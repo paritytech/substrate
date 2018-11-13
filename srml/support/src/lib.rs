@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Support code for the runtime.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
@@ -24,18 +22,19 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
-extern crate sr_std as rstd;
+#[doc(hidden)]
+pub extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]
 pub extern crate sr_primitives as runtime_primitives;
-extern crate substrate_metadata;
+extern crate srml_metadata;
 
 extern crate mashup;
 
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
-#[cfg(test)]
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 #[cfg(test)]
@@ -65,6 +64,7 @@ pub mod inherent;
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
 
 #[macro_export]
@@ -120,3 +120,6 @@ pub enum Void {}
 
 #[doc(hidden)]
 pub use mashup::*;
+
+#[cfg(feature = "std")]
+pub use serde_derive::*;

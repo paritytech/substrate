@@ -30,13 +30,6 @@ extern crate sr_io as runtime_io;
 #[cfg(test)]
 extern crate substrate_primitives;
 
-// Needed for deriving `Serialize` and `Deserialize` for various types.
-// We only implement the serde traits for std builds - they're unneeded
-// in the wasm runtime.
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 // Needed for deriving `Encode` and `Decode` for `RawEvent`.
 #[macro_use]
 extern crate parity_codec_derive;
@@ -69,16 +62,47 @@ type AssetId = u32;
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
-		fn issue(origin, total: T::Balance) -> Result;
+		fn issue(origin, total: T::Balance) -> Result {
+			let origin = ensure_signed(origin)?;
+
+			let id = Self::next_asset_id();
+			<NextAssetId<T>>::mutate(|id| *id += 1);
+
+			<Balances<T>>::insert((id, origin.clone()), total);
+
+			Self::deposit_event(RawEvent::Issued(id, origin, total));
+			Ok(())
+		}
 
 		/// Move some assets from one holder to another.
-		fn transfer(origin, id: AssetId, target: T::AccountId, total: T::Balance) -> Result;
+		fn transfer(origin, id: AssetId, target: T::AccountId, amount: T::Balance) -> Result {
+			let origin = ensure_signed(origin)?;
+			let origin_account = (id, origin.clone());
+			let origin_balance = <Balances<T>>::get(&origin_account);
+			ensure!(origin_balance >= amount, "origin account balance must be greater than amount");
+
+			Self::deposit_event(RawEvent::Transfered(id, origin, target.clone(), amount));
+			<Balances<T>>::insert(origin_account, origin_balance - amount);
+			<Balances<T>>::mutate((id, target), |balance| *balance += amount);
+
+			Ok(())
+		}
 
 		/// Destroy any assets of `id` owned by `origin`.
-		fn destroy(origin, id: AssetId) -> Result;
+		fn destroy(origin, id: AssetId) -> Result {
+			let origin = ensure_signed(origin)?;
+
+			let balance = <Balances<T>>::take((id, origin.clone()));
+			ensure!(!balance.is_zero(), "origin balance should be non-zero");
+
+			Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
+
+			Ok(())
+		}
 	}
 }
 
@@ -107,56 +131,11 @@ decl_storage! {
 
 // The main implementation block for the module.
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	// TODO: move into `decl_module` macro.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// Public immutables
 
 	/// Get the asset `id` balance of `who`.
 	pub fn balance(id: AssetId, who: T::AccountId) -> T::Balance {
 		<Balances<T>>::get((id, who))
-	}
-
-	// Implement Calls and add public immutables and private mutables.
-
-	fn issue(origin: T::Origin, total: T::Balance) -> Result {
-		let origin = ensure_signed(origin)?;
-
-		let id = Self::next_asset_id();
-		<NextAssetId<T>>::mutate(|id| *id += 1);
-
-
-		<Balances<T>>::insert((id, origin.clone()), total);
-
-		Self::deposit_event(RawEvent::Issued(id, origin, total));
-		Ok(())
-	}
-
-	fn transfer(origin: T::Origin, id: AssetId, target: T::AccountId, amount: T::Balance) -> Result {
-		let origin = ensure_signed(origin)?;
-		let origin_account = (id, origin.clone());
-		let origin_balance = <Balances<T>>::get(&origin_account);
-		ensure!(origin_balance >= amount, "origin account balance must be greater than amount");
-
-		Self::deposit_event(RawEvent::Transfered(id, origin, target.clone(), amount));
-		<Balances<T>>::insert(origin_account, origin_balance - amount);
-		<Balances<T>>::mutate((id, target), |balance| *balance += amount);
-
-		Ok(())
-	}
-
-	fn destroy(origin: T::Origin, id: AssetId) -> Result {
-		let origin = ensure_signed(origin)?;
-
-		let balance = <Balances<T>>::take((id, origin.clone()));
-		ensure!(!balance.is_zero(), "origin balance should be non-zero");
-
-		Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
-
-		Ok(())
 	}
 }
 
@@ -200,7 +179,7 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
+		system::GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
 	}
 
 	#[test]

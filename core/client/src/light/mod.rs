@@ -23,7 +23,7 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
-use primitives::{Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{CodeExecutor, ExecutionStrategy};
@@ -53,11 +53,12 @@ pub fn new_light<B, S, F, GS>(
 	fetcher: Arc<F>,
 	genesis_storage: GS,
 ) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F, Blake2Hasher>, B>>
-	where
-		B: BlockT,
-		S: BlockchainStorage<B>,
-		F: Fetcher<B>,
-		GS: BuildStorage,
+where
+	B: BlockT<Hash=H256>,
+	S: BlockchainStorage<B>,
+	F: Fetcher<B>,
+	GS: BuildStorage,
+
 {
 	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
 	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
@@ -70,7 +71,7 @@ pub fn new_fetch_checker<E, H>(
 	where
 		E: CodeExecutor<H>,
 		H: Hasher,
-	
+
 {
 	LightDataChecker::new(executor)
 }

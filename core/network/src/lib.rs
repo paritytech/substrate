@@ -17,10 +17,8 @@
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
-// tag::description[]
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
-// end::description[]
 
 extern crate linked_hash_map;
 extern crate parking_lot;
@@ -28,6 +26,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_network_libp2p as network_libp2p;
+extern crate substrate_consensus_common as consensus;
 extern crate parity_codec as codec;
 extern crate futures;
 extern crate rustc_hex;

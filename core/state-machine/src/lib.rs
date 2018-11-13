@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate state machine implementation.
-// end::description[]
 
 #![warn(missing_docs)]
 
@@ -63,6 +61,9 @@ pub use changes_trie::{Storage as ChangesTrieStorage,
 pub use overlayed_changes::OverlayedChanges;
 pub use trie_backend_essence::Storage;
 pub use trie_backend::TrieBackend;
+
+/// Default num of pages for the heap
+const DEFAULT_HEAP_PAGES :u64 = 1024;
 
 /// State Machine Error bound.
 ///
@@ -291,7 +292,7 @@ where
 		.to_vec();
 
 	let heap_pages = try_read_overlay_value(overlay, backend, well_known_keys::HEAP_PAGES)?
-		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
+		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(DEFAULT_HEAP_PAGES) as usize;
 
 	// read changes trie configuration. The reason why we're doing it here instead of the
 	// `OverlayedChanges` constructor is that we need proofs for this read as a part of

@@ -254,7 +254,8 @@ mod tests {
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
-		}.build_storage().unwrap())
+			upgrade_key: Some(Default::default()),
+		}.build_storage().unwrap().0)
 	}
 
 	fn construct_block(
@@ -267,7 +268,10 @@ mod tests {
 		use trie::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
+		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter()
+			.map(Encode::encode))
+			.to_fixed_bytes()
+			.into();
 
 		let mut digest = generic::Digest::<Log>::default();
 		if let Some(changes_root) = changes_root {
@@ -291,9 +295,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("ffa85ed1832eae3e25e684d4f993ff0b5e8b6ac4d7ba0f40a5fb0114fda22f3d").into()
+				hex!("a998cf2956b526aecc0887903df66457e640bb2debfd7976b5c7696da31cdaef").into()
 			} else {
-				hex!("98971908b8923d07944cdf7ee658c203d17042ef447169adbdfec8160cfabcad").into()
+				hex!("2caffd5fcc42934e6b758613ff0a7e624a8c5b7c67b7c405bf6985a7e3a19701").into()
 			},
 			if support_changes_trie {
 				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
@@ -317,7 +321,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("788a2e8b23e4b30e1bce347ca6415fd0080e989d40741c86995b9ad539bb76b3").into(),
+			hex!("72b2afc379ce2161aef95ef6f86a2321867f12b046703ea0af5aed158c2a4f30").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -340,7 +344,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("acc03af5b3972deaf9dde4dfd99c5614a5360454313681b6fc299d1644ae8a59").into(),
+			hex!("5f4461c584ce91dd6862313fd075ffc26dc702fcc1183634ee7b0c5de8b5b4d1").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -622,7 +626,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("21fb6fb965f012ae3c6e521b71b5b57d6df17c738c52f202ec2809ca235eb082").into(),
+			hex!("9885d4297ce0341ec07957d1de32848460565a17ef2ea400df0e2326634914ae").into(),
 			None,
 			vec![
 				CheckedExtrinsic {

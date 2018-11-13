@@ -1,6 +1,9 @@
 {
 	"name": "BBQ Birch",
 	"id": "bbq-birch",
+	"properties": {
+		"tokenSymbol": "BBQ"
+	},
 	"telemetryUrl": "wss://telemetry.polkadot.io/submit/",
 	"protocolId": null,
 	"bootNodes": [

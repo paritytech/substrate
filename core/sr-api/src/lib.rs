@@ -26,7 +26,7 @@ extern crate sr_version as runtime_version;
 
 #[doc(hidden)]
 pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
-use runtime_version::RuntimeVersion;
+use runtime_version::{ApiId, RuntimeVersion};
 use rstd::vec::Vec;
 #[doc(hidden)]
 pub use rstd::slice;
@@ -427,6 +427,20 @@ macro_rules! decl_apis {
 	};
 }
 
+/// The ApiIds for the various standard runtime APIs.
+pub mod id {
+	use super::ApiId;
+	
+	/// ApiId for the BlockBuilder trait.
+	pub const BLOCK_BUILDER: ApiId = *b"blkbuild";
+
+	/// ApiId for the TaggedTransactionQueue trait.
+	pub const TAGGED_TRANSACTION_QUEUE: ApiId = *b"validatx";
+
+	/// ApiId for the Metadata trait.
+	pub const METADATA: ApiId = *b"metadata";
+}
+
 decl_apis! {
 	/// The `Core` api trait that is mandantory for each runtime.
 	pub trait Core<Block: BlockT, AuthorityId> {
@@ -436,26 +450,13 @@ decl_apis! {
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata {
-		fn metadata() -> Vec<u8>;
-	}
-
-	/// The `OldTxQueue` api trait for interfering with the old transaction queue.
-	pub trait OldTxQueue {
-		fn account_nonce<AccountId, Index>(account: AccountId) -> Index;
-		fn lookup_address<Address, LookupId>(address: Address) -> Option<LookupId>;
+	pub trait Metadata<Data> {
+		fn metadata() -> Data;
 	}
 
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
 	pub trait TaggedTransactionQueue<Block: BlockT> {
 		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
-	}
-
-	/// The `Miscellaneous` api trait for getting miscellaneous information from the runtime.
-	pub trait Miscellaneous {
-		fn validator_count() -> u32;
-		fn validators<AccountId>() -> Vec<AccountId>;
-		fn timestamp<Moment>() -> Moment;
 	}
 
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.

@@ -29,7 +29,6 @@
 //! ## Finalization
 //!
 //! This module should be hooked up to the finalization routine.
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -38,10 +37,6 @@ extern crate sr_std as rstd;
 
 #[macro_use]
 extern crate srml_support as runtime_support;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 
 #[cfg(test)]
 extern crate substrate_primitives;
@@ -74,7 +69,33 @@ pub trait Trait: consensus::Trait + system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result;
+		/// Set the current time.
+		///
+		/// Extrinsic with this call should be placed at the specific position in the each block
+		/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
+		/// This call should be invoked exactly once per block. It will panic at the finalization phase,
+		/// if this call hasn't been invoked by that time.
+		///
+		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
+		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result {
+			ensure_inherent(origin)?;
+			let now = now.into();
+
+			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+			assert!(
+				<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
+				"Timestamp extrinsic must be at position {} in the block",
+				T::TIMESTAMP_SET_POSITION
+			);
+			assert!(
+				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
+				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
+			);
+			<Self as Store>::Now::put(now);
+			<Self as Store>::DidUpdate::put(true);
+			Ok(())
+		}
+
 		fn on_finalise() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}
@@ -101,33 +122,6 @@ impl<T: Trait> Module<T> {
 	/// it will return the timestamp of the previous block.
 	pub fn get() -> T::Moment {
 		Self::now()
-	}
-
-	/// Set the current time.
-	///
-	/// Extrinsic with this call should be placed at the specific position in the each block
-	/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
-	/// This call should be invoked exactly once per block. It will panic at the finalization phase,
-	/// if this call hasn't been invoked by that time.
-	///
-	/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-	fn set(origin: T::Origin, now: <T::Moment as HasCompact>::Type) -> Result {
-		ensure_inherent(origin)?;
-		let now = now.into();
-
-		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
-		assert!(
-			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
-			"Timestamp extrinsic must be at position {} in the block",
-			T::TIMESTAMP_SET_POSITION
-		);
-		assert!(
-			Self::now().is_zero() || now >= Self::now() + Self::block_period(),
-			"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
-		);
-		<Self as Store>::Now::put(now);
-		<Self as Store>::DidUpdate::put(true);
-		Ok(())
 	}
 
 	/// Set the timestamp to something in particular. Only used for tests.
@@ -216,8 +210,8 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
@@ -229,8 +223,8 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
@@ -242,8 +236,8 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
 	fn block_period_is_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);

@@ -14,19 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 
 #[macro_use]
 extern crate srml_support as runtime_support;

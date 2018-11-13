@@ -77,6 +77,10 @@ pub use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
 
+/// A set of key value pairs for children storage;
+#[cfg(feature = "std")]
+pub type ChildrenStorageMap = HashMap<Vec<u8>, StorageMap>;
+
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
@@ -85,13 +89,13 @@ pub trait BuildStorage {
 		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
 		r
 	}
-	fn build_storage(self) -> Result<StorageMap, String>;
+	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String>;
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageMap {
-	fn build_storage(self) -> Result<StorageMap, String> {
-		Ok(self)
+	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String> {
+		Ok((self, Default::default()))
 	}
 }
 
@@ -192,7 +196,7 @@ pub struct Ed25519Signature(pub H512);
 impl Verify for Ed25519Signature {
 	type Signer = H256;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(&(self.0).0, msg.get(), &signer.0[..])
+		runtime_io::ed25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
 	}
 }
 
@@ -306,14 +310,19 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
-			fn build_storage(self) -> ::std::result::Result<$crate::StorageMap, String> {
-				let mut s = $crate::StorageMap::new();
+			fn build_storage(self) -> ::std::result::Result<($crate::StorageMap, $crate::ChildrenStorageMap), String> {
+				let mut top = $crate::StorageMap::new();
+				let mut children = $crate::ChildrenStorageMap::new();
 				$(
 					if let Some(extra) = self.$snake {
-						s.extend(extra.build_storage()?);
+						let (other_top, other_children) = extra.build_storage()?;
+						top.extend(other_top);
+						for (other_child_key, other_child_map) in other_children {
+							children.entry(other_child_key).or_default().extend(other_child_map);
+						}
 					}
 				)*
-				Ok(s)
+				Ok((top, children))
 			}
 		}
 	}

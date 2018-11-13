@@ -20,8 +20,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-extern crate sr_io as runtime_io;
-
 #[macro_use]
 extern crate sr_api as runtime_api;
 
@@ -52,6 +50,7 @@ extern crate srml_staking as staking;
 extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 extern crate srml_treasury as treasury;
+extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
@@ -62,12 +61,12 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	SessionKey, Signature
 };
-use runtime_api::runtime::*;
+use runtime_api::{runtime::*, id::*};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
-use version::{RuntimeVersion, ApiId};
+use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
 use council::seats as council_seats;
@@ -81,13 +80,10 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
-pub use srml_support::StorageValue;
+pub use srml_support::{StorageValue, RuntimeMetadata};
 
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
-
-const INHERENT: ApiId = *b"inherent";
-const VALIDATX: ApiId = *b"validatx";
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -96,7 +92,11 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
-	apis: apis_vec!([(INHERENT, 1), (VALIDATX, 1)]),
+	apis: apis_vec!([
+		(BLOCK_BUILDER, 1),
+		(TAGGED_TRANSACTION_QUEUE, 1),
+		(METADATA, 1)
+	]),
 };
 
 /// Native version.
@@ -145,7 +145,7 @@ impl timestamp::Trait for Runtime {
 pub struct SessionKeyConversion;
 impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 	fn convert(a: AccountId) -> SessionKey {
-		a.0.into()
+		a.to_fixed_bytes().into()
 	}
 }
 
@@ -191,15 +191,19 @@ impl contract::Trait for Runtime {
 	type Event = Event;
 }
 
+impl upgrade_key::Trait for Runtime {
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
+		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Balances: balances,
-		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Session: session,
 		Staking: staking,
 		Democracy: democracy,
@@ -209,6 +213,7 @@ construct_runtime!(
 		CouncilSeats: council_seats::{Config<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
+		UpgradeKey: upgrade_key,
 	}
 );
 
@@ -221,7 +226,7 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// A Block signed with a Justification
-pub type SignedBlock = generic::SignedBlock<Header, UncheckedExtrinsic>;
+pub type SignedBlock = generic::SignedBlock<Block>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
@@ -246,8 +251,8 @@ impl_apis! {
 		}
 	}
 
-	impl Metadata for Runtime {
-		fn metadata() -> Vec<u8> {
+	impl Metadata<RuntimeMetadata> for Runtime {
+		fn metadata() -> RuntimeMetadata {
 			Runtime::metadata()
 		}
 	}
@@ -278,33 +283,9 @@ impl_apis! {
 		}
 	}
 
-	impl OldTxQueue<AccountId, Index, Address, AccountId> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
-			System::account_nonce(&account)
-		}
-
-		fn lookup_address(address: Address) -> Option<AccountId> {
-			Balances::lookup_address(address)
-		}
-	}
-
 	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
-		}
-	}
-
-	impl Miscellaneous<AccountId, u64> for Runtime {
-		fn validator_count() -> u32 {
-			Session::validator_count()
-		}
-
-		fn validators() -> Vec<AccountId> {
-			Session::validators()
-		}
-
-		fn timestamp() -> u64 {
-			Timestamp::get()
 		}
 	}
 }

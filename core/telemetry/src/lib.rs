@@ -14,14 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Telemetry utils.
 //!
-//! `telemetry` macro be used from whereever in the Substrate codebase
+//! `telemetry` macro may be used anywhere in the Substrate codebase
 //! in order to send real-time logging information to the telemetry
 //! server (if there is one). We use the async drain adapter of `slog`
 //! so that the logging thread doesn't get held up at all.
-// end::description[]
 
 extern crate parking_lot;
 extern crate ws;
@@ -55,14 +53,27 @@ const CHANNEL_SIZE: usize = 262144;
 
 /// Initialise telemetry.
 pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
+	let writer = TelemetryWriter::new();
+	let out_sync = writer.out.clone();
 	let log = slog::Logger::root(
 		slog_async::Async::new(
-			slog_json::Json::default(TelemetryWriter::new(config)).fuse()
+			slog_json::Json::default(writer).fuse()
 		).chan_size(CHANNEL_SIZE)
 		.overflow_strategy(slog_async::OverflowStrategy::DropAndReport)
 		.build().fuse(), o!()
 	);
-	slog_scope::set_global_logger(log)
+	let logger_guard = slog_scope::set_global_logger(log);
+
+	thread::spawn(move || {
+		loop {
+			trace!(target: "telemetry", "Connecting to Telemetry...");
+			let _ = ws::connect(config.url.as_str(), |out| Connection::new(out, &*out_sync, &config));
+
+			thread::sleep(time::Duration::from_millis(5000));
+		}
+	});
+
+	return logger_guard;
 }
 
 /// Exactly equivalent to `slog_scope::info`, provided as a convenience.
@@ -117,19 +128,8 @@ struct TelemetryWriter {
 }
 
 impl TelemetryWriter {
-	fn new(config: TelemetryConfig) -> Self {
-		let out_sync = Arc::new(Mutex::new(None));
-		let out = out_sync.clone();
-
-		thread::spawn(move || {
-			loop {
-				trace!(target: "telemetry", "Connecting to Telemetry...");
-
-				let _ = ws::connect(config.url.as_str(), |out| Connection::new(out, &*out_sync, &config));
-
-				thread::sleep(time::Duration::from_millis(5000));
-			}
-		});
+	fn new() -> Self {
+		let out = Arc::new(Mutex::new(None));
 
 		TelemetryWriter {
 			buffer: Vec::new(),

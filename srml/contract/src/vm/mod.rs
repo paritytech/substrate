@@ -20,8 +20,7 @@
 use exec::CreateReceipt;
 use gas::GasMeter;
 use rstd::prelude::*;
-use runtime_primitives::traits::As;
-use Trait;
+use {Trait, Schedule};
 use {balances, sandbox, system};
 
 type BalanceOf<T> = <T as balances::Trait>::Balance;
@@ -118,7 +117,7 @@ pub fn execute<'a, E: Ext>(
 	input_data: &[u8],
 	output_data: &mut Vec<u8>,
 	ext: &'a mut E,
-	config: &Config<E::T>,
+	schedule: &Schedule<<E::T as Trait>::Gas>,
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<(), Error> {
 	let env = runtime::init_env();
@@ -126,7 +125,7 @@ pub fn execute<'a, E: Ext>(
 	let PreparedContract {
 		instrumented_code,
 		memory,
-	} = prepare_contract(code, &config, &env)?;
+	} = prepare_contract(code, &schedule, &env)?;
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	for (func_name, ext_func) in &env.funcs {
@@ -134,7 +133,7 @@ pub fn execute<'a, E: Ext>(
 	}
 	imports.add_memory("env", "memory", memory.clone());
 
-	let mut runtime = Runtime::new(ext, input_data, output_data, &config, memory, gas_meter);
+	let mut runtime = Runtime::new(ext, input_data, output_data, &schedule, memory, gas_meter);
 
 	// Instantiate the instance from the instrumented module code.
 	match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
@@ -149,41 +148,6 @@ pub fn execute<'a, E: Ext>(
 		// Other instantiation errors.
 		// Return without executing anything.
 		Err(_) => return Err(Error::Instantiate),
-	}
-}
-
-// TODO: Extract it to the root of the crate
-#[derive(Clone)]
-pub struct Config<T: Trait> {
-	/// Gas cost of a growing memory by single page.
-	grow_mem_cost: T::Gas,
-
-	/// Gas cost of a regular operation.
-	regular_op_cost: T::Gas,
-
-	/// Gas cost per one byte returned.
-	return_data_per_byte_cost: T::Gas,
-
-	/// How tall the stack is allowed to grow?
-	///
-	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
-	/// how the stack frame cost is calculated.
-	max_stack_height: u32,
-
-	//// What is the maximal memory pages amount is allowed to have for
-	/// a contract.
-	max_memory_pages: u32,
-}
-
-impl<T: Trait> Default for Config<T> {
-	fn default() -> Config<T> {
-		Config {
-			grow_mem_cost: T::Gas::sa(1),
-			regular_op_cost: T::Gas::sa(1),
-			return_data_per_byte_cost: T::Gas::sa(1),
-			max_stack_height: 64 * 1024,
-			max_memory_pages: 16,
-		}
 	}
 }
 
@@ -310,7 +274,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&::vm::Config::default(),
+			&Schedule::<u64>::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -322,7 +286,7 @@ mod tests {
 				data: vec![
 					1, 2, 3, 4,
 				],
-				gas_left: 49990,
+				gas_left: 49970,
 			}]
 		);
 	}
@@ -373,7 +337,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&::vm::Config::default(),
+			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -385,7 +349,7 @@ mod tests {
 				data: vec![
 					1, 2, 3, 4,
 				],
-				gas_left: 49990,
+				gas_left: 49970,
 			}]
 		);
 	}
@@ -413,7 +377,7 @@ mod tests {
 				&[],
 				&mut Vec::new(),
 				&mut mock_ext,
-				&::vm::Config::default(),
+				&Schedule::default(),
 				&mut GasMeter::with_limit(100_000, 1)
 			),
 			Err(_)
@@ -467,7 +431,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&::vm::Config::default(),
+			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -560,7 +524,7 @@ mod tests {
 			&[],
 			&mut return_buf,
 			&mut mock_ext,
-			&Config::default(),
+			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 

@@ -146,7 +146,7 @@ pub fn chain_id() -> u64 {
 pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
-	).unwrap_or(H256::new())
+	).unwrap_or(H256::zero())
 }
 
 /// "Commit" all existing operations and compute the resultant child storage root.

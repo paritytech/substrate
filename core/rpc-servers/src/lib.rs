@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate RPC servers.
-// end::description[]
 
 #[warn(missing_docs)]
 
@@ -32,7 +30,7 @@ extern crate sr_primitives;
 extern crate log;
 
 use std::io;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
@@ -40,7 +38,7 @@ pub type HttpServer = http::Server;
 pub type WsServer = ws::Server;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
+pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 	state: S,
 	chain: C,
 	author: A,
@@ -48,10 +46,10 @@ pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
 ) -> RpcHandler where
 	Block: BlockT + 'static,
 	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
-	PendingExtrinsics: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
+	SignedBlock<Block>: serde::Serialize + sr_primitives::DeserializeOwned,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic, Metadata=Metadata>,
-	A: apis::author::AuthorApi<ExHash, Block::Hash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>, Metadata=Metadata>,
+	A: apis::author::AuthorApi<ExHash, Block::Hash, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {
 	let mut io = pubsub::PubSubHandler::default();

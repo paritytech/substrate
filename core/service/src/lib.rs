@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
-//! Substrate service. Starts a thread that spins the network, the client and the extrinsic pool.
+//! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
 //! Manages communication between them.
-// end::description[]
 
 #![warn(unused_extern_crates)]
 
@@ -29,6 +27,7 @@ extern crate parking_lot;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_common as consensus_common;
 extern crate substrate_network as network;
 extern crate substrate_executor;
 extern crate substrate_client as client;
@@ -56,6 +55,7 @@ mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
+pub mod consensus;
 
 use std::io;
 use std::net::SocketAddr;
@@ -63,11 +63,11 @@ use std::collections::HashMap;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 use futures::prelude::*;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, SignedBlock};
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -76,10 +76,12 @@ use codec::{Encode, Decode};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::ChainSpec;
+pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
+use consensus_common::offline_tracker::OfflineTracker;
+pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
@@ -98,6 +100,7 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
+	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
 	_telemetry: Option<tel::Telemetry>,
@@ -118,8 +121,8 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 impl<Components> Service<Components>
 	where
 		Components: components::Components,
-		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
-		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
+		<Components as components::Components>::Executor: std::clone::Clone,
+		for<'de> SignedBlock<ComponentBlock<Components>>: ::serde::Deserialize<'de>,
 {
 	/// Creates a new service.
 	pub fn new(
@@ -134,10 +137,12 @@ impl<Components> Service<Components>
 		let executor = NativeExecutor::new();
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+
+		// This is meant to be for testing only
+		// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
-
 		// Keep the public key for telemetry
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
@@ -230,6 +235,7 @@ impl<Components> Service<Components>
 		// RPC
 		let rpc_config = RpcConfig {
 			chain_name: config.chain_spec.name().to_string(),
+			properties: config.chain_spec.properties().clone(),
 			impl_name: config.impl_name,
 			impl_version: config.impl_version,
 		};
@@ -241,7 +247,7 @@ impl<Components> Service<Components>
 				let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
 				let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
 				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), subscriptions.clone());
-				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
+				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _>(
 					state,
 					chain,
 					author,
@@ -253,6 +259,13 @@ impl<Components> Service<Components>
 				maybe_start_server(config.rpc_ws, |address| rpc::start_ws(address, handler()))?,
 			)
 		};
+
+		let proposer = Arc::new(ProposerFactory {
+			client: client.clone(),
+			transaction_pool: transaction_pool.clone(),
+			offline: Arc::new(RwLock::new(OfflineTracker::new())),
+			force_delay: 0 // FIXME: allow this to be configured
+		});
 
 		// Telemetry
 		let telemetry = match config.telemetry_url {
@@ -287,6 +300,7 @@ impl<Components> Service<Components>
 			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			proposer,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
@@ -301,6 +315,13 @@ impl<Components> Service<Components> where
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
+	}
+
+	/// Get shared proposer instance
+	pub fn proposer(&self)
+		-> Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>
+	{
+		self.proposer.clone()
 	}
 
 	/// Get shared network instance.
@@ -323,6 +344,7 @@ impl<Components> Service<Components> where
 		self.exit.clone()
 	}
 }
+
 
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
@@ -357,6 +379,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
+	properties: Properties,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -372,6 +395,10 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(self.chain_name.clone())
+	}
+
+	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
+		Ok(self.properties.clone())
 	}
 }
 
@@ -450,7 +477,7 @@ macro_rules! construct_simple_service {
 		$name: ident
 	) => {
 		pub struct $name<C: $crate::Components> {
-			inner: $crate::Service<C>,
+			inner: $crate::Arc<$crate::Service<C>>,
 		}
 
 		impl<C: $crate::Components> $name<C> {
@@ -460,7 +487,7 @@ macro_rules! construct_simple_service {
 			) -> $crate::Result<Self, $crate::Error> {
 				Ok(
 					Self {
-						inner: $crate::Service::new(config, executor)?
+						inner: $crate::Arc::new($crate::Service::new(config, executor)?)
 					}
 				)
 			}
@@ -525,8 +552,9 @@ macro_rules! construct_service_factory {
 			Configuration = $config:ty,
 			FullService = $full_service:ty { $( $full_service_init:tt )* },
 			LightService = $light_service:ty { $( $light_service_init:tt )* },
-			ImportQueue = $import_queue:ty
-				{ $( $full_import_queue_init:tt )* }
+			FullImportQueue = $full_import_queue:ty
+				{ $( $full_import_queue_init:tt )* },
+			LightImportQueue = $light_import_queue:ty
 				{ $( $light_import_queue_init:tt )* },
 		}
 	) => {
@@ -544,7 +572,8 @@ macro_rules! construct_service_factory {
 			type Configuration = $config;
 			type FullService = $full_service;
 			type LightService = $light_service;
-			type ImportQueue = $import_queue;
+			type FullImportQueue = $full_import_queue;
+			type LightImportQueue = $light_import_queue;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -571,14 +600,14 @@ macro_rules! construct_service_factory {
 			fn build_full_import_queue(
 				config: &$crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
-			) -> $crate::Result<Self::ImportQueue, $crate::Error> {
+			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
 				( $( $full_import_queue_init )* ) (config, client)
 			}
 
 			fn build_light_import_queue(
 				config: &FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
-			) -> Result<Self::ImportQueue, $crate::Error> {
+			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
 			}
 

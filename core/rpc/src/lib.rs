@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate RPC interfaces.
-// end::description[]
 
 #![warn(missing_docs)]
 
@@ -46,6 +44,8 @@ extern crate assert_matches;
 extern crate hex_literal;
 #[cfg(test)]
 extern crate substrate_test_client as test_client;
+#[cfg(test)]
+extern crate substrate_consensus_common as consensus;
 #[cfg(test)]
 extern crate rustc_hex;
 

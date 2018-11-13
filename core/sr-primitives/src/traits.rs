@@ -197,11 +197,13 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 pub trait SimpleBitOps:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
@@ -244,7 +246,7 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -320,8 +322,8 @@ impl CheckEqual for substrate_primitives::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		use substrate_primitives::hexdisplay::HexDisplay;
-		if &self.0 != &other.0 {
-			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
+		if self != other {
+			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
 		}
 	}
 
@@ -329,8 +331,8 @@ impl CheckEqual for substrate_primitives::H256 {
 	fn check_equal(&self, other: &Self) {
 		if self != other {
 			runtime_io::print("Hash not equal");
-			runtime_io::print(&self.0[..]);
-			runtime_io::print(&other.0[..]);
+			runtime_io::print(self.as_bytes());
+			runtime_io::print(other.as_bytes());
 		}
 	}
 }
@@ -364,6 +366,16 @@ pub trait MaybeSerializeDebugButNotDeserialize {}
 impl<T> MaybeSerializeDebugButNotDeserialize for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeSerialize: Serialize {}
+#[cfg(feature = "std")]
+impl<T: Serialize> MaybeSerialize for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerialize {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerialize for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
@@ -372,6 +384,16 @@ impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
 pub trait MaybeSerializeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebug for T {}
+
+#[cfg(feature = "std")]
+pub trait MaybeDebug: Debug {}
+#[cfg(feature = "std")]
+impl<T: Debug> MaybeDebug for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDebug {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDebug for T {}
 
 #[cfg(feature = "std")]
 pub trait MaybeDisplay: Display {}
@@ -393,9 +415,8 @@ pub trait MaybeDecode {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDecode for T {}
 
-
-pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
-impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
+pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
@@ -403,8 +424,8 @@ impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'st
 ///
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Digest<Hash = Self::Hash>;
 
@@ -429,6 +450,8 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	fn set_parent_hash(&mut self, Self::Hash);
 
 	fn digest(&self) -> &Self::Digest;
+	/// Get a mutable reference to the digest.
+	fn digest_mut(&mut self) -> &mut Self::Digest;
 	fn set_digest(&mut self, Self::Digest);
 
 	fn hash(&self) -> Self::Hash {
@@ -441,9 +464,9 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Extrinsic: Member + Codec + Extrinsic;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
@@ -454,10 +477,21 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stati
 	}
 }
 
+/// Something that acts like an `Extrinsic`.
+pub trait Extrinsic {
+	/// Is this `Extrinsic` signed?
+	/// If no information are available about signed/unsigned, `None` should be returned.
+	fn is_signed(&self) -> Option<bool> { None }
+}
+
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
+/// Extract the digest type for a block.
+pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
+/// Extract the digest item type for a block.
+pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -508,14 +542,16 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
-pub trait Digest: Member + Default {
-	type Hash: Member;
+pub trait Digest: Member + MaybeSerializeDebug + Default {
+	type Hash: Member + MaybeSerializeDebug;
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
 	fn logs(&self) -> &[Self::Item];
 	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
+	/// Pop a digest item.
+	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
 	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
@@ -529,9 +565,9 @@ pub trait Digest: Member + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member {
-	type Hash: Member;
-	type AuthorityId: Member;
+pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
+	type Hash: Member + MaybeSerializeDebug;
+	type AuthorityId: Member + MaybeSerializeDebug;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
@@ -560,11 +596,4 @@ pub trait ProvideInherent {
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
 	) -> Result<(), Self::Error>;
-}
-
-/// Something that acts like an `Extrinsic`.
-pub trait Extrinsic {
-	/// Is this `Extrinsic` signed?
-	/// If no information are available about signed/unsigned, `None` should be returned.
-	fn is_signed(&self) -> Option<bool> { None }
 }
