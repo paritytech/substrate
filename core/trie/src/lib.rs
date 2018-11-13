@@ -56,6 +56,8 @@ pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 /// As in `hash_db`, but less generic, trait exposed.
 pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
+/// As in `hash_db`, but less generic, trait exposed.
+pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db`, but less generic, trait exposed.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
 
