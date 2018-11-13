@@ -38,7 +38,7 @@ use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use codec::Decode;
 use state_machine::{
-	Backend as StateBackend, CodeExecutor,
+	Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	key_changes, key_changes_proof, OverlayedChanges
 };
