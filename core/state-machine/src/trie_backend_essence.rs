@@ -269,7 +269,7 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
 // This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(<Self as hash_db::HashDB<H, DBValue>>::get(self, key))
+		Ok(hash_db::PlainDB::get(self, key))
 	}
 }
 
