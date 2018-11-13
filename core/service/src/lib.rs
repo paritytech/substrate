@@ -537,6 +537,9 @@ macro_rules! construct_simple_service {
 /// 		Configuration = (),
 /// 		FullService = Service<FullComponents<Self>>
 /// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+///         // Setup as Consensus Authority (if the role and key are given)
+/// 		AuthoritySetup = {
+/// 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| { Ok(service) }},
 /// 		LightService = Service<LightComponents<Self>>
 /// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
 ///         // Declare the import queue. The import queue is special as it takes two initializers.
