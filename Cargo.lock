@@ -1786,7 +1786,6 @@ dependencies = [
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-api 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "sr-version 0.1.0",
@@ -1803,6 +1802,7 @@ dependencies = [
  "srml-timestamp 0.1.0",
  "srml-treasury 0.1.0",
  "srml-upgrade-key 0.1.0",
+ "substrate-client 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]
@@ -2567,16 +2567,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sr-api"
-version = "0.1.0"
-dependencies = [
- "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-primitives 0.1.0",
- "sr-std 0.1.0",
- "sr-version 0.1.0",
-]
-
-[[package]]
 name = "sr-io"
 version = "0.1.0"
 dependencies = [
@@ -2789,6 +2779,8 @@ dependencies = [
  "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 0.1.0",
+ "substrate-primitives 0.1.0",
 ]
 
 [[package]]
@@ -3060,8 +3052,9 @@ dependencies = [
  "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-api 0.1.0",
  "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "sr-version 0.1.0",
  "substrate-consensus-common 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
@@ -3455,6 +3448,7 @@ dependencies = [
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-state-machine 0.1.0",
  "substrate-test-runtime 0.1.0",
 ]
 
@@ -3468,12 +3462,12 @@ dependencies = [
  "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-api 0.1.0",
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "sr-version 0.1.0",
  "srml-support 0.1.0",
+ "substrate-client 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]

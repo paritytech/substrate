@@ -35,11 +35,11 @@ pub trait TestClient: Sized {
 	fn genesis_hash(&self) -> runtime::Hash;
 }
 
-impl<B, E> TestClient for Client<B, E, runtime::Block>
+impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 	where
 		B: client::backend::Backend<runtime::Block, Blake2Hasher>,
 		E: client::CallExecutor<runtime::Block, Blake2Hasher>,
-		Self: BlockImport<runtime::Block, Error=client::error::Error>
+		Self: BlockImport<runtime::Block, Error=client::error::Error>,
 {
 	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
 		-> client::error::Result<()>

@@ -129,7 +129,30 @@ impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self { Bytes(s) }
 }
 
+impl From<OpaqueMetadata> for Bytes {
+	fn from(s: OpaqueMetadata) -> Self { Bytes(s.0) }
+}
+
 impl Deref for Bytes {
 	type Target = [u8];
 	fn deref(&self) -> &[u8] { &self.0[..] }
+}
+
+/// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
+#[derive(Encode, Decode)]
+pub struct OpaqueMetadata(Vec<u8>);
+
+impl OpaqueMetadata {
+	/// Creates a new instance with the given metadata blob.
+	pub fn new(metadata: Vec<u8>) -> Self {
+		OpaqueMetadata(metadata)
+	}
+}
+
+impl rstd::ops::Deref for OpaqueMetadata {
+	type Target = Vec<u8>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }

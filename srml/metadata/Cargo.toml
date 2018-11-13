@@ -8,12 +8,16 @@ parity-codec = { version = "2.1", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
+sr-std = { path = "../../core/sr-std", default-features = false }
+substrate-primitives = { path = "../../core/primitives", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"parity-codec/std",
 	"parity-codec-derive/std",
+	"sr-std/std",
+	"substrate-primitives/std",
 	"serde",
 	"serde_derive"
 ]

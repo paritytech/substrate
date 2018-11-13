@@ -28,7 +28,6 @@ use client::block_builder::BlockBuilder;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol, ProtocolContext};
-use primitives::{Blake2Hasher};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, PeerId, Severity};
@@ -137,7 +136,7 @@ pub struct TestPacket {
 	recipient: NodeIndex,
 }
 
-pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block>;
+pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>;
 
 pub struct Peer<V: Verifier<Block>> {
 	client: Arc<PeersClient>,
@@ -230,7 +229,7 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>)
+	where F: FnMut(&mut BlockBuilder<Block, PeersClient>)
 	{
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();
@@ -305,7 +304,7 @@ pub trait TestNetFactory: Sized {
 	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier>>>)>(&mut self, closure: F );
 
 	fn started(&self) -> bool;
-	fn set_started(&mut self, now: bool); 
+	fn set_started(&mut self, now: bool);
 
 	fn default_config() -> ProtocolConfig {
 		ProtocolConfig::default()
@@ -468,7 +467,7 @@ impl TestNetFactory for TestNet {
 			started: false
 		}
 	}
-	
+
 	fn make_verifier(&self, _client: Arc<PeersClient>, _config: &ProtocolConfig)
 		-> Arc<Self::Verifier>
 	{

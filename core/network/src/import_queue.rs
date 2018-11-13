@@ -677,7 +677,7 @@ pub mod tests {
 		fn restart(&mut self) { self.restarts += 1; }
 	}
 
-	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block>, Hash, u64, BlockData<Block>) {
+	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>, Hash, u64, BlockData<Block>) {
 		let client = test_client::new();
 		let block = client.new_block().unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::File, block).unwrap();
