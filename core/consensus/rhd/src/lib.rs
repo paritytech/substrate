@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! BFT Agreement based on a rotating proposer in different rounds.
 //!
 //! Where this crate refers to input stream, should never logically conclude.
@@ -30,7 +29,6 @@
 //! conclude without having witnessed the conclusion.
 //! In general, this future should be pre-empted by the import of a justification
 //! set for this block height.
-// end::description[]
 
 #![cfg(feature="rhd")]
 // FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020

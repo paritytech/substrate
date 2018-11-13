@@ -21,7 +21,7 @@ pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
 pub use std::fmt;
 pub use rstd::result;
 pub use codec::{Codec, Decode, Encode, Input, Output};
-pub use substrate_metadata::{
+pub use srml_metadata::{
 	ModuleMetadata, FunctionMetadata, DecodeDifferent,
 	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };

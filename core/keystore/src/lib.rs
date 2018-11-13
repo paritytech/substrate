@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
-// end::description[]
 
 extern crate substrate_primitives;
 extern crate parity_crypto as crypto;

@@ -8,7 +8,7 @@ hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "2.1", default-features = false }
-substrate-metadata = { path = "../metadata", default-features = false }
+srml-metadata = { path = "../metadata", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
@@ -28,7 +28,7 @@ std = [
 	"parity-codec/std",
 	"sr-std/std",
 	"sr-primitives/std",
-	"substrate-metadata/std",
+	"srml-metadata/std",
 ]
 nightly = []
 strict = []
