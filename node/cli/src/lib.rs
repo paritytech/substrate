@@ -40,14 +40,19 @@ extern crate node_executor;
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate structopt;
 
 pub use cli::error;
 mod chain_spec;
 mod service;
+mod params;
 
 use tokio::runtime::Runtime;
 pub use cli::{VersionInfo, IntoExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
+use params::{Params as NodeParams};
+use structopt::StructOpt;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -97,10 +102,29 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	match cli::prepare_execution::<service::Factory, _, _, _, _>(args, exit, version, load_spec, "substrate-node")? {
+	let full_version = substrate_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+
+	let matches = match NodeParams::clap()
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(&(full_version + "\n")[..])
+		.get_matches_from_safe(args) {
+			Ok(m) => m,
+			Err(e) => e.exit(),
+	};
+
+	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(load_spec, version, "substrate-node", &matches)?;
+
+	config.custom.grandpa_authority = matches.is_present("grandpa_authority");
+
+	match cli::execute_default::<service::Factory, _>(spec, exit, &matches)? {
 		cli::Action::ExecutedInternally => (),
-		cli::Action::RunService((config, exit)) => {
-			info!("Substrate Node");
+		cli::Action::RunService(exit) => {
+			info!("{}", config.name);
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017, 2018");
 			info!("Chain specification: {}", config.chain_spec.name());

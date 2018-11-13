@@ -102,7 +102,7 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
-	roles: Roles,
+	config: FactoryFullConfiguration<Components::Factory>,
 	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
@@ -167,7 +167,7 @@ impl<Components> Service<Components>
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool, client.clone())?
+			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
 			imports_external_transactions: !(config.roles == Roles::LIGHT),
@@ -179,7 +179,7 @@ impl<Components> Service<Components>
 			config: network::ProtocolConfig {
 				roles: config.roles,
 			},
-			network_config: config.network,
+			network_config: config.network.clone(),
 			chain: client.clone(),
 			on_demand: on_demand.clone()
 				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
@@ -187,13 +187,16 @@ impl<Components> Service<Components>
 			specialization: network_protocol,
 		};
 
-		let mut protocol_id = network::ProtocolId::default();
-		let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
-		if protocol_id_full.len() > protocol_id.len() {
-			warn!("Protocol ID truncated to {} chars", protocol_id.len());
-		}
-		let id_len = protocol_id_full.len().min(protocol_id.len());
-		&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+		let protocol_id = {
+			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
+			let mut protocol_id = network::ProtocolId::default();
+			if protocol_id_full.len() > protocol_id.len() {
+				warn!("Protocol ID truncated to {} chars", protocol_id.len());
+			}
+			let id_len = protocol_id_full.len().min(protocol_id.len());
+			&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+			protocol_id
+		};
 
 		let network = network::Service::new(network_params, protocol_id, import_queue)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
@@ -269,7 +272,7 @@ impl<Components> Service<Components>
 		});
 
 		// Telemetry
-		let telemetry = match config.telemetry_url {
+		let telemetry = match config.telemetry_url.clone() {
 			Some(url) => {
 				let is_authority = config.roles == Roles::AUTHORITY;
 				let pubkey = format!("{}", public_key);
@@ -301,7 +304,7 @@ impl<Components> Service<Components>
 			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
-			roles: config.roles,
+			config,
 			proposer,
 			exit,
 			_rpc_http: rpc_http,
@@ -312,7 +315,7 @@ impl<Components> Service<Components>
 
 	/// give the authority key, if we are an authority and have a key
 	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
-		if self.roles != Roles::AUTHORITY { return None }
+		if self.config.roles != Roles::AUTHORITY { return None }
 		let keystore = &self.keystore;
 		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
 				.map(|k| keystore.load(k, "")))
@@ -321,6 +324,10 @@ impl<Components> Service<Components>
 		} else {
 			None
 		}
+	}
+
+	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
+		&self.config
 	}
 }
 

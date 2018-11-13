@@ -53,7 +53,10 @@ extern crate clap;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate structopt;
 
+mod params;
 pub mod error;
 pub mod informant;
 mod panic_hook;
@@ -76,6 +79,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use names::{Generator, Name};
 use regex::Regex;
+use structopt::StructOpt;   
+pub use params::{CoreParams, CoreCommands, ExecutionStrategy};
 
 use futures::Future;
 
@@ -94,11 +99,11 @@ pub struct VersionInfo {
 }
 
 /// CLI Action
-pub enum Action<F: ServiceFactory, E: IntoExit> {
+pub enum Action<E> {
 	/// Substrate handled the command. No need to do anything.
 	ExecutedInternally,
 	/// Service mode requested. Caller should start the service.
-	RunService((FactoryFullConfiguration<F>, E)),
+	RunService(E),
 }
 
 /// Something that can be converted into an exit signal.
@@ -149,84 +154,41 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-/// Parse command line arguments and execute commands or return service configuration.
-///
-/// IANA unassigned port ranges that we could use:
-/// 6717-6766		Unassigned
-/// 8504-8553		Unassigned
-/// 9556-9591		Unassigned
-/// 9803-9874		Unassigned
-/// 9926-9949		Unassigned
-pub fn prepare_execution<F, I, T, E, S>(
-	args: I,
-	exit: E,
-	version: VersionInfo,
-	spec_factory: S,
-	impl_name: &'static str,
-) -> error::Result<Action<F, E>>
+/// Parse command line arguments
+pub fn parse_args_default<'a, I, T>(args: I, version: VersionInfo) -> clap::ArgMatches<'a>
 where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
-	E: IntoExit,
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	panic_hook::set();
-
 	let full_version = service::config::full_version_from_strs(
 		version.version,
 		version.commit
 	);
-	let yaml = format!(include_str!("./cli.yml"),
-		name = version.executable_name,
-		description = version.description,
-		author = version.author,
-	);
-	let yaml = &clap::YamlLoader::load_from_str(&yaml).expect("Invalid yml file")[0];
-	let matches = match clap::App::from_yaml(yaml)
+
+	match CoreParams::clap()
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
 		.version(&(full_version + "\n")[..])
 		.get_matches_from_safe(args) {
 			Ok(m) => m,
 			Err(e) => e.exit(),
-	};
-
-	// TODO [ToDr] Split parameters parsing from actual execution.
-	let log_pattern = matches.value_of("log").unwrap_or("");
-	init_logger(log_pattern);
-	fdlimit::raise_fd_limit();
-
-	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		let spec = load_spec(&matches, spec_factory)?;
-		build_spec::<F>(matches, spec)?;
-		return Ok(Action::ExecutedInternally);
 	}
+}
 
-	if let Some(matches) = matches.subcommand_matches("export-blocks") {
-		let spec = load_spec(&matches, spec_factory)?;
-		export_blocks::<F, _>(matches, spec, exit.into_exit())?;
-		return Ok(Action::ExecutedInternally);
-	}
+pub fn parse_matches<'a, F, S>(
+	spec_factory: S,
+	version: VersionInfo,
+	impl_name: &'static str,
+	matches: &clap::ArgMatches<'a>
+) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>
+where
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 
-	if let Some(matches) = matches.subcommand_matches("import-blocks") {
-		let spec = load_spec(&matches, spec_factory)?;
-		import_blocks::<F, _>(matches, spec, exit.into_exit())?;
-		return Ok(Action::ExecutedInternally);
-	}
-
-	if let Some(matches) = matches.subcommand_matches("revert") {
-		let spec = load_spec(&matches, spec_factory)?;
-		revert_chain::<F>(matches, spec)?;
-		return Ok(Action::ExecutedInternally);
-	}
-
-	if let Some(matches) = matches.subcommand_matches("purge-chain") {
-		let spec = load_spec(&matches, spec_factory)?;
-		purge_chain::<F>(matches, spec)?;
-		return Ok(Action::ExecutedInternally);
-	}
-
+{
 	let spec = load_spec(&matches, spec_factory)?;
-	let mut config = service::Configuration::default_with_spec(spec);
+	let mut config = service::Configuration::default_with_spec(spec.clone());
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -351,7 +313,60 @@ where
 		config.telemetry_url = Some(url.to_owned());
 	}
 
-	Ok(Action::RunService((config, exit)))
+	Ok((spec, config))
+}
+
+// 
+// IANA unassigned port ranges that we could use:
+// 6717-6766		Unassigned
+// 8504-8553		Unassigned
+// 9556-9591		Unassigned
+// 9803-9874		Unassigned
+// 9926-9949		Unassigned
+
+/// execute default commands or return service configuration
+pub fn execute_default<'a, F, E>(
+	spec: ChainSpec<FactoryGenesis<F>>,
+	exit: E,
+	matches: &clap::ArgMatches<'a>
+) -> error::Result<Action<E>>
+where
+	E: IntoExit,
+	F: ServiceFactory,
+{
+
+	panic_hook::set();
+
+	let log_pattern = matches.value_of("log").unwrap_or("");
+	init_logger(log_pattern);
+	fdlimit::raise_fd_limit();
+
+	if let Some(matches) = matches.subcommand_matches("build-spec") {
+		build_spec::<F>(matches, spec)?;
+		return Ok(Action::ExecutedInternally);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("export-blocks") {
+		export_blocks::<F, _>(matches, spec, exit.into_exit())?;
+		return Ok(Action::ExecutedInternally);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("import-blocks") {
+		import_blocks::<F, _>(matches, spec, exit.into_exit())?;
+		return Ok(Action::ExecutedInternally);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("revert") {
+		revert_chain::<F>(matches, spec)?;
+		return Ok(Action::ExecutedInternally);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("purge-chain") {
+		purge_chain::<F>(matches, spec)?;
+		return Ok(Action::ExecutedInternally);
+	}
+
+	Ok(Action::RunService(exit))
 }
 
 fn build_spec<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>

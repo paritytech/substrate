@@ -37,6 +37,20 @@ construct_simple_protocol! {
 	pub struct NodeProtocol where Block = Block { }
 }
 
+/// Node specific configuration
+pub struct NodeConfig {
+	/// should run as a grandpa authority
+	pub grandpa_authority: bool
+}
+
+impl Default for NodeConfig {
+	fn default() -> NodeConfig {
+		NodeConfig {
+			grandpa_authority: false
+		}
+	}
+}
+
 construct_simple_service!(Service);
 
 construct_service_factory! {
@@ -49,23 +63,26 @@ construct_service_factory! {
 		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
-		Configuration = (),
+		Configuration = NodeConfig,
 		FullService = Service<FullComponents<Self>>
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor| 
 				Service::<FullComponents<Factory>>::new(config, executor) },
 		AuthoritySetup = {
 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
-				// known here: service, executor, key
-				info!("Using authority key {}", key.public());
-				executor.spawn(start_aura(
-					AuraConfig {
-						local_key: Some(key),
-						slot_duration: AURA_SLOT_DURATION,
-					},
-					service.client(),
-					service.proposer(),
-					service.network(),
-				));
+				if service.config().custom.grandpa_authority {
+					info!("Running Grandpa session as Authority {}", key.public());
+				} else {
+					info!("Using authority key {}", key.public());
+					executor.spawn(start_aura(
+						AuraConfig {
+							local_key: Some(key),
+							slot_duration: AURA_SLOT_DURATION,
+						},
+						service.client(),
+						service.proposer(),
+						service.network(),
+					));
+				}
 				Ok(service)
 			}
 		},
