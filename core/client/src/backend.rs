@@ -47,8 +47,7 @@ impl NewBlockState {
 }
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
-pub trait BlockImportOperation<Block, H>
-where
+pub trait BlockImportOperation<Block, H> where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
 {
@@ -85,11 +84,9 @@ where
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend<Block, H>: Send + Sync
-where
+pub trait Backend<Block, H>: Send + Sync where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-
 {
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H>;

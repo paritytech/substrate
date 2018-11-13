@@ -21,14 +21,12 @@
 //! codec-encoded metadata.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
-
-#[cfg(not(feature = "std"))]
-extern crate alloc;
 
 #[macro_use]
 extern crate parity_codec_derive;
 extern crate parity_codec as codec;
+extern crate sr_std as rstd;
+extern crate substrate_primitives as primitives;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -36,17 +34,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(feature = "std")]
-pub mod alloc {
-	pub use std::vec;
-}
-
 use codec::{Encode, Output};
 #[cfg(feature = "std")]
 use codec::{Decode, Input};
-
-// Make Vec available on `std` and `no_std`
-use alloc::vec::Vec;
+use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
@@ -293,4 +284,10 @@ pub struct RuntimeMetadata {
 	pub outer_event: OuterEventMetadata,
 	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
 	pub outer_dispatch: OuterDispatchMetadata,
+}
+
+impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {
+	fn into(self) -> primitives::OpaqueMetadata {
+		primitives::OpaqueMetadata::new(self.encode())
+	}
 }

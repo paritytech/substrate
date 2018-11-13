@@ -94,17 +94,17 @@ pub struct DatabaseSettings {
 }
 
 /// Create an instance of db-backed client.
-pub fn new_client<E, S, Block>(
+pub fn new_client<E, S, Block, RA>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
-) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
-where
-	Block: BlockT<Hash=H256>,
-	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-	S: BuildStorage,
+) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block, RA>, client::error::Error>
+	where
+		Block: BlockT<Hash=H256>,
+		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);

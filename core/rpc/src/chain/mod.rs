@@ -97,16 +97,16 @@ build_rpc_trait! {
 }
 
 /// Chain API with subscriptions support.
-pub struct Chain<B, E, Block: BlockT> {
+pub struct Chain<B, E, Block: BlockT, RA> {
 	/// Substrate client.
-	client: Arc<Client<B, E, Block>>,
+	client: Arc<Client<B, E, Block, RA>>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 }
 
-impl<B, E, Block: BlockT> Chain<B, E, Block> {
+impl<B, E, Block: BlockT, RA> Chain<B, E, Block, RA> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, subscriptions: Subscriptions) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block, RA>>, subscriptions: Subscriptions) -> Self {
 		Self {
 			client,
 			subscriptions,
@@ -114,10 +114,11 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> Chain<B, E, Block> where
+impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
 		Ok(match hash.into() {
@@ -163,10 +164,11 @@ impl<B, E, Block> Chain<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>> for Chain<B, E, Block> where
+impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>> for Chain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static
 {
 	type Metadata = ::metadata::Metadata;
 

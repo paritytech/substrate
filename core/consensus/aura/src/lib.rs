@@ -130,22 +130,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)>;
 }
 
-impl CompatibleDigestItem for generic::DigestItem<primitives::H256, u64> {
-	/// Construct a digest item which is a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
-		generic::DigestItem::Seal(slot_number, signature)
-	}
-	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
-		match self {
-			generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
-			_ => None
-		}
-	}
-}
-
-impl CompatibleDigestItem for generic::DigestItem<primitives::H256, primitives::AuthorityId> {
+impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId> {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
 	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
@@ -429,7 +414,7 @@ mod tests {
 
 	type Error = client::error::Error;
 
-	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock>;
+	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::ClientWithApi>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);
