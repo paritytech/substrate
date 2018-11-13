@@ -600,13 +600,6 @@ pub trait ProvideInherent {
 	) -> Result<(), Self::Error>;
 }
 
-/// Something that acts like an `Extrinsic`.
-pub trait Extrinsic {
-	/// Is this `Extrinsic` signed?
-	/// If no information are available about signed/unsigned, `None` should be returned.
-	fn is_signed(&self) -> Option<bool> { None }
-}
-
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
 

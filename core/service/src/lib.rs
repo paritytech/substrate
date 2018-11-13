@@ -67,7 +67,7 @@ use parking_lot::{Mutex, RwLock};
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
-use runtime_primitives::generic::{BlockId, SignedBlock};
+use runtime_primitives::generic::BlockId;
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -232,8 +232,8 @@ impl<Components> Service<Components>
 		// RPC
 		let (rpc_http, rpc_ws) = Components::RPC::start_rpc(
 			client.clone(), config.chain_spec.name().to_string(), config.impl_name,
-			config.impl_version, config.rpc_http, config.rpc_ws, task_executor.clone(),
-			transaction_pool.clone()
+			config.impl_version, config.rpc_http, config.rpc_ws, config.chain_spec.properties(),
+			task_executor.clone(), transaction_pool.clone()
 		)?;
 
 		let proposer = Arc::new(ProposerFactory {

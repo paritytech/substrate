@@ -19,14 +19,14 @@
 use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
-use chain_spec::ChainSpec;
+use chain_spec::{ChainSpec, Properties};
 use client_db;
 use client::{self, Client, runtime_api::{TaggedTransactionQueue, Metadata}};
 use {error, Service, RpcConfig, maybe_start_server, TransactionPoolAdapter};
 use network::{self, OnDemand, import_queue::ImportQueue};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
+use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage, generic::SignedBlock};
 use config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc;
@@ -125,31 +125,16 @@ pub trait StartRPC<C: Components> {
 		impl_version: &'static str,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		properties: Properties,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> Result<(Option<rpc::HttpServer>, Option<rpc::WsServer>), error::Error>;
 }
 
-<<<<<<< HEAD
 impl<T: Components> StartRPC<Self> for T where
-	T::RuntimeApi:
-		client::runtime_api::Metadata<
-			ComponentBlock<T>,
-			std::vec::Vec<u8>,
-			Error=client::error::Error
-		>
-		+ client::runtime_api::ConstructRuntimeApi<Block=ComponentBlock<T>>
-		+ client::runtime_api::Core<
-			ComponentBlock<T>,
-			primitives::AuthorityId,
-			Error=client::error::Error,
-			OverlayedChanges=client::runtime_api::OverlayedChanges
-		>,
+	T::RuntimeApi: Metadata<ComponentBlock<T>>,
 	for<'de> SignedBlock<ComponentBlock<T>>: ::serde::Deserialize<'de>,
 {
-=======
-impl<T: Components> StartRPC<Self> for T where T::RuntimeApi: Metadata<ComponentBlock<T>> {
->>>>>>> Move `sr-api` into client and more refactoring
 	fn start_rpc(
 		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
 		chain_name: String,
@@ -157,10 +142,11 @@ impl<T: Components> StartRPC<Self> for T where T::RuntimeApi: Metadata<Component
 		impl_version: &'static str,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
+		properties: Properties,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<T::TransactionPoolApi>>,
 	) -> Result<(Option<rpc::HttpServer>, Option<rpc::WsServer>), error::Error> {
-		let rpc_config = RpcConfig { chain_name, impl_name, impl_version };
+		let rpc_config = RpcConfig { properties, chain_name, impl_name, impl_version };
 
 		let handler = || {
 			let client = client.clone();
@@ -170,7 +156,7 @@ impl<T: Components> StartRPC<Self> for T where T::RuntimeApi: Metadata<Component
 			let author = rpc::apis::author::Author::new(
 				client.clone(), transaction_pool.clone(), subscriptions
 			);
-			rpc::rpc_handler::<ComponentBlock<T>, ComponentExHash<T>, _, _, _, _, _>(
+			rpc::rpc_handler::<ComponentBlock<T>, ComponentExHash<T>, _, _, _, _>(
 				state,
 				chain,
 				author,
