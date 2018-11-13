@@ -25,7 +25,7 @@ use overlayed_changes::OverlayedChanges;
 use trie_backend_essence::{TrieBackendStorage, TrieBackendEssence};
 use changes_trie::build_iterator::digest_build_iterator;
 use changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
-use changes_trie::{Configuration, Storage};
+use changes_trie::{AnchorBlockId, Configuration, Storage};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -37,7 +37,7 @@ pub fn prepare_input<'a, B, S, H>(
 	backend: &B,
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,
-	block: u64,
+	parent: &'a AnchorBlockId<H::Out>,
 ) -> Result<Option<Vec<InputPair>>, String>
 	where
 		B: Backend<H>,
@@ -54,10 +54,10 @@ pub fn prepare_input<'a, B, S, H>(
 	let mut input = Vec::new();
 	input.extend(prepare_extrinsics_input(
 		backend,
-		block,
+		parent.number + 1,
 		changes)?);
 	input.extend(prepare_digest_input::<_, H>(
-		block,
+		parent,
 		config,
 		storage)?);
 
@@ -73,7 +73,6 @@ fn prepare_extrinsics_input<B, H>(
 	where
 		B: Backend<H>,
 		H: Hasher,
-
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
 	for (key, val) in changes.prospective.top.iter().chain(changes.committed.top.iter()) {
@@ -103,19 +102,19 @@ fn prepare_extrinsics_input<B, H>(
 
 /// Prepare DigestIndex input pairs.
 fn prepare_digest_input<'a, S, H>(
-	block: u64,
+	parent: &'a AnchorBlockId<H::Out>,
 	config: &Configuration,
 	storage: &'a S
-) -> Result<impl Iterator<Item=InputPair>, String>
+) -> Result<impl Iterator<Item=InputPair> + 'a, String>
 	where
 		S: Storage<H>,
 		&'a S: TrieBackendStorage<H>,
 		H: Hasher,
-		H::Out: HeapSizeOf,
+		H::Out: 'a + HeapSizeOf,
 {
 	let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<u64>>::new();
-	for digest_build_block in digest_build_iterator(config, block) {
-		let trie_root = storage.root(digest_build_block)?;
+	for digest_build_block in digest_build_iterator(config, parent.number + 1) {
+		let trie_root = storage.root(parent, digest_build_block)?;
 		let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block))?;
 		let trie_storage = TrieBackendEssence::<_, H>::new(storage, trie_root);
 
@@ -136,7 +135,7 @@ fn prepare_digest_input<'a, S, H>(
 
 	Ok(digest_map.into_iter()
 		.map(move |(key, set)| InputPair::DigestIndex(DigestIndex {
-			block,
+			block: parent.number + 1,
 			key
 		}, set.into_iter().collect())))
 }
@@ -228,7 +227,7 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
 		let (backend, storage, changes) = prepare_for_build();
-		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 5).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, &AnchorBlockId { hash: Default::default(), number: 4 }).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
@@ -239,7 +238,7 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l1() {
 		let (backend, storage, changes) = prepare_for_build();
-		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 4).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, &AnchorBlockId { hash: Default::default(), number: 3 }).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
@@ -255,7 +254,7 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l2() {
 		let (backend, storage, changes) = prepare_for_build();
-		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 16).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, &AnchorBlockId { hash: Default::default(), number: 15 }).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
@@ -279,7 +278,7 @@ mod test {
 			extrinsics: Some(vec![1].into_iter().collect())
 		});
 
-		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 4).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, &AnchorBlockId { hash: Default::default(), number: 3 }).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),

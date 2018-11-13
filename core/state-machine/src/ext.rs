@@ -18,7 +18,7 @@
 
 use std::{error, fmt, cmp::Ord};
 use backend::{Backend, Consolidate};
-use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
+use changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
 use {Externalities, OverlayedChanges};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
@@ -288,12 +288,12 @@ where
 		Some(self.child_storage_root_transaction(storage_key).0)
 	}
 
-	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {
+	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {
 		let root_and_tx = compute_changes_trie_root::<_, T, H>(
 			self.backend,
 			self.changes_trie_storage.clone(),
 			self.overlay,
-			block,
+			&AnchorBlockId { hash: parent, number: parent_num },
 		);
 		let root_and_tx = root_and_tx.map(|(root, changes)| {
 			let mut calculated_root = Default::default();
@@ -305,7 +305,7 @@ where
 				}
 			}
 
-			(block, mdb, root)
+			(parent_num + 1, mdb, root)
 		});
 		let root = root_and_tx.as_ref().map(|(_, _, root)| root.clone());
 		self.changes_trie_transaction = root_and_tx;
@@ -353,7 +353,7 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, None);
-		assert_eq!(ext.storage_changes_root(100), None);
+		assert_eq!(ext.storage_changes_root(Default::default(), 100), None);
 	}
 
 	#[test]
@@ -363,7 +363,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
-		assert_eq!(ext.storage_changes_root(100), None);
+		assert_eq!(ext.storage_changes_root(Default::default(), 100), None);
 	}
 
 	#[test]
@@ -372,7 +372,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
-		assert_eq!(ext.storage_changes_root(100),
+		assert_eq!(ext.storage_changes_root(Default::default(), 99),
 			Some(hex!("5b829920b9c8d554a19ee2a1ba593c4f2ee6fc32822d083e04236d693e8358d5").into()));
 	}
 
@@ -383,7 +383,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
-		assert_eq!(ext.storage_changes_root(100),
+		assert_eq!(ext.storage_changes_root(Default::default(), 99),
 			Some(hex!("bcf494e41e29a15c9ae5caa053fe3cb8b446ee3e02a254efbdec7a19235b76e4").into()));
 	}
 }

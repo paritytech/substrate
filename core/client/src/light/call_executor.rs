@@ -21,6 +21,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
 
+use primitives::convert_hash;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
@@ -136,8 +137,7 @@ pub fn check_execution_proof<Header, E, H>(
 
 {
 	let local_state_root = request.header.state_root();
-	let mut root: H::Out = Default::default();
-	root.as_mut().copy_from_slice(local_state_root.as_ref());
+	let root: H::Out = convert_hash(&local_state_root);
 
 	let mut changes = OverlayedChanges::default();
 	let local_result = execution_proof_check::<H, _>(

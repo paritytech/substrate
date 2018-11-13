@@ -187,6 +187,17 @@ pub fn read_header<Block: BlockT>(
 	}
 }
 
+/// Required header from the database.
+pub fn require_header<Block: BlockT>(
+	db: &KeyValueDB,
+	col_index: Option<u32>,
+	col: Option<u32>,
+	id: BlockId<Block>,
+) -> client::error::Result<Block::Header> {
+	read_header(db, col_index, col, id)
+		.and_then(|header| header.ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{}", id)).into()))
+}
+
 /// Read meta from the database.
 pub fn read_meta<Block>(db: &KeyValueDB, col_meta: Option<u32>, col_header: Option<u32>) -> Result<
 	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,

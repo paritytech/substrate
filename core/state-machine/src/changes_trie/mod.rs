@@ -58,10 +58,20 @@ use trie::{DBValue, trie_root};
 /// Changes that are made outside of extrinsics are marked with this index;
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 
+/// Block identifier that could be used to determine fork of this block.
+#[derive(Debug)]
+pub struct AnchorBlockId<Hash: ::std::fmt::Debug> {
+	/// Hash of this block.
+	pub hash: Hash,
+	/// Number of this block.
+	pub number: u64,
+}
+
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait RootsStorage<H: Hasher>: Send + Sync {
-	/// Get changes trie root for given block.
-	fn root(&self, block: u64) -> Result<Option<H::Out>, String>;
+	/// Get changes trie root for the block with given number which is an ancestor (or the block
+	/// itself) of the anchor_block (i.e. anchor_block.number >= block).
+	fn root(&self, anchor: &AnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String>;
 }
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
@@ -79,13 +89,13 @@ pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H>, H: Hasher>(
 	backend: &B,
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,
-	block: u64,
+	parent: &'a AnchorBlockId<H::Out>,
 ) -> Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>)>
 	where
 		&'a S: TrieBackendStorage<H>,
 		H::Out: Ord + HeapSizeOf,
 {
-	let input_pairs = prepare_input::<B, S, H>(backend, storage, changes, block)
+	let input_pairs = prepare_input::<B, S, H>(backend, storage, changes, parent)
 		.expect("storage is not allowed to fail within runtime")?;
 	let transaction = input_pairs.into_iter()
 		.map(Into::into)
