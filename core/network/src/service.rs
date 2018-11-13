@@ -27,7 +27,7 @@ use io::NetSyncIo;
 use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
 use config::Params;
 use error::Error;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use import_queue::ImportQueue;
 use runtime_primitives::traits::{Block as BlockT};
 use tokio::{runtime::Runtime, timer::Interval};
@@ -64,7 +64,7 @@ pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 }
 
 /// Substrate network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
+pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Network service
 	network: Arc<Mutex<NetworkService>>,
 	/// Protocol handler
@@ -77,7 +77,7 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 	bg_thread: Option<(oneshot::Sender<()>, thread::JoinHandle<()>)>,
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S, H> {
 	/// Creates and register protocol with the network service
 	pub fn new<I: 'static + ImportQueue<B>>(
 		params: Params<B, S, H>,
@@ -132,13 +132,13 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
 	fn is_major_syncing(&self) -> bool {
 		self.handler.sync().read().status().is_major_syncing()
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H:ExHashT> Drop for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H:ExHashT> Drop for Service<B, S, H> {
 	fn drop(&mut self) {
 		self.handler.stop();
 		if let Some((sender, join)) = self.bg_thread.take() {
@@ -150,13 +150,13 @@ impl<B: BlockT + 'static, S: Specialization<B>, H:ExHashT> Drop for Service<B, S
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ExecuteInContext<B> for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ExecuteInContext<B> for Service<B, S, H> {
 	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
 		closure(&mut ProtocolContext::new(self.handler.context_data(), &mut NetSyncIo::new(&self.network, self.protocol_id)))
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> SyncProvider<B> for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> SyncProvider<B> for Service<B, S, H> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.status()
@@ -177,7 +177,7 @@ pub trait ManageNetwork: Send + Sync {
 	fn node_id(&self) -> Option<String>;
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ManageNetwork for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork for Service<B, S, H> {
 	fn accept_unreserved_peers(&self) {
 		self.network.lock().accept_unreserved_peers();
 	}
@@ -223,7 +223,7 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ManageNetwork for Se
 }
 
 /// Starts the background thread that handles the networking.
-fn start_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
+fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	config: NetworkConfiguration,
 	protocol: Arc<Protocol<B, S, H>>,
 	registered: RegisteredProtocol,
@@ -264,7 +264,7 @@ fn start_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
 }
 
 /// Runs the background thread that handles the networking.
-fn run_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
+fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	network_service: Arc<Mutex<NetworkService>>,
 	protocol: Arc<Protocol<B, S, H>>,
 	protocol_id: ProtocolId,

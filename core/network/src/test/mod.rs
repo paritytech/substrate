@@ -35,7 +35,7 @@ use keyring::Keyring;
 use codec::Encode;
 use import_queue::{SyncImportQueue, PassThroughVerifier, Verifier};
 use consensus::BlockOrigin;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use consensus_gossip::ConsensusGossip;
 use import_queue::ImportQueue;
 use service::ExecuteInContext;
@@ -62,7 +62,7 @@ pub struct DummySpecialization {
 	pub gossip: ConsensusGossip<Block>,
 }
 
-impl Specialization<Block> for DummySpecialization {
+impl NetworkSpecialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
 	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, status: ::message::Status<Block>) {

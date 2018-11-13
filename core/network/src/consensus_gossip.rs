@@ -27,7 +27,7 @@ use runtime_primitives::generic::BlockId;
 use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
 use config::Roles;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use StatusMessage;
 use generic_message;
 
@@ -262,7 +262,7 @@ where
 	}
 }
 
-impl<Block: BlockT> Specialization<Block> for ConsensusGossip<Block> where
+impl<Block: BlockT> NetworkSpecialization<Block> for ConsensusGossip<Block> where
 	Block::Header: HeaderT<Number=u64>
 {
 	fn status(&self) -> Vec<u8> {

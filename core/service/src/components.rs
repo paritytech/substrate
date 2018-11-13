@@ -225,7 +225,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
 	/// Network protocol extensions.
-	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
+	type NetworkProtocol: network::specialization::NetworkSpecialization<Self::Block>;
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.
