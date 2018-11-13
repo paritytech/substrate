@@ -28,6 +28,7 @@ use substrate_service::{
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
+use primitives::ed25519::Pair;
 
 const AURA_SLOT_DURATION: u64 = 6;
 
@@ -50,24 +51,22 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = (),
 		FullService = Service<FullComponents<Self>>
-			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor| {
-				Service::<FullComponents<Factory>>::new(config, executor.clone()).map(move |service|{
-					if let Some(key) = service.authority_key() {
-						info!("Using authority key {}", key.public());
-						let task = start_aura(
-							AuraConfig {
-								local_key:  Some(Arc::new(key)),
-								slot_duration: AURA_SLOT_DURATION,
-							},
-							service.client(),
-							service.proposer(),
-							service.network(),
-						);
-
-						executor.spawn(task);
-					}
-					service
-				})
+			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor| 
+				Service::<FullComponents<Factory>>::new(config, executor) },
+		AuthoritySetup = {
+			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
+				// known here: service, executor, key
+				info!("Using authority key {}", key.public());
+				executor.spawn(start_aura(
+					AuraConfig {
+						local_key: Some(key),
+						slot_duration: AURA_SLOT_DURATION,
+					},
+					service.client(),
+					service.proposer(),
+					service.network(),
+				));
+				Ok(service)
 			}
 		},
 		LightService = Service<LightComponents<Self>>

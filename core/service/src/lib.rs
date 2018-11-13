@@ -561,6 +561,7 @@ macro_rules! construct_service_factory {
 			Genesis = $genesis:ty,
 			Configuration = $config:ty,
 			FullService = $full_service:ty { $( $full_service_init:tt )* },
+			AuthoritySetup = { $( $authority_setup:tt )* },
 			LightService = $light_service:ty { $( $light_service_init:tt )* },
 			FullImportQueue = $full_import_queue:ty
 				{ $( $full_import_queue_init:tt )* },
@@ -634,7 +635,13 @@ macro_rules! construct_service_factory {
 				executor: $crate::TaskExecutor
 			) -> Result<Self::FullService, $crate::Error>
 			{
-				( $( $full_service_init )* ) (config, executor)
+				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
+					if let Some(key) = service.authority_key() {
+						($( $authority_setup )*)(service, executor, Arc::new(key))
+					} else {
+						Ok(service)
+					}
+				})
 			}
 		}
 	}
