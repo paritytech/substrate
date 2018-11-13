@@ -21,7 +21,7 @@ use heapsize::HeapSizeOf;
 use substrate_trie::Recorder;
 use proving_backend::ProvingBackendEssence;
 use trie_backend_essence::TrieBackendEssence;
-use changes_trie::{Configuration, Storage};
+use changes_trie::{AnchorBlockId, Configuration, Storage};
 use changes_trie::storage::TrieBackendAdapter;
 
 /// Prune obslete changes tries. Puning happens at the same block, where highest
@@ -33,21 +33,21 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	config: &Configuration,
 	storage: &S,
 	min_blocks_to_keep: u64,
-	current_block: u64,
+	current_block: &AnchorBlockId<H::Out>,
 	mut remove_trie_node: F,
 )
 	where
 		H::Out: HeapSizeOf,
 {
 	// we only CAN prune at block where max-level-digest is created
-	let digest_interval = match config.digest_level_at_block(current_block) {
+	let digest_interval = match config.digest_level_at_block(current_block.number) {
 		Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
 			digest_interval,
 		_ => return,
 	};
 
 	// select range for pruning
-	let (first, last) = match pruning_range(min_blocks_to_keep, current_block, digest_interval) {
+	let (first, last) = match pruning_range(min_blocks_to_keep, current_block.number, digest_interval) {
 		Some((first, last)) => (first, last),
 		None => return,
 	};
@@ -55,7 +55,7 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	// delete changes trie for every block in range
 	// TODO: limit `max_digest_interval` so that this cycle won't involve huge ranges
 	for block in first..last+1 {
-		let root = match storage.root(block) {
+		let root = match storage.root(current_block, block) {
 			Ok(Some(root)) => root,
 			Ok(None) => continue,
 			Err(error) => {
@@ -139,7 +139,7 @@ mod tests {
 			H::Out: HeapSizeOf,
 	{
 		let mut pruned_trie_nodes = HashSet::new();
-		prune(config, storage, min_blocks_to_keep, current_block,
+		prune(config, storage, min_blocks_to_keep, &AnchorBlockId { hash: Default::default(), number: current_block },
 			|node| { pruned_trie_nodes.insert(node); });
 		pruned_trie_nodes
 	}

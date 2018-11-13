@@ -734,7 +734,7 @@ mod tests {
 		let mut t = new_test_ext(true);
 		Executor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0, true).0.unwrap();
 
-		assert!(t.storage_changes_root(1).is_some());
+		assert!(t.storage_changes_root(Default::default(), 0).is_some());
 	}
 
 	#[test]
@@ -742,6 +742,6 @@ mod tests {
 		let mut t = new_test_ext(true);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0).unwrap();
 
-		assert!(t.storage_changes_root(1).is_some());
+		assert!(t.storage_changes_root(Default::default(), 0).is_some());
 	}
 }

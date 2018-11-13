@@ -93,7 +93,7 @@ pub fn execute_block(block: Block) {
 
 	// check digest
 	let mut digest = Digest::default();
-	if let Some(storage_changes_root) = storage_changes_root(header.number) {
+	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root.into()));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
@@ -160,7 +160,7 @@ pub fn finalise_block() -> Header {
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();
 	let storage_root = BlakeTwo256::storage_root();
-	let storage_changes_root = BlakeTwo256::storage_changes_root(number);
+	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash, number - 1);
 
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root {

@@ -53,7 +53,9 @@ pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
-pub use changes_trie::{Storage as ChangesTrieStorage,
+pub use changes_trie::{
+	AnchorBlockId as ChangesTrieAnchorBlockId,
+	Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check,
@@ -154,8 +156,8 @@ pub trait Externalities<H: Hasher> {
 	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
 	fn child_storage_root(&mut self, storage_key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Get the change trie root of the current storage overlay at given block.
-	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> where H::Out: Ord;
+	/// Get the change trie root of the current storage overlay at a block wth given parent.
+	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
 }
 
 /// Code execution engine.
