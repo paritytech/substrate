@@ -102,6 +102,7 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
+	roles: Roles,
 	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
@@ -300,12 +301,26 @@ impl<Components> Service<Components>
 			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			roles: config.roles,
 			proposer,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
 			_telemetry: telemetry,
 		})
+	}
+
+	/// give the authority key, if we are an authority and have a key
+	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
+		if self.roles != Roles::AUTHORITY { return None }
+		let keystore = &self.keystore;
+		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
+				.map(|k| keystore.load(k, "")))
+		{
+			Some(key)
+		} else {
+			None
+		}
 	}
 }
 
