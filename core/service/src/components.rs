@@ -175,12 +175,12 @@ impl<T: Components> StartRPC<Self> for T where
 pub trait CreateNetworkParams<C: Components> {
 	fn create_network_params<S>(
 		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
-		roles: network::Roles,
-		network_config: network::NetworkConfiguration,
+		roles: network::config::Roles,
+		network_config: network::config::NetworkConfiguration,
 		on_demand: Option<Arc<OnDemand<FactoryBlock<C::Factory>, NetworkService<C::Factory>>>>,
 		transaction_pool_adapter: TransactionPoolAdapter<C>,
 		specialization: S,
-	) -> network::Params<ComponentBlock<C>, S, ComponentExHash<C>>;
+	) -> network::config::Params<ComponentBlock<C>, S, ComponentExHash<C>>;
 }
 
 impl<T: Components> CreateNetworkParams<Self> for T where
@@ -188,14 +188,14 @@ impl<T: Components> CreateNetworkParams<Self> for T where
 {
 	fn create_network_params<S>(
 		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
-		roles: network::Roles,
-		network_config: network::NetworkConfiguration,
+		roles: network::config::Roles,
+		network_config: network::config::NetworkConfiguration,
 		on_demand: Option<Arc<OnDemand<FactoryBlock<T::Factory>, NetworkService<T::Factory>>>>,
 		transaction_pool_adapter: TransactionPoolAdapter<T>,
 		specialization: S,
-	) -> network::Params<ComponentBlock<T>, S, ComponentExHash<T>> {
-		network::Params {
-			config: network::ProtocolConfig { roles },
+	) -> network::config::Params<ComponentBlock<T>, S, ComponentExHash<T>> {
+		network::config::Params {
+			config: network::config::ProtocolConfig { roles },
 			network_config,
 			chain: client,
 			on_demand: on_demand.map(|d| d as Arc<network::OnDemandService<ComponentBlock<T>>>),
@@ -225,7 +225,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
 	/// Network protocol extensions.
-	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
+	type NetworkProtocol: network::specialization::NetworkSpecialization<Self::Block>;
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.

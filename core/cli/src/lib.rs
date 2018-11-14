@@ -60,7 +60,7 @@ use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
-use network::{NonReservedPeerMode, Protocol};
+use network::{Protocol, config::NonReservedPeerMode};
 use primitives::H256;
 
 use std::io::{Write, Read, stdin, stdout};

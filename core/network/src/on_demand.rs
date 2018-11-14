@@ -30,6 +30,7 @@ use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 use io::SyncIo;
 use message;
 use network_libp2p::{Severity, NodeIndex};
+use config::Roles;
 use service;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
@@ -41,7 +42,7 @@ const RETRY_COUNT: usize = 1;
 /// On-demand service API.
 pub trait OnDemandService<Block: BlockT>: Send + Sync {
 	/// When new node is connected.
-	fn on_connect(&self, peer: NodeIndex, role: service::Roles, best_number: NumberFor<Block>);
+	fn on_connect(&self, peer: NodeIndex, role: Roles, best_number: NumberFor<Block>);
 
 	/// When block is announced by the peer.
 	fn on_block_announce(&self, peer: NodeIndex, best_number: NumberFor<Block>);
@@ -211,8 +212,8 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	E: service::ExecuteInContext<B>,
 	B::Header: HeaderT,
 {
-	fn on_connect(&self, peer: NodeIndex, role: service::Roles, best_number: NumberFor<B>) {
-		if !role.intersects(service::Roles::FULL | service::Roles::AUTHORITY) { // TODO: correct?
+	fn on_connect(&self, peer: NodeIndex, role: Roles, best_number: NumberFor<B>) {
+		if !role.intersects(Roles::FULL | Roles::AUTHORITY) { // TODO: correct?
 			return;
 		}
 
@@ -511,9 +512,10 @@ pub mod tests {
 	use client::{self, error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
+	use config::Roles;
 	use message;
 	use network_libp2p::NodeIndex;
-	use service::{Roles, ExecuteInContext};
+	use service::ExecuteInContext;
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{changes_trie_config, Block, Header};

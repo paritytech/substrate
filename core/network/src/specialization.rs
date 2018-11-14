@@ -21,7 +21,7 @@ use runtime_primitives::traits::Block as BlockT;
 use protocol::Context;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
-pub trait Specialization<B: BlockT>: Send + Sync + 'static {
+pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	/// Get the current specialization-status.
 	fn status(&self) -> Vec<u8>;
 
