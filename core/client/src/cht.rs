@@ -29,7 +29,7 @@ use hash_db;
 use heapsize::HeapSizeOf;
 use trie;
 
-use primitives::H256;
+use primitives::{H256, convert_hash};
 use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
 use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
@@ -94,7 +94,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 {
 	let transaction = build_pairs::<Header, _>(cht_size, cht_num, hashes)?
 		.into_iter()
-		.map(|(k, v)| (k, Some(v)))
+		.map(|(k, v)| (None, k, Some(v)))
 		.collect::<Vec<_>>();
 	let storage = InMemoryState::<Hasher>::default().update(transaction);
 	let trie_storage = storage.try_into_trie_backend()
@@ -157,8 +157,7 @@ fn do_check_proof<Header, Hasher, F>(
 		Hasher::Out: Ord + HeapSizeOf,
 		F: FnOnce(Hasher::Out, &[u8]) -> ClientResult<Option<Vec<u8>>>,
 {
-	let mut root: Hasher::Out = Default::default();
-	root.as_mut().copy_from_slice(local_root.as_ref());
+	let root: Hasher::Out = convert_hash(&local_root);
 	let local_cht_key = encode_cht_key(local_number);
 	let local_cht_value = checker(root, &local_cht_key)?;
 	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidCHTProof)?;
@@ -302,7 +301,7 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 		32 => Some(H256::from_slice(&value[0..32])),
 		_ => None,
 	}
-	
+
 }
 
 #[cfg(test)]
@@ -313,8 +312,8 @@ mod tests {
 
 	#[test]
 	fn is_build_required_works() {
-		assert_eq!(is_build_required(SIZE, 0), None);
-		assert_eq!(is_build_required(SIZE, 1), None);
+		assert_eq!(is_build_required(SIZE, 0u64), None);
+		assert_eq!(is_build_required(SIZE, 1u64), None);
 		assert_eq!(is_build_required(SIZE, SIZE), None);
 		assert_eq!(is_build_required(SIZE, SIZE + 1), None);
 		assert_eq!(is_build_required(SIZE, 2 * SIZE), None);
@@ -325,16 +324,16 @@ mod tests {
 
 	#[test]
 	fn start_number_works() {
-		assert_eq!(start_number(SIZE, 0), 1);
-		assert_eq!(start_number(SIZE, 1), SIZE + 1);
-		assert_eq!(start_number(SIZE, 2), SIZE + SIZE + 1);
+		assert_eq!(start_number(SIZE, 0u64), 1u64);
+		assert_eq!(start_number(SIZE, 1u64), SIZE + 1);
+		assert_eq!(start_number(SIZE, 2u64), SIZE + SIZE + 1);
 	}
 
 	#[test]
 	fn end_number_works() {
-		assert_eq!(end_number(SIZE, 0), SIZE);
-		assert_eq!(end_number(SIZE, 1), SIZE + SIZE);
-		assert_eq!(end_number(SIZE, 2), SIZE + SIZE + SIZE);
+		assert_eq!(end_number(SIZE, 0u64), SIZE);
+		assert_eq!(end_number(SIZE, 1u64), SIZE + SIZE);
+		assert_eq!(end_number(SIZE, 2u64), SIZE + SIZE + SIZE);
 	}
 
 	#[test]

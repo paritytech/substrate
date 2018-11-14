@@ -20,10 +20,6 @@
 
 #[cfg(test)]
 #[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]
@@ -224,11 +220,11 @@ impl<
 
 	/// Check a given transaction for validity. This doesn't execute any
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
-	/// 
+	///
 	/// Changes made to the storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.encode().len();
-		
+
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -259,8 +255,13 @@ impl<
 				deps.push((sender, expected_index).encode());
 				expected_index = expected_index + One::one();
 			}
-			
-			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *index).encode()], TransactionLongevity::max_value())
+
+			TransactionValidity::Valid {
+				priority: encoded_len as TransactionPriority,
+				requires: deps,
+				provides: vec![(sender, *index).encode()],
+				longevity: TransactionLongevity::max_value(),
+			}
 		} else {
 			return TransactionValidity::Invalid
 		}
@@ -290,7 +291,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+	#[derive(Clone, Eq, PartialEq)]
 	pub struct Runtime;
 	impl system::Trait for Runtime {
 		type Origin = Origin;
@@ -317,7 +318,7 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			transaction_base_fee: 10,
@@ -326,8 +327,8 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
-		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
+		}.build_storage().unwrap().0);
+		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69.into()));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
@@ -339,8 +340,8 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
-		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
 		t.into()
 	}
 
@@ -397,7 +398,7 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext();
-		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33.into(), 69));
+		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33.into(), 69.into()));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());

@@ -19,7 +19,7 @@
 use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::bft::Justification;
+use runtime_primitives::Justification;
 
 use error::{ErrorKind, Result};
 
@@ -40,6 +40,22 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
 		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
 	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<Block::Hash>> {
+		match *id {
+			BlockId::Hash(h) => Ok(Some(h)),
+			BlockId::Number(n) => self.hash(n),
+		}
+	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	fn block_number_from_id(&self, id: &BlockId<Block>) -> Result<Option<NumberFor<Block>>> {
+		match *id {
+			BlockId::Hash(_) => Ok(self.header(*id)?.map(|h| h.number().clone())),
+			BlockId::Number(n) => Ok(Some(n)),
+		}
+	}
 }
 
 /// Blockchain database backend. Does not perform any validation.
@@ -47,10 +63,9 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// Get block body. Returns `None` if block is not found.
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>>;
 	/// Get last finalized block hash.
 	fn last_finalized(&self) -> Result<Block::Hash>;
-
 	/// Returns data cache reference, if it is enabled on this backend.
 	fn cache(&self) -> Option<&Cache<Block>>;
 
@@ -121,7 +136,7 @@ pub struct RouteEntry<Block: BlockT> {
 /// The ancestry sets will include the given blocks, and thus the tree-route is
 /// never empty.
 ///
-/// ```ignore
+/// ```text
 /// Tree route from R1 to E2. Retracted is [R1, R2, R3], Common is C, enacted [E1, E2]
 ///   <- R3 <- R2 <- R1
 ///  /
@@ -129,7 +144,7 @@ pub struct RouteEntry<Block: BlockT> {
 ///  \-> E1 -> E2
 /// ```
 ///
-/// ```ignore
+/// ```text
 /// Tree route from C to E2. Retracted empty. Common is C, enacted [E1, E2]
 /// C -> E1 -> E2
 /// ```

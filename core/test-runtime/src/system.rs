@@ -18,14 +18,14 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root};
+use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
 use runtime_primitives::generic;
-use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
+use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
-use primitives::Blake2Hasher;
+use primitives::{Blake2Hasher};
 use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -93,11 +93,52 @@ pub fn execute_block(block: Block) {
 
 	// check digest
 	let mut digest = Digest::default();
-	if let Some(storage_changes_root) = storage_changes_root(header.number) {
+	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root.into()));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
+
+/// Execute a transaction outside of the block execution function.
+/// This doesn't attempt to validate anything regarding the block.
+pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
+	let tx = match check_signature(&utx) {
+		Ok(tx) => tx,
+		Err(_) => return TransactionValidity::Invalid,
+	};
+
+	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
+	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
+	if tx.nonce < expected_nonce {
+		return TransactionValidity::Invalid;
+	}
+	if tx.nonce > expected_nonce + 64 {
+		return TransactionValidity::Unknown;
+	}
+
+	let hash = |from: &AccountId, nonce: u64| {
+		twox_128(&nonce.to_keyed_vec(from.as_bytes())).to_vec()
+	};
+	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
+		let mut deps = Vec::new();
+		deps.push(hash(&tx.from, tx.nonce - 1));
+		deps
+	} else { Vec::new() };
+
+	let provides = {
+		let mut p = Vec::new();
+		p.push(hash(&tx.from, tx.nonce));
+		p
+	};
+
+	TransactionValidity::Valid {
+		priority: tx.amount,
+		requires,
+		provides,
+		longevity: 64
+	}
+}
+
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
@@ -119,7 +160,7 @@ pub fn finalise_block() -> Header {
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();
 	let storage_root = BlakeTwo256::storage_root();
-	let storage_changes_root = BlakeTwo256::storage_changes_root(number);
+	let storage_changes_root = BlakeTwo256::storage_changes_root(parent_hash, number - 1);
 
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root {
@@ -135,16 +176,21 @@ pub fn finalise_block() -> Header {
 	}
 }
 
-fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
+#[inline(always)]
+fn check_signature(utx: &Extrinsic) -> Result<::Transfer, ApplyError> {
 	use runtime_primitives::traits::BlindCheckable;
 
-	// check signature
 	let utx = match utx.clone().check() {
 		Ok(tx) => tx,
 		Err(_) => return Err(ApplyError::BadSignature),
 	};
 
-	let tx: ::Transfer = utx.transfer;
+	Ok(utx.transfer)
+}
+
+fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
+	// check signature
+	let tx = check_signature(utx)?;
 
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
@@ -175,7 +221,11 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use primitives::hexdisplay::HexDisplay;
 	if given != expected {
-		println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
+		println!(
+			"Hash: given={}, expected={}",
+			HexDisplay::from(given.as_fixed_bytes()),
+			HexDisplay::from(expected.as_fixed_bytes())
+		);
 	}
 }
 
@@ -183,8 +233,8 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	if given != expected {
 		::runtime_io::print("Hash not equal");
-		::runtime_io::print(&given.0[..]);
-		::runtime_io::print(&expected.0[..]);
+		::runtime_io::print(given.as_bytes());
+		::runtime_io::print(expected.as_bytes());
 	}
 }
 
@@ -211,7 +261,7 @@ mod tests {
 	}
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
 		Extrinsic { transfer: tx, signature }
 	}
 

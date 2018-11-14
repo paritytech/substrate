@@ -27,10 +27,6 @@ extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -40,8 +36,9 @@ extern crate sr_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash};
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
+	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug};
 use substrate_primitives::storage::well_known_keys;
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
@@ -68,12 +65,12 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 
 pub trait Trait: Eq + Clone {
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
-	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
-	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
-	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
+	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
+	type Hash: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Parameter + Member + Default + traits::Digest<Hash = Self::Hash>;
-	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
+	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
+	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
@@ -86,7 +83,16 @@ pub trait Trait: Eq + Clone {
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Deposits an event onto this block's event record.
+		pub fn deposit_event(event: T::Event) {
+			let extrinsic_index = Self::extrinsic_index();
+			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+			let mut events = Self::events();
+			events.push(EventRecord { phase, event });
+			<Events<T>>::put(events);
+		}
+	}
 }
 
 /// A phase of a block's execution.
@@ -197,7 +203,7 @@ decl_storage! {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 		config(_phantom): ::std::marker::PhantomData<T>;
 
-		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			use codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
@@ -278,7 +284,7 @@ impl<T: Trait> Module<T> {
 		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
-		let storage_changes_root = T::Hashing::storage_changes_root(number.as_());
+		let storage_changes_root = T::Hashing::storage_changes_root(parent_hash, number.as_() - 1);
 
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries
@@ -299,15 +305,6 @@ impl<T: Trait> Module<T> {
 		let mut l = <Digest<T>>::get();
 		traits::Digest::push(&mut l, item);
 		<Digest<T>>::put(l);
-	}
-
-	/// Deposits an event onto this block's event record.
-	pub fn deposit_event(event: T::Event) {
-		let extrinsic_index = Self::extrinsic_index();
-		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-		let mut events = Self::events();
-		events.push(EventRecord { phase, event });
-		<Events<T>>::put(events);
 	}
 
 	/// Calculate the current block's random seed.
@@ -397,14 +394,29 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> CurrentHeight for Module<T> {
+pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
+impl<T> Default for ChainContext<T> {
+	fn default() -> Self {
+		ChainContext(::rstd::marker::PhantomData)
+	}
+}
+
+impl<T: Trait> Lookup for ChainContext<T> {
+	type Source = T::AccountId;
+	type Target = T::AccountId;
+	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
+		Ok(s)
+	}
+}
+
+impl<T: Trait> CurrentHeight for ChainContext<T> {
 	type BlockNumber = T::BlockNumber;
 	fn current_height(&self) -> Self::BlockNumber {
 		<Module<T>>::block_number()
 	}
 }
 
-impl<T: Trait> BlockNumberToHash for Module<T> {
+impl<T: Trait> BlockNumberToHash for ChainContext<T> {
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
 	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
@@ -452,7 +464,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().into()
+		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
 	}
 
 	#[test]

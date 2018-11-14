@@ -23,10 +23,10 @@ use futures::IntoFuture;
 
 use hash_db::{HashDB, Hasher};
 use heapsize::HeapSizeOf;
-use primitives::ChangesTrieConfiguration;
+use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
-use state_machine::{TrieBackend, CodeExecutor, ChangesTrieRootsStorage, read_proof_check,
-	key_changes_proof_check, create_proof_check_backend_storage};
+use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
+	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
 
 use call_executor::CallResult;
 use cht;
@@ -241,7 +241,10 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			},
 			remote_proof,
 			request.first_block.0.as_(),
-			request.last_block.0.as_(),
+			&ChangesTrieAnchorBlockId {
+				hash: convert_hash(&request.last_block.1),
+				number: request.last_block.0.as_(),
+			},
 			remote_max_block.as_(),
 			&request.key)
 		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
@@ -333,9 +336,8 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		request: &RemoteReadRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
-		let mut root: H::Out = Default::default();
-		root.as_mut().copy_from_slice(request.header.state_root().as_ref());
-		read_proof_check::<H>(root, remote_proof, &request.key).map_err(Into::into)
+		read_proof_check::<H>(convert_hash(request.header.state_root()), remote_proof, &request.key)
+			.map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -367,7 +369,8 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number
 		Number: Send + Sync + Eq + ::std::cmp::Ord + Copy + As<u64>,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
-	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
+	fn root(&self, _anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+		// we can't ask for roots from parallel forks here => ignore anchor
 		let root = if block < self.roots.0.as_() {
 			self.prev_roots.get(&As::sa(block)).cloned()
 		} else {
@@ -393,9 +396,10 @@ pub mod tests {
 	use client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
 	use error::Error as ClientError;
-	use test_client::{self, TestClient};
+	use test_client::{self, TestClient, blockchain::HeaderBackend};
 	use test_client::runtime::{self, Hash, Block, Header};
-	use test_client::client::BlockOrigin;
+	use consensus::BlockOrigin;
+
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
@@ -663,7 +667,7 @@ pub mod tests {
 		// check proof on local client using broken proof
 		assert!(local_checker.check_changes_proof(&request, ChangesProof {
 			max_block: remote_proof.max_block,
-			proof: local_roots_range.clone().into_iter().map(|v| v.to_vec()).collect(),
+			proof: local_roots_range.clone().into_iter().map(|v| v.as_ref().to_vec()).collect(),
 			roots: remote_proof.roots,
 			roots_proof: remote_proof.roots_proof,
 		}).is_err());

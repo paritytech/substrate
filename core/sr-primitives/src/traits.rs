@@ -23,12 +23,14 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
-use codec::{Codec, Encode};
+use codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
-use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
-	RemAssign, Shl, Shr};
+use rstd::ops::{
+	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
+	RemAssign, Shl, Shr
+};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -78,7 +80,7 @@ pub trait BlockNumberToHash {
 	type BlockNumber: Zero;
 
 	/// The type of the hash.
-	type Hash;
+	type Hash: Encode;
 
 	/// Get the hash for a given block number, or `None` if unknown.
 	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
@@ -160,7 +162,8 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord
+	PartialOrd<Self> + Ord +
+	HasCompact
 {}
 impl<T:
 	Zero + One + IntegerSquareRoot + As<u64> +
@@ -174,7 +177,8 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord
+	PartialOrd<Self> + Ord +
+	HasCompact
 > SimpleArithmetic for T {}
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
@@ -195,11 +199,13 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 pub trait SimpleBitOps:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
@@ -242,7 +248,7 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -272,7 +278,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 	fn storage_root() -> Self::Output;
 
 	/// Acquire the global storage changes root.
-	fn storage_changes_root(block: u64) -> Option<Self::Output>;
+	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -304,8 +310,8 @@ impl Hash for BlakeTwo256 {
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
-	fn storage_changes_root(block: u64) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(block).map(Into::into)
+	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output> {
+		runtime_io::storage_changes_root(parent_hash.into(), parent_number).map(Into::into)
 	}
 }
 
@@ -318,8 +324,8 @@ impl CheckEqual for substrate_primitives::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		use substrate_primitives::hexdisplay::HexDisplay;
-		if &self.0 != &other.0 {
-			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
+		if self != other {
+			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
 		}
 	}
 
@@ -327,8 +333,8 @@ impl CheckEqual for substrate_primitives::H256 {
 	fn check_equal(&self, other: &Self) {
 		if self != other {
 			runtime_io::print("Hash not equal");
-			runtime_io::print(&self.0[..]);
-			runtime_io::print(&other.0[..]);
+			runtime_io::print(self.as_bytes());
+			runtime_io::print(other.as_bytes());
 		}
 	}
 }
@@ -362,6 +368,16 @@ pub trait MaybeSerializeDebugButNotDeserialize {}
 impl<T> MaybeSerializeDebugButNotDeserialize for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeSerialize: Serialize {}
+#[cfg(feature = "std")]
+impl<T: Serialize> MaybeSerialize for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerialize {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerialize for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
@@ -370,6 +386,16 @@ impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
 pub trait MaybeSerializeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebug for T {}
+
+#[cfg(feature = "std")]
+pub trait MaybeDebug: Debug {}
+#[cfg(feature = "std")]
+impl<T: Debug> MaybeDebug for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDebug {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDebug for T {}
 
 #[cfg(feature = "std")]
 pub trait MaybeDisplay: Display {}
@@ -381,8 +407,18 @@ pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
-pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
-impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
+#[cfg(feature = "std")]
+pub trait MaybeDecode: ::codec::Decode {}
+#[cfg(feature = "std")]
+impl<T: ::codec::Decode> MaybeDecode for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDecode {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDecode for T {}
+
+pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
@@ -390,8 +426,8 @@ impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'st
 ///
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Digest<Hash = Self::Hash>;
 
@@ -416,6 +452,8 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	fn set_parent_hash(&mut self, Self::Hash);
 
 	fn digest(&self) -> &Self::Digest;
+	/// Get a mutable reference to the digest.
+	fn digest_mut(&mut self) -> &mut Self::Digest;
 	fn set_digest(&mut self, Self::Digest);
 
 	fn hash(&self) -> Self::Hash {
@@ -428,9 +466,9 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Extrinsic: Member + Codec;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
@@ -441,10 +479,21 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stati
 	}
 }
 
+/// Something that acts like an `Extrinsic`.
+pub trait Extrinsic {
+	/// Is this `Extrinsic` signed?
+	/// If no information are available about signed/unsigned, `None` should be returned.
+	fn is_signed(&self) -> Option<bool> { None }
+}
+
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
+/// Extract the digest type for a block.
+pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
+/// Extract the digest item type for a block.
+pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -495,14 +544,16 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
-pub trait Digest: Member + Default {
-	type Hash: Member;
+pub trait Digest: Member + MaybeSerializeDebug + Default {
+	type Hash: Member + MaybeSerializeDebug;
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
 	fn logs(&self) -> &[Self::Item];
 	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
+	/// Pop a digest item.
+	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
 	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
@@ -516,17 +567,65 @@ pub trait Digest: Member + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member {
-	type Hash: Member;
-	type AuthorityId: Member;
+pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
+	type Hash: Member + MaybeSerializeDebug;
+	type AuthorityId: Member + MaybeSerializeDebug;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-		None
-	}
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
 
 	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
-		None
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
+}
+
+/// Something that provides an inherent for a runtime.
+pub trait ProvideInherent {
+	/// The inherent that is provided.
+	type Inherent: Encode + MaybeDecode;
+	/// The error used by this trait.
+	type Error: Encode + MaybeDecode;
+	/// The call for setting the inherent.
+	type Call: Encode + MaybeDecode;
+
+	/// Create the inherent extrinsics.
+	///
+	/// # Return
+	///
+	/// Returns a vector with tuples containing the index for the extrinsic and the extrinsic itself.
+	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)>;
+
+	/// Check that the given inherent is valid.
+	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
+		block: &Block, data: Self::Inherent, extract_function: &F
+	) -> Result<(), Self::Error>;
+}
+
+/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
+pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+
+impl<'a, T> From<T> for ApiRef<'a, T> {
+	fn from(api: T) -> Self {
+		ApiRef(api, Default::default())
 	}
+}
+
+impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+/// Something that provides a runtime api.
+pub trait ProvideRuntimeApi {
+	/// The concrete type that provides the api.
+	type Api;
+
+	/// Returns the runtime api.
+	/// The returned instance will keep track of modifications to the storage. Any successful
+	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
+	/// the modifications will be `discarded`. The modifications will not be applied to the
+	/// storage, even on a `commit`.
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
 }

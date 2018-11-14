@@ -72,6 +72,7 @@ impl ExtBuilder {
 		self.existential_deposit = existential_deposit;
 		self
 	}
+	#[allow(dead_code)]
 	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
 		self.transfer_fee = transfer_fee;
 		self
@@ -85,7 +86,7 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {
@@ -103,7 +104,7 @@ impl ExtBuilder {
 			transfer_fee: self.transfer_fee,
 			creation_fee: self.creation_fee,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.into()
 	}
 }

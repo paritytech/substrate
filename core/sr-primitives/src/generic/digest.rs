@@ -19,7 +19,9 @@
 use rstd::prelude::*;
 
 use codec::{Decode, Encode, Codec, Input};
-use traits::{self, Member, DigestItem as DigestItemT};
+use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug};
+
+use substrate_primitives::hash::H512 as Signature;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -46,6 +48,10 @@ impl<Item> traits::Digest for Digest<Item> where
 	fn push(&mut self, item: Self::Item) {
 		self.logs.push(item);
 	}
+
+	fn pop(&mut self) -> Option<Self::Item> {
+		self.logs.pop()
+	}
 }
 
 /// Digest item that is able to encode/decode 'system' digest items and
@@ -60,9 +66,12 @@ pub enum DigestItem<Hash, AuthorityId> {
 	/// block. It is created for every block iff runtime supports changes
 	/// trie creation.
 	ChangesTrieRoot(Hash),
+	/// Put a Seal on it
+	Seal(u64, Signature),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(Vec<u8>),
 }
+
 
 /// A 'referencing view' for digest item. Does not own its contents. Used by
 /// final runtime implementations for encoding/decoding its log items.
@@ -73,6 +82,9 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a> {
 	AuthoritiesChange(&'a [AuthorityId]),
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),
+	/// A sealed signature for testing
+	Seal(&'a u64, &'a Signature),
+	/// Any 'non-system' digest item, opaque to the native code.
 	/// Reference to `DigestItem::Other`.
 	Other(&'a Vec<u8>),
 }
@@ -87,6 +99,7 @@ enum DigestItemType {
 	Other = 0,
 	AuthoritiesChange,
 	ChangesTrieRoot,
+	Seal,
 }
 
 impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
@@ -103,27 +116,25 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 		match *self {
 			DigestItem::AuthoritiesChange(ref v) => DigestItemRef::AuthoritiesChange(v),
 			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
+			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
 			DigestItem::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
 }
 
-impl<Hash: Codec + Member, AuthorityId: Codec + Member> traits::DigestItem for DigestItem<Hash, AuthorityId> {
+impl<
+	Hash: Codec + Member + MaybeSerializeDebug,
+	AuthorityId: Codec + Member + MaybeSerializeDebug
+> traits::DigestItem for DigestItem<Hash, AuthorityId> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;
 
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-		match *self {
-			DigestItem::AuthoritiesChange(ref authorities) => Some(authorities),
-			_ => None,
-		}
+		self.dref().as_authorities_change()
 	}
 
 	fn as_changes_trie_root(&self) -> Option<&Hash> {
-		match *self {
-			DigestItem::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
-			_ => None,
-		}
+		self.dref().as_changes_trie_root()
 	}
 }
 
@@ -143,9 +154,29 @@ impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId>
 			DigestItemType::ChangesTrieRoot => Some(DigestItem::ChangesTrieRoot(
 				Decode::decode(input)?,
 			)),
+			DigestItemType::Seal => {
+				let vals: (u64, Signature) = Decode::decode(input)?;
+				Some(DigestItem::Seal(vals.0, vals.1))
+			},
 			DigestItemType::Other => Some(DigestItem::Other(
 				Decode::decode(input)?,
 			)),
+		}
+	}
+}
+
+impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member> DigestItemRef<'a, Hash, AuthorityId> {
+	pub fn as_authorities_change(&self) -> Option<&'a [AuthorityId]> {
+		match *self {
+			DigestItemRef::AuthoritiesChange(ref authorities) => Some(authorities),
+			_ => None,
+		}
+	}
+
+	pub fn as_changes_trie_root(&self) -> Option<&'a Hash> {
+		match *self {
+			DigestItemRef::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
+			_ => None,
 		}
 	}
 }
@@ -162,6 +193,10 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 			DigestItemRef::ChangesTrieRoot(changes_trie_root) => {
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
 				changes_trie_root.encode_to(&mut v);
+			},
+			DigestItemRef::Seal(val, sig) => {
+				DigestItemType::Seal.encode_to(&mut v);
+				(val, sig).encode_to(&mut v);
 			},
 			DigestItemRef::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);

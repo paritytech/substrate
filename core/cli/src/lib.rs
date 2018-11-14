@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate CLI library.
-// end::description[]
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
@@ -36,7 +34,6 @@ extern crate sysinfo;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
-extern crate substrate_network_libp2p as network_libp2p;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_service as service;
 extern crate substrate_primitives as primitives;
@@ -58,13 +55,12 @@ pub mod error;
 pub mod informant;
 mod panic_hook;
 
-use network_libp2p::Protocol;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
-use network::NonReservedPeerMode;
+use network::{Protocol, config::NonReservedPeerMode};
 use primitives::H256;
 
 use std::io::{Write, Read, stdin, stdout};
@@ -320,19 +316,17 @@ where
 			None => None,
 		};
 
-		let min_peers = match matches.value_of("min-peers") {
-			Some(min_peers) => min_peers.parse().map_err(|_| "Invalid min-peers value specified.")?,
+		let in_peers = match matches.value_of("in-peers") {
+			Some(in_peers) => in_peers.parse().map_err(|_| "Invalid in-peers value specified.")?,
 			None => 25,
 		};
-		let max_peers = match matches.value_of("max-peers") {
-			Some(max_peers) => max_peers.parse().map_err(|_| "Invalid max-peers value specified.")?,
-			None => 50,
+		let out_peers = match matches.value_of("out-peers") {
+			Some(out_peers) => out_peers.parse().map_err(|_| "Invalid out-peers value specified.")?,
+			None => 25,
 		};
-		if min_peers > max_peers {
-			return Err(error::ErrorKind::Input("Min-peers mustn't be larger than max-peers.".to_owned()).into());
-		}
-		config.network.min_peers = min_peers;
-		config.network.max_peers = max_peers;
+
+		config.network.in_peers = in_peers;
+		config.network.out_peers = out_peers;
 	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
@@ -517,7 +511,7 @@ fn init_logger(pattern: &str) {
 
 	let mut builder = env_logger::Builder::new();
 	// Disable info logging by default for some modules:
-	builder.filter(Some("ws"), log::LevelFilter::Warn);
+	builder.filter(Some("ws"), log::LevelFilter::Off);
 	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	// Enable info for others.
 	builder.filter(None, log::LevelFilter::Info);

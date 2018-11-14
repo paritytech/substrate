@@ -29,18 +29,14 @@
 //! ## Finalization
 //!
 //! This module should be hooked up to the finalization routine.
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
 extern crate srml_support as runtime_support;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 
 #[cfg(test)]
 extern crate substrate_primitives;
@@ -50,13 +46,18 @@ extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 extern crate parity_codec as codec;
+#[macro_use]
+extern crate parity_codec_derive;
 
+use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{As, OnFinalise, SimpleArithmetic, Zero};
+use runtime_primitives::RuntimeString;
+use runtime_primitives::traits::{
+	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
+};
 use system::ensure_inherent;
-use rstd::ops::{Mul, Div};
-
+use rstd::{result, ops::{Mul, Div}, vec::Vec};
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
@@ -68,7 +69,36 @@ pub trait Trait: consensus::Trait + system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set(origin, now: T::Moment) -> Result;
+		/// Set the current time.
+		///
+		/// Extrinsic with this call should be placed at the specific position in the each block
+		/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
+		/// This call should be invoked exactly once per block. It will panic at the finalization phase,
+		/// if this call hasn't been invoked by that time.
+		///
+		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
+		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result {
+			ensure_inherent(origin)?;
+			let now = now.into();
+
+			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+			assert!(
+				<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
+				"Timestamp extrinsic must be at position {} in the block",
+				T::TIMESTAMP_SET_POSITION
+			);
+			assert!(
+				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
+				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
+			);
+			<Self as Store>::Now::put(now);
+			<Self as Store>::DidUpdate::put(true);
+			Ok(())
+		}
+
+		fn on_finalise() {
+			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+		}
 	}
 }
 
@@ -94,41 +124,47 @@ impl<T: Trait> Module<T> {
 		Self::now()
 	}
 
-	/// Set the current time.
-	///
-	/// Extrinsic with this call should be placed at the specific position in the each block
-	/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
-	/// This call should be invoked exactly once per block. It will panic at the finalization phase,
-	/// if this call hasn't been invoked by that time.
-	///
-	/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-	fn set(origin: T::Origin, now: T::Moment) -> Result {
-		ensure_inherent(origin)?;
-		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
-		assert!(
-			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
-			"Timestamp extrinsic must be at position {} in the block",
-			T::TIMESTAMP_SET_POSITION
-		);
-		assert!(
-			Self::now().is_zero() || now >= Self::now() + Self::block_period(),
-			"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
-		);
-		<Self as Store>::Now::put(now);
-		<Self as Store>::DidUpdate::put(true);
-		Ok(())
-	}
-
 	/// Set the timestamp to something in particular. Only used for tests.
-	#[cfg(any(feature = "std", test))]
+	#[cfg(feature = "std")]
 	pub fn set_timestamp(now: T::Moment) {
 		<Self as Store>::Now::put(now);
 	}
 }
 
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
-		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Decode))]
+pub enum InherentError {
+	Other(RuntimeString),
+	TimestampInFuture(u64),
+}
+
+impl<T: Trait> ProvideInherent for Module<T> {
+	type Inherent = T::Moment;
+	type Call = Call<T>;
+	type Error = InherentError;
+
+	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
+		vec![(T::TIMESTAMP_SET_POSITION, Call::set(data.into()))]
+	}
+
+	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
+			block: &Block, data: Self::Inherent, extract_function: &F
+	) -> result::Result<(), Self::Error> {
+		const MAX_TIMESTAMP_DRIFT: u64 = 60;
+
+		let xt = block.extrinsics().get(T::TIMESTAMP_SET_POSITION as usize)
+			.ok_or_else(|| InherentError::Other("No valid timestamp inherent in block".into()))?;
+
+		let t = match (xt.is_signed(), extract_function(&xt)) {
+			(Some(false), Some(Call::set(ref t))) => t.clone(),
+			_ => return Err(InherentError::Other("No valid timestamp inherent in block".into())),
+		}.into().as_();
+
+		if t > data.as_() + MAX_TIMESTAMP_DRIFT {
+			Err(InherentError::TimestampInFuture(t))
+		} else {
+			Ok(())
+		}
 	}
 }
 
@@ -174,12 +210,12 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -187,25 +223,25 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
-			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
+			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
+			let _ = Timestamp::dispatch(Call::set(70.into()), Origin::INHERENT);
 		});
 	}
 
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
 	fn block_period_is_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
+			let _ = Timestamp::dispatch(Call::set(46.into()), Origin::INHERENT);
 		});
 	}
 }

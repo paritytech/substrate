@@ -19,9 +19,9 @@
 #[cfg(feature = "std")]
 use serde::{Deserialize, Deserializer};
 
-use codec::{Decode, Encode, Codec, Input, Output};
+use codec::{Decode, Encode, Codec, Input, Output, HasCompact};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
-	Hash as HashT, DigestItem as DigestItemT};
+	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
 use generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.
@@ -42,48 +42,19 @@ pub struct Header<Number, Hash: HashT, DigestItem> {
 	pub digest: Digest<DigestItem>,
 }
 
-// Hack to work around the fact that deriving deserialize doesn't work nicely with
-// the `hashing` trait used as a parameter.
-// dummy struct that uses the hash type directly.
-// https://github.com/serde-rs/serde/issues/1296
-#[cfg(feature = "std")]
-#[serde(rename_all = "camelCase")]
-#[derive(Deserialize)]
-struct DeserializeHeader<N, H, D> {
-	parent_hash: H,
-	number: N,
-	state_root: H,
-	extrinsics_root: H,
-	digest: Digest<D>,
-}
-
-#[cfg(feature = "std")]
-impl<N, D, Hash: HashT> From<DeserializeHeader<N, Hash::Output, D>> for Header<N, Hash, D> {
-	fn from(other: DeserializeHeader<N, Hash::Output, D>) -> Self {
-		Header {
-			parent_hash: other.parent_hash,
-			number: other.number,
-			state_root: other.state_root,
-			extrinsics_root: other.extrinsics_root,
-			digest: other.digest,
-		}
-	}
-}
-
+// TODO: Remove Deserialize for Header once RPC no longer needs it #1098
 #[cfg(feature = "std")]
 impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Header<Number, Hash, DigestItem> where
-	Number: Deserialize<'a>,
-	Hash::Output: Deserialize<'a>,
-	DigestItem: Deserialize<'a>,
+	Header<Number, Hash, DigestItem>: Decode,
 {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		DeserializeHeader::<Number, Hash::Output, DigestItem>::deserialize(de).map(Into::into)
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
 	}
 }
 
-// TODO [ToDr] Issue with bounds
 impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
-	Number: Decode,
+	Number: HasCompact,
 	Hash: HashT,
 	Hash::Output: Decode,
 	DigestItem: DigestItemT + Decode,
@@ -91,7 +62,7 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
 			parent_hash: Decode::decode(input)?,
-			number: Decode::decode(input)?,
+			number: <<Number as HasCompact>::Type>::decode(input)?.into(),
 			state_root: Decode::decode(input)?,
 			extrinsics_root: Decode::decode(input)?,
 			digest: Decode::decode(input)?,
@@ -100,14 +71,14 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
-	Number: Encode,
+	Number: HasCompact + Copy,
 	Hash: HashT,
 	Hash::Output: Encode,
 	DigestItem: DigestItemT + Encode,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
-		dest.push(&self.number);
+		dest.push(&<<Number as HasCompact>::Type>::from(self.number));
 		dest.push(&self.state_root);
 		dest.push(&self.extrinsics_root);
 		dest.push(&self.digest);
@@ -115,11 +86,11 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
+	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
 	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
- {
+	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
+{
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
 	type Hashing = Hash;
@@ -138,6 +109,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
 	fn digest(&self) -> &Self::Digest { &self.digest }
+	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
 	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
 
 	fn new(
@@ -158,7 +130,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 }
 
 impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
+	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
 	DigestItem: DigestItemT + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,

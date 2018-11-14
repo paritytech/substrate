@@ -16,16 +16,17 @@
 
 //! Substrate client possible errors.
 
+#![allow(missing_docs)]
+
 use std;
 use state_machine;
 use runtime_primitives::ApplyError;
-use bft;
+use consensus;
 
 error_chain! {
 	links {
-		BFT(bft::error::Error, bft::error::ErrorKind) #[doc="BFT error"];
+		Consensus(consensus::Error, consensus::ErrorKind);
 	}
-
 	errors {
 		/// Backend error.
 		Backend(s: String) {
@@ -40,7 +41,7 @@ error_chain! {
 		}
 
 		/// Applying extrinsic error.
-		ApplyExtinsicFailed(e: ApplyError) {
+		ApplyExtrinsicFailed(e: ApplyError) {
 			description("Extrinsic error"),
 			display("Extrinsic error: {:?}", e),
 		}
@@ -67,6 +68,12 @@ error_chain! {
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),
+		}
+
+		/// Genesis config is invalid.
+		GenesisInvalid {
+			description("Genesis config error"),
+			display("Genesis config provided is invalid"),
 		}
 
 		/// Bad justification for header.

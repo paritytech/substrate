@@ -18,8 +18,9 @@
 
 use rstd::prelude::*;
 use rstd::result;
+use codec::Compact;
 use substrate_primitives::u32_trait::Value as U32;
-use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug, OnFinalise};
+use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Result, Dispatchable, Parameter};
 use srml_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
@@ -28,12 +29,12 @@ use system::{self, ensure_signed};
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
-pub trait Trait: CouncilTrait + MaybeSerializeDebug {
+pub trait Trait: CouncilTrait {
 	/// The outer origin type.
 	type Origin: From<Origin>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + MaybeSerializeDebug;
+	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait>::Origin>;
 
 	/// The outer event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -65,10 +66,97 @@ decl_event!(
 );
 
 decl_module! {
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "<T as Trait>::Proposal: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
-		fn propose(origin, threshold: u32, proposal: Box<<T as Trait>::Proposal>) -> Result;
-		fn vote(origin, proposal: T::Hash, index: ProposalIndex, approve: bool) -> Result;
+		fn deposit_event() = default;
+		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) -> Result {
+			let who = ensure_signed(origin)?;
+			let threshold = threshold.into();
+
+			ensure!(Self::is_councillor(&who), "proposer not on council");
+
+			let proposal_hash = T::Hashing::hash_of(&proposal);
+
+			ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
+
+			if threshold < 2 {
+				let ok = proposal.dispatch(Origin::Members(1).into()).is_ok();
+				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
+			} else {
+				let index = Self::proposal_count();
+				<ProposalCount<T>>::mutate(|i| *i += 1);
+				<Proposals<T>>::mutate(|proposals| proposals.push(proposal_hash));
+				<ProposalOf<T>>::insert(proposal_hash, *proposal);
+				<Voting<T>>::insert(proposal_hash, (index, threshold, vec![who.clone()], vec![]));
+
+				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
+			}
+			Ok(())
+		}
+
+		fn vote(origin, proposal: T::Hash, index: Compact<ProposalIndex>, approve: bool) -> Result {
+			let who = ensure_signed(origin)?;
+			let index = index.into();
+
+			ensure!(Self::is_councillor(&who), "voter not on council");
+
+			let mut voting = Self::voting(&proposal).ok_or("proposal must exist")?;
+			ensure!(voting.0 == index, "mismatched index");
+
+			let position_yes = voting.2.iter().position(|a| a == &who);
+			let position_no = voting.3.iter().position(|a| a == &who);
+
+			if approve {
+				if position_yes.is_none() {
+					voting.2.push(who.clone());
+				} else {
+					return Err("duplicate vote ignored")
+				}
+				if let Some(pos) = position_no {
+					voting.3.swap_remove(pos);
+				}
+			} else {
+				if position_no.is_none() {
+					voting.3.push(who.clone());
+				} else {
+					return Err("duplicate vote ignored")
+				}
+				if let Some(pos) = position_yes {
+					voting.2.swap_remove(pos);
+				}
+			}
+
+			let yes_votes = voting.2.len() as u32;
+			let no_votes = voting.3.len() as u32;
+			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
+
+			let threshold = voting.1;
+			let potential_votes = <Council<T>>::active_council().len() as u32;
+			let approved = yes_votes >= threshold;
+			let disapproved = potential_votes.saturating_sub(no_votes) < threshold;
+			if approved || disapproved {
+				if approved {
+					Self::deposit_event(RawEvent::Approved(proposal));
+
+					// execute motion, assuming it exists.
+					if let Some(p) = <ProposalOf<T>>::take(&proposal) {
+						let ok = p.dispatch(Origin::Members(threshold).into()).is_ok();
+						Self::deposit_event(RawEvent::Executed(proposal, ok));
+					}
+				} else {
+					// disapproved
+					Self::deposit_event(RawEvent::Disapproved(proposal));
+				}
+
+				// remove vote
+				<Voting<T>>::remove(&proposal);
+				<Proposals<T>>::mutate(|proposals| proposals.retain(|h| h != &proposal));
+			} else {
+				// update voting
+				<Voting<T>>::insert(&proposal, voting);
+			}
+
+			Ok(())
+		}
 	}
 }
 
@@ -85,114 +173,14 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(_marker): ::std::marker::PhantomData<T>;
-		build(|_, _| {});
+		build(|_, _, _| {});
 	}
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	pub fn is_councillor(who: &T::AccountId) -> bool {
 		<Council<T>>::active_council().iter()
 			.any(|&(ref a, _)| a == who)
-	}
-
-	// Dispatch
-	fn propose(origin: <T as system::Trait>::Origin, threshold: u32, proposal: Box<<T as Trait>::Proposal>) -> Result {
-		let who = ensure_signed(origin)?;
-
-		ensure!(Self::is_councillor(&who), "proposer not on council");
-
-		let proposal_hash = T::Hashing::hash_of(&proposal);
-
-		ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
-
-		if threshold < 2 {
-			let ok = proposal.dispatch(Origin::Members(1).into()).is_ok();
-			Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
-		} else {
-			let index = Self::proposal_count();
-			<ProposalCount<T>>::mutate(|i| *i += 1);
-			<Proposals<T>>::mutate(|proposals| proposals.push(proposal_hash));
-			<ProposalOf<T>>::insert(proposal_hash, *proposal);
-			<Voting<T>>::insert(proposal_hash, (index, threshold, vec![who.clone()], vec![]));
-
-			Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
-		}
-		Ok(())
-	}
-
-	fn vote(origin: <T as system::Trait>::Origin, proposal: T::Hash, index: ProposalIndex, approve: bool) -> Result {
-		let who = ensure_signed(origin)?;
-
-		ensure!(Self::is_councillor(&who), "voter not on council");
-
-		let mut voting = Self::voting(&proposal).ok_or("proposal must exist")?;
-		ensure!(voting.0 == index, "mismatched index");
-
-		let position_yes = voting.2.iter().position(|a| a == &who);
-		let position_no = voting.3.iter().position(|a| a == &who);
-
-		if approve {
-			if position_yes.is_none() {
-				voting.2.push(who.clone());
-			} else {
-				return Err("duplicate vote ignored")
-			}
-			if let Some(pos) = position_no {
-				voting.3.swap_remove(pos);
-			}
-		} else {
-			if position_no.is_none() {
-				voting.3.push(who.clone());
-			} else {
-				return Err("duplicate vote ignored")
-			}
-			if let Some(pos) = position_yes {
-				voting.2.swap_remove(pos);
-			}
-		}
-
-		let yes_votes = voting.2.len() as u32;
-		let no_votes = voting.3.len() as u32;
-		Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
-
-		let threshold = voting.1;
-		let potential_votes = <Council<T>>::active_council().len() as u32;
-		let approved = yes_votes >= threshold;
-		let disapproved = potential_votes.saturating_sub(no_votes) < threshold;
-		if approved || disapproved {
-			if approved {
-				Self::deposit_event(RawEvent::Approved(proposal));
-
-				// execute motion, assuming it exists.
-				if let Some(p) = <ProposalOf<T>>::take(&proposal) {
-					let ok = p.dispatch(Origin::Members(threshold).into()).is_ok();
-					Self::deposit_event(RawEvent::Executed(proposal, ok));
-				}
-			} else {
-				// disapproved
-				Self::deposit_event(RawEvent::Disapproved(proposal));
-			}
-
-			// remove vote
-			<Voting<T>>::remove(&proposal);
-			<Proposals<T>>::mutate(|proposals| proposals.retain(|h| h != &proposal));
-		} else {
-			// update voting
-			<Voting<T>>::insert(&proposal, voting);
-		}
-
-		Ok(())
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 
@@ -236,7 +224,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value, 0))
+		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value.into(), 0.into()))
 	}
 
 	#[test]
@@ -245,7 +233,7 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3.into(), Box::new(proposal.clone())));
 			assert_eq!(CouncilMotions::proposals(), vec![hash]);
 			assert_eq!(CouncilMotions::proposal_of(&hash), Some(proposal));
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![1], Vec::<u64>::new())));
@@ -253,7 +241,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 3))
 				}
 			]);
 		});
@@ -264,7 +252,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_noop!(CouncilMotions::propose(Origin::signed(42), 3, Box::new(proposal.clone())), "proposer not on council");
+			assert_noop!(CouncilMotions::propose(Origin::signed(42), 3.into(), Box::new(proposal.clone())), "proposer not on council");
 		});
 	}
 
@@ -274,8 +262,8 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(CouncilMotions::vote(Origin::signed(42), hash.clone(), 0, true), "voter not on council");
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3.into(), Box::new(proposal.clone())));
+			assert_noop!(CouncilMotions::vote(Origin::signed(42), hash.clone(), 0.into(), true), "voter not on council");
 		});
 	}
 
@@ -285,8 +273,8 @@ mod tests {
 			System::set_block_number(3);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 1, true), "mismatched index");
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3.into(), Box::new(proposal.clone())));
+			assert_noop!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 1.into(), true), "mismatched index");
 		});
 	}
 
@@ -296,21 +284,21 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2.into(), Box::new(proposal.clone())));
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 2, vec![1], Vec::<u64>::new())));
-			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, true), "duplicate vote ignored");
-			assert_ok!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, false));
+			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0.into(), true), "duplicate vote ignored");
+			assert_ok!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0.into(), false));
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 2, Vec::<u64>::new(), vec![1])));
-			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, false), "duplicate vote ignored");
+			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0.into(), false), "duplicate vote ignored");
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 0, 1))
+					event: OuterEvent::motions(RawEvent::Voted(1, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false, 0, 1))
 				}
 			]);
 		});
@@ -322,21 +310,21 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, false));
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3.into(), Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0.into(), false));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 3))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 1, 1))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false, 1, 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Disapproved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+					event: OuterEvent::motions(RawEvent::Disapproved(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into()))
 				}
 			]);
 		});
@@ -348,25 +336,25 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
-			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2.into(), Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0.into(), true));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), true, 2, 0))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), true, 2, 0))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Approved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+					event: OuterEvent::motions(RawEvent::Approved(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into()))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Executed(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false))
+					event: OuterEvent::motions(RawEvent::Executed(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false))
 				}
 			]);
 		});

@@ -22,10 +22,11 @@ use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 
+use in_mem;
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
@@ -72,9 +73,8 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
-	H: Hasher,
-
-	H::Out: HeapSizeOf,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
@@ -143,9 +143,8 @@ where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
-	H: Hasher,
-	H::Out: HeapSizeOf,
-
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
 {}
 
 impl<S, F, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, F>
@@ -153,8 +152,8 @@ where
 	Block: BlockT,
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
-	H: Hasher,
-
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
 {
 	type State = OnDemandState<Block, S, F>;
 
@@ -167,7 +166,7 @@ where
 		&mut self,
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
-		_justification: Option<Justification<Block::Hash>>,
+		_justification: Option<Justification>,
 		state: NewBlockState,
 	) -> ClientResult<()> {
 		self.leaf_state = state;
@@ -189,19 +188,19 @@ where
 		Ok(())
 	}
 
-	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, _iter: I) -> ClientResult<()> {
-		// we're not storing anything locally => ignore changes
-		Ok(())
+	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> ClientResult<H::Out> {
+		let in_mem = in_mem::Backend::<Block, H>::new();
+		let mut op = in_mem.begin_operation(BlockId::Hash(Default::default()))?;
+		op.reset_storage(top, children)
 	}
 }
 
 impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
-	where
-		Block: BlockT,
-		S: BlockchainStorage<Block>,
-		F: Fetcher<Block>,
-		H: Hasher,
-	
+where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+	H: Hasher<Out=Block::Hash>,
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -227,13 +226,30 @@ impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
 			.into_future().wait()
 	}
 
+	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+	}
+
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {
 		// whole state is not available on light node
 	}
 
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _storage_key: &[u8], _action: A) {
+		// whole state is not available on light node
+	}
+
 	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
 		(H::Out::default(), ())
+	}
+
+	fn child_storage_root<I>(&self, _key: &[u8], _delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		(H::Out::default().as_ref().to_vec(), true, ())
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

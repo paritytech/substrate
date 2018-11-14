@@ -1,0 +1,42 @@
+[package]
+name = "substrate-consensus-aura"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Rhododendron Round-Based consensus-algorithm for substrate"
+
+[dependencies]
+futures = "0.1.17"
+parity-codec = { version = "2.1" }
+substrate-consensus-common = { path = "../common" }
+substrate-client = { path = "../../client" }
+substrate-primitives = { path = "../../primitives" }
+substrate-network = { path = "../../network" }
+srml-support = { path = "../../../srml/support" }
+sr-primitives = { path = "../../sr-primitives" }
+sr-version = { path = "../../sr-version" }
+sr-io = { path = "../../sr-io" }
+srml-consensus = { path = "../../../srml/consensus" }
+tokio = "0.1.7"
+parking_lot = "0.4"
+error-chain = "0.12"
+log = "0.3"
+
+[dev-dependencies]
+substrate-keyring = { path = "../../keyring" }
+substrate-executor = { path = "../../executor" }
+substrate-service = { path = "../../service" }
+substrate-test-client = { path = "../../test-client" }
+env_logger = { version = "0.4" }
+
+[target.'cfg(test)'.dependencies]
+substrate-network = { path = "../../network", features = ["test-helpers"] }
+
+[features]
+default = ["std"]
+std = [
+	"substrate-primitives/std",
+	"srml-support/std",
+	"sr-primitives/std",
+	"sr-version/std",
+]
+

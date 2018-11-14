@@ -30,9 +30,8 @@ use runtime_primitives::traits::{Header, As};
 const TIMER_INTERVAL_MS: u64 = 5000;
 
 /// Spawn informant on the event loop
-pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor)
-	where
-		C: Components,
+pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
+	C: Components,
 {
 	let interval = Interval::new(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS));
 
@@ -58,7 +57,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed()), format!(", target=#{}", n)),
 			};
 			last_number = Some(best_number);
-			let txpool_status = txpool.light_status();
+			let txpool_status = txpool.status();
 			info!(
 				target: "substrate",
 				"{}{} ({} peers), best: #{} ({})",
@@ -81,7 +80,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"peers" => num_peers,
 				"height" => best_number,
 				"best" => ?hash,
-				"txcount" => txpool_status.transaction_count,
+				"txcount" => txpool_status.ready,
 				"cpu" => cpu_usage,
 				"memory" => memory
 			);
@@ -100,8 +99,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let txpool = service.transaction_pool();
 	let display_txpool_import = txpool.import_notification_stream().for_each(move |_| {
-		let status = txpool.light_status();
-		telemetry!("txpool.import"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);
+		let status = txpool.status();
+		telemetry!("txpool.import"; "ready" => status.ready, "future" => status.future);
 		Ok(())
 	});
 
@@ -121,4 +120,3 @@ fn speed(best_number: u64, last_number: Option<u64>) -> String {
 		format!(" {:4.1} bps", speed / 10.0)
 	}
 }
-

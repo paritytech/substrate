@@ -17,18 +17,16 @@
 //! Client extension for tests.
 
 use client::{self, Client};
-use keyring::Keyring;
-use primitives::ed25519;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use consensus::{ImportBlock, BlockImport, BlockOrigin};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
 use runtime;
-use bft;
 
 /// Extension trait for a test client.
-pub trait TestClient {
+pub trait TestClient: Sized {
 	/// Justify and import block to the chain. No finality.
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()>;
+	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
+		-> client::error::Result<()>;
 
 	/// Finalize a block.
 	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()>;
@@ -37,23 +35,26 @@ pub trait TestClient {
 	fn genesis_hash(&self) -> runtime::Hash;
 }
 
-impl<B, E> TestClient for Client<B, E, runtime::Block>
+impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 	where
 		B: client::backend::Backend<runtime::Block, Blake2Hasher>,
-		E: client::CallExecutor<runtime::Block, Blake2Hasher>
+		E: client::CallExecutor<runtime::Block, Blake2Hasher>,
+		Self: BlockImport<runtime::Block, Error=client::error::Error>,
 {
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
-		let authorities: [ed25519::Pair; 3] = [
-			Keyring::Alice.into(),
-			Keyring::Bob.into(),
-			Keyring::Charlie.into(),
-		];
-		let keys: Vec<&ed25519::Pair> = authorities.iter().collect();
-		let justification = fake_justify::<runtime::Block>(&block.header, &keys);
-		let justified = self.check_justification(block.header, justification)?;
-		self.import_block(origin, justified, Some(block.extrinsics), false)?;
+	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
+		-> client::error::Result<()>
+	{
+		let import = ImportBlock {
+			origin,
+			header: block.header,
+			external_justification: vec![],
+			post_runtime_digests: vec![],
+			body: Some(block.extrinsics),
+			finalized: false,
+			auxiliary: Vec::new(),
+		};
 
-		Ok(())
+		self.import_block(import, None).map(|_| ())
 	}
 
 	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()> {
@@ -63,30 +64,4 @@ impl<B, E> TestClient for Client<B, E, runtime::Block>
 	fn genesis_hash(&self) -> runtime::Hash {
 		self.block_hash(0).unwrap().unwrap()
 	}
-}
-
-/// Prepare fake justification for the header.
-///
-/// since we are in the client module we can create falsely justified
-/// headers.
-/// TODO: remove this in favor of custom verification pipelines for the
-/// client
-pub fn fake_justify<Block: BlockT>(header: &Block::Header, authorities: &[&ed25519::Pair]) -> bft::UncheckedJustification<Block::Hash> {
-	let hash = header.hash();
-	bft::UncheckedJustification::new(
-		hash,
-		authorities.iter().map(|key| {
-			let msg = bft::sign_message::<Block>(
-				::rhododendron::Vote::Commit(1, hash).into(),
-				key,
-				header.parent_hash().clone(),
-			);
-
-			match msg {
-				::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
-				_ => panic!("signing vote leads to signed vote"),
-			}
-		}).collect(),
-		1,
-	)
 }

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use substrate_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
 
 /// Implement the `Event` for a module.
 ///
@@ -115,7 +115,7 @@ macro_rules! decl_event {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum Event {
 			$(
@@ -216,7 +216,7 @@ macro_rules! __decl_generic_event {
 		pub type Event<$event_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),*> {
 			$(
@@ -364,7 +364,7 @@ macro_rules! impl_outer_event {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
@@ -433,6 +433,7 @@ mod tests {
 	mod system {
 		pub trait Trait {
 			type Origin;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -449,6 +450,7 @@ mod tests {
 	mod system_renamed {
 		pub trait Trait {
 			type Origin;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -466,6 +468,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -488,6 +491,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -514,7 +518,7 @@ mod tests {
 		);
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
 	pub struct TestRuntime;
 
 	impl_outer_event! {
@@ -525,7 +529,7 @@ mod tests {
 		}
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
 	pub struct TestRuntime2;
 
 	impl_outer_event! {
@@ -539,29 +543,35 @@ mod tests {
 	impl event_module::Trait for TestRuntime {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl system::Trait for TestRuntime {
 		type Origin = u32;
+		type BlockNumber = u32;
 	}
 
 	impl event_module::Trait for TestRuntime2 {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime2 {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl system_renamed::Trait for TestRuntime2 {
 		type Origin = u32;
+		type BlockNumber = u32;
 	}
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {

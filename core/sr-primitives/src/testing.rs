@@ -16,13 +16,13 @@
 
 //! Testing utilities.
 
-use serde::{Serialize, de::DeserializeOwned};
-use std::fmt::Debug;
-use codec::Codec;
+use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
+use std::{fmt::Debug, ops::Deref, fmt};
+use codec::{Codec, Encode, Decode};
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 use generic::DigestItem as GenDigestItem;
 
-pub use substrate_primitives::H256;
+pub use substrate_primitives::{H256, AuthorityId};
 
 pub type DigestItem = GenDigestItem<H256, u64>;
 
@@ -41,6 +41,10 @@ impl traits::Digest for Digest {
 
 	fn push(&mut self, item: Self::Item) {
 		self.logs.push(item);
+	}
+
+	fn pop(&mut self) -> Option<Self::Item> {
+		self.logs.pop()
 	}
 }
 
@@ -74,6 +78,7 @@ impl traits::Header for Header {
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
 	fn digest(&self) -> &Self::Digest { &self.digest }
+	fn digest_mut(&mut self) -> &mut Self::Digest { &mut self.digest }
 	fn set_digest(&mut self, digest: Self::Digest) { self.digest = digest }
 
 	fn new(
@@ -94,12 +99,35 @@ impl traits::Header for Header {
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+pub struct ExtrinsicWrapper<Xt>(Xt);
+
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> where Xt: Serialize {
+	fn is_signed(&self) -> Option<bool> {
+		None
+	}
+}
+
+impl<Xt> From<Xt> for ExtrinsicWrapper<Xt> {
+	fn from(xt: Xt) -> Self {
+		ExtrinsicWrapper(xt)
+	}
+}
+
+impl<Xt> Deref for ExtrinsicWrapper<Xt> {
+	type Target = Xt;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Block<Xt> {
 	pub header: Header,
 	pub extrinsics: Vec<Xt>,
 }
 
-impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
+impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
 	type Hash = <Header as traits::Header>::Hash;
@@ -118,15 +146,40 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + 
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(DeError::custom("Invalid value passed into decode"))
+	}
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
-impl<Call: Codec + Sync + Send + Serialize, Context> Checkable<Context> for TestXt<Call> {
+impl<Call> Serialize for TestXt<Call> where TestXt<Call>: Encode
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+	}
+}
+
+impl<Call> Debug for TestXt<Call> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "TestXt({:?}, {:?})", self.0, self.1)
+	}
+}
+
+impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
+impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
+	fn is_signed(&self) -> Option<bool> {
+		None
+	}
+}
 impl<Call> Applyable for TestXt<Call> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Serialize + DeserializeOwned,
+	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug,
 {
 	type AccountId = u64;
 	type Index = u64;

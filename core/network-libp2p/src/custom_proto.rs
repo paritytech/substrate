@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use libp2p::core::{Multiaddr, ConnectionUpgrade, Endpoint};
+use libp2p::core::{ConnectionUpgrade, Endpoint};
 use libp2p::tokio_codec::Framed;
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream, task};
@@ -112,14 +112,9 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 
 	/// Sends a message to the substream.
 	pub fn send_message(&mut self, data: Bytes) {
-		// TODO: remove the packet id system
-		let mut message = Bytes::with_capacity(1 + data.len());
-		message.extend_from_slice(&[0]);
-		message.extend_from_slice(&data);
-		self.send_queue.push_back(message);
+		self.send_queue.push_back(data);
 
 		// If the length of the queue goes over a certain arbitrary threshold, we print a warning.
-		// TODO: figure out a good threshold
 		if self.send_queue.len() >= 2048 {
 			warn!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
 				large: {}", self.send_queue.len());
@@ -165,16 +160,8 @@ where TSubstream: AsyncRead + AsyncWrite,
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		loop {
 			match self.inner.poll()? {
-				Async::Ready(Some(mut data)) => {
-					// The `data` should be prefixed by the packet ID, therefore an empty
-					// packet is invalid.
-					// TODO: remove the packet id system
-					if data.is_empty() {
-						return Err(io::Error::new(io::ErrorKind::Other, "bad packet"));
-					}
-					let data = data.split_off(1);
-					return Ok(Async::Ready(Some(data.freeze())))
-				},
+				Async::Ready(Some(data)) =>
+					return Ok(Async::Ready(Some(data.freeze()))),
 				Async::Ready(None) =>
 					if !self.requires_poll_complete && self.send_queue.is_empty() {
 						return Ok(Async::Ready(None))
@@ -215,8 +202,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 		self,
 		socket: TSubstream,
 		protocol_version: Self::UpgradeIdentifier,
-		_: Endpoint,
-		_: &Multiaddr
+		_: Endpoint
 	) -> Self::Future {
 		let framed = Framed::new(socket, UviBytes::default());
 
@@ -285,13 +271,12 @@ where TSubstream: AsyncRead + AsyncWrite,
 		self,
 		socket: TSubstream,
 		upgrade_identifier: Self::UpgradeIdentifier,
-		endpoint: Endpoint,
-		remote_addr: &Multiaddr
+		endpoint: Endpoint
 	) -> Self::Future {
 		let (protocol_index, inner_proto_id) = upgrade_identifier;
 		self.0.into_iter()
 			.nth(protocol_index)
 			.expect("invalid protocol index ; programmer logic error")
-			.upgrade(socket, inner_proto_id, endpoint, remote_addr)
+			.upgrade(socket, inner_proto_id, endpoint)
 	}
 }

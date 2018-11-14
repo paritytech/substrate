@@ -20,18 +20,18 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
 
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
-use service::{Roles, TransactionPool, ExHashT};
+use service::{TransactionPool, ExHashT};
 use import_queue::ImportQueue;
-use config::ProtocolConfig;
+use config::{ProtocolConfig, Roles};
 use chain::Client;
 use client::light::fetcher::ChangesProof;
 use on_demand::OnDemandService;
@@ -51,7 +51,7 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
+pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -182,15 +182,15 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: RwLock<HashMap<NodeIndex, Peer<B, H>>>,
-	chain: Arc<Client<B>>,
+	pub chain: Arc<Client<B>>,
 }
 
-impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
-	pub fn new(
+	pub fn new<I: 'static + ImportQueue<B>>(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		import_queue: Arc<ImportQueue<B>>,
+		import_queue: Arc<I>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
@@ -278,7 +278,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
-			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, other),
+			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, &mut Some(other)),
 		}
 	}
 
@@ -374,7 +374,19 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks{}",
 			response.id, peer, response.blocks.len(), blocks_range);
 
-		self.sync.write().on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response);
+		// import_queue.import_blocks also acquires sync.write();
+		// Break the cycle by doing these separately from the outside;
+		let new_blocks = {
+			let mut sync = self.sync.write();
+			sync.on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response)
+		};
+
+		if let Some((origin, new_blocks)) = new_blocks {
+			let import_queue = self.sync.read().import_queue();
+			import_queue.import_blocks(origin, new_blocks);
+		}
+
+
 	}
 
 	/// Perform time based maintenance.
@@ -405,6 +417,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>> {
 		self.context_data.peers.read().get(&peer).map(|p| {
 			PeerInfo {
@@ -504,8 +517,8 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		for (who, ref mut peer) in peers.iter_mut() {
 			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
 				.iter()
-				.cloned()
 				.filter(|&(ref hash, _)| peer.known_extrinsics.insert(hash.clone()))
+				.cloned()
 				.unzip();
 
 			if !to_send.is_empty() {
@@ -714,8 +727,101 @@ fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B,
 	io.send(who, message.encode());
 }
 
-/// Hash a message.
-pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
-	let data = message.encode();
-	HashFor::<B>::hash(&data)
+/// Construct a simple protocol that is composed of several sub protocols.
+/// Each "sub protocol" needs to implement `Specialization` and needs to provide a `new()` function.
+/// For more fine grained implementations, this macro is not usable.
+///
+/// # Example
+///
+/// ```nocompile
+/// construct_simple_protocol! {
+///     pub struct MyProtocol where Block = MyBlock {
+///         consensus_gossip: ConsensusGossip<MyBlock>,
+///         other_protocol: MyCoolStuff,
+///     }
+/// }
+/// ```
+///
+/// You can also provide an optional parameter after `where Block = MyBlock`, so it looks like
+/// `where Block = MyBlock, Status = consensus_gossip`. This will instruct the implementation to
+/// use the `status()` function from the `ConsensusGossip` protocol. By default, `status()` returns
+/// an empty vector.
+#[macro_export]
+macro_rules! construct_simple_protocol {
+	(
+		$( #[ $attr:meta ] )*
+		pub struct $protocol:ident where
+			Block = $block:ident
+			$( , Status = $status_protocol_name:ident )*
+		{
+			$( $sub_protocol_name:ident : $sub_protocol:ident $( <$protocol_block:ty> )*, )*
+		}
+	) => {
+		$( #[$attr] )*
+		pub struct $protocol {
+			$( $sub_protocol_name: $sub_protocol $( <$protocol_block> )*, )*
+		}
+
+		impl $protocol {
+			/// Instantiate a node protocol handler.
+			pub fn new() -> Self {
+				Self {
+					$( $sub_protocol_name: $sub_protocol::new(), )*
+				}
+			}
+		}
+
+		impl $crate::specialization::NetworkSpecialization<$block> for $protocol {
+			fn status(&self) -> Vec<u8> {
+				$(
+					let status = self.$status_protocol_name.status();
+
+					if !status.is_empty() {
+						return status;
+					}
+				)*
+
+				Vec::new()
+			}
+
+			fn on_connect(
+				&mut self,
+				_ctx: &mut $crate::Context<$block>,
+				_who: $crate::NodeIndex,
+				_status: $crate::StatusMessage<$block>
+			) {
+				$( self.$sub_protocol_name.on_connect(_ctx, _who, _status); )*
+			}
+
+			fn on_disconnect(&mut self, _ctx: &mut $crate::Context<$block>, _who: $crate::NodeIndex) {
+				$( self.$sub_protocol_name.on_disconnect(_ctx, _who); )*
+			}
+
+			fn on_message(
+				&mut self,
+				_ctx: &mut $crate::Context<$block>,
+				_who: $crate::NodeIndex,
+				_message: &mut Option<$crate::message::Message<$block>>
+			) {
+				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
+			}
+
+			fn on_abort(&mut self) {
+				$( self.$sub_protocol_name.on_abort(); )*
+			}
+
+			fn maintain_peers(&mut self, _ctx: &mut $crate::Context<$block>) {
+				$( self.$sub_protocol_name.maintain_peers(_ctx); )*
+			}
+
+			fn on_block_imported(
+				&mut self,
+				_ctx: &mut $crate::Context<$block>,
+				_hash: <$block as $crate::BlockT>::Hash,
+				_header: &<$block as $crate::BlockT>::Header
+			) {
+				$( self.$sub_protocol_name.on_block_imported(_ctx, _hash, _header); )*
+			}
+		}
+	}
 }

@@ -25,10 +25,8 @@ extern crate srml_support as runtime_support;
 
 #[cfg(test)]
 extern crate sr_io as runtime_io;
-
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
+extern crate serde;
 
 #[macro_use]
 extern crate parity_codec_derive;
@@ -43,8 +41,9 @@ extern crate srml_balances as balances;
 use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
-use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
-use balances::OnDilution;
+use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin}};
+use codec::{HasCompact, Compact};
+use balances::{OnDilution, address::Address};
 use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -70,23 +69,87 @@ type ProposalIndex = u32;
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		// Put forward a suggestion for spending. A deposit proportional to the value
-		// is reserved and slashed if the proposal is rejected. It is returned once the
-		// proposal is awarded.
-		fn propose_spend(origin, value: T::Balance, beneficiary: T::AccountId) -> Result;
+		fn deposit_event() = default;
+		/// Put forward a suggestion for spending. A deposit proportional to the value
+		/// is reserved and slashed if the proposal is rejected. It is returned once the
+		/// proposal is awarded.
+		fn propose_spend(
+			origin,
+			value: <T::Balance as HasCompact>::Type,
+			beneficiary: Address<T::AccountId, T::AccountIndex>
+		) -> Result {
+			let proposer = ensure_signed(origin)?;
+			let beneficiary = <balances::Module<T>>::lookup(beneficiary)?;
+			let value = value.into();
 
-		// Set the balance of funds available to spend.
-		fn set_pot(new_pot: T::Balance) -> Result;
+			let bond = Self::calculate_bond(value);
+			<balances::Module<T>>::reserve(&proposer, bond)
+				.map_err(|_| "Proposer's balance too low")?;
 
-		// (Re-)configure this module.
-		fn configure(proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result;
+			let c = Self::proposal_count();
+			<ProposalCount<T>>::put(c + 1);
+			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
-		// Reject a proposed spend. The original deposit will be slashed.
-		fn reject_proposal(origin, roposal_id: ProposalIndex) -> Result;
+			Self::deposit_event(RawEvent::Proposed(c));
 
-		// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
-		// and the original deposit will be returned.
-		fn approve_proposal(origin, proposal_id: ProposalIndex) -> Result;
+			Ok(())
+		}
+
+		/// Set the balance of funds available to spend.
+		fn set_pot(new_pot: <T::Balance as HasCompact>::Type) -> Result {
+			// Put the new value into storage.
+			<Pot<T>>::put(new_pot.into());
+
+			// All good.
+			Ok(())
+		}
+
+		/// (Re-)configure this module.
+		fn configure(
+			proposal_bond: Permill,
+			proposal_bond_minimum: <T::Balance as HasCompact>::Type,
+			spend_period: <T::BlockNumber as HasCompact>::Type,
+			burn: Permill
+		) -> Result {
+			<ProposalBond<T>>::put(proposal_bond);
+			<ProposalBondMinimum<T>>::put(proposal_bond_minimum.into());
+			<SpendPeriod<T>>::put(spend_period.into());
+			<Burn<T>>::put(burn);
+			Ok(())
+		}
+
+		/// Reject a proposed spend. The original deposit will be slashed.
+		fn reject_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result {
+			T::RejectOrigin::ensure_origin(origin)?;
+			let proposal_id: ProposalIndex = proposal_id.into();
+
+			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
+
+			let value = proposal.bond;
+			let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
+
+			Ok(())
+		}
+
+		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
+		/// and the original deposit will be returned.
+		fn approve_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result {
+			T::ApproveOrigin::ensure_origin(origin)?;
+			let proposal_id = proposal_id.into();
+
+			ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
+
+			<Approvals<T>>::mutate(|v| v.push(proposal_id));
+
+			Ok(())
+		}
+
+		fn on_finalise(n: T::BlockNumber) {
+			// Check to see if we should spend some funds!
+			if (n % Self::spend_period()).is_zero() {
+				Self::spend_funds();
+			}
+		}
 	}
 }
 
@@ -150,70 +213,7 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
-	// Implement Calls and add public immutables and private mutables.
-
-	fn propose_spend(origin: T::Origin, value: T::Balance, beneficiary: T::AccountId) -> Result {
-		let proposer = ensure_signed(origin)?;
-
-		let bond = Self::calculate_bond(value);
-		<balances::Module<T>>::reserve(&proposer, bond)
-			.map_err(|_| "Proposer's balance too low")?;
-
-		let c = Self::proposal_count();
-		<ProposalCount<T>>::put(c + 1);
-		<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
-
-		Self::deposit_event(RawEvent::Proposed(c));
-
-		Ok(())
-	}
-
-	fn reject_proposal(origin: T::Origin, proposal_id: ProposalIndex) -> Result {
-		T::RejectOrigin::ensure_origin(origin)?;
-
-		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
-
-		let value = proposal.bond;
-		let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
-
-		Ok(())
-	}
-
-	fn approve_proposal(origin: T::Origin, proposal_id: ProposalIndex) -> Result {
-		T::ApproveOrigin::ensure_origin(origin)?;
-
-		ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
-
-		<Approvals<T>>::mutate(|v| v.push(proposal_id));
-
-		Ok(())
-	}
-
-	fn set_pot(new_pot: T::Balance) -> Result {
-		// Put the new value into storage.
-		<Pot<T>>::put(new_pot);
-
-		// All good.
-		Ok(())
-	}
-
-	fn configure(
-		proposal_bond: Permill,
-		proposal_bond_minimum: T::Balance,
-		spend_period: T::BlockNumber,
-		burn: Permill
-	) -> Result {
-		<ProposalBond<T>>::put(proposal_bond);
-		<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
-		<SpendPeriod<T>>::put(spend_period);
-		<Burn<T>>::put(burn);
-		Ok(())
-	}
+	// Add public immutables and private mutables.
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: T::Balance) -> T::Balance {
@@ -277,15 +277,6 @@ impl<T: Trait> OnDilution<T::Balance> for Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		// Check to see if we should spend some funds!
-		if (n % Self::spend_period()).is_zero() {
-			Self::spend_funds();
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -293,7 +284,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256};
+	use runtime_primitives::traits::{BlakeTwo256, OnFinalise};
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
@@ -330,7 +321,7 @@ mod tests {
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			transaction_base_fee: 0,
@@ -339,13 +330,13 @@ mod tests {
 			creation_fee: 0,
 			existential_deposit: 0,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1,
 			spend_period: 2,
 			burn: Permill::from_percent(50),
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.into()
 	}
 
@@ -373,7 +364,7 @@ mod tests {
 	#[test]
 	fn spend_proposal_takes_min_deposit() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1.into(), Address::Id(3)));
 			assert_eq!(Balances::free_balance(&0), 99);
 			assert_eq!(Balances::reserved_balance(&0), 1);
 		});
@@ -382,7 +373,7 @@ mod tests {
 	#[test]
 	fn spend_proposal_takes_proportional_deposit() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100.into(), Address::Id(3)));
 			assert_eq!(Balances::free_balance(&0), 95);
 			assert_eq!(Balances::reserved_balance(&0), 5);
 		});
@@ -391,7 +382,7 @@ mod tests {
 	#[test]
 	fn spend_proposal_fails_when_proposer_poor() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), "Proposer's balance too low");
+			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100.into(), Address::Id(3)), "Proposer's balance too low");
 		});
 	}
 
@@ -400,8 +391,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100.into(), Address::Id(3)));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0.into()));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(1);
 			assert_eq!(Balances::free_balance(&3), 0);
@@ -424,8 +415,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100.into(), Address::Id(3)));
+			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0.into()));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Balances::free_balance(&3), 0);
@@ -438,23 +429,23 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100.into(), Address::Id(3)));
+			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0.into()));
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
 		});
 	}
 
 	#[test]
 	fn reject_non_existant_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
 		});
 	}
 
 	#[test]
 	fn accept_non_existant_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
 		});
 	}
 
@@ -463,9 +454,9 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100.into(), Address::Id(3)));
+			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0.into()));
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
 		});
 	}
 
@@ -474,8 +465,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100.into(), Address::Id(3)));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0.into()));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Balances::free_balance(&3), 100);
@@ -488,8 +479,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
-			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
+			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150.into(), Address::Id(3)));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0.into()));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Treasury::pot(), 100);

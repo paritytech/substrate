@@ -19,26 +19,27 @@ vergen = "2"
 
 [workspace]
 members = [
-	"core/bft",
 	"core/cli",
 	"core/client",
 	"core/client/db",
+	"core/consensus/common",
+	"core/consensus/aura",
+	"core/consensus/rhd",
 	"core/executor",
 	"core/finality-grandpa",
 	"core/keyring",
-	"core/misbehavior-check",
 	"core/network",
 	"core/primitives",
 	"core/rpc",
 	"core/rpc-servers",
-	"core/sr-api",
 	"core/sr-io",
 	"core/sr-sandbox",
 	"core/sr-std",
 	"core/sr-version",
-	"core/transaction-graph",
 	"core/transaction-pool",
+	"core/transaction-pool/graph",
 	"srml/support",
+	"srml/assets",
 	"srml/balances",
 	"srml/consensus",
 	"srml/contract",
@@ -53,6 +54,7 @@ members = [
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
+	"srml/upgrade-key",
 	"core/serializer",
 	"core/service",
 	"core/service/test",
@@ -63,13 +65,9 @@ members = [
 	"core/trie",
 	"core/keystore",
 	"node/cli",
-	"node/consensus",
 	"node/executor",
-	"node/network",
 	"node/primitives",
 	"node/runtime",
-	"node/service",
-	"node/transaction-pool",
 	"subkey",
 ]
 exclude = [
@@ -77,6 +75,7 @@ exclude = [
 	"core/executor/wasm",
 	"pwasm-alloc",
 	"core/test-runtime/wasm",
+	"test-utils/chain-spec-builder"
 ]
 
 [badges]

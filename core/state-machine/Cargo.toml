@@ -14,4 +14,4 @@ trie-db = { git = "https://github.com/paritytech/trie" }
 trie-root = { git = "https://github.com/paritytech/trie" }
 substrate-trie = { path = "../trie" }
 substrate-primitives = { path = "../primitives" }
-parity-codec = "2.0"
+parity-codec = "2.1"

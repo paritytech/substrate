@@ -16,9 +16,9 @@ use runtime_io::{
 };
 
 macro_rules! impl_stubs {
-	( $( $new_name:ident $($nodecode:ident)* => $invoke:expr ),* ) => {
+	( $( $new_name:ident => $invoke:expr ),* ) => {
 		$(
-			impl_stubs!(@METHOD $new_name $($nodecode)* => $invoke);
+			impl_stubs!(@METHOD $new_name => $invoke);
 		)*
 	};
 	( @METHOD $new_name:ident => $invoke:expr ) => {
