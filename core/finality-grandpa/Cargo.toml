@@ -11,6 +11,7 @@ sr-primitives = { path = "../sr-primitives" }
 substrate-consensus-common = { path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
 substrate-client = { path = "../client" }
+substrate-network = { path = "../network" }
 log = "0.4"
 parking_lot = "0.4"
 tokio = "0.1.7"

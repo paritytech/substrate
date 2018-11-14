@@ -55,6 +55,7 @@ extern crate futures;
 extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_consensus_common as consensus_common;
+extern crate substrate_network as network;
 extern crate substrate_primitives;
 extern crate tokio;
 extern crate parking_lot;
@@ -63,9 +64,6 @@ extern crate substrate_fg_primitives as fg_primitives;
 
 #[macro_use]
 extern crate log;
-
-#[cfg(test)]
-extern crate substrate_network as network;
 
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
@@ -89,6 +87,7 @@ use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor,
+	Hash as HashT
 };
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
@@ -97,6 +96,8 @@ use tokio::timer::Interval;
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
 
+use network::{Service as NetworkService, ExHashT};
+use network::consensus_gossip::{ConsensusMessage};
 use std::collections::{VecDeque, HashMap};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
@@ -172,7 +173,7 @@ impl From<GrandpaError> for Error {
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network: Clone {
+pub trait Network : Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
@@ -185,6 +186,51 @@ pub trait Network: Clone {
 
 	/// Clean up messages for a round.
 	fn drop_messages(&self, round: u64, set_id: u64);
+}
+
+///  Bridge between NetworkService, gossiping consensus messages and Grandpa
+pub struct NetworkBridge<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> {
+	service: Arc<NetworkService<B, S, H>>
+}
+
+impl<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> NetworkBridge<B, S, H> {
+	/// Create a new NetworkBridge to the given NetworkService
+	pub fn new(service: Arc<NetworkService<B, S, H>>) -> Self {
+		NetworkBridge { service }
+	}
+}
+
+
+impl<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> Clone for NetworkBridge<B, S, H> {
+	fn clone(&self) -> Self {
+		NetworkBridge {
+			service: Arc::clone(&self.service)
+		}
+	}
+}
+
+fn make_msg_hash<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
+}
+
+impl<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
+	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
+	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
+		self.service.consensus_gossip().write().messages_for(make_msg_hash::<B>(round, set_id))
+	}
+
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+		let hash = make_msg_hash::<B>(round, set_id);
+		let gossip = self.service.consensus_gossip();
+		self.service.with_spec(move |_s, context|{
+			gossip.write().multicast(context, hash, message);
+		});
+	}
+
+	fn drop_messages(&self, round: u64, set_id: u64) {
+		let h = make_msg_hash::<B>(round, set_id);
+		self.service.consensus_gossip().write().collect_garbage(|t| t == &h);
+	}
 }
 
 /// Something which can determine if a block is known.

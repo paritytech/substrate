@@ -1719,6 +1719,7 @@ version = "0.1.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-executor 0.1.0",
@@ -1733,6 +1734,7 @@ dependencies = [
  "substrate-cli 0.3.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura 0.1.0",
+ "substrate-finality-grandpa 0.1.0",
  "substrate-keystore 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",

@@ -27,7 +27,8 @@ use codec::{Encode, Decode};
 
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
-use specialization::NetworkSpecialization;
+use consensus_gossip::ConsensusGossip;
+use specialization::Specialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use service::{TransactionPool, ExHashT};
 use import_queue::ImportQueue;
@@ -56,6 +57,7 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	genesis_hash: B::Hash,
 	sync: Arc<RwLock<ChainSync<B>>>,
 	specialization: RwLock<S>,
+	consensus_gossip: RwLock<ConsensusGossip<B>>,
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<NodeIndex, time::Instant>>,
@@ -206,6 +208,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			genesis_hash: info.chain.genesis_hash,
 			sync: Arc::new(RwLock::new(sync)),
 			specialization: RwLock::new(specialization),
+			consensus_gossip: RwLock::new(ConsensusGossip::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
 		};
@@ -218,6 +221,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	pub(crate) fn sync(&self) -> &Arc<RwLock<ChainSync<B>>> {
 		&self.sync
+	}
+
+
+	pub(crate) fn consensus_gossip<'a>(&'a self) -> &'a RwLock<ConsensusGossip<B>> {
+		&self.consensus_gossip
 	}
 
 	/// Returns protocol status
@@ -277,6 +285,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
+			GenericMessage::Consensus(topic, msg) => {
+				self.consensus_gossip.write().on_incoming(&mut ProtocolContext::new(&self.context_data, io), who, topic, msg);	
+			},
 			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, &mut Some(other)),
 		}
 	}
@@ -296,6 +307,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: NodeIndex) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_debug_info(peer));
 
+
 		// lock all the the peer lists so that add/remove peer events are in order
 		let mut sync = self.sync.write();
 		let mut spec = self.specialization.write();
@@ -308,6 +320,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 		if removed {
 			let mut context = ProtocolContext::new(&self.context_data, io);
+			self.consensus_gossip.write().peer_disconnected(&mut context, peer);
 			sync.peer_disconnected(&mut context, peer);
 			spec.on_disconnect(&mut context, peer);
 			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
@@ -390,6 +403,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
+		self.consensus_gossip.write().collect_garbage(|_| true);
 		self.maintain_peers(io);
 		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
 	}
@@ -477,6 +491,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let mut context = ProtocolContext::new(&self.context_data, io);
 		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles, status.best_number));
 		self.sync.write().new_peer(&mut context, who);
+		self.consensus_gossip.write().new_peer(&mut context, who, status.roles);
 		self.specialization.write().on_connect(&mut context, who, status);
 	}
 
@@ -554,10 +569,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let mut spec = self.specialization.write();
 		let mut peers = self.context_data.peers.write();
 		let mut handshaking_peers = self.handshaking_peers.write();
+		let mut consensus_gossip = self.consensus_gossip.write();
 		sync.clear();
 		spec.on_abort();
 		peers.clear();
 		handshaking_peers.clear();
+		consensus_gossip.abort();
 	}
 
 	pub fn stop(&self) {
