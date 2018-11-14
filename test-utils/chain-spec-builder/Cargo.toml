@@ -1,0 +1,10 @@
+[package]
+name = "chain-spec-builder"
+version = "0.1.0"
+authors = ["haydn dufrene <haydn.dufrene@gmail.com>"]
+
+[dependencies]
+clap = { version = "~2.32", features = ["yaml"] }
+node-cli = { path = "../../node/cli" }
+substrate-primitives = { path = "../../core/primitives" }
+substrate-service = { path = "../../core/service" }

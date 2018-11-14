@@ -22,7 +22,7 @@ use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::trie_root;
 use backend::InMemory;
-use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage};
+use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
 use primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG;
 use super::{Externalities, OverlayedChanges};
 
@@ -136,12 +136,12 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		None
 	}
 
-	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {
+	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {
 		compute_changes_trie_root::<_, _, H>(
 			&InMemory::default(),
 			Some(&self.changes_trie_storage),
 			&self.changes,
-			block,
+			&AnchorBlockId { hash: parent, number: parent_num },
 		).map(|(root, _)| root.clone())
 	}
 }
@@ -158,6 +158,6 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
-		assert_eq!(ext.storage_root(), H256(ROOT));
+		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 }

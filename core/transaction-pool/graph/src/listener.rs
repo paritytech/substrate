@@ -19,6 +19,7 @@ use std::{
 	collections::HashMap,
 	hash,
 };
+use serde::Serialize;
 use watcher;
 use sr_primitives::traits;
 
@@ -35,7 +36,7 @@ impl<H: hash::Hash + Eq, H2> Default for Listener<H, H2> {
 	}
 }
 
-impl<H: hash::Hash + traits::Member, H2: Clone> Listener<H, H2> {
+impl<H: hash::Hash + traits::Member + Serialize, H2: Clone> Listener<H, H2> {
 	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, H2>) {
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);

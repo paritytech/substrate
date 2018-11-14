@@ -14,25 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
-//! API's for interfacing with the runtime via native/wasm.
-// end::description[]
-
-#![cfg_attr(not(feature = "std"), no_std)]
-
-extern crate sr_std as rstd;
-extern crate sr_primitives as primitives;
-#[doc(hidden)]
-pub extern crate parity_codec as codec;
-extern crate sr_version as runtime_version;
-use rstd::vec::Vec;
-
-#[doc(hidden)]
-pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
-#[doc(hidden)]
-pub use rstd::slice;
-#[doc(hidden)]
-pub use codec::{Encode, Decode};
+//! Macros for declaring and implementing the runtime APIs.
 
 // these are part of the public API, so need to be re-exported
 pub use runtime_version::{ApiId, RuntimeVersion};
@@ -42,7 +24,7 @@ pub use runtime_version::{ApiId, RuntimeVersion};
 /// # Example:
 ///
 /// ```nocompile
-/// decl_apis!{
+/// decl_runtime_apis!{
 ///     pub trait Test<Event> ExtraClientSide<ClientArg> {
 ///         fn test<AccountId>(event: Event) -> AccountId;
 ///
@@ -70,11 +52,11 @@ pub use runtime_version::{ApiId, RuntimeVersion};
 /// }
 /// ```
 ///
-/// The declarations generated in the `runtime` module will be used by `impl_apis!` for implementing
+/// The declarations generated in the `runtime` module will be used by `impl_runtime_apis!` for implementing
 /// the traits for a runtime. The other declarations should be used for implementing the interface
 /// in the client.
 #[macro_export]
-macro_rules! decl_apis {
+macro_rules! decl_runtime_apis {
 	(
 		$(
 			$( #[$attr:meta] )*
@@ -93,7 +75,7 @@ macro_rules! decl_apis {
 		)*
 	) => {
 		$(
-			decl_apis!(
+			decl_runtime_apis!(
 				@ADD_BLOCK_GENERIC
 				$( #[$attr] )*
 				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
@@ -111,7 +93,7 @@ macro_rules! decl_apis {
 				$( $( $generic_param $( : $generic_bound )* ),* )*
 			);
 		)*
-		decl_apis! {
+		decl_runtime_apis! {
 			@GENERATE_RUNTIME_TRAITS
 			$(
 				$( #[$attr] )*
@@ -140,7 +122,7 @@ macro_rules! decl_apis {
 		Block: BlockT
 		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@ADD_BLOCK_GENERIC
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -153,7 +135,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			Found;
-			$( $generic_param_parsed $( : $generic_bound_parsed )* , )* Block: $crate::BlockT;
+			$( $generic_param_parsed $( : $generic_bound_parsed )* , )* Block: $crate::runtime_api::BlockT;
 			$( $generic_param_rest $( : $generic_bound_rest )* ),*
 		);
 	};
@@ -173,7 +155,7 @@ macro_rules! decl_apis {
 		$generic_param:ident $( : $generic_bound:ident )*
 		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@ADD_BLOCK_GENERIC
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -204,7 +186,7 @@ macro_rules! decl_apis {
 		Found;
 	 	$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -235,7 +217,7 @@ macro_rules! decl_apis {
 		;
 		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -248,7 +230,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			// We need to add the required generic Block parameter
-			Block: $crate::BlockT $(, $generic_param_parsed $( : $generic_bound_parsed )* )*;
+			Block: $crate::runtime_api::BlockT $(, $generic_param_parsed $( : $generic_bound_parsed )* )*;
 			{};
 			$( $( $return_ty )*; )*
 		);
@@ -269,7 +251,7 @@ macro_rules! decl_apis {
 		$return_ty_current:ty;
 		$( $( $return_ty_rest:ty )*; )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -282,7 +264,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
-			{ $( $result_return_ty; )* Result<$return_ty_current, Self::Error>; };
+			{ $( $result_return_ty; )* $crate::error::Result<$return_ty_current>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
@@ -302,7 +284,7 @@ macro_rules! decl_apis {
 		;
 		$( $( $return_ty_rest:ty )*; )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -315,7 +297,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
-			{ $( $result_return_ty; )* Result<(), Self::Error>; };
+			{ $( $result_return_ty; )* $crate::error::Result<()>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
@@ -333,7 +315,7 @@ macro_rules! decl_apis {
         $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_CLIENT_TRAITS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -364,15 +346,14 @@ macro_rules! decl_apis {
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		$( #[$attr] )*
-		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > {
-			/// The Error type returned by this API.
-			type Error;
+		#[cfg(feature = "std")]
+		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::runtime_api::Core<Block> {
 			$( type $client_generic_param $( : $client_generic_bound )*; )*
 
 			$(
 				$( #[$fn_attr] )*
-				fn $fn_name $( < $( $fn_generic: $crate::Encode + $crate::Decode ),* > )* (
-					&self, at: &$crate::BlockId<Block> $(, $param_name: $param_type )*
+				fn $fn_name $( < $( $fn_generic: $crate::runtime_api::Encode + $crate::runtime_api::Decode ),* > )* (
+					&self, at: &$crate::runtime_api::BlockId<Block> $(, $param_name: $param_type )*
 				) -> $result_return_ty;
 			)*
 		}
@@ -390,7 +371,7 @@ macro_rules! decl_apis {
 			};
 		)*
 	) => {
-		decl_apis! {
+		decl_runtime_apis! {
 			@GENERATE_RUNTIME_TRAITS_WITH_JOINED_GENERICS
 			$(
 				$( #[$attr] )*
@@ -431,63 +412,8 @@ macro_rules! decl_apis {
 	};
 }
 
-/// The ApiIds for the various standard runtime APIs.
-pub mod id {
-	use super::ApiId;
-
-	/// ApiId for the BlockBuilder trait.
-	pub const BLOCK_BUILDER: ApiId = *b"blkbuild";
-
-	/// ApiId for the TaggedTransactionQueue trait.
-	pub const TAGGED_TRANSACTION_QUEUE: ApiId = *b"validatx";
-
-	/// ApiId for the Metadata trait.
-	pub const METADATA: ApiId = *b"metadata";
-}
-
-decl_apis! {
-	/// The `Core` api trait that is mandantory for each runtime.
-	pub trait Core<Block: BlockT, AuthorityId> {
-		fn version() -> RuntimeVersion;
-		fn authorities() -> Vec<AuthorityId>;
-		fn execute_block(block: Block);
-	}
-
-	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata<Data> {
-		fn metadata() -> Data;
-	}
-
-	/// The `OldTxQueue` api trait for interfering with the old transaction queue.
-	pub trait OldTxQueue {
-		fn account_nonce<AccountId, Index>(account: AccountId) -> Index;
-		fn lookup_address<Address, LookupId>(address: Address) -> Option<LookupId>;
-	}
-
-	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
-	pub trait TaggedTransactionQueue<Block: BlockT> {
-		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
-	}
-
-	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-	pub trait BlockBuilder<Block: BlockT> ExtraClientSide <OverlayedChanges> {
-		/// Initialise a block with the given header.
-		fn initialise_block(header: <Block as BlockT>::Header) ExtraClientSide(changes: &mut Self::OverlayedChanges);
-		/// Apply the given extrinsics.
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) ExtraClientSide(changes: &mut Self::OverlayedChanges) -> ApplyResult;
-		/// Finish the current block.
-		fn finalise_block() ExtraClientSide(changes: &mut Self::OverlayedChanges) -> <Block as BlockT>::Header;
-		/// Generate inherent extrinsics.
-		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
-		/// Check that the inherents are valid.
-		fn check_inherents<InherentData, Error>(block: Block, data: InherentData) -> Result<(), Error>;
-		/// Generate a random seed.
-		fn random_seed() -> <Block as BlockT>::Hash;
-	}
-}
-
 /// Implement the given API's for the given runtime.
-/// All desired API's need to be implemented in one `impl_apis!` call.
+/// All desired API's need to be implemented in one `impl_runtime_apis!` call.
 /// Besides generating the implementation for the runtime, there will be also generated an
 /// auxiliary module named `api` that contains function for inferring with the API in native/wasm.
 /// It is important to use the traits from the `runtime` module with this macro.
@@ -496,18 +422,17 @@ decl_apis! {
 ///
 /// ```nocompile
 /// #[macro_use]
-/// extern crate sr_api as runtime_api;
+/// extern crate substrate_client as client;
 ///
-/// use runtime_api::runtime::{Core, TaggedTransactionQueue};
+/// use client::runtime_api::runtime::{Core, TaggedTransactionQueue};
 ///
-/// impl_apis! {
-///     impl Core<Block, AccountId> for Runtime {
-///         fn version() -> RuntimeVersion { 1 }
-///         fn authorities() -> Vec<AuthorityId> { vec![1] }
+/// impl_runtime_apis! {
+///     impl Core<Block> for Runtime {
+///         fn version() -> RuntimeVersion { unimplemented!() }
+///         fn authorities() -> Vec<AuthorityId> { unimplemented!() }
 ///         fn execute_block(block: Block) {
 ///             //comment
-///             let block = call_arbitrary_code(block);
-///             execute(block);
+///             unimplemented!()
 ///         }
 ///     }
 ///
@@ -521,7 +446,7 @@ decl_apis! {
 /// fn main() {}
 /// ```
 #[macro_export]
-macro_rules! impl_apis {
+macro_rules! impl_runtime_apis {
 	(
 		impl $trait_name:ident $( < $( $generic:ident ),* > )* for $runtime:ident {
 			$(
@@ -539,7 +464,7 @@ macro_rules! impl_apis {
 				}
 			)*
 		}
-		impl_apis! {
+		impl_runtime_apis! {
 			$runtime;
 			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
 			$( $rest )*
@@ -564,7 +489,7 @@ macro_rules! impl_apis {
 				}
 			)*
 		}
-		impl_apis! {
+		impl_runtime_apis! {
 			$runtime;
 			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* ); )*
 			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
@@ -583,7 +508,7 @@ macro_rules! impl_apis {
 				match method {
 					$(
 						stringify!($fn_name) => {
-							Some({impl_apis! {
+							Some({impl_runtime_apis! {
 								@GENERATE_IMPL_CALL
 								$runtime;
 								$fn_name;
@@ -604,11 +529,11 @@ macro_rules! impl_apis {
 						&[0u8; 0]
 					} else {
 						unsafe {
-							$crate::slice::from_raw_parts(input_data, input_len)
+							$crate::runtime_api::slice::from_raw_parts(input_data, input_len)
 						}
 					};
 
-					let output = { impl_apis! {
+					let output = { impl_runtime_apis! {
 						@GENERATE_IMPL_CALL
 						$runtime;
 						$fn_name;
@@ -632,13 +557,13 @@ macro_rules! impl_apis {
 		$arg_name:ident : $arg_ty:ty;
 		$input:ident;
 	) => {
-		let $arg_name : $arg_ty = match $crate::codec::Decode::decode(&mut $input) {
+		let $arg_name : $arg_ty = match $crate::runtime_api::Decode::decode(&mut $input) {
 			Some(input) => input,
 			None => panic!("Bad input data provided to {}", stringify!($fn_name)),
 		};
 
 		let output = $runtime::$fn_name($arg_name);
-		$crate::codec::Encode::encode(&output)
+		$crate::runtime_api::Encode::encode(&output)
 	};
 	(@GENERATE_IMPL_CALL
 		$runtime:ident;
@@ -646,12 +571,12 @@ macro_rules! impl_apis {
 		$( $arg_name:ident : $arg_ty:ty ),*;
 		$input:ident;
 	) => {
-		let ( $( $arg_name ),* ) : ($( $arg_ty ),*) = match $crate::codec::Decode::decode(&mut $input) {
+		let ( $( $arg_name ),* ) : ($( $arg_ty ),*) = match $crate::runtime_api::Decode::decode(&mut $input) {
 			Some(input) => input,
 			None => panic!("Bad input data provided to {}", stringify!($fn_name)),
 		};
 
 		let output = $runtime::$fn_name($( $arg_name ),*);
-		$crate::codec::Encode::encode(&output)
+		$crate::runtime_api::Encode::encode(&output)
 	};
 }

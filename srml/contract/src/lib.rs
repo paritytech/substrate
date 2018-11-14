@@ -52,10 +52,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -172,11 +168,13 @@ decl_module! {
 			// paying for the gas.
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
+			let cfg = Config::preload();
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
 				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 				events: Vec::new(),
+				config: &cfg,
 			};
 
 			let mut output_data = Vec::new();
@@ -225,11 +223,13 @@ decl_module! {
 			// paying for the gas.
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
+			let cfg = Config::preload();
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
 				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 				events: Vec::new(),
+				config: &cfg,
 			};
 			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
@@ -288,7 +288,8 @@ decl_storage! {
 		BlockGasLimit get(block_gas_limit) config(): T::Gas = T::Gas::sa(1_000_000);
 		/// Gas spent so far in this block.
 		GasSpent get(gas_spent): T::Gas;
-
+		/// Current cost schedule for contracts.
+		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
 		/// The code associated with an account.
 		pub CodeOf: map T::AccountId => Vec<u8>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
 	}
@@ -312,5 +313,79 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
+	}
+}
+
+/// In-memory cache of configuration values.
+///
+/// We assume that these values can't be changed in the
+/// course of transaction execution.
+pub struct Config<T: Trait> {
+	pub schedule: Schedule<T::Gas>,
+	pub existential_deposit: T::Balance,
+	pub max_depth: u32,
+	pub contract_account_create_fee: T::Balance,
+	pub account_create_fee: T::Balance,
+	pub transfer_fee: T::Balance,
+	pub call_base_fee: T::Gas,
+	pub create_base_fee: T::Gas,
+}
+
+impl<T: Trait> Config<T> {
+	fn preload() -> Config<T> {
+		Config {
+			schedule: <Module<T>>::current_schedule(),
+			existential_deposit: <balances::Module<T>>::existential_deposit(),
+			max_depth: <Module<T>>::max_depth(),
+			contract_account_create_fee: <Module<T>>::contract_fee(),
+			account_create_fee: <balances::Module<T>>::creation_fee(),
+			transfer_fee: <balances::Module<T>>::transfer_fee(),
+			call_base_fee: <Module<T>>::call_base_fee(),
+			create_base_fee: <Module<T>>::create_base_fee(),
+		}
+	}
+}
+
+/// Definition of the cost schedule and other parameterizations for wasm vm.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Clone, Encode, Decode)]
+pub struct Schedule<Gas> {
+	/// Gas cost of a growing memory by single page.
+	pub grow_mem_cost: Gas,
+
+	/// Gas cost of a regular operation.
+	pub regular_op_cost: Gas,
+
+	/// Gas cost per one byte returned.
+	pub return_data_per_byte_cost: Gas,
+
+	/// Gas cost per one byte read from the sandbox memory.
+	sandbox_data_read_cost: Gas,
+
+	/// Gas cost per one byte written to the sandbox memory.
+	sandbox_data_write_cost: Gas,
+
+	/// How tall the stack is allowed to grow?
+	///
+	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
+	/// how the stack frame cost is calculated.
+	pub max_stack_height: u32,
+
+	//// What is the maximal memory pages amount is allowed to have for
+	/// a contract.
+	pub max_memory_pages: u32,
+}
+
+impl<Gas: As<u64>> Default for Schedule<Gas> {
+	fn default() -> Schedule<Gas> {
+		Schedule {
+			grow_mem_cost: Gas::sa(1),
+			regular_op_cost: Gas::sa(1),
+			return_data_per_byte_cost: Gas::sa(1),
+			sandbox_data_read_cost: Gas::sa(1),
+			sandbox_data_write_cost: Gas::sa(1),
+			max_stack_height: 64 * 1024,
+			max_memory_pages: 16,
+		}
 	}
 }

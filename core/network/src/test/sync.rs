@@ -16,9 +16,9 @@
 
 use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
+use config::Roles;
 use consensus::BlockOrigin;
 use sync::SyncState;
-use Roles;
 use super::*;
 
 #[test]

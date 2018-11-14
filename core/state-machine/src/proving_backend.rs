@@ -211,7 +211,8 @@ mod tests {
 
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
-		assert!(create_proof_check_backend::<Blake2Hasher>(1.into(), vec![]).is_err());
+		use primitives::H256;
+		assert!(create_proof_check_backend::<Blake2Hasher>(H256::from_low_u64_be(1), vec![]).is_err());
 	}
 
 	#[test]

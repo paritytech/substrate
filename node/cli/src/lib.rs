@@ -33,21 +33,24 @@ extern crate substrate_transaction_pool as transaction_pool;
 #[macro_use]
 extern crate substrate_network as network;
 extern crate substrate_consensus_aura as consensus;
+extern crate substrate_client as client;
 extern crate node_primitives;
 #[macro_use]
 extern crate substrate_service;
 extern crate node_executor;
+extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;
 
 pub use cli::error;
-mod chain_spec;
+pub mod chain_spec;
 mod service;
 
 use tokio::runtime::Runtime;
 pub use cli::{VersionInfo, IntoExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
+use std::ops::Deref;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -117,12 +120,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	Ok(())
 }
 
-fn run_until_exit<C, E>(
+fn run_until_exit<T, C, E>(
 	runtime: &mut Runtime,
-	service: service::Service<C>,
+	service: T,
 	e: E,
 ) -> error::Result<()>
 	where
+	    T: Deref<Target=substrate_service::Service<C>>,
 		C: substrate_service::Components,
 		E: IntoExit,
 {

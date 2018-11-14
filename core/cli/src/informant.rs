@@ -30,9 +30,8 @@ use runtime_primitives::traits::{Header, As};
 const TIMER_INTERVAL_MS: u64 = 5000;
 
 /// Spawn informant on the event loop
-pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor)
-	where
-		C: Components,
+pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
+	C: Components,
 {
 	let interval = Interval::new(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS));
 
@@ -121,4 +120,3 @@ fn speed(best_number: u64, last_number: Option<u64>) -> String {
 		format!(" {:4.1} bps", speed / 10.0)
 	}
 }
-

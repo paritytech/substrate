@@ -1,8 +1,0 @@
-
-=== Misc packages
-
-:leveloffset: +3
-
-include::../../subkey/README.adoc[]
-
-:leveloffset: -3

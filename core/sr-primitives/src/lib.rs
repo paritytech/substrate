@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -198,7 +196,7 @@ pub struct Ed25519Signature(pub H512);
 impl Verify for Ed25519Signature {
 	type Signer = H256;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(&(self.0).0, msg.get(), &signer.0[..])
+		runtime_io::ed25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
 	}
 }
 

@@ -37,5 +37,9 @@ build_rpc_trait! {
 		/// Get the chain's type. Given as a string identifier.
 		#[rpc(name = "system_chain")]
 		fn system_chain(&self) -> Result<String>;
+
+		/// Get a custom set of properties as a JSON object, defined in the chain spec.
+		#[rpc(name = "system_properties")]
+		fn system_properties(&self) -> Result<serde_json::map::Map<String, serde_json::Value>>;
 	}
 }
