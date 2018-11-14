@@ -124,7 +124,7 @@ mod tests {
 			let block = proposer.propose().expect("Error making test block");
 			ImportBlock {
 				origin: BlockOrigin::File,
-				external_justification: Vec::new(),
+				justification: Vec::new(),
 				internal_justification: Vec::new(),
 				finalized: true,
 				body: Some(block.extrinsics),
