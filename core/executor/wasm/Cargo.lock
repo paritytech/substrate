@@ -32,12 +32,12 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#19146df4aabb9ddea28850b3da8f6fb1817fd979"
 
 [[package]]
 name = "hash256-std-hasher"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#19146df4aabb9ddea28850b3da8f6fb1817fd979"
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
