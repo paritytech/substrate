@@ -215,6 +215,18 @@ impl<'a,
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: Hasher
+> hash_db::PlainDBRef<H::Out, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
+	fn keys(&self) -> HashMap<H::Out, i32> { hash_db::PlainDB::keys(self) }
+	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::PlainDB::get(self, key) }
+	fn contains(&self, key: &H::Out) -> bool { hash_db::PlainDB::contains(self, key) }
+}
+
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: Hasher
 > hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
@@ -252,6 +264,18 @@ impl<'a,
 	fn remove(&mut self, key: &H::Out) {
 		hash_db::HashDB::remove(self.overlay, key)
 	}
+}
+
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: Hasher
+> hash_db::HashDBRef<H, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
+	fn keys(&self) -> HashMap<H::Out, i32> { hash_db::HashDB::keys(self) }
+	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::HashDB::get(self, key) }
+	fn contains(&self, key: &H::Out) -> bool { hash_db::HashDB::contains(self, key) }
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
