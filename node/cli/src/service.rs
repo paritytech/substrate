@@ -40,13 +40,16 @@ construct_simple_protocol! {
 /// Node specific configuration
 pub struct NodeConfig {
 	/// should run as a grandpa authority
-	pub grandpa_authority: bool
+	pub grandpa_authority: bool,
+	/// should run as a grandpa authority only, don't validate as usual
+	pub grandpa_authority_only: bool
 }
 
 impl Default for NodeConfig {
 	fn default() -> NodeConfig {
 		NodeConfig {
-			grandpa_authority: false
+			grandpa_authority: false,
+			grandpa_authority_only: false
 		}
 	}
 }
@@ -71,7 +74,8 @@ construct_service_factory! {
 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
 				if service.config().custom.grandpa_authority {
 					info!("Running Grandpa session as Authority {}", key.public());
-				} else {
+				}
+				if !service.config().custom.grandpa_authority_only {
 					info!("Using authority key {}", key.public());
 					executor.spawn(start_aura(
 						AuraConfig {

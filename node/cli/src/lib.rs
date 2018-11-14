@@ -119,7 +119,16 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 
 	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(load_spec, version, "substrate-node", &matches)?;
 
-	config.custom.grandpa_authority = matches.is_present("grandpa_authority");
+	if matches.is_present("grandpa_authority_only") {
+		config.custom.grandpa_authority = true;
+		config.custom.grandpa_authority_only = true;
+		// Authority Setup is only called if validator is set as true
+		config.roles = ServiceRoles::AUTHORITY;
+	} else if  matches.is_present("grandpa_authority") {
+		config.custom.grandpa_authority = true;
+		// Authority Setup is only called if validator is set as true
+		config.roles = ServiceRoles::AUTHORITY;
+	}
 
 	match cli::execute_default::<service::Factory, _>(spec, exit, &matches)? {
 		cli::Action::ExecutedInternally => (),
