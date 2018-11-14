@@ -569,8 +569,8 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			header,
 			body,
 			finalized: self.0,
-			external_justification: justification,
-			post_runtime_digests: vec![],
+			justification: justification,
+			post_digests: vec![],
 			auxiliary: Vec::new(),
 		}, None))
 	}

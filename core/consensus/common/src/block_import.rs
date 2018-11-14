@@ -44,7 +44,7 @@ pub struct ImportBlock<Block: BlockT> {
 	///
 	/// Consensus engines which alter the header (by adding post-runtime digests)
 	/// should strip those off in the initial verification process and pass them
-	/// via the `post_runtime_digests` field. During block authorship, they should
+	/// via the `post_digests` field. During block authorship, they should
 	/// not be pushed to the header directly.
 	///
 	/// The reason for this distinction is so the header can be directly
@@ -52,10 +52,10 @@ pub struct ImportBlock<Block: BlockT> {
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
 	/// Justification provided for this block from the outside:.
-	pub external_justification: Justification,
+	pub justification: Justification,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
-	pub post_runtime_digests: Vec<DigestItemFor<Block>>,
+	pub post_digests: Vec<DigestItemFor<Block>>,
 	/// Block's body
 	pub body: Option<Vec<Block::Extrinsic>>,
 	/// Is this block finalized already?
@@ -82,8 +82,8 @@ impl<Block: BlockT> ImportBlock<Block> {
 		(
 			self.origin,
 			self.header,
-			self.external_justification,
-			self.post_runtime_digests,
+			self.justification,
+			self.post_digests,
 			self.body,
 			self.finalized,
 			self.auxiliary,

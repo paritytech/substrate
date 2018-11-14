@@ -962,8 +962,8 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		let ImportBlock {
 			origin,
 			header,
-			external_justification,
-			post_runtime_digests,
+			justification,
+			post_digests,
 			body,
 			finalized,
 			..
@@ -975,11 +975,11 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
 
-		let import_headers = if post_runtime_digests.is_empty() {
+		let import_headers = if post_digests.is_empty() {
 			PrePostHeader::Same(header)
 		} else {
 			let mut post_header = header.clone();
-			for item in post_runtime_digests {
+			for item in post_digests {
 				post_header.digest_mut().push(item);
 			}
 			PrePostHeader::Different(header, post_header)
@@ -994,7 +994,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			origin,
 			hash,
 			import_headers,
-			external_justification,
+			justification,
 			body,
 			new_authorities,
 			finalized,
