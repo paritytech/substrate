@@ -798,7 +798,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> ApiClient<Block> for Arc<Client<B, E, B
 	{
 		self.call_api_at_strong(
 			&BlockId::hash(header.parent_hash().clone()),
-			::fg_primitives::PENDING_CHANGE_CALL,
+			fg_primitives::PENDING_CHANGE_CALL,
 			header.digest(),
 			&mut Default::default(),
 			&mut None,
