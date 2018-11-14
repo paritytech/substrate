@@ -28,7 +28,7 @@ use codec::{Encode, Decode};
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
 use consensus_gossip::ConsensusGossip;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use service::{TransactionPool, ExHashT};
 use import_queue::ImportQueue;

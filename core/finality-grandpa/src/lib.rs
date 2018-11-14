@@ -189,11 +189,11 @@ pub trait Network : Clone {
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
-pub struct NetworkBridge<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> {
+pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> {
 	service: Arc<NetworkService<B, S, H>>
 }
 
-impl<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> NetworkBridge<B, S, H> {
 	/// Create a new NetworkBridge to the given NetworkService
 	pub fn new(service: Arc<NetworkService<B, S, H>>) -> Self {
 		NetworkBridge { service }
@@ -201,7 +201,7 @@ impl<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> Netwo
 }
 
 
-impl<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> Clone for NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Clone for NetworkBridge<B, S, H> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: Arc::clone(&self.service)
@@ -213,7 +213,7 @@ fn make_msg_hash<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
 }
 
-impl<B: BlockT, S: network::specialization::Specialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
 		self.service.consensus_gossip().write().messages_for(make_msg_hash::<B>(round, set_id))

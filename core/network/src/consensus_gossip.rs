@@ -26,7 +26,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashF
 use runtime_primitives::generic::BlockId;
 pub use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
-use service::Roles;
+use config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);

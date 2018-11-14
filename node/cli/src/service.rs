@@ -31,6 +31,8 @@ use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
 use primitives::ed25519::Pair;
 use client;
+use std::time::Duration;
+use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
 
@@ -75,6 +77,17 @@ construct_service_factory! {
 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
 				if service.config().custom.grandpa_authority {
 					info!("Running Grandpa session as Authority {}", key.public());
+					let (block_import, link_half) = grandpa::block_import(service.client(), service.client())?;
+					// executor.spawn(
+					let grandpa_fut = grandpa::run_grandpa(
+							grandpa::Config {
+								gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
+								local_key: Some(key.clone()),
+								name: Some(service.config().name.clone())
+							},
+							link_half,
+							grandpa::NetworkBridge::new(service.network())
+						);
 				}
 				if !service.config().custom.grandpa_authority_only {
 					info!("Using authority key {}", key.public());

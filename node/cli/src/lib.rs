@@ -20,6 +20,7 @@
 #![warn(unused_extern_crates)]
 
 extern crate tokio;
+extern crate futures;
 
 extern crate substrate_cli as cli;
 extern crate substrate_primitives as primitives;
@@ -34,6 +35,7 @@ extern crate substrate_transaction_pool as transaction_pool;
 extern crate substrate_network as network;
 extern crate substrate_consensus_aura as consensus;
 extern crate substrate_client as client;
+extern crate substrate_finality_grandpa as grandpa;
 extern crate node_primitives;
 #[macro_use]
 extern crate substrate_service;
