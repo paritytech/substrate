@@ -27,8 +27,10 @@ use codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
-use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
-	RemAssign, Shl, Shr};
+use rstd::ops::{
+	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
+	RemAssign, Shl, Shr
+};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -276,7 +278,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 	fn storage_root() -> Self::Output;
 
 	/// Acquire the global storage changes root.
-	fn storage_changes_root(block: u64) -> Option<Self::Output>;
+	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -308,8 +310,8 @@ impl Hash for BlakeTwo256 {
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
-	fn storage_changes_root(block: u64) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(block).map(Into::into)
+	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output> {
+		runtime_io::storage_changes_root(parent_hash.into(), parent_number).map(Into::into)
 	}
 }
 
@@ -596,4 +598,34 @@ pub trait ProvideInherent {
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
 	) -> Result<(), Self::Error>;
+}
+
+/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
+pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+
+impl<'a, T> From<T> for ApiRef<'a, T> {
+	fn from(api: T) -> Self {
+		ApiRef(api, Default::default())
+	}
+}
+
+impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+/// Something that provides a runtime api.
+pub trait ProvideRuntimeApi {
+	/// The concrete type that provides the api.
+	type Api;
+
+	/// Returns the runtime api.
+	/// The returned instance will keep track of modifications to the storage. Any successful
+	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
+	/// the modifications will be `discarded`. The modifications will not be applied to the
+	/// storage, even on a `commit`.
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
 }

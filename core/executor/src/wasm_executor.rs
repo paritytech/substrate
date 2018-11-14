@@ -29,7 +29,7 @@ use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256, ed25519};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::Blake2Hasher;
+use primitives::{H256, Blake2Hasher};
 use trie::ordered_trie_root;
 use sandbox;
 
@@ -412,8 +412,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			Ok(0)
 		}
 	},
-	ext_storage_changes_root(block: u64, result: *mut u8) -> u32 => {
-		let r = this.ext.storage_changes_root(block);
+	ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_number: u64, result: *mut u8) -> u32 => {
+		let mut parent_hash = H256::default();
+		if parent_hash_len != parent_hash.as_ref().len() as u32 {
+			return Err(UserError("Invalid parent_hash_len in ext_storage_changes_root").into());
+		}
+		let raw_parent_hash = this.memory.get(parent_hash_data, parent_hash_len as usize)
+			.map_err(|_| UserError("Invalid attempt to get parent_hash in ext_storage_changes_root"))?;
+		parent_hash.as_mut().copy_from_slice(&raw_parent_hash[..]);
+		let r = this.ext.storage_changes_root(parent_hash, parent_number);
 		if let Some(ref r) = r {
 			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
 		}

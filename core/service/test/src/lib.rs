@@ -47,7 +47,8 @@ use service::{
 	Roles,
 	FactoryExtrinsic,
 };
-use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
+use network::{Protocol, SyncProvider, ManageNetwork};
+use network::config::{NetworkConfiguration, NonReservedPeerMode};
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
@@ -179,7 +180,10 @@ impl<F: ServiceFactory> TestNet<F> {
 	}
 }
 
-pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
+pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
+	<F as ServiceFactory>::RuntimeApi:
+		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block>
+{
 	const NUM_NODES: u32 = 10;
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
@@ -219,6 +223,9 @@ where
 	F: ServiceFactory,
 	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
+	<F as ServiceFactory>::RuntimeApi:
+		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block> +
+		client::runtime_api::TaggedTransactionQueue<<F as service::ServiceFactory>::Block>
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: usize = 512;
@@ -255,6 +262,8 @@ where
 pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 where
 	F: ServiceFactory,
+	<F as ServiceFactory>::RuntimeApi:
+		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block>
 {
 	const NUM_NODES: u32 = 20;
 	const NUM_BLOCKS: u64 = 200;

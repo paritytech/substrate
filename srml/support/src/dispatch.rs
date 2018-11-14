@@ -193,11 +193,8 @@ macro_rules! decl_module {
 		$($rest:tt)*
 	) => {
 		compile_error!("\
-First parameter of dispatch should be marked `origin` only, with no\n\
-type specified (a bit like `self`).\n\
-(For root-matching dispatches, ensure the first parameter does not use\n\
-the `T::Origin` type.)\
-")
+first parameter of dispatch should be marked `origin` only, with no type specified (a bit like `self`)\n\
+(For root-matching dispatches, ensure the first parameter does not use the `T::Origin` type.)")
 	};
 	(@normalize
 		$(#[$attr:meta])*
@@ -211,11 +208,8 @@ the `T::Origin` type.)\
 		$($rest:tt)*
 	) => {
 		compile_error!("\
-First parameter of dispatch should be marked `origin` only, with no\n\
-type specified (a bit like `self`).\n\
-(For root-matching dispatches, ensure the first parameter is not named\n\
-`origin`.)\
-")
+first parameter of dispatch should be marked `origin` only, with no type specified (a bit like `self`)\n\
+(For root-matching dispatches, ensure the first parameter is not named`origin`.)")
 	};
 	(@normalize
 		$(#[$attr:meta])*

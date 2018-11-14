@@ -20,8 +20,8 @@
 
 use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
+use node_runtime::{GenesisConfig, ClientWithApi};
 use node_primitives::Block;
-use node_runtime::GenesisConfig;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
@@ -29,6 +29,7 @@ use substrate_service::{
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
+use client;
 
 const AURA_SLOT_DURATION: u64 = 6;
 
@@ -37,23 +38,22 @@ construct_simple_protocol! {
 	pub struct NodeProtocol where Block = Block { }
 }
 
-construct_simple_service!(Service);
-
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
+		RuntimeApi = ClientWithApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
+		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, ClientWithApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
+		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, ClientWithApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = (),
-		FullService = Service<FullComponents<Self>>
+		FullService = FullComponents<Self>
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor| {
 				let is_auth = config.roles == Roles::AUTHORITY;
-				Service::<FullComponents<Factory>>::new(config, executor.clone()).map(move |service|{
+				FullComponents::<Factory>::new(config, executor.clone()).map(move |service|{
 					if is_auth {
 						if let Ok(Some(Ok(key))) = service.keystore().contents()
 							.map(|keys| keys.get(0).map(|k| service.keystore().load(k, "")))
@@ -77,18 +77,20 @@ construct_service_factory! {
 				})
 			}
 		},
-		LightService = Service<LightComponents<Self>>
-			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
+		LightService = LightComponents<Self>
+			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block, FullClient<Self>>
 			{ |config, client| Ok(import_queue(AuraConfig {
 						local_key: None,
 						slot_duration: 5
 					}, client)) },
 		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
-			{ |config, client| Ok(import_queue(AuraConfig {
-						local_key: None,
-						slot_duration: 5
-					}, client)) },
+			{ |config, client| Ok(
+				import_queue(AuraConfig {
+					local_key: None,
+					slot_duration: 5
+				}, client))
+			},
 	}
 }
 

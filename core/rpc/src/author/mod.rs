@@ -71,23 +71,19 @@ build_rpc_trait! {
 }
 
 /// Authoring API
-pub struct Author<B, E, P> where
-	P: PoolChainApi + Sync + Send + 'static,
-{
+pub struct Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	/// Substrate client
-	client: Arc<Client<B, E, <P as PoolChainApi>::Block>>,
+	client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 	/// Extrinsic pool
 	pool: Arc<Pool<P>>,
 	/// Subscriptions manager
 	subscriptions: Subscriptions,
 }
 
-impl<B, E, P> Author<B, E, P> where
-	P: PoolChainApi + Sync + Send + 'static,
-{
+impl<B, E, P, RA> Author<B, E, P, RA> where P: PoolChainApi + Sync + Send + 'static {
 	/// Create new instance of Authoring API.
 	pub fn new(
-		client: Arc<Client<B, E, <P as PoolChainApi>::Block>>,
+		client: Arc<Client<B, E, <P as PoolChainApi>::Block, RA>>,
 		pool: Arc<Pool<P>>,
 		subscriptions: Subscriptions,
 	) -> Self {
@@ -99,12 +95,13 @@ impl<B, E, P> Author<B, E, P> where
 	}
 }
 
-impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P> where
+impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
 	P::Block: traits::Block<Hash=H256>,
 	P::Error: 'static,
+	RA: Send + Sync + 'static
 {
 	type Metadata = ::metadata::Metadata;
 

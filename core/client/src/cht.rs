@@ -27,7 +27,7 @@ use hash_db;
 use heapsize::HeapSizeOf;
 use trie;
 
-use primitives::H256;
+use primitives::{H256, convert_hash};
 use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
 use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{prove_read, read_proof_check};
@@ -113,8 +113,7 @@ pub fn check_proof<Header, Hasher>(
 		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + HeapSizeOf,
 {
-	let mut root: Hasher::Out = Default::default();
-	root.as_mut().copy_from_slice(local_root.as_ref());
+	let root: Hasher::Out = convert_hash(&local_root);
 	let local_cht_key = encode_cht_key(local_number);
 	let local_cht_value = read_proof_check::<Hasher>(root, remote_proof,
 		&local_cht_key).map_err(|e| ClientError::from(e))?;

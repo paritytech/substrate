@@ -76,6 +76,16 @@ impl_rest!(H160, 20);
 impl_rest!(H256, 32);
 impl_rest!(H512, 64);
 
+/// Hash conversion. Used to convert between unbound associated hash types in traits,
+/// implemented by the same hash type.
+/// Panics if used to convert between different hash types.
+pub fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 {
+	let mut dest = H1::default();
+	assert_eq!(dest.as_mut().len(), src.as_ref().len());
+	dest.as_mut().copy_from_slice(src.as_ref());
+	dest
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

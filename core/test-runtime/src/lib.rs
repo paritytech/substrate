@@ -23,11 +23,12 @@ extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
 
 #[macro_use]
+extern crate substrate_client as client;
+
+#[macro_use]
 extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
-#[macro_use]
-extern crate sr_api as runtime_api;
 extern crate sr_io as runtime_io;
 #[macro_use]
 extern crate sr_version as runtime_version;
@@ -47,12 +48,20 @@ pub mod system;
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use runtime_api::runtime::*;
+use client::{runtime_api::runtime::*, block_builder::api::runtime::*};
+#[cfg(feature = "std")]
+use client::runtime_api::ApiExt;
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT};
+#[cfg(feature = "std")]
+use runtime_primitives::traits::ApiRef;
 use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
+#[cfg(feature = "std")]
+use runtime_primitives::generic::BlockId;
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
 use primitives::AuthorityId;
+#[cfg(feature = "std")]
+use primitives::OpaqueMetadata;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 
@@ -152,8 +161,8 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
-mod test_api {
-	decl_apis! {
+pub mod test_api {
+	decl_runtime_apis! {
 		pub trait TestAPI {
 			fn balance_of<AccountId>(id: AccountId) -> u64;
 		}
@@ -162,10 +171,161 @@ mod test_api {
 
 use test_api::runtime::TestAPI;
 
+#[cfg(feature = "std")]
+pub struct ClientWithApi {
+	call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<Block>>,
+	commit_on_success: ::std::cell::RefCell<bool>,
+	initialised_block: ::std::cell::RefCell<Option<BlockId<Block>>>,
+	changes: ::std::cell::RefCell<client::runtime_api::OverlayedChanges>,
+}
+
+#[cfg(feature = "std")]
+unsafe impl Send for ClientWithApi {}
+#[cfg(feature = "std")]
+unsafe impl Sync for ClientWithApi {}
+
+#[cfg(feature = "std")]
+impl ApiExt for ClientWithApi {
+	fn map_api_result<F: FnOnce(&Self) -> Result<R, E>, R, E>(&self, map_call: F) -> Result<R, E> {
+		*self.commit_on_success.borrow_mut() = false;
+		let res = map_call(self);
+		*self.commit_on_success.borrow_mut() = true;
+
+		self.commit_on_ok(&res);
+
+		res
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::ConstructRuntimeApi<Block> for ClientWithApi {
+	fn construct_runtime_api<'a, T: client::runtime_api::CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self> {
+		ClientWithApi {
+			call: unsafe {
+				::std::ptr::NonNull::new_unchecked(
+					::std::mem::transmute(
+						call as &client::runtime_api::CallApiAt<Block>
+					)
+				)
+			},
+			commit_on_success: true.into(),
+			initialised_block: None.into(),
+			changes: Default::default(),
+		}.into()
+	}
+}
+
+#[cfg(feature = "std")]
+impl ClientWithApi {
+	fn call_api_at<A: Encode, R: Decode>(
+		&self,
+		at: &BlockId<Block>,
+		function: &'static str,
+		args: &A
+	) -> client::error::Result<R> {
+		let res = unsafe {
+			self.call.as_ref().call_api_at(
+				at,
+				function,
+				args.encode(),
+				&mut *self.changes.borrow_mut(),
+				&mut *self.initialised_block.borrow_mut()
+			).and_then(|r|
+				R::decode(&mut &r[..])
+					.ok_or_else(||
+						client::error::ErrorKind::CallResultDecode(function).into()
+					)
+			)
+		};
+
+		self.commit_on_ok(&res);
+		res
+	}
+
+	fn commit_on_ok<R, E>(&self, res: &Result<R, E>) {
+		if *self.commit_on_success.borrow() {
+			if res.is_err() {
+				self.changes.borrow_mut().discard_prospective();
+			} else {
+				self.changes.borrow_mut().commit_prospective();
+			}
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::Core<Block> for ClientWithApi {
+	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, client::error::Error> {
+		self.call_api_at(at, "version", &())
+	}
+
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, client::error::Error> {
+		self.call_api_at(at, "authorities", &())
+	}
+
+	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), client::error::Error> {
+		self.call_api_at(at, "execute_block", block)
+	}
+
+	fn initialise_block(&self, at: &BlockId<Block>, header: &<Block as BlockT>::Header) -> Result<(), client::error::Error> {
+		self.call_api_at(at, "initialise_block", header)
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::block_builder::api::BlockBuilder<Block> for ClientWithApi {
+	fn apply_extrinsic(&self, at: &BlockId<Block>, extrinsic: &<Block as BlockT>::Extrinsic) -> Result<ApplyResult, client::error::Error> {
+		self.call_api_at(at, "apply_extrinsic", extrinsic)
+	}
+
+	fn finalise_block(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Header, client::error::Error> {
+		self.call_api_at(at, "finalise_block", &())
+	}
+
+	fn inherent_extrinsics<Inherent: Decode + Encode, Unchecked: Decode + Encode>(
+		&self, at: &BlockId<Block>, inherent: &Inherent
+	) -> Result<Vec<Unchecked>, client::error::Error> {
+		self.call_api_at(at, "inherent_extrinsics", inherent)
+	}
+
+	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &BlockId<Block>, block: &Block, inherent: &Inherent) -> Result<Result<(), Error>, client::error::Error> {
+		self.call_api_at(at, "check_inherents", &(block, inherent))
+	}
+
+	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, client::error::Error> {
+		self.call_api_at(at, "random_seed", &())
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::TaggedTransactionQueue<Block> for ClientWithApi {
+	fn validate_transaction(
+		&self,
+		at: &BlockId<Block>,
+		utx: &<Block as BlockT>::Extrinsic
+	) -> Result<TransactionValidity, client::error::Error> {
+		self.call_api_at(at, "validate_transaction", utx)
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::Metadata<Block> for ClientWithApi {
+	fn metadata(&self, at: &BlockId<Block>) -> Result<OpaqueMetadata, client::error::Error> {
+		self.call_api_at(at, "metadata", &())
+	}
+}
+
+#[cfg(feature = "std")]
+impl test_api::TestAPI<Block> for ClientWithApi {
+	fn balance_of<AccountId: Encode + Decode>(&self, at: &BlockId<Block>, id: &AccountId) -> Result<u64, client::error::Error> {
+		self.call_api_at(at, "balance_of", id)
+	}
+}
+
 struct Runtime;
 
-impl_apis! {
-	impl Core<Block, AuthorityId> for Runtime {
+impl_runtime_apis! {
+	impl Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			version()
 		}
@@ -177,19 +337,19 @@ impl_apis! {
 		fn execute_block(block: Block) {
 			system::execute_block(block)
 		}
+
+		fn initialise_block(header: <Block as BlockT>::Header) {
+			system::initialise_block(header)
+		}
 	}
 
-	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
+	impl TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}
 	}
 
 	impl BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			system::initialise_block(header)
-		}
-
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
