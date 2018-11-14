@@ -150,9 +150,12 @@ pub fn buy_gas<T: Trait>(
 	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
 		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;
-	if b < cost + <balances::Module<T>>::existential_deposit() {
+
+	let new_balance = b.checked_sub(&cost);
+	if new_balance < Some(<balances::Module<T>>::existential_deposit()) {
 		return Err("not enough funds for transaction fee");
 	}
+
 	<balances::Module<T>>::set_free_balance(transactor, b - cost);
 	<balances::Module<T>>::decrease_total_stake_by(cost);
 	Ok(GasMeter {
