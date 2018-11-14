@@ -94,7 +94,8 @@ struct BlockchainStorage<Block: BlockT> {
 	finalized_hash: Block::Hash,
 	finalized_number: NumberFor<Block>,
 	genesis_hash: Block::Hash,
-	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
+	header_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
+	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 }
 
@@ -142,7 +143,8 @@ impl<Block: BlockT> Blockchain<Block> {
 				finalized_hash: Default::default(),
 				finalized_number: Zero::zero(),
 				genesis_hash: Default::default(),
-				cht_roots: HashMap::new(),
+				header_cht_roots: HashMap::new(),
+				changes_trie_cht_roots: HashMap::new(),
 				leaves: LeafSet::new(),
 			}));
 		Blockchain {
@@ -233,9 +235,9 @@ impl<Block: BlockT> Blockchain<Block> {
 			&& this.genesis_hash == other.genesis_hash
 	}
 
-	/// Insert CHT root.
+	/// Insert header CHT root.
 	pub fn insert_cht_root(&self, block: NumberFor<Block>, cht_root: Block::Hash) {
-		self.storage.write().cht_roots.insert(block, cht_root);
+		self.storage.write().header_cht_roots.insert(block, cht_root);
 	}
 
 	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
@@ -339,9 +341,14 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 		Blockchain::finalize_header(self, id)
 	}
 
-	fn cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
-		self.storage.read().cht_roots.get(&block).cloned()
-			.ok_or_else(|| error::ErrorKind::Backend(format!("CHT for block {} not exists", block)).into())
+	fn header_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
+		self.storage.read().header_cht_roots.get(&block).cloned()
+			.ok_or_else(|| error::ErrorKind::Backend(format!("Header CHT for block {} not exists", block)).into())
+	}
+
+	fn changes_trie_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
+		self.storage.read().changes_trie_cht_roots.get(&block).cloned()
+			.ok_or_else(|| error::ErrorKind::Backend(format!("Changes trie CHT for block {} not exists", block)).into())
 	}
 
 	fn cache(&self) -> Option<&blockchain::Cache<Block>> {

@@ -18,8 +18,9 @@
 
 use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor};
 use client::error::Error;
+use client::light::fetcher::ChangesProof;
 use consensus::BlockImport;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::{BlockId};
 use consensus::{ImportBlock, ImportResult};
 use runtime_primitives::Justification;
@@ -63,9 +64,10 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		&self,
 		first: Block::Hash,
 		last: Block::Hash,
+		min: Block::Hash,
 		max: Block::Hash,
 		key: &[u8]
-	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error>;
+	) -> Result<ChangesProof<Block::Header>, Error>;
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
@@ -121,9 +123,10 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		&self,
 		first: Block::Hash,
 		last: Block::Hash,
+		min: Block::Hash,
 		max: Block::Hash,
 		key: &[u8]
-	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error> {
-		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, max, key)
+	) -> Result<ChangesProof<Block::Header>, Error> {
+		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, key)
 	}
 }

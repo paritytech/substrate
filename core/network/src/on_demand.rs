@@ -26,7 +26,7 @@ use linked_hash_map::Entry;
 use parking_lot::Mutex;
 use client::{self, error::{Error as ClientError, ErrorKind as ClientErrorKind}};
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
+	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 use io::SyncIo;
 use message;
 use network_libp2p::{Severity, NodeIndex};
@@ -72,7 +72,7 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 		&self,
 		io: &mut SyncIo,
 		peer: NodeIndex,
-		response: message::RemoteChangesResponse<NumberFor<Block>>
+		response: message::RemoteChangesResponse<NumberFor<Block>, Block::Hash>
 	);
 }
 
@@ -284,11 +284,15 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		})
 	}
 
-	fn on_remote_changes_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+	fn on_remote_changes_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
 		self.accept_response("changes", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteChanges(request, sender) => match self.checker.check_changes_proof(
-				&request, response.max, response.proof
-			) {
+				&request, ChangesProof {
+					max_block: response.max,
+					proof: response.proof,
+					roots: response.roots.into_iter().collect(),
+					roots_proof: response.roots_proof,
+			}) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
@@ -483,6 +487,7 @@ impl<Block: BlockT> Request<Block> {
 					id: self.id,
 					first: data.first_block.1.clone(),
 					last: data.last_block.1.clone(),
+					min: data.tries_roots.1.clone(),
 					max: data.max_block.1.clone(),
 					key: data.key.clone(),
 				}),
@@ -509,9 +514,10 @@ pub mod tests {
 	use std::time::Instant;
 	use futures::Future;
 	use parking_lot::RwLock;
+	use runtime_primitives::traits::NumberFor;
 	use client::{self, error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
+		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 	use config::Roles;
 	use message;
 	use network_libp2p::NodeIndex;
@@ -557,7 +563,7 @@ pub mod tests {
 			}
 		}
 
-		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: u64, _: Vec<Vec<u8>>) -> ClientResult<Vec<(u64, u32)>> {
+		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: ChangesProof<Header>) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
 			match self.ok {
 				true => Ok(vec![(100, 2)]),
 				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
@@ -855,7 +861,7 @@ pub mod tests {
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),
-			tries_roots: vec![],
+			tries_roots: (1, Default::default(), vec![]),
 			key: vec![],
 			retry_count: None,
 		});
@@ -868,6 +874,8 @@ pub mod tests {
 			id: 0,
 			max: 1000,
 			proof: vec![vec![2]],
+			roots: vec![],
+			roots_proof: vec![],
 		});
 		thread.join().unwrap();
 	}

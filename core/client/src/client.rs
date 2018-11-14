@@ -16,7 +16,7 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
 use error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -29,7 +29,7 @@ use runtime_primitives::{
 use consensus::{ImportBlock, ImportResult, BlockOrigin};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
-	ApiRef, ProvideRuntimeApi
+	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
 };
 use runtime_primitives::BuildStorage;
 use runtime_api::{Core as CoreAPI, CallApiAt, TaggedTransactionQueue, ConstructRuntimeApi};
@@ -38,8 +38,9 @@ use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use codec::Decode;
 use state_machine::{
-	Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
+	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
+	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges
 };
 use codec::Encode;
@@ -49,6 +50,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
+use light::fetcher::ChangesProof;
 use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
 
 /// Type that implements `futures::Stream` of block import events.
@@ -366,9 +368,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
-		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _>(cht_size, cht_num, block_num, headers)
-			.ok_or_else(proof_error)?;
+		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)));
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, ::std::iter::once(block_num), headers)?;
 		Ok((header, proof))
 	}
 
@@ -402,6 +403,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
+	/// `min` is the hash of the first block, which changes trie root is known to the requester - when we're using
+	/// changes tries from ascendants of this block, we should provide proofs for changes tries roots
 	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
 	/// of this block.
 	/// Works only for runtimes that are supporting changes tries.
@@ -409,9 +412,57 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self,
 		first: Block::Hash,
 		last: Block::Hash,
+		min: Block::Hash,
 		max: Block::Hash,
 		key: &[u8]
-	) -> error::Result<(NumberFor<Block>, Vec<Vec<u8>>)> {
+	) -> error::Result<ChangesProof<Block::Header>> {
+		self.key_changes_proof_with_cht_size(
+			first,
+			last,
+			min,
+			max,
+			key,
+			cht::SIZE,
+		)
+	}
+
+	/// Does the same work as `key_changes_proof`, but assumes that CHTs are of passed size.
+	pub fn key_changes_proof_with_cht_size(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		min: Block::Hash,
+		max: Block::Hash,
+		key: &[u8],
+		cht_size: u64,
+	) -> error::Result<ChangesProof<Block::Header>> {
+		struct AccessedRootsRecorder<'a, Block: BlockT> {
+			storage: &'a ChangesTrieStorage<Blake2Hasher>,
+			min: u64,
+			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, H256>>,
+		};
+
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+			fn root(&self, anchor: &ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
+				let root = self.storage.root(anchor, block)?;
+				if block < self.min {
+					if let Some(ref root) = root {
+						self.required_roots_proofs.lock().insert(
+							As::sa(block),
+							root.clone()
+						);
+					}
+				}
+				Ok(root)
+			}
+		}
+
+		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+			fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
+				self.storage.get(key)
+			}
+		}
+
 		let config = self.changes_trie_config.as_ref();
 		let storage = self.backend.changes_trie_storage();
 		let (config, storage) = match (config, storage) {
@@ -419,22 +470,76 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
 		};
 
+		let min_number = self.require_block_number_from_id(&BlockId::Hash(min))?;
+		let recording_storage = AccessedRootsRecorder::<Block> {
+			storage,
+			min: min_number.as_(),
+			required_roots_proofs: Mutex::new(BTreeMap::new()),
+		};
+
 		let max_number = ::std::cmp::min(
 			self.backend.blockchain().info()?.best_number,
 			self.require_block_number_from_id(&BlockId::Hash(max))?,
 		);
-		key_changes_proof::<_, Blake2Hasher>(
+
+		// fetch key changes proof
+		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
 			config,
-			storage,
+			&recording_storage,
 			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last),
 				number: self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
 			},
 			max_number.as_(),
-			key)
-		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
-		.map(|proof| (max_number, proof))
+			key
+		)
+		.map_err(|err| error::Error::from(error::ErrorKind::ChangesTrieAccessFailed(err)))?;
+
+		// now gather proofs for all changes tries roots that were touched during key_changes_proof
+		// execution AND are unknown (i.e. replaced with CHT) to the requester
+		let roots = recording_storage.required_roots_proofs.into_inner();
+		let roots_proof = self.changes_trie_roots_proof(cht_size, roots.keys().cloned())?;
+
+		Ok(ChangesProof {
+			max_block: max_number,
+			proof: key_changes_proof,
+			roots: roots.into_iter().map(|(n, h)| (n, convert_hash(&h))).collect(),
+			roots_proof,
+		})
+	}
+
+	/// Generate CHT-based proof for roots of changes tries at given blocks.
+	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(
+		&self,
+		cht_size: u64,
+		blocks: I
+	) -> error::Result<Vec<Vec<u8>>> {
+		// most probably we have touched several changes tries that are parts of the single CHT
+		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
+		let mut proof = HashSet::new();
+
+		cht::for_each_cht_group::<Block::Header, _, _, _>(cht_size, blocks, |_, cht_num, cht_blocks| {
+			let cht_proof = self.changes_trie_roots_proof_at_cht(cht_size, cht_num, cht_blocks)?;
+			proof.extend(cht_proof);
+			Ok(())
+		}, ())?;
+
+		Ok(proof.into_iter().collect())
+	}
+
+	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
+	fn changes_trie_roots_proof_at_cht(
+		&self,
+		cht_size: u64,
+		cht_num: NumberFor<Block>,
+		blocks: Vec<NumberFor<Block>>
+	) -> error::Result<Vec<Vec<u8>>> {
+		let cht_start = cht::start_number(cht_size, cht_num);
+		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
+			.map(|block| block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())));
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, blocks, roots)?;
+		Ok(proof)
 	}
 
 	/// Create a new block, built on the head of the chain.
@@ -1097,7 +1202,7 @@ pub(crate) mod tests {
 	use super::*;
 	use keyring::Keyring;
 	use primitives::twox_128;
-	use runtime_primitives::traits::{Digest as DigestT, DigestItem as DigestItemT};
+	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;

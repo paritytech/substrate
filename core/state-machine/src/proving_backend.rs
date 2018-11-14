@@ -84,14 +84,14 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<S: TrieBackendStorage<H>, H: Hasher> {
-	backend: TrieBackend<S, H>,
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+	backend: &'a TrieBackend<S, H>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> ProvingBackend<S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H> {
 	/// Create new proving backend.
-	pub fn new(backend: TrieBackend<S, H>) -> Self {
+	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: RefCell::new(Recorder::new()),
@@ -108,10 +108,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> ProvingBackend<S, H> {
 	}
 }
 
-impl<S, H> Backend<H> for ProvingBackend<S, H>
+impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
-		S: TrieBackendStorage<H>,
-		H: Hasher,
+		S: 'a + TrieBackendStorage<H>,
+		H: 'a + Hasher,
 		H::Out: Ord + HeapSizeOf,
 {
 	type Error = String;
@@ -174,16 +174,28 @@ where
 	H: Hasher,
 	H::Out: HeapSizeOf,
 {
-	let mut db = MemoryDB::default();	// TODO: use new for correctness
-	for item in proof {
-		db.insert(&item);
-	}
+	let db = create_proof_check_backend_storage(proof);
 
 	if !db.contains(&root) {
 		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
 	}
 
 	Ok(TrieBackend::new(db, root))
+}
+
+/// Create in-memory storage of proof check backend.
+pub fn create_proof_check_backend_storage<H>(
+	proof: Vec<Vec<u8>>
+) -> MemoryDB<H>
+where
+	H: Hasher,
+	H::Out: HeapSizeOf,
+{
+	let mut db = MemoryDB::default();	// TODO: use new for correctness
+	for item in proof {
+		db.insert(&item);
+	}
+	db
 }
 
 #[cfg(test)]
@@ -193,18 +205,20 @@ mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher};
 
-	fn test_proving() -> ProvingBackend<MemoryDB<Blake2Hasher>, Blake2Hasher> {
-		ProvingBackend::new(test_trie())
+	fn test_proving<'a>(trie_backend: &'a TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher>) -> ProvingBackend<'a, MemoryDB<Blake2Hasher>, Blake2Hasher> {
+		ProvingBackend::new(trie_backend)
 	}
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
-		assert!(test_proving().extract_proof().is_empty());
+		let trie_backend = test_trie();
+		assert!(test_proving(&trie_backend).extract_proof().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
-		let backend = test_proving();
+		let trie_backend = test_trie();
+		let backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().is_empty());
 	}
@@ -218,7 +232,7 @@ mod tests {
 	#[test]
 	fn passes_throgh_backend_calls() {
 		let trie_backend = test_trie();
-		let proving_backend = test_proving();
+		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
@@ -241,7 +255,7 @@ mod tests {
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let proving = ProvingBackend::new(trie);
+		let proving = ProvingBackend::new(&trie);
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 		let proof = proving.extract_proof();

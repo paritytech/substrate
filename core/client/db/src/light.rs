@@ -31,7 +31,7 @@ use codec::{Decode, Encode};
 use primitives::{AuthorityId, Blake2Hasher};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
-	Zero, One, As, NumberFor};
+	Zero, One, As, NumberFor, Digest, DigestItem};
 use cache::{DbCacheSync, DbCache, ComplexBlockId};
 use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
@@ -45,11 +45,16 @@ pub(crate) mod columns {
 	pub const CHT: Option<u32> = Some(4);
 }
 
+/// Prefix for headers CHT.
+const HEADER_CHT_PREFIX: u8 = 0;
+/// Prefix for changes tries roots CHT.
+const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
+
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 /// Locks order: meta, leaves, cache.
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
-	meta: RwLock<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>>,
+	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	cache: DbCacheSync<Block>,
 }
@@ -109,7 +114,7 @@ impl<Block> LightStorage<Block>
 	fn update_meta(
 		&self,
 		hash: Block::Hash,
-		number: <<Block as BlockT>::Header as HeaderT>::Number,
+		number: NumberFor<Block>,
 		is_best: bool,
 		is_finalized: bool,
 	) {
@@ -167,7 +172,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> ClientResult<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
 		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Hash(hash))? {
 			let number = ::utils::lookup_key_to_number(&lookup_key)?;
 			Ok(Some(number))
@@ -176,12 +181,21 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		}
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
+	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
 		Ok(self.header(BlockId::Number(number))?.map(|header| header.hash().clone()))
 	}
 }
 
 impl<Block: BlockT> LightStorage<Block> {
+	// Get block changes trie root, if available.
+	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
+		self.header(block)
+			.map(|header| header.and_then(|header|
+				header.digest().log(DigestItem::as_changes_trie_root)
+					.cloned()))
+	}
+
+	// Note that a block is finalized. Only call with child of last finalized block.
 	fn note_finalized(
 		&self,
 		transaction: &mut DBTransaction,
@@ -199,34 +213,67 @@ impl<Block: BlockT> LightStorage<Block> {
 		let lookup_key = ::utils::number_to_lookup_key(header.number().clone());
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
-		// build new CHT if required
+		// build new CHT(s) if required
 		if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
 			let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
-			let new_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+
+			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
 				cht::SIZE, new_cht_number, (new_cht_start.as_()..)
-				.map(|num| self.hash(As::sa(num)).unwrap_or_default())
+				.map(|num| self.hash(As::sa(num)))
+			)?;
+			transaction.put(
+				columns::CHT,
+				&cht_key(HEADER_CHT_PREFIX, new_cht_start),
+				new_header_cht_root.as_ref()
 			);
 
-			if let Some(new_cht_root) = new_cht_root {
-				transaction.put(columns::CHT, &number_to_lookup_key(new_cht_start), new_cht_root.as_ref());
+			// if the header includes changes trie root, let's build a changes tries roots CHT
+			if header.digest().log(DigestItem::as_changes_trie_root).is_some() {
+				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+					cht::SIZE, new_cht_number, (new_cht_start.as_()..)
+					.map(|num| self.changes_trie_root(BlockId::Number(As::sa(num))))
+				)?;
+				transaction.put(
+					columns::CHT,
+					&cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start),
+					new_changes_trie_cht_root.as_ref()
+				);
+			}
 
-				let mut prune_block = new_cht_start;
-				let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
-				trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
+			// prune headers that are replaced with CHT
+			let mut prune_block = new_cht_start;
+			let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
+			trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}",
+				new_cht_start, new_cht_end, new_cht_number);
 
-				while prune_block <= new_cht_end {
-					if let Some(hash) = self.hash(prune_block)? {
-						let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?
-							.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
-						transaction.delete(columns::HASH_LOOKUP, hash.as_ref());
-						transaction.delete(columns::HEADER, &lookup_key);
-					}
-					prune_block += NumberFor::<Block>::one();
+			while prune_block <= new_cht_end {
+				if let Some(hash) = self.hash(prune_block)? {
+					let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?
+						.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
+					transaction.delete(columns::HASH_LOOKUP, hash.as_ref());
+					transaction.delete(columns::HEADER, &lookup_key);
 				}
+				prune_block += One::one();
 			}
 		}
 
 		Ok(())
+	}
+
+	/// Read CHT root of given type for the block.
+	fn read_cht_root(
+		&self,
+		cht_type: u8,
+		cht_size: u64,
+		block: NumberFor<Block>
+	) -> ClientResult<Block::Hash> {
+		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
+
+		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
+		let cht_start = cht::start_number(cht_size, cht_number);
+		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)).map_err(db_err)?
+			.ok_or_else(no_cht_for_block)
+			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
 	}
 }
 
@@ -354,14 +401,12 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		Ok(())
 	}
 
-	fn cht_root(&self, cht_size: u64, block: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Block::Hash> {
-		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
+	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
+	}
 
-		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
-		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &number_to_lookup_key(cht_start)).map_err(db_err)?
-			.ok_or_else(no_cht_for_block)
-			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
+	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
 	}
 
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
@@ -400,68 +445,72 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	}
 }
 
+/// Build the key for inserting header-CHT at given block.
+fn cht_key<N: As<u64>>(cht_type: u8, block: N) -> [u8; 5] {
+	let mut key = [cht_type; 5];
+	key[1..].copy_from_slice(&number_to_lookup_key(block));
+	key
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use client::cht;
+	use runtime_primitives::generic::DigestItem;
 	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
-	fn prepare_header(parent: &Hash, number: u64, extrinsics_root: Hash) -> Header {
+	pub fn default_header(parent: &Hash, number: u64) -> Header {
 		Header {
 			number: number.into(),
 			parent_hash: *parent,
 			state_root: Hash::random(),
 			digest: Default::default(),
-			extrinsics_root,
+			extrinsics_root: Default::default(),
 		}
 	}
 
-	pub fn insert_block_with_extrinsics_root(
+	fn header_with_changes_trie(parent: &Hash, number: u64) -> Header {
+		let mut header = default_header(parent, number);
+		header.digest.logs.push(DigestItem::ChangesTrieRoot([(number % 256) as u8; 32].into()));
+		header
+	}
+
+	fn header_with_extrinsics_root(parent: &Hash, number: u64, extrinsics_root: Hash) -> Header {
+		let mut header = default_header(parent, number);
+		header.extrinsics_root = extrinsics_root;
+		header
+	}
+
+	pub fn insert_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		parent: &Hash,
-		number: u64,
 		authorities: Option<Vec<AuthorityId>>,
-		extrinsics_root: Hash,
+		header: F,
 	) -> Hash {
-		let header = prepare_header(parent, number, extrinsics_root);
+		let header = header();
 		let hash = header.hash();
 		db.import_header(header, authorities, NewBlockState::Best).unwrap();
 		hash
 	}
 
-	pub fn insert_block(
+	fn insert_final_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		parent: &Hash,
-		number: u64,
-		authorities: Option<Vec<AuthorityId>>
+		authorities: Option<Vec<AuthorityId>>,
+		header: F,
 	) -> Hash {
-		let header = prepare_header(parent, number, Default::default());
-		let hash = header.hash();
-		db.import_header(header, authorities, NewBlockState::Best).unwrap();
-		hash
-	}
-
-	fn insert_final_block(
-		db: &LightStorage<Block>,
-		parent: &Hash,
-		number: u64,
-		authorities: Option<Vec<AuthorityId>>
-	) -> Hash {
-		let header = prepare_header(parent, number, Default::default());
+		let header = header();
 		let hash = header.hash();
 		db.import_header(header, authorities, NewBlockState::Final).unwrap();
 		hash
 	}
 
-	fn insert_non_best_block(
+	fn insert_non_best_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		parent: &Hash,
-		number: u64,
-		authorities: Option<Vec<AuthorityId>>
+		authorities: Option<Vec<AuthorityId>>,
+		header: F,
 	) -> Hash {
-		let header = prepare_header(parent, number, Default::default());
+		let header = header();
 		let hash = header.hash();
 		db.import_header(header, authorities, NewBlockState::Normal).unwrap();
 		hash
@@ -470,7 +519,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_known_header() {
 		let db = LightStorage::new_test();
-		let known_hash = insert_block(&db, &Default::default(), 0, None);
+		let known_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		let header_by_hash = db.header(BlockId::Hash(known_hash)).unwrap().unwrap();
 		let header_by_number = db.header(BlockId::Number(0)).unwrap().unwrap();
 		assert_eq!(header_by_hash, header_by_number);
@@ -486,12 +535,12 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_info() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		let info = db.info().unwrap();
 		assert_eq!(info.best_hash, genesis_hash);
 		assert_eq!(info.best_number, 0);
 		assert_eq!(info.genesis_hash, genesis_hash);
-		let best_hash = insert_block(&db, &genesis_hash, 1, None);
+		let best_hash = insert_block(&db, None, || default_header(&genesis_hash, 1));
 		let info = db.info().unwrap();
 		assert_eq!(info.best_hash, best_hash);
 		assert_eq!(info.best_number, 1);
@@ -501,7 +550,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_block_status() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.status(BlockId::Hash(genesis_hash)).unwrap(), BlockStatus::InChain);
 		assert_eq!(db.status(BlockId::Number(0)).unwrap(), BlockStatus::InChain);
 		assert_eq!(db.status(BlockId::Hash(1.into())).unwrap(), BlockStatus::Unknown);
@@ -511,7 +560,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_block_hash() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.hash(0).unwrap(), Some(genesis_hash));
 		assert_eq!(db.hash(1).unwrap(), None);
 	}
@@ -520,64 +569,81 @@ pub(crate) mod tests {
 	fn import_header_works() {
 		let db = LightStorage::new_test();
 
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.db.iter(columns::HEADER).count(), 1);
 		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 1);
 
-		let _ = insert_block(&db, &genesis_hash, 1, None);
+		let _ = insert_block(&db, None, || default_header(&genesis_hash, 1));
 		assert_eq!(db.db.iter(columns::HEADER).count(), 2);
 		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 2);
 	}
 
 	#[test]
 	fn finalized_ancient_headers_are_replaced_with_cht() {
-		let db = LightStorage::new_test();
+		fn insert_headers<F: Fn(&Hash, u64) -> Header>(header_producer: F) -> LightStorage<Block> {
+			let db = LightStorage::new_test();
 
-		// insert genesis block header (never pruned)
-		let mut prev_hash = insert_final_block(&db, &Default::default(), 0, None);
+			// insert genesis block header (never pruned)
+			let mut prev_hash = insert_final_block(&db, None, || header_producer(&Default::default(), 0));
 
-		// insert SIZE blocks && ensure that nothing is pruned
-		for number in 0..cht::SIZE {
-			prev_hash = insert_block(&db, &prev_hash, 1 + number, None);
+			// insert SIZE blocks && ensure that nothing is pruned
+			for number in 0..cht::SIZE {
+				prev_hash = insert_block(&db, None, || header_producer(&prev_hash, 1 + number));
+			}
+			assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+			// insert next SIZE blocks && ensure that nothing is pruned
+			for number in 0..cht::SIZE {
+				prev_hash = insert_block(&db, None, || header_producer(&prev_hash, 1 + cht::SIZE + number));
+			}
+			assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+			// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
+			// nothing is yet finalized, so nothing is pruned.
+			prev_hash = insert_block(&db, None, || header_producer(&prev_hash, 1 + cht::SIZE + cht::SIZE));
+			assert_eq!(db.db.iter(columns::HEADER).count(), (2 + cht::SIZE + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+			// now finalize the block.
+			for i in (0..(cht::SIZE + cht::SIZE)).map(|i| i + 1) {
+				db.finalize_header(BlockId::Number(i)).unwrap();
+			}
+			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
+			db
 		}
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (1 + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
-		// insert next SIZE blocks && ensure that nothing is pruned
-		for number in 0..cht::SIZE {
-			prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + number, None);
-		}
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (1 + cht::SIZE + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 0);
-
-		// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
-		// nothing is yet finalized, so nothing is pruned.
-		prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + cht::SIZE, None);
-		assert_eq!(db.db.iter(columns::HEADER).count(), (2 + cht::SIZE + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (2 + cht::SIZE + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 0);
-
-		// now finalize the block.
-		for i in (0..(cht::SIZE + cht::SIZE)).map(|i| i + 1) {
-			db.finalize_header(BlockId::Number(i)).unwrap();
-		}
-		db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
+		// when headers are created without changes tries roots
+		let db = insert_headers(default_header);
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
 		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+
+		// when headers are created with changes tries roots
+		let db = insert_headers(header_with_changes_trie);
+		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
+		assert_eq!(db.db.iter(columns::CHT).count(), 2);
+		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
 	}
 
 	#[test]
 	fn get_cht_fails_for_genesis_block() {
-		assert!(LightStorage::<Block>::new_test().cht_root(cht::SIZE, 0).is_err());
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht::SIZE, 0).is_err());
 	}
 
 	#[test]
 	fn get_cht_fails_for_non_existant_cht() {
-		assert!(LightStorage::<Block>::new_test().cht_root(cht::SIZE, (cht::SIZE / 2) as u64).is_err());
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht::SIZE, (cht::SIZE / 2) as u64).is_err());
 	}
 
 	#[test]
@@ -585,15 +651,21 @@ pub(crate) mod tests {
 		let db = LightStorage::new_test();
 
 		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
-		let mut prev_hash = insert_final_block(&db, &Default::default(), 0, None);
+		let mut prev_hash = insert_final_block(&db, None, || header_with_changes_trie(&Default::default(), 0));
 		for i in 1..1 + cht::SIZE + cht::SIZE + 1 {
-			prev_hash = insert_block(&db, &prev_hash, i as u64, None);
+			prev_hash = insert_block(&db, None, || header_with_changes_trie(&prev_hash, i as u64));
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
 
-		let cht_root_1 = db.cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
-		let cht_root_2 = db.cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
-		let cht_root_3 = db.cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
+		let cht_root_1 = db.header_cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
+		let cht_root_2 = db.header_cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
+		let cht_root_3 = db.header_cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
+		assert_eq!(cht_root_1, cht_root_2);
+		assert_eq!(cht_root_2, cht_root_3);
+
+		let cht_root_1 = db.changes_trie_cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
+		let cht_root_2 = db.changes_trie_cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
+		let cht_root_3 = db.changes_trie_cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 	}
@@ -601,16 +673,16 @@ pub(crate) mod tests {
 	#[test]
 	fn tree_route_works() {
 		let db = LightStorage::new_test();
-		let block0 = insert_block(&db, &Default::default(), 0, None);
+		let block0 = insert_block(&db, None, || default_header(&Default::default(), 0));
 
 		// fork from genesis: 3 prong.
-		let a1 = insert_block(&db, &block0, 1, None);
-		let a2 = insert_block(&db, &a1, 2, None);
-		let a3 = insert_block(&db, &a2, 3, None);
+		let a1 = insert_block(&db, None, || default_header(&block0, 1));
+		let a2 = insert_block(&db, None, || default_header(&a1, 2));
+		let a3 = insert_block(&db, None, || default_header(&a2, 3));
 
 		// fork from genesis: 2 prong.
-		let b1 = insert_block_with_extrinsics_root(&db, &block0, 1, None, Hash::from([1; 32]));
-		let b2 = insert_block(&db, &b1, 2, None);
+		let b1 = insert_block(&db, None, || header_with_extrinsics_root(&block0, 1, Hash::from([1; 32])));
+		let b2 = insert_block(&db, None, || default_header(&b1, 2));
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
@@ -686,19 +758,19 @@ pub(crate) mod tests {
 				(7, None), // block will work for 'future' block too
 			];
 
-			let hash0 = insert_final_block(&db, &Default::default(), 0, None);
+			let hash0 = insert_final_block(&db, None, || default_header(&Default::default(), 0));
 			run_checks(&db, 0, &checks);
-			let hash1 = insert_final_block(&db, &hash0, 1, None);
+			let hash1 = insert_final_block(&db, None, || default_header(&hash0, 1));
 			run_checks(&db, 1, &checks);
-			let hash2 = insert_final_block(&db, &hash1, 2, Some(vec![[1u8; 32].into()]));
+			let hash2 = insert_final_block(&db, Some(vec![[1u8; 32].into()]), || default_header(&hash1, 2));
 			run_checks(&db, 2, &checks);
-			let hash3 = insert_final_block(&db, &hash2, 3, Some(vec![[1u8; 32].into()]));
+			let hash3 = insert_final_block(&db, Some(vec![[1u8; 32].into()]), || default_header(&hash2, 3));
 			run_checks(&db, 3, &checks);
-			let hash4 = insert_final_block(&db, &hash3, 4, Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
+			let hash4 = insert_final_block(&db, Some(vec![[1u8; 32].into(), [2u8; 32].into()]), || default_header(&hash3, 4));
 			run_checks(&db, 4, &checks);
-			let hash5 = insert_final_block(&db, &hash4, 5, Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
+			let hash5 = insert_final_block(&db, Some(vec![[1u8; 32].into(), [2u8; 32].into()]), || default_header(&hash4, 5));
 			run_checks(&db, 5, &checks);
-			let hash6 = insert_final_block(&db, &hash5, 6, None);
+			let hash6 = insert_final_block(&db, None, || default_header(&hash5, 6));
 			run_checks(&db, 7, &checks);
 
 			(hash2, hash6)
@@ -708,9 +780,9 @@ pub(crate) mod tests {
 			// some older non-best blocks are inserted
 			// ... -> B2(1) -> B2_1(1) -> B2_2(2)
 			// => the cache ignores all writes before best finalized block
-			let hash2_1 = insert_non_best_block(&db, &hash2, 3, Some(vec![[1u8; 32].into()]));
+			let hash2_1 = insert_non_best_block(&db, Some(vec![[1u8; 32].into()]), || default_header(&hash2, 3));
 			assert_eq!(None, db.cache().authorities_at(BlockId::Hash(hash2_1)));
-			let hash2_2 = insert_non_best_block(&db, &hash2_1, 4, Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
+			let hash2_2 = insert_non_best_block(&db, Some(vec![[1u8; 32].into(), [2u8; 32].into()]), || default_header(&hash2_1, 4));
 			assert_eq!(None, db.cache().authorities_at(BlockId::Hash(hash2_2)));
 		}
 
@@ -721,32 +793,32 @@ pub(crate) mod tests {
 			//                     \> B6_1_1(5)
 			//                     \> B6_1_2(6) -> B6_1_3(7)
 
-			let hash7 = insert_block(&db, &hash6, 7, Some(vec![[3u8; 32].into()]));
+			let hash7 = insert_block(&db, Some(vec![[3u8; 32].into()]), || default_header(&hash6, 7));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
-			let hash8 = insert_block(&db, &hash7, 8, Some(vec![[3u8; 32].into()]));
+			let hash8 = insert_block(&db, Some(vec![[3u8; 32].into()]), || default_header(&hash7, 8));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
-			let hash6_1 = insert_block(&db, &hash6, 7, Some(vec![[4u8; 32].into()]));
+			let hash6_1 = insert_block(&db, Some(vec![[4u8; 32].into()]), || default_header(&hash6, 7));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
-			let hash6_1_1 = insert_non_best_block(&db, &hash6_1, 8, Some(vec![[5u8; 32].into()]));
+			let hash6_1_1 = insert_non_best_block(&db, Some(vec![[5u8; 32].into()]), || default_header(&hash6_1, 8));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_1)), Some(vec![[5u8; 32].into()]));
-			let hash6_1_2 = insert_non_best_block(&db, &hash6_1, 8, Some(vec![[6u8; 32].into()]));
+			let hash6_1_2 = insert_non_best_block(&db, Some(vec![[6u8; 32].into()]), || default_header(&hash6_1, 8));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_1)), Some(vec![[5u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_2)), Some(vec![[6u8; 32].into()]));
-			let hash6_2 = insert_block(&db, &hash6_1, 8, Some(vec![[4u8; 32].into()]));
+			let hash6_2 = insert_block(&db, Some(vec![[4u8; 32].into()]), || default_header(&hash6_1, 8));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
