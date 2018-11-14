@@ -203,7 +203,7 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
 	root_slice: &[u8],
 	mut f: F
 ) -> Result<(), Box<TrieError<H::Out>>> where
-	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
+	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
@@ -249,7 +249,7 @@ pub fn read_child_trie_value<H: Hasher, DB>(
 	root_slice: &[u8],
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
-	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
+	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
@@ -265,7 +265,7 @@ pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
 	key: &[u8],
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
-	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
+	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
