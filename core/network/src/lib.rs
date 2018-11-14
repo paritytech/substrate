@@ -17,10 +17,8 @@
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
-// tag::description[]
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
-// end::description[]
 
 extern crate linked_hash_map;
 extern crate parking_lot;
@@ -53,10 +51,10 @@ mod sync;
 #[macro_use]
 mod protocol;
 mod io;
-mod config;
 mod chain;
 mod blocks;
 mod on_demand;
+pub mod config;
 pub mod import_queue;
 pub mod consensus_gossip;
 pub mod error;
@@ -67,13 +65,12 @@ pub mod specialization;
 pub mod test;
 
 pub use chain::Client as ClientHandle;
-pub use service::{Service, FetchFuture, TransactionPool, Params, ManageNetwork, SyncProvider};
+pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeIndex, ProtocolId, Severity, Protocol};
+pub use network_libp2p::{NodeIndex, ProtocolId, Severity, Protocol};
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
-pub use config::{Roles, ProtocolConfig};
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;

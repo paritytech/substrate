@@ -25,7 +25,6 @@ exit-future = "0.1"
 sysinfo = "0.6.2"
 substrate-client = { path = "../../core/client" }
 substrate-network = { path = "../../core/network" }
-substrate-network-libp2p = { path = "../../core/network-libp2p" }
 sr-primitives = { path = "../../core/sr-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }

@@ -21,7 +21,7 @@ use futures::{prelude::*, task, Stream};
 use futures::sync::{oneshot, mpsc};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{Endpoint, PublicKey};
-use libp2p::core::nodes::swarm::ConnectedPoint;
+use libp2p::core::nodes::ConnectedPoint;
 use libp2p::kad::{KadSystem, KadSystemConfig, KadConnecController, KadPeer};
 use libp2p::kad::{KadConnectionType, KadQueryEvent};
 use parking_lot::Mutex;
@@ -567,6 +567,8 @@ impl Service {
 
 	/// Adds a list of peers to the network topology.
 	fn add_discovered_peers(&mut self, list: impl IntoIterator<Item = KadPeer>) {
+		let mut topology_has_changed = false;
+
 		for peer in list {
 			let connected = match peer.connection_ty {
 				KadConnectionType::NotConnected => false,
@@ -575,15 +577,20 @@ impl Service {
 				KadConnectionType::CannotConnect => continue,
 			};
 
-			self.topology.add_kademlia_discovered_addrs(
+			let changed = self.topology.add_kademlia_discovered_addrs(
 				&peer.node_id,
 				peer.multiaddrs.iter().map(|a| (a.clone(), connected))
 			);
+
+			if changed {
+				topology_has_changed = true;
+			}
 		}
 
 		// Potentially connect to the newly-discovered nodes.
-		// TODO: only do so if the topology reports that something new has been added
-		self.connect_to_nodes();
+		if topology_has_changed {
+			self.connect_to_nodes();
+		}
 	}
 
 	/// Handles the swarm opening a connection to the given peer.

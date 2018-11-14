@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
 //! Manages communication between them.
-// end::description[]
 
 #![warn(unused_extern_crates)]
 
@@ -78,7 +76,7 @@ use codec::{Encode, Decode};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::ChainSpec;
+pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
@@ -89,8 +87,11 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
 };
+use components::{StartRPC, CreateNetworkParams};
+#[doc(hidden)]
+pub use network::OnDemand;
 
 const DEFAULT_PROTOCOL_ID: &'static str = "sup";
 
@@ -124,8 +125,7 @@ impl<Components> Service<Components>
 	where
 		Components: components::Components,
 		<Components as components::Components>::Executor: std::clone::Clone,
-		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
-		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
+		// <Components as components::Components>::RuntimeApi: client::runtime_api::BlockBuilder<<<Components as components::Components>::Factory as ServiceFactory>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Sync + Send + client::runtime_api::Core<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, primitives::AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + client::runtime_api::ConstructRuntimeApi<Block=<<Components as components::Components>::Factory as ServiceFactory>::Block> + client::runtime_api::Metadata<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, Vec<u8>, Error=client::error::Error> + client::runtime_api::TaggedTransactionQueue<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, Error=client::error::Error>,
 {
 	/// Creates a new service.
 	pub fn new(
@@ -140,10 +140,12 @@ impl<Components> Service<Components>
 		let executor = NativeExecutor::new();
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+
+		// This is meant to be for testing only
+		// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
-
 		// Keep the public key for telemetry
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
@@ -174,17 +176,10 @@ impl<Components> Service<Components>
 			client: client.clone(),
 		 };
 
-		let network_params = network::Params {
-			config: network::ProtocolConfig {
-				roles: config.roles,
-			},
-			network_config: config.network,
-			chain: client.clone(),
-			on_demand: on_demand.clone()
-				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
-			transaction_pool: Arc::new(transaction_pool_adapter),
-			specialization: network_protocol,
-		};
+		let network_params = Components::CreateNetworkParams::create_network_params(
+			client.clone(), config.roles, config.network, on_demand.clone(),
+			transaction_pool_adapter, network_protocol
+		);
 
 		let mut protocol_id = network::ProtocolId::default();
 		let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
@@ -233,32 +228,13 @@ impl<Components> Service<Components>
 			task_executor.spawn(events);
 		}
 
-		// RPC
-		let rpc_config = RpcConfig {
-			chain_name: config.chain_spec.name().to_string(),
-			impl_name: config.impl_name,
-			impl_version: config.impl_version,
-		};
 
-		let (rpc_http, rpc_ws) = {
-			let handler = || {
-				let client = client.clone();
-				let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
-				let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
-				let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), subscriptions.clone());
-				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
-					state,
-					chain,
-					author,
-					rpc_config.clone(),
-				)
-			};
-			(
-				maybe_start_server(config.rpc_http, |address| rpc::start_http(address, handler()))?,
-				maybe_start_server(config.rpc_ws, |address| rpc::start_ws(address, handler()))?,
-			)
-		};
+		// RPC
+		let (rpc_http, rpc_ws) = Components::RPC::start_rpc(
+			client.clone(), config.chain_spec.name().to_string(), config.impl_name,
+			config.impl_version, config.rpc_http, config.rpc_ws, config.chain_spec.properties(),
+			task_executor.clone(), transaction_pool.clone()
+		)?;
 
 		let proposer = Arc::new(ProposerFactory {
 			client: client.clone(),
@@ -309,9 +285,7 @@ impl<Components> Service<Components>
 	}
 }
 
-impl<Components> Service<Components> where
-	Components: components::Components,
-{
+impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
@@ -379,6 +353,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
+	properties: Properties,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -394,6 +369,10 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(self.chain_name.clone())
+	}
+
+	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
+		Ok(self.properties.clone())
 	}
 }
 
@@ -415,7 +394,7 @@ impl<C: Components> TransactionPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync{
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		self.pool.ready()
 			.map(|t| {
@@ -463,41 +442,6 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
-/// Creates a simple `Service` implementation.
-/// This `Service` just holds an instance to a `service::Service` and implements `Deref`.
-/// It also provides a `new` function that takes a `config` and a `TaskExecutor`.
-#[macro_export]
-macro_rules! construct_simple_service {
-	(
-		$name: ident
-	) => {
-		pub struct $name<C: $crate::Components> {
-			inner: $crate::Arc<$crate::Service<C>>,
-		}
-
-		impl<C: $crate::Components> $name<C> {
-			fn new(
-				config: FactoryFullConfiguration<C::Factory>,
-				executor: $crate::TaskExecutor
-			) -> $crate::Result<Self, $crate::Error> {
-				Ok(
-					Self {
-						inner: $crate::Arc::new($crate::Service::new(config, executor)?)
-					}
-				)
-			}
-		}
-
-		impl<C: $crate::Components> $crate::Deref for $name<C> {
-			type Target = $crate::Service<C>;
-
-			fn deref(&self) -> &Self::Target {
-				&self.inner
-			}
-		}
-	}
-}
-
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
 /// by `{}` blocks. These blocks are required and used to initialize the given parameter.
@@ -539,6 +483,7 @@ macro_rules! construct_service_factory {
 		$(#[$attr:meta])*
 		struct $name:ident {
 			Block = $block:ty,
+			RuntimeApi = $runtime_api:ty,
 			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
 			RuntimeDispatch = $dispatch:ty,
 			FullTransactionPoolApi = $full_transaction:ty { $( $full_transaction_init:tt )* },
@@ -559,6 +504,7 @@ macro_rules! construct_service_factory {
 		#[allow(unused_variables)]
 		impl $crate::ServiceFactory for $name {
 			type Block = $block;
+			type RuntimeApi = $runtime_api;
 			type NetworkProtocol = $protocol;
 			type RuntimeDispatch = $dispatch;
 			type FullTransactionPoolApi = $full_transaction;

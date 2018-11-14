@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
-//! Consensus basics and common features
-// end::description[]
+//! Tracks offline validators.
 
 // This provides "unused" building blocks to other crates
 #![allow(dead_code)]

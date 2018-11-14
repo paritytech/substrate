@@ -19,7 +19,7 @@
 use super::*;
 use network::test::{Block, Hash, TestNetFactory, Peer, PeersClient};
 use network::import_queue::{PassThroughVerifier};
-use network::ProtocolConfig;
+use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::Keyring;
@@ -31,7 +31,7 @@ use std::collections::HashSet;
 
 use authorities::AuthoritySet;
 
-type PeerData = Mutex<Option<LinkHalf<test_client::Backend, test_client::Executor, Block>>>;
+type PeerData = Mutex<Option<LinkHalf<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>>>;
 type GrandpaPeer = Peer<PassThroughVerifier, PeerData>;
 
 struct GrandpaTestNet {
@@ -73,7 +73,7 @@ impl TestNetFactory for GrandpaTestNet {
 	fn default_config() -> ProtocolConfig {
 		// the authority role ensures gossip hits all nodes here.
 		ProtocolConfig {
-			roles: ::network::Roles::AUTHORITY,
+			roles: Roles::AUTHORITY,
 		}
 	}
 

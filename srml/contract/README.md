@@ -1,3 +1,5 @@
+# Complexity
+
 This analysis is on the computing and memory complexity of specific procedures. It provides a rough estimate of operations performed in general and especially focusing on DB reads and writes. It is also an attempt to estimate the memory consumption at its peak.
 
 The primary goal is to come up with decent pricing for functions that can be invoked by a user (via extrinsics) or by untrusted code that prevents DoS attacks.
@@ -132,53 +134,48 @@ Consists of dropping (in the Rust sense) of the `AccountDb`.
 This function performs the following steps:
 
 1. Querying source and destination balances from an overlay (see `get_balance`),
-2. Querying fee for the case. (This hits DB unless pre-loaded)
-2. Querying `existential_deposit`. (This hits DB unless pre-loaded)
+2. Querying `existential_deposit`.
 3. Executing `ensure_account_liquid` hook.
 4. Updating source and destination balance in the overlay (see `set_balance`).
 
 **Note** that the complexity of executing `ensure_account_liquid` hook should be considered separately.
 
-In the course of the execution this function can perform up to 4 DB reads: 2x `get_balance`, fee and `existential_deposit`. The last two can be pre-loaded pushing the cost of loading to a higher level and making it a one time. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
+In the course of the execution this function can perform up to 2 DB reads to `get_balance` of source and destination accounts. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
 
 Moreover, if the source balance goes below `existential_deposit` then the account will be deleted along with all its storage which requires time proportional to the number of storage entries of that account.
 
 Assuming marshaled size of a balance value is of the constant size we can neglect its effect on the performance.
 
-**complexity**: up to 4 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has. For the current `AccountDb` implementation computing complexity also depends on the depth of the `AccountDb` cascade. Memorywise it can be assumed to be constant.
+**complexity**: up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has. For the current `AccountDb` implementation computing complexity also depends on the depth of the `AccountDb` cascade. Memorywise it can be assumed to be constant.
 
 ## Call
 
 This function receives input data for the contract execution. The execution consists of the following steps:
 
-1. Querying `MaxDepth` and `call_base_fee`. (These hit DB unless pre-loaded)
-2. Loading code from the DB.
-3. `transfer`-ing funds between the caller and the destination account.
-4. Executing the code of the destination account.
-5. Committing overlayed changed to the underlying `AccountDb`.
+1. Loading code from the DB.
+2. `transfer`-ing funds between the caller and the destination account.
+3. Executing the code of the destination account.
+4. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the contract code should be considered separately.
 
-The execution of this function will involve 2 DB reads for querying `MaxDepth` and `MaxDepth` constants. These values can be pre-loaded pushing the cost of loading to a higher level and making it a one time.
-
 Loading code most probably will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
 
-Also, `transfer` can make up to 4 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
+Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
-**complexity**: Up to 7 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
+**complexity**: Up to 3 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 ## Create
 
 This function takes the code of the constructor and input data. Creation of a contract consists of the following steps:
 
-1. Querying `MaxDepth` and `create_base_fee`. (These hit DB unless pre-loaded)
-2. Calling `DetermineContractAddress` hook to determine an address for the contract,
-3. `transfer`-ing funds between self and the newly created contract.
-4. Executing the constructor code. This will yield the final code of the code.
-5. Storing the code for the newly created contract in the overlay.
-6. Committing overlayed changed to the underlying `AccountDb`.
+1. Calling `DetermineContractAddress` hook to determine an address for the contract,
+2. `transfer`-ing funds between self and the newly created contract.
+3. Executing the constructor code. This will yield the final code of the code.
+4. Storing the code for the newly created contract in the overlay.
+5. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
@@ -186,15 +183,13 @@ This function takes the code of the constructor and input data. Creation of a co
 
 **Note** that the constructor returns code in the owned form and it's obtained via return facilities, which should have take fee for the return value.
 
-The execution of this function involves 2 DB reads for querying `create_base_fee` and `MaxDepth` constants. These values can be pre-loaded pushing the cost of loading to a higher level and making it a one time.
-
-Also, `transfer` can make up to 4 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
+Also, `transfer` can make up to 2 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
 Storing the code in the overlay may induce another DB write (if flushed to the storage) with the size proportional to the size of the constructor code.
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the constructor code. Thus, the pricing of storage modification should account for that.
 
-**complexity**: Up to 6 DB reads and induces up to 3 DB writes (if flushed to the storage), one of which is dependent on the size of the code. Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
+**complexity**: Up to 2 DB reads and induces up to 3 DB writes (if flushed to the storage), one of which is dependent on the size of the code. Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 # Externalities
 

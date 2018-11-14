@@ -25,10 +25,6 @@ extern crate srml_support as runtime_support;
 
 #[cfg(test)]
 extern crate sr_io as runtime_io;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 

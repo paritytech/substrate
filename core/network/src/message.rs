@@ -125,7 +125,7 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use runtime_primitives::Justification;
-	use service::Roles;
+	use config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
 		RequestId, Transactions, Direction

@@ -40,6 +40,22 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
 		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
 	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<Block::Hash>> {
+		match *id {
+			BlockId::Hash(h) => Ok(Some(h)),
+			BlockId::Number(n) => self.hash(n),
+		}
+	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	fn block_number_from_id(&self, id: &BlockId<Block>) -> Result<Option<NumberFor<Block>>> {
+		match *id {
+			BlockId::Hash(_) => Ok(self.header(*id)?.map(|h| h.number().clone())),
+			BlockId::Number(n) => Ok(Some(n)),
+		}
+	}
 }
 
 /// Blockchain database backend. Does not perform any validation.

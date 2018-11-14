@@ -20,8 +20,8 @@ use codec;
 use client;
 use keyring;
 use runtime;
-
-use primitives::{Blake2Hasher};
+use runtime_primitives::traits::ProvideRuntimeApi;
+use client::block_builder::api::BlockBuilder;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
@@ -29,10 +29,9 @@ pub trait BlockBuilderExt {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl<'a, B, E> BlockBuilderExt for client::block_builder::BlockBuilder<'a, B, E, runtime::Block, Blake2Hasher>
-    where
-        B: client::backend::Backend<runtime::Block, Blake2Hasher>,
-        E: client::CallExecutor<runtime::Block, Blake2Hasher> + Clone,
+impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
+	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block> + 'a,
+	A::Api: BlockBuilder<runtime::Block>
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))
@@ -40,6 +39,6 @@ impl<'a, B, E> BlockBuilderExt for client::block_builder::BlockBuilder<'a, B, E,
 }
 
 fn sign_tx(transfer: runtime::Transfer) -> runtime::Extrinsic {
-	let signature = keyring::Keyring::from_raw_public(transfer.from.0.clone()).unwrap().sign(&codec::Encode::encode(&transfer)).into();
+	let signature = keyring::Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&codec::Encode::encode(&transfer)).into();
 	runtime::Extrinsic { transfer, signature }
 }

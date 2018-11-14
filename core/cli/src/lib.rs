@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate CLI library.
-// end::description[]
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
@@ -36,7 +34,6 @@ extern crate sysinfo;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
-extern crate substrate_network_libp2p as network_libp2p;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_service as service;
 extern crate substrate_primitives as primitives;
@@ -58,13 +55,12 @@ pub mod error;
 pub mod informant;
 mod panic_hook;
 
-use network_libp2p::Protocol;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
-use network::NonReservedPeerMode;
+use network::{Protocol, config::NonReservedPeerMode};
 use primitives::H256;
 
 use std::io::{Write, Read, stdin, stdout};

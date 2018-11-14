@@ -27,11 +27,11 @@ use codec::{Encode, Decode};
 
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
-use service::{Roles, TransactionPool, ExHashT};
+use service::{TransactionPool, ExHashT};
 use import_queue::ImportQueue;
-use config::ProtocolConfig;
+use config::{ProtocolConfig, Roles};
 use chain::Client;
 use on_demand::OnDemandService;
 use io::SyncIo;
@@ -50,7 +50,7 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
+pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -184,7 +184,7 @@ pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	pub chain: Arc<Client<B>>,
 }
 
-impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new<I: 'static + ImportQueue<B>>(
 		config: ProtocolConfig,
@@ -761,7 +761,7 @@ macro_rules! construct_simple_protocol {
 			}
 		}
 
-		impl $crate::specialization::Specialization<$block> for $protocol {
+		impl $crate::specialization::NetworkSpecialization<$block> for $protocol {
 			fn status(&self) -> Vec<u8> {
 				$(
 					let status = self.$status_protocol_name.status();
