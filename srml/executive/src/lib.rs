@@ -327,6 +327,7 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
+			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69.into()));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
