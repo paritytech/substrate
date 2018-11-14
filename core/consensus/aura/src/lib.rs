@@ -405,7 +405,7 @@ mod tests {
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
 	use runtime_primitives::traits::Block as BlockT;
-	use network::ProtocolConfig;
+	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::Keyring;

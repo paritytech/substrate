@@ -25,7 +25,7 @@ use blocks::{self, BlockCollection};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
-use service::Roles;
+use config::Roles;
 use import_queue::ImportQueue;
 
 // Maximum blocks to request in a single packet.
