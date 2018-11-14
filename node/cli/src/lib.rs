@@ -124,7 +124,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	match cli::execute_default::<service::Factory, _>(spec, exit, &matches)? {
 		cli::Action::ExecutedInternally => (),
 		cli::Action::RunService(exit) => {
-			info!("{}", config.name);
+			info!("Substrate Node");
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017, 2018");
 			info!("Chain specification: {}", config.chain_spec.name());

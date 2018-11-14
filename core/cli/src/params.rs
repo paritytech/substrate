@@ -78,10 +78,10 @@ pub struct CoreParams {
     telemetry_url: Option<String>,
 
     #[structopt(long = "execution", value_name = "STRATEGY", help = "The means of execution used when calling into the runtime. Can be either wasm, native or both.")]
-    execution: ExecutionStrategy,
+    execution: Option<ExecutionStrategy>,
 
     #[structopt(subcommand)]
-    cmds: CoreCommands,
+    cmds: Option<CoreCommands>,
 }
 
 #[derive(Debug, StructOpt)]

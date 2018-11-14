@@ -176,6 +176,7 @@ where
 	}
 }
 
+/// Parse clap::Matches into config and chain specification
 pub fn parse_matches<'a, F, S>(
 	spec_factory: S,
 	version: VersionInfo,
