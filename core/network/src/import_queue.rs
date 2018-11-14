@@ -164,8 +164,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 	fn stop(&self) {
 		self.clear();
 		if let Some(handle) = self.handle.lock().take() {
-			self.data.is_stopping.store(true, Ordering::SeqCst);
-			self.data.signal.notify_one();
+			{
+				// Perform storing the stop flag and signalling under a single lock.
+				let _queue_lock = self.data.queue.lock();
+				self.data.is_stopping.store(true, Ordering::SeqCst);
+				self.data.signal.notify_one();
+			}
 
 			let _ = handle.join();
 		}
@@ -217,12 +221,15 @@ fn import_thread<B: BlockT, L: Link<B>, V: Verifier<B>>(
 ) {
 	trace!(target: "sync", "Starting import thread");
 	loop {
-		if qdata.is_stopping.load(Ordering::SeqCst) {
-			break;
-		}
-
 		let new_blocks = {
 			let mut queue_lock = qdata.queue.lock();
+
+			// We are holding the same lock that `stop` takes so here we either see that stop flag
+			// is active or wait for the signal. The latter one unlocks the mutex and this gives a chance
+			// to `stop` to generate the signal.
+			if qdata.is_stopping.load(Ordering::SeqCst) {
+				break;
+			}
 			if queue_lock.is_empty() {
 				qdata.signal.wait(&mut queue_lock);
 			}
@@ -556,8 +563,8 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			header,
 			body,
 			finalized: self.0,
-			external_justification: justification,
-			post_runtime_digests: vec![],
+			justification: justification,
+			post_digests: vec![],
 			auxiliary: Vec::new(),
 		}, None))
 	}
@@ -692,7 +699,7 @@ pub mod tests {
 		}
 	}
 
-	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block>, Hash, u64, BlockData<Block>) {
+	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>, Hash, u64, BlockData<Block>) {
 		let client = test_client::new();
 		let block = client.new_block().unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::File, block).unwrap();
@@ -803,9 +810,12 @@ pub mod tests {
 
 	#[test]
 	fn async_import_queue_drops() {
-		let verifier = Arc::new(PassThroughVerifier(true));
-		let queue = BasicQueue::new(verifier, Arc::new(test_client::new()));
-		queue.start(TestLink::new()).unwrap();
-		drop(queue);
+		// Perform this test multiple times since it exhibits non-deterministic behavior.
+		for _ in 0..100 {
+			let verifier = Arc::new(PassThroughVerifier(true));
+			let queue = BasicQueue::new(verifier, Arc::new(test_client::new()));
+			queue.start(TestLink::new()).unwrap();
+			drop(queue);
+		}
 	}
 }

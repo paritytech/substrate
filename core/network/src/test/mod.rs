@@ -29,7 +29,6 @@ use client::block_builder::BlockBuilder;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol, ProtocolContext};
-use primitives::{Blake2Hasher};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, PeerId, Severity};
@@ -37,7 +36,7 @@ use keyring::Keyring;
 use codec::Encode;
 use import_queue::{SyncImportQueue, PassThroughVerifier, Verifier};
 use consensus::BlockOrigin;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use consensus_gossip::ConsensusGossip;
 use import_queue::{BlockImport, ImportQueue};
 use service::ExecuteInContext;
@@ -64,7 +63,7 @@ pub struct DummySpecialization {
 	pub gossip: ConsensusGossip<Block>,
 }
 
-impl Specialization<Block> for DummySpecialization {
+impl NetworkSpecialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
 	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, status: ::message::Status<Block>) {
@@ -138,7 +137,7 @@ pub struct TestPacket {
 	recipient: NodeIndex,
 }
 
-pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block>;
+pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>;
 
 pub struct Peer<V: Verifier<Block>, D> {
 	client: Arc<PeersClient>,
@@ -241,7 +240,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-		where F: FnMut(BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>) -> Block
+		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
 	{
 		use blocks::BlockData;
 
@@ -280,7 +279,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 					amount: 1,
 					nonce,
 				};
-				let signature = Keyring::from_raw_public(transfer.from.0).unwrap().sign(&transfer.encode()).into();
+				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
 				builder.push(Extrinsic { transfer, signature }).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()

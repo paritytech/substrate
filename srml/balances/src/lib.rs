@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles balances.
+//! Balances: Handles setting and retrieval of free balance, 
+//! retrieving total balance, reserve and unreserve balance, 
+//! repatriating a reserved balance to a beneficiary account that exists,
+//! transfering a balance between accounts (when not reserved),
+//! slashing an account balance, account removal, rewards,
+//! lookup of an index to reclaim an account (when not balance not reserved),
+//! increasing total stake.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 
 #[macro_use]
 extern crate srml_support as runtime_support;
@@ -106,7 +108,7 @@ impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 
 pub trait Trait: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;

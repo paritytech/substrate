@@ -19,10 +19,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 extern crate sr_std as rstd;
 
 #[macro_use]

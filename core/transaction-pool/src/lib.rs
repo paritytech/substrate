@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate transaction pool.
-// end::description[]
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]

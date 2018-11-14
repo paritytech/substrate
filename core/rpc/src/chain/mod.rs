@@ -39,7 +39,7 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate blockchain API
-	pub trait ChainApi<Hash, Header, Number, Extrinsic> {
+	pub trait ChainApi<Hash, Header, Number, SignedBlock> {
 		type Metadata;
 
 		/// Get header of a relay chain block.
@@ -48,13 +48,17 @@ build_rpc_trait! {
 
 		/// Get header and body of a relay chain block.
 		#[rpc(name = "chain_getBlock")]
-		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock<Header, Extrinsic>>>;
+		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock>>;
 
 		/// Get hash of the n-th block in the canon chain.
 		///
 		/// By default returns latest block hash.
 		#[rpc(name = "chain_getBlockHash", alias = ["chain_getHead", ])]
 		fn block_hash(&self, Trailing<Number>) -> Result<Option<Hash>>;
+
+		/// Get hash of the last finalised block in the canon chain.
+		#[rpc(name = "chain_getFinalisedHead")]
+		fn finalised_head(&self) -> Result<Hash>;
 
 		/// Get the runtime version.
 		#[rpc(name = "chain_getRuntimeVersion")]
@@ -70,6 +74,16 @@ build_rpc_trait! {
 			fn unsubscribe_new_head(&self, SubscriptionId) -> RpcResult<bool>;
 		}
 
+		#[pubsub(name = "chain_finalisedHead")] {
+			/// New head subscription
+			#[rpc(name = "chain_subscribeFinalisedHeads")]
+			fn subscribe_finalised_heads(&self, Self::Metadata, pubsub::Subscriber<Header>);
+
+			/// Unsubscribe from new head subscription.
+			#[rpc(name = "chain_unsubscribeFinalisedHeads")]
+			fn unsubscribe_finalised_heads(&self, SubscriptionId) -> RpcResult<bool>;
+		}
+
 		#[pubsub(name = "chain_runtimeVersion")] {
 			/// New runtime version subscription
 			#[rpc(name = "chain_subscribeRuntimeVersion")]
@@ -83,16 +97,16 @@ build_rpc_trait! {
 }
 
 /// Chain API with subscriptions support.
-pub struct Chain<B, E, Block: BlockT> {
+pub struct Chain<B, E, Block: BlockT, RA> {
 	/// Substrate client.
-	client: Arc<Client<B, E, Block>>,
+	client: Arc<Client<B, E, Block, RA>>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 }
 
-impl<B, E, Block: BlockT> Chain<B, E, Block> {
+impl<B, E, Block: BlockT, RA> Chain<B, E, Block, RA> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, subscriptions: Subscriptions) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block, RA>>, subscriptions: Subscriptions) -> Self {
 		Self {
 			client,
 			subscriptions,
@@ -100,10 +114,11 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> Chain<B, E, Block> where
+impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
 		Ok(match hash.into() {
@@ -111,43 +126,21 @@ impl<B, E, Block> Chain<B, E, Block> where
 			Some(hash) => hash,
 		})
 	}
-}
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic> for Chain<B, E, Block> where
-	Block: BlockT<Hash=H256> + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-{
-	type Metadata = ::metadata::Metadata;
-
-	fn header(&self, hash: Trailing<Block::Hash>) -> Result<Option<Block::Header>> {
-		let hash = self.unwrap_or_best(hash)?;
-		Ok(self.client.header(&BlockId::Hash(hash))?)
-	}
-
-	fn block(&self, hash: Trailing<Block::Hash>)
-		-> Result<Option<SignedBlock<Block::Header, Block::Extrinsic>>>
+	fn subscribe_headers<F, G, S, ERR>(
+		&self,
+		subscriber: pubsub::Subscriber<Block::Header>,
+		best_block_hash: G,
+		stream: F,
+	) where
+		F: FnOnce() -> S,
+		G: FnOnce() -> Result<Option<Block::Hash>>,
+		ERR: ::std::fmt::Debug,
+		S: Stream<Item=Block::Header, Error=ERR> + Send + 'static,
 	{
-		let hash = self.unwrap_or_best(hash)?;
-		Ok(self.client.block(&BlockId::Hash(hash))?)
-	}
-
-	fn block_hash(&self, number: Trailing<NumberFor<Block>>) -> Result<Option<Block::Hash>> {
-		Ok(match number.into() {
-			None => Some(self.client.info()?.chain.best_hash),
-			Some(number) => self.client.header(&BlockId::number(number))?.map(|h| h.hash()),
-		})
-	}
-
-	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
-		let at = self.unwrap_or_best(at)?;
-		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
-	}
-
-	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
 		self.subscriptions.add(subscriber, |sink| {
 			// send current head right at the start.
-			let header = self.block_hash(None.into())
+			let header = best_block_hash()
 				.and_then(|hash| self.header(hash.into()))
 				.and_then(|header| {
 					header.ok_or_else(|| self::error::ErrorKind::Unimplemented.into())
@@ -155,9 +148,8 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::
 				.map_err(Into::into);
 
 			// send further subscriptions
-			let stream = self.client.import_notification_stream()
-				.filter(|notification| notification.is_new_best)
-				.map(|notification| Ok(notification.header))
+			let stream = stream()
+				.map(|res| Ok(res))
 				.map_err(|e| warn!("Block notification stream error: {:?}", e));
 
 			sink
@@ -170,11 +162,70 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::
 				.map(|_| ())
 		});
 	}
+}
+
+impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>> for Chain<B, E, Block, RA> where
+	Block: BlockT<Hash=H256> + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static
+{
+	type Metadata = ::metadata::Metadata;
+
+	fn header(&self, hash: Trailing<Block::Hash>) -> Result<Option<Block::Header>> {
+		let hash = self.unwrap_or_best(hash)?;
+		Ok(self.client.header(&BlockId::Hash(hash))?)
+	}
+
+	fn block(&self, hash: Trailing<Block::Hash>)
+		-> Result<Option<SignedBlock<Block>>>
+	{
+		let hash = self.unwrap_or_best(hash)?;
+		Ok(self.client.block(&BlockId::Hash(hash))?)
+	}
+
+	fn block_hash(&self, number: Trailing<NumberFor<Block>>) -> Result<Option<Block::Hash>> {
+		Ok(match number.into() {
+			None => Some(self.client.info()?.chain.best_hash),
+			Some(number) => self.client.header(&BlockId::number(number))?.map(|h| h.hash()),
+		})
+	}
+
+	fn finalised_head(&self) -> Result<Block::Hash> {
+		Ok(self.client.info()?.chain.finalized_hash)
+	}
+
+	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
+		let at = self.unwrap_or_best(at)?;
+		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
+	}
+
+	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
+		self.subscribe_headers(
+			subscriber,
+			|| self.block_hash(None.into()),
+			|| self.client.import_notification_stream()
+				.filter(|notification| notification.is_new_best)
+				.map(|notification| notification.header),
+		)
+	}
 
 	fn unsubscribe_new_head(&self, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 
+	fn subscribe_finalised_heads(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
+		self.subscribe_headers(
+			subscriber,
+			|| Ok(Some(self.client.info()?.chain.finalized_hash)),
+			|| self.client.finality_notification_stream()
+				.map(|notification| notification.header),
+		)
+	}
+
+	fn unsubscribe_finalised_heads(&self, id: SubscriptionId) -> RpcResult<bool> {
+		Ok(self.subscriptions.cancel(id))
+	}
 
 	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<RuntimeVersion>) {
 		let stream = match self.client.storage_changes_notification_stream(Some(&[storage::StorageKey(storage::well_known_keys::CODE.to_vec())])) {

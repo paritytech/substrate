@@ -73,7 +73,7 @@ impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
 pub(crate) struct Status<H, N> {
 	/// Whether internal changes were made.
 	pub(crate) changed: bool,
-	/// `Some` when underlying authority set has changed, containign the
+	/// `Some` when underlying authority set has changed, containing the
 	/// block where that set changed.
 	pub(crate) new_set_block: Option<(H, N)>,
 }

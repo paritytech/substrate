@@ -26,6 +26,7 @@ substrate-consensus-aura = { path = "../../core/consensus/aura" }
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
 structopt = "0.2.13"
+substrate-keystore = { path = "../../core/keystore" }
 
 [dev-dependencies]
 substrate-service-test = { path = "../../core/service/test" }
