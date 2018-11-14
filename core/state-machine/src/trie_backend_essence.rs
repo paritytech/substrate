@@ -17,7 +17,6 @@
 //! Trie-based state machine backend essence used to read values
 //! from storage.
 
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use hash_db::{self, Hasher};
@@ -181,10 +180,6 @@ impl<'a,
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn keys(&self) -> HashMap<H::Out, i32> {
-		hash_db::PlainDB::keys(self.overlay)
-	}
-
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
 		if let Some(val) = hash_db::PlainDB::get(self.overlay, key) {
 			Some(val)
@@ -219,7 +214,6 @@ impl<'a,
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn keys(&self) -> HashMap<H::Out, i32> { hash_db::PlainDB::keys(self) }
 	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::PlainDB::get(self, key) }
 	fn contains(&self, key: &H::Out) -> bool { hash_db::PlainDB::contains(self, key) }
 }
@@ -231,10 +225,6 @@ impl<'a,
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn keys(&self) -> HashMap<H::Out, i32> {
-		hash_db::HashDB::keys(self.overlay) // TODO: iterate backing
-	}
-
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
 		if let Some(val) = hash_db::HashDB::get(self.overlay, key) {
 			Some(val)
@@ -273,7 +263,6 @@ impl<'a,
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn keys(&self) -> HashMap<H::Out, i32> { hash_db::HashDB::keys(self) }
 	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::HashDB::get(self, key) }
 	fn contains(&self, key: &H::Out) -> bool { hash_db::HashDB::contains(self, key) }
 }
