@@ -49,6 +49,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSi
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
 	}
+
+	/// Consumes self and returns underlying storage.
+	pub fn into_storage(self) -> S {
+		self.essence.into_storage()
+	}
 }
 
 impl super::Error for String {}

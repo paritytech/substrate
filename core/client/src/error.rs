@@ -88,8 +88,8 @@ error_chain! {
 			display("This method is not currently available when running in light client mode"),
 		}
 
-		/// Invalid remote header proof.
-		InvalidHeaderProof {
+		/// Invalid remote CHT-based proof.
+		InvalidCHTProof {
 			description("invalid header proof"),
 			display("Remote node has responded with invalid header proof"),
 		}
@@ -134,6 +134,12 @@ error_chain! {
 		NotInFinalizedChain {
 			description("Potential long-range attack: block not in finalized chain."),
 			display("Potential long-range attack: block not in finalized chain."),
+		}
+
+		/// Hash that is required for building CHT is missing.
+		MissingHashRequiredForCHT(cht_num: u64, block_number: u64) {
+			description("missed hash required for building CHT"),
+			display("Failed to get hash of block#{} for building CHT#{}", block_number, cht_num),
 		}
 	}
 }

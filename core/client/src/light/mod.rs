@@ -65,13 +65,14 @@ where
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<E, H>(
+pub fn new_fetch_checker<E, H, B: BlockT, S: BlockchainStorage<B>, F>(
+	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
-) -> LightDataChecker<E, H>
+) -> LightDataChecker<E, H, B, S, F>
 	where
 		E: CodeExecutor<H>,
 		H: Hasher,
 
 {
-	LightDataChecker::new(executor)
+	LightDataChecker::new(blockchain, executor)
 }

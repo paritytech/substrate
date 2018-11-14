@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
@@ -33,6 +33,7 @@ use service::{TransactionPool, ExHashT};
 use import_queue::ImportQueue;
 use config::{ProtocolConfig, Roles};
 use chain::Client;
+use client::light::fetcher::ChangesProof;
 use on_demand::OnDemandService;
 use io::SyncIo;
 use error;
@@ -673,20 +674,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn on_remote_changes_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteChangesRequest<B::Hash>) {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id, who, request.key.to_hex(), request.first, request.last);
-		let (max, proof) = match self.context_data.chain.key_changes_proof(request.first, request.last, request.max, &request.key) {
-			Ok((max, proof)) => (max, proof),
+		let proof = match self.context_data.chain.key_changes_proof(request.first, request.last, request.min, request.max, &request.key) {
+			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
 					request.id, who, request.key.to_hex(), request.first, request.last, error);
-				(Zero::zero(), Default::default())
+				ChangesProof::<B::Header> {
+					max_block: Zero::zero(),
+					proof: vec![],
+					roots: BTreeMap::new(),
+					roots_proof: vec![],
+				}
 			},
 		};
  		self.send_message(io, who, GenericMessage::RemoteChangesResponse(message::RemoteChangesResponse {
-			id: request.id, max, proof,
+			id: request.id,
+			max: proof.max_block,
+			proof: proof.proof,
+			roots: proof.roots.into_iter().collect(),
+			roots_proof: proof.roots_proof,
 		}));
 	}
 
- 	fn on_remote_changes_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+ 	fn on_remote_changes_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
 		trace!(target: "sync", "Remote changes proof response {} from {} (max={})",
 			response.id, who, response.max);
 		self.on_demand.as_ref().map(|s| s.on_remote_changes_response(io, who, response));
