@@ -916,7 +916,8 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: Send + Sync,
+	RA: CoreAPI<Block>, // not strictly necessary at the moment
+						// but we want to bound to make sure the API is actually available.
 {
 	fn call_api_at(
 		&self,

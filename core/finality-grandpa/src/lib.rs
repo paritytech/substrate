@@ -84,12 +84,13 @@ use futures::stream::Fuse;
 use futures::sync::mpsc;
 use client::{Client, error::Error as ClientError, ImportNotifications, backend::Backend, CallExecutor};
 use client::blockchain::HeaderBackend;
-use client::runtime_api::{CallApiAt, TaggedTransactionQueue};
+use client::runtime_api::{CallApiAt, TaggedTransactionQueue, Core as CoreAPI};
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor,
 };
+use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
 use tokio::timer::Interval;
@@ -765,46 +766,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 }
 
-/// Client side of the GRANDPA APIs declared in fg-primitives.
-pub trait ApiClient<Block: BlockT<Hash=H256>> {
-	/// Get the genesis authorities for GRANDPA.
-	fn genesis_authorities(&self) -> Result<Vec<(AuthorityId, u64)>, ClientError>;
 
-	/// Check a header's digest for a scheduled change.
-	fn scheduled_change(&self, header: &Block::Header)
-		-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>;
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA> ApiClient<Block> for Arc<Client<B, E, Block, RA>> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	DigestFor<Block>: Encode,
-	RA: Send + Sync,
-{
-	fn genesis_authorities(&self) -> Result<Vec<(AuthorityId, u64)>, ClientError> {
-		use runtime_primitives::traits::Zero;
-
-		self.call_api_at_strong(
-			&BlockId::Number(NumberFor::<Block>::zero()),
-			fg_primitives::AUTHORITIES_CALL,
-			&(),
-			&mut Default::default(),
-			&mut None,
-		)
-	}
-
-	fn scheduled_change(&self, header: &Block::Header)
-		-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>
-	{
-		self.call_api_at_strong(
-			&BlockId::hash(header.parent_hash().clone()),
-			fg_primitives::PENDING_CHANGE_CALL,
-			header.digest(),
-			&mut Default::default(),
-			&mut None,
-		)
-	}
-}
 
 /// A block-import handler for GRANDPA.
 ///
@@ -821,7 +783,7 @@ impl<B, E, Block: BlockT<Hash=H256>, Api, RA> BlockImport<Block> for GrandpaBloc
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
-	Api: ApiClient<Block>,
+	Api: GrandpaApi<Block>,
 	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
 {
 	type Error = ClientError;
@@ -831,7 +793,10 @@ impl<B, E, Block: BlockT<Hash=H256>, Api, RA> BlockImport<Block> for GrandpaBloc
 	{
 		use authorities::PendingChange;
 
-		let maybe_change = self.api_client.scheduled_change(&block.header)?;
+		let maybe_change = self.api_client.grandpa_pending_change(
+			&BlockId::hash(*block.header.parent_hash()),
+			&block.header.digest().clone(),
+		)?;
 
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
@@ -879,9 +844,10 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<
 	where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	Api: ApiClient<Block>,
+	Api: GrandpaApi<Block>,
 	RA: Send + Sync,
 {
+	use runtime_primitives::traits::Zero;
 	let authority_set = match client.backend().get_aux(AUTHORITY_SET_KEY)? {
 		None => {
 			info!(target: "afg", "Loading GRANDPA authorities \
@@ -890,7 +856,8 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<
 			// no authority set on disk: fetch authorities from genesis state.
 			// if genesis state is not available, we may be a light client, but these
 			// are unsupported for following GRANDPA directly.
-			let genesis_authorities: Vec<(AuthorityId, u64)> = api_client.genesis_authorities()?;
+			let genesis_authorities = api_client
+				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
 
 			let authority_set = SharedAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.inner().read().encode();
