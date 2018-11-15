@@ -28,8 +28,11 @@ extern crate parity_codec_derive;
 #[macro_use]
 extern crate substrate_client as client;
 
+extern crate sr_std as rstd;
+
 use substrate_primitives::AuthorityId;
 use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
+use rstd::vec::Vec;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
@@ -79,57 +82,5 @@ decl_runtime_apis! {
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
 		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
-	}
-}
-
-#[cfg(feature = "std")]
-mod implementation {
-	use super::{GrandpaApi, ScheduledChange};
-	use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
-	use sr_primitives::generic::BlockId;
-	use parity_codec::{Encode, Decode};
-	use client::{Client, error::Error as ClientError, backend::Backend, CallExecutor};
-	use client::runtime_api::{CallApiAt, Core as CoreAPI};
-	use substrate_primitives::{AuthorityId, H256, Blake2Hasher};
-
-	// TODO [basti]: do this implementation in runtime.
-	impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaApi<Block> for Client<B, E, Block, RA> where
-		B: Backend<Block, Blake2Hasher> + 'static,
-		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-		DigestFor<Block>: Encode,
-		RA: CoreAPI<Block>,
-	{
-		fn grandpa_authorities(&self, at: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>, ClientError> {
-			let raw = self.call_api_at(
-				&at,
-				::AUTHORITIES_CALL,
-				Encode::encode(&()),
-				&mut Default::default(),
-				&mut None,
-			);
-
-			// TODO [basti]: implement this in runtime with macro.
-			match Decode::decode(&mut &raw[..]) {
-				Some(x) => Ok(x),
-				None => Err(::client::error::ErrorKind::CallResultDecode(::AUTHORITIES_CALL).into()),
-			}
-		}
-
-		fn grandpa_pending_change(&self, at: &BlockId<Block>, digest: DigestFor<Block>)
-			-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>
-		{
-			let raw = self.call_api_at(
-				at,
-				::PENDING_CHANGE_CALL,
-				digest.encode(),
-				&mut Default::default(),
-				&mut None,
-			);
-
-			match Decode::decode(&mut &raw[..]) {
-				Some(x) => Ok(x),
-				None => Err(::client::error::ErrorKind::CallResultDecode(::PENDING_CHANGE_CALL).into()),
-			}
-		}
 	}
 }

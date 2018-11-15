@@ -84,11 +84,11 @@ use futures::stream::Fuse;
 use futures::sync::mpsc;
 use client::{Client, error::Error as ClientError, ImportNotifications, backend::Backend, CallExecutor};
 use client::blockchain::HeaderBackend;
-use client::runtime_api::{CallApiAt, TaggedTransactionQueue, Core as CoreAPI};
+use client::runtime_api::TaggedTransactionQueue;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult};
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, DigestFor,
+	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
@@ -773,18 +773,16 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 /// This scans each imported block for signals of changing authority set.
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, Api, RA> {
+pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	api_client: Api,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, Api, RA> BlockImport<Block> for GrandpaBlockImport<B, E, Block, Api, RA> where
+impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block> for GrandpaBlockImport<B, E, Block, RA> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 	DigestFor<Block>: Encode,
-	Api: GrandpaApi<Block>,
-	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
+	RA: GrandpaApi<Block> + TaggedTransactionQueue<Block>,
 {
 	type Error = ClientError;
 
@@ -793,7 +791,7 @@ impl<B, E, Block: BlockT<Hash=H256>, Api, RA> BlockImport<Block> for GrandpaBloc
 	{
 		use authorities::PendingChange;
 
-		let maybe_change = self.api_client.grandpa_pending_change(
+		let maybe_change = self.inner.runtime_api().grandpa_pending_change(
 			&BlockId::hash(*block.header.parent_hash()),
 			&block.header.digest().clone(),
 		)?;
@@ -839,13 +837,12 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<B, E, Block, RA>>, api_client: Api)
-	-> Result<(GrandpaBlockImport<B, E, Block, Api, RA>, LinkHalf<B, E, Block, RA>), ClientError>
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA>(client: Arc<Client<B, E, Block, RA>>)
+	-> Result<(GrandpaBlockImport<B, E, Block, RA>, LinkHalf<B, E, Block, RA>), ClientError>
 	where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	Api: GrandpaApi<Block>,
-	RA: Send + Sync,
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		RA: GrandpaApi<Block>,
 {
 	use runtime_primitives::traits::Zero;
 	let authority_set = match client.backend().get_aux(AUTHORITY_SET_KEY)? {
@@ -856,7 +853,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<
 			// no authority set on disk: fetch authorities from genesis state.
 			// if genesis state is not available, we may be a light client, but these
 			// are unsupported for following GRANDPA directly.
-			let genesis_authorities = api_client
+			let genesis_authorities = client.runtime_api()
 				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
 
 			let authority_set = SharedAuthoritySet::genesis(genesis_authorities);
@@ -873,7 +870,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<
 	};
 
 	Ok((
-		GrandpaBlockImport { inner: client.clone(), authority_set: authority_set.clone(), api_client },
+		GrandpaBlockImport { inner: client.clone(), authority_set: authority_set.clone() },
 		LinkHalf { client, authority_set },
 	))
 }

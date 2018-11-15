@@ -1804,6 +1804,7 @@ dependencies = [
  "srml-treasury 0.1.0",
  "srml-upgrade-key 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-fg-primitives 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]
@@ -3186,6 +3187,7 @@ dependencies = [
  "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
  "substrate-client 0.1.0",
  "substrate-primitives 0.1.0",
 ]
