@@ -393,6 +393,8 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash> for Envi
 	NumberFor<Block>: As<u32>,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+		if base == block { return Err(NotDescendent) }
+
 		let tree_route_res = ::client::blockchain::tree_route(
 			self.inner.backend().blockchain(),
 			BlockId::Hash(block),
