@@ -74,6 +74,9 @@ pub trait BlockImportOperation<Block, H> where
 	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
+	/// Update auxiliary keys. Values are `None` if should be deleted.
+	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 }
 
 /// Client backend. Manages the data layer.

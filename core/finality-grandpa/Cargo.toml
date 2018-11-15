@@ -6,17 +6,22 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 futures = "0.1.17"
 parity-codec = "2.1"
+parity-codec-derive = "2.0"
 sr-primitives = { path = "../sr-primitives" }
+substrate-consensus-common = { path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
 substrate-client = { path = "../client" }
 log = "0.4"
+parking_lot = "0.4"
 tokio = "0.1.7"
+substrate-fg-primitives = { path = "primitives" }
 
 [dependencies.finality-grandpa]
-version = "0.2.0"
+version = "0.3.0"
 features = ["derive-codec"]
 
 [dev-dependencies]
 substrate-network = { path = "../network", features = ["test-helpers"] }
-parking_lot = "0.4"
 substrate-keyring = { path = "../keyring" }
+substrate-test-client = { path = "../test-client"}
+env_logger = "0.5"

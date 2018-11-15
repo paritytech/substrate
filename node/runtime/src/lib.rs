@@ -56,6 +56,7 @@ extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
+extern crate substrate_fg_primitives;
 
 #[cfg(feature = "std")]
 use codec::{Encode, Decode};
@@ -72,7 +73,7 @@ use client::runtime_api::ApiExt;
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor};
 #[cfg(feature = "std")]
 use runtime_primitives::traits::ApiRef;
 #[cfg(feature = "std")]
@@ -84,6 +85,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
+use substrate_fg_primitives::{runtime::GrandpaApi, ScheduledChange};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -395,6 +397,19 @@ impl client::runtime_api::Metadata<GBlock> for ClientWithApi {
 	}
 }
 
+#[cfg(feature = "std")]
+impl substrate_fg_primitives::GrandpaApi<GBlock> for ClientWithApi {
+	fn grandpa_pending_change(&self, at: &GBlockId, digest: &DigestFor<GBlock>)
+		-> Result<Option<ScheduledChange<NumberFor<GBlock>>>, client::error::Error> {
+		self.call_api_at(at, "grandpa_pending_change", digest)
+	}
+
+	fn grandpa_authorities(&self, at: &GBlockId)
+		-> Result<Vec<(AuthorityId, u64)>, client::error::Error> {
+		self.call_api_at(at, "grandpa_authorities", &())
+	}
+}
+
 impl_runtime_apis! {
 	impl Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -445,6 +460,18 @@ impl_runtime_apis! {
 	impl TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
+		}
+	}
+
+
+	impl GrandpaApi<Block> for ClientWithApi {
+		fn grandpa_pending_change(digest: DigestFor<Block>)
+			-> Option<ScheduledChange<NumberFor<Block>>> {
+			unimplemented!("Robert, where is the impl?")
+		}
+
+		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
+			unimplemented!("Robert, where is the impl?")
 		}
 	}
 }

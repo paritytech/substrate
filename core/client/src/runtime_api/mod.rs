@@ -24,12 +24,11 @@ pub use state_machine::OverlayedChanges;
 pub use runtime_primitives::{traits::Block as BlockT, generic::BlockId};
 #[cfg(feature = "std")]
 use runtime_primitives::traits::ApiRef;
-use runtime_version::ApiId;
+pub use runtime_version::ApiId;
 #[doc(hidden)]
 pub use rstd::slice;
 #[cfg(feature = "std")]
 use rstd::result;
-#[doc(hidden)]
 pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use error;
@@ -73,6 +72,30 @@ pub trait CallApiAt<Block: BlockT> {
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 	) -> error::Result<Vec<u8>>;
+
+	/// Call the given api function with strong arguments at the given block
+	/// and returns the decoded result.
+	fn call_api_at_strong<In: Encode, Out: Decode>(
+		&self,
+		at: &BlockId<Block>,
+		function: &'static str,
+		args: &In,
+		changes: &mut OverlayedChanges,
+		initialised_block: &mut Option<BlockId<Block>>,
+	) -> error::Result<Out> where Self: Sized {
+		let raw = self.call_api_at(
+			at,
+			function,
+			args.encode(),
+			changes,
+			initialised_block,
+		)?;
+
+		match Out::decode(&mut &raw[..]) {
+			Some(out) => Ok(out),
+			None => bail!(error::ErrorKind::CallResultDecode(function)),
+		}
+	}
 }
 
 /// The ApiIds for the various standard runtime APIs.
