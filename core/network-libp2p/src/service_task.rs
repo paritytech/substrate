@@ -171,6 +171,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 }
 
 /// Event produced by the service.
+#[derive(Debug)]
 pub enum ServiceEvent {
 	/// Closed connection to a node.
 	///
