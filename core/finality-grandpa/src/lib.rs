@@ -864,6 +864,23 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, Api, RA> {
 	api_client: Api,
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, Api, RA> GrandpaBlockImport<B, E, Block, Api, RA>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	DigestFor<Block>: Encode,
+	Api: ApiClient<Block>,
+	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
+{
+	pub fn make_link_half(&self) -> LinkHalf<B, E, Block, RA> {
+		LinkHalf {
+			client: self.inner.clone(),
+			authority_set: self.authority_set.clone()
+		}
+
+	}
+}
+
 impl<B, E, Block: BlockT<Hash=H256>, Api, RA> BlockImport<Block> for GrandpaBlockImport<B, E, Block, Api, RA> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -919,10 +936,9 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 }
 
-/// Make block importer and link half necessary to tie the background voter
-/// to it.
+/// Make block importer a link half can be to tied to
 pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<B, E, Block, RA>>, api_client: Api)
-	-> Result<(GrandpaBlockImport<B, E, Block, Api, RA>, LinkHalf<B, E, Block, RA>), ClientError>
+	-> Result<GrandpaBlockImport<B, E, Block, Api, RA>, ClientError>
 	where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -952,10 +968,11 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<
 			.into(),
 	};
 
-	Ok((
-		GrandpaBlockImport { inner: client.clone(), authority_set: authority_set.clone(), api_client },
-		LinkHalf { client, authority_set },
-	))
+	Ok(GrandpaBlockImport {
+			inner: client,
+			authority_set,
+			api_client
+	})
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a

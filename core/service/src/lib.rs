@@ -104,6 +104,7 @@ pub struct Service<Components: components::Components> {
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	config: FactoryFullConfiguration<Components::Factory>,
+	import_queue: Arc<Components::ImportQueue>,
 	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
@@ -160,7 +161,7 @@ impl<Components> Service<Components>
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Components::build_import_queue(&config, client.clone())?;
+		let import_queue = Arc::new(Components::build_import_queue(&config, client.clone())?);
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
@@ -197,7 +198,11 @@ impl<Components> Service<Components>
 			protocol_id
 		};
 
-		let network = network::Service::new(network_params, protocol_id, import_queue)?;
+		let network = network::Service::new(
+			network_params,
+			protocol_id,
+			import_queue.clone()
+		)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
 		{
@@ -286,6 +291,7 @@ impl<Components> Service<Components>
 			keystore: keystore,
 			config,
 			proposer,
+			import_queue,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
@@ -304,6 +310,11 @@ impl<Components> Service<Components>
 		} else {
 			None
 		}
+	}
+
+	/// Get access to the internally running import queue
+	pub fn import_queue(&self) -> &Arc<Components::ImportQueue> {
+		&self.import_queue
 	}
 
 	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
@@ -596,7 +607,7 @@ macro_rules! construct_service_factory {
 			) -> Result<Self::FullService, $crate::Error>
 			{
 				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
-					if let Some(key) = service.authority_key() {
+					if let Some(key) = (&service).authority_key() {
 						($( $authority_setup )*)(service, executor, Arc::new(key))
 					} else {
 						Ok(service)

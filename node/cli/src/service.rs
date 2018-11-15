@@ -25,16 +25,25 @@ use node_primitives::Block;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
-	Service,
+	Service, ServiceFactory,
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
+use substrate_service::Deref;
 use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
+
+type GrandpaBlockImport<F> = grandpa::GrandpaBlockImport<
+	FullBackend<F>,
+	FullExecutor<F>,
+	<F as ServiceFactory>::Block, 
+	grandpa::ApiClient<<F as ServiceFactory>::Block>,
+	<F as ServiceFactory>::RuntimeApi
+>;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -77,7 +86,7 @@ construct_service_factory! {
 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
 				if service.config().custom.grandpa_authority {
 					info!("Running Grandpa session as Authority {}", key.public());
-					let (block_import, link_half) = grandpa::block_import(service.client(), service.client())?;
+					let link_half = service.deref().import_queue().make_link_half();
 					// executor.spawn(
 					let grandpa_fut = grandpa::run_grandpa(
 							grandpa::Config {
@@ -106,11 +115,15 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<Self::Block, FullClient<Self>>
-			{ |config, client| Ok(import_queue(AuraConfig {
-						local_key: None,
-						slot_duration: 5
-					}, client)) },
+		FullImportQueue = AuraImportQueue<Self::Block, GrandpaBlockImport<Self>>
+			{ |config, client: Arc<FullClient<Self>>| {
+				let block_import = grandpa::block_import(client.clone(), client)?;
+					
+				Ok(import_queue(AuraConfig {
+					local_key: None,
+					slot_duration: 5
+				}, Arc::new(block_import)))
+			}},
 		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
 			{ |config, client| Ok(
 				import_queue(AuraConfig {
