@@ -32,6 +32,7 @@ use rstd::result;
 pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use error;
+pub use runtime_version::RuntimeVersion;
 
 mod core;
 #[macro_use]
