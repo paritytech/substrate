@@ -124,7 +124,7 @@ To get going as fast as possible, there is a simple script that installs all req
 
 [source, shell]
 ----
-curl getsubstrate.io -sSf | bash
+curl https://getsubstrate.io -sSf | bash
 ----
 
 You can start a local Substrate development chain with running `substrate --dev`.
