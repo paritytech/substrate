@@ -54,27 +54,82 @@ pub mod id {
 	pub const GRANDPA_API: ApiId = *b"fgrandpa";
 }
 
-/// APIs for integrating the GRANDPA finality gadget into runtimes.
-/// This should be implemented on the runtime side.
-///
-/// This is primarily used for negotiating authority-set changes for the
-/// gadget. GRANDPA uses a signalling model of changing authority sets:
-/// changes should be signalled with a delay of N blocks, and then automatically
-/// applied in the runtime after those N blocks have passed.
-///
-/// The consensus protocol will coordinate the handoff externally.
-pub trait GrandpaApi<B: BlockT> {
-	/// Check a digest for pending changes.
-	/// Return `None` if there are no pending changes.
+decl_runtime_apis! {
+	/// APIs for integrating the GRANDPA finality gadget into runtimes.
+	/// This should be implemented on the runtime side.
 	///
-	/// Precedence towards earlier or later digest items can be given
-	/// based on the rules of the chain.
+	/// This is primarily used for negotiating authority-set changes for the
+	/// gadget. GRANDPA uses a signalling model of changing authority sets:
+	/// changes should be signalled with a delay of N blocks, and then automatically
+	/// applied in the runtime after those N blocks have passed.
 	///
-	/// No change should be scheduled if one is already and the delay has not
-	/// passed completely.
-	fn grandpa_pending_change(digest: DigestFor<B>) -> Option<ScheduledChange<NumberFor<B>>>;
+	/// The consensus protocol will coordinate the handoff externally.
+	pub trait GrandpaApi<Block: BlockT> {
+		/// Check a digest for pending changes.
+		/// Return `None` if there are no pending changes.
+		///
+		/// Precedence towards earlier or later digest items can be given
+		/// based on the rules of the chain.
+		///
+		/// No change should be scheduled if one is already and the delay has not
+		/// passed completely.
+		fn grandpa_pending_change(digest: DigestFor<Block>)
+			-> Option<ScheduledChange<NumberFor<Block>>>;
 
-	/// Get the current GRANDPA authorities and weights. This should not change except
-	/// for when changes are scheduled and the corresponding delay has passed.
-	fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+		/// Get the current GRANDPA authorities and weights. This should not change except
+		/// for when changes are scheduled and the corresponding delay has passed.
+		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+	}
+}
+
+#[cfg(feature = "std")]
+mod implementation {
+	use super::{GrandpaApi, ScheduledChange};
+	use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
+	use sr_primitives::generic::BlockId;
+	use parity_codec::{Encode, Decode};
+	use client::{Client, error::Error as ClientError, backend::Backend, CallExecutor};
+	use client::runtime_api::{CallApiAt, Core as CoreAPI};
+	use substrate_primitives::{AuthorityId, H256, Blake2Hasher};
+
+	// TODO [basti]: do this implementation in runtime.
+	impl<B, E, Block: BlockT<Hash=H256>, RA> GrandpaApi<Block> for Client<B, E, Block, RA> where
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		DigestFor<Block>: Encode,
+		RA: CoreAPI<Block>,
+	{
+		fn grandpa_authorities(&self, at: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>, ClientError> {
+			let raw = self.call_api_at(
+				&at,
+				::AUTHORITIES_CALL,
+				Encode::encode(&()),
+				&mut Default::default(),
+				&mut None,
+			);
+
+			// TODO [basti]: implement this in runtime with macro.
+			match Decode::decode(&mut &raw[..]) {
+				Some(x) => Ok(x),
+				None => Err(::client::error::ErrorKind::CallResultDecode(::AUTHORITIES_CALL).into()),
+			}
+		}
+
+		fn grandpa_pending_change(&self, at: &BlockId<Block>, digest: DigestFor<Block>)
+			-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>
+		{
+			let raw = self.call_api_at(
+				at,
+				::PENDING_CHANGE_CALL,
+				digest.encode(),
+				&mut Default::default(),
+				&mut None,
+			);
+
+			match Decode::decode(&mut &raw[..]) {
+				Some(x) => Ok(x),
+				None => Err(::client::error::ErrorKind::CallResultDecode(::PENDING_CHANGE_CALL).into()),
+			}
+		}
+	}
 }
