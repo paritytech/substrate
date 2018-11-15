@@ -465,7 +465,7 @@ impl_runtime_apis! {
 
 
 	impl GrandpaApi<Block> for ClientWithApi {
-		fn grandpa_pending_change(digest: DigestFor<Block>)
+		fn grandpa_pending_change(_digest: DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>> {
 			unimplemented!("Robert, where is the impl?")
 		}

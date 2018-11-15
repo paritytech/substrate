@@ -213,6 +213,7 @@ pub mod tests {
 			_header: Header,
 			_authorities: Option<Vec<AuthorityId>>,
 			_state: NewBlockState,
+			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}

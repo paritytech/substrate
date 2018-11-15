@@ -480,17 +480,16 @@ pub(crate) mod tests {
 		}
 	}
 
-	pub fn insert_block_with_extrinsics_root(
-		db: &LightStorage<Block>,
-		parent: &Hash,
-		number: u64,
-		authorities: Option<Vec<AuthorityId>>,
-		extrinsics_root: Hash,
-	) -> Hash {
-		let header = prepare_header(parent, number, extrinsics_root);
-		let hash = header.hash();
-		db.import_header(header, authorities, NewBlockState::Best, Vec::new()).unwrap();
-		hash
+	fn header_with_changes_trie(parent: &Hash, number: u64) -> Header {
+		let mut header = default_header(parent, number);
+		header.digest.logs.push(DigestItem::ChangesTrieRoot([(number % 256) as u8; 32].into()));
+		header
+	}
+
+	fn header_with_extrinsics_root(parent: &Hash, number: u64, extrinsics_root: Hash) -> Header {
+		let mut header = default_header(parent, number);
+		header.extrinsics_root = extrinsics_root;
+		header
 	}
 
 	pub fn insert_block<F: Fn() -> Header>(

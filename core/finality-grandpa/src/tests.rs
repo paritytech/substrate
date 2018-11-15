@@ -212,22 +212,22 @@ impl ProvideRuntimeApi for TestApi {
 }
 
 impl Core<Block> for RuntimeApi {
-	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion> {
+	fn version(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>> {
+	fn authorities(&self, _: &BlockId<Block>) -> Result<Vec<AuthorityId>> {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<()> {
+	fn execute_block(&self, _: &BlockId<Block>, _: &Block) -> Result<()> {
 		unimplemented!("Not required for testing!")
 	}
 
 	fn initialise_block(
 		&self,
-		at: &BlockId<Block>,
-		header: &<Block as BlockT>::Header
+		_: &BlockId<Block>,
+		_: &<Block as BlockT>::Header
 	) -> Result<()> {
 		unimplemented!("Not required for testing!")
 	}
@@ -236,14 +236,14 @@ impl Core<Block> for RuntimeApi {
 impl ApiExt for RuntimeApi {
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
-		map_call: F
+		_: F
 	) -> result::Result<R, E> {
 		unimplemented!("Not required for testing!")
 	}
 }
 
 impl ConstructRuntimeApi<Block> for RuntimeApi {
-	fn construct_runtime_api<'a, T: CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self> {
+	fn construct_runtime_api<'a, T: CallApiAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -251,16 +251,16 @@ impl ConstructRuntimeApi<Block> for RuntimeApi {
 impl GrandpaApi<Block> for RuntimeApi {
 	fn grandpa_authorities(
 		&self,
-		_: &BlockId<Block>
+		at: &BlockId<Block>
 	) -> Result<Vec<(AuthorityId, u64)>> {
 		if at == &BlockId::Number(0) {
-			Ok(self.genesis_authorities.clone())
+			Ok(self.inner.genesis_authorities.clone())
 		} else {
 			panic!("should generally only request genesis authorities")
 		}
 	}
 
-	fn grandpa_pending_change(&self, _: &BlockId<Block>, digest: &DigestFor<Block>)
+	fn grandpa_pending_change(&self, at: &BlockId<Block>, _: &DigestFor<Block>)
 		-> Result<Option<ScheduledChange<NumberFor<Block>>>>
 	{
 		let parent_hash = match at {
@@ -270,7 +270,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
-		Ok(self.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone()))
+		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone()))
 	}
 }
 
