@@ -240,8 +240,8 @@ pub fn start_aura<B, C, E, SO, Error>(
 						let import_block = ImportBlock {
 							origin: BlockOrigin::Own,
 							header,
-							external_justification: Vec::new(),
-							post_runtime_digests: vec![item],
+							justification: Vec::new(),
+							post_digests: vec![item],
 							body: Some(body),
 							finalized: false,
 							auxiliary: Vec::new(),
@@ -365,8 +365,8 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
-					external_justification: Vec::new(),
-					post_runtime_digests: vec![item],
+					justification: Vec::new(),
+					post_digests: vec![item],
 					body,
 					finalized: false,
 					auxiliary: Vec::new(),

@@ -189,7 +189,7 @@ pub mod generic {
 		/// Remote changes request.
 		RemoteChangesRequest(RemoteChangesRequest<Hash>),
 		/// Remote changes reponse.
-		RemoteChangesResponse(RemoteChangesResponse<Number>),
+		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -298,6 +298,9 @@ pub mod generic {
 		pub first: H,
 		/// Hash of the last block of the range (including last) where changes are requested.
 		pub last: H,
+		/// Hash of the first block for which the requester has the changes trie root. All other
+		/// affected roots must be proved.
+		pub min: H,
 		/// Hash of the last block that we can use when querying changes.
 		pub max: H,
 		/// Storage key which changes are requested.
@@ -306,7 +309,7 @@ pub mod generic {
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Remote changes response.
-	pub struct RemoteChangesResponse<N> {
+	pub struct RemoteChangesResponse<N, H> {
 		/// Id of a request this response was made for.
 		pub id: RequestId,
 		/// Proof has been generated using block with this number as a max block. Should be
@@ -314,5 +317,9 @@ pub mod generic {
 		pub max: N,
 		/// Changes proof.
 		pub proof: Vec<Vec<u8>>,
+		/// Changes tries roots missing on the requester' node.
+		pub roots: Vec<(N, H)>,
+		/// Missing changes tries roots proof.
+		pub roots_proof: Vec<Vec<u8>>,
 	}
 }
