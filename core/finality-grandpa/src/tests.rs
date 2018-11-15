@@ -181,17 +181,26 @@ impl TestApi {
 	}
 }
 
-impl ApiClient<Block> for TestApi {
-	fn genesis_authorities(&self) -> Result<Vec<(AuthorityId, u64)>, ClientError> {
-		Ok(self.genesis_authorities.clone())
+impl GrandpaApi<Block> for TestApi {
+	fn grandpa_authorities(&self, at: &BlockId<Block>) -> Result<Vec<(AuthorityId, u64)>, ClientError> {
+		if at == &BlockId::Number(0) {
+			Ok(self.genesis_authorities.clone())
+		} else {
+			panic!("should generally only request genesis authorities")
+		}
 	}
 
-	fn scheduled_change(&self, header: &<Block as BlockT>::Header)
+	fn grandpa_pending_change(&self, at: &BlockId<Block>, _digest: DigestFor<Block>)
 		-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>
 	{
+		let parent_hash = match at {
+			&BlockId::Hash(at) => at,
+			_ => panic!("not requested by block hash!!"),
+		};
+
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
-		Ok(self.scheduled_changes.lock().get(&header.hash()).map(|c| c.clone()))
+		Ok(self.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone()))
 	}
 }
 
@@ -349,8 +358,8 @@ fn transition_3_voters_twice_1_observer() {
 
 	let api = TestApi::new(genesis_voters);
 	let transitions = api.scheduled_changes.clone();
-	let add_transition = move |hash, change| {
-		transitions.lock().insert(hash, change);
+	let add_transition = move |parent_hash, change| {
+		transitions.lock().insert(parent_hash, change);
 	};
 
 	let mut net = GrandpaTestNet::new(api, 9);
@@ -360,7 +369,7 @@ fn transition_3_voters_twice_1_observer() {
 		net.peer(0).push_blocks(14, false);
 		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 			let block = builder.bake().unwrap();
-			add_transition(block.header.hash(), ScheduledChange {
+			add_transition(*block.header.parent_hash(), ScheduledChange {
 				next_authorities: make_ids(peers_b),
 				delay: 4,
 			});
@@ -375,7 +384,7 @@ fn transition_3_voters_twice_1_observer() {
 	{
 		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 			let block = builder.bake().unwrap();
-			add_transition(block.header.hash(), ScheduledChange {
+			add_transition(*block.header.parent_hash(), ScheduledChange {
 				next_authorities: make_ids(peers_c),
 				delay: 0,
 			});
