@@ -270,11 +270,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
-<<<<<<< HEAD
 		Ok(self.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone()))
-=======
-		Ok(self.inner.scheduled_changes.lock().get(&digest.hash()).map(|c| c.clone()))
->>>>>>> Refactor grandpa stuff to get tests almost compiling
 	}
 }
 
