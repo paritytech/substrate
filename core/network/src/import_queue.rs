@@ -34,14 +34,16 @@ use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 pub use blocks::BlockData;
-use chain::Client;
+use client::error::Error as ClientError;
 use error::{ErrorKind, Error};
 use protocol::Context;
 use service::ExecuteInContext;
 use sync::ChainSync;
 
-pub use consensus::{ImportBlock, ImportResult, BlockOrigin};
+pub use consensus::{ImportBlock, BlockImport, ImportResult, BlockOrigin};
 
+/// Shared block import struct used by the queue.
+pub type SharedBlockImport<B> = Arc<dyn BlockImport<B,Error=ClientError> + Send + Sync>;
 
 #[cfg(any(test, feature = "test-helpers"))]
 use std::cell::RefCell;
@@ -66,14 +68,9 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	///
 	/// This is called automatically by the network service when synchronization
 	/// begins.
-	fn start<E>(
-		&self,
-		_sync: Weak<RwLock<ChainSync<B>>>,
-		_service: Weak<E>,
-		_chain: Weak<Client<B>>
-	) -> Result<(), Error> where
+	fn start<L>(&self, _link: L) -> Result<(), Error> where
 		Self: Sized,
-		E: 'static + ExecuteInContext<B>,
+		L: 'static + Link<B>,
 	{
 		Ok(())
 	}
@@ -103,6 +100,7 @@ pub struct BasicQueue<B: BlockT, V: 'static + Verifier<B>> {
 	handle: Mutex<Option<::std::thread::JoinHandle<()>>>,
 	data: Arc<AsyncImportQueueData<B>>,
 	verifier: Arc<V>,
+	block_import: SharedBlockImport<B>,
 }
 
 /// Locks order: queue, queue_blocks, best_importing_number
@@ -116,11 +114,12 @@ struct AsyncImportQueueData<B: BlockT> {
 
 impl<B: BlockT, V: Verifier<B>> BasicQueue<B, V> {
 	/// Instantiate a new basic queue, with given verifier.
-	pub fn new(verifier: Arc<V>) -> Self {
+	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>) -> Self {
 		Self {
 			handle: Mutex::new(None),
 			data: Arc::new(AsyncImportQueueData::new()),
 			verifier,
+			block_import,
 		}
 	}
 }
@@ -138,18 +137,17 @@ impl<B: BlockT> AsyncImportQueueData<B> {
 }
 
 impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
-	fn start<E: 'static + ExecuteInContext<B>>(
+	fn start<L: 'static + Link<B>>(
 		&self,
-		sync: Weak<RwLock<ChainSync<B>>>,
-		service: Weak<E>,
-		chain: Weak<Client<B>>
+		link: L,
 	) -> Result<(), Error> {
 		debug_assert!(self.handle.lock().is_none());
 
 		let qdata = self.data.clone();
 		let verifier = self.verifier.clone();
+		let block_import = self.block_import.clone();
 		*self.handle.lock() = Some(::std::thread::Builder::new().name("ImportQueue".into()).spawn(move || {
-			import_thread(sync, service, chain, qdata, verifier)
+			import_thread(block_import, link, qdata, verifier)
 		}).map_err(|err| Error::from(ErrorKind::Io(err)))?);
 		Ok(())
 	}
@@ -215,10 +213,9 @@ impl<B: BlockT, V: 'static + Verifier<B>> Drop for BasicQueue<B, V> {
 }
 
 /// Blocks import thread.
-fn import_thread<B: BlockT, E: ExecuteInContext<B>, V: Verifier<B>>(
-	sync: Weak<RwLock<ChainSync<B>>>,
-	service: Weak<E>,
-	chain: Weak<Client<B>>,
+fn import_thread<B: BlockT, L: Link<B>, V: Verifier<B>>(
+	block_import: SharedBlockImport<B>,
+	link: L,
 	qdata: Arc<AsyncImportQueueData<B>>,
 	verifier: Arc<V>
 ) {
@@ -243,91 +240,87 @@ fn import_thread<B: BlockT, E: ExecuteInContext<B>, V: Verifier<B>>(
 			}
 		};
 
-		match (sync.upgrade(), service.upgrade(), chain.upgrade()) {
-			(Some(sync), Some(service), Some(chain)) => {
-				let blocks_hashes: Vec<B::Hash> = new_blocks.1.iter().map(|b| b.block.hash.clone()).collect();
-				if !import_many_blocks(
-					&mut SyncLink{chain: &sync, client: &*chain, context: &*service},
-					Some(&*qdata),
-					new_blocks,
-					verifier.clone(),
-				) {
-					break;
-				}
+		let blocks_hashes: Vec<B::Hash> = new_blocks.1.iter().map(|b| b.block.hash.clone()).collect();
+		if !import_many_blocks(
+			&*block_import,
+			&link,
+			Some(&*qdata),
+			new_blocks,
+			verifier.clone(),
+		) {
+			break;
+		}
 
-				let mut queue_blocks = qdata.queue_blocks.write();
-				for blocks_hash in blocks_hashes {
-					queue_blocks.remove(&blocks_hash);
-				}
-			},
-			_ => break,
+		let mut queue_blocks = qdata.queue_blocks.write();
+		for blocks_hash in blocks_hashes {
+			queue_blocks.remove(&blocks_hash);
 		}
 	}
 
 	trace!(target: "sync", "Stopping import thread");
 }
-/// ChainSync link trait.
-trait SyncLinkApi<B: BlockT> {
-	/// Get chain reference.
-	fn chain(&self) -> &Client<B>;
+
+/// Hooks that the verification queue can use to influence the synchronization
+/// algorithm.
+pub trait Link<B: BlockT>: Send {
 	/// Block imported.
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>);
+	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
 	/// Maintain sync.
-	fn maintain_sync(&mut self);
+	fn maintain_sync(&self) { }
 	/// Disconnect from peer.
-	fn useless_peer(&mut self, who: NodeIndex, reason: &str);
+	fn useless_peer(&self, _who: NodeIndex, _reason: &str) { }
 	/// Disconnect from peer and restart sync.
-	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str);
+	fn note_useless_and_restart_sync(&self, _who: NodeIndex, _reason: &str) { }
 	/// Restart sync.
-	fn restart(&mut self);
+	fn restart(&self) { }
 }
 
+/// A link implementation that does nothing.
+pub struct NoopLink;
 
-/// Link with the ChainSync service.
-struct SyncLink<'a, B: 'a + BlockT, E: 'a + ExecuteInContext<B>> {
-	pub chain: &'a RwLock<ChainSync<B>>,
-	pub client: &'a Client<B>,
-	pub context: &'a E,
+impl<B: BlockT> Link<B> for NoopLink { }
+
+/// A link implementation that connects to the network.
+pub struct NetworkLink<B: BlockT, E: ExecuteInContext<B>> {
+	/// The chain-sync handle
+	pub(crate) sync: Weak<RwLock<ChainSync<B>>>,
+	/// Network context.
+	pub(crate) context: Weak<E>,
 }
 
-impl<'a, B: 'static + BlockT, E: 'a + ExecuteInContext<B>> SyncLink<'a, B, E> {
+impl<B: BlockT, E: ExecuteInContext<B>> NetworkLink<B, E> {
 	/// Execute closure with locked ChainSync.
-	fn with_sync<F: Fn(&mut ChainSync<B>, &mut Context<B>)>(&mut self, closure: F) {
-		let service = self.context;
-		let sync = self.chain;
-		service.execute_in_context(move |protocol| {
-			let mut sync = sync.write();
-			closure(&mut *sync, protocol)
-		});
+	fn with_sync<F: Fn(&mut ChainSync<B>, &mut Context<B>)>(&self, closure: F) {
+		if let (Some(sync), Some(service)) = (self.sync.upgrade(), self.context.upgrade()) {
+			service.execute_in_context(move |protocol| {
+				let mut sync = sync.write();
+				closure(&mut *sync, protocol)
+			});
+		}
 	}
 }
 
-impl<'a, B: 'static + BlockT, E: 'a + ExecuteInContext<B>> SyncLinkApi<B> for SyncLink<'a, B, E> {
-
-	fn chain(&self) -> &Client<B> {
-		self.client
-	}
-
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
+	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>) {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
 
-	fn maintain_sync(&mut self) {
+	fn maintain_sync(&self) {
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}
 
-	fn useless_peer(&mut self, who: NodeIndex, reason: &str) {
+	fn useless_peer(&self, who: NodeIndex, reason: &str) {
 		self.with_sync(|_, protocol| protocol.report_peer(who, Severity::Useless(reason)))
 	}
 
-	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str) {
+	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str) {
 		self.with_sync(|sync, protocol| {
 			protocol.report_peer(who, Severity::Useless(reason));	// is this actually malign or just useless?
 			sync.restart(protocol);
 		})
 	}
 
-	fn restart(&mut self) {
+	fn restart(&self) {
 		self.with_sync(|sync, protocol| sync.restart(protocol))
 	}
 }
@@ -360,7 +353,8 @@ enum BlockImportError {
 
 /// Import a bunch of blocks.
 fn import_many_blocks<'a, B: BlockT, V: Verifier<B>>(
-	link: &mut SyncLinkApi<B>,
+	import_handle: &BlockImport<B, Error=ClientError>,
+	link: &Link<B>,
 	qdata: Option<&AsyncImportQueueData<B>>,
 	blocks: (BlockOrigin, Vec<BlockData<B>>),
 	verifier: Arc<V>
@@ -383,7 +377,7 @@ fn import_many_blocks<'a, B: BlockT, V: Verifier<B>>(
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
 		let import_result = import_single_block(
-			link.chain(),
+			import_handle,
 			blocks_origin.clone(),
 			block,
 			verifier.clone(),
@@ -407,7 +401,7 @@ fn import_many_blocks<'a, B: BlockT, V: Verifier<B>>(
 
 /// Single block import function.
 fn import_single_block<B: BlockT, V: Verifier<B>>(
-	chain: &Client<B>,
+	import_handle: &BlockImport<B,Error=ClientError>,
 	block_origin: BlockOrigin,
 	block: BlockData<B>,
 	verifier: Arc<V>
@@ -449,7 +443,7 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 			BlockImportError::VerificationFailed(peer, msg)
 		})?;
 
-	match chain.import(import_block, new_authorities) {
+	match import_handle.import_block(import_block, new_authorities) {
 		Ok(ImportResult::AlreadyInChain) => {
 			trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 			Ok(BlockImportResult::ImportedKnown(hash, number))
@@ -478,8 +472,8 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 }
 
 /// Process single block import result.
-fn process_import_result<'a, B: BlockT>(
-	link: &mut SyncLinkApi<B>,
+fn process_import_result<B: BlockT>(
+	link: &Link<B>,
 	result: Result<BlockImportResult<B::Hash, <<B as BlockT>::Header as HeaderT>::Number>, BlockImportError>
 ) -> usize
 {
@@ -576,40 +570,61 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	}
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 /// Blocks import queue that is importing blocks in the same thread.
 /// The boolean value indicates whether blocks should be imported without instant finality.
-pub struct SyncImportQueue<B: BlockT, V: Verifier<B>>(Arc<V>, ImportCB<B>);
 #[cfg(any(test, feature = "test-helpers"))]
-impl<B: BlockT, V: Verifier<B>> SyncImportQueue<B, V> {
-	/// Create a new SyncImportQueue wrapping the given Verifier
-	pub fn new(verifier: Arc<V>) -> Self {
-		SyncImportQueue(verifier, ImportCB::new())
+pub struct SyncImportQueue<B: BlockT, V: Verifier<B>> {
+	verifier: Arc<V>,
+	link: ImportCB<B>,
+	block_import: SharedBlockImport<B>,
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<B: 'static + BlockT, V: 'static + Verifier<B>> SyncImportQueue<B, V> {
+	/// Create a new SyncImportQueue wrapping the given Verifier and block import
+	/// handle.
+	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>) -> Self {
+		let queue = SyncImportQueue {
+			verifier,
+			link: ImportCB::new(),
+			block_import,
+		};
+
+		let v = queue.verifier.clone();
+		let import_handle = queue.block_import.clone();
+		queue.link.set(Box::new(move |origin, new_blocks| {
+			let verifier = v.clone();
+			import_many_blocks(
+				&*import_handle,
+				&NoopLink,
+				None,
+				(origin, new_blocks),
+				verifier,
+			)
+		}));
+
+		queue
 	}
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
 impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImportQueue<B, V>
 {
-	fn start<E: 'static + ExecuteInContext<B>>(
+	fn start<L: 'static + Link<B>>(
 		&self,
-		sync: Weak<RwLock<ChainSync<B>>>,
-		service: Weak<E>,
-		chain: Weak<Client<B>>
+		link: L,
 	) -> Result<(), Error> {
-		let v = self.0.clone();
-		self.1.set(Box::new(move | origin, new_blocks | {
+		let v = self.verifier.clone();
+		let import_handle = self.block_import.clone();
+		self.link.set(Box::new(move |origin, new_blocks| {
 			let verifier = v.clone();
-			match (sync.upgrade(), service.upgrade(), chain.upgrade()) {
-				(Some(sync), Some(service), Some(chain)) =>
-					import_many_blocks(
-						&mut SyncLink{chain: &sync, client: &*chain, context: &*service},
-						None,
-						(origin, new_blocks),
-						verifier,
-					),
-				_ => false
-			}
+			import_many_blocks(
+				&*import_handle,
+				&link,
+				None,
+				(origin, new_blocks),
+				verifier,
+			)
 		}));
 		Ok(())
 	}
@@ -629,7 +644,7 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 	}
 
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<BlockData<B>>) {
-		self.1.call(origin, blocks);
+		self.link.call(origin, blocks);
 	}
 }
 
@@ -639,42 +654,49 @@ pub mod tests {
 	use message;
 	use test_client::{self, TestClient};
 	use test_client::runtime::{Block, Hash};
-	use on_demand::tests::DummyExecutor;
 	use runtime_primitives::generic::BlockId;
+	use std::cell::Cell;
 	use super::*;
 
-
 	struct TestLink {
-		chain: Arc<Client<Block>>,
-		imported: usize,
-		maintains: usize,
-		disconnects: usize,
-		restarts: usize,
+		imported: Cell<usize>,
+		maintains: Cell<usize>,
+		disconnects: Cell<usize>,
+		restarts: Cell<usize>,
 	}
 
 	impl TestLink {
 		fn new() -> TestLink {
 			TestLink {
-				chain: Arc::new(test_client::new()),
-				imported: 0,
-				maintains: 0,
-				disconnects: 0,
-				restarts: 0,
+				imported: Cell::new(0),
+				maintains: Cell::new(0),
+				disconnects: Cell::new(0),
+				restarts: Cell::new(0),
 			}
 		}
 
 		fn total(&self) -> usize {
-			self.imported + self.maintains + self.disconnects + self.restarts
+			self.imported.get() + self.maintains.get() + self.disconnects.get() + self.restarts.get()
 		}
 	}
 
-	impl SyncLinkApi<Block> for TestLink {
-		fn chain(&self) -> &Client<Block> { &*self.chain }
-		fn block_imported(&mut self, _hash: &Hash, _number: NumberFor<Block>) { self.imported += 1; }
-		fn maintain_sync(&mut self) { self.maintains += 1; }
-		fn useless_peer(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; }
-		fn note_useless_and_restart_sync(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; self.restarts += 1; }
-		fn restart(&mut self) { self.restarts += 1; }
+	impl Link<Block> for TestLink {
+		fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
+			self.imported.set(self.imported.get() + 1);
+		}
+		fn maintain_sync(&self) {
+			self.maintains.set(self.maintains.get() + 1);
+		}
+		fn useless_peer(&self, _: NodeIndex, _: &str) {
+			self.disconnects.set(self.disconnects.get() + 1);
+		}
+		fn note_useless_and_restart_sync(&self, id: NodeIndex, r: &str) {
+			self.useless_peer(id, r);
+			self.restart();
+		}
+		fn restart(&self) {
+			self.restarts.set(self.restarts.get() + 1);
+		}
 	}
 
 	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>, Hash, u64, BlockData<Block>) {
@@ -735,39 +757,39 @@ pub mod tests {
 
 	#[test]
 	fn process_import_result_works() {
-		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
+		let link = TestLink::new();
+		assert_eq!(process_import_result::<Block>(&link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
 		assert_eq!(link.total(), 1);
 
-		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
+		let link = TestLink::new();
+		assert_eq!(process_import_result::<Block>(&link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
 		assert_eq!(link.total(), 1);
-		assert_eq!(link.imported, 1);
+		assert_eq!(link.imported.get(), 1);
 
-		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedUnknown(Default::default(), 0))), 1);
+		let link = TestLink::new();
+		assert_eq!(process_import_result::<Block>(&link, Ok(BlockImportResult::ImportedUnknown(Default::default(), 0))), 1);
 		assert_eq!(link.total(), 1);
-		assert_eq!(link.imported, 1);
+		assert_eq!(link.imported.get(), 1);
 
-		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Err(BlockImportError::IncompleteHeader(Some(0)))), 0);
+		let link = TestLink::new();
+		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteHeader(Some(0)))), 0);
 		assert_eq!(link.total(), 1);
-		assert_eq!(link.disconnects, 1);
+		assert_eq!(link.disconnects.get(), 1);
 
-		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Err(BlockImportError::IncompleteJustification(Some(0)))), 0);
+		let link = TestLink::new();
+		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteJustification(Some(0)))), 0);
 		assert_eq!(link.total(), 1);
-		assert_eq!(link.disconnects, 1);
+		assert_eq!(link.disconnects.get(), 1);
 
-		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Err(BlockImportError::UnknownParent)), 0);
+		let link = TestLink::new();
+		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::UnknownParent)), 0);
 		assert_eq!(link.total(), 1);
-		assert_eq!(link.restarts, 1);
+		assert_eq!(link.restarts.get(), 1);
 
-		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Err(BlockImportError::Error)), 0);
+		let link = TestLink::new();
+		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::Error)), 0);
 		assert_eq!(link.total(), 1);
-		assert_eq!(link.restarts, 1);
+		assert_eq!(link.restarts.get(), 1);
 	}
 
 	#[test]
@@ -776,7 +798,9 @@ pub mod tests {
 		let qdata = AsyncImportQueueData::new();
 		let verifier = Arc::new(PassThroughVerifier(true));
 		qdata.is_stopping.store(true, Ordering::SeqCst);
+		let client = test_client::new();
 		assert!(!import_many_blocks(
+			&client,
 			&mut TestLink::new(),
 			Some(&qdata),
 			(BlockOrigin::File, vec![block.clone(), block]),
@@ -789,10 +813,8 @@ pub mod tests {
 		// Perform this test multiple times since it exhibits non-deterministic behavior.
 		for _ in 0..100 {
 			let verifier = Arc::new(PassThroughVerifier(true));
-			let queue = BasicQueue::new(verifier);
-			let service = Arc::new(DummyExecutor);
-			let chain = Arc::new(test_client::new());
-			queue.start(Weak::new(), Arc::downgrade(&service), Arc::downgrade(&chain) as Weak<Client<Block>>).unwrap();
+			let queue = BasicQueue::new(verifier, Arc::new(test_client::new()));
+			queue.start(TestLink::new()).unwrap();
 			drop(queue);
 		}
 	}

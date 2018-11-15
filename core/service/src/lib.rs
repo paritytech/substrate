@@ -472,8 +472,8 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 ///         // The first one is for the initializing the full import queue and the second for the
 ///         // light import queue.
 /// 		ImportQueue = BasicQueue<Block, NoneVerifier>
-/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
-/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) },
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) }
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) },
 /// 	}
 /// }
 /// ```

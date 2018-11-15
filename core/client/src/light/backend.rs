@@ -46,6 +46,7 @@ pub struct ImportOperation<Block: BlockT, S, F> {
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityId>>,
 	leaf_state: NewBlockState,
+	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -86,6 +87,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 			header: None,
 			authorities: None,
 			leaf_state: NewBlockState::Normal,
+			aux_ops: Vec::new(),
 			_phantom: Default::default(),
 		})
 	}
@@ -96,6 +98,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 			header,
 			operation.authorities,
 			operation.leaf_state,
+			operation.aux_ops,
 		)
 	}
 
@@ -192,6 +195,13 @@ where
 		let in_mem = in_mem::Backend::<Block, H>::new();
 		let mut op = in_mem.begin_operation(BlockId::Hash(Default::default()))?;
 		op.reset_storage(top, children)
+	}
+
+	fn set_aux<I>(&mut self, ops: I) -> ClientResult<()>
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		self.aux_ops = ops.into_iter().collect();
+		Ok(())
 	}
 }
 
