@@ -70,9 +70,9 @@ construct_service_factory! {
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig,
-		FullService = Service<FullComponents<Self>>
+		FullService = FullComponents<Self>
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
-				Service::<FullComponents<Factory>>::new(config, executor) },
+				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
 				if service.config().custom.grandpa_authority {
