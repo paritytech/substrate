@@ -347,7 +347,7 @@ macro_rules! decl_runtime_apis {
 	) => {
 		$( #[$attr] )*
 		#[cfg(feature = "std")]
-		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::runtime_api::Core<Block> {
+		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > {
 			$( type $client_generic_param $( : $client_generic_bound )*; )*
 
 			$(

@@ -547,7 +547,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block> + CoreAPI<Block>,
 	{
 		block_builder::BlockBuilder::new(self)
 	}
@@ -557,7 +557,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self, parent: &BlockId<Block>
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block> + CoreAPI<Block>,
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
@@ -568,7 +568,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		at: Block::Hash,
 		body: &Option<Vec<Block::Extrinsic>>
 	) -> error::Result<Vec<TransactionTag>> where
-		RA: TaggedTransactionQueue<Block>,
+		RA: TaggedTransactionQueue<Block> + CoreAPI<Block>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let id = BlockId::Hash(at);
@@ -604,7 +604,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<ImportResult> where
-		RA: TaggedTransactionQueue<Block>,
+		RA: TaggedTransactionQueue<Block> + CoreAPI<Block>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
@@ -1058,7 +1058,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: TaggedTransactionQueue<Block>
+	RA: TaggedTransactionQueue<Block> + CoreAPI<Block>,
 {
 	type Error = Error;
 

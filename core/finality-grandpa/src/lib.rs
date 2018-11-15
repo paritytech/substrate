@@ -84,7 +84,7 @@ use futures::stream::Fuse;
 use futures::sync::mpsc;
 use client::{Client, error::Error as ClientError, ImportNotifications, backend::Backend, CallExecutor};
 use client::blockchain::HeaderBackend;
-use client::runtime_api::TaggedTransactionQueue;
+use client::runtime_api::{Core as CoreAPI, TaggedTransactionQueue};
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult};
 use runtime_primitives::traits::{
@@ -775,16 +775,16 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 /// This scans each imported block for signals of changing authority set.
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
-	inner: Arc<Client<B, E, Block, RA>>,
+pub struct GrandpaBlockImport<Import, Api, Block: BlockT> {
+	import: Import,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	api: Api,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block> for GrandpaBlockImport<B, E, Block, RA> where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	DigestFor<Block>: Encode,
-	RA: GrandpaApi<Block> + TaggedTransactionQueue<Block>,
+impl<Import, Api, Block: BlockT<Hash=H256>> BlockImport<Block> for GrandpaBlockImport<Import, Api, Block> where
+	Import: BlockImport<Block>,
+	Api: ProvideRuntimeApi,
+	Api::Api: GrandpaApi<Block>,
 {
 	type Error = ClientError;
 
@@ -793,7 +793,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block> for GrandpaBlockImpo
 	{
 		use authorities::PendingChange;
 
-		let maybe_change = self.inner.runtime_api().grandpa_pending_change(
+		let maybe_change = self.api.runtime_api().grandpa_pending_change(
 			&BlockId::hash(*block.header.parent_hash()),
 			&block.header.digest().clone(),
 		)?;
@@ -818,7 +818,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block> for GrandpaBlockImpo
 			(old_set, authorities)
 		});
 
-		let result = self.inner.import_block(block, new_authorities);
+		let result = self.import.import_block(block, new_authorities);
 		if let Err(ref e) = result {
 			if let Some((old_set, mut authorities)) = just_in_case {
 				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
@@ -832,15 +832,15 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block> for GrandpaBlockImpo
 
 /// Half of a link between a block-import worker and a the background voter.
 // This should remain non-clone.
-pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
-	client: Arc<Client<B, E, Block, RA>>,
+pub struct LinkHalf<C, RA> {
+	client: C,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 }
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA>(client: Arc<Client<B, E, Block, RA>>)
-	-> Result<(GrandpaBlockImport<B, E, Block, RA>, LinkHalf<B, E, Block, RA>), ClientError>
+pub fn block_import<C, Api>(client: Arc<Client<B, E, Block>>)
+	-> Result<(GrandpaBlockImport<C RA>, LinkHalf<B, E, Block, RA>), ClientError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -881,7 +881,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA>(client: Arc<Client<B, E,
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
-	link: LinkHalf<B, E, Block, RA>,
+	link: LinkHalf<Client<B, E, Block, RA>>,
 	network: N,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()>> where
 	Block::Hash: Ord,
