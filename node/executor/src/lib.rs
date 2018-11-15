@@ -17,9 +17,13 @@
 //! A `CodeExecutor` specialisation which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
 
+#![cfg_attr(feature = "benchmarks", feature(test))]
+
 extern crate node_runtime;
 #[macro_use] extern crate substrate_executor;
 #[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
+
+#[cfg(feature = "benchmarks")] extern crate test;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate sr_primitives as runtime_primitives;
@@ -746,5 +750,20 @@ mod tests {
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0).unwrap();
 
 		assert!(t.storage_changes_root(Default::default(), 0).is_some());
+	}
+
+	#[cfg(feature = "benchmarks")]
+	mod benches {
+		use super::*;
+		use test::Bencher;
+
+		#[bench]
+		fn wasm_execute_block(b: &mut Bencher) {
+			b.iter(|| {
+				let mut t = new_test_ext(false);
+				WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(false).0).unwrap();
+				WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block2().0).unwrap();
+			});
+		}
 	}
 }
