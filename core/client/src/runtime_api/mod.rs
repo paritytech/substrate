@@ -23,7 +23,7 @@ pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 pub use runtime_primitives::{traits::Block as BlockT, generic::BlockId};
 #[cfg(feature = "std")]
-use runtime_primitives::traits::ApiRef;
+pub use runtime_primitives::traits::ApiRef;
 pub use runtime_version::ApiId;
 #[doc(hidden)]
 pub use rstd::slice;
