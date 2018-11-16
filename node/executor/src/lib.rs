@@ -230,10 +230,12 @@ mod tests {
 				transfer_fee: 0,
 				creation_fee: 0,
 				reclaim_rebate: 0,
+				_genesis_phantom_data: Default::default(),
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
+				_genesis_phantom_data: Default::default(),
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
@@ -247,6 +249,7 @@ mod tests {
 				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
+				_genesis_phantom_data: Default::default(),
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
