@@ -94,7 +94,10 @@ fn own_blocks_are_announced() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);
 	net.sync(); // connect'em
-	net.peer(0).generate_blocks(1, BlockOrigin::Own, |_| ());
+	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
+
+	let header = net.peer(0).client().header(&BlockId::Number(1)).unwrap().unwrap();
+	net.peer(0).with_io(|io| net.peer(0).sync.on_block_imported(io, header.hash(), &header));
 	net.sync();
 	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
 	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);

@@ -602,6 +602,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
+		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<ImportResult> where
 		RA: TaggedTransactionQueue<Block>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
@@ -695,6 +696,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Some(Some(changes_update)) = changes_update {
 			transaction.update_changes_trie(changes_update)?;
 		}
+
+		transaction.set_aux(aux)?;
 		self.backend.commit_operation(transaction)?;
 
 		if make_notifications {
@@ -880,7 +883,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
 	/// TODO [snd] write down time complexity
-	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>) -> error::Result<Option<Block::Hash>> {
+	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>)
+		-> error::Result<Option<Block::Hash>>
+	{
 		let target_header = {
 			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
@@ -1016,7 +1021,8 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: CoreAPI<Block>
+	RA: CoreAPI<Block>, // not strictly necessary at the moment
+						// but we want to bound to make sure the API is actually available.
 {
 	fn call_api_at(
 		&self,
@@ -1071,7 +1077,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			post_digests,
 			body,
 			finalized,
-			..
+			auxiliary,
 		} = import_block;
 		let parent_hash = header.parent_hash().clone();
 
@@ -1103,6 +1109,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			body,
 			new_authorities,
 			finalized,
+			auxiliary,
 		);
 
 		*self.importing_block.write() = None;

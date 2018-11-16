@@ -16,6 +16,9 @@
 
 //! Macros for declaring and implementing the runtime APIs.
 
+// these are part of the public API, so need to be re-exported
+pub use runtime_version::{ApiId, RuntimeVersion};
+
 /// Declare the given API traits.
 ///
 /// # Example:

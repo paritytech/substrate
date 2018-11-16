@@ -27,6 +27,7 @@ members = [
 	"core/consensus/rhd",
 	"core/executor",
 	"core/finality-grandpa",
+	"core/finality-grandpa/primitives",
 	"core/keyring",
 	"core/network",
 	"core/primitives",

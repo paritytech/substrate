@@ -21,7 +21,7 @@ use futures::Future;
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{As, Block, Header};
-use network::import_queue::{ImportQueue, BlockData};
+use network::import_queue::{ImportQueue, Link, BlockData};
 use network::message;
 
 use consensus_common::BlockOrigin;
@@ -90,8 +90,12 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
+	struct DummyLink;
+	impl<B: Block> Link<B> for DummyLink { }
+
 	let client = new_client::<F>(&config)?;
 	let queue = components::FullComponents::<F>::build_import_queue(&config, client.clone())?;
+	queue.start(DummyLink)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -101,7 +105,7 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 
 	let count: u32 = Decode::decode(&mut input).ok_or("Error reading file")?;
 	info!("Importing {} blocks", count);
-	let mut block_count = 0; 
+	let mut block_count = 0;
 	for b in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
 			break;
