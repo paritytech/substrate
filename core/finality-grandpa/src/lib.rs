@@ -965,11 +965,11 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
-) -> ::client::error::Result<impl Future<Item=(),Error=()>> where
+) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network + Send + 'static,
+	N: Network + Send + Sync + 'static,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,

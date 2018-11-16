@@ -76,18 +76,6 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 	}
 }
 
-// fn assertions() {
-// 	fn backend_is_backend<T: client::backend::Backend<Block, ::primitives::Blake2Hasher>>() { }
-// 	fn executor_has_basic_bounds<T: Clone + Send + Sync>() { }
-// 	fn api_is_core<T: client::runtime_api::Core<Block>>() {}
-// 	fn all_good<T: ::runtime_primitives::traits::ProvideRuntimeAPI>() {}
-
-// 	backend_is_backend::<FullBackend<Factory>>();
-// 	executor_has_basic_bounds::<FullExecutor<Factory>>();
-// 	api_is_core::<ClientWithApi>();
-// 	all_good::<FullClient<Factory>>();
-// }
-
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
@@ -109,16 +97,17 @@ construct_service_factory! {
 					info!("Running Grandpa session as Authority {}", key.public());
 					let link_half = service.config().custom.grandpa_link_half.as_ref().take()
 						.expect("Link Half is present for Full Services or setup failed before. qed");
-					// executor.spawn(
 					let grandpa_fut = grandpa::run_grandpa(
-							grandpa::Config {
-								gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
-								local_key: Some(key.clone()),
-								name: Some(service.config().name.clone())
-							},
-							(*link_half).clone(),
-							grandpa::NetworkBridge::new(service.network())
-						);
+						grandpa::Config {
+							gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
+							local_key: Some(key.clone()),
+							name: Some(service.config().name.clone())
+						},
+						(*link_half).clone(),
+						grandpa::NetworkBridge::new(service.network())
+					)?;
+
+					executor.spawn(grandpa_fut);
 				}
 				if !service.config.custom.grandpa_authority_only {
 					info!("Using authority key {}", key.public());

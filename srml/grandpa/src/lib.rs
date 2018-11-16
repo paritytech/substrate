@@ -287,6 +287,9 @@ impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 
 		// instant changes
-		let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero());
+		let last_authorities = <Module<T>>::grandpa_authorities();
+		if next_authorities != last_authorities {
+			let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero());
+		}
 	}
 }
