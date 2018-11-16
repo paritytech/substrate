@@ -122,7 +122,7 @@ fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G
 }
 
 fn base_path(matches: &clap::ArgMatches) -> PathBuf {
-	matches.value_of("base-path")
+	matches.value_of("base_path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(default_base_path)
 }
@@ -247,14 +247,14 @@ where
 		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 		config.network.reserved_nodes.extend(matches
-			 .values_of("reserved-nodes")
+			 .values_of("reserved_nodes")
 			 .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		if !config.network.reserved_nodes.is_empty() {
 			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
 		}
 
 		config.network.listen_addresses = Vec::new();
-		for addr in matches.values_of("listen-addr").unwrap_or_default() {
+		for addr in matches.values_of("listen_addr").unwrap_or_default() {
 			let addr = addr.parse().map_err(|_| "Invalid listen multiaddress")?;
 			config.network.listen_addresses.push(addr);
 		}
@@ -273,17 +273,17 @@ where
 		config.network.public_addresses = Vec::new();
 
 		config.network.client_version = config.client_id();
-		config.network.use_secret = match matches.value_of("node-key").map(H256::from_str) {
+		config.network.use_secret = match matches.value_of("node_key").map(H256::from_str) {
 			Some(Ok(secret)) => Some(secret.into()),
 			Some(Err(err)) => return Err(format!("Error parsing node key: {}", err).into()),
 			None => None,
 		};
 
-		let in_peers = match matches.value_of("in-peers") {
+		let in_peers = match matches.value_of("in_peers") {
 			Some(in_peers) => in_peers.parse().map_err(|_| "Invalid in-peers value specified.")?,
 			None => 25,
 		};
-		let out_peers = match matches.value_of("out-peers") {
+		let out_peers = match matches.value_of("out_peers") {
 			Some(out_peers) => out_peers.parse().map_err(|_| "Invalid out-peers value specified.")?,
 			None => 25,
 		};
@@ -297,16 +297,16 @@ where
 		config.keys.push("Alice".into());
 	}
 
-	let rpc_interface: &str = if matches.is_present("rpc-external") { "0.0.0.0" } else { "127.0.0.1" };
-	let ws_interface: &str = if matches.is_present("ws-external") { "0.0.0.0" } else { "127.0.0.1" };
+	let rpc_interface: &str = if matches.is_present("rpc_external") { "0.0.0.0" } else { "127.0.0.1" };
+	let ws_interface: &str = if matches.is_present("ws_external") { "0.0.0.0" } else { "127.0.0.1" };
 
-	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), "rpc-port", &matches)?);
-	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), "ws-port", &matches)?);
+	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), "rpc_port", &matches)?);
+	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), "ws_port", &matches)?);
 
 	// Override telemetry
-	if matches.is_present("no-telemetry") {
+	if matches.is_present("no_telemetry") {
 		config.telemetry_url = None;
-	} else if let Some(url) = matches.value_of("telemetry-url") {
+	} else if let Some(url) = matches.value_of("telemetry_url") {
 		config.telemetry_url = Some(url.to_owned());
 	}
 
@@ -338,17 +338,17 @@ where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
-	if let Some(matches) = matches.subcommand_matches("build-spec") {
+	if let Some(matches) = matches.subcommand_matches("build_spec") {
 		build_spec::<F>(matches, spec)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("export-blocks") {
+	if let Some(matches) = matches.subcommand_matches("export_blocks") {
 		export_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("import-blocks") {
+	if let Some(matches) = matches.subcommand_matches("import_blocks") {
 		import_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
@@ -358,7 +358,7 @@ where
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("purge-chain") {
+	if let Some(matches) = matches.subcommand_matches("purge_chain") {
 		purge_chain::<F>(matches, spec)?;
 		return Ok(Action::ExecutedInternally);
 	}
