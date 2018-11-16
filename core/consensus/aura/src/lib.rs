@@ -286,7 +286,6 @@ enum CheckedHeader<H> {
 	Checked(H, u64, ed25519::Signature),
 }
 
-
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
@@ -328,15 +327,37 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 	}
 }
 
-/// A verifier for Aura blocks.
-pub struct AuraVerifier<C> {
-	config: Config,
-	client: Arc<C>,
+/// Extra verification for Aura blocks.
+pub trait ExtraVerification<B: Block>: Send + Sync {
+	/// Future that resolves when the block is verified or fails with error if not.
+	type Verified: IntoFuture<Item=(),Error=String>;
+
+	/// Do additional verification for this block.
+	fn verify(&self, header: &B::Header, body: Option<&[B::Extrinsic]>) -> Self::Verified;
 }
 
-impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
+/// No-op extra verification.
+#[derive(Debug, Clone, Copy)]
+pub struct NothingExtra;
+
+impl<B: Block> ExtraVerification<B> for NothingExtra {
+	type Verified = Result<(), String>;
+
+	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
+		Ok(())
+	}
+}
+/// A verifier for Aura blocks.
+pub struct AuraVerifier<C, E> {
+	config: Config,
+	client: Arc<C>,
+	extra: E,
+}
+
+impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 	C: Authorities<B> + BlockImport<B> + Send + Sync,
 	DigestItemFor<B>: CompatibleDigestItem,
+	E: ExtraVerification<B>,
 {
 	fn verify(
 		&self,
@@ -352,6 +373,8 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 		let authorities = self.client.authorities(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
+		let extra_verification = self.extra.verify(&header, body.as_ref().map(|x| &x[..]));
+
 		// we add one to allow for some small drift.
 		// FIXME: in the future, alter this queue to allow deferring of headers
 		// https://github.com/paritytech/substrate/issues/1019
@@ -362,6 +385,7 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 
 				debug!(target: "aura", "Checked {:?}; importing.", pre_header);
 
+				extra_verification.into_future().wait()?;
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
@@ -384,19 +408,18 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B, C> = BasicQueue<B, AuraVerifier<C>>;
+pub type AuraImportQueue<B, C, E> = BasicQueue<B, AuraVerifier<C, E>>;
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> AuraImportQueue<B, C> where
+pub fn import_queue<B, C, E>(config: Config, client: Arc<C>, extra: E) -> AuraImportQueue<B, C, E> where
 	B: Block,
 	C: Authorities<B> + BlockImport<B,Error=client::error::Error> + Send + Sync,
 	DigestItemFor<B>: CompatibleDigestItem,
+	E: ExtraVerification<B>,
 {
-	let verifier = Arc::new(AuraVerifier { config, client: client.clone() });
+	let verifier = Arc::new(AuraVerifier { config, client: client.clone(), extra, });
 	BasicQueue::new(verifier, client)
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -443,12 +466,12 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<AuraVerifier<PeersClient>, ()>>>,
+		peers: Vec<Arc<Peer<AuraVerifier<PeersClient, NothingExtra>, ()>>>,
 		started: bool
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersClient>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -463,7 +486,7 @@ mod tests {
 			-> Arc<Self::Verifier>
 		{
 			let config = Config { local_key: None, slot_duration: SLOT_DURATION };
-			Arc::new(AuraVerifier { client, config })
+			Arc::new(AuraVerifier { client, config, extra: NothingExtra })
 		}
 
 		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
