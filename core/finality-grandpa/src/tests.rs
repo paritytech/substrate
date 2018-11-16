@@ -23,15 +23,30 @@ use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::Keyring;
-use client::BlockchainEvents;
+use client::{
+	BlockchainEvents, runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallApiAt},
+	error::Result
+};
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
 use consensus_common::BlockOrigin;
-use std::collections::HashSet;
+use std::{collections::HashSet, result};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
+use runtime_primitives::generic::BlockId;
 
 use authorities::AuthoritySet;
 
-type PeerData = Mutex<Option<LinkHalf<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>>>;
+type PeerData =
+	Mutex<
+		Option<
+			LinkHalf<
+				test_client::Backend,
+				test_client::Executor,
+				Block,
+				test_client::runtime::ClientWithApi,
+			>
+		>
+	>;
 type GrandpaPeer = Peer<PassThroughVerifier, PeerData>;
 
 struct GrandpaTestNet {
@@ -86,7 +101,10 @@ impl TestNetFactory for GrandpaTestNet {
 	fn make_block_import(&self, client: Arc<PeersClient>)
 		-> (Arc<BlockImport<Block,Error=ClientError> + Send + Sync>, PeerData)
 	{
-		let (import, link) = block_import(client, self.test_config.clone()).expect("Could not create block import for fresh peer.");
+		let (import, link) = block_import(
+			client,
+			Arc::new(self.test_config.clone())
+		).expect("Could not create block import for fresh peer.");
 		(Arc::new(import), Mutex::new(Some(link)))
 	}
 
@@ -181,17 +199,78 @@ impl TestApi {
 	}
 }
 
-impl ApiClient<Block> for TestApi {
-	fn genesis_authorities(&self) -> Result<Vec<(AuthorityId, u64)>, ClientError> {
-		Ok(self.genesis_authorities.clone())
+struct RuntimeApi {
+	inner: TestApi,
+}
+
+impl ProvideRuntimeApi for TestApi {
+	type Api = RuntimeApi;
+
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+		RuntimeApi { inner: self.clone() }.into()
+	}
+}
+
+impl Core<Block> for RuntimeApi {
+	fn version(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
+		unimplemented!("Not required for testing!")
 	}
 
-	fn scheduled_change(&self, header: &<Block as BlockT>::Header)
-		-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>
+	fn authorities(&self, _: &BlockId<Block>) -> Result<Vec<AuthorityId>> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn execute_block(&self, _: &BlockId<Block>, _: &Block) -> Result<()> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn initialise_block(
+		&self,
+		_: &BlockId<Block>,
+		_: &<Block as BlockT>::Header
+	) -> Result<()> {
+		unimplemented!("Not required for testing!")
+	}
+}
+
+impl ApiExt for RuntimeApi {
+	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
+		&self,
+		_: F
+	) -> result::Result<R, E> {
+		unimplemented!("Not required for testing!")
+	}
+}
+
+impl ConstructRuntimeApi<Block> for RuntimeApi {
+	fn construct_runtime_api<'a, T: CallApiAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
+		unimplemented!("Not required for testing!")
+	}
+}
+
+impl GrandpaApi<Block> for RuntimeApi {
+	fn grandpa_authorities(
+		&self,
+		at: &BlockId<Block>
+	) -> Result<Vec<(AuthorityId, u64)>> {
+		if at == &BlockId::Number(0) {
+			Ok(self.inner.genesis_authorities.clone())
+		} else {
+			panic!("should generally only request genesis authorities")
+		}
+	}
+
+	fn grandpa_pending_change(&self, at: &BlockId<Block>, _: &DigestFor<Block>)
+		-> Result<Option<ScheduledChange<NumberFor<Block>>>>
 	{
+		let parent_hash = match at {
+			&BlockId::Hash(at) => at,
+			_ => panic!("not requested by block hash!!"),
+		};
+
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
-		Ok(self.scheduled_changes.lock().get(&header.hash()).map(|c| c.clone()))
+		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone()))
 	}
 }
 
@@ -349,8 +428,8 @@ fn transition_3_voters_twice_1_observer() {
 
 	let api = TestApi::new(genesis_voters);
 	let transitions = api.scheduled_changes.clone();
-	let add_transition = move |hash, change| {
-		transitions.lock().insert(hash, change);
+	let add_transition = move |parent_hash, change| {
+		transitions.lock().insert(parent_hash, change);
 	};
 
 	let mut net = GrandpaTestNet::new(api, 9);
@@ -360,7 +439,7 @@ fn transition_3_voters_twice_1_observer() {
 		net.peer(0).push_blocks(14, false);
 		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 			let block = builder.bake().unwrap();
-			add_transition(block.header.hash(), ScheduledChange {
+			add_transition(*block.header.parent_hash(), ScheduledChange {
 				next_authorities: make_ids(peers_b),
 				delay: 4,
 			});
@@ -375,7 +454,7 @@ fn transition_3_voters_twice_1_observer() {
 	{
 		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 			let block = builder.bake().unwrap();
-			add_transition(block.header.hash(), ScheduledChange {
+			add_transition(*block.header.parent_hash(), ScheduledChange {
 				next_authorities: make_ids(peers_c),
 				delay: 0,
 			});

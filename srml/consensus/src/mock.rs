@@ -54,6 +54,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	t.extend(GenesisConfig::<Test>{
 		code: vec![],
 		authorities,
+		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.into()
 }

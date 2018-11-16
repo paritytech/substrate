@@ -65,7 +65,7 @@ use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
-use grandpa::fg_primitives::{GrandpaApi, ScheduledChange,  id::*};
+use grandpa::fg_primitives::{runtime::GrandpaApi, ScheduledChange,  id::*};
 #[cfg(feature = "std")]
 use node_primitives::Block as GBlock;
 use client::{block_builder::api::runtime::*, runtime_api::{runtime::*, id::*}};
@@ -401,6 +401,19 @@ impl client::runtime_api::TaggedTransactionQueue<GBlock> for ClientWithApi {
 impl client::runtime_api::Metadata<GBlock> for ClientWithApi {
 	fn metadata(&self, at: &GBlockId) -> Result<OpaqueMetadata, client::error::Error> {
 		self.call_api_at(at, "metadata", &())
+	}
+}
+
+#[cfg(feature = "std")]
+impl substrate_finality_grandpa_primitives::GrandpaApi<GBlock> for ClientWithApi {
+	fn grandpa_pending_change(&self, at: &GBlockId, digest: &DigestFor<GBlock>)
+		-> Result<Option<ScheduledChange<NumberFor<GBlock>>>, client::error::Error> {
+		self.call_api_at(at, "grandpa_pending_change", digest)
+	}
+
+	fn grandpa_authorities(&self, at: &GBlockId)
+		-> Result<Vec<(AuthorityId, u64)>, client::error::Error> {
+		self.call_api_at(at, "grandpa_authorities", &())
 	}
 }
 

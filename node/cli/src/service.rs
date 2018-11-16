@@ -28,7 +28,7 @@ use substrate_service::{
 	ServiceFactory,
 };
 use node_executor;
-use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
+use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
@@ -39,7 +39,7 @@ const AURA_SLOT_DURATION: u64 = 6;
 type GrandpaBlockImport<F> = grandpa::GrandpaBlockImport<
 	FullBackend<F>,
 	FullExecutor<F>,
-	<F as ServiceFactory>::Block, 
+	<F as ServiceFactory>::Block,
 	Arc<client::Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>>,
 	<F as ServiceFactory>::RuntimeApi
 >;
@@ -47,7 +47,7 @@ type GrandpaBlockImport<F> = grandpa::GrandpaBlockImport<
 type GrandpaLinkHalf<F> = grandpa::LinkHalf<
 	FullBackend<F>,
 	FullExecutor<F>,
-	<F as ServiceFactory>::Block, 
+	<F as ServiceFactory>::Block,
 	<F as ServiceFactory>::RuntimeApi
 >;
 
@@ -128,19 +128,36 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<Self::Block, GrandpaBlockImport<Self>>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				let (block_import, link_half) = grandpa::block_import(client.clone(), client)?;
-				config.custom.grandpa_link_half = Some(link_half); 
-					
-				Ok(import_queue(AuraConfig {
-					local_key: None,
-					slot_duration: 5
-				}, Arc::new(block_import)))
+				config.custom.grandpa_link_half = Some(link_half);
+
+				Ok(import_queue(
+					AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					},
+					Arc::new(block_import),
+					NothingExtra,
+				))
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
 			{ |ref mut config, client| Ok(
 				import_queue(AuraConfig {
 					local_key: None,
 					slot_duration: 5
-				}, client))
+				},
+				client,
+				NothingExtra,
+			))
+			},
+		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>, NothingExtra>
+			{ |config, client| Ok(import_queue(
+				AuraConfig {
+					local_key: None,
+					slot_duration: 5
+				},
+				client,
+				NothingExtra,
+			))
 			},
 	}
 }

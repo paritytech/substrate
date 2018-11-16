@@ -52,7 +52,7 @@ extern crate substrate_primitives;
 extern crate sr_io as runtime_io;
 
 // re-export since this is necessary for `impl_apis` in runtime.
-pub extern crate substrate_fg_primitives as fg_primitives;
+pub extern crate substrate_finality_grandpa_primitives as fg_primitives;
 
 use rstd::prelude::*;
 use fg_primitives::ScheduledChange;

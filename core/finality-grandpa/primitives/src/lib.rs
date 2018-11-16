@@ -32,8 +32,11 @@ extern crate parity_codec_derive;
 #[macro_use]
 extern crate substrate_client as client;
 
+extern crate sr_std as rstd;
+
 use substrate_primitives::AuthorityId;
 use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
+use rstd::vec::Vec;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -69,32 +72,34 @@ pub mod well_known_keys {
 	pub const AUTHORITY_COUNT: &[u8] = b":grandpa:auth:len";
 }
 
-/// APIs for integrating the GRANDPA finality gadget into runtimes.
-/// This should be implemented on the runtime side.
-///
-/// This is primarily used for negotiating authority-set changes for the
-/// gadget. GRANDPA uses a signalling model of changing authority sets:
-/// changes should be signalled with a delay of N blocks, and then automatically
-/// applied in the runtime after those N blocks have passed.
-///
-/// The consensus protocol will coordinate the handoff externally.
-pub trait GrandpaApi<B: BlockT> {
-	/// Check a digest for pending changes.
-	/// Return `None` if there are no pending changes.
+decl_runtime_apis! {
+	/// APIs for integrating the GRANDPA finality gadget into runtimes.
+	/// This should be implemented on the runtime side.
 	///
-	/// Precedence towards earlier or later digest items can be given
-	/// based on the rules of the chain.
+	/// This is primarily used for negotiating authority-set changes for the
+	/// gadget. GRANDPA uses a signalling model of changing authority sets:
+	/// changes should be signalled with a delay of N blocks, and then automatically
+	/// applied in the runtime after those N blocks have passed.
 	///
-	/// No change should be scheduled if one is already and the delay has not
-	/// passed completely.
-	///
-	/// This should be a pure function: i.e. as long as the runtime can interpret
-	/// the digest type it should return the same result regardless of the current
-	/// state.
-	fn grandpa_pending_change(digest: DigestFor<B>)
-		-> Option<ScheduledChange<NumberFor<B>>>;
+	/// The consensus protocol will coordinate the handoff externally.
+	pub trait GrandpaApi<Block: BlockT> {
+		/// Check a digest for pending changes.
+		/// Return `None` if there are no pending changes.
+		///
+		/// Precedence towards earlier or later digest items can be given
+		/// based on the rules of the chain.
+		///
+		/// No change should be scheduled if one is already and the delay has not
+		/// passed completely.
+		///
+		/// This should be a pure function: i.e. as long as the runtime can interpret
+		/// the digest type it should return the same result regardless of the current
+		/// state.
+		fn grandpa_pending_change(digest: DigestFor<Block>)
+			-> Option<ScheduledChange<NumberFor<Block>>>;
 
-	/// Get the current GRANDPA authorities and weights. This should not change except
-	/// for when changes are scheduled and the corresponding delay has passed.
-	fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+		/// Get the current GRANDPA authorities and weights. This should not change except
+		/// for when changes are scheduled and the corresponding delay has passed.
+		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+	}
 }

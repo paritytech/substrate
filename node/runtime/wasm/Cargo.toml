@@ -39,6 +39,7 @@ std = [
 	"parity-codec/std",
 	"substrate-primitives/std",
 	"substrate-client/std",
+	"substrate-finality-grandpa-primitives/std",
 	"sr-std/std",
 	"srml-support/std",
 	"srml-balances/std",
