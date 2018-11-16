@@ -209,27 +209,28 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 	}
 }
 
-fn make_msg_hash<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+fn message_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+	use runtime_primitives::traits::Hash as HashT;
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
 }
 
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.service.consensus_gossip().write().messages_for(make_msg_hash::<B>(round, set_id))
+		self.service.consensus_gossip().write().messages_for(message_topic::<B>(round, set_id))
 	}
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
-		let hash = make_msg_hash::<B>(round, set_id);
+		let topic = message_topic::<B>(round, set_id);
 		let gossip = self.service.consensus_gossip();
 		self.service.with_spec(move |_s, context|{
-			gossip.write().multicast(context, hash, message);
+			gossip.write().multicast(context, topic, message);
 		});
 	}
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
-		let h = make_msg_hash::<B>(round, set_id);
-		self.service.consensus_gossip().write().collect_garbage(|t| t == &h);
+		let topic = message_topic::<B>(round, set_id);
+		self.service.consensus_gossip().write().collect_garbage(|t| t == &topic);
 	}
 }
 
@@ -628,22 +629,22 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network + 'static,
-	N::In: 'static,
+	N: Network + 'static + Send,
+	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Box<Future<Item = (), Error = Self::Error>>;
+	type Timer = Box<Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
 	type In = Box<Stream<
 		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
-	>>;
+	> + Send>;
 	type Out = Box<Sink<
 		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
-	>>;
+	> + Send>;
 	type Error = ExitOrError<Block::Hash, NumberFor<Block>>;
 
 	#[allow(unreachable_code)]
@@ -968,8 +969,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network + 'static,
-	N::In: 'static,
+	N: Network + Send + 'static,
+	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,

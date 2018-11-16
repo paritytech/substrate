@@ -158,7 +158,7 @@ fn make_topic(round: u64, set_id: u64) -> Hash {
 }
 
 impl Network for MessageRouting {
-	type In = Box<Stream<Item=Vec<u8>,Error=()>>;
+	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
 		let messages = self.inner.lock().peer(self.peer_id)
@@ -318,6 +318,8 @@ fn finalize_3_voters_no_observers() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(|_| Ok(()))
 		);
+		fn assert_send<T: Send>(_: &T) { }
+
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
@@ -327,6 +329,8 @@ fn finalize_3_voters_no_observers() {
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
+
+		assert_send(&voter);
 
 		runtime.spawn(voter);
 	}

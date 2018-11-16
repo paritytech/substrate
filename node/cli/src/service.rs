@@ -125,7 +125,7 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<Self::Block, GrandpaBlockImport<Self>>
+		FullImportQueue = AuraImportQueue<Self::Block, GrandpaBlockImport<Self>, NothingExtra>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				let (block_import, link_half) = grandpa::block_import(client.clone(), client)?;
 				config.custom.grandpa_link_half = Some(link_half);
@@ -139,19 +139,9 @@ construct_service_factory! {
 					NothingExtra,
 				))
 			}},
-		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
+		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>, NothingExtra>
 			{ |ref mut config, client| Ok(
 				import_queue(AuraConfig {
-					local_key: None,
-					slot_duration: 5
-				},
-				client,
-				NothingExtra,
-			))
-			},
-		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>, NothingExtra>
-			{ |config, client| Ok(import_queue(
-				AuraConfig {
 					local_key: None,
 					slot_duration: 5
 				},
