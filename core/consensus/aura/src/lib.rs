@@ -329,7 +329,7 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 
 /// Extra verification for Aura blocks.
 pub trait ExtraVerification<B: Block>: Send + Sync {
-	/// Future that resolves when the block is verified or not.
+	/// Future that resolves when the block is verified or fails with error if not.
 	type Verified: IntoFuture<Item=(),Error=String>;
 
 	/// Do additional verification for this block.
