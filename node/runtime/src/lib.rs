@@ -56,7 +56,7 @@ extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
-extern crate substrate_fg_primitives;
+extern crate substrate_finality_grandpa_primitives;
 
 #[cfg(feature = "std")]
 use codec::{Encode, Decode};
@@ -85,7 +85,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-use substrate_fg_primitives::{runtime::GrandpaApi, ScheduledChange};
+use substrate_finality_grandpa_primitives::{runtime::GrandpaApi, ScheduledChange};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -398,7 +398,7 @@ impl client::runtime_api::Metadata<GBlock> for ClientWithApi {
 }
 
 #[cfg(feature = "std")]
-impl substrate_fg_primitives::GrandpaApi<GBlock> for ClientWithApi {
+impl substrate_finality_grandpa_primitives::GrandpaApi<GBlock> for ClientWithApi {
 	fn grandpa_pending_change(&self, at: &GBlockId, digest: &DigestFor<GBlock>)
 		-> Result<Option<ScheduledChange<NumberFor<GBlock>>>, client::error::Error> {
 		self.call_api_at(at, "grandpa_pending_change", digest)

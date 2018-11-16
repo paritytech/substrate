@@ -59,7 +59,7 @@ extern crate substrate_primitives;
 extern crate tokio;
 extern crate parking_lot;
 extern crate parity_codec as codec;
-extern crate substrate_fg_primitives as fg_primitives;
+extern crate substrate_finality_grandpa_primitives as fg_primitives;
 
 #[macro_use]
 extern crate log;

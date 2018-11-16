@@ -14,7 +14,7 @@ substrate-client = { path = "../client" }
 log = "0.4"
 parking_lot = "0.4"
 tokio = "0.1.7"
-substrate-fg-primitives = { path = "primitives" }
+substrate-finality-grandpa-primitives = { path = "primitives" }
 
 [dependencies.finality-grandpa]
 version = "0.3.0"
