@@ -878,7 +878,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, Api, RA> Authorities<Block> for GrandpaBlockImport<B, E, Block, Api, RA>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBlockImport<B, E, Block, RA, PRA>
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,

@@ -40,8 +40,8 @@ type GrandpaBlockImport<F> = grandpa::GrandpaBlockImport<
 	FullBackend<F>,
 	FullExecutor<F>,
 	<F as ServiceFactory>::Block,
-	Arc<client::Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>>,
-	<F as ServiceFactory>::RuntimeApi
+	<F as ServiceFactory>::RuntimeApi,
+	client::Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>,
 >;
 
 type GrandpaLinkHalf<F> = grandpa::LinkHalf<
@@ -75,6 +75,18 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 		}
 	}
 }
+
+// fn assertions() {
+// 	fn backend_is_backend<T: client::backend::Backend<Block, ::primitives::Blake2Hasher>>() { }
+// 	fn executor_has_basic_bounds<T: Clone + Send + Sync>() { }
+// 	fn api_is_core<T: client::runtime_api::Core<Block>>() {}
+// 	fn all_good<T: ::runtime_primitives::traits::ProvideRuntimeAPI>() {}
+
+// 	backend_is_backend::<FullBackend<Factory>>();
+// 	executor_has_basic_bounds::<FullExecutor<Factory>>();
+// 	api_is_core::<ClientWithApi>();
+// 	all_good::<FullClient<Factory>>();
+// }
 
 construct_service_factory! {
 	struct Factory {
@@ -127,7 +139,7 @@ construct_service_factory! {
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block, GrandpaBlockImport<Self>, NothingExtra>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
-				let (block_import, link_half) = grandpa::block_import(client.clone(), client)?;
+				let (block_import, link_half) = grandpa::block_import::<_, _, _, ClientWithApi, FullClient<Self>>(client.clone(), client)?;
 				config.custom.grandpa_link_half = Some(link_half);
 
 				Ok(import_queue(

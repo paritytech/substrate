@@ -141,7 +141,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			_genesis_phantom_data: Default::default(),
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: vec![]
+			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
+			_genesis_phantom_data: Default::default(),
 		})
 	}
 }
@@ -273,7 +274,8 @@ pub fn testnet_genesis(
 			_genesis_phantom_data: Default::default(),
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: vec![]
+			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
+			_genesis_phantom_data: Default::default(),
 		})
 	}
 }
