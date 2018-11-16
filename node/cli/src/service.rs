@@ -41,7 +41,12 @@ type GrandpaBlockImport<F> = grandpa::GrandpaBlockImport<
 	FullBackend<F>,
 	FullExecutor<F>,
 	<F as ServiceFactory>::Block, 
-	grandpa::ApiClient<<F as ServiceFactory>::Block>,
+	client::Client<
+		FullBackend<F>,
+		FullExecutor<F>,
+		<F as ServiceFactory>::Block,
+		<F as ServiceFactory>::RuntimeApi
+	>,
 	<F as ServiceFactory>::RuntimeApi
 >;
 
