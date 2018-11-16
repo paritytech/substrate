@@ -22,7 +22,6 @@ use keyring;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
 use client::block_builder::api::BlockBuilder;
-use client::runtime_api::Core as CoreAPI;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
@@ -32,7 +31,7 @@ pub trait BlockBuilderExt {
 
 impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
 	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block> + 'a,
-	A::Api: BlockBuilder<runtime::Block> + CoreAPI<runtime::Block>,
+	A::Api: BlockBuilder<runtime::Block>
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))
