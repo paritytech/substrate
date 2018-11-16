@@ -369,6 +369,11 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 		transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
+		if number == Zero::zero() {
+			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
+			transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
+		}
+
 		let finalized = match leaf_state {
 			NewBlockState::Final => true,
 			_ => false,
@@ -859,5 +864,18 @@ pub(crate) mod tests {
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_2)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_2)), Some(vec![[4u8; 32].into()]));
 		}
+	}
+
+	#[test]
+	fn database_is_reopened() {
+		let db = LightStorage::new_test();
+		let hash0 = insert_final_block(&db, None, || default_header(&Default::default(), 0));
+		assert_eq!(db.info().unwrap().best_hash, hash0);
+		assert_eq!(db.header(BlockId::Hash(hash0)).unwrap().unwrap().hash(), hash0);
+
+		let db = db.db;
+		let db = LightStorage::from_kvdb(db).unwrap();
+		assert_eq!(db.info().unwrap().best_hash, hash0);
+		assert_eq!(db.header(BlockId::Hash::<Block>(hash0)).unwrap().unwrap().hash(), hash0);
 	}
 }

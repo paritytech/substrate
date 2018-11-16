@@ -70,7 +70,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
-	changes_trie_config: Option<ChangesTrieConfiguration>,
 	_phantom: PhantomData<RA>,
 }
 
@@ -245,12 +244,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			backend.commit_operation(op)?;
 		}
 
-		// changes trie configuration should never change => we can read it in advance
-		let changes_trie_config = backend.state_at(BlockId::Number(backend.blockchain().info()?.best_number))?
-			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
-			.map_err(|e| error::Error::from_state(Box::new(e)))?
-			.and_then(|c| Decode::decode(&mut &*c));
-
 		Ok(Client {
 			backend,
 			executor,
@@ -261,7 +254,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			importing_block: Default::default(),
 			block_execution_strategy,
 			api_execution_strategy,
-			changes_trie_config,
 			_phantom: Default::default(),
 		})
 	}
@@ -381,7 +373,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		key: &[u8]
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
-		let config = self.changes_trie_config.as_ref();
+		let config = self.changes_trie_config()?;
 		let storage = self.backend.changes_trie_storage();
 		let (config, storage) = match (config, storage) {
 			(Some(config), Some(storage)) => (config, storage),
@@ -389,7 +381,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		key_changes::<_, Blake2Hasher>(
-			config,
+			&config,
 			storage,
 			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
 			&ChangesTrieAnchorBlockId {
@@ -463,7 +455,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		let config = self.changes_trie_config.as_ref();
+		let config = self.changes_trie_config()?;
 		let storage = self.backend.changes_trie_storage();
 		let (config, storage) = match (config, storage) {
 			(Some(config), Some(storage)) => (config, storage),
@@ -484,7 +476,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		// fetch key changes proof
 		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
-			config,
+			&config,
 			&recording_storage,
 			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
 			&ChangesTrieAnchorBlockId {
@@ -974,6 +966,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		unreachable!("this is a bug. `target_hash` is in blockchain but wasn't found following all leaves backwards");
+	}
+
+	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
+		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info()?.best_number))?
+			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
+			.map_err(|e| error::Error::from_state(Box::new(e)))?
+			.and_then(|c| Decode::decode(&mut &*c)))
 	}
 }
 
