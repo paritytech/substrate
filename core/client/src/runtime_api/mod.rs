@@ -23,7 +23,7 @@ pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 pub use runtime_primitives::{traits::Block as BlockT, generic::BlockId};
 #[cfg(feature = "std")]
-pub use runtime_primitives::traits::ApiRef;
+use runtime_primitives::traits::ApiRef;
 pub use runtime_version::ApiId;
 #[doc(hidden)]
 pub use rstd::slice;
@@ -32,6 +32,7 @@ use rstd::result;
 pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use error;
+pub use runtime_version::RuntimeVersion;
 
 mod core;
 #[macro_use]
