@@ -466,12 +466,12 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<AuraVerifier<PeersClient>, ()>>>,
+		peers: Vec<Arc<Peer<AuraVerifier<PeersClient, NothingExtra>, ()>>>,
 		started: bool
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersClient>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -486,7 +486,7 @@ mod tests {
 			-> Arc<Self::Verifier>
 		{
 			let config = Config { local_key: None, slot_duration: SLOT_DURATION };
-			Arc::new(AuraVerifier { client, config })
+			Arc::new(AuraVerifier { client, config, extra: NothingExtra })
 		}
 
 		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
