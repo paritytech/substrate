@@ -84,7 +84,7 @@ use client::{Client, error::Error as ClientError, ImportNotifications, backend::
 use client::blockchain::HeaderBackend;
 use client::runtime_api::{CallApiAt, TaggedTransactionQueue};
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, ImportBlock, ImportResult};
+use consensus_common::{BlockImport, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor,
 	Hash as HashT
@@ -864,23 +864,6 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, Api, RA> {
 	api_client: Api,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, Api, RA> GrandpaBlockImport<B, E, Block, Api, RA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	DigestFor<Block>: Encode,
-	Api: ApiClient<Block>,
-	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
-{
-	pub fn make_link_half(&self) -> LinkHalf<B, E, Block, RA> {
-		LinkHalf {
-			client: self.inner.clone(),
-			authority_set: self.authority_set.clone()
-		}
-
-	}
-}
-
 impl<B, E, Block: BlockT<Hash=H256>, Api, RA> BlockImport<Block> for GrandpaBlockImport<B, E, Block, Api, RA> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
@@ -929,16 +912,42 @@ impl<B, E, Block: BlockT<Hash=H256>, Api, RA> BlockImport<Block> for GrandpaBloc
 	}
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, Api, RA> Authorities<Block> for GrandpaBlockImport<B, E, Block, Api, RA>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
+{
+
+	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		self.inner.authorities_at(at)
+	}
+}
+
 /// Half of a link between a block-import worker and a the background voter.
 // This should remain non-clone.
 pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 }
+impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for LinkHalf<B, E, Block, RA>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
+{
+	fn clone(&self) -> Self {
+		LinkHalf {
+			client: self.client.clone(),
+			authority_set: self.authority_set.clone()
+		}
+	}
+}
 
 /// Make block importer a link half can be to tied to
 pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<B, E, Block, RA>>, api_client: Api)
-	-> Result<GrandpaBlockImport<B, E, Block, Api, RA>, ClientError>
+	-> Result<(GrandpaBlockImport<B, E, Block, Api, RA>, LinkHalf<B, E, Block, RA>), ClientError>
 	where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -968,11 +977,11 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api, RA>(client: Arc<Client<
 			.into(),
 	};
 
-	Ok(GrandpaBlockImport {
-			inner: client,
-			authority_set,
+	Ok((GrandpaBlockImport {
+			inner: client.clone(),
+			authority_set: authority_set.clone(),
 			api_client
-	})
+	}, LinkHalf { authority_set, client }))
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a

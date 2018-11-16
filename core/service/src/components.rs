@@ -266,7 +266,7 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// ImportQueue for a full client
 	fn build_full_import_queue(
-		config: &FactoryFullConfiguration<Self>,
+		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<FullClient<Self>>
 	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
@@ -281,7 +281,7 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// ImportQueue for a light client
 	fn build_light_import_queue(
-		config: &FactoryFullConfiguration<Self>,
+		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<LightClient<Self>>
 	) -> Result<Self::LightImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
@@ -336,7 +336,7 @@ pub trait Components: Sized + 'static {
 
 	/// instance of import queue for clients
 	fn build_import_queue(
-		config: &FactoryFullConfiguration<Self::Factory>,
+		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error>;
 }
@@ -409,7 +409,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	}
 
 	fn build_import_queue(
-		config: &FactoryFullConfiguration<Self::Factory>,
+		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_full_import_queue(config, client)
@@ -485,7 +485,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	}
 
 	fn build_import_queue(
-		config: &FactoryFullConfiguration<Self::Factory>,
+		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)

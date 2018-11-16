@@ -71,8 +71,6 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>
 	network: Arc<Mutex<NetworkService>>,
 	/// Protocol handler
 	handler: Arc<Protocol<B, S, H>>,
-	/// the import queue
-	import_queue: Arc<ImportQueue<B>>,
 	/// Protocol ID.
 	protocol_id: ProtocolId,
 	/// Sender for messages to the background service task, and handle for the background thread.
@@ -104,8 +102,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 			network,
 			protocol_id,
 			handler,
-			bg_thread: Some(thread),
-			import_queue: import_queue.clone()
+			bg_thread: Some(thread)
 		});
 
 		// connect the import-queue to the network service.

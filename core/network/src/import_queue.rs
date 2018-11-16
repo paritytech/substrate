@@ -122,6 +122,11 @@ impl<B: BlockT, V: Verifier<B>> BasicQueue<B, V> {
 			block_import,
 		}
 	}
+
+	/// Gain access to the underlying shared block import
+	pub fn block_import(&self) -> &SharedBlockImport<B> {
+		&self.block_import
+	}
 }
 
 impl<B: BlockT> AsyncImportQueueData<B> {

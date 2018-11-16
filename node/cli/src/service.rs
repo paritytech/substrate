@@ -25,14 +25,13 @@ use node_primitives::Block;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
-	Service, ServiceFactory,
+	ServiceFactory,
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
-use substrate_service::Deref;
 use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
@@ -41,12 +40,14 @@ type GrandpaBlockImport<F> = grandpa::GrandpaBlockImport<
 	FullBackend<F>,
 	FullExecutor<F>,
 	<F as ServiceFactory>::Block, 
-	client::Client<
-		FullBackend<F>,
-		FullExecutor<F>,
-		<F as ServiceFactory>::Block,
-		<F as ServiceFactory>::RuntimeApi
-	>,
+	Arc<client::Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>>,
+	<F as ServiceFactory>::RuntimeApi
+>;
+
+type GrandpaLinkHalf<F> = grandpa::LinkHalf<
+	FullBackend<F>,
+	FullExecutor<F>,
+	<F as ServiceFactory>::Block, 
 	<F as ServiceFactory>::RuntimeApi
 >;
 
@@ -56,18 +57,21 @@ construct_simple_protocol! {
 }
 
 /// Node specific configuration
-pub struct NodeConfig {
+pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// should run as a grandpa authority
 	pub grandpa_authority: bool,
 	/// should run as a grandpa authority only, don't validate as usual
-	pub grandpa_authority_only: bool
+	pub grandpa_authority_only: bool,
+	/// grandpa connection to import block
+	pub grandpa_link_half: Option<GrandpaLinkHalf<F>>,
 }
 
-impl Default for NodeConfig {
-	fn default() -> NodeConfig {
+impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
+	fn default() -> NodeConfig<F> {
 		NodeConfig {
 			grandpa_authority: false,
-			grandpa_authority_only: false
+			grandpa_authority_only: false,
+			grandpa_link_half: None
 		}
 	}
 }
@@ -83,15 +87,16 @@ construct_service_factory! {
 		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, ClientWithApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
-		Configuration = NodeConfig,
+		Configuration = NodeConfig<Self>,
 		FullService = FullComponents<Self>
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
-				if service.config().custom.grandpa_authority {
+				if service.config.custom.grandpa_authority {
 					info!("Running Grandpa session as Authority {}", key.public());
-					let link_half = service.deref().import_queue().make_link_half();
+					let link_half = service.config().custom.grandpa_link_half.as_ref().take()
+						.expect("Link Half is present for Full Services or setup failed before. qed");
 					// executor.spawn(
 					let grandpa_fut = grandpa::run_grandpa(
 							grandpa::Config {
@@ -99,11 +104,11 @@ construct_service_factory! {
 								local_key: Some(key.clone()),
 								name: Some(service.config().name.clone())
 							},
-							link_half,
+							(*link_half).clone(),
 							grandpa::NetworkBridge::new(service.network())
 						);
 				}
-				if !service.config().custom.grandpa_authority_only {
+				if !service.config.custom.grandpa_authority_only {
 					info!("Using authority key {}", key.public());
 					executor.spawn(start_aura(
 						AuraConfig {
@@ -121,8 +126,9 @@ construct_service_factory! {
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block, GrandpaBlockImport<Self>>
-			{ |config, client: Arc<FullClient<Self>>| {
-				let block_import = grandpa::block_import(client.clone(), client)?;
+			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
+				let (block_import, link_half) = grandpa::block_import(client.clone(), client)?;
+				config.custom.grandpa_link_half = Some(link_half); 
 					
 				Ok(import_queue(AuraConfig {
 					local_key: None,
@@ -130,7 +136,7 @@ construct_service_factory! {
 				}, Arc::new(block_import)))
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
-			{ |config, client| Ok(
+			{ |ref mut config, client| Ok(
 				import_queue(AuraConfig {
 					local_key: None,
 					slot_duration: 5

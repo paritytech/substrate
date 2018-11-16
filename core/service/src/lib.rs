@@ -103,7 +103,8 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
-	config: FactoryFullConfiguration<Components::Factory>,
+	/// Configuration of this Service
+	pub config: FactoryFullConfiguration<Components::Factory>,
 	import_queue: Arc<Components::ImportQueue>,
 	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
@@ -131,7 +132,7 @@ impl<Components> Service<Components>
 {
 	/// Creates a new service.
 	pub fn new(
-		config: FactoryFullConfiguration<Components::Factory>,
+		mut config: FactoryFullConfiguration<Components::Factory>,
 		task_executor: TaskExecutor,
 	)
 		-> Result<Self, error::Error>
@@ -161,7 +162,7 @@ impl<Components> Service<Components>
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Arc::new(Components::build_import_queue(&config, client.clone())?);
+		let import_queue = Arc::new(Components::build_import_queue(&mut config, client.clone())?);
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
@@ -319,6 +320,10 @@ impl<Components> Service<Components>
 
 	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
 		&self.config
+	}
+
+	pub fn mut_config(&mut self) -> &mut FactoryFullConfiguration<Components::Factory> {
+		&mut self.config
 	}
 }
 
@@ -580,14 +585,14 @@ macro_rules! construct_service_factory {
 			}
 
 			fn build_full_import_queue(
-				config: &$crate::FactoryFullConfiguration<Self>,
+				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
 				( $( $full_import_queue_init )* ) (config, client)
 			}
 
 			fn build_light_import_queue(
-				config: &FactoryFullConfiguration<Self>,
+				config: &mut FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
 			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
