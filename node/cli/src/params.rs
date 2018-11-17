@@ -21,7 +21,7 @@ use cli::CoreParams;
 #[derive(Debug, StructOpt)]
 pub struct Params {
 	/// Should run as a GRANDPA authority node
-    #[structopt(long = "grandpa-authority", help = "Run Node as a GRANDPA authority, implies --validator")]
+	#[structopt(long = "grandpa-authority", help = "Run Node as a GRANDPA authority, implies --validator")]
 	grandpa_authority: bool,
 
 	/// Should run as a GRANDPA authority node only
