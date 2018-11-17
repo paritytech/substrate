@@ -65,7 +65,7 @@ use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
-use grandpa::fg_primitives::{runtime::GrandpaApi, ScheduledChange,  id::*};
+use grandpa::fg_primitives::{runtime::GrandpaApi, ScheduledChange, id::*};
 #[cfg(feature = "std")]
 use node_primitives::Block as GBlock;
 use client::{block_builder::api::runtime::*, runtime_api::{runtime::*, id::*}};
