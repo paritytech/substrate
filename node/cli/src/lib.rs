@@ -119,7 +119,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		.get_matches_from_safe(args) {
 			Ok(m) => m,
 			Err(e) => e.exit(),
-	};
+		};
 
 	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(load_spec, version, "substrate-node", &matches)?;
 
