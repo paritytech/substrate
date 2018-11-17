@@ -569,7 +569,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 		// once blocks are finalized that make that transition irrelevant or activate it,
 		// we will proceed onwards. most of the time there will be no pending transition.
 		let limit = self.authority_set.current_limit();
-		trace!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
+		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
 		match self.inner.best_containing(block, limit) {
 			Ok(Some(hash)) => {
