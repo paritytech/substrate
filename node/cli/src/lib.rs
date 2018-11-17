@@ -128,7 +128,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		config.custom.grandpa_authority_only = true;
 		// Authority Setup is only called if validator is set as true
 		config.roles = ServiceRoles::AUTHORITY;
-	} else if  matches.is_present("grandpa_authority") {
+	} else if matches.is_present("grandpa_authority") {
 		config.custom.grandpa_authority = true;
 		// Authority Setup is only called if validator is set as true
 		config.roles = ServiceRoles::AUTHORITY;
