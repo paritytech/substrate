@@ -25,7 +25,7 @@ pub struct Params {
 	grandpa_authority: bool,
 
 	/// Should run as a GRANDPA authority node only
-    #[structopt(long = "grandpa-authority-only", help = "Run Node as a GRANDPA authority only, don't as a usual validator, implies --grandpa-authority")]
+	#[structopt(long = "grandpa-authority-only", help = "Run Node as a GRANDPA authority only, don't as a usual validator, implies --grandpa-authority")]
 	grandpa_authority_only: bool,
 
 	#[structopt(flatten)]
