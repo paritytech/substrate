@@ -38,9 +38,6 @@ use substrate_primitives::AuthorityId;
 use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
 use rstd::vec::Vec;
 
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
 #[derive(Clone, Encode, Decode)]

@@ -735,6 +735,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			return Ok(());
 		}
 
+		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+
 		// lock must be held through writing to DB to avoid race
 		let mut authority_set = self.authority_set.inner().write();
 		let client = &self.inner;
