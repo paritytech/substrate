@@ -201,6 +201,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
+		config(_phantom): ::std::marker::PhantomData<T>;
 
 		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			use codec::Encode;
