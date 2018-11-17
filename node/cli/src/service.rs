@@ -28,7 +28,7 @@ use substrate_service::{
 	Roles, TaskExecutor,
 };
 use node_executor;
-use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
+use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
 use client;
 
 const AURA_SLOT_DURATION: u64 = 6;
@@ -79,25 +79,17 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<Self::Block, FullClient<Self>, NothingExtra>
-			{ |config, client| Ok(import_queue(
-				AuraConfig {
+		FullImportQueue = AuraImportQueue<Self::Block, FullClient<Self>>
+			{ |config, client| Ok(import_queue(AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					}, client)) },
+		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
+			{ |config, client| Ok(
+				import_queue(AuraConfig {
 					local_key: None,
 					slot_duration: 5
-				},
-				client,
-				NothingExtra,
-			))
-			},
-		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>, NothingExtra>
-			{ |config, client| Ok(import_queue(
-				AuraConfig {
-					local_key: None,
-					slot_duration: 5
-				},
-				client,
-				NothingExtra,
-			))
+				}, client))
 			},
 	}
 }

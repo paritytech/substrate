@@ -29,6 +29,3 @@ srml-timestamp = { path = "../../srml/timestamp" }
 srml-treasury = { path = "../../srml/treasury" }
 srml-contract = { path = "../../srml/contract" }
 wabt = "0.4"
-
-[features]
-benchmarks = []

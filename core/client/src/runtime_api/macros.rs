@@ -465,20 +465,14 @@ macro_rules! impl_runtime_apis {
 			)*
 		}
 		impl_runtime_apis! {
-			@EXTEND_FUNCTIONS
 			$runtime;
-			;
-			$trait_name;
-			$( $( $generic ),* )*;
-			{ $( $fn_name ( $( $arg_name: $arg_ty ),* ); )* }
+			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
 			$( $rest )*
 		}
 	};
 	(
 		$runtime:ident;
-		$( $trait_name_parsed:ident $( < $( $parsed_generic:ident ),* > )*::$fn_name_parsed:ident (
-			$( $arg_name_parsed:ident : $arg_ty_parsed:ty ),* );
-		)*;
+		$( $fn_name_parsed:ident ( $( $arg_name_parsed:ident : $arg_ty_parsed:ty ),* ); )*;
 		impl $trait_name:ident $( < $( $generic:ident ),* > )* for $runtime_ignore:ident {
 			$(
 				fn $fn_name:ident ( $( $arg_name:ident : $arg_ty:ty ),* ) $( -> $return_ty:ty )* {
@@ -496,73 +490,15 @@ macro_rules! impl_runtime_apis {
 			)*
 		}
 		impl_runtime_apis! {
-			@EXTEND_FUNCTIONS
 			$runtime;
-			$(
-				$trait_name_parsed $( < $( $parsed_generic ),* > )*
-					::$fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* );
-			)*;
-			$trait_name;
-			$( $( $generic ),* )*;
-			{ $( $fn_name ( $( $arg_name: $arg_ty ),* ); )* }
-			$( $rest )*
-		}
-	};
-	(@EXTEND_FUNCTIONS
-		$runtime:ident;
-		$( $trait_name_parsed:ident $( < $( $parsed_generic:ident ),* > )*::$fn_name_parsed:ident (
-			$( $arg_name_parsed:ident : $arg_ty_parsed:ty ),* );
-		)*;
-		$trait_name:ident;
-		$( $generic:ident ),*;
-		{
-			$fn_name_extend:ident ( $( $arg_name_extend:ident : $arg_ty_extend:ty ),* );
-			$( $extend_rest:tt )*
-		}
-		$( $rest:tt )*
-	) => {
-		impl_runtime_apis! {
-			@EXTEND_FUNCTIONS
-			$runtime;
-			$(
-				$trait_name_parsed $( < $( $parsed_generic ),* > )*
-					::$fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* );
-			)*
-			$trait_name < $( $generic ),* >
-				::$fn_name_extend ( $( $arg_name_extend: $arg_ty_extend ),* );;
-			$trait_name;
-			$( $generic ),*;
-			{
-				$( $extend_rest )*
-			}
-			$( $rest )*
-		}
-	};
-	(@EXTEND_FUNCTIONS
-		$runtime:ident;
-		$( $trait_name_parsed:ident $( < $( $parsed_generic:ident ),* > )*::$fn_name_parsed:ident (
-			$( $arg_name_parsed:ident : $arg_ty_parsed:ty ),* );
-		)*;
-		$trait_name:ident;
-		$( $generic:ident ),*;
-		{}
-		$( $rest:tt )*
-	) => {
-		impl_runtime_apis! {
-			$runtime;
-			$(
-				$trait_name_parsed $( < $( $parsed_generic ),* > )*
-					::$fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* );
-			)*;
+			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* ); )*
+			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
 			$( $rest )*
 		}
 	};
 	(
 		$runtime:ident;
-		$(
-			$trait_name:ident $( < $( $generic:ident ),* > )*
-				::$fn_name:ident ( $( $arg_name:ident : $arg_ty:ty ),* );
-		)*;
+		$( $fn_name:ident ( $( $arg_name:ident : $arg_ty:ty ),* ); )*;
 	) => {
 		pub mod api {
 			use super::*;
@@ -575,7 +511,6 @@ macro_rules! impl_runtime_apis {
 							Some({impl_runtime_apis! {
 								@GENERATE_IMPL_CALL
 								$runtime;
-								$trait_name $( < $( $generic ),* > )*;
 								$fn_name;
 								$( $arg_name : $arg_ty ),*;
 								data;
@@ -601,7 +536,6 @@ macro_rules! impl_runtime_apis {
 					let output = { impl_runtime_apis! {
 						@GENERATE_IMPL_CALL
 						$runtime;
-						$trait_name $( < $( $generic ),* > )*;
 						$fn_name;
 						$( $arg_name : $arg_ty ),*;
 						input;
@@ -619,7 +553,6 @@ macro_rules! impl_runtime_apis {
 	};
 	(@GENERATE_IMPL_CALL
 		$runtime:ident;
-		$trait_name:ident $( < $( $generic:ident ),* > )*;
 		$fn_name:ident;
 		$arg_name:ident : $arg_ty:ty;
 		$input:ident;
@@ -629,12 +562,11 @@ macro_rules! impl_runtime_apis {
 			None => panic!("Bad input data provided to {}", stringify!($fn_name)),
 		};
 
-		let output = <$runtime as $trait_name $( < $( $generic ),* > )*>::$fn_name($arg_name);
+		let output = $runtime::$fn_name($arg_name);
 		$crate::runtime_api::Encode::encode(&output)
 	};
 	(@GENERATE_IMPL_CALL
 		$runtime:ident;
-		$trait_name:ident $( < $( $generic:ident ),* > )*;
 		$fn_name:ident;
 		$( $arg_name:ident : $arg_ty:ty ),*;
 		$input:ident;
@@ -644,7 +576,7 @@ macro_rules! impl_runtime_apis {
 			None => panic!("Bad input data provided to {}", stringify!($fn_name)),
 		};
 
-		let output = <$runtime as $trait_name $( < $( $generic ),* > )*>::$fn_name($( $arg_name ),*);
+		let output = $runtime::$fn_name($( $arg_name ),*);
 		$crate::runtime_api::Encode::encode(&output)
 	};
 }

@@ -1662,6 +1662,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "nan-preserving-float"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "native-tls"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2604,7 +2609,7 @@ dependencies = [
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
  "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3172,7 +3177,7 @@ dependencies = [
  "substrate-state-machine 0.1.0",
  "substrate-trie 0.4.0",
  "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3308,7 +3313,7 @@ dependencies = [
  "twox-hash 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4151,11 +4156,12 @@ dependencies = [
 
 [[package]]
 name = "wasmi"
-version = "0.4.2"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory_units 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nan-preserving-float 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -4467,6 +4473,7 @@ dependencies = [
 "checksum multihash 0.8.1-pre (git+https://github.com/libp2p/rust-libp2p?rev=d961e656a74d1bab5366d371a06f9e10d5f4a6c5)" = "<none>"
 "checksum multistream-select 0.1.0 (git+https://github.com/libp2p/rust-libp2p?rev=d961e656a74d1bab5366d371a06f9e10d5f4a6c5)" = "<none>"
 "checksum names 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ef320dab323286b50fb5cdda23f61c796a72a89998ab565ca32525c5c556f2da"
+"checksum nan-preserving-float 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "34d4f00fcc2f4c9efa8cc971db0da9e28290e28e97af47585e48691ef10ff31f"
 "checksum native-tls 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "ff8e08de0070bbf4c31f452ea2a70db092f36f6f2e4d897adf5674477d488fb2"
 "checksum net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)" = "42550d9fb7b6684a6d404d9fa7250c2eb2646df731d1c06afc06dcee9e1bcf88"
 "checksum nix 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d37e713a259ff641624b6cb20e3b12b2952313ba36b6823c0f16e6cfd9e5de17"
@@ -4643,7 +4650,7 @@ dependencies = [
 "checksum wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "182ae543249ccf2705f324d233891c1176fca142e137b55ba43d9dbfe93f18a2"
 "checksum wabt-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8ca77c6b934a2b32618941b2f565aac43b8cb7141378c3b4fba4d8fcdcd57da3"
 "checksum want 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "797464475f30ddb8830cc529aaaae648d581f99e2036a928877dfde027ddf6b3"
-"checksum wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "8a60b9508cff2b7c27ed41200dd668806280740fadc8c88440e9c88625e84f1a"
+"checksum wasmi 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d184c4b7081f30316f74f8d73c197314dcb56ea7af9323522b42a2fa9cb19453"
 "checksum websocket 0.21.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8c9faed2bff8af2ea6b9f8b917d3d00b467583f6781fe3def174a9e33c879703"
 "checksum winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 "checksum winapi 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "92c1eb33641e276cfa214a0522acad57be5c56b10cb348b3c5117db75f3ac4b0"
