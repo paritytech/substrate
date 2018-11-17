@@ -121,7 +121,7 @@ impl<Block> LightStorage<Block>
 	) {
 		let mut meta = self.meta.write();
 
-		if number == Zero::zero() {
+		if number.is_zero() {
 			meta.genesis_hash = hash;
 			meta.finalized_hash = hash;
 		}
@@ -369,7 +369,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 		transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
-		if number == Zero::zero() {
+		if number.is_zero() {
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 			transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 		}
@@ -390,7 +390,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			let mut cache = self.cache.0.write();
 			let cache_ops = cache.transaction(&mut transaction)
 				.on_block_insert(
-					ComplexBlockId::new(*header.parent_hash(), if number == Zero::zero() { Zero::zero() } else { number - One::one() }),
+					ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),
 					ComplexBlockId::new(hash, number),
 					authorities,
 					finalized,
@@ -434,7 +434,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				let mut cache = self.cache.0.write();
 				let cache_ops = cache.transaction(&mut transaction)
 					.on_block_finalize(
-						ComplexBlockId::new(*header.parent_hash(), if number == Zero::zero() { Zero::zero() } else { number - One::one() }),
+						ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),
 						ComplexBlockId::new(hash, number)
 					)?
 					.into_ops();
