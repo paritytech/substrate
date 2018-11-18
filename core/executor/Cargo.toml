@@ -14,7 +14,7 @@ substrate-state-machine = { path = "../state-machine"  }
 sr-version = { path = "../sr-version" }
 serde = "1.0"
 serde_derive = "1.0"
-wasmi = { version = "0.4.1" }
+wasmi = { version = "0.4.2" }
 byteorder = "1.1"
 lazy_static = "1.0"
 parking_lot = "*"
