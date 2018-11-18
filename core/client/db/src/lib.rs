@@ -1277,6 +1277,62 @@ mod tests {
 	}
 
 	#[test]
+	fn changes_trie_storage_works_with_forks() {
+		let backend = Backend::<Block>::new_test(1000, 100);
+
+		let changes0 = vec![(b"k0".to_vec(), b"v0".to_vec())];
+		let changes1 = vec![(b"k1".to_vec(), b"v1".to_vec())];
+		let changes2 = vec![(b"k2".to_vec(), b"v2".to_vec())];
+		let block0 = insert_header(&backend, 0, Default::default(), changes0.clone(), Default::default());
+		let block1 = insert_header(&backend, 1, block0, changes1.clone(), Default::default());
+		let block2 = insert_header(&backend, 2, block1, changes2.clone(), Default::default());
+
+		let changes2_1_0 = vec![(b"k3".to_vec(), b"v3".to_vec())];
+		let changes2_1_1 = vec![(b"k4".to_vec(), b"v4".to_vec())];
+		let block2_1_0 = insert_header(&backend, 3, block2, changes2_1_0.clone(), Default::default());
+		let block2_1_1 = insert_header(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
+
+		let changes2_2_0 = vec![(b"k5".to_vec(), b"v5".to_vec())];
+		let changes2_2_1 = vec![(b"k6".to_vec(), b"v6".to_vec())];
+		let block2_2_0 = insert_header(&backend, 3, block2, changes2_2_0.clone(), Default::default());
+		let block2_2_1 = insert_header(&backend, 4, block2_2_0, changes2_2_1.clone(), Default::default());
+
+		// finalize block1
+		backend.changes_tries_storage.meta.write().finalized_number = 1;
+
+		// branch1: when asking for finalized block hash
+		let (changes1_root, _) = prepare_changes(changes1);
+		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
+
+		// branch2: when asking for finalized block hash
+		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
+		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
+
+		// branch1: when asking for non-finalized block hash (search by traversal)
+		let (changes2_1_0_root, _) = prepare_changes(changes2_1_0);
+		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_1_0_root)));
+
+		// branch2: when asking for non-finalized block hash (search using canonicalized hint)
+		let (changes2_2_0_root, _) = prepare_changes(changes2_2_0);
+		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
+		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
+
+		// finalize first block of branch2 (block2_2_0)
+		backend.changes_tries_storage.meta.write().finalized_number = 3;
+
+		// branch2: when asking for finalized block of this branch
+		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
+
+		// branch1: when asking for finalized block of other branch
+		// => result is incorrect (returned for the block of branch1), but this is expected,
+		// because the other fork is abandoned (forked before finalized header)
+		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
+		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
+	}
+
+	#[test]
 	fn changes_tries_with_digest_are_pruned_on_finalization() {
 		let mut backend = Backend::<Block>::new_test(1000, 100);
 		backend.changes_tries_storage.meta.write().finalized_number = 1000;
@@ -1378,6 +1434,7 @@ mod tests {
 			backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
 				.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone()
 		}
+
 		let root1 = read_changes_trie_root(&backend, 1); assert_eq!(backend.changes_tries_storage.root(&anchor, 1).unwrap(), Some(root1));
 		let root2 = read_changes_trie_root(&backend, 2); assert_eq!(backend.changes_tries_storage.root(&anchor, 2).unwrap(), Some(root2));
 		let root3 = read_changes_trie_root(&backend, 3); assert_eq!(backend.changes_tries_storage.root(&anchor, 3).unwrap(), Some(root3));
@@ -1398,62 +1455,6 @@ mod tests {
 		backend.storage.db.write(tx).unwrap();
 		assert!(backend.changes_tries_storage.get(&root2).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root3).unwrap().is_some());
-	}
-
-	#[test]
-	fn changes_trie_storage_works_with_forks() {
-		let backend = Backend::<Block>::new_test(1000, 100);
-
-		let changes0 = vec![(b"k0".to_vec(), b"v0".to_vec())];
-		let changes1 = vec![(b"k1".to_vec(), b"v1".to_vec())];
-		let changes2 = vec![(b"k2".to_vec(), b"v2".to_vec())];
-		let block0 = insert_header(&backend, 0, Default::default(), changes0.clone(), Default::default());
-		let block1 = insert_header(&backend, 1, block0, changes1.clone(), Default::default());
-		let block2 = insert_header(&backend, 2, block1, changes2.clone(), Default::default());
-
-		let changes2_1_0 = vec![(b"k3".to_vec(), b"v3".to_vec())];
-		let changes2_1_1 = vec![(b"k4".to_vec(), b"v4".to_vec())];
-		let block2_1_0 = insert_header(&backend, 3, block2, changes2_1_0.clone(), Default::default());
-		let block2_1_1 = insert_header(&backend, 4, block2_1_0, changes2_1_1.clone(), Default::default());
-
-		let changes2_2_0 = vec![(b"k5".to_vec(), b"v5".to_vec())];
-		let changes2_2_1 = vec![(b"k6".to_vec(), b"v6".to_vec())];
-		let block2_2_0 = insert_header(&backend, 3, block2, changes2_2_0.clone(), Default::default());
-		let block2_2_1 = insert_header(&backend, 4, block2_2_0, changes2_2_1.clone(), Default::default());
-
-		// finalize block1
-		backend.changes_tries_storage.meta.write().finalized_number = 1;
-
-		// branch1: when asking for finalized block hash
-		let (changes1_root, _) = prepare_changes(changes1);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
-
-		// branch2: when asking for finalized block hash
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
-
-		// branch1: when asking for non-finalized block hash (search by traversal)
-		let (changes2_1_0_root, _) = prepare_changes(changes2_1_0);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_1_0_root)));
-
-		// branch2: when asking for non-finalized block hash (search using canonicalized hint)
-		let (changes2_2_0_root, _) = prepare_changes(changes2_2_0);
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
-
-		// finalize first block of branch2 (block2_2_0)
-		backend.changes_tries_storage.meta.write().finalized_number = 3;
-
-		// branch2: when asking for finalized block of this branch
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
-
-		// branch1: when asking for finalized block of other branch
-		// => result is incorrect (returned for the block of branch1), but this is expected,
-		// because the other fork is abandoned (forked before finalized header)
-		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 	}
 
 	#[test]
