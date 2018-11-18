@@ -39,15 +39,8 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	where
 		H::Out: HeapSizeOf,
 {
-	// we only CAN prune at block where max-level-digest is created
-	let digest_interval = match config.digest_level_at_block(current_block.number) {
-		Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
-			digest_interval,
-		_ => return,
-	};
-
 	// select range for pruning
-	let (first, last) = match pruning_range(min_blocks_to_keep, current_block.number, digest_interval) {
+	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number) {
 		Some((first, last)) => (first, last),
 		None => return,
 	};
