@@ -154,7 +154,7 @@ impl<H: Eq, N> AuthoritySet<H, N>
 					// our chain.
 					let canonical_at_height = canonical(change.canon_height.clone())?;
 					debug!(target: "afg", "Evaluating potential set change at block {:?}. Our canonical hash is {:?}",
-						(&change.canon_number, &change.canon_hash), canonical_at_height);
+						(&change.canon_height, &change.canon_hash), canonical_at_height);
 
 					if canonical_at_height == change.canon_hash {
 						// apply this change: make the set canonical
