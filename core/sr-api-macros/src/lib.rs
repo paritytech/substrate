@@ -31,6 +31,7 @@ use syn::{parse_macro_input, Ident, Token, Type, ItemImpl, MethodSig, FnArg, Pat
 
 use std::{env, iter};
 
+/// The structure used for parsing the runtime api implementations.
 struct RuntimeApiImpls {
 	impls: Vec<ItemImpl>,
 }
@@ -47,11 +48,13 @@ impl Parse for RuntimeApiImpls {
 	}
 }
 
+/// Generates the hidden includes that are required to make the macro independent from its scope.
 fn generate_hidden_includes() -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "substrate-client" {
         TokenStream::new()
     } else {
         quote!(
+			#[doc(hidden)]
 			mod sr_api_hidden_includes {
 				pub extern crate substrate_client as sr_api_client;
 			}
@@ -59,6 +62,7 @@ fn generate_hidden_includes() -> TokenStream {
     }.into()
 }
 
+/// Generates the access to the `subtrate_client` crate.
 fn generate_crate_access() -> TokenStream {
 	if env::var("CARGO_PKG_NAME").unwrap() == "substrate-client" {
         quote!( crate )
@@ -67,6 +71,8 @@ fn generate_crate_access() -> TokenStream {
     }.into()
 }
 
+/// Generates the call to the implementation of the requested function.
+/// The generated code includes decoding of the input arguments and encoding of the output.
 fn generate_impl_call(
 	signature: &MethodSig,
 	runtime: &Type,
@@ -110,6 +116,7 @@ fn generate_impl_call(
 	)
 }
 
+/// Generate all the implementation calls for the given functions.
 fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, TokenStream)>> {
 	let mut impl_calls = Vec::new();
 
@@ -138,6 +145,7 @@ fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, 
 	Ok(impl_calls)
 }
 
+/// Generate the dispatch function that is used in native to call into the runtime.
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let data = Ident::new("data", Span::call_site());
 	let impl_calls = generate_impl_calls(impls, &data)?.into_iter().map(|(fn_name, impl_)| {
@@ -156,6 +164,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	).into())
 }
 
+/// Generate the interface functions that are used to call into the runtime in wasm.
 fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let input = Ident::new("input", Span::call_site());
 	let c = generate_crate_access();
@@ -191,8 +200,10 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 pub fn impl_runtime_apis(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
-	let dispatch_impl = generate_dispatch_function(&api_impls).unwrap_or_else(|e| e.to_compile_error());
-	let wasm_interface = generate_wasm_interface(&api_impls).unwrap_or_else(|e| e.to_compile_error());
+	let dispatch_impl =
+		generate_dispatch_function(&api_impls).unwrap_or_else(|e| e.to_compile_error());
+	let wasm_interface =
+		generate_wasm_interface(&api_impls).unwrap_or_else(|e| e.to_compile_error());
 	let hidden_includes = generate_hidden_includes();
 
 	quote!(
