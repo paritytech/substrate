@@ -72,7 +72,7 @@ impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
 		db: Arc<KeyValueDB>,
-		hash_lookup_column: Option<u32>,
+		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
 		authorities_column: Option<u32>,
 		best_finalized_block: ComplexBlockId<Block>,
@@ -82,7 +82,7 @@ impl<Block: BlockT> DbCache<Block> {
 				self::list_storage::DbStorage::new(b"auth".to_vec(), db,
 					self::list_storage::DbColumns {
 						meta: COLUMN_META,
-						hash_lookup: hash_lookup_column,
+						key_lookup: key_lookup_column,
 						header: header_column,
 						cache: authorities_column,
 					},
@@ -188,7 +188,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			BlockId::Hash(hash) => {
 				let header = utils::read_header::<Block>(
 					&**db,
-					columns.hash_lookup,
+					columns.key_lookup,
 					columns.header,
 					BlockId::Hash(hash.clone())).ok()??;
 				ComplexBlockId::new(hash, *header.number())
@@ -196,7 +196,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			BlockId::Number(number) => {
 				let hash = utils::read_header::<Block>(
 					&**db,
-					columns.hash_lookup,
+					columns.key_lookup,
 					columns.header,
 					BlockId::Number(number.clone())).ok()??.hash();
 				ComplexBlockId::new(hash, number)
