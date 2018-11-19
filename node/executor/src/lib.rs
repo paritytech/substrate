@@ -303,9 +303,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("a998cf2956b526aecc0887903df66457e640bb2debfd7976b5c7696da31cdaef").into()
+				hex!("1193f900449128ab5d1e4ef0c1d3e1a1e22bdc2e8df3f35f8c82d273e08f96d6").into()
 			} else {
-				hex!("2caffd5fcc42934e6b758613ff0a7e624a8c5b7c67b7c405bf6985a7e3a19701").into()
+				hex!("a5cf2ec89087e23b4042563cd1c48a25a713dc8085f281bbda2a6faa561c19fd").into()
 			},
 			if support_changes_trie {
 				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
@@ -352,7 +352,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("5f4461c584ce91dd6862313fd075ffc26dc702fcc1183634ee7b0c5de8b5b4d1").into(),
+			hex!("54e1715822e15bc6595f387b4ace1e5069478f2c75098a451035a80a09bba32a").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -634,7 +634,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("9885d4297ce0341ec07957d1de32848460565a17ef2ea400df0e2326634914ae").into(),
+			hex!("642e8a7609979b09537ebdb5c05d6ecbdac894a54fbd3142119fcfda274c5d1f").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
