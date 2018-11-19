@@ -24,7 +24,7 @@ use runtime_primitives::traits::{As, Block, Header};
 use network::import_queue::{ImportQueue, Link, BlockData};
 use network::message;
 
-use consensus_common::BlockOrigin;
+use client::client::BlockOrigin;
 use components::{self, Components, ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
 use new_client;
 use codec::{Decode, Encode};

@@ -35,7 +35,7 @@ use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::Encode;
 use import_queue::{SyncImportQueue, PassThroughVerifier, Verifier};
-use consensus::BlockOrigin;
+use client::client::BlockOrigin;
 use specialization::NetworkSpecialization;
 use consensus_gossip::ConsensusGossip;
 use import_queue::{BlockImport, ImportQueue};

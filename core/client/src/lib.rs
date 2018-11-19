@@ -27,8 +27,6 @@ extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 #[cfg(feature = "std")]
 extern crate substrate_state_machine as state_machine;
-#[cfg(feature = "std")]
-extern crate substrate_consensus_common as consensus;
 extern crate sr_version as runtime_version;
 extern crate sr_std as rstd;
 #[cfg(test)]
@@ -91,9 +89,9 @@ pub mod light;
 #[cfg(feature = "std")]
 mod leaves;
 #[cfg(feature = "std")]
-mod call_executor;
+pub mod call_executor;
 #[cfg(feature = "std")]
-mod client;
+pub mod client;
 #[cfg(feature = "std")]
 mod notifications;
 

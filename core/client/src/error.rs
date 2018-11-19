@@ -21,12 +21,8 @@
 use std;
 use state_machine;
 use runtime_primitives::ApplyError;
-use consensus;
 
 error_chain! {
-	links {
-		Consensus(consensus::Error, consensus::ErrorKind);
-	}
 	errors {
 		/// Backend error.
 		Backend(s: String) {

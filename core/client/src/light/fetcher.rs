@@ -398,7 +398,6 @@ pub mod tests {
 	use error::Error as ClientError;
 	use test_client::{self, TestClient, blockchain::HeaderBackend};
 	use test_client::runtime::{self, Hash, Block, Header};
-	use consensus::BlockOrigin;
 
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,

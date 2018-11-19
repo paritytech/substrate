@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 use keyring::Keyring;
-use consensus::BlockOrigin;
+use client::client::BlockOrigin;
 use primitives::Blake2Hasher;
 use ::TestClient;
 use runtime_primitives::traits::Block as BlockT;

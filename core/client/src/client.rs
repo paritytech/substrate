@@ -26,7 +26,7 @@ use runtime_primitives::{
 	generic::{BlockId, SignedBlock},
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
-use consensus::{ImportBlock, ImportResult, BlockOrigin};
+
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
@@ -51,7 +51,7 @@ use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
 use light::fetcher::ChangesProof;
-use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
+use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -61,13 +61,13 @@ pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotifica
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
-	backend: Arc<B>,
+	pub backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
-	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	pub import_lock: Mutex<()>,
+	pub importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
@@ -126,6 +126,38 @@ pub enum BlockStatus {
 	Unknown,
 }
 
+/// Block import result.
+#[derive(Debug)]
+pub enum ImportResult {
+	/// Added to the import queue.
+	Queued,
+	/// Already in the import queue.
+	AlreadyQueued,
+	/// Already in the blockchain.
+	AlreadyInChain,
+	/// Block or parent is known to be bad.
+	KnownBad,
+	/// Block parent is not in the chain.
+	UnknownParent,
+}
+
+/// Block data origin.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum BlockOrigin {
+	/// Genesis block built into the client.
+	Genesis,
+	/// Block is part of the initial sync with the network.
+	NetworkInitialSync,
+	/// Block was broadcasted on the network.
+	NetworkBroadcast,
+	/// Block that was received from the network and validated in the consensus process.
+	ConsensusBroadcast,
+	/// Block that was collated by this node.
+	Own,
+	/// Block was imported from a file.
+	File,
+}
+
 /// Summary of an imported block
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification<Block: BlockT> {
@@ -152,7 +184,7 @@ pub struct FinalityNotification<Block: BlockT> {
 
 // used in importing a block, where additional changes are made after the runtime
 // executed.
-enum PrePostHeader<H> {
+pub enum PrePostHeader<H> {
 	// they are the same: no post-runtime digest items.
 	Same(H),
 	// different headers (pre, post).
@@ -169,7 +201,7 @@ impl<H> PrePostHeader<H> {
 	}
 
 	// get a reference to the "post-header" -- the header as it should be after all changes are applied.
-	fn post(&self) -> &H {
+	pub fn post(&self) -> &H {
 		match *self {
 			PrePostHeader::Same(ref h) => h,
 			PrePostHeader::Different(_, ref h) => h,
@@ -585,7 +617,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		})
 	}
 
-	fn execute_and_import_block(
+	pub fn execute_and_import_block(
 		&self,
 		origin: BlockOrigin,
 		hash: Block::Hash,
@@ -1052,86 +1084,6 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-
-impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
-	Block: BlockT<Hash=H256>,
-	RA: TaggedTransactionQueue<Block>
-{
-	type Error = Error;
-
-	/// Import a checked and validated block
-	fn import_block(
-		&self,
-		import_block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityId>>,
-	) -> Result<ImportResult, Self::Error> {
-		use runtime_primitives::traits::Digest;
-
-		let ImportBlock {
-			origin,
-			header,
-			justification,
-			post_digests,
-			body,
-			finalized,
-			auxiliary,
-		} = import_block;
-		let parent_hash = header.parent_hash().clone();
-
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
-		}
-
-		let import_headers = if post_digests.is_empty() {
-			PrePostHeader::Same(header)
-		} else {
-			let mut post_header = header.clone();
-			for item in post_digests {
-				post_header.digest_mut().push(item);
-			}
-			PrePostHeader::Different(header, post_header)
-		};
-
-		let hash = import_headers.post().hash();
-		let _import_lock = self.import_lock.lock();
-		let height: u64 = import_headers.post().number().as_();
-		*self.importing_block.write() = Some(hash);
-
-		let result = self.execute_and_import_block(
-			origin,
-			hash,
-			import_headers,
-			justification,
-			body,
-			new_authorities,
-			finalized,
-			auxiliary,
-		);
-
-		*self.importing_block.write() = None;
-		telemetry!("block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
-		result.map_err(|e| e.into())
-	}
-}
-
-impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT<Hash=H256>,
-{
-	type Error = Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
-		self.authorities_at(at).map_err(|e| e.into())
-	}
-}
-
 impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
@@ -1211,7 +1163,6 @@ pub(crate) mod tests {
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
-	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, ClientWithApi, test_api::TestAPI};

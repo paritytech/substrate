@@ -13,3 +13,13 @@ sr-primitives = { path = "../../sr-primitives" }
 tokio = "0.1.7"
 parity-codec = "2.1"
 parity-codec-derive = "2.0"
+substrate-client = { path = "../../../core/client" }
+slog = { version = "^2", optional = true }
+substrate-telemetry = { path = "../../../core/telemetry", optional = true }
+
+[features]
+default = ["std"]
+std = [
+    "slog",
+    "substrate-telemetry",
+]

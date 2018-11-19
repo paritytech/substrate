@@ -12,7 +12,6 @@ hex-literal = { version = "0.1", optional = true }
 futures = { version = "0.1.17", optional = true }
 slog = { version = "^2", optional = true }
 heapsize = { version = "0.4", optional = true }
-substrate-consensus-common = { path = "../consensus/common", optional = true }
 substrate-executor = { path = "../executor", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 substrate-keyring = { path = "../keyring", optional = true }
@@ -35,7 +34,6 @@ kvdb-memorydb = "0.1"
 default = ["std"]
 std = [
 	"parity-codec/std",
-	"substrate-consensus-common",
 	"substrate-primitives/std",
 	"parking_lot",
 	"error-chain",

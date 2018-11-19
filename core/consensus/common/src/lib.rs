@@ -27,6 +27,13 @@ extern crate futures;
 extern crate sr_version as runtime_version;
 extern crate sr_primitives as runtime_primitives;
 extern crate tokio;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate substrate_telemetry;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate slog;
+extern crate substrate_client as client;
 
 extern crate parity_codec as codec;
 #[macro_use]
@@ -37,26 +44,42 @@ extern crate error_chain;
 
 use std::sync::Arc;
 
-use primitives::{ed25519, AuthorityId};
+use primitives::{ed25519, AuthorityId, Blake2Hasher, H256};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block;
 use futures::prelude::*;
+use client::backend;
+use client::client::{BlockOrigin, ImportResult, Client};
+use client::call_executor::CallExecutor;
+use client::runtime_api::BlockT;
 
 pub mod offline_tracker;
 pub mod error;
 mod block_import;
 pub mod evaluation;
+//pub mod service;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
-pub use self::error::{Error, ErrorKind};
-pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult};
+pub use client::error::{Error, ErrorKind};
+pub use block_import::{BlockImport, ImportBlock};
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
 	type Error: ::std::error::Error + Send + 'static;	/// Get the authorities at the given block.
 	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityId>, Self::Error>;
+}
+
+impl<B, E, Block, RA> Authorities<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	Block: BlockT<Hash=H256>,
+{
+	type Error = Error;
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		self.authorities_at(at).map_err(|e| e.into())
+	}
 }
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
