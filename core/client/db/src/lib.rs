@@ -115,8 +115,8 @@ mod columns {
 	pub const META: Option<u32> = ::utils::COLUMN_META;
 	pub const STATE: Option<u32> = Some(1);
 	pub const STATE_META: Option<u32> = Some(2);
-	/// maps hashes to lookup keys
-	pub const HASH_LOOKUP: Option<u32> = Some(3);
+	/// maps hashes to lookup keys and numbers to canon hashes.
+	pub const KEY_LOOKUP: Option<u32> = Some(3);
 	pub const HEADER: Option<u32> = Some(4);
 	pub const BODY: Option<u32> = Some(5);
 	pub const JUSTIFICATION: Option<u32> = Some(6);
@@ -187,7 +187,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>, client::error::Error> {
-		::utils::read_header(&*self.db, columns::HASH_LOOKUP, columns::HEADER, id)
+		::utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
 	fn info(&self) -> Result<client::blockchain::Info<Block>, client::error::Error> {
@@ -205,7 +205,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		let exists = match id {
 			BlockId::Hash(_) => read_db(
 				&*self.db,
-				columns::HASH_LOOKUP,
+				columns::KEY_LOOKUP,
 				columns::HEADER,
 				id
 			)?.is_some(),
@@ -218,7 +218,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 	}
 
 	fn number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, client::error::Error> {
-		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Hash(hash))? {
+		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Hash(hash))? {
 			let number = utils::lookup_key_to_number(&lookup_key)?;
 			Ok(Some(number))
 		} else {
@@ -236,7 +236,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 
 impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
-		match read_db(&*self.db, columns::HASH_LOOKUP, columns::BODY, id)? {
+		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Some(body) => Ok(Some(body)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
@@ -246,7 +246,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	}
 
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>, client::error::Error> {
-		match read_db(&*self.db, columns::HASH_LOOKUP, columns::JUSTIFICATION, id)? {
+		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
@@ -460,7 +460,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 			let mut current_num = anchor.number;
 			let mut current_hash: Block::Hash = convert_hash(&anchor.hash);
 			let maybe_anchor_header: Block::Header = ::utils::require_header::<Block>(
-				&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Number(As::sa(current_num))
+				&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Number(As::sa(current_num))
 			).map_err(|e| e.to_string())?;
 			if maybe_anchor_header.hash() == current_hash {
 				// if anchor is canonicalized, then the block is also canonicalized
@@ -471,7 +471,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 				// back from the anchor to the block with given number
 				while current_num != block {
 					let current_header: Block::Header = ::utils::require_header::<Block>(
-						&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Hash(current_hash)
+						&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Hash(current_hash)
 					).map_err(|e| e.to_string())?;
 
 					current_hash = *current_header.parent_hash();
@@ -482,7 +482,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 			}
 		};
 
-		Ok(::utils::require_header::<Block>(&*self.db, columns::HASH_LOOKUP, columns::HEADER, block_id)
+		Ok(::utils::require_header::<Block>(&*self.db, columns::KEY_LOOKUP, columns::HEADER, block_id)
 			.map_err(|e| e.to_string())?
 			.digest().log(DigestItem::as_changes_trie_root)
 			.map(|root| H256::from_slice(root.as_ref())))
@@ -609,7 +609,7 @@ impl<Block: BlockT> Backend<Block> {
 				).into())
 			}
 
-			let lookup_key = ::utils::number_to_lookup_key(f_num);
+			let lookup_key = ::utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash);
@@ -670,13 +670,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
 
-			// blocks in longest chain are keyed by number
-			let lookup_key = if pending_block.leaf_state.is_best() {
-				::utils::number_to_lookup_key(number).to_vec()
-			} else {
-				// other blocks are keyed by number + hash
-				::utils::number_and_hash_to_lookup_key(number, hash)
-			};
+			// blocks are keyed by number + hash.
+			let lookup_key = ::utils::number_and_hash_to_lookup_key(number, hash);
 
 			if pending_block.leaf_state.is_best() {
 				let meta = self.blockchain.meta.read();
@@ -689,7 +684,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 						BlockId::Hash(parent_hash),
 					)?;
 
-					// uncanonicalize
+					// uncanonicalize: check safety violations and ensure the numbers no longer
+					// point to these block hashes in the key mapping.
 					for retracted in tree_route.retracted() {
 						if retracted.hash == meta.finalized_hash {
 							warn!("Potential safety failure: reverting finalized block {:?}",
@@ -698,75 +694,39 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 							return Err(::client::error::ErrorKind::NotInFinalizedChain.into());
 						}
 
-						let prev_lookup_key = ::utils::number_to_lookup_key(retracted.number);
-						let new_lookup_key = ::utils::number_and_hash_to_lookup_key(retracted.number, retracted.hash);
-
-						// change mapping from `number -> header`
-						// to `number + hash -> header`
-						let retracted_header = if let Some(header) = ::client::blockchain::HeaderBackend::<Block>::header(&self.blockchain, BlockId::Number(retracted.number))? {
-							header
-						} else {
-							return Err(client::error::ErrorKind::UnknownBlock(format!("retracted {:?}", retracted)).into());
-						};
-						transaction.delete(columns::HEADER, &prev_lookup_key);
-						transaction.put(columns::HEADER, &new_lookup_key, &retracted_header.encode());
-
-						// if body is stored
-						// change mapping from `number -> body`
-						// to `number + hash -> body`
-						if let Some(retracted_body) = ::client::blockchain::Backend::<Block>::body(&self.blockchain, BlockId::Number(retracted.number))? {
-							transaction.delete(columns::BODY, &prev_lookup_key);
-							transaction.put(columns::BODY, &new_lookup_key, &retracted_body.encode());
-						}
-
-						// if justification is stored
-						// change mapping from `number -> justification`
-						// to `number + hash -> justification`
-						if let Some(retracted_justification) = ::client::blockchain::Backend::<Block>::justification(&self.blockchain, BlockId::Number(retracted.number))? {
-							transaction.delete(columns::JUSTIFICATION, &prev_lookup_key);
-							transaction.put(columns::JUSTIFICATION, &new_lookup_key, &retracted_justification.encode());
-						}
-
-						transaction.put(columns::HASH_LOOKUP, retracted.hash.as_ref(), &new_lookup_key);
+						::utils::remove_number_to_key_mapping(
+							&mut transaction,
+							columns::KEY_LOOKUP,
+							retracted.number
+						);
 					}
 
-					// canonicalize
+					// canonicalize: set the number lookup to map to this block's hash.
 					for enacted in tree_route.enacted() {
-						let prev_lookup_key = ::utils::number_and_hash_to_lookup_key(enacted.number, enacted.hash);
-						let new_lookup_key = ::utils::number_to_lookup_key(enacted.number);
-
-						// change mapping from `number + hash -> header`
-						// to `number -> header`
-						let enacted_header = if let Some(header) = ::client::blockchain::HeaderBackend::<Block>::header(&self.blockchain, BlockId::Number(enacted.number))? {
-							header
-						} else {
-							return Err(client::error::ErrorKind::UnknownBlock(format!("enacted {:?}", enacted)).into());
-						};
-						transaction.delete(columns::HEADER, &prev_lookup_key);
-						transaction.put(columns::HEADER, &new_lookup_key, &enacted_header.encode());
-
-						// if body is stored
-						// change mapping from `number + hash -> body`
-						// to `number -> body`
-						if let Some(enacted_body) = ::client::blockchain::Backend::<Block>::body(&self.blockchain, BlockId::Number(enacted.number))? {
-							transaction.delete(columns::BODY, &prev_lookup_key);
-							transaction.put(columns::BODY, &new_lookup_key, &enacted_body.encode());
-						}
-
-						// if justification is stored
-						// change mapping from `number -> justification`
-						// to `number + hash -> justification`
-						if let Some(enacted_justification) = ::client::blockchain::Backend::<Block>::justification(&self.blockchain, BlockId::Number(enacted.number))? {
-							transaction.delete(columns::JUSTIFICATION, &prev_lookup_key);
-							transaction.put(columns::JUSTIFICATION, &new_lookup_key, &enacted_justification.encode());
-						}
-
-						transaction.put(columns::HASH_LOOKUP, enacted.hash.as_ref(), &new_lookup_key);
+						::utils::insert_number_to_key_mapping(
+							&mut transaction,
+							columns::KEY_LOOKUP,
+							enacted.number,
+							enacted.hash
+						);
 					}
 				}
 
 				transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
+				::utils::insert_number_to_key_mapping(
+					&mut transaction,
+					columns::KEY_LOOKUP,
+					number,
+					hash,
+				);
 			}
+
+			::utils::insert_hash_to_key_mapping(
+				&mut transaction,
+				columns::KEY_LOOKUP,
+				number,
+				hash,
+			);
 
 			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
 			if let Some(body) = pending_block.body {
@@ -775,8 +735,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			if let Some(justification) = pending_block.justification {
 				transaction.put(columns::JUSTIFICATION, &lookup_key, &justification.encode());
 			}
-
-			transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
 			if number.is_zero() {
 				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
@@ -876,9 +834,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 						|| client::error::ErrorKind::UnknownBlock(
 							format!("Error reverting to {}. Block header not found.", best)))?;
 
-					let lookup_key = ::utils::number_to_lookup_key(header.number().clone());
+					let lookup_key = ::utils::number_and_hash_to_lookup_key(header.number().clone(), header.hash().clone());
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
-					transaction.delete(columns::HASH_LOOKUP, header.hash().as_ref());
+					transaction.delete(columns::KEY_LOOKUP, header.hash().as_ref());
 					self.storage.db.write(transaction).map_err(db_err)?;
 					self.blockchain.update_meta(header.hash().clone(), best.clone(), true, false);
 					self.blockchain.leaves.write().revert(header.hash().clone(), header.number().clone(), header.parent_hash().clone());

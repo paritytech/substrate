@@ -68,11 +68,14 @@ pub struct Meta<N, H> {
 }
 
 /// A block lookup key: used for canonical lookup from block number to hash
-pub type ShortBlockLookupKey = [u8; 4];
+pub type NumberIndexKey = [u8; 4];
 
 /// Convert block number into short lookup key (LE representation) for
 /// blocks that are in the canonical chain.
-pub fn number_to_lookup_key<N>(n: N) -> ShortBlockLookupKey where N: As<u64> {
+///
+/// In the current database schema, this kind of key is only used for
+/// lookups into an index, NOT for storing header data or others.
+pub fn number_index_key<N>(n: N) -> NumberIndexKey where N: As<u64> {
 	let n: u64 = n.as_();
 	assert!(n & 0xffffffff00000000 == 0);
 
@@ -90,7 +93,7 @@ pub fn number_and_hash_to_lookup_key<N, H>(number: N, hash: H) -> Vec<u8> where
 	N: As<u64>,
 	H: AsRef<[u8]>
 {
-	let mut lookup_key = number_to_lookup_key(number).to_vec();
+	let mut lookup_key = number_index_key(number).to_vec();
 	lookup_key.extend_from_slice(hash.as_ref());
 	lookup_key
 }
@@ -107,25 +110,76 @@ pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: 
 		| (key[3] as u64)).map(As::sa)
 }
 
+/// Delete number to hash mapping in DB transaction.
+pub fn remove_number_to_key_mapping<N: As<u64>>(
+	transaction: &mut DBTransaction,
+	key_lookup_col: Option<u32>,
+	number: N,
+) {
+	transaction.delete(key_lookup_col, number_index_key(number).as_ref())
+}
+
+/// Remove key mappings.
+pub fn remove_key_mappings<N: As<u64>, H: AsRef<[u8]>>(
+	transaction: &mut DBTransaction,
+	key_lookup_col: Option<u32>,
+	number: N,
+	hash: H,
+) {
+	remove_number_to_key_mapping(transaction, key_lookup_col, number);
+	transaction.delete(key_lookup_col, hash.as_ref());
+}
+
+/// Place a number mapping into the database. This maps number to current perceived
+/// block hash at that position.
+pub fn insert_number_to_key_mapping<N: As<u64> + Clone, H: AsRef<[u8]>>(
+	transaction: &mut DBTransaction,
+	key_lookup_col: Option<u32>,
+	number: N,
+	hash: H,
+) {
+	transaction.put_vec(
+		key_lookup_col,
+		number_index_key(number.clone()).as_ref(),
+		number_and_hash_to_lookup_key(number, hash),
+	)
+}
+
+/// Insert a hash to key mapping in the database.
+pub fn insert_hash_to_key_mapping<N: As<u64>, H: AsRef<[u8]> + Clone>(
+	transaction: &mut DBTransaction,
+	key_lookup_col: Option<u32>,
+	number: N,
+	hash: H,
+) {
+	transaction.put_vec(
+		key_lookup_col,
+		hash.clone().as_ref(),
+		number_and_hash_to_lookup_key(number, hash),
+	)
+}
+
 /// Convert block id to block lookup key.
 /// block lookup key is the DB-key header, block and justification are stored under.
 /// looks up lookup key by hash from DB as necessary.
 pub fn block_id_to_lookup_key<Block>(
 	db: &KeyValueDB,
-	hash_lookup_col: Option<u32>,
+	key_lookup_col: Option<u32>,
 	id: BlockId<Block>
 ) -> Result<Option<Vec<u8>>, client::error::Error> where
 	Block: BlockT,
+	::runtime_primitives::traits::NumberFor<Block>: As<u64>,
 {
-	match id {
-		// numbers are solely looked up in canonical chain
-		BlockId::Number(n) => Ok(Some(number_to_lookup_key(n).to_vec())),
-		BlockId::Hash(h) => db.get(hash_lookup_col, h.as_ref()).map(|v|
-			v.map(|v| { v.into_vec() })
-		).map_err(db_err),
-	}
-}
+	let res = match id {
+		BlockId::Number(n) => db.get(
+			key_lookup_col,
+			number_index_key(n).as_ref(),
+		),
+		BlockId::Hash(h) => db.get(key_lookup_col, h.as_ref()),
+	};
 
+	res.map(|v| v.map(|v| v.into_vec())).map_err(db_err)
+}
 
 /// Maps database error to client error
 pub fn db_err(err: io::Error) -> client::error::Error {

@@ -33,13 +33,13 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor, Digest, DigestItem};
 use cache::{DbCacheSync, DbCache, ComplexBlockId};
-use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
+use utils::{meta_keys, Meta, db_err, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
 use DatabaseSettings;
 
 pub(crate) mod columns {
 	pub const META: Option<u32> = ::utils::COLUMN_META;
-	pub const HASH_LOOKUP: Option<u32> = Some(1);
+	pub const KEY_LOOKUP: Option<u32> = Some(1);
 	pub const HEADER: Option<u32> = Some(2);
 	pub const CACHE: Option<u32> = Some(3);
 	pub const CHT: Option<u32> = Some(4);
@@ -93,7 +93,7 @@ impl<Block> LightStorage<Block>
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		let cache = DbCache::new(
 			db.clone(),
-			columns::HASH_LOOKUP,
+			columns::KEY_LOOKUP,
 			columns::HEADER,
 			columns::CACHE,
 			ComplexBlockId::new(meta.finalized_hash, meta.finalized_number),
@@ -143,7 +143,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		Block: BlockT,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		::utils::read_header(&*self.db, columns::HASH_LOOKUP, columns::HEADER, id)
+		::utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
 	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
@@ -161,7 +161,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		let exists = match id {
 			BlockId::Hash(_) => read_db(
 				&*self.db,
-				columns::HASH_LOOKUP,
+				columns::KEY_LOOKUP,
 				columns::HEADER,
 				id
 			)?.is_some(),
@@ -174,7 +174,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 
 	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
-		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Hash(hash))? {
+		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Hash(hash))? {
 			let number = ::utils::lookup_key_to_number(&lookup_key)?;
 			Ok(Some(number))
 		} else {
@@ -211,7 +211,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			).into())
 		}
 
-		let lookup_key = ::utils::number_to_lookup_key(header.number().clone());
+		let lookup_key = ::utils::number_and_hash_to_lookup_key(header.number().clone(), hash);
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 		// build new CHT(s) if required
@@ -249,9 +249,14 @@ impl<Block: BlockT> LightStorage<Block> {
 
 			while prune_block <= new_cht_end {
 				if let Some(hash) = self.hash(prune_block)? {
-					let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?
+					let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(prune_block))?
 						.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
-					transaction.delete(columns::HASH_LOOKUP, hash.as_ref());
+					::utils::remove_key_mappings(
+						transaction,
+						columns::KEY_LOOKUP,
+						prune_block,
+						hash
+					);
 					transaction.delete(columns::HEADER, &lookup_key);
 				}
 				prune_block += One::one();
@@ -294,20 +299,15 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		let number = *header.number();
 		let parent_hash = *header.parent_hash();
 
-		// blocks in longest chain are keyed by number
-		let lookup_key = if leaf_state.is_best() {
-			::utils::number_to_lookup_key(number).to_vec()
-		} else {
-		// other blocks are keyed by number + hash
-			::utils::number_and_hash_to_lookup_key(number, hash)
-		};
-
 		for (key, maybe_val) in aux_ops {
 			match maybe_val {
 				Some(val) => transaction.put_vec(columns::AUX, &key, val),
 				None => transaction.delete(columns::AUX, &key),
 			}
 		}
+
+		// blocks are keyed by number + hash.
+		let lookup_key = ::utils::number_and_hash_to_lookup_key(number, hash);
 
 		if leaf_state.is_best() {
 			// handle reorg.
@@ -328,46 +328,40 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 								(&retracted.number, &retracted.hash));
 						}
 
-						let prev_lookup_key = ::utils::number_to_lookup_key(retracted.number);
-						let new_lookup_key = ::utils::number_and_hash_to_lookup_key(retracted.number, retracted.hash);
-
-						// change mapping from `number -> header`
-						// to `number + hash -> header`
-						let retracted_header = if let Some(header) = self.header(BlockId::Number(retracted.number))? {
-							header
-						} else {
-							return Err(::client::error::ErrorKind::UnknownBlock(format!("retracted {:?}", retracted)).into());
-						};
-						transaction.delete(columns::HEADER, &prev_lookup_key);
-						transaction.put(columns::HEADER, &new_lookup_key, &retracted_header.encode());
-
-						transaction.put(columns::HASH_LOOKUP, retracted.hash.as_ref(), &new_lookup_key);
+						::utils::remove_number_to_key_mapping(
+							&mut transaction,
+							columns::KEY_LOOKUP,
+							retracted.number
+						);
 					}
 
 					for enacted in tree_route.enacted() {
-						let prev_lookup_key = ::utils::number_and_hash_to_lookup_key(enacted.number, enacted.hash);
-						let new_lookup_key = ::utils::number_to_lookup_key(enacted.number);
-
-						// change mapping from `number + hash -> header`
-						// to `number -> header`
-						let enacted_header = if let Some(header) = self.header(BlockId::Number(enacted.number))? {
-							header
-						} else {
-							return Err(::client::error::ErrorKind::UnknownBlock(format!("enacted {:?}", enacted)).into());
-						};
-						transaction.delete(columns::HEADER, &prev_lookup_key);
-						transaction.put(columns::HEADER, &new_lookup_key, &enacted_header.encode());
-
-						transaction.put(columns::HASH_LOOKUP, enacted.hash.as_ref(), &new_lookup_key);
+						::utils::insert_number_to_key_mapping(
+							&mut transaction,
+							columns::KEY_LOOKUP,
+							enacted.number,
+							enacted.hash
+						);
 					}
 				}
 			}
 
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
+			::utils::insert_number_to_key_mapping(
+				&mut transaction,
+				columns::KEY_LOOKUP,
+				number,
+				hash,
+			);
 		}
 
+		::utils::insert_hash_to_key_mapping(
+			&mut transaction,
+			columns::KEY_LOOKUP,
+			number,
+			hash,
+		);
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
-		transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
 		if number.is_zero() {
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
@@ -462,7 +456,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 /// Build the key for inserting header-CHT at given block.
 fn cht_key<N: As<u64>>(cht_type: u8, block: N) -> [u8; 5] {
 	let mut key = [cht_type; 5];
-	key[1..].copy_from_slice(&number_to_lookup_key(block));
+	key[1..].copy_from_slice(&::utils::number_index_key(block));
 	key
 }
 
@@ -585,11 +579,11 @@ pub(crate) mod tests {
 
 		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.db.iter(columns::HEADER).count(), 1);
-		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 1);
+		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), 2);
 
 		let _ = insert_block(&db, None, || default_header(&genesis_hash, 1));
 		assert_eq!(db.db.iter(columns::HEADER).count(), 2);
-		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 2);
+		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), 4);
 	}
 
 	#[test]
@@ -631,9 +625,9 @@ pub(crate) mod tests {
 		// when headers are created without changes tries roots
 		let db = insert_headers(default_header);
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
-		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (1 + cht::SIZE + 1) as usize);
+		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), (2 * (1 + cht::SIZE + 1)) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
-		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
+		assert!((0..cht::SIZE).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
 		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
 		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
 		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_err());
@@ -643,7 +637,7 @@ pub(crate) mod tests {
 		let db = insert_headers(header_with_changes_trie);
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 2);
-		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
+		assert!((0..cht::SIZE).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
 		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
 		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
 		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
