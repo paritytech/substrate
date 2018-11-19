@@ -161,8 +161,12 @@ impl Network for MessageRouting {
 	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		let messages = self.inner.lock().peer(self.peer_id)
-			.with_spec(|spec, _| spec.gossip.messages_for(make_topic(round, set_id)));
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		let messages = peer.with_spec(move |_, _| {
+			gossip.messages_for(make_topic(round, set_id))
+		});
 
 		let messages = messages.map_err(
 			move |_| panic!("Messages for round {} dropped too early", round)
@@ -179,8 +183,12 @@ impl Network for MessageRouting {
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
 		let topic = make_topic(round, set_id);
-		self.inner.lock().peer(self.peer_id)
-			.with_spec(|spec, _| spec.gossip.collect_garbage(|t| t == &topic));
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		peer.with_spec(move |_, _| {
+			gossip.collect_garbage(|t| t == &topic)
+		});
 	}
 }
 
