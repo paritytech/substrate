@@ -22,4 +22,4 @@ tokio = "0.1.7"
 [dev-dependencies]
 assert_matches = "1.1"
 substrate-test-client = { path = "../test-client" }
-rustc-hex = "2.0"
+rustc-hex = { git = "https://github.com/rphmeier/rustc-hex.git", version = "2.0", default_features = false }
