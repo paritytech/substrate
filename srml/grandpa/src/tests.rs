@@ -22,21 +22,31 @@ use primitives::{testing, traits::OnFinalise};
 use primitives::traits::Header;
 use runtime_io::with_externalities;
 use mock::{Grandpa, System, new_test_ext};
-use {RawLog};
+use system::{EventRecord, Phase};
+use {RawLog, RawEvent};
 
 #[test]
 fn authorities_change_logged() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
 		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 0).unwrap();
+
+		System::note_finished_extrinsics();
 		Grandpa::on_finalise(1);
+
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
 				RawLog::AuthoritiesChangeSignal(0, vec![(4, 1), (5, 1), (6, 1)]).into(),
-				RawLog::AuthoritiesChange(vec![(4, 1), (5, 1), (6, 1)]).into(),
 			],
 		});
+
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::Finalization,
+				event: RawEvent::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
+			},
+		]);
 	});
 }
 
@@ -53,15 +63,20 @@ fn authorities_change_logged_after_delay() {
 			],
 		});
 
+		// no change at this height.
+		assert_eq!(System::events(), vec![]);
+
 		System::initialise(&2, &header.hash(), &Default::default());
+		System::note_finished_extrinsics();
 		Grandpa::on_finalise(2);
 
-		let header = System::finalise();
-		assert_eq!(header.digest, testing::Digest {
-			logs: vec![
-				RawLog::AuthoritiesChange(vec![(4, 1), (5, 1), (6, 1)]).into(),
-			],
-		});
+		let _header = System::finalise();
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::Finalization,
+				event: RawEvent::NewAuthorities(vec![(4, 1), (5, 1), (6, 1)]).into(),
+			},
+		]);
 	});
 }
 

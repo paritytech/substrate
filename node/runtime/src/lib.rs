@@ -213,6 +213,7 @@ impl upgrade_key::Trait for Runtime {
 impl grandpa::Trait for Runtime {
 	type SessionKey = SessionKey;
 	type Log = Log;
+	type Event = Event;
 }
 
 construct_runtime!(
@@ -231,7 +232,7 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
-		Grandpa: grandpa::{Module, Storage, Config<T>, Log()},
+		Grandpa: grandpa::{Module, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		UpgradeKey: upgrade_key,

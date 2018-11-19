@@ -36,11 +36,12 @@ impl From<RawLog<u64, u64>> for DigestItem {
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Decode, Encode, Serialize, Deserialize)]
 pub struct Test;
 impl Trait for Test {
 	type Log = DigestItem;
 	type SessionKey = u64;
+	type Event = TestEvent;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -51,8 +52,18 @@ impl system::Trait for Test {
 	type Digest = Digest;
 	type AccountId = u64;
 	type Header = Header;
-	type Event = ();
+	type Event = TestEvent;
 	type Log = DigestItem;
+}
+
+mod grandpa {
+	pub use ::Event;
+}
+
+impl_outer_event!{
+	pub enum TestEvent for Test {
+		grandpa<T>,
+	}
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
