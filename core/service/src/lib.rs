@@ -105,7 +105,6 @@ pub struct Service<Components: components::Components> {
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	import_queue: Arc<Components::ImportQueue>,
 	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
@@ -202,7 +201,7 @@ impl<Components> Service<Components>
 		let network = network::Service::new(
 			network_params,
 			protocol_id,
-			import_queue.clone()
+			import_queue
 		)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
@@ -292,7 +291,6 @@ impl<Components> Service<Components>
 			keystore: keystore,
 			config,
 			proposer,
-			import_queue,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
@@ -313,17 +311,8 @@ impl<Components> Service<Components>
 		}
 	}
 
-	/// Get access to the internally running import queue
-	pub fn import_queue(&self) -> &Arc<Components::ImportQueue> {
-		&self.import_queue
-	}
-
 	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
 		&self.config
-	}
-
-	pub fn mut_config(&mut self) -> &mut FactoryFullConfiguration<Components::Factory> {
-		&mut self.config
 	}
 }
 

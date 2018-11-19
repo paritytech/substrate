@@ -63,6 +63,9 @@ pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// should run as a grandpa authority only, don't validate as usual
 	pub grandpa_authority_only: bool,
 	/// grandpa connection to import block
+
+	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
+	// https://github.com/paritytech/substrate/issues/1134
 	pub grandpa_link_half: Option<GrandpaLinkHalf<F>>,
 }
 
