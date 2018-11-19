@@ -42,6 +42,25 @@ impl ChangesTrieConfiguration {
 			&& block % self.digest_interval == 0
 	}
 
+	/// Returns max digest interval. One if digests are not created at all.
+	/// Returns ::std::u64::MAX instead of panic in the case of overflow.
+	pub fn max_digest_interval(&self) -> u64 {
+		if !self.is_digest_build_enabled() {
+			return 1;
+		}
+
+		// TODO: use saturating_pow when available
+		let mut max_digest_interval = self.digest_interval;
+		for _ in 1..self.digest_levels {
+			max_digest_interval = match max_digest_interval.checked_mul(self.digest_interval) {
+				Some(max_digest_interval) => max_digest_interval,
+				None => return u64::max_value(),
+			}
+		}
+
+		max_digest_interval
+	}
+
 	/// Returns Some if digest must be built at given block number.
 	/// The tuple is:
 	/// (
@@ -123,5 +142,13 @@ mod tests {
 		assert_eq!(config(8, 4).digest_level_at_block(512), Some((3, 512, 64)));
 		assert_eq!(config(8, 4).digest_level_at_block(4096), Some((4, 4096, 512)));
 		assert_eq!(config(8, 4).digest_level_at_block(4112), Some((1, 8, 1)));
+	}
+
+	#[test]
+	fn max_digest_interval_works() {
+		assert_eq!(config(0, 0).max_digest_interval(), 1);
+		assert_eq!(config(2, 2).max_digest_interval(), 4);
+		assert_eq!(config(8, 4).max_digest_interval(), 4096);
+		assert_eq!(config(::std::u64::MAX, 1024).max_digest_interval(), ::std::u64::MAX);
 	}
 }

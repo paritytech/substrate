@@ -159,20 +159,6 @@ pub fn insert_hash_to_key_mapping<N: As<u64>, H: AsRef<[u8]> + Clone>(
 	)
 }
 
-/// When inserting a new block, call this function to set the key mappings
-/// correctly. The number mapping may be subsequently removed later on.
-///
-/// This returns the lookup key that can be used by the block.
-pub fn insert_new_block_key_mappings<N: As<u64> + Clone, H: AsRef<[u8]> + Clone>(
-	transaction: &mut DBTransaction,
-	key_lookup_col: Option<u32>,
-	number: N,
-	hash: H,
-) {
-	insert_hash_to_key_mapping(transaction, key_lookup_col, number.clone(), hash.clone());
-	insert_number_to_key_mapping(transaction, key_lookup_col, number, hash);
-}
-
 /// Convert block id to block lookup key.
 /// block lookup key is the DB-key header, block and justification are stored under.
 /// looks up lookup key by hash from DB as necessary.
