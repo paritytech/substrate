@@ -860,7 +860,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error.
 		let just_in_case = maybe_change.map(|change| {
-			let hash = block.header.hash();
+			let hash = block.post_header().hash();
 			let number = block.header.number().clone();
 
 			let mut authorities = self.authority_set.inner().write();
