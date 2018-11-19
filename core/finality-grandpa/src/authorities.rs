@@ -50,7 +50,9 @@ impl<H, N> SharedAuthoritySet<H, N> {
 }
 
 impl<H: Eq, N> SharedAuthoritySet<H, N>
-	where N: Add<Output=N> + Ord + Clone + Debug
+where
+	N: Add<Output=N> + Ord + Clone + Debug,
+	H: Debug
 {
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
@@ -103,7 +105,9 @@ impl<H, N> AuthoritySet<H, N> {
 }
 
 impl<H: Eq, N> AuthoritySet<H, N>
-	where N: Add<Output=N> + Ord + Clone + Debug,
+where
+	N: Add<Output=N> + Ord + Clone + Debug,
+	H: Debug
 {
 	/// Note an upcoming pending transition.
 	pub(crate) fn add_pending_change(&mut self, pending: PendingChange<H, N>) {
