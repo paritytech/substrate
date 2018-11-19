@@ -50,7 +50,7 @@ pub mod system;
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use client::{runtime_api::runtime::*, block_builder::api::runtime::*};
+use client::{runtime_api::runtime as client_api, block_builder::api::runtime as block_builder_api};
 #[cfg(feature = "std")]
 use client::runtime_api::ApiExt;
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT};
@@ -178,8 +178,6 @@ pub mod test_api {
 		}
 	}
 }
-
-use test_api::runtime::TestAPI;
 
 #[cfg(feature = "std")]
 pub struct ClientWithApi {
@@ -335,7 +333,7 @@ impl test_api::TestAPI<Block> for ClientWithApi {
 struct Runtime;
 
 impl_runtime_apis! {
-	impl Core<Block> for Runtime {
+	impl client_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			version()
 		}
@@ -353,13 +351,13 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl TaggedTransactionQueue<Block> for Runtime {
+	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}
 	}
 
-	impl BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
+	impl block_builder_api::BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
@@ -381,7 +379,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl TestAPI<AccountId> for Runtime {
+	impl self::test_api::runtime::TestAPI<AccountId> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
 		}

@@ -116,14 +116,31 @@ fn generate_impl_call(
 	)
 }
 
+/// Extract the trait that is implemented in the given `ItemImpl`.
+fn extract_impl_trait<'a>(impl_: &'a ItemImpl) -> Result<&'a Path> {
+	impl_.trait_.as_ref().map(|v| &v.1).ok_or_else(
+		|| Error::new(impl_.span(), "Only implementation of traits are supported!")
+	).and_then(|p| {
+		if p.segments.len() > 1 {
+			Ok(p)
+		} else {
+			Err(
+				Error::new(
+					p.span(),
+					"The implemented trait has to be referenced with a path, \
+					e.g. `impl client::Core for Runtime`."
+				)
+			)
+		}
+	})
+}
+
 /// Generate all the implementation calls for the given functions.
 fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, TokenStream)>> {
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
-		let impl_trait = impl_.trait_.as_ref().map(|v| &v.1).ok_or_else(
-			|| Error::new(impl_.span(), "Only implementation of traits are supported!")
-		)?;
+		let impl_trait = extract_impl_trait(impl_)?;
 
 		for item in &impl_.items {
 			match item {
