@@ -12,6 +12,7 @@ substrate-consensus-common = { path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
 substrate-client = { path = "../client" }
 substrate-network = { path = "../network" }
+substrate-service = { path = "../service", optional = true }
 log = "0.4"
 parking_lot = "0.4"
 tokio = "0.1.7"
@@ -26,3 +27,7 @@ substrate-network = { path = "../network", features = ["test-helpers"] }
 substrate-keyring = { path = "../keyring" }
 substrate-test-client = { path = "../test-client"}
 env_logger = "0.5"
+
+[features]
+default = ["service-integration"]
+service-integration = ["substrate-service"]

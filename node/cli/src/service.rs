@@ -24,8 +24,7 @@ use node_runtime::{GenesisConfig, ClientWithApi};
 use node_primitives::Block;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
-	ServiceFactory,
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
@@ -35,21 +34,6 @@ use std::time::Duration;
 use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
-
-type GrandpaBlockImport<F> = grandpa::GrandpaBlockImport<
-	FullBackend<F>,
-	FullExecutor<F>,
-	<F as ServiceFactory>::Block,
-	<F as ServiceFactory>::RuntimeApi,
-	client::Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>,
->;
-
-type GrandpaLinkHalf<F> = grandpa::LinkHalf<
-	FullBackend<F>,
-	FullExecutor<F>,
-	<F as ServiceFactory>::Block,
-	<F as ServiceFactory>::RuntimeApi
->;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -66,7 +50,7 @@ pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 
 	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
 	// https://github.com/paritytech/substrate/issues/1134
-	pub grandpa_link_half: Option<GrandpaLinkHalf<F>>,
+	pub grandpa_link_half: Option<grandpa::LinkHalfForService<F>>,
 }
 
 impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
@@ -129,7 +113,7 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<Self::Block, GrandpaBlockImport<Self>, NothingExtra>
+		FullImportQueue = AuraImportQueue<Self::Block, grandpa::BlockImportForService<Self>, NothingExtra>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				let (block_import, link_half) = grandpa::block_import::<_, _, _, ClientWithApi, FullClient<Self>>(client.clone(), client)?;
 				config.custom.grandpa_link_half = Some(link_half);

@@ -65,6 +65,9 @@ extern crate substrate_finality_grandpa_primitives as fg_primitives;
 #[macro_use]
 extern crate log;
 
+#[cfg(feature="service-integration")]
+extern crate substrate_service as service;
+
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
@@ -107,6 +110,11 @@ use authorities::SharedAuthoritySet;
 pub use fg_primitives::ScheduledChange;
 
 mod authorities;
+
+#[cfg(feature="service-integration")]
+mod service_integration;
+#[cfg(feature="service-integration")]
+pub use service_integration::{LinkHalfForService, BlockImportForService};
 
 #[cfg(test)]
 mod tests;
