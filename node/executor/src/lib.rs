@@ -66,7 +66,7 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, Event, Log};
+		SystemConfig, GrandpaConfig, Event, Log};
 	use wabt;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
@@ -262,7 +262,14 @@ mod tests {
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
 			upgrade_key: Some(Default::default()),
-			grandpa: Some(Default::default()),
+			grandpa: Some(GrandpaConfig {
+				authorities: vec![ // set these so no GRANDPA events fire when session changes
+					(Alice.to_raw_public().into(), 1),
+					(Bob.to_raw_public().into(), 1),
+					(Charlie.to_raw_public().into(), 1),
+				],
+				_genesis_phantom_data: Default::default(),
+			}),
 		}.build_storage().unwrap().0)
 	}
 
@@ -303,9 +310,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("1193f900449128ab5d1e4ef0c1d3e1a1e22bdc2e8df3f35f8c82d273e08f96d6").into()
+				hex!("910341f567f4f5cbe0bef4f5cc43b0144136591c88508dbd611fbfa4067596a1").into()
 			} else {
-				hex!("a5cf2ec89087e23b4042563cd1c48a25a713dc8085f281bbda2a6faa561c19fd").into()
+				hex!("fdcfa916f809615b18fd86afe8274a1782328d83519614cdb765a36690f4422a").into()
 			},
 			if support_changes_trie {
 				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())

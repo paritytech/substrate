@@ -94,9 +94,6 @@ pub enum RawLog<N, SessionKey> {
 	/// Authorities set change has been signalled. Contains the new set of authorities
 	/// and the delay in blocks before applying.
 	AuthoritiesChangeSignal(N, Vec<(SessionKey, u64)>),
-	/// Authorities set change has happened. New authorities are contained,
-	/// with associated weights.
-	AuthoritiesChange(Vec<(SessionKey, u64)>),
 }
 
 impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
@@ -104,15 +101,6 @@ impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
 	pub fn as_signal(&self) -> Option<(N, &[(SessionKey, u64)])> {
 		match *self {
 			RawLog::AuthoritiesChangeSignal(ref n, ref signal) => Some((n.clone(), signal)),
-			RawLog::AuthoritiesChange(_) => None,
-		}
-	}
-
-	/// Try to cast the log entry as a post-change notification.
-	pub fn as_authorities_change(&self) -> Option<&[(SessionKey, u64)]> {
-		match *self {
-			RawLog::AuthoritiesChangeSignal(_, _) => None,
-			RawLog::AuthoritiesChange(ref v) => Some(&v[..]),
 		}
 	}
 }
@@ -137,6 +125,9 @@ pub trait Trait: system::Trait {
 
 	/// The session key type used by authorities.
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
+
+	/// The event type of this module.
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 /// A stored pending change.
@@ -149,6 +140,14 @@ pub struct StoredPendingChange<N, SessionKey> {
 	/// The next authority set.
 	pub next_authorities: Vec<(SessionKey, u64)>,
 }
+
+/// GARNDPA events.
+decl_event!(
+	pub enum Event<T> where <T as Trait>::SessionKey {
+		/// New authority set has been applied.
+		NewAuthorities(Vec<(SessionKey, u64)>),
+	}
+);
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
@@ -178,6 +177,8 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
+
 		/// Report some misbehaviour.
 		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
 			ensure_signed(origin)?;
@@ -195,8 +196,8 @@ decl_module! {
 				}
 
 				if block_number == pending_change.scheduled_at + pending_change.delay {
-					Self::deposit_log(
-						RawLog::AuthoritiesChange(pending_change.next_authorities.clone())
+					Self::deposit_event(
+						RawEvent::NewAuthorities(pending_change.next_authorities.clone())
 					);
 					<AuthorityStorageVec<T::SessionKey>>::set_items(pending_change.next_authorities);
 					<PendingChange<T>>::kill();
