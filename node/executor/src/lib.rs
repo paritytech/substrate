@@ -36,6 +36,7 @@ extern crate node_runtime;
 #[cfg(test)] extern crate srml_timestamp as timestamp;
 #[cfg(test)] extern crate srml_treasury as treasury;
 #[cfg(test)] extern crate srml_contract as contract;
+#[cfg(test)] extern crate srml_grandpa as grandpa;
 #[cfg(test)] extern crate node_primitives;
 #[cfg(test)] extern crate parity_codec as codec;
 #[cfg(test)] extern crate sr_io as runtime_io;
@@ -273,11 +274,15 @@ mod tests {
 		}.build_storage().unwrap().0)
 	}
 
+	fn changes_trie_log(changes_root: Hash) -> Log {
+		Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root))
+	}
+
 	fn construct_block(
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
-		changes_root: Option<Hash>,
+		logs: Vec<Log>,
 		extrinsics: Vec<CheckedExtrinsic>
 	) -> (Vec<u8>, Hash) {
 		use trie::ordered_trie_root;
@@ -289,8 +294,8 @@ mod tests {
 			.into();
 
 		let mut digest = generic::Digest::<Log>::default();
-		if let Some(changes_root) = changes_root {
-			digest.push(Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root)));
+		for item in logs {
+			digest.push(item);
 		}
 
 		let header = Header {
@@ -310,14 +315,16 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("910341f567f4f5cbe0bef4f5cc43b0144136591c88508dbd611fbfa4067596a1").into()
+				hex!("df90128fe9ee27bd61d90308cc25ad262e518d4ba09e5077558be2389780d8e5").into()
 			} else {
-				hex!("fdcfa916f809615b18fd86afe8274a1782328d83519614cdb765a36690f4422a").into()
+				hex!("3cb0654b6c47c6532108695327fc68e22f2e67a4b20029c3c9d05a285f9e80a2").into()
 			},
 			if support_changes_trie {
-				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
+				vec![changes_trie_log(
+					hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into(),
+				)]
 			} else {
-				None
+				vec![]
 			},
 			vec![
 				CheckedExtrinsic {
@@ -336,8 +343,14 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("72b2afc379ce2161aef95ef6f86a2321867f12b046703ea0af5aed158c2a4f30").into(),
-			None,
+			hex!("612d3e3c542b4ce62105f2f1fbc4fef1652d5ba38401795115042bee56a50752").into(),
+			vec![ // session changes here, so we add a grandpa change signal log.
+				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
+					(Keyring::One.to_raw_public().into(), 1),
+					(Keyring::Two.to_raw_public().into(), 1),
+					([3u8; 32].into(), 1),
+				]))
+			],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -359,8 +372,8 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("54e1715822e15bc6595f387b4ace1e5069478f2c75098a451035a80a09bba32a").into(),
-			None,
+			hex!("17df8f360a4a1bd8d5dc23f05b044f5b14ece43555f97d2058ded47d5e7fb64d").into(),
+			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -467,6 +480,14 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::staking(staking::RawEvent::Reward(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
+						(Keyring::One.to_raw_public().into(), 1),
+						(Keyring::Two.to_raw_public().into(), 1),
+						([3u8; 32].into(), 1),
+					])),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
@@ -641,8 +662,8 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("642e8a7609979b09537ebdb5c05d6ecbdac894a54fbd3142119fcfda274c5d1f").into(),
-			None,
+			hex!("81f45b36d1c8f667ac948bc48f8fb61d12aae87d841b6303ab0320ca906d01d2").into(),
+			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,

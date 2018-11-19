@@ -200,8 +200,6 @@ impl<
 		// remove temporaries.
 		let new_header = <system::Module<System>>::finalise();
 
-		println!("header digest: {:?}", header.digest());
-		println!("new_header digest: {:?}", new_header.digest());
 		// check digest.
 		assert_eq!(
 			header.digest().logs().len(),
