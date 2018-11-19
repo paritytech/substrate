@@ -168,7 +168,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		is_finalized: bool
 	) {
 		let mut meta = self.meta.write();
-		if number == Zero::zero() {
+		if number.is_zero() {
 			meta.genesis_hash = hash;
 			meta.finalized_hash = hash;
 		}
@@ -778,7 +778,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 			transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
-			if number == Zero::zero() {
+			if number.is_zero() {
 				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 				transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 			}
