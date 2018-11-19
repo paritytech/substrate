@@ -26,6 +26,7 @@ substrate-primitives = { path = "../primitives", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-version = { path = "../sr-version", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
+sr-api-macros = { path = "../sr-api-macros" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }

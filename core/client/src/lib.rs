@@ -31,6 +31,8 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_consensus_common as consensus;
 extern crate sr_version as runtime_version;
 extern crate sr_std as rstd;
+#[macro_use]
+extern crate sr_api_macros;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 #[cfg(test)]
@@ -114,3 +116,6 @@ pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
 #[cfg(feature = "std")]
 pub use leaves::LeafSet;
+
+#[doc(hidden)]
+pub use sr_api_macros::*;
