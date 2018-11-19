@@ -22,7 +22,7 @@ use rstd::vec::Vec;
 decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
 	pub trait BlockBuilder<Block: BlockT> {
-		/// The runtime api for building blocks./// Apply the given extrinsics.
+		/// Apply the given extrinsics.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		/// Finish the current block.
 		fn finalise_block() -> <Block as BlockT>::Header;
