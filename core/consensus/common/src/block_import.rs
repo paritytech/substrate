@@ -4,7 +4,7 @@ use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header, As};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 
-use client::backend::{self, BlockImportOperation};
+use client::backend;
 use client::client::{BlockOrigin, ImportResult, PrePostHeader, Client};
 use client::blockchain::{self, HeaderBackend};
 use client::call_executor::CallExecutor;
@@ -107,7 +107,7 @@ impl<B, E, Block, RA> BlockImport<Block> for Client<B, E, Block, RA> where
 		} = import_block;
 		let parent_hash = header.parent_hash().clone();
 
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
+		match self.backend().blockchain().status(BlockId::Hash(parent_hash))? {
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
@@ -123,9 +123,9 @@ impl<B, E, Block, RA> BlockImport<Block> for Client<B, E, Block, RA> where
 		};
 
 		let hash = import_headers.post().hash();
-		let _import_lock = self.import_lock.lock();
+		let _import_lock = self.import_lock().lock();
 		let height: u64 = import_headers.post().number().as_();
-		*self.importing_block.write() = Some(hash);
+		*self.importing_block().write() = Some(hash);
 
 		let result = self.execute_and_import_block(
 			origin,
@@ -138,7 +138,7 @@ impl<B, E, Block, RA> BlockImport<Block> for Client<B, E, Block, RA> where
 			auxiliary,
 		);
 
-		*self.importing_block.write() = None;
+		*self.importing_block().write() = None;
 		telemetry!("block.import";
 			"height" => height,
 			"best" => ?hash,

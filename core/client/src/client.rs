@@ -61,13 +61,13 @@ pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotifica
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
-	pub backend: Arc<B>,
+	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
-	pub import_lock: Mutex<()>,
-	pub importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	import_lock: Mutex<()>,
+	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
@@ -333,6 +333,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn executor(&self) -> &E {
 		&self.executor
 	}
+
+	/// Get import_lock reference.
+	pub fn import_lock(&self) -> &Mutex<()> {
+		&self.import_lock
+	}
+
+	/// Get importing_block reference.
+	pub fn importing_block(&self) -> &RwLock<Option<Block::Hash>> {
+		&self.importing_block
+	}
+
 
 	/// Reads storage value at a given block + key, returning read proof.
 	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {

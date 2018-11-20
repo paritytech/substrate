@@ -49,7 +49,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block;
 use futures::prelude::*;
 use client::backend;
-use client::client::{BlockOrigin, ImportResult, Client};
+use client::client::Client;
 use client::call_executor::CallExecutor;
 use client::runtime_api::BlockT;
 
