@@ -19,41 +19,42 @@
 //!
 //! This is used for votes and commit messages currently.
 
-use super::{BlockStatus, Error, SignedMessage};
+use super::{BlockStatus, Error, SignedMessage, CompactCommit};
 
 use client::ImportNotifications;
 use futures::prelude::*;
 use futures::stream::Fuse;
+use parking_lot::Mutex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use substrate_primitives::AuthorityId;
 use tokio::timer::Interval;
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
 use std::time::{Duration, Instant};
 
 // something which will block until imported.
 pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
-	// the type that is converted into one or more waiting handles.
-	type In;
-	// the type that's produced when done blocking.
-	type Out;
+	// the type that is blocked on.
+	type Blocked;
 
 	/// new incoming item. For all internal items,
 	/// check if they require to be waited for.
 	/// if so, call the `Wait` closure.
 	/// if they are ready, call the `Ready` closure.
 	fn schedule_wait<S, Wait, Ready>(
-		input: Self::In,
+		input: Self::Blocked,
 		status_check: &S,
 		wait: Wait,
 		ready: Ready,
 	) -> Result<(), Error> where
 		S: BlockStatus<Block>,
 		Wait: FnMut(Block::Hash, Self),
-		Ready: FnMut(Self::Out);
+		Ready: FnMut(Self::Blocked);
 
 	/// called when the wait has completed. The canonical number is passed through
 	/// for further checks.
-	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Out>;
+	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Blocked>;
 }
 
 /// Buffering imported messages until blocks with given hashes are imported.
@@ -61,7 +62,7 @@ pub(crate) struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<
 	import_notifications: Fuse<ImportNotifications<Block>>,
 	status_check: Status,
 	inner: Fuse<I>,
-	ready: VecDeque<M::Out>,
+	ready: VecDeque<M::Blocked>,
 	check_pending: Interval,
 	pending: HashMap<Block::Hash, Vec<M>>,
 }
@@ -97,13 +98,13 @@ impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
 
 impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> where
 	Status: BlockStatus<Block>,
-	I: Stream<Item=M::In,Error=Error>,
+	I: Stream<Item=M::Blocked,Error=Error>,
 	M: BlockUntilImported<Block>,
 {
-	type Item = M::Out;
+	type Item = M::Blocked;
 	type Error = Error;
 
-	fn poll(&mut self) -> Poll<Option<M::Out>, Error> {
+	fn poll(&mut self) -> Poll<Option<M::Blocked>, Error> {
 		loop {
 			match self.inner.poll() {
 				Err(e) => return Err(e),
@@ -180,31 +181,34 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 	}
 }
 
+fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId) {
+	warn!(
+		target: "afg",
+		"Authority {:?} signed GRANDPA message with \
+		wrong block number for hash {}",
+		id,
+		hash,
+	);
+}
+
 impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
-	type In = Self;
-	type Out = Self;
+	type Blocked = Self;
 
 	fn schedule_wait<S, Wait, Ready>(
-		msg: Self::In,
+		msg: Self::Blocked,
 		status_check: &S,
 		mut wait: Wait,
 		mut ready: Ready,
 	) -> Result<(), Error> where
 		S: BlockStatus<Block>,
 		Wait: FnMut(Block::Hash, Self),
-		Ready: FnMut(Self::Out)
+		Ready: FnMut(Self::Blocked),
 	{
 		let (&target_hash, target_number) = msg.target();
 
 		if let Some(number) = status_check.block_number(target_hash)? {
 			if number != target_number {
-				warn!(
-					target: "afg",
-					"Authority {:?} signed GRANDPA message with \
-					wrong block number for hash {}",
-					msg.id,
-					target_hash,
-				);
+				warn_authority_wrong_target(target_hash, msg.id);
 			} else {
 				ready(msg);
 			}
@@ -215,16 +219,10 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 		Ok(())
 	}
 
-	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Out> {
+	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Blocked> {
 		let (&target_hash, target_number) = self.target();
 		if canon_number != target_number {
-			warn!(
-				target: "afg",
-				"Authority {:?} signed GRANDPA message with \
-				wrong block number for hash {}",
-				self.id,
-				target_hash,
-			);
+			warn_authority_wrong_target(target_hash, self.id);
 
 			None
 		} else {
@@ -236,3 +234,146 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 /// Helper type definition for the stream which waits until vote targets for
 /// signed messages are imported.
 pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block, Status, I, SignedMessage<Block>>;
+
+/// This blocks a commit message's import until all blocks
+/// referenced in its votes are known.
+///
+/// This is used for compact commits which have already been checked for
+/// structural soundness.
+pub(crate) struct BlockCommitMessage<Block: BlockT> {
+	inner: Arc<(AtomicUsize, Mutex<Option<CompactCommit<Block>>>)>,
+	target_number: NumberFor<Block>,
+}
+
+impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
+	type Blocked = CompactCommit<Block>;
+
+	fn schedule_wait<S, Wait, Ready>(
+		commit: Self::Blocked,
+		status_check: &S,
+		mut wait: Wait,
+		mut ready: Ready,
+	) -> Result<(), Error> where
+		S: BlockStatus<Block>,
+		Wait: FnMut(Block::Hash, Self),
+		Ready: FnMut(Self::Blocked),
+	{
+		use std::collections::hash_map::Entry;
+
+		enum KnownOrUnknown<N> {
+			Known(N),
+			Unknown(N),
+		}
+
+		impl<N> KnownOrUnknown<N> {
+			fn number(&self) -> &N {
+				match *self {
+					KnownOrUnknown::Known(ref n) => n,
+					KnownOrUnknown::Unknown(ref n) => n,
+				}
+			}
+		}
+
+		let mut checked_hashes: HashMap<_, KnownOrUnknown<NumberFor<Block>>> = HashMap::new();
+		let mut unknown_count = 0;
+
+		{
+			// returns false when should early exit.
+			let mut query_known = |target_hash, perceived_number| -> Result<bool, Error> {
+				// check integrity: all precommits for same hash have same number.
+				let canon_number = match checked_hashes.entry(target_hash) {
+					Entry::Occupied(entry) => entry.get().number().clone(),
+					Entry::Vacant(mut entry) => {
+						if let Some(number) = status_check.block_number(target_hash)? {
+							entry.insert(KnownOrUnknown::Known(number));
+							number
+
+						} else {
+							entry.insert(KnownOrUnknown::Unknown(perceived_number));
+							unknown_count += 1;
+							perceived_number
+						}
+					}
+				};
+
+				if canon_number != perceived_number {
+					// invalid commit: messages targeting wrong number or
+					// at least different from other vote. in same commit.
+					return Ok(false);
+				}
+
+				Ok(true)
+			};
+
+			// add known hashes from the precommits.
+			for precommit in &commit.precommits {
+				let target_number = precommit.target_number;
+				let target_hash = precommit.target_hash;
+
+				if !query_known(target_hash, target_number)? {
+					return Ok(())
+				}
+			}
+
+			// see if commit target hash is known.
+			if !query_known(commit.target_hash, commit.target_number)? {
+				return Ok(())
+			}
+		}
+
+		// none of the hashes in the commit message were unknown.
+		// we can just return the commit directly.
+		if unknown_count == 0 {
+			ready(commit);
+			return Ok(())
+		}
+
+		let locked_commit = Arc::new((AtomicUsize::new(unknown_count), Mutex::new(Some(commit))));
+
+		// schedule waits for all unknown messages.
+		// when the last one of these has `wait_completed` called on it,
+		// the commit will be returned.
+		//
+		// in the future, we may want to issue sync requests to the network
+		// if this is taking a long time.
+		for (hash, is_known) in checked_hashes {
+			if let KnownOrUnknown::Unknown(target_number) = is_known {
+				wait(hash, BlockCommitMessage {
+					inner: locked_commit.clone(),
+					target_number,
+				})
+			}
+		}
+
+		Ok(())
+	}
+
+	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<CompactCommit<Block>> {
+		if self.target_number != canon_number {
+			// if we return without deducting the counter, then none of the other
+			// handles can return the commit message.
+			return None;
+		}
+
+		let mut last_count = self.inner.0.load(Ordering::Acquire);
+
+		// CAS loop to ensure that we always have a last reader.
+		loop {
+			if last_count == 1 { // we are the last one left.
+				return self.inner.1.lock().take();
+			}
+
+			let prev_value = self.inner.0.compare_and_swap(
+				last_count,
+				last_count - 1,
+				Ordering::SeqCst,
+			);
+
+			if prev_value == last_count {
+				return None;
+			} else {
+				last_count = prev_value;
+			}
+		}
+	}
+}

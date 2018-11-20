@@ -145,6 +145,13 @@ pub type Commit<Block> = grandpa::Commit<
 	ed25519::Signature,
 	AuthorityId
 >;
+/// A compact commit message for this chain's block type.
+pub type CompactCommit<Block> = grandpa::CompactCommit<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	ed25519::Signature,
+	AuthorityId
+>;
 
 /// Configuration for the GRANDPA service.
 #[derive(Clone)]
