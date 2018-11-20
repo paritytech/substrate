@@ -23,7 +23,7 @@ use parking_lot::RwLock;
 
 use primitives::AuthorityId;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
+use state_machine::{Backend as StateBackend, TrieBackend};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 
 use in_mem;
@@ -80,7 +80,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, S, F>;
-	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
+	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {

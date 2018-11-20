@@ -22,14 +22,14 @@ use parking_lot::RwLock;
 use error;
 use backend::{self, NewBlockState};
 use light;
-use primitives::{AuthorityId, storage::well_known_keys};
+use primitives::{AuthorityId, ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem};
 use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
 use blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
-use state_machine::InMemoryChangesTrieStorage;
+use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use leaves::LeafSet;
@@ -465,7 +465,7 @@ where
 	H::Out: HeapSizeOf + Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
-	changes_trie_storage: InMemoryChangesTrieStorage<H>,
+	changes_trie_storage: ChangesTrieStorage<H>,
 	blockchain: Blockchain<Block>,
 }
 
@@ -479,7 +479,7 @@ where
 	pub fn new() -> Backend<Block, H> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
-			changes_trie_storage: InMemoryChangesTrieStorage::new(),
+			changes_trie_storage: ChangesTrieStorage(InMemoryChangesTrieStorage::new()),
 			blockchain: Blockchain::new(),
 		}
 	}
@@ -494,7 +494,7 @@ where
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory<H>;
-	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
+	type ChangesTrieStorage = ChangesTrieStorage<H>;
 
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
@@ -526,7 +526,7 @@ where
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();
-					self.changes_trie_storage.insert(header.number().as_(), changes_trie_root, changes_trie_update);
+					self.changes_trie_storage.0.insert(header.number().as_(), changes_trie_root, changes_trie_update);
 				}
 			}
 
@@ -603,6 +603,26 @@ impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
 		};
 
 		self.authorities_at.read().get(&hash).cloned().unwrap_or(None)
+	}
+}
+
+/// Prunable in-memory changes trie storage.
+pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>) where H::Out: HeapSizeOf;
+impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn oldest_changes_trie_block(&self, _config: &ChangesTrieConfiguration, _best_finalized: u64) -> u64 {
+		0
+	}
+}
+
+impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn root(&self, anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+		self.0.root(anchor, block)
+	}
+}
+
+impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn get(&self, key: &H::Out) -> Result<Option<state_machine::DBValue>, String> {
+		self.0.get(key)
 	}
 }
 

@@ -17,7 +17,7 @@
 //! Substrate Client data backend
 
 use error;
-use primitives::AuthorityId;
+use primitives::{AuthorityId, ChangesTrieConfiguration};
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
@@ -98,7 +98,7 @@ pub trait Backend<Block, H>: Send + Sync where
 	/// Associated state backend type.
 	type State: StateBackend<H>;
 	/// Changes trie storage.
-	type ChangesTrieStorage: StateChangesTrieStorage<H>;
+	type ChangesTrieStorage: PrunableStateChangesTrieStorage<H>;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -121,6 +121,12 @@ pub trait Backend<Block, H>: Send + Sync where
 	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, insert: I, delete: D) -> error::Result<()>;
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>>;
+}
+
+/// Changes trie storage that supports pruning.
+pub trait PrunableStateChangesTrieStorage<H: Hasher>: StateChangesTrieStorage<H> {
+	/// Get number block of oldest, non-pruned changes trie.
+	fn oldest_changes_trie_block(&self, config: &ChangesTrieConfiguration, best_finalized: u64) -> u64;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

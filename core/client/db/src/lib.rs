@@ -446,6 +446,20 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	}
 }
 
+impl<Block: BlockT> client::backend::PrunableStateChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
+	fn oldest_changes_trie_block(
+		&self,
+		config: &ChangesTrieConfiguration,
+		best_finalized_block: u64
+	) -> u64 {
+		let min_blocks_to_keep = match self.min_blocks_to_keep {
+			Some(min_blocks_to_keep) => min_blocks_to_keep,
+			None => return 1,
+		};
+ 		state_machine::oldest_non_pruned_changes_trie(config, min_blocks_to_keep, best_finalized_block)
+	}
+}
+
 impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
 	fn root(&self, anchor: &state_machine::ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
 		// check API requirement
