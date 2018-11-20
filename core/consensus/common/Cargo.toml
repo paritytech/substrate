@@ -16,6 +16,9 @@ parity-codec-derive = "2.0"
 substrate-client = { path = "../../../core/client" }
 slog = { version = "^2", optional = true }
 substrate-telemetry = { path = "../../../core/telemetry", optional = true }
+log = "0.4"
+substrate-transaction-pool = { path = "../../../core/transaction-pool" }
+parking_lot = "0.4"
 
 [features]
 default = ["std"]

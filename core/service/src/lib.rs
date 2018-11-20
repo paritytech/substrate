@@ -55,7 +55,6 @@ mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
-pub mod consensus;
 
 use std::io;
 use std::net::SocketAddr;
@@ -81,7 +80,7 @@ pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as Tra
 pub use client::ExecutionStrategy;
 
 use consensus_common::offline_tracker::OfflineTracker;
-pub use consensus::ProposerFactory;
+use consensus_common::service::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,

@@ -33,7 +33,11 @@ extern crate substrate_telemetry;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate slog;
+#[macro_use]
+extern crate log;
 extern crate substrate_client as client;
+extern crate substrate_transaction_pool as transaction_pool;
+extern crate parking_lot;
 
 extern crate parity_codec as codec;
 #[macro_use]
@@ -57,7 +61,7 @@ pub mod offline_tracker;
 pub mod error;
 mod block_import;
 pub mod evaluation;
-//pub mod service;
+pub mod service;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
