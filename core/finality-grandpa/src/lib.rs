@@ -642,14 +642,14 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Box<Future<Item = (), Error = Self::Error> + Send>;
+	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
-	type In = Box<Stream<
+	type In = Box<dyn Stream<
 		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
 	> + Send>;
-	type Out = Box<Sink<
+	type Out = Box<dyn Sink<
 		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
 	> + Send>;
@@ -892,7 +892,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBloc
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
+	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
 {
 
 	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
@@ -911,7 +911,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for LinkHalf<B, E, Block, RA>
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	RA: TaggedTransactionQueue<Block> + Send + Sync, // necessary for client to import `BlockImport`.
+	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
 {
 	fn clone(&self) -> Self {
 		LinkHalf {

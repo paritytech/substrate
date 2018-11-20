@@ -141,7 +141,7 @@ pub struct StoredPendingChange<N, SessionKey> {
 	pub next_authorities: Vec<(SessionKey, u64)>,
 }
 
-/// GARNDPA events.
+/// GRANDPA events.
 decl_event!(
 	pub enum Event<T> where <T as Trait>::SessionKey {
 		/// New authority set has been applied.
@@ -182,7 +182,7 @@ decl_module! {
 		/// Report some misbehaviour.
 		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
 			ensure_signed(origin)?;
-			// TODO.
+			// TODO: https://github.com/paritytech/substrate/issues/1112
 			Ok(())
 		}
 
