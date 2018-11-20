@@ -16,7 +16,7 @@
 
 //! Client extension for tests.
 
-use client::{self, Client, client::BlockOrigin};
+use client::{self, Client, BlockOrigin};
 use consensus::{ImportBlock, BlockImport};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;

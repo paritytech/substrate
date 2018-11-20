@@ -295,7 +295,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.state_at(*block)
 	}
 
-	/// Expose backend reference. To be used in tests only
+	/// Expose backend reference.
 	pub fn backend(&self) -> &Arc<B> {
 		&self.backend
 	}

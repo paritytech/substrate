@@ -89,9 +89,9 @@ pub mod light;
 #[cfg(feature = "std")]
 mod leaves;
 #[cfg(feature = "std")]
-pub mod call_executor;
+mod call_executor;
 #[cfg(feature = "std")]
-pub mod client;
+mod client;
 #[cfg(feature = "std")]
 mod notifications;
 
@@ -104,7 +104,7 @@ pub use client::{
 	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	Client, ClientInfo, ChainHead,
+	Client, ClientInfo, ChainHead, BlockOrigin, ImportResult, PrePostHeader
 };
 #[cfg(feature = "std")]
 pub use notifications::{StorageEventStream, StorageChangeSet};

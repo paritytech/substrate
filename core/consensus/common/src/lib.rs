@@ -52,9 +52,7 @@ use primitives::{ed25519, AuthorityId, Blake2Hasher, H256};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block;
 use futures::prelude::*;
-use client::backend;
-use client::client::Client;
-use client::call_executor::CallExecutor;
+use client::{backend, Client, CallExecutor};
 use client::runtime_api::BlockT;
 
 pub mod offline_tracker;

@@ -16,7 +16,7 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor, client::ImportResult};
+use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor, ImportResult};
 use client::error::Error;
 use client::light::fetcher::ChangesProof;
 use consensus::BlockImport;

@@ -35,7 +35,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, 
 
 pub use blocks::BlockData;
 use client::error::Error as ClientError;
-use client::client::{ImportResult, BlockOrigin};
+use client::{ImportResult, BlockOrigin};
 use error::{ErrorKind, Error};
 use protocol::Context;
 use service::ExecuteInContext;

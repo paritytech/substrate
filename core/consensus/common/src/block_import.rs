@@ -4,10 +4,8 @@ use runtime_primitives::traits::{Block as BlockT, DigestItemFor, Header, As};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 
-use client::backend;
-use client::client::{BlockOrigin, ImportResult, PrePostHeader, Client};
+use client::{backend, CallExecutor, BlockOrigin, ImportResult, PrePostHeader, Client};
 use client::blockchain::{self, HeaderBackend};
-use client::call_executor::CallExecutor;
 use client::runtime_api::TaggedTransactionQueue;
 
 use client::error::Error;
