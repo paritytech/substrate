@@ -17,15 +17,19 @@
 //! Module that takes care of loading, checking and preprocessing of a
 //! wasm module before execution.
 
-use super::env_def::HostFunctionSet;
-use super::{Error, Ext};
+use super::{InstrumentedWasmModule, MemoryDefinition};
+
 use rstd::prelude::*;
-use parity_wasm::elements::{self, External, MemoryType, Type};
+use parity_wasm::elements::{self, External, MemoryType, Type, FunctionType};
 use pwasm_utils;
 use pwasm_utils::rules;
 use runtime_primitives::traits::As;
 use sandbox;
 use {Trait, Schedule};
+
+pub trait EnvironmentCheck {
+	fn check_func(&self, name: &[u8], func_ty: &FunctionType) -> bool;
+}
 
 struct ContractModule<'a, Gas: 'a> {
 	// An `Option` is used here for loaning (`take()`-ing) the module.
@@ -36,9 +40,9 @@ struct ContractModule<'a, Gas: 'a> {
 }
 
 impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
-	fn new(original_code: &[u8], schedule: &'a Schedule<Gas>) -> Result<ContractModule<'a, Gas>, Error> {
+	fn new(original_code: &[u8], schedule: &'a Schedule<Gas>) -> Result<ContractModule<'a, Gas>, &'static str> {
 		let module =
-			elements::deserialize_buffer(original_code).map_err(|_| Error::Deserialization)?;
+			elements::deserialize_buffer(original_code).map_err(|_| "can't decode wasm code")?;
 		Ok(ContractModule {
 			module: Some(module),
 			schedule,
@@ -50,7 +54,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 	/// In this runtime we only allow wasm module to import memory from the environment.
 	/// Memory section contains declarations of internal linear memories, so if we find one
 	/// we reject such a module.
-	fn ensure_no_internal_memory(&self) -> Result<(), Error> {
+	fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
 		let module = self
 			.module
 			.as_ref()
@@ -59,12 +63,12 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 			.memory_section()
 			.map_or(false, |ms| ms.entries().len() > 0)
 		{
-			return Err(Error::InternalMemoryDeclared);
+			return Err("module declares internal memory");
 		}
 		Ok(())
 	}
 
-	fn inject_gas_metering(&mut self) -> Result<(), Error> {
+	fn inject_gas_metering(&mut self) -> Result<(), &'static str> {
 		let gas_rules = rules::Set::new(self.schedule.regular_op_cost.clone().as_(), Default::default())
 			.with_grow_cost(self.schedule.grow_mem_cost.clone().as_())
 			.with_forbidden_floats();
@@ -75,13 +79,13 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 			.expect("On entry to the function `module` can't be `None`; qed");
 
 		let contract_module = pwasm_utils::inject_gas_counter(module, &gas_rules)
-			.map_err(|_| Error::GasInstrumentation)?;
+			.map_err(|_| "gas instrumentation failed")?;
 
 		self.module = Some(contract_module);
 		Ok(())
 	}
 
-	fn inject_stack_height_metering(&mut self) -> Result<(), Error> {
+	fn inject_stack_height_metering(&mut self) -> Result<(), &'static str> {
 		let module = self
 			.module
 			.take()
@@ -89,7 +93,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 
 		let contract_module =
 			pwasm_utils::stack_height::inject_limiter(module, self.schedule.max_stack_height)
-				.map_err(|_| Error::StackHeightInstrumentation)?;
+				.map_err(|_| "stack height instrumentation failed")?;
 
 		self.module = Some(contract_module);
 		Ok(())
@@ -102,7 +106,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 	/// - checks any imported function against defined host functions set, incl.
 	///   their signatures.
 	/// - if there is a memory import, returns it's descriptor
-	fn scan_imports<E: Ext>(&self, env: &HostFunctionSet<E>) -> Result<Option<&MemoryType>, Error> {
+	fn scan_imports<C: EnvironmentCheck>(&self, check: &C) -> Result<Option<&MemoryType>, &'static str> {
 		let module = self
 			.module
 			.as_ref()
@@ -120,7 +124,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 			if import.module() != "env" {
 				// This import tries to import something from non-"env" module,
 				// but all imports are located in "env" at the moment.
-				return Err(Error::Instantiate);
+				return Err("module has imports from a non-'env' namespace");
 			}
 
 			let type_idx = match import.external() {
@@ -134,31 +138,22 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 
 			let Type::Function(ref func_ty) = types
 				.get(*type_idx as usize)
-				.ok_or_else(|| Error::Instantiate)?;
+				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
 
-			let ext_func = env
-				.funcs
-				.get(import.field().as_bytes())
-				.ok_or_else(|| Error::Instantiate)?;
-			if !ext_func.func_type_matches(func_ty) {
-				return Err(Error::Instantiate);
+			if !check.check_func(import.field().as_bytes(), func_ty) {
+				return Err("module imports a non-existent function");
 			}
 		}
 		Ok(imported_mem_type)
 	}
 
-	fn into_wasm_code(mut self) -> Result<Vec<u8>, Error> {
+	fn into_wasm_code(mut self) -> Result<Vec<u8>, &'static str> {
 		elements::serialize(
 			self.module
 				.take()
 				.expect("On entry to the function `module` can't be `None`; qed"),
-		).map_err(|_| Error::Serialization)
+		).map_err(|_| "error serializing instrumented module")
 	}
-}
-
-pub(super) struct PreparedContract {
-	pub instrumented_code: Vec<u8>,
-	pub memory: sandbox::Memory,
 }
 
 /// Loads the given module given in `original_code`, performs some checks on it and
@@ -171,46 +166,46 @@ pub(super) struct PreparedContract {
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
-pub(super) fn prepare_contract<E: Ext>(
+pub fn prepare_contract<T: Trait, C: EnvironmentCheck>(
 	original_code: &[u8],
-	schedule: &Schedule<<E::T as Trait>::Gas>,
-	env: &HostFunctionSet<E>,
-) -> Result<PreparedContract, Error> {
+	schedule: &Schedule<T::Gas>,
+	check: &C,
+) -> Result<InstrumentedWasmModule, &'static str> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
 	contract_module.inject_stack_height_metering()?;
 
-	let memory = if let Some(memory_type) = contract_module.scan_imports(env)? {
+	let memory_def = if let Some(memory_type) = contract_module.scan_imports(check)? {
 		// Inspect the module to extract the initial and maximum page count.
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
 			(initial, Some(maximum)) if initial > maximum => {
-				// Requested initial number of pages should not exceed the requested maximum.
-				return Err(Error::Memory);
+				return Err("Requested initial number of pages should not exceed the requested maximum");
 			}
 			(_, Some(maximum)) if maximum > schedule.max_memory_pages => {
-				// Maximum number of pages should not exceed the configured maximum.
-				return Err(Error::Memory);
+				return Err("Maximum number of pages should not exceed the configured maximum.");
 			}
+			(initial, Some(maximum)) => MemoryDefinition { initial, maximum },
 			(_, None) => {
 				// Maximum number of pages should be always declared.
 				// This isn't a hard requirement and can be treated as a maxiumum set
 				// to configured maximum.
-				return Err(Error::Memory);
+				return Err("Maximum number of pages should be always declared.");
 			}
-			(initial, maximum) => sandbox::Memory::new(initial, maximum),
 		}
 	} else {
 		// If none memory imported then just crate an empty placeholder.
 		// Any access to it will lead to out of bounds trap.
-		sandbox::Memory::new(0, Some(0))
+		MemoryDefinition {
+			initial: 0,
+			maximum: 0,
+		}
 	};
-	let memory = memory.map_err(|_| Error::Memory)?;
 
-	Ok(PreparedContract {
-		instrumented_code: contract_module.into_wasm_code()?,
-		memory,
+	Ok(InstrumentedWasmModule {
+		code: contract_module.into_wasm_code()?,
+		memory_def,
 	})
 }
 

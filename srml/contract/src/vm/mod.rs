@@ -26,12 +26,10 @@ use {balances, sandbox, system};
 type BalanceOf<T> = <T as balances::Trait>::Balance;
 type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
-mod prepare;
 #[macro_use]
 mod env_def;
 mod runtime;
 
-use self::prepare::{prepare_contract, PreparedContract};
 use self::runtime::{to_execution_result, Runtime};
 
 /// An interface that provides an access to the external environment in which the
@@ -114,6 +112,10 @@ pub enum Error {
 	Memory,
 }
 
+// TODO: Take a name of a function to execute.
+// TODO: Instead of taking the code explicitly can we take the code hash?
+// TODO: Extract code injection stuff and expect the code to be already prepared?
+
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
 	code: &[u8],
@@ -125,10 +127,10 @@ pub fn execute<'a, E: Ext>(
 ) -> Result<(), Error> {
 	let env = runtime::init_env();
 
-	let PreparedContract {
-		instrumented_code,
-		memory,
-	} = prepare_contract(code, &schedule, &env)?;
+	// TODO: Instantiate memory from the provided memory definition.
+	// TODO: take code
+	let memory = sandbox::Memory::new(0, Some(0)).unwrap();
+	let instrumented_code = Vec::new();
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	for (func_name, ext_func) in &env.funcs {

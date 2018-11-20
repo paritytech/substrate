@@ -59,6 +59,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base call fee");
 		}
 
+		// TODO: Load code from the storage or cache.
 		let dest_code = self.overlay.get_code(&dest);
 
 		let (change_set, events) = {
@@ -106,12 +107,13 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		Ok(CallReceipt)
 	}
 
+	// TODO: rename it to instantiate.
 	pub fn create(
 		&mut self,
 		caller: T::AccountId,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		init_code: &[u8],
+		init_code: &[u8], // TODO: Take code hash.
 		data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == self.config.max_depth as usize {

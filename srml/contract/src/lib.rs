@@ -88,6 +88,7 @@ mod double_map;
 mod exec;
 mod vm;
 mod gas;
+mod code;
 
 #[cfg(test)]
 mod tests;
@@ -148,8 +149,19 @@ decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
-		// TODO: Change AccountId to staking::Address
-		/// Make a call to a specified account, optionally transferring some balance.
+
+		fn put_code(origin, code: Vec<u8>) -> Result {
+			let origin = ensure_signed(origin)?;
+
+			// TODO: deduct some freebalance according to price per byte according to
+			// the schedule.
+			// TODO: get the hash of the code
+			// TODO: validate the code. If the code is not valid, then don't store it.
+			// TODO: put code directly into the storage under a key equal to hash, without involving `AccountDb`.
+
+			Ok(())
+		}
+
 		/// Make a call to a specified account, optionally transferring some balance.
 		fn call(
 			origin,
@@ -210,7 +222,7 @@ decl_module! {
 			origin,
 			endowment: <T::Balance as HasCompact>::Type,
 			gas_limit: <T::Gas as HasCompact>::Type,
-			ctor_code: Vec<u8>,
+			ctor_code: Vec<u8>, // TODO: take code hash
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -292,6 +304,8 @@ decl_storage! {
 		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
 		/// The code associated with an account.
 		pub CodeOf: map T::AccountId => Vec<u8>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
+
+		// pub CodeStorage: map code::CodeHash<T::Hash> => code::InstrumentedWasmModule;
 	}
 }
 
