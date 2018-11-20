@@ -629,3 +629,9 @@ pub trait ProvideRuntimeApi {
 	/// storage, even on a `commit`.
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
 }
+
+/// A marker trait for something that knows the type of the node block.
+pub trait GetNodeBlockType {
+	/// The `NodeBlock` type.
+	type NodeBlock: self::Block;
+}

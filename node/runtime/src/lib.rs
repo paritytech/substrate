@@ -222,6 +222,7 @@ impl grandpa::Trait for Runtime {
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
+		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
@@ -244,6 +245,7 @@ construct_runtime!(
 
 /// The address format for describing accounts.
 pub use balances::address::Address as RawAddress;
+
 /// The address format for describing accounts.
 pub type Address = balances::Address<Runtime>;
 /// Block header type as expected by this runtime.

@@ -20,7 +20,11 @@
 ///
 /// ```nocompile
 /// construct_runtime!(
-///     pub enum Runtime with Log(interalIdent: DigestItem<SessionKey>) {
+///     pub enum Runtime with Log(interalIdent: DigestItem<SessionKey>) where
+///         Block = Block,
+///         NodeBlock = runtime::Block,
+///         UncheckedExtrinsic = UncheckedExtrinsic
+///     {
 ///         System: system,
 ///         Test: test::{default, Log(Test)},
 ///         Test2: test_with_long_module::{Module},
@@ -48,7 +52,10 @@
 macro_rules! construct_runtime {
 	(
 		pub enum $runtime:ident with Log ($log_internal:ident: DigestItem<$( $log_genarg:ty ),+>)
-			where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident
+			where
+				Block = $block:ident,
+				NodeBlock = $node_block:ty,
+				UncheckedExtrinsic = $unchecked:ident
 		{
 			$( $rest:tt )*
 		}
@@ -56,6 +63,7 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
+			$node_block;
 			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			;
@@ -65,6 +73,7 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
+		$node_block:ty;
 		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
@@ -92,6 +101,7 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
+			$node_block;
 			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			$(
@@ -119,6 +129,7 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
+		$node_block:ty;
 		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
@@ -153,6 +164,7 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
+			$node_block;
 			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			$(
@@ -186,6 +198,7 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
+		$node_block:ty;
 		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
@@ -219,6 +232,7 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
+			$node_block;
 			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			$(
@@ -251,6 +265,7 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
+		$node_block:ty;
 		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
@@ -273,6 +288,9 @@ macro_rules! construct_runtime {
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct $runtime;
+		impl $crate::runtime_primitives::traits::GetNodeBlockType for $runtime {
+			type NodeBlock = $node_block;
+		}
 		__decl_outer_event!(
 			$runtime;
 			$(
