@@ -138,6 +138,13 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A precommit message for this chain's block type.
 pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
+/// A commit message for this chain's block type.
+pub type Commit<Block> = grandpa::Commit<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	ed25519::Signature,
+	AuthorityId
+>;
 
 /// Configuration for the GRANDPA service.
 #[derive(Clone)]
@@ -645,6 +652,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
+
+	// regular round message streams
 	type In = Box<dyn Stream<
 		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
@@ -653,9 +662,21 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
 	> + Send>;
+
+	// commit message streams; cross-round.
+	type CommitIn = Box<dyn Stream<
+		Item = (u64, ::grandpa::CompactCommit<
+			Block::Hash, NumberFor<Block>, Self::Signature, Self::Id
+		>),
+		Error = Self::Error,
+	> + Send>;
+	type CommitOut = Box<dyn Sink<
+		SinkItem = (u64, Commit<Block>),
+		SinkError = Self::Error,
+	> + Send>;
+
 	type Error = ExitOrError<Block::Hash, NumberFor<Block>>;
 
-	#[allow(unreachable_code)]
 	fn round_data(
 		&self,
 		round: u64
@@ -732,7 +753,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		}
 	}
 
-	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>) -> Result<(), Self::Error> {
+	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, commit: Commit<Block>) -> Result<(), Self::Error> {
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), true) {
@@ -794,6 +815,10 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			} else {
 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
+
+			// TODO [now]: write commit to DB in a way where it can be fetched for syncing
+			// peers.
+
 			Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
 				canon_hash,
 				canon_number,
@@ -803,6 +828,19 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		} else {
 			Ok(())
 		}
+	}
+
+	fn committer_data(&self) -> (Self::CommitIn, Self::CommitOut) {
+		unimplemented!()
+	}
+
+	fn voters(&self, _round: u64) -> &HashMap<AuthorityId, u64> {
+		&*self.voters
+	}
+
+	fn round_commit_timer(&self) -> Self::Timer {
+		// let's say, random between 0-1 seconds.
+		unimplemented!()
 	}
 
 	fn prevote_equivocation(
