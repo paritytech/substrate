@@ -126,21 +126,6 @@ pub enum BlockStatus {
 	Unknown,
 }
 
-/// Block import result.
-#[derive(Debug)]
-pub enum ImportResult {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the import queue.
-	AlreadyQueued,
-	/// Already in the blockchain.
-	AlreadyInChain,
-	/// Block or parent is known to be bad.
-	KnownBad,
-	/// Block parent is not in the chain.
-	UnknownParent,
-}
-
 /// Block data origin.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BlockOrigin {
@@ -193,7 +178,7 @@ pub enum PrePostHeader<H> {
 
 impl<H> PrePostHeader<H> {
 	// get a reference to the "pre-header" -- the header as it should be just after the runtime.
-	fn pre(&self) -> &H {
+	pub fn pre(&self) -> &H {
 		match *self {
 			PrePostHeader::Same(ref h) => h,
 			PrePostHeader::Different(ref h, _) => h,
@@ -209,7 +194,7 @@ impl<H> PrePostHeader<H> {
 	}
 
 	// convert to the "post-header" -- the header as it should be after all changes are applied.
-	fn into_post(self) -> H {
+	pub fn into_post(self) -> H {
 		match self {
 			PrePostHeader::Same(h) => h,
 			PrePostHeader::Different(_, h) => h,
@@ -334,6 +319,21 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self.executor
 	}
 
+	/// Get call storage_notification reference.
+	pub fn storage_notifications(&self) -> &Mutex<StorageNotifications<Block>> {
+		&self.storage_notifications
+	}
+
+	/// Get call import_notification_sinks reference.
+	pub fn import_notification_sinks(&self) -> &Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>> {
+		&self.import_notification_sinks
+	}
+
+	/// Get call finality_notification_sinks reference.
+	pub fn finality_notification_sinks(&self) -> &Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>> {
+		&self.finality_notification_sinks
+	}
+
 	/// Get import_lock reference.
 	pub fn import_lock(&self) -> &Mutex<()> {
 		&self.import_lock
@@ -342,6 +342,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get importing_block reference.
 	pub fn importing_block(&self) -> &RwLock<Option<Block::Hash>> {
 		&self.importing_block
+	}
+
+	/// Get block_execution_strategy reference.
+	pub fn block_execution_strategy(&self) -> &ExecutionStrategy {
+		&self.block_execution_strategy
 	}
 
 
@@ -598,7 +603,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	// TODO [ToDr] Optimize and re-use tags from the pool.
-	fn transaction_tags(
+	pub fn transaction_tags(
 		&self,
 		at: Block::Hash,
 		body: &Option<Vec<Block::Extrinsic>>
@@ -628,147 +633,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		})
 	}
 
-	pub fn execute_and_import_block(
-		&self,
-		origin: BlockOrigin,
-		hash: Block::Hash,
-		import_headers: PrePostHeader<Block::Header>,
-		justification: Justification,
-		body: Option<Vec<Block::Extrinsic>>,
-		authorities: Option<Vec<AuthorityId>>,
-		finalized: bool,
-		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	) -> error::Result<ImportResult> where
-		RA: TaggedTransactionQueue<Block>,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	{
-		let parent_hash = import_headers.post().parent_hash().clone();
-		match self.backend.blockchain().status(BlockId::Hash(hash))? {
-			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
-			blockchain::BlockStatus::Unknown => {},
-		}
-
-		let (last_best, last_best_number) = {
-			let info = self.backend.blockchain().info()?;
-			(info.best_hash, info.best_number)
-		};
-
-		// this is a fairly arbitrary choice of where to draw the line on making notifications,
-		// but the general goal is to only make notifications when we are already fully synced
-		// and get a new chain head.
-		let make_notifications = match origin {
-			BlockOrigin::NetworkBroadcast | BlockOrigin::Own | BlockOrigin::ConsensusBroadcast => true,
-			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::File => false,
-		};
-
-		// ensure parent block is finalized to maintain invariant that
-		// finality is called sequentially.
-		if finalized {
-			self.apply_finality(parent_hash, last_best, make_notifications)?;
-		}
-
-		let tags = self.transaction_tags(parent_hash, &body)?;
-		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
-			Some(transaction_state) => {
-				let mut overlay = Default::default();
-				let mut r = self.executor.call_at_state(
-					transaction_state,
-					&mut overlay,
-					"execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
-					match (origin, self.block_execution_strategy) {
-						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
-							ExecutionManager::NativeWhenPossible,
-						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
-						_ => ExecutionManager::Both(|wasm_result, native_result| {
-							let header = import_headers.post();
-							warn!("Consensus error between wasm and native block execution at block {}", hash);
-							warn!("   Header {:?}", header);
-							warn!("   Native result {:?}", native_result);
-							warn!("   Wasm result {:?}", wasm_result);
-							telemetry!("block.execute.consensus_failure";
-								"hash" => ?hash,
-								"origin" => ?origin,
-								"header" => ?header
-							);
-							wasm_result
-						}),
-					},
-				);
-				let (_, storage_update, changes_update) = r?;
-				overlay.commit_prospective();
-				(Some(storage_update), Some(changes_update), Some(overlay.into_committed()))
-			},
-			None => (None, None, None)
-		};
-
-		// TODO: non longest-chain rule.
-		let is_new_best = finalized || import_headers.post().number() > &last_best_number;
-		let leaf_state = if finalized {
-			::backend::NewBlockState::Final
-		} else if is_new_best {
-			::backend::NewBlockState::Best
-		} else {
-			::backend::NewBlockState::Normal
-		};
-
-		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
-
-		transaction.set_block_data(
-			import_headers.post().clone(),
-			body,
-			Some(justification),
-			leaf_state,
-		)?;
-
-		if let Some(authorities) = authorities {
-			transaction.update_authorities(authorities);
-		}
-		if let Some(storage_update) = storage_update {
-			transaction.update_storage(storage_update)?;
-		}
-		if let Some(Some(changes_update)) = changes_update {
-			transaction.update_changes_trie(changes_update)?;
-		}
-
-		transaction.set_aux(aux)?;
-		self.backend.commit_operation(transaction)?;
-
-		if make_notifications {
-			if let Some(storage_changes) = storage_changes {
-				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-				self.storage_notifications.lock()
-					.trigger(&hash, storage_changes);
-			}
-
-			if finalized {
-				let notification = FinalityNotification::<Block> {
-					hash,
-					header: import_headers.post().clone(),
-				};
-
-				self.finality_notification_sinks.lock()
-					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-			}
-
-			let notification = BlockImportNotification::<Block> {
-				hash,
-				origin,
-				header: import_headers.into_post(),
-				is_new_best,
-				tags,
-			};
-
-			self.import_notification_sinks.lock()
-				.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-		}
-
-		Ok(ImportResult::Queued)
-	}
-
 	/// Finalizes all blocks up to given.
-	fn apply_finality(&self, block: Block::Hash, best_block: Block::Hash, notify: bool) -> error::Result<()> {
+	pub fn apply_finality(&self, block: Block::Hash, best_block: Block::Hash, notify: bool) -> error::Result<()> {
 		// find tree route from last finalized to given block.
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 

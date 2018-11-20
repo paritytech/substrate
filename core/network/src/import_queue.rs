@@ -35,13 +35,13 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, 
 
 pub use blocks::BlockData;
 use client::error::Error as ClientError;
-use client::{ImportResult, BlockOrigin};
+use client::BlockOrigin;
 use error::{ErrorKind, Error};
 use protocol::Context;
 use service::ExecuteInContext;
 use sync::ChainSync;
 
-pub use consensus::{ImportBlock, BlockImport};
+pub use consensus::{ImportBlock, BlockImport, ImportResult};
 
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B,Error=ClientError> + Send + Sync>;

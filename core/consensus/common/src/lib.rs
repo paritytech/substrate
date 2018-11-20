@@ -37,6 +37,7 @@ extern crate slog;
 extern crate log;
 extern crate substrate_client as client;
 extern crate substrate_transaction_pool as transaction_pool;
+extern crate substrate_state_machine as state_machine;
 extern crate parking_lot;
 
 extern crate parity_codec as codec;
@@ -65,7 +66,7 @@ pub mod service;
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 pub use client::error::{Error, ErrorKind};
-pub use block_import::{BlockImport, ImportBlock};
+pub use block_import::{BlockImport, ImportBlock, ImportResult};
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {

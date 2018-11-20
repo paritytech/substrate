@@ -103,8 +103,8 @@ pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
 	new_with_backend,
 	new_in_mem,
-	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	Client, ClientInfo, ChainHead, BlockOrigin, ImportResult, PrePostHeader
+	BlockBody, BlockStatus, ImportNotifications, FinalityNotification, FinalityNotifications, BlockchainEvents,
+	Client, ClientInfo, ChainHead, BlockOrigin, PrePostHeader, BlockImportNotification
 };
 #[cfg(feature = "std")]
 pub use notifications::{StorageEventStream, StorageChangeSet};

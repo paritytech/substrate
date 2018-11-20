@@ -18,6 +18,7 @@ slog = { version = "^2", optional = true }
 substrate-telemetry = { path = "../../../core/telemetry", optional = true }
 log = "0.4"
 substrate-transaction-pool = { path = "../../../core/transaction-pool" }
+substrate-state-machine = { path = "../../../core/state-machine", optional = true }
 parking_lot = "0.4"
 
 [features]
@@ -25,4 +26,5 @@ default = ["std"]
 std = [
     "slog",
     "substrate-telemetry",
+    "substrate-state-machine"
 ]

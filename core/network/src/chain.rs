@@ -16,13 +16,13 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor, ImportResult};
+use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor};
 use client::error::Error;
 use client::light::fetcher::ChangesProof;
 use consensus::BlockImport;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::{BlockId};
-use consensus::{ImportBlock};
+use consensus::{ImportBlock, ImportResult};
 use runtime_primitives::Justification;
 use primitives::{H256, Blake2Hasher, AuthorityId};
 
