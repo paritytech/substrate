@@ -440,7 +440,7 @@ mod tests {
 
 	type Error = client::error::Error;
 
-	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::ClientWithApi>;
+	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::RuntimeApi>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);

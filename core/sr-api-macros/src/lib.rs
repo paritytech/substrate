@@ -213,18 +213,130 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	Ok(quote!( #( #impl_calls )* ))
 }
 
+fn generate_get_node_block_ty(runtime: &Type) -> TokenStream {
+	let crate_ = generate_crate_access();
+
+	quote!( <#runtime as #crate_::runtime_api::GetNodeBlockType>::NodeBlock )
+}
+
+fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStream> {
+	let crate_ = generate_crate_access();
+	let runtime = &impls.get(0).ok_or_else(||
+		Error::new(Span::call_site(), "No api implementation given!")
+	)?.self_ty;
+	let block = generate_get_node_block_ty(runtime);
+	let block_id = quote!( #crate_::runtime_api::BlockId<#block> );
+
+	Ok(quote!(
+		/// The struct that implements all runtime apis for a runtime.
+		#[cfg(feature = "std")]
+		pub struct RuntimeApi {
+			call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<#block>>,
+			commit_on_success: ::std::cell::RefCell<bool>,
+			initialised_block: ::std::cell::RefCell<Option<#block_id>>,
+			changes: ::std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
+		}
+
+		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
+		// `ApiRef` object and `ApiRef` also has an associated lifetime. This lifetimes makes it
+		// impossible to move `RuntimeApi` into another thread.
+		#[cfg(feature = "std")]
+		unsafe impl Send for RuntimeApi {}
+		#[cfg(feature = "std")]
+		unsafe impl Sync for RuntimeApi {}
+
+		#[cfg(feature = "std")]
+		impl #crate_::runtime_api::ApiExt for RuntimeApi {
+			fn map_api_result<F: FnOnce(&Self) -> Result<R, E>, R, E>(
+				&self,
+				map_call: F
+			) -> Result<R, E> {
+				*self.commit_on_success.borrow_mut() = false;
+				let res = map_call(self);
+				*self.commit_on_success.borrow_mut() = true;
+
+				self.commit_on_ok(&res);
+
+				res
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl #crate_::runtime_api::ConstructRuntimeApi<#block> for RuntimeApi {
+			fn construct_runtime_api<'a, T: client::runtime_api::CallApiAt<#block>>(
+				call: &'a T
+			) -> #crate_::runtime_api::ApiRef<'a, Self> {
+				RuntimeApi {
+					call: unsafe {
+						::std::ptr::NonNull::new_unchecked(
+							call as &client::runtime_api::CallApiAt<#block> as *const _ as *mut _
+						)
+					},
+					commit_on_success: true.into(),
+					initialised_block: None.into(),
+					changes: Default::default(),
+				}.into()
+			}
+		}
+
+		#[cfg(feature = "std")]
+		impl RuntimeApi {
+			fn call_api_at<A: Encode, R: Decode>(
+				&self,
+				at: &#block_id,
+				function: &'static str,
+				args: &A
+			) -> client::error::Result<R> {
+				let res = unsafe {
+					self.call.as_ref().call_api_at(
+						at,
+						function,
+						args.encode(),
+						&mut *self.changes.borrow_mut(),
+						&mut *self.initialised_block.borrow_mut()
+					).and_then(|r|
+						R::decode(&mut &r[..])
+							.ok_or_else(||
+								#crate_::error::ErrorKind::CallResultDecode(function).into()
+							)
+					)
+				};
+
+				self.commit_on_ok(&res);
+				res
+			}
+
+			fn commit_on_ok<R, E>(&self, res: &Result<R, E>) {
+				if *self.commit_on_success.borrow() {
+					if res.is_err() {
+						self.changes.borrow_mut().discard_prospective();
+					} else {
+						self.changes.borrow_mut().commit_prospective();
+					}
+				}
+			}
+		}
+	))
+}
+
+/// Unwrap the given result, if it is an error, `compile_error!` will be generated.
+fn unwrap_or_error(res: Result<TokenStream>) -> TokenStream {
+	res.unwrap_or_else(|e| e.to_compile_error())
+}
+
 #[proc_macro]
 pub fn impl_runtime_apis(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
-	let dispatch_impl =
-		generate_dispatch_function(&api_impls).unwrap_or_else(|e| e.to_compile_error());
-	let wasm_interface =
-		generate_wasm_interface(&api_impls).unwrap_or_else(|e| e.to_compile_error());
+	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls));
+	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
 	let hidden_includes = generate_hidden_includes();
+	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
 
 	quote!(
 		#hidden_includes
+
+		#base_runtime_api
 
 		#( #api_impls )*
 

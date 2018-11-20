@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-use node_runtime::{GenesisConfig, ClientWithApi};
+use node_runtime::{GenesisConfig, RuntimeApi};
 use node_primitives::Block;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
@@ -68,12 +68,12 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		RuntimeApi = ClientWithApi,
+		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, ClientWithApi>, Block>
+		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, ClientWithApi>, Block>
+		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig<Self>,

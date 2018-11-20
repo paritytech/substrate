@@ -1221,14 +1221,14 @@ pub(crate) mod tests {
 	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer, ClientWithApi, test_api::TestAPI};
+	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
 	/// 2) roots of changes tries for these blocks
 	/// 3) test cases in form (begin, end, key, vec![(block, extrinsic)]) that are required to pass
 	pub fn prepare_client_with_key_changes() -> (
-		test_client::client::Client<test_client::Backend, test_client::Executor, Block, ClientWithApi>,
+		test_client::client::Client<test_client::Backend, test_client::Executor, Block, RuntimeApi>,
 		Vec<H256>,
 		Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
 	) {
