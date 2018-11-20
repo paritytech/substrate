@@ -89,7 +89,7 @@ use client::runtime_api::TaggedTransactionQueue;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi
+	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
@@ -188,7 +188,7 @@ impl From<GrandpaError> for Error {
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network : Clone {
+pub trait Network: Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
@@ -201,6 +201,13 @@ pub trait Network : Clone {
 
 	/// Clean up messages for a round.
 	fn drop_messages(&self, round: u64, set_id: u64);
+
+	/// Get a stream of commit messages for a specific set-id. This stream
+	/// should never logically conclude.
+	fn commit_messages(&self, set_id: u64) -> Self::In;
+
+	/// Send message over the commit channel.
+	fn send_commit(&self, set_id: u64, message: Vec<u8>);
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
@@ -225,8 +232,11 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 }
 
 fn message_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
-	use runtime_primitives::traits::Hash as HashT;
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
+}
+
+fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
+	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
 }
 
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
@@ -246,6 +256,18 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 	fn drop_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
 		self.service.consensus_gossip().write().collect_garbage(|t| t == &topic);
+	}
+
+	fn commit_messages(&self, set_id: u64) -> Self::In {
+		self.service.consensus_gossip().write().messages_for(commit_topic::<B>(set_id))
+	}
+
+	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+		let topic = commit_topic::<B>(set_id);
+		let gossip = self.service.consensus_gossip();
+		self.service.with_spec(move |_s, context|{
+			gossip.write().multicast(context, topic, message);
+		});
 	}
 }
 
@@ -269,17 +291,45 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 	}
 }
 
+// something which will block until imported.
+trait BlockUntilImported<Block: BlockT>: Sized {
+	// the type that is converted into one or more waiting handles.
+	type In;
+	// the type that's produced when done blocking.
+	type Out;
+
+	/// new incoming item. For all internal items,
+	/// check if they require to be waited for.
+	/// if so, call the `Wait` closure.
+	/// if they are ready, call the `Ready` closure.
+	fn schedule_wait<S, Wait, Ready>(
+		input: Self::In,
+		status_check: &S,
+		wait: Wait,
+		ready: Ready,
+	) -> Result<(), Error> where
+		S: BlockStatus<Block>,
+		Wait: FnMut(Block::Hash, Self),
+		Ready: FnMut(Self::Out);
+
+	/// called when the wait has completed. The canonical number is passed through
+	/// for further checks.
+	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Out>;
+}
+
 /// Buffering imported messages until blocks with given hashes are imported.
-struct UntilImported<Block: BlockT, Status, I> {
+struct UntilImported<Block: BlockT, Status, I, M: BlockUntilImported<Block>> {
 	import_notifications: Fuse<ImportNotifications<Block>>,
 	status_check: Status,
 	inner: Fuse<I>,
-	ready: VecDeque<SignedMessage<Block>>,
+	ready: VecDeque<M::Out>,
 	check_pending: Interval,
-	pending: HashMap<Block::Hash, Vec<SignedMessage<Block>>>,
+	pending: HashMap<Block::Hash, Vec<M>>,
 }
 
-impl<Block: BlockT, Status: BlockStatus<Block>, I: Stream> UntilImported<Block, Status, I> {
+impl<Block: BlockT, Status, I: Stream, M> UntilImported<Block, Status, I, M>
+	where Status: BlockStatus<Block>, M: BlockUntilImported<Block>
+{
 	fn new(
 		import_notifications: ImportNotifications<Block>,
 		status_check: Status,
@@ -305,38 +355,33 @@ impl<Block: BlockT, Status: BlockStatus<Block>, I: Stream> UntilImported<Block, 
 	}
 }
 
-impl<Block: BlockT, Status: BlockStatus<Block>, I> Stream for UntilImported<Block, Status, I>
-	where I: Stream<Item=SignedMessage<Block>,Error=Error>
+impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> where
+	Status: BlockStatus<Block>,
+	I: Stream<Item=M::In,Error=Error>,
+	M: BlockUntilImported<Block>,
 {
-	type Item = SignedMessage<Block>;
+	type Item = M::Out;
 	type Error = Error;
 
-	fn poll(&mut self) -> Poll<Option<SignedMessage<Block>>, Error> {
+	fn poll(&mut self) -> Poll<Option<M::Out>, Error> {
 		loop {
 			match self.inner.poll() {
 				Err(e) => return Err(e),
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(None)),
-				Ok(Async::Ready(Some(signed_message))) => {
-					let (&target_hash, target_number) = signed_message.target();
-
-					// new message: hold it until the block is known.
-					if let Some(number) = self.status_check.block_number(target_hash)? {
-						if number != target_number {
-							warn!(
-								target: "afg",
-								"Authority {:?} signed GRANDPA message with \
-								wrong block number for hash {}",
-								signed_message.id,
-								target_hash
-							);
-						} else {
-							self.ready.push_back(signed_message)
-						}
-					} else {
-						self.pending.entry(target_hash)
+				Ok(Async::Ready(Some(input))) => {
+					// new input: schedule wait of any parts which require
+					// blocks to be known.
+					let mut ready = &mut self.ready;
+					let mut pending = &mut self.pending;
+					M::schedule_wait(
+						input,
+						&self.status_check,
+						|target_hash, wait| pending
+							.entry(target_hash)
 							.or_insert_with(Vec::new)
-							.push(signed_message);
-					}
+							.push(wait),
+						|ready_item| ready.push_back(ready_item),
+					)?;
 				}
 				Ok(Async::NotReady) => break,
 			}
@@ -349,7 +394,11 @@ impl<Block: BlockT, Status: BlockStatus<Block>, I> Stream for UntilImported<Bloc
 				Ok(Async::Ready(Some(notification))) => {
 					// new block imported. queue up all messages tied to that hash.
 					if let Some(messages) = self.pending.remove(&notification.hash) {
-						self.ready.extend(messages);
+						let canon_number = notification.header.number().clone();
+						let ready_messages = messages.into_iter()
+							.filter_map(|m| m.wait_completed(canon_number));
+
+						self.ready.extend(ready_messages);
 				 	}
 				}
 				Ok(Async::NotReady) => break,
@@ -370,22 +419,11 @@ impl<Block: BlockT, Status: BlockStatus<Block>, I> Stream for UntilImported<Bloc
 			}
 
 			for (known_hash, canon_number) in known_keys {
-				if let Some(mut pending_messages) = self.pending.remove(&known_hash) {
-					// verify canonicality of pending messages.
-					pending_messages.retain(|msg| {
-						let number_correct = msg.target().1 == canon_number;
-						if !number_correct {
-							warn!(
-								target: "afg",
-								"Authority {:?} signed GRANDPA message with \
-								wrong block number for hash {}",
-								msg.id,
-								known_hash,
-							);
-						}
-						number_correct
-					});
-					self.ready.extend(pending_messages);
+				if let Some(pending_messages) = self.pending.remove(&known_hash) {
+					let ready_messages = pending_messages.into_iter()
+						.filter_map(|m| m.wait_completed(canon_number));
+
+					self.ready.extend(ready_messages);
 				}
 			}
 		}
@@ -401,6 +439,61 @@ impl<Block: BlockT, Status: BlockStatus<Block>, I> Stream for UntilImported<Bloc
 		}
 	}
 }
+
+impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
+	type In = Self;
+	type Out = Self;
+
+	fn schedule_wait<S, Wait, Ready>(
+		msg: Self::In,
+		status_check: &S,
+		mut wait: Wait,
+		mut ready: Ready,
+	) -> Result<(), Error> where
+		S: BlockStatus<Block>,
+		Wait: FnMut(Block::Hash, Self),
+		Ready: FnMut(Self::Out)
+	{
+		let (&target_hash, target_number) = msg.target();
+
+		if let Some(number) = status_check.block_number(target_hash)? {
+			if number != target_number {
+				warn!(
+					target: "afg",
+					"Authority {:?} signed GRANDPA message with \
+					wrong block number for hash {}",
+					msg.id,
+					target_hash,
+				);
+			} else {
+				ready(msg);
+			}
+		} else {
+			wait(target_hash, msg)
+		}
+
+		Ok(())
+	}
+
+	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Out> {
+		let (&target_hash, target_number) = self.target();
+		if canon_number != target_number {
+			warn!(
+				target: "afg",
+				"Authority {:?} signed GRANDPA message with \
+				wrong block number for hash {}",
+				self.id,
+				target_hash,
+			);
+
+			None
+		} else {
+			Some(self)
+		}
+	}
+}
+
+type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block, Status, I, SignedMessage<Block>>;
 
 // clears the network messages for inner round on drop.
 struct ClearOnDrop<I, N: Network> {
@@ -706,7 +799,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
-		let incoming = UntilImported::new(
+		let incoming = UntilVoteTargetImported::new(
 			self.inner.import_notification_stream(),
 			self.inner.clone(),
 			incoming,
