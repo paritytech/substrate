@@ -222,7 +222,6 @@ fn check_compact_commit<Block: BlockT>(
 /// A stream for incoming commit messages. This checks all the signatures on the
 /// messages.
 pub(crate) fn checked_commit_stream<Block: BlockT, S>(
-	round: u64,
 	set_id: u64,
 	inner: S,
 	voters: Arc<HashMap<AuthorityId, u64>>,
@@ -233,15 +232,16 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	inner
 		.filter_map(|raw| {
 			// this could be optimized by decoding piecewise.
-			let decoded = CompactCommit::<Block>::decode(&mut &raw[..]);
+			let decoded = <(u64, CompactCommit<Block>)>::decode(&mut &raw[..]);
 			if decoded.is_none() {
 				trace!(target: "afg", "Skipping malformed commit message {:?}", raw);
 			}
 			decoded
 		})
-		.map(move |msg| check_compact_commit::<Block>(msg, &*voters, round, set_id))
+		.map(move |(round, msg)| {
+			check_compact_commit::<Block>(msg, &*voters, round, set_id).map(move |c| (round, c))
+		})
 		.filter_map(|x| x)
-		.map(move |commit| (round, commit))
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 

@@ -61,6 +61,7 @@ extern crate tokio;
 extern crate parking_lot;
 extern crate parity_codec as codec;
 extern crate substrate_finality_grandpa_primitives as fg_primitives;
+extern crate rand;
 
 #[macro_use]
 extern crate log;
@@ -82,7 +83,9 @@ extern crate parity_codec_derive;
 
 use futures::prelude::*;
 use futures::sync::mpsc;
-use client::{Client, error::Error as ClientError, backend::Backend, CallExecutor};
+use client::{
+	Client, error::Error as ClientError, backend::Backend, CallExecutor, BlockchainEvents
+};
 use client::blockchain::HeaderBackend;
 use client::runtime_api::TaggedTransactionQueue;
 use codec::{Encode, Decode};
@@ -93,6 +96,7 @@ use runtime_primitives::traits::{
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
+use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
@@ -105,7 +109,7 @@ use std::sync::Arc;
 use std::time::{Instant, Duration};
 
 use authorities::SharedAuthoritySet;
-use until_imported::UntilVoteTargetImported;
+use until_imported::{UntilCommitBlocksImported, UntilVoteTargetImported};
 
 pub use fg_primitives::ScheduledChange;
 
@@ -414,7 +418,7 @@ impl<H, N> fmt::Display for ExitOrError<H, N> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
 			ExitOrError::Error(ref e) => write!(f, "{:?}", e),
-			ExitOrError::AuthoritiesChanged(ref change) => write!(f, "restarting voter on new authorities"),
+			ExitOrError::AuthoritiesChanged(_) => write!(f, "restarting voter on new authorities"),
 		}
 	}
 }
@@ -460,9 +464,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		&self,
 		round: u64
 	) -> voter::RoundData<Self::Timer, Self::Id, Self::In, Self::Out> {
-		use client::BlockchainEvents;
-		use tokio::timer::Delay;
-
 		let now = Instant::now();
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
@@ -605,7 +606,29 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 
 	fn committer_data(&self) -> (Self::CommitIn, Self::CommitOut) {
-		unimplemented!()
+		// verification stream
+		let commit_in = ::communication::checked_commit_stream::<Block, _>(
+			self.set_id,
+			self.network.commit_messages(self.set_id),
+			self.voters.clone(),
+		);
+
+		// block commit messages until relevant blocks are imported.
+		let commit_in = UntilCommitBlocksImported::new(
+			self.inner.import_notification_stream(),
+			self.inner.clone(),
+			commit_in,
+		);
+
+		let commit_out = ::communication::CommitsOut::<Block, _>::new(
+			self.network.clone(),
+			self.set_id,
+		);
+
+		let commit_in = commit_in.map_err(Into::into);
+		let commit_out = commit_out.sink_map_err(Into::into);
+
+		(Box::new(commit_in), Box::new(commit_out))
 	}
 
 	fn voters(&self, _round: u64) -> &HashMap<AuthorityId, u64> {
@@ -613,8 +636,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
-		// let's say, random between 0-1 seconds.
-		unimplemented!()
+		use rand::{thread_rng, Rng};
+
+		//random between 0-1 seconds.
+		let delay: u64 = thread_rng().gen_range(0, 1000);
+		Box::new(Delay::new(
+			Instant::now() + Duration::from_millis(delay)
+		).map_err(|e| Error::Timer(e).into()))
 	}
 
 	fn prevote_equivocation(
