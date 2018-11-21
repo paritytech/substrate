@@ -26,7 +26,7 @@ pub use substrate_primitives::{H256, AuthorityId};
 
 pub type DigestItem = GenDigestItem<H256, u64>;
 
-#[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+#[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Digest {
 	pub logs: Vec<DigestItem>,
 }
@@ -48,7 +48,7 @@ impl traits::Digest for Digest {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -98,12 +98,27 @@ impl traits::Header for Header {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+impl<'a> Deserialize<'a> for Header {
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(DeError::custom("Invalid value passed into decode"))
+	}
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
-impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> where Xt: Serialize {
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	fn is_signed(&self) -> Option<bool> {
 		None
+	}
+}
+
+#[cfg(feature = "std")]
+impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt>
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
 

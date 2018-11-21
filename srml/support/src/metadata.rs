@@ -197,7 +197,7 @@ mod tests {
 	type EventModule = event_module::Module<TestRuntime>;
 	type EventModule2 = event_module2::Module<TestRuntime>;
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct TestRuntime;
 
 	impl_outer_event! {

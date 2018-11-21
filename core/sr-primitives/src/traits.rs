@@ -544,8 +544,8 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
-pub trait Digest: Member + MaybeSerializeDebug + Default {
-	type Hash: Member + MaybeSerializeDebug;
+pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
+	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
@@ -567,9 +567,9 @@ pub trait Digest: Member + MaybeSerializeDebug + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
-	type Hash: Member + MaybeSerializeDebug;
-	type AuthorityId: Member + MaybeSerializeDebug;
+pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
+	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
+	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;

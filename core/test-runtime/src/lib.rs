@@ -18,6 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+extern crate serde;
+
 extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
@@ -89,7 +92,7 @@ pub fn native_version() -> NativeVersion {
 
 /// Calls in transactions.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -99,10 +102,18 @@ pub struct Transfer {
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Extrinsic {
 	pub transfer: Transfer,
 	pub signature: Ed25519Signature,
+}
+
+#[cfg(feature = "std")]
+impl serde::Serialize for Extrinsic
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+	}
 }
 
 impl BlindCheckable for Extrinsic {

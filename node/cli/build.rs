@@ -17,10 +17,17 @@
 #[macro_use]
 extern crate clap;
 
+extern crate substrate_cli as cli;
+
+#[macro_use]
+extern crate structopt;
+
 use std::fs;
 use std::env;
 use clap::Shell;
 use std::path::Path;
+
+include!("src/params.rs");
 
 fn main() {
 	build_shell_completion();
@@ -37,7 +44,6 @@ fn build_shell_completion() {
 
 /// Build the shell auto-completion for a given Shell
 fn build_completion(shell: &Shell) {
-	let yml = load_yaml!("src/cli.yml");
 
 	let outdir = match env::var_os("OUT_DIR") {
         None => return,
@@ -51,9 +57,9 @@ fn build_completion(shell: &Shell) {
 
     fs::create_dir(&path).ok();
 
-    let mut app = clap::App::from_yaml(&yml);
+    let mut app = Params::clap();
     app.gen_completions(
-    	"polkadot",
+    	"substrate-node",
     	*shell,
     	&path);
 }

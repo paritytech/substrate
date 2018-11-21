@@ -87,14 +87,15 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 }
 
 /// Import blocks from a binary stream.
-pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
+pub fn import_blocks<F, E, R>(mut config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
 	struct DummyLink;
 	impl<B: Block> Link<B> for DummyLink { }
 
 	let client = new_client::<F>(&config)?;
-	let queue = components::FullComponents::<F>::build_import_queue(&config, client.clone())?;
+	// FIXME: this shouldn't need a mutable config. https://github.com/paritytech/substrate/issues/1134
+	let queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone())?;
 	queue.start(DummyLink)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();

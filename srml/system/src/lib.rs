@@ -154,7 +154,7 @@ pub type Log<T> = RawLog<
 >;
 
 /// A logs in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<Hash> {
 	/// Changes trie has been computed for this block. Contains the root of
