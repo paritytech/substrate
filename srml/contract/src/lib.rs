@@ -174,7 +174,7 @@ decl_module! {
 
 			// TODO: Return code hash and deposit an event?
 
-			code::save::<T>(&code, &schedule)?;
+			code::save::<T>(code, &schedule)?;
 
 			Ok(())
 		}
@@ -325,7 +325,8 @@ decl_storage! {
 		/// The code associated with an account.
 		pub CodeHashOf: map T::AccountId => Option<T::CodeHash>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
 
-		// pub CodeStorage: map code::CodeHash<T::Hash> => code::InstrumentedWasmModule;
+		pub PrestineCode: map T::CodeHash => Option<Vec<u8>>;
+		pub CodeStorage: map T::CodeHash => Option<code::InstrumentedWasmModule>;
 	}
 }
 

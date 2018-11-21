@@ -85,7 +85,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			}
 
 			if let Some(dest_code_hash) = dest_code_hash {
-				let dest_code = code::load::<T>(&dest_code_hash)?;
+				let dest_code = code::load::<T>(&dest_code_hash, &self.config.schedule)?;
 
 				vm::execute(
 					&dest_code.code,
@@ -161,7 +161,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				)?;
 			}
 
-			let dest_code = code::load::<T>(code_hash)?;
+			let dest_code = code::load::<T>(code_hash, &self.config.schedule)?;
 
 			// TODO: Do something with the output data.
 			let mut output_data = Vec::new();

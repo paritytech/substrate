@@ -15,11 +15,12 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use codec::Compact;
-use {Schedule, Trait};
+use runtime_support::StorageMap;
+use {Schedule, Trait, CodeStorage, PrestineCode};
 
 mod prepare;
 
-#[derive(Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
 pub struct MemoryDefinition {
 	#[codec(compact)]
 	pub initial: u32,
@@ -27,7 +28,7 @@ pub struct MemoryDefinition {
 	pub maximum: u32,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
 pub struct InstrumentedWasmModule {
 	/// Version of the schedule with which the code was instrumented.
 	#[codec(compact)]
@@ -38,11 +39,10 @@ pub struct InstrumentedWasmModule {
 }
 
 pub fn save<T: Trait>(
-	original_code: &[u8],
+	original_code: Vec<u8>,
 	schedule: &Schedule<T::Gas>,
 ) -> Result<(), &'static str> {
-	// TODO: panic
-	// let code_hash = T::Hashing::hash(&original_code);
+	// TODO: let code_hash = T::Hashing::hash(&original_code);
 	let code_hash = T::CodeHash::default();
 
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
@@ -54,12 +54,29 @@ pub fn save<T: Trait>(
 	)?;
 
 	// TODO: validate the code. If the code is not valid, then don't store it.
-	// TODO: put code directly into the storage under a key equal to hash, without involving `AccountDb`.
+
+	<CodeStorage<T>>::insert(code_hash, instrumented_module);
+	<PrestineCode<T>>::insert(code_hash, original_code);
 
 	panic!()
 }
 
-pub fn load<T: Trait>(hash: &T::CodeHash) -> Result<InstrumentedWasmModule, &'static str> {
-	// TODO: Load the version of schedule for the code. Reinstrument if it doesn't match.
-	panic!()
+pub fn load<T: Trait>(code_hash: &T::CodeHash, schedule: &Schedule<T::Gas>,) -> Result<InstrumentedWasmModule, &'static str> {
+	let instrumented_module = <CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
+
+	if instrumented_module.schedule_version < schedule.version {
+		let original_code = <PrestineCode<T>>::get(code_hash).ok_or_else(|| "prestine code is not found")?;
+
+		let instrumented_module = prepare::prepare_contract::<T, _>(
+			&original_code,
+			schedule,
+			|_, _| true, // TODO: Use real validation function.
+		)?;
+
+		<CodeStorage<T>>::insert(code_hash, instrumented_module.clone());
+
+		Ok(instrumented_module)
+	} else {
+		Ok(instrumented_module)
+	}
 }
