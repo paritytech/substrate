@@ -19,11 +19,12 @@ use std::sync::Arc;
 use std::{io, thread};
 use std::time::Duration;
 use futures::{self, Future, Stream, stream, sync::oneshot};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, ErrorKind};
 use network_libp2p::{start_service, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProtocol};
 use io::NetSyncIo;
+use consensus_gossip::ConsensusGossip;
 use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
 use config::Params;
 use error::Error;
@@ -44,6 +45,7 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 	fn status(&self) -> ProtocolStatus<B>;
 }
 
+/// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static {}
 impl<T> ExHashT for T where T: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static {}
 
@@ -82,9 +84,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 	pub fn new<I: 'static + ImportQueue<B>>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
-		import_queue: I,
+		import_queue: Arc<I>,
 	) -> Result<Arc<Service<B, S, H>>, Error> {
-		let import_queue = Arc::new(import_queue);
 		let handler = Arc::new(Protocol::new(
 			params.config,
 			params.chain,
@@ -101,7 +102,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 			network,
 			protocol_id,
 			handler,
-			bg_thread: Some(thread),
+			bg_thread: Some(thread)
 		});
 
 		// connect the import-queue to the network service.
@@ -130,6 +131,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		where F: FnOnce(&mut S, &mut Context<B>) -> U
 	{
 		self.handler.with_spec(&mut NetSyncIo::new(&self.network, self.protocol_id), f)
+	}
+
+	/// access the underlying consensus gossip handler
+	pub fn consensus_gossip<'a>(&'a self) -> &'a RwLock<ConsensusGossip<B>> {
+		self.handler.consensus_gossip()
 	}
 }
 

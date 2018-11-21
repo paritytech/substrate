@@ -55,6 +55,15 @@ impl<T> OnSessionChange<T> for () {
 	fn on_session_change(_: T, _: bool) {}
 }
 
+impl<T, A, B> OnSessionChange<T> for (A, B)
+	where T: Clone, A: OnSessionChange<T>, B: OnSessionChange<T>
+{
+	fn on_session_change(time_elapsed: T, should_reward: bool) {
+		A::on_session_change(time_elapsed.clone(), should_reward);
+		B::on_session_change(time_elapsed, should_reward);
+	}
+}
+
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 	type OnSessionChange: OnSessionChange<Self::Moment>;

@@ -50,7 +50,9 @@ impl<H, N> SharedAuthoritySet<H, N> {
 }
 
 impl<H: Eq, N> SharedAuthoritySet<H, N>
-	where N: Add<Output=N> + Ord + Clone + Debug
+where
+	N: Add<Output=N> + Ord + Clone + Debug,
+	H: Debug
 {
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
@@ -103,7 +105,9 @@ impl<H, N> AuthoritySet<H, N> {
 }
 
 impl<H: Eq, N> AuthoritySet<H, N>
-	where N: Add<Output=N> + Ord + Clone + Debug,
+where
+	N: Add<Output=N> + Ord + Clone + Debug,
+	H: Debug
 {
 	/// Note an upcoming pending transition.
 	pub(crate) fn add_pending_change(&mut self, pending: PendingChange<H, N>) {
@@ -152,7 +156,11 @@ impl<H: Eq, N> AuthoritySet<H, N>
 
 					// check if the block that signalled the change is canonical in
 					// our chain.
-					if canonical(change.canon_height.clone())? == change.canon_hash {
+					let canonical_at_height = canonical(change.canon_height.clone())?;
+					debug!(target: "afg", "Evaluating potential set change at block {:?}. Our canonical hash is {:?}",
+						(&change.canon_height, &change.canon_hash), canonical_at_height);
+
+					if canonical_at_height == change.canon_hash {
 						// apply this change: make the set canonical
 						info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
 							change.canon_height);

@@ -103,6 +103,8 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
+	/// Configuration of this Service
+	pub config: FactoryFullConfiguration<Components::Factory>,
 	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
@@ -129,7 +131,7 @@ impl<Components> Service<Components>
 {
 	/// Creates a new service.
 	pub fn new(
-		config: FactoryFullConfiguration<Components::Factory>,
+		mut config: FactoryFullConfiguration<Components::Factory>,
 		task_executor: TaskExecutor,
 	)
 		-> Result<Self, error::Error>
@@ -159,7 +161,7 @@ impl<Components> Service<Components>
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Components::build_import_queue(&config, client.clone())?;
+		let import_queue = Arc::new(Components::build_import_queue(&mut config, client.clone())?);
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
@@ -168,7 +170,7 @@ impl<Components> Service<Components>
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool, client.clone())?
+			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
 			imports_external_transactions: !(config.roles == Roles::LIGHT),
@@ -177,19 +179,30 @@ impl<Components> Service<Components>
 		 };
 
 		let network_params = Components::CreateNetworkParams::create_network_params(
-			client.clone(), config.roles, config.network, on_demand.clone(),
-			transaction_pool_adapter, network_protocol
+			client.clone(),
+			config.roles,
+			config.network.clone(),
+			on_demand.clone(),
+			transaction_pool_adapter,
+			network_protocol,
 		);
 
-		let mut protocol_id = network::ProtocolId::default();
-		let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
-		if protocol_id_full.len() > protocol_id.len() {
-			warn!("Protocol ID truncated to {} chars", protocol_id.len());
-		}
-		let id_len = protocol_id_full.len().min(protocol_id.len());
-		&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+		let protocol_id = {
+			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
+			let mut protocol_id = network::ProtocolId::default();
+			if protocol_id_full.len() > protocol_id.len() {
+				warn!("Protocol ID truncated to {} chars", protocol_id.len());
+			}
+			let id_len = protocol_id_full.len().min(protocol_id.len());
+			&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+			protocol_id
+		};
 
-		let network = network::Service::new(network_params, protocol_id, import_queue)?;
+		let network = network::Service::new(
+			network_params,
+			protocol_id,
+			import_queue
+		)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
 		{
@@ -244,7 +257,7 @@ impl<Components> Service<Components>
 		});
 
 		// Telemetry
-		let telemetry = match config.telemetry_url {
+		let telemetry = match config.telemetry_url.clone() {
 			Some(url) => {
 				let is_authority = config.roles == Roles::AUTHORITY;
 				let pubkey = format!("{}", public_key);
@@ -276,12 +289,30 @@ impl<Components> Service<Components>
 			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			config,
 			proposer,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
 			_telemetry: telemetry,
 		})
+	}
+
+	/// give the authority key, if we are an authority and have a key
+	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
+		if self.config.roles != Roles::AUTHORITY { return None }
+		let keystore = &self.keystore;
+		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
+				.map(|k| keystore.load(k, "")))
+		{
+			Some(key)
+		} else {
+			None
+		}
+	}
+
+	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
+		&self.config
 	}
 }
 
@@ -466,6 +497,9 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 /// 		Configuration = (),
 /// 		FullService = Service<FullComponents<Self>>
 /// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+///         // Setup as Consensus Authority (if the role and key are given)
+/// 		AuthoritySetup = {
+/// 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| { Ok(service) }},
 /// 		LightService = Service<LightComponents<Self>>
 /// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
 ///         // Declare the import queue. The import queue is special as it takes two initializers.
@@ -491,6 +525,7 @@ macro_rules! construct_service_factory {
 			Genesis = $genesis:ty,
 			Configuration = $config:ty,
 			FullService = $full_service:ty { $( $full_service_init:tt )* },
+			AuthoritySetup = { $( $authority_setup:tt )* },
 			LightService = $light_service:ty { $( $light_service_init:tt )* },
 			FullImportQueue = $full_import_queue:ty
 				{ $( $full_import_queue_init:tt )* },
@@ -539,14 +574,14 @@ macro_rules! construct_service_factory {
 			}
 
 			fn build_full_import_queue(
-				config: &$crate::FactoryFullConfiguration<Self>,
+				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
 				( $( $full_import_queue_init )* ) (config, client)
 			}
 
 			fn build_light_import_queue(
-				config: &FactoryFullConfiguration<Self>,
+				config: &mut FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
 			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
@@ -565,7 +600,13 @@ macro_rules! construct_service_factory {
 				executor: $crate::TaskExecutor
 			) -> Result<Self::FullService, $crate::Error>
 			{
-				( $( $full_service_init )* ) (config, executor)
+				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
+					if let Some(key) = (&service).authority_key() {
+						($( $authority_setup )*)(service, executor, Arc::new(key))
+					} else {
+						Ok(service)
+					}
+				})
 			}
 		}
 	}

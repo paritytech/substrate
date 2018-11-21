@@ -77,7 +77,7 @@ pub type BlockId = generic::BlockId<Block>;
 
 /// Opaque, encoded, unchecked extrinsic.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl traits::Extrinsic for UncheckedExtrinsic {

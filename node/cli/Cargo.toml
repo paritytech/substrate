@@ -3,10 +3,12 @@ name = "node-cli"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
+build = "build.rs"
 
 [dependencies]
 log = "0.4"
 tokio = "0.1.7"
+futures = "0.1"
 exit-future = "0.1"
 substrate-cli = { path = "../../core/cli" }
 parity-codec = { version = "2.1" }
@@ -22,9 +24,16 @@ substrate-service = { path = "../../core/service" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-network = { path = "../../core/network" }
 substrate-consensus-aura = { path = "../../core/consensus/aura" }
+substrate-finality-grandpa = { path = "../../core/finality-grandpa" }
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
+structopt = "0.2.13"
 substrate-keystore = { path = "../../core/keystore" }
 
 [dev-dependencies]
 substrate-service-test = { path = "../../core/service/test" }
+
+[build-dependencies]
+substrate-cli = { path = "../../core/cli" }
+structopt = "0.2.13"
+clap = "~2.32"

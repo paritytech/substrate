@@ -23,6 +23,7 @@ srml-contract = { path = "../../srml/contract" }
 srml-council = { path = "../../srml/council" }
 srml-democracy = { path = "../../srml/democracy" }
 srml-executive = { path = "../../srml/executive" }
+srml-grandpa = { path = "../../srml/grandpa" }
 sr-primitives = { path = "../../core/sr-primitives" }
 srml-session = { path = "../../srml/session" }
 srml-staking = { path = "../../srml/staking" }
@@ -46,6 +47,7 @@ std = [
 	"srml-council/std",
 	"srml-democracy/std",
 	"srml-executive/std",
+	"srml-grandpa/std",
 	"sr-primitives/std",
 	"srml-session/std",
 	"srml-staking/std",

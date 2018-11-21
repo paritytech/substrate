@@ -24,18 +24,43 @@ use node_runtime::{GenesisConfig, ClientWithApi};
 use node_primitives::Block;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	Roles, TaskExecutor,
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
+use primitives::ed25519::Pair;
 use client;
+use std::time::Duration;
+use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
 	pub struct NodeProtocol where Block = Block { }
+}
+
+/// Node specific configuration
+pub struct NodeConfig<F: substrate_service::ServiceFactory> {
+	/// should run as a grandpa authority
+	pub grandpa_authority: bool,
+	/// should run as a grandpa authority only, don't validate as usual
+	pub grandpa_authority_only: bool,
+	/// grandpa connection to import block
+
+	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
+	// https://github.com/paritytech/substrate/issues/1134
+	pub grandpa_link_half: Option<grandpa::LinkHalfForService<F>>,
+}
+
+impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
+	fn default() -> NodeConfig<F> {
+		NodeConfig {
+			grandpa_authority: false,
+			grandpa_authority_only: false,
+			grandpa_link_half: None
+		}
+	}
 }
 
 construct_service_factory! {
@@ -49,49 +74,62 @@ construct_service_factory! {
 		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, ClientWithApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
-		Configuration = (),
+		Configuration = NodeConfig<Self>,
 		FullService = FullComponents<Self>
-			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor| {
-				let is_auth = config.roles == Roles::AUTHORITY;
-				FullComponents::<Factory>::new(config, executor.clone()).map(move |service|{
-					if is_auth {
-						if let Ok(Some(Ok(key))) = service.keystore().contents()
-							.map(|keys| keys.get(0).map(|k| service.keystore().load(k, "")))
-						{
-							info!("Using authority key {}", key.public());
-							let task = start_aura(
-								AuraConfig {
-									local_key:  Some(Arc::new(key)),
-									slot_duration: AURA_SLOT_DURATION,
-								},
-								service.client(),
-								service.proposer(),
-								service.network(),
-							);
+			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
+				FullComponents::<Factory>::new(config, executor) },
+		AuthoritySetup = {
+			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
+				if service.config.custom.grandpa_authority {
+					info!("Running Grandpa session as Authority {}", key.public());
+					let link_half = service.config().custom.grandpa_link_half.as_ref().take()
+						.expect("Link Half is present for Full Services or setup failed before. qed");
+					let grandpa_fut = grandpa::run_grandpa(
+						grandpa::Config {
+							gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
+							local_key: Some(key.clone()),
+							name: Some(service.config().name.clone())
+						},
+						(*link_half).clone(),
+						grandpa::NetworkBridge::new(service.network())
+					)?;
 
-							executor.spawn(task);
-						}
-					}
-
-					service
-				})
+					executor.spawn(grandpa_fut);
+				}
+				if !service.config.custom.grandpa_authority_only {
+					info!("Using authority key {}", key.public());
+					executor.spawn(start_aura(
+						AuraConfig {
+							local_key: Some(key),
+							slot_duration: AURA_SLOT_DURATION,
+						},
+						service.client(),
+						service.proposer(),
+						service.network(),
+					));
+				}
+				Ok(service)
 			}
 		},
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<Self::Block, FullClient<Self>, NothingExtra>
-			{ |config, client| Ok(import_queue(
-				AuraConfig {
-					local_key: None,
-					slot_duration: 5
-				},
-				client,
-				NothingExtra,
-			))
-			},
+		FullImportQueue = AuraImportQueue<Self::Block, grandpa::BlockImportForService<Self>, NothingExtra>
+			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
+				let (block_import, link_half) = grandpa::block_import::<_, _, _, ClientWithApi, FullClient<Self>>(client.clone(), client)?;
+				config.custom.grandpa_link_half = Some(link_half);
+
+				Ok(import_queue(
+					AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					},
+					Arc::new(block_import),
+					NothingExtra,
+				))
+			}},
 		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>, NothingExtra>
-			{ |config, client| Ok(import_queue(
-				AuraConfig {
+			{ |ref mut config, client| Ok(
+				import_queue(AuraConfig {
 					local_key: None,
 					slot_duration: 5
 				},

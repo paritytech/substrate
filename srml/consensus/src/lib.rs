@@ -75,7 +75,7 @@ pub type Log<T> = RawLog<
 >;
 
 /// A logs in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<SessionKey> {
 	/// Authorities set has been changed. Contains the new set of authorities.

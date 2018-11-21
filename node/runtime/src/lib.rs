@@ -47,6 +47,7 @@ extern crate srml_contract as contract;
 extern crate srml_council as council;
 extern crate srml_democracy as democracy;
 extern crate srml_executive as executive;
+extern crate srml_grandpa as grandpa;
 extern crate srml_session as session;
 extern crate srml_staking as staking;
 extern crate srml_system as system;
@@ -56,7 +57,6 @@ extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
-extern crate substrate_finality_grandpa_primitives;
 
 #[cfg(feature = "std")]
 use codec::{Encode, Decode};
@@ -65,6 +65,7 @@ use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
+use grandpa::fg_primitives::{runtime::GrandpaApi, ScheduledChange, id::*};
 #[cfg(feature = "std")]
 use node_primitives::Block as GBlock;
 use client::{block_builder::api::runtime::*, runtime_api::{runtime::*, id::*}};
@@ -85,7 +86,6 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-use substrate_finality_grandpa_primitives::{runtime::GrandpaApi, ScheduledChange};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -109,7 +109,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	apis: apis_vec!([
 		(BLOCK_BUILDER, 1),
 		(TAGGED_TRANSACTION_QUEUE, 1),
-		(METADATA, 1)
+		(METADATA, 1),
+		(GRANDPA_API, 1),
 	]),
 };
 
@@ -165,7 +166,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 
 impl session::Trait for Runtime {
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
-	type OnSessionChange = Staking;
+	type OnSessionChange = (Staking, grandpa::SyncedAuthorities<Runtime>);
 	type Event = Event;
 }
 
@@ -209,6 +210,12 @@ impl upgrade_key::Trait for Runtime {
 	type Event = Event;
 }
 
+impl grandpa::Trait for Runtime {
+	type SessionKey = SessionKey;
+	type Log = Log;
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
@@ -225,6 +232,7 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
+		Grandpa: grandpa::{Module, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		UpgradeKey: upgrade_key,
@@ -463,15 +471,23 @@ impl_runtime_apis! {
 		}
 	}
 
-
-	impl GrandpaApi<Block> for ClientWithApi {
-		fn grandpa_pending_change(_digest: DigestFor<Block>)
-			-> Option<ScheduledChange<NumberFor<Block>>> {
-			unimplemented!("Robert, where is the impl?")
+	impl GrandpaApi<Block> for Runtime {
+		fn grandpa_pending_change(digest: DigestFor<Block>)
+			-> Option<ScheduledChange<NumberFor<Block>>>
+		{
+			for log in digest.logs.iter().filter_map(|l| match l {
+				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
+				_=> None
+			}) {
+				if let Some(change) = Grandpa::scrape_digest_change(log) {
+					return Some(change);
+				}
+			}
+			None
 		}
 
 		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
-			unimplemented!("Robert, where is the impl?")
+			Grandpa::grandpa_authorities()
 		}
 	}
 }

@@ -24,14 +24,11 @@ use rand::{self, Rng};
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
-use message::generic::{Message, ConsensusMessage};
+pub use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
 use config::Roles;
-use specialization::NetworkSpecialization;
-use StatusMessage;
-use generic_message;
 
-// TODO: Add additional spam/DoS attack protection.
+// FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
 
 struct PeerConsensus<H> {
@@ -55,10 +52,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	session_start: Option<B::Hash>,
 }
 
-impl<B: BlockT> ConsensusGossip<B>
-where
-	B::Header: HeaderT<Number=u64>
-{
+impl<B: BlockT> ConsensusGossip<B> {
 	/// Create a new instance.
 	pub fn new() -> Self {
 		ConsensusGossip {
@@ -260,52 +254,6 @@ where
 		self.session_start = Some(parent_hash);
 		self.collect_garbage(|topic| old_session.as_ref().map_or(true, |h| topic != h));
 	}
-}
-
-impl<Block: BlockT> NetworkSpecialization<Block> for ConsensusGossip<Block> where
-	Block::Header: HeaderT<Number=u64>
-{
-	fn status(&self) -> Vec<u8> {
-		Vec::new()
-	}
-
-	fn on_connect(&mut self, ctx: &mut Context<Block>, who: NodeIndex, status: StatusMessage<Block>) {
-		self.new_peer(ctx, who, status.roles);
-	}
-
-	fn on_disconnect(&mut self, ctx: &mut Context<Block>, who: NodeIndex) {
-		self.peer_disconnected(ctx, who);
-	}
-
-	fn on_message(
-		&mut self,
-		ctx: &mut Context<Block>,
-		who: NodeIndex,
-		message: &mut Option<::message::Message<Block>>
-	) {
-		match message.take() {
-			Some(generic_message::Message::Consensus(topic, msg)) => {
-				trace!(target: "gossip", "Consensus message from {}: {:?}", who, msg);
-				self.on_incoming(ctx, who, topic, msg);
-			}
-			r => *message = r,
-		}
-	}
-
-	fn on_abort(&mut self) {
-		self.abort();
-	}
-
-	fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
-		self.collect_garbage(|_| true);
-	}
-
-	fn on_block_imported(
-		&mut self,
-		_ctx: &mut Context<Block>,
-		_hash: <Block as BlockT>::Hash,
-		_header: &<Block as BlockT>::Header)
-	{}
 }
 
 #[cfg(test)]

@@ -3,10 +3,9 @@ name = "substrate-cli"
 version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
-build = "build.rs"
 
 [dependencies]
-clap = { version = "~2.32", features = ["yaml"] }
+clap = "~2.32"
 backtrace = "0.3"
 env_logger = "0.5"
 error-chain = "0.12"
@@ -30,6 +29,4 @@ substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
 names = "0.11.0"
-
-[build-dependencies]
-clap = "~2.32"
+structopt = "0.2.13"

@@ -30,7 +30,7 @@ impl_outer_origin!{
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;

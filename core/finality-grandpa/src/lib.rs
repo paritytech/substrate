@@ -55,6 +55,7 @@ extern crate futures;
 extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_consensus_common as consensus_common;
+extern crate substrate_network as network;
 extern crate substrate_primitives;
 extern crate tokio;
 extern crate parking_lot;
@@ -64,8 +65,8 @@ extern crate substrate_finality_grandpa_primitives as fg_primitives;
 #[macro_use]
 extern crate log;
 
-#[cfg(test)]
-extern crate substrate_network as network;
+#[cfg(feature="service-integration")]
+extern crate substrate_service as service;
 
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
@@ -86,7 +87,7 @@ use client::{Client, error::Error as ClientError, ImportNotifications, backend::
 use client::blockchain::HeaderBackend;
 use client::runtime_api::TaggedTransactionQueue;
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, ImportBlock, ImportResult};
+use consensus_common::{BlockImport, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi
 };
@@ -98,6 +99,8 @@ use tokio::timer::Interval;
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
 
+use network::{Service as NetworkService, ExHashT};
+use network::consensus_gossip::{ConsensusMessage};
 use std::collections::{VecDeque, HashMap};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
@@ -107,6 +110,11 @@ use authorities::SharedAuthoritySet;
 pub use fg_primitives::ScheduledChange;
 
 mod authorities;
+
+#[cfg(feature="service-integration")]
+mod service_integration;
+#[cfg(feature="service-integration")]
+pub use service_integration::{LinkHalfForService, BlockImportForService};
 
 #[cfg(test)]
 mod tests;
@@ -173,7 +181,7 @@ impl From<GrandpaError> for Error {
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network: Clone {
+pub trait Network : Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
@@ -186,6 +194,52 @@ pub trait Network: Clone {
 
 	/// Clean up messages for a round.
 	fn drop_messages(&self, round: u64, set_id: u64);
+}
+
+///  Bridge between NetworkService, gossiping consensus messages and Grandpa
+pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> {
+	service: Arc<NetworkService<B, S, H>>
+}
+
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> NetworkBridge<B, S, H> {
+	/// Create a new NetworkBridge to the given NetworkService
+	pub fn new(service: Arc<NetworkService<B, S, H>>) -> Self {
+		NetworkBridge { service }
+	}
+}
+
+
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Clone for NetworkBridge<B, S, H> {
+	fn clone(&self) -> Self {
+		NetworkBridge {
+			service: Arc::clone(&self.service)
+		}
+	}
+}
+
+fn message_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
+	use runtime_primitives::traits::Hash as HashT;
+	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
+}
+
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
+	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
+	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
+		self.service.consensus_gossip().write().messages_for(message_topic::<B>(round, set_id))
+	}
+
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
+		let topic = message_topic::<B>(round, set_id);
+		let gossip = self.service.consensus_gossip();
+		self.service.with_spec(move |_s, context|{
+			gossip.write().multicast(context, topic, message);
+		});
+	}
+
+	fn drop_messages(&self, round: u64, set_id: u64) {
+		let topic = message_topic::<B>(round, set_id);
+		self.service.consensus_gossip().write().collect_garbage(|t| t == &topic);
+	}
 }
 
 /// Something which can determine if a block is known.
@@ -523,7 +577,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 		// once blocks are finalized that make that transition irrelevant or activate it,
 		// we will proceed onwards. most of the time there will be no pending transition.
 		let limit = self.authority_set.current_limit();
-		trace!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
+		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
 		match self.inner.best_containing(block, limit) {
 			Ok(Some(hash)) => {
@@ -583,22 +637,22 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network + 'static,
-	N::In: 'static,
+	N: Network + 'static + Send,
+	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Box<Future<Item = (), Error = Self::Error>>;
+	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
 	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
-	type In = Box<Stream<
+	type In = Box<dyn Stream<
 		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
 		Error = Self::Error,
-	>>;
-	type Out = Box<Sink<
+	> + Send>;
+	type Out = Box<dyn Sink<
 		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
-	>>;
+	> + Send>;
 	type Error = ExitOrError<Block::Hash, NumberFor<Block>>;
 
 	#[allow(unreachable_code)]
@@ -689,6 +743,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			return Ok(());
 		}
 
+		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+
 		// lock must be held through writing to DB to avoid race
 		let mut authority_set = self.authority_set.inner().write();
 		let client = &self.inner;
@@ -768,8 +824,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 }
 
-
-
 /// A block-import handler for GRANDPA.
 ///
 /// This scans each imported block for signals of changing authority set.
@@ -806,7 +860,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error.
 		let just_in_case = maybe_change.map(|change| {
-			let hash = block.header.hash();
+			let hash = block.post_header().hash();
 			let number = block.header.number().clone();
 
 			let mut authorities = self.authority_set.inner().write();
@@ -834,11 +888,37 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	}
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBlockImport<B, E, Block, RA, PRA>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
+{
+
+	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		self.inner.authorities_at(at)
+	}
+}
+
 /// Half of a link between a block-import worker and a the background voter.
 // This should remain non-clone.
 pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+}
+impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for LinkHalf<B, E, Block, RA>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
+{
+	fn clone(&self) -> Self {
+		LinkHalf {
+			client: self.client.clone(),
+			authority_set: self.authority_set.clone()
+		}
+	}
 }
 
 /// Make block importer and link half necessary to tie the background voter
@@ -895,12 +975,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
-) -> ::client::error::Result<impl Future<Item=(),Error=()>> where
+) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network + 'static,
-	N::In: 'static,
+	N: Network + Send + Sync + 'static,
+	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	RA: Send + Sync + 'static,

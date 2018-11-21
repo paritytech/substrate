@@ -48,6 +48,7 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
+	"srml/grandpa",
 	"srml/metadata",
 	"core/sr-primitives",
 	"srml/session",

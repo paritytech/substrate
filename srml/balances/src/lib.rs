@@ -273,7 +273,7 @@ decl_storage! {
 }
 
 /// Whatever happened about the hint given when creating the new account.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone, Copy)]
 pub enum NewAccountOutcome {
 	NoHint,

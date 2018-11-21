@@ -17,6 +17,10 @@
 //! Primitives for GRANDPA integration, suitable for WASM compilation.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 extern crate substrate_primitives;
 extern crate sr_primitives;
@@ -57,6 +61,14 @@ pub mod id {
 	pub const GRANDPA_API: ApiId = *b"fgrandpa";
 }
 
+/// Well-known storage keys for GRANDPA.
+pub mod well_known_keys {
+	/// The key for the authorities and weights vector in storage.
+	pub const AUTHORITY_PREFIX: &[u8] = b":grandpa:auth:";
+	/// The key for the authorities count.
+	pub const AUTHORITY_COUNT: &[u8] = b":grandpa:auth:len";
+}
+
 decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
@@ -76,6 +88,10 @@ decl_runtime_apis! {
 		///
 		/// No change should be scheduled if one is already and the delay has not
 		/// passed completely.
+		///
+		/// This should be a pure function: i.e. as long as the runtime can interpret
+		/// the digest type it should return the same result regardless of the current
+		/// state.
 		fn grandpa_pending_change(digest: DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>;
 
