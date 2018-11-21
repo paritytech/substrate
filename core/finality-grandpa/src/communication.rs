@@ -22,7 +22,7 @@ use futures::sync::mpsc;
 use codec::{Encode, Decode};
 use substrate_primitives::{ed25519, AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
-use {Error, Network, Message, SignedMessage};
+use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,6 +34,24 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 	set_id.using_encoded(|s| v.extend(s));
 
 	v
+}
+
+// check a message.
+fn check_message_sig<Block: BlockT>(
+	message: &Message<Block>,
+	id: &AuthorityId,
+	signature: &ed25519::Signature,
+	round: u64,
+	set_id: u64,
+) -> Result<(), ()> {
+	let as_public = ::ed25519::Public::from_raw(id.0);
+	let encoded_raw = localized_payload(round, set_id, message);
+	if ::ed25519::verify_strong(signature, &encoded_raw, as_public) {
+		Ok(())
+	} else {
+		debug!(target: "afg", "Bad signature on message from {:?}", id);
+		Err(())
+	}
 }
 
 /// converts a message stream into a stream of signed messages.
@@ -62,14 +80,15 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 				return Ok(None);
 			}
 
-			let as_public = ::ed25519::Public::from_raw(msg.id.0);
-			let encoded_raw = localized_payload(round, set_id, &msg.message);
-			if ::ed25519::verify_strong(&msg.signature, &encoded_raw, as_public) {
-				Ok(Some(msg))
-			} else {
-				debug!(target: "afg", "Skipping message with bad signature");
-				Ok(None)
-			}
+			// we ignore messages where the signature doesn't check out.
+			let res = check_message_sig::<Block>(
+				&msg.message,
+				&msg.id,
+				&msg.signature,
+				round,
+				set_id
+			);
+			Ok(res.map(move |()| msg).ok())
 		})
 		.filter_map(|x| x)
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
@@ -123,8 +142,8 @@ impl<Block: BlockT, N: Network> Drop for OutgoingMessages<Block, N> {
 	}
 }
 
-/// A stream for outgoing messages. This signs the messages with the key,
-/// if we are an authority.
+/// A sink for outgoing messages. This signs the messages with the key,
+/// if we are an authority. A stream for the signed messages is also returned.
 ///
 /// A future can push unsigned messages into the sink. They will be automatically
 /// broadcast to the network. The returned stream should be combined with other input.
@@ -162,4 +181,65 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
 	));
 
 	(rx, outgoing)
+}
+
+fn check_compact_commit<Block: BlockT>(
+	msg: CompactCommit<Block>,
+	voters: &HashMap<AuthorityId, u64>,
+	round: u64,
+	set_id: u64,
+) -> Option<CompactCommit<Block>> {
+	use grandpa::Message as GrandpaMessage;
+	if msg.precommits.len() != msg.auth_data.len() || msg.precommits.is_empty() {
+		debug!(target: "afg", "Skipping malformed compact commit");
+		return None;
+	}
+
+	// check signatures on all contained precommits.
+	for (precommit, &(ref sig, ref id)) in msg.precommits.iter().zip(&msg.auth_data) {
+		if !voters.contains_key(id) {
+			debug!(target: "afg", "Skipping commit containing unknown voter {}", id);
+			return None;
+		}
+
+		let res = check_message_sig::<Block>(
+			&GrandpaMessage::Precommit(precommit.clone()),
+			id,
+			sig,
+			round,
+			set_id,
+		);
+
+		if let Err(()) = res {
+			debug!(target: "afg", "Skipping commit containing bad message");
+			return None;
+		}
+	}
+
+	Some(msg)
+}
+
+/// A stream for incoming commit messages. This checks all the signatures on the
+/// messages.
+pub(crate) fn checked_commit_stream<Block: BlockT, S>(
+	round: u64,
+	set_id: u64,
+	inner: S,
+	voters: Arc<HashMap<AuthorityId, u64>>,
+)
+	-> impl Stream<Item=CompactCommit<Block>,Error=Error> where
+	S: Stream<Item=Vec<u8>,Error=()>
+{
+	inner
+		.filter_map(|raw| {
+			// this could be optimized by decoding piecewise.
+			let decoded = CompactCommit::<Block>::decode(&mut &raw[..]);
+			if decoded.is_none() {
+				trace!(target: "afg", "Skipping malformed commit message {:?}", raw);
+			}
+			decoded
+		})
+		.map(move |msg| check_compact_commit::<Block>(msg, &*voters, round, set_id))
+		.filter_map(|x| x)
+		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
