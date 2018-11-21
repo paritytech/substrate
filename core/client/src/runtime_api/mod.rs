@@ -22,7 +22,7 @@
 pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{Block as BlockT, GetNodeBlockType, ApiRef}, generic::BlockId
+	traits::{Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef}, generic::BlockId
 };
 pub use runtime_version::ApiId;
 #[doc(hidden)]

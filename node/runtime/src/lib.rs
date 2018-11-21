@@ -338,7 +338,7 @@ impl substrate_finality_grandpa_primitives::GrandpaApi<GBlock> for RuntimeApi {
 }
 
 impl_runtime_apis! {
-	impl client_api::Core<Block> for Runtime {
+	impl client_api::Core for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
 		}
@@ -362,7 +362,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<Block, InherentData, UncheckedExtrinsic, InherentData, InherentError> for Runtime {
+	impl block_builder_api::BlockBuilder<InherentData, UncheckedExtrinsic, InherentData, InherentError> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
@@ -384,7 +384,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::TaggedTransactionQueue<Block> for Runtime {
+	impl client_api::TaggedTransactionQueue for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}
@@ -406,7 +406,7 @@ impl_runtime_apis! {
 			None
 =======
 
-	impl grandpa_api::GrandpaApi<Block> for RuntimeApi {
+	impl grandpa_api::GrandpaApi for Runtime {
 		fn grandpa_pending_change(_digest: DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>> {
 			unimplemented!("Robert, where is the impl?")

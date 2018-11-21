@@ -60,7 +60,7 @@ macro_rules! decl_runtime_apis {
 	(
 		$(
 			$( #[$attr:meta] )*
-			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:ident )* ),* >)*
+			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:path )* ),* >)*
 				$( ExtraClientSide < $( $client_generic_param:ident $( : $client_generic_bound:ident )* ),+ > )*
 			{
 				$(
@@ -76,9 +76,9 @@ macro_rules! decl_runtime_apis {
 	) => {
 		$(
 			decl_runtime_apis!(
-				@ADD_BLOCK_GENERIC
+				@GENERATE_RETURN_TYPES
 				$( #[$attr] )*
-				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
+				pub trait $name < Block: $crate::runtime_api::BlockT $( $(, $generic_param $( : $generic_bound )* )* )* > {
 					$( $( type $client_generic_param $( : $client_generic_bound )*; )* )*
 					$(
 						$( #[$fn_attr] )*
@@ -88,16 +88,15 @@ macro_rules! decl_runtime_apis {
 						) $( -> $return_ty )*;
 					)*
 				};
-				;
-				;
-				$( $( $generic_param $( : $generic_bound )* ),* )*
+				{};
+				$( $( $return_ty )*; )*
 			);
 		)*
 		decl_runtime_apis! {
 			@GENERATE_RUNTIME_TRAITS
 			$(
 				$( #[$attr] )*
-				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
+				pub trait $name < Block: $crate::runtime_api::BlockT $( $(, $generic_param $( : $generic_bound )* )* )* > {
 					$(
 						$( #[$fn_attr] )*
 						fn $fn_name $( < $( $fn_generic ),* > )* ($( $param_name : $param_type )* ) $( -> $return_ty )*;
@@ -106,138 +105,9 @@ macro_rules! decl_runtime_apis {
 			)*
 		}
 	};
-	(@ADD_BLOCK_GENERIC
-		$( #[$attr:meta] )*
-		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
-			$(
-				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty)*;
-			)*
-		};
-		;
-		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
-		Block: BlockT
-		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
-	) => {
-		decl_runtime_apis!(
-			@ADD_BLOCK_GENERIC
-			$( #[$attr] )*
-			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
-				$( type $client_generic_param $( : $client_generic_bound )*; )*
-				$(
-					$( #[$fn_attr] )*
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type, )*
-					) $( -> $return_ty )*;
-				)*
-			};
-			Found;
-			$( $generic_param_parsed $( : $generic_bound_parsed )* , )* Block: $crate::runtime_api::BlockT;
-			$( $generic_param_rest $( : $generic_bound_rest )* ),*
-		);
-	};
-	(@ADD_BLOCK_GENERIC
-		$( #[$attr:meta] )*
-		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
-	 		$(
-				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty )*;
-			)*
-		};
-		$( $block_found:ident )*;
-		$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
-		$generic_param:ident $( : $generic_bound:ident )*
-		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
-	) => {
-		decl_runtime_apis!(
-			@ADD_BLOCK_GENERIC
-			$( #[$attr] )*
-			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
-				$( type $client_generic_param $( : $client_generic_bound )*; )*
-				$(
-					$( #[$fn_attr] )*
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type, )*
-					) $( -> $return_ty )*;
-				)*
-			};
-			$( $block_found )*;
-			$( $generic_param_parsed $( : $generic_bound_parsed )* , )* $generic_param $( : $generic_bound )*;
-			$( $generic_param_rest $( : $generic_bound_rest )* ),*
-		);
-	};
-	(@ADD_BLOCK_GENERIC
-		$( #[$attr:meta] )*
-		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
-			$(
-				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty )*;
-			)*
-		};
-		Found;
-	 	$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
-	) => {
-		decl_runtime_apis!(
-			@GENERATE_RETURN_TYPES
-			$( #[$attr] )*
-			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
-				$( type $client_generic_param $( : $client_generic_bound )*; )*
-				$(
-					$( #[$fn_attr] )*
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type, )*
-					) $( -> $return_ty )*;
-				)*
-			};
-			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
-			{};
-			$( $( $return_ty )*; )*
-		);
-	};
-	(@ADD_BLOCK_GENERIC
-		$( #[$attr:meta] )*
-		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
-			$(
-				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty )*;
-			)*
-		};
-		;
-		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
-	) => {
-		decl_runtime_apis!(
-			@GENERATE_RETURN_TYPES
-			$( #[$attr] )*
-			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
-				$( type $client_generic_param $( : $client_generic_bound )*; )*
-				$(
-					$( #[$fn_attr] )*
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type, )*
-					) $( -> $return_ty )*;
-				)*
-			};
-			// We need to add the required generic Block parameter
-			Block: $crate::runtime_api::BlockT $(, $generic_param_parsed $( : $generic_bound_parsed )* )*;
-			{};
-			$( $( $return_ty )*; )*
-		);
-	};
 	(@GENERATE_RETURN_TYPES
         $( #[$attr:meta] )*
-        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
+        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
 			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
@@ -246,7 +116,6 @@ macro_rules! decl_runtime_apis {
 				) $( -> $return_ty:ty)*;
 			)*
         };
-        $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 		$return_ty_current:ty;
 		$( $( $return_ty_rest:ty )*; )*
@@ -263,14 +132,13 @@ macro_rules! decl_runtime_apis {
 					) $( -> $return_ty )*;
 				)*
 			};
-			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
 			{ $( $result_return_ty; )* $crate::error::Result<$return_ty_current>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
 	(@GENERATE_RETURN_TYPES
         $( #[$attr:meta] )*
-        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
+        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
 			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
@@ -279,7 +147,6 @@ macro_rules! decl_runtime_apis {
 				) $( -> $return_ty:ty)*;
 			)*
         };
-        $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 		;
 		$( $( $return_ty_rest:ty )*; )*
@@ -296,14 +163,13 @@ macro_rules! decl_runtime_apis {
 					) $( -> $return_ty )*;
 				)*
 			};
-			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
 			{ $( $result_return_ty; )* $crate::error::Result<()>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
 	(@GENERATE_RETURN_TYPES
         $( #[$attr:meta] )*
-        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
+        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
 			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
@@ -312,7 +178,6 @@ macro_rules! decl_runtime_apis {
 				) $( -> $return_ty:ty)*;
 			)*
         };
-        $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		decl_runtime_apis!(
@@ -327,13 +192,12 @@ macro_rules! decl_runtime_apis {
 					) $( -> $return_ty )*;
 				)*
 			};
-			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
 			{ $( $result_return_ty; )* };
 		);
 	};
 	(@GENERATE_CLIENT_TRAITS
 		$( #[$attr:meta] )*
-		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
+		pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:path )* ),* >)* {
 			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
@@ -342,12 +206,11 @@ macro_rules! decl_runtime_apis {
 				) $( -> $return_ty:ty)*;
 			)*
 		};
-		$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		$( #[$attr] )*
 		#[cfg(feature = "std")]
-		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::runtime_api::Core<Block> {
+		pub trait $name $( < $( $generic_param $( : $generic_bound )* ),* > )* : $crate::runtime_api::Core<Block> {
 			$( type $client_generic_param $( : $client_generic_bound )*; )*
 
 			$(
@@ -361,7 +224,7 @@ macro_rules! decl_runtime_apis {
 	(@GENERATE_RUNTIME_TRAITS
 		$(
 			$( #[$attr:meta] )*
-			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:ident )* ),* >)* {
+			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:path )* ),* >)* {
 				$(
 					$( #[$fn_attr:meta] )*
 					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
@@ -387,7 +250,7 @@ macro_rules! decl_runtime_apis {
 	(@GENERATE_RUNTIME_TRAITS_WITH_JOINED_GENERICS
 		$(
 			$( #[$attr:meta] )*
-			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:ident )*, )* > {
+			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:path )*, )* > {
 				$(
 					$( #[$fn_attr:meta] )*
 					fn $fn_name:ident($( $param_name:ident : $param_type:ty ),*) $( -> $return_ty:ty)*;

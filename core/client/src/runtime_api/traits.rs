@@ -28,7 +28,7 @@ decl_runtime_apis! {
 	}
 
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
-	pub trait TaggedTransactionQueue<Block: BlockT> {
+	pub trait TaggedTransactionQueue {
 		/// Validate the given transaction.
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}

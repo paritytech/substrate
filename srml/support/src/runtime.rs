@@ -291,6 +291,9 @@ macro_rules! construct_runtime {
 		impl $crate::runtime_primitives::traits::GetNodeBlockType for $runtime {
 			type NodeBlock = $node_block;
 		}
+		impl $crate::runtime_primitives::traits::GetRuntimeBlockType for $runtime {
+			type RuntimeBlock = $block;
+		}
 		__decl_outer_event!(
 			$runtime;
 			$(

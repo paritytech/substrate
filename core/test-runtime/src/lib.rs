@@ -52,7 +52,8 @@ use codec::{Encode, Decode};
 
 use client::{runtime_api as client_api, block_builder::api as block_builder_api};
 use runtime_primitives::traits::{
-	BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType
+	BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
+	GetRuntimeBlockType
 };
 use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
 #[cfg(feature = "std")]
@@ -252,8 +253,12 @@ impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
 }
 
+impl GetRuntimeBlockType for Runtime {
+	type RuntimeBlock = Block;
+}
+
 impl_runtime_apis! {
-	impl client_api::Core<Block> for Runtime {
+	impl client_api::Core for Runtime {
 		fn version() -> RuntimeVersion {
 			version()
 		}
@@ -271,13 +276,13 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::TaggedTransactionQueue<Block> for Runtime {
+	impl client_api::TaggedTransactionQueue for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
+	impl block_builder_api::BlockBuilder<u32, u32, u32, u32> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}

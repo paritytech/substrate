@@ -21,7 +21,7 @@ use rstd::vec::Vec;
 
 decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-	pub trait BlockBuilder<Block: BlockT> {
+	pub trait BlockBuilder {
 		/// Apply the given extrinsics.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		/// Finish the current block.

@@ -630,6 +630,12 @@ pub trait ProvideRuntimeApi {
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
 }
 
+/// A marker trait for something that knows the type of the runtime block.
+pub trait GetRuntimeBlockType {
+	/// The `RuntimeBlock` type.
+	type RuntimeBlock: self::Block;
+}
+
 /// A marker trait for something that knows the type of the node block.
 pub trait GetNodeBlockType {
 	/// The `NodeBlock` type.
