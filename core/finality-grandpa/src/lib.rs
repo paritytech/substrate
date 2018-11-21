@@ -100,6 +100,7 @@ use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 
@@ -404,6 +405,17 @@ impl<H, N> From<ClientError> for ExitOrError<H, N> {
 impl<H, N> From<grandpa::Error> for ExitOrError<H, N> {
 	fn from(e: grandpa::Error) -> Self {
 		ExitOrError::Error(Error::from(e))
+	}
+}
+
+impl<H: fmt::Debug, N: fmt::Debug> ::std::error::Error for ExitOrError<H, N> { }
+
+impl<H, N> fmt::Display for ExitOrError<H, N> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			ExitOrError::Error(ref e) => write!(f, "{:?}", e),
+			ExitOrError::AuthoritiesChanged(ref change) => write!(f, "restarting voter on new authorities"),
+		}
 	}
 }
 
