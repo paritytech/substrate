@@ -100,22 +100,22 @@ use double_map::StorageDoubleMap;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::{Codec, HasCompact};
-use runtime_primitives::traits::{Member, Hash, As, SimpleArithmetic};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 use system::ensure_signed;
 
+pub type CodeHash<T> = <T as system::Trait>::Hash;
+
 pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
-	type DetermineContractAddress: ContractAddressFor<Self::CodeHash, Self::AccountId>;
+	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
 
 	// As<u32> is needed for wasm-utils
 	type Gas: Parameter + Default + Codec + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-
-	type CodeHash: Parameter + Member + Default + Copy + Clone + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 }
 
 pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
@@ -130,11 +130,11 @@ pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
 /// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 
-impl<T: Trait> ContractAddressFor<T::CodeHash, T::AccountId> for SimpleAddressDeterminator<T>
+impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
 	T::AccountId: From<T::Hash> + AsRef<[u8]>
 {
-	fn contract_address_for(code_hash: &T::CodeHash, data: &[u8], origin: &T::AccountId) -> T::AccountId {
+	fn contract_address_for(code_hash: &CodeHash<T>, data: &[u8], origin: &T::AccountId) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
 
 		let mut buf = Vec::new();
@@ -239,7 +239,7 @@ decl_module! {
 			origin,
 			endowment: <T::Balance as HasCompact>::Type,
 			gas_limit: <T::Gas as HasCompact>::Type,
-			code_hash: T::CodeHash,
+			code_hash: CodeHash<T>,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -323,10 +323,10 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
 		/// The code associated with an account.
-		pub CodeHashOf: map T::AccountId => Option<T::CodeHash>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
+		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
 
-		pub PrestineCode: map T::CodeHash => Option<Vec<u8>>;
-		pub CodeStorage: map T::CodeHash => Option<code::InstrumentedWasmModule>;
+		pub PrestineCode: map CodeHash<T> => Option<Vec<u8>>;
+		pub CodeStorage: map CodeHash<T> => Option<code::InstrumentedWasmModule>;
 	}
 }
 

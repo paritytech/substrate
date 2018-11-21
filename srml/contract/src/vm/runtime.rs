@@ -23,7 +23,7 @@ use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
 use sandbox;
 use system;
-use Trait;
+use {Trait, CodeHash};
 
 type GasOf<E> = <<E as Ext>::T as Trait>::Gas;
 
@@ -304,7 +304,7 @@ define_env!(init_env, <E: Ext>,
 	) -> u32 => {
 		let code_hash = {
 			let code_hash_buf = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
-			<<E as Ext>::T as Trait>::CodeHash::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
+			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
 		};
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;

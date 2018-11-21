@@ -16,7 +16,7 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHashOf, StorageOf, Trait};
+use super::{CodeHash, CodeHashOf, StorageOf, Trait};
 use double_map::StorageDoubleMap;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
@@ -27,7 +27,7 @@ use {balances, system};
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
 	/// In the case the outer option is None, the code_hash will be untouched.
-	code: Option<Option<T::CodeHash>>,
+	code: Option<Option<CodeHash<T>>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -46,7 +46,7 @@ pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>
 
 pub trait AccountDb<T: Trait> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
-	fn get_code(&self, account: &T::AccountId) -> Option<T::CodeHash>;
+	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
 	fn commit(&mut self, change_set: ChangeSet<T>);
@@ -57,7 +57,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
 		<StorageOf<T>>::get(account.clone(), location.to_vec())
 	}
-	fn get_code(&self, account: &T::AccountId) -> Option<T::CodeHash> {
+	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<CodeHashOf<T>>::get(account)
 	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
@@ -122,7 +122,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.storage
 			.insert(location, value);
 	}
-	pub fn set_code(&mut self, account: &T::AccountId, code: Option<T::CodeHash>) {
+	pub fn set_code(&mut self, account: &T::AccountId, code: Option<CodeHash<T>>) {
 		self.local
 			.borrow_mut()
 			.entry(account.clone())
@@ -147,7 +147,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, location))
 	}
-	fn get_code(&self, account: &T::AccountId) -> Option<T::CodeHash> {
+	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local
 			.borrow()
 			.get(account)

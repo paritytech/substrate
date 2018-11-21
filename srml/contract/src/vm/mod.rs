@@ -21,7 +21,7 @@ use exec::CreateReceipt;
 use gas::GasMeter;
 use code::MemoryDefinition;
 use rstd::prelude::*;
-use {Trait, Schedule};
+use {Trait, Schedule, CodeHash};
 use {balances, sandbox, system};
 
 type BalanceOf<T> = <T as balances::Trait>::Balance;
@@ -53,7 +53,7 @@ pub trait Ext {
 	/// transfered from this to the newly created account.
 	fn create(
 		&mut self,
-		code: &<Self::T as Trait>::CodeHash,
+		code: &CodeHash<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
@@ -129,7 +129,6 @@ pub fn execute<'a, E: Ext>(
 ) -> Result<(), Error> {
 	let env = runtime::init_env();
 
-	// TODO: Instantiate memory from the provided memory definition.
 	let memory =
 		sandbox::Memory::new(
 			memory_def.initial,

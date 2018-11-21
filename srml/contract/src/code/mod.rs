@@ -16,7 +16,8 @@
 
 use codec::Compact;
 use runtime_support::StorageMap;
-use {Schedule, Trait, CodeStorage, PrestineCode};
+use runtime_primitives::traits::Hash;
+use {Schedule, Trait, CodeHash, CodeStorage, PrestineCode};
 
 mod prepare;
 
@@ -42,8 +43,7 @@ pub fn save<T: Trait>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T::Gas>,
 ) -> Result<(), &'static str> {
-	// TODO: let code_hash = T::Hashing::hash(&original_code);
-	let code_hash = T::CodeHash::default();
+	let code_hash = T::Hashing::hash(&original_code);
 
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
 	// due to the schedule changes is on governance system.
@@ -61,7 +61,7 @@ pub fn save<T: Trait>(
 	panic!()
 }
 
-pub fn load<T: Trait>(code_hash: &T::CodeHash, schedule: &Schedule<T::Gas>,) -> Result<InstrumentedWasmModule, &'static str> {
+pub fn load<T: Trait>(code_hash: &CodeHash<T>, schedule: &Schedule<T::Gas>,) -> Result<InstrumentedWasmModule, &'static str> {
 	let instrumented_module = <CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
 	if instrumented_module.schedule_version < schedule.version {

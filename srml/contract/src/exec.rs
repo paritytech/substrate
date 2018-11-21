@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{ContractAddressFor, Trait, Event, RawEvent, Config};
+use super::{CodeHash, ContractAddressFor, Trait, Event, RawEvent, Config};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
@@ -116,7 +116,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		caller: T::AccountId,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		code_hash: &T::CodeHash,
+		code_hash: &CodeHash<T>,
 		input_data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == self.config.max_depth as usize {
@@ -286,7 +286,7 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
 
 	fn create(
 		&mut self,
-		code_hash: &T::CodeHash,
+		code_hash: &CodeHash<T>,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
