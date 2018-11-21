@@ -227,7 +227,7 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	inner: S,
 	voters: Arc<HashMap<AuthorityId, u64>>,
 )
-	-> impl Stream<Item=CompactCommit<Block>,Error=Error> where
+	-> impl Stream<Item=(u64, CompactCommit<Block>),Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
 {
 	inner
@@ -241,5 +241,50 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 		})
 		.map(move |msg| check_compact_commit::<Block>(msg, &*voters, round, set_id))
 		.filter_map(|x| x)
+		.map(move |commit| (round, commit))
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
+}
+
+/// An output sink for commit messages.
+pub(crate) struct CommitsOut<Block, N> {
+	network: N,
+	set_id: u64,
+	_marker: ::std::marker::PhantomData<Block>,
+}
+
+impl<Block, N> CommitsOut<Block, N> {
+	/// Create a new commit output stream.
+	pub(crate) fn new(network: N, set_id: u64) -> Self {
+		CommitsOut {
+			network,
+			set_id,
+			_marker: Default::default(),
+		}
+	}
+}
+
+impl<Block: BlockT, N: Network> Sink for CommitsOut<Block, N> {
+	type SinkItem = (u64, Commit<Block>);
+	type SinkError = Error;
+
+	fn start_send(&mut self, input: (u64, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
+		let (round, commit) = input;
+		let (precommits, auth_data) = commit.precommits.into_iter()
+			.map(|signed| (signed.precommit, (signed.signature, signed.id)))
+			.unzip();
+
+		let compact_commit = CompactCommit::<Block> {
+			target_hash: commit.target_hash,
+			target_number: commit.target_number,
+			precommits,
+			auth_data
+		};
+
+		self.network.send_commit(self.set_id, Encode::encode(&(round, compact_commit)));
+
+		Ok(AsyncSink::Ready)
+	}
+
+	fn close(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
+	fn poll_complete(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
 }
