@@ -354,7 +354,7 @@ macro_rules! impl_outer_log {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
@@ -362,7 +362,7 @@ macro_rules! impl_outer_log {
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -482,7 +482,7 @@ mod tests {
 		use super::RuntimeT;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
 		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
 	}
 
@@ -490,7 +490,7 @@ mod tests {
 		use super::RuntimeT;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 

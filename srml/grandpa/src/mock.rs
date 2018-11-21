@@ -36,7 +36,7 @@ impl From<RawLog<u64, u64>> for DigestItem {
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Decode, Encode, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
 pub struct Test;
 impl Trait for Test {
 	type Log = DigestItem;

@@ -29,7 +29,7 @@ impl_outer_origin!{
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
 impl system::Trait for Runtime {
 	type Origin = Origin;
