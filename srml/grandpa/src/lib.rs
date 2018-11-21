@@ -61,7 +61,7 @@ use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{
-	MaybeSerializeDebug, CurrentHeight, Convert,
+	MaybeSerializeDebugButNotDeserialize, CurrentHeight, Convert,
 };
 use substrate_primitives::AuthorityId;
 use system::ensure_signed;
@@ -88,7 +88,7 @@ pub trait GrandpaChangeSignal<N> {
 }
 
 /// A logs in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<N, SessionKey> {
 	/// Authorities set change has been signalled. Contains the new set of authorities
@@ -124,7 +124,7 @@ pub trait Trait: system::Trait {
 	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 
 	/// The session key type used by authorities.
-	type SessionKey: Parameter + Default + MaybeSerializeDebug;
+	type SessionKey: Parameter + Default + MaybeSerializeDebugButNotDeserialize;
 
 	/// The event type of this module.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;

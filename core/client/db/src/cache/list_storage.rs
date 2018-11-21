@@ -86,7 +86,7 @@ pub struct DbColumns {
 	/// Column holding cache meta.
 	pub meta: Option<u32>,
 	/// Column holding the mapping of { block number => block hash } for blocks of the best chain.
-	pub hash_lookup: Option<u32>,
+	pub key_lookup: Option<u32>,
 	/// Column holding the mapping of { block hash => block header }.
 	pub header: Option<u32>,
 	/// Column holding cache entries.
@@ -126,12 +126,12 @@ impl DbStorage {
 
 impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 	fn read_id(&self, at: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
-		utils::read_header::<Block>(&*self.db, self.columns.hash_lookup, self.columns.header, BlockId::Number(at))
+		utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Number(at))
 			.map(|maybe_header| maybe_header.map(|header| header.hash()))
 	}
 
 	fn read_header(&self, at: &Block::Hash) -> ClientResult<Option<Block::Header>> {
-		utils::read_header::<Block>(&*self.db, self.columns.hash_lookup, self.columns.header, BlockId::Hash(*at))
+		utils::read_header::<Block>(&*self.db, self.columns.key_lookup, self.columns.header, BlockId::Hash(*at))
 	}
 
 	fn read_meta(&self) -> ClientResult<Metadata<Block>> {
@@ -197,7 +197,7 @@ impl<'a, Block: BlockT, T: CacheItemT> StorageTransaction<Block, T> for DbStorag
 mod meta {
 	use super::*;
 
-	/// Convert cache name into cache metadata key. 
+	/// Convert cache name into cache metadata key.
 	pub fn key(name: &[u8]) -> Vec<u8> {
 		let mut key_name = meta_keys::CACHE_META_PREFIX.to_vec();
 		key_name.extend_from_slice(name);

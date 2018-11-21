@@ -271,7 +271,7 @@ macro_rules! construct_runtime {
 		}
 
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct $runtime;
 		__decl_outer_event!(
 			$runtime;
