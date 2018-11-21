@@ -245,10 +245,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T>
-where
-	AuthorityId: core::convert::From<<T as Trait>::SessionKey>
-{
+impl<T: Trait> Module<T> where AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
 	/// See if the digest contains any scheduled change.
 	pub fn scrape_digest_change(log: &Log<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>
@@ -264,6 +261,7 @@ where
 /// sets should be.
 pub struct SyncedAuthorities<T>(::rstd::marker::PhantomData<T>);
 
+// TODO: remove when https://github.com/rust-lang/rust/issues/26925 is fixed
 impl<T> Default for SyncedAuthorities<T> {
 	fn default() -> Self {
 		SyncedAuthorities(::rstd::marker::PhantomData)
