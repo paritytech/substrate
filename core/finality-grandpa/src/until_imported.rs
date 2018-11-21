@@ -169,6 +169,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 			}
 		}
 
+		println!("Ready items? {}", self.ready.len());
 		if let Some(ready) = self.ready.pop_front() {
 			return Ok(Async::Ready(Some(ready)))
 		}
@@ -338,6 +339,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 		// if this is taking a long time.
 		for (hash, is_known) in checked_hashes {
 			if let KnownOrUnknown::Unknown(target_number) = is_known {
+				println!("scheduling wait for hash {:?}", (&target_number, &hash));
 				wait(hash, BlockCommitMessage {
 					inner: locked_commit.clone(),
 					target_number,
@@ -359,6 +361,8 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 
 		// CAS loop to ensure that we always have a last reader.
 		loop {
+			println!("wait completed for number {:?}. remaining waiters for commit: {}", &self.target_number, last_count);
+
 			if last_count == 1 { // we are the last one left.
 				return self.inner.1.lock().take();
 			}
@@ -375,5 +379,184 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 				last_count = prev_value;
 			}
 		}
+	}
+}
+
+/// A stream which gates off incoming commit messages until all referenced
+/// block hashes have been imported.
+pub(crate) type UntilCommitBlocksImported<Block, Status, I> = UntilImported<
+	Block,
+	Status,
+	I,
+	BlockCommitMessage<Block>,
+>;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use tokio::runtime::current_thread::Runtime;
+	use tokio::timer::Delay;
+	use test_client::runtime::{Block, Hash, Header};
+	use consensus_common::BlockOrigin;
+	use client::BlockImportNotification;
+	use futures::future::Either;
+	use futures::sync::mpsc;
+	use grandpa::Precommit;
+
+	#[derive(Clone)]
+	struct TestChainState {
+		sender: mpsc::UnboundedSender<BlockImportNotification<Block>>,
+		known_blocks: Arc<Mutex<HashMap<Hash, u64>>>,
+	}
+
+	impl TestChainState {
+		fn new() -> (Self, ImportNotifications<Block>) {
+			let (tx, rx) = mpsc::unbounded();
+			let state = TestChainState {
+				sender: tx,
+				known_blocks: Arc::new(Mutex::new(HashMap::new())),
+			};
+
+			(state, rx)
+		}
+
+		fn block_status(&self) -> TestBlockStatus {
+			TestBlockStatus { inner: self.known_blocks.clone() }
+		}
+
+		fn import_header(&self, header: Header) {
+			let hash = header.hash();
+			let number = header.number().clone();
+
+			self.known_blocks.lock().insert(hash, number);
+			self.sender.unbounded_send(BlockImportNotification {
+				hash,
+				origin: BlockOrigin::File,
+				header,
+				is_new_best: false,
+				tags: Vec::new(),
+			}).unwrap();
+		}
+	}
+
+	struct TestBlockStatus {
+		inner: Arc<Mutex<HashMap<Hash, u64>>>,
+	}
+
+	impl BlockStatus<Block> for TestBlockStatus {
+		fn block_number(&self, hash: Hash) -> Result<Option<u64>, Error> {
+			Ok(self.inner.lock().get(&hash).map(|x| x.clone()))
+		}
+	}
+
+	fn make_header(number: u64) -> Header {
+		Header::new(
+			number,
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+		)
+	}
+
+	#[test]
+	fn blocking_commit_message() {
+		let h1 = make_header(5);
+		let h2 = make_header(6);
+		let h3 = make_header(7);
+
+		let (chain_state, import_notifications) = TestChainState::new();
+		let block_status = chain_state.block_status();
+
+		let unknown_commit = CompactCommit::<Block> {
+			target_hash: h1.hash(),
+			target_number: 5,
+			precommits: vec![
+				Precommit {
+					target_hash: h2.hash(),
+					target_number: 6,
+				},
+				Precommit {
+					target_hash: h3.hash(),
+					target_number: 7,
+				},
+			],
+			auth_data: Vec::new(), // not used
+		};
+
+		let (commit_tx, commit_rx) = mpsc::unbounded();
+
+		let until_imported = UntilCommitBlocksImported::new(
+			import_notifications,
+			block_status,
+			commit_rx.map_err(|_| panic!("should never error")),
+		);
+
+		commit_tx.unbounded_send(unknown_commit.clone()).unwrap();
+
+		let inner_chain_state = chain_state.clone();
+		let work = until_imported
+			.into_future()
+			.select2(Delay::new(Instant::now() + Duration::from_millis(100)))
+			.then(move |res| match res {
+				Err(_) => panic!("neither should have had error"),
+				Ok(Either::A(_)) => panic!("timeout should have fired first"),
+				Ok(Either::B((_, until_imported))) => {
+					// timeout fired. push in the headers.
+					inner_chain_state.import_header(h1);
+					inner_chain_state.import_header(h2);
+					inner_chain_state.import_header(h3);
+
+					until_imported
+				}
+			});
+
+		let mut runtime = Runtime::new().unwrap();
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some(unknown_commit));
+	}
+
+	#[test]
+	fn commit_message_all_known() {
+		let h1 = make_header(5);
+		let h2 = make_header(6);
+		let h3 = make_header(7);
+
+		let (chain_state, import_notifications) = TestChainState::new();
+		let block_status = chain_state.block_status();
+
+		let unknown_commit = CompactCommit::<Block> {
+			target_hash: h1.hash(),
+			target_number: 5,
+			precommits: vec![
+				Precommit {
+					target_hash: h2.hash(),
+					target_number: 6,
+				},
+				Precommit {
+					target_hash: h3.hash(),
+					target_number: 7,
+				},
+			],
+			auth_data: Vec::new(), // not used
+		};
+
+		chain_state.import_header(h1);
+		chain_state.import_header(h2);
+		chain_state.import_header(h3);
+
+		let (commit_tx, commit_rx) = mpsc::unbounded();
+
+		let until_imported = UntilCommitBlocksImported::new(
+			import_notifications,
+			block_status,
+			commit_rx.map_err(|_| panic!("should never error")),
+		);
+
+		commit_tx.unbounded_send(unknown_commit.clone()).unwrap();
+
+		let work = until_imported.into_future();
+
+		let mut runtime = Runtime::new().unwrap();
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some(unknown_commit));
 	}
 }
