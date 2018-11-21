@@ -235,7 +235,6 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 	}
 }
 
-
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Clone for NetworkBridge<B, S, H> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
