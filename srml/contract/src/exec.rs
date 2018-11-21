@@ -89,6 +89,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 				vm::execute(
 					&dest_code.code,
+					&dest_code.memory_def,
 					input_data,
 					output_data,
 					&mut CallContext {
@@ -166,6 +167,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			let mut output_data = Vec::new();
 			vm::execute(
 				&dest_code.code,
+				&dest_code.memory_def,
 				input_data,
 				&mut output_data,
 				&mut CallContext {

@@ -15,7 +15,6 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use codec::Compact;
-use runtime_primitives::traits::Hash;
 use {Schedule, Trait};
 
 mod prepare;
@@ -23,9 +22,9 @@ mod prepare;
 #[derive(Encode, Decode)]
 pub struct MemoryDefinition {
 	#[codec(compact)]
-	initial: u32,
+	pub initial: u32,
 	#[codec(compact)]
-	maximum: u32,
+	pub maximum: u32,
 }
 
 #[derive(Encode, Decode)]
@@ -33,7 +32,7 @@ pub struct InstrumentedWasmModule {
 	/// Version of the schedule with which the code was instrumented.
 	#[codec(compact)]
 	schedule_version: u32,
-	memory_def: MemoryDefinition,
+	pub memory_def: MemoryDefinition,
 	/// Code instrumented with the latest schedule.
 	pub code: Vec<u8>,
 }

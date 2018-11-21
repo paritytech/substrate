@@ -19,6 +19,7 @@
 
 use exec::CreateReceipt;
 use gas::GasMeter;
+use code::MemoryDefinition;
 use rstd::prelude::*;
 use {Trait, Schedule};
 use {balances, sandbox, system};
@@ -119,6 +120,7 @@ pub enum Error {
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
 	code: &[u8],
+	memory_def: &MemoryDefinition,
 	input_data: &[u8],
 	output_data: &mut Vec<u8>,
 	ext: &'a mut E,
@@ -128,9 +130,16 @@ pub fn execute<'a, E: Ext>(
 	let env = runtime::init_env();
 
 	// TODO: Instantiate memory from the provided memory definition.
-	// TODO: take code
-	let memory = sandbox::Memory::new(0, Some(0)).unwrap();
-	let instrumented_code = Vec::new();
+	let memory =
+		sandbox::Memory::new(
+			memory_def.initial,
+			Some(memory_def.maximum)
+		)
+		.expect(
+			"memory_def.initial can't be greater than memory_def.maximum;
+			thus Memory::new must not fail;
+			qed
+		");
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	for (func_name, ext_func) in &env.funcs {
@@ -141,7 +150,7 @@ pub fn execute<'a, E: Ext>(
 	let mut runtime = Runtime::new(ext, input_data, output_data, &schedule, memory, gas_meter);
 
 	// Instantiate the instance from the instrumented module code.
-	match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
+	match sandbox::Instance::new(code, &imports, &mut runtime) {
 		// No errors or traps were generated on instantiation! That
 		// means we can now invoke the contract entrypoint.
 		Ok(mut instance) => {
