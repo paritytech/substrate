@@ -15,7 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Helper stream for waiting until one or more blocks are imported before
-//! passing through inner items.
+//! passing through inner items. This is done in a generic way to support
+//! many different kinds of items.
 //!
 //! This is used for votes and commit messages currently.
 

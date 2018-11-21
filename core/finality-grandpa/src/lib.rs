@@ -109,6 +109,7 @@ use until_imported::UntilVoteTargetImported;
 pub use fg_primitives::ScheduledChange;
 
 mod authorities;
+mod communication;
 mod until_imported;
 
 #[cfg(feature="service-integration")]
@@ -298,136 +299,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 	}
 }
 
-// clears the network messages for inner round on drop.
-struct ClearOnDrop<I, N: Network> {
-	round: u64,
-	set_id: u64,
-	inner: I,
-	network: N,
-}
-
-impl<I: Sink, N: Network> Sink for ClearOnDrop<I, N> {
-	type SinkItem = I::SinkItem;
-	type SinkError = I::SinkError;
-
-	fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
-		self.inner.start_send(item)
-	}
-
-	fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
-		self.inner.poll_complete()
-	}
-
-	fn close(&mut self) -> Poll<(), Self::SinkError> {
-		self.inner.close()
-	}
-}
-
-impl<I, N: Network> Drop for ClearOnDrop<I, N> {
-	fn drop(&mut self) {
-		self.network.drop_messages(self.round, self.set_id);
-	}
-}
-
-fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
-	let mut v = message.encode();
-
-	round.using_encoded(|s| v.extend(s));
-	set_id.using_encoded(|s| v.extend(s));
-
-	v
-}
-
-// converts a message stream into a stream of signed messages.
-// the output stream checks signatures also.
-fn checked_message_stream<Block: BlockT, S>(
-	round: u64,
-	set_id: u64,
-	inner: S,
-	voters: Arc<HashMap<AuthorityId, u64>>,
-)
-	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
-	S: Stream<Item=Vec<u8>,Error=()>
-{
-	inner
-		.filter_map(|raw| {
-			let decoded = SignedMessage::<Block>::decode(&mut &raw[..]);
-			if decoded.is_none() {
-				debug!(target: "afg", "Skipping malformed message {:?}", raw);
-			}
-			decoded
-		})
-		.and_then(move |msg| {
-			// check signature.
-			if !voters.contains_key(&msg.id) {
-				debug!(target: "afg", "Skipping message from unknown voter {}", msg.id);
-				return Ok(None);
-			}
-
-			let as_public = ::ed25519::Public::from_raw(msg.id.0);
-			let encoded_raw = localized_payload(round, set_id, &msg.message);
-			if ::ed25519::verify_strong(&msg.signature, &encoded_raw, as_public) {
-				Ok(Some(msg))
-			} else {
-				debug!(target: "afg", "Skipping message with bad signature");
-				Ok(None)
-			}
-		})
-		.filter_map(|x| x)
-		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
-}
-
-fn outgoing_messages<Block: BlockT, N: Network>(
-	round: u64,
-	set_id: u64,
-	local_key: Option<Arc<ed25519::Pair>>,
-	voters: Arc<HashMap<AuthorityId, u64>>,
-	network: N,
-) -> (
-	impl Stream<Item=SignedMessage<Block>,Error=Error>,
-	impl Sink<SinkItem=Message<Block>,SinkError=Error>,
-) {
-	let locals = local_key.and_then(|pair| {
-		let public = pair.public();
-		let id = AuthorityId(public.0);
-		if voters.contains_key(&id) {
-			Some((pair, id))
-		} else {
-			None
-		}
-	});
-
-	let (tx, rx) = mpsc::unbounded();
-	let rx = rx
-		.map(move |msg: Message<Block>| {
-			// when locals exist, sign messages on import
-			if let Some((ref pair, local_id)) = locals {
-				let encoded = localized_payload(round, set_id, &msg);
-				let signature = pair.sign(&encoded[..]);
-				let signed = SignedMessage::<Block> {
-					message: msg,
-					signature,
-					id: local_id,
-				};
-
-				// forward to network.
-				network.send_message(round, set_id, signed.encode());
-				Some(signed)
-			} else {
-				None
-			}
-		})
-		.filter_map(|x| x)
-		.map_err(move |()| Error::Network(
-			format!("Failed to receive on unbounded receiver for round {}", round)
-		));
-
-	let tx = tx.sink_map_err(move |e| Error::Network(format!("Failed to broadcast message \
-		to network in round {}: {:?}", round, e)));
-
-	(rx, tx)
-}
-
 /// The environment we run GRANDPA in.
 struct Environment<B, E, Block: BlockT, N: Network, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
@@ -585,14 +456,14 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
 		// TODO: dispatch this with `mpsc::spawn`.
-		let incoming = checked_message_stream::<Block, _>(
+		let incoming = ::communication::checked_message_stream::<Block, _>(
 			round,
 			self.set_id,
 			self.network.messages_for(round, self.set_id),
 			self.voters.clone(),
 		);
 
-		let (out_rx, outgoing) = outgoing_messages::<Block, _>(
+		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
 			self.config.local_key.clone(),
@@ -612,12 +483,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let incoming = Box::new(out_rx.select(incoming).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
-		let outgoing = Box::new(ClearOnDrop {
-			round,
-			set_id: self.set_id,
-			network: self.network.clone(),
-			inner: outgoing.sink_map_err(Into::into),
-		});
+		let outgoing = Box::new(outgoing.sink_map_err(Into::into));
 
 		voter::RoundData {
 			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
