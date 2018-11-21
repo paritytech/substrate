@@ -215,7 +215,7 @@ decl_module! {
 			Ok(())
 		}
 
-		/// The length of a staking era in sessions.
+		/// The ideal number of validators.
 		fn set_validator_count(new: Compact<u32>) -> Result {
 			let new: u32 = new.into();
 			<ValidatorCount<T>>::put(new);
