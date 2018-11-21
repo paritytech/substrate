@@ -49,7 +49,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		data: &[u8],
+		input_data: &[u8],
 		output_data: &mut Vec<u8>,
 	) -> Result<CallReceipt, &'static str> {
 		if self.depth == self.config.max_depth as usize {
@@ -60,7 +60,6 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base call fee");
 		}
 
-		// TODO: Load code from the storage or cache.
 		let dest_code_hash = self.overlay.get_code(&dest);
 
 		let (change_set, events) = {
@@ -86,11 +85,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			}
 
 			if let Some(dest_code_hash) = dest_code_hash {
-				let dest_code = code::load::<T>(dest_code_hash)?;
+				let dest_code = code::load::<T>(&dest_code_hash)?;
 
 				vm::execute(
 					&dest_code.code,
-					data,
+					input_data,
 					output_data,
 					&mut CallContext {
 						ctx: &mut nested,
@@ -116,8 +115,8 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		caller: T::AccountId,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		init_code: &[u8], // TODO: Take code hash.
-		data: &[u8],
+		code_hash: &T::CodeHash,
+		input_data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot create");
@@ -127,7 +126,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base create fee");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
+		let dest = T::DetermineContractAddress::contract_address_for(
+			code_hash,
+			input_data,
+			&self.self_account
+		);
 
 		if self.overlay.get_code(&dest).is_some() {
 			// It should be enough to check only the code.
@@ -136,7 +139,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
-			// TODO: save the code hash in the overlay.
+			overlay.set_code(&dest, Some(code_hash.clone()));
 
 			let mut nested = ExecutionContext {
 				overlay: overlay,
@@ -157,11 +160,14 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				)?;
 			}
 
-			let mut contract_code = Vec::new();
+			let dest_code = code::load::<T>(code_hash)?;
+
+			// TODO: Do something with the output data.
+			let mut output_data = Vec::new();
 			vm::execute(
-				init_code,
-				data,
-				&mut contract_code,
+				&dest_code.code,
+				input_data,
+				&mut output_data,
 				&mut CallContext {
 					ctx: &mut nested,
 					caller: caller,
@@ -278,14 +284,14 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
 
 	fn create(
 		&mut self,
-		code: &[u8],
+		code_hash: &T::CodeHash,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
-			.create(caller, endowment, gas_meter, code, &data)
+			.create(caller, endowment, gas_meter, code_hash, &data)
 			.map_err(|_| ())
 	}
 

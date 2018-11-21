@@ -302,7 +302,10 @@ define_env!(init_env, <E: Ext>,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let init_code = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
+		let code_hash = {
+			let code_hash_buf = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
+			<<E as Ext>::T as Trait>::CodeHash::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
+		};
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
 			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
@@ -321,7 +324,7 @@ define_env!(init_env, <E: Ext>,
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.create(&init_code, value, nested_meter, &input_data),
+				Some(nested_meter) => ext.create(&code_hash, value, nested_meter, &input_data),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}

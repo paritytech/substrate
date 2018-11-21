@@ -107,7 +107,7 @@ use system::ensure_signed;
 
 pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
-	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
+	type DetermineContractAddress: ContractAddressFor<Self::CodeHash, Self::AccountId>;
 
 	// As<u32> is needed for wasm-utils
 	type Gas: Parameter + Default + Codec + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
@@ -118,8 +118,8 @@ pub trait Trait: balances::Trait {
 	type CodeHash: Parameter + Member + Default + Copy + Clone + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 }
 
-pub trait ContractAddressFor<AccountId: Sized> {
-	fn contract_address_for(code: &[u8], data: &[u8], origin: &AccountId) -> AccountId;
+pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
+	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
 }
 
 /// Simple contract address determintator.
@@ -130,12 +130,11 @@ pub trait ContractAddressFor<AccountId: Sized> {
 /// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 
-impl<T: Trait> ContractAddressFor<T::AccountId> for SimpleAddressDeterminator<T>
+impl<T: Trait> ContractAddressFor<T::CodeHash, T::AccountId> for SimpleAddressDeterminator<T>
 where
 	T::AccountId: From<T::Hash> + AsRef<[u8]>
 {
-	fn contract_address_for(code: &[u8], data: &[u8], origin: &T::AccountId) -> T::AccountId {
-		let code_hash = T::Hashing::hash(code);
+	fn contract_address_for(code_hash: &T::CodeHash, data: &[u8], origin: &T::AccountId) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
 
 		let mut buf = Vec::new();
@@ -240,7 +239,7 @@ decl_module! {
 			origin,
 			endowment: <T::Balance as HasCompact>::Type,
 			gas_limit: <T::Gas as HasCompact>::Type,
-			ctor_code: Vec<u8>, // TODO: take code hash
+			code_hash: T::CodeHash,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
@@ -261,7 +260,7 @@ decl_module! {
 				events: Vec::new(),
 				config: &cfg,
 			};
-			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
+			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(ref r) = result {
 				// Commit all changes that made it thus far into the persistant storage.

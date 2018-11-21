@@ -60,7 +60,7 @@ pub fn save<T: Trait>(
 	panic!()
 }
 
-pub fn load<T: Trait>(hash: T::CodeHash) -> Result<InstrumentedWasmModule, &'static str> {
+pub fn load<T: Trait>(hash: &T::CodeHash) -> Result<InstrumentedWasmModule, &'static str> {
 	// TODO: Load the version of schedule for the code. Reinstrument if it doesn't match.
 	panic!()
 }

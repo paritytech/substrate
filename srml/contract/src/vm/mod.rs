@@ -52,7 +52,7 @@ pub trait Ext {
 	/// transfered from this to the newly created account.
 	fn create(
 		&mut self,
-		code: &[u8],
+		code: &<Self::T as Trait>::CodeHash,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
