@@ -88,6 +88,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				let dest_code = code::load::<T>(&dest_code_hash, &self.config.schedule)?;
 
 				vm::execute(
+					b"call",
 					&dest_code.code,
 					&dest_code.memory_def,
 					input_data,
@@ -166,6 +167,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			// TODO: Do something with the output data.
 			let mut output_data = Vec::new();
 			vm::execute(
+				b"deploy",
 				&dest_code.code,
 				&dest_code.memory_def,
 				input_data,

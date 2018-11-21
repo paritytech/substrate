@@ -113,12 +113,12 @@ pub enum Error {
 	Memory,
 }
 
-// TODO: Take a name of a function to execute.
 // TODO: Instead of taking the code explicitly can we take the code hash?
 // TODO: Extract code injection stuff and expect the code to be already prepared?
 
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
+	entrypoint: &[u8],
 	code: &[u8],
 	memory_def: &MemoryDefinition,
 	input_data: &[u8],
@@ -153,7 +153,7 @@ pub fn execute<'a, E: Ext>(
 		// No errors or traps were generated on instantiation! That
 		// means we can now invoke the contract entrypoint.
 		Ok(mut instance) => {
-			let err = instance.invoke(b"call", &[], &mut runtime).err();
+			let err = instance.invoke(entrypoint, &[], &mut runtime).err();
 			to_execution_result(runtime, err)
 		}
 		// `start` function trapped. Treat it in the same manner as an execution error.
