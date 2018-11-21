@@ -18,6 +18,7 @@ use super::{ContractAddressFor, Trait, Event, RawEvent, Config};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
+use code;
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
@@ -60,7 +61,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		}
 
 		// TODO: Load code from the storage or cache.
-		let dest_code = self.overlay.get_code(&dest);
+		let dest_code_hash = self.overlay.get_code(&dest);
 
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
@@ -84,9 +85,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				)?;
 			}
 
-			if !dest_code.is_empty() {
+			if let Some(dest_code_hash) = dest_code_hash {
+				let dest_code = code::load::<T>(dest_code_hash)?;
+
 				vm::execute(
-					&dest_code,
+					&dest_code.code,
 					data,
 					output_data,
 					&mut CallContext {
@@ -126,13 +129,14 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
 
-		if !self.overlay.get_code(&dest).is_empty() {
+		if self.overlay.get_code(&dest).is_some() {
 			// It should be enough to check only the code.
 			return Err("contract already exists");
 		}
 
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
+			// TODO: save the code hash in the overlay.
 
 			let mut nested = ExecutionContext {
 				overlay: overlay,
@@ -166,7 +170,6 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				gas_meter,
 			).map_err(|_| "vm execute returned error while create")?;
 
-			nested.overlay.set_code(&dest, contract_code);
 			(nested.overlay.into_change_set(), nested.events)
 		};
 

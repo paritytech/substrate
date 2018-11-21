@@ -100,7 +100,7 @@ use double_map::StorageDoubleMap;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::{Codec, HasCompact};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic};
+use runtime_primitives::traits::{Member, Hash, As, SimpleArithmetic};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 use system::ensure_signed;
@@ -114,6 +114,8 @@ pub trait Trait: balances::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	type CodeHash: Parameter + Member + Default + Copy + Clone + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
@@ -322,7 +324,7 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
 		/// The code associated with an account.
-		pub CodeOf: map T::AccountId => Vec<u8>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
+		pub CodeHashOf: map T::AccountId => Option<T::CodeHash>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
 
 		// pub CodeStorage: map code::CodeHash<T::Hash> => code::InstrumentedWasmModule;
 	}
@@ -344,7 +346,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		<CodeOf<T>>::remove(who);
+		<CodeHashOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
 	}
 }

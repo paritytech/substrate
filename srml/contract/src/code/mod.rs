@@ -21,9 +21,6 @@ use {Schedule, Trait};
 mod prepare;
 
 #[derive(Encode, Decode)]
-pub struct CodeHash<Hash>(Hash);
-
-#[derive(Encode, Decode)]
 pub struct MemoryDefinition {
 	#[codec(compact)]
 	initial: u32,
@@ -38,14 +35,16 @@ pub struct InstrumentedWasmModule {
 	schedule_version: u32,
 	memory_def: MemoryDefinition,
 	/// Code instrumented with the latest schedule.
-	code: Vec<u8>,
+	pub code: Vec<u8>,
 }
 
 pub fn save<T: Trait>(
 	original_code: &[u8],
 	schedule: &Schedule<T::Gas>,
 ) -> Result<(), &'static str> {
-	let code_hash = T::Hashing::hash(&original_code);
+	// TODO: panic
+	// let code_hash = T::Hashing::hash(&original_code);
+	let code_hash = T::CodeHash::default();
 
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
 	// due to the schedule changes is on governance system.
@@ -61,7 +60,7 @@ pub fn save<T: Trait>(
 	panic!()
 }
 
-pub fn load<T: Trait>(hash: CodeHash<T::Hash>) -> Result<InstrumentedWasmModule, &'static str> {
+pub fn load<T: Trait>(hash: T::CodeHash) -> Result<InstrumentedWasmModule, &'static str> {
 	// TODO: Load the version of schedule for the code. Reinstrument if it doesn't match.
 	panic!()
 }
