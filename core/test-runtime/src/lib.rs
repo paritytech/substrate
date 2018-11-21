@@ -50,7 +50,7 @@ pub mod system;
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use client::{runtime_api::runtime as client_api, block_builder::api::runtime as block_builder_api};
+use client::{runtime_api as client_api, block_builder::api as block_builder_api};
 use runtime_primitives::traits::{
 	BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType
 };
@@ -299,7 +299,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl self::test_api::runtime::TestAPI<AccountId> for Runtime {
+	impl self::test_api::TestAPI<AccountId> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
 		}

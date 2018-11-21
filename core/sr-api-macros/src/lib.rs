@@ -25,9 +25,10 @@ extern crate syn;
 use proc_macro2::{Span, TokenStream};
 
 use quote::quote;
-use syn::parse::{Parse, ParseStream, Result, Error};
-use syn::spanned::Spanned;
-use syn::{parse_macro_input, Ident, Token, Type, ItemImpl, MethodSig, FnArg, Path, ImplItem};
+use syn::{
+	spanned::Spanned, parse_macro_input, Ident, Token, Type, ItemImpl, MethodSig, FnArg, Path,
+	ImplItem, parse::{Parse, ParseStream, Result, Error}
+};
 
 use std::{env, iter};
 
@@ -140,7 +141,7 @@ fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, 
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
-		let impl_trait = extract_impl_trait(impl_)?;
+		let impl_trait = extend_with_runtime_path(extract_impl_trait(impl_)?.clone());
 
 		for item in &impl_.items {
 			match item {
@@ -149,7 +150,7 @@ fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, 
 						&method.sig,
 						&impl_.self_ty,
 						input,
-						impl_trait
+						&impl_trait
 					)?;
 
 					impl_calls.push((method.sig.ident.clone(), impl_call));
@@ -319,6 +320,30 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 	))
 }
 
+/// Extend the given trait path with `runtime`.
+/// So, `my_api::MyApi` will be transformed to `my_api::runtime::MyApi`.
+fn extend_with_runtime_path(mut trait_: Path) -> Path {
+	let runtime = Ident::new("runtime", Span::call_site());
+	let pos = trait_.segments.len() - 1;
+	trait_.segments.insert(pos, runtime.clone().into());
+	trait_
+}
+
+/// Generates the implementations of the apis for the runtime.
+fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> TokenStream {
+
+	// We put `runtime` before each trait to get the trait that is intended for the runtime.
+	let impls = impls.iter().cloned().map(|mut impl_| {
+		impl_.trait_.as_mut().map(|trait_| {
+			trait_.1 = extend_with_runtime_path(trait_.1.clone());
+			trait_
+		});
+		impl_
+	});
+
+	quote!( #( #impls )* )
+}
+
 /// Unwrap the given result, if it is an error, `compile_error!` will be generated.
 fn unwrap_or_error(res: Result<TokenStream>) -> TokenStream {
 	res.unwrap_or_else(|e| e.to_compile_error())
@@ -332,13 +357,14 @@ pub fn impl_runtime_apis(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
 	let hidden_includes = generate_hidden_includes();
 	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
+	let api_impls_for_runtime = generate_api_impl_for_runtime(&api_impls);
 
 	quote!(
 		#hidden_includes
 
 		#base_runtime_api
 
-		#( #api_impls )*
+		#( #api_impls_for_runtime )*
 
 		pub mod api {
 			use super::*;

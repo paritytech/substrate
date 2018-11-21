@@ -69,7 +69,7 @@ use grandpa::fg_primitives::{runtime::GrandpaApi, ScheduledChange, id::*};
 #[cfg(feature = "std")]
 use node_primitives::Block as GBlock;
 use client::{
-	block_builder::api::runtime as block_builder_api, runtime_api::{runtime as client_api, id::*}
+	block_builder::api as block_builder_api, runtime_api::{self as client_api, id::*}
 };
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
@@ -84,7 +84,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-use substrate_finality_grandpa_primitives::{runtime as grandpa_api, ScheduledChange};
+use substrate_finality_grandpa_primitives::{self as grandpa_api, ScheduledChange};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
