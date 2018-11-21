@@ -242,15 +242,15 @@ pub(crate) type UntilVoteTargetImported<Block, Status, I> = UntilImported<Block,
 /// This is used for compact commits which have already been checked for
 /// structural soundness.
 pub(crate) struct BlockCommitMessage<Block: BlockT> {
-	inner: Arc<(AtomicUsize, Mutex<Option<CompactCommit<Block>>>)>,
+	inner: Arc<(AtomicUsize, Mutex<Option<(u64, CompactCommit<Block>)>>)>,
 	target_number: NumberFor<Block>,
 }
 
 impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
-	type Blocked = CompactCommit<Block>;
+	type Blocked = (u64, CompactCommit<Block>);
 
 	fn schedule_wait<S, Wait, Ready>(
-		commit: Self::Blocked,
+		input: Self::Blocked,
 		status_check: &S,
 		mut wait: Wait,
 		mut ready: Ready,
@@ -306,6 +306,8 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 				Ok(true)
 			};
 
+			let commit = &input.1;
+
 			// add known hashes from the precommits.
 			for precommit in &commit.precommits {
 				let target_number = precommit.target_number;
@@ -325,11 +327,11 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 		// none of the hashes in the commit message were unknown.
 		// we can just return the commit directly.
 		if unknown_count == 0 {
-			ready(commit);
+			ready(input);
 			return Ok(())
 		}
 
-		let locked_commit = Arc::new((AtomicUsize::new(unknown_count), Mutex::new(Some(commit))));
+		let locked_commit = Arc::new((AtomicUsize::new(unknown_count), Mutex::new(Some(input))));
 
 		// schedule waits for all unknown messages.
 		// when the last one of these has `wait_completed` called on it,
@@ -350,7 +352,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 		Ok(())
 	}
 
-	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<CompactCommit<Block>> {
+	fn wait_completed(self, canon_number: NumberFor<Block>) -> Option<Self::Blocked> {
 		if self.target_number != canon_number {
 			// if we return without deducting the counter, then none of the other
 			// handles can return the commit message.
@@ -492,7 +494,7 @@ mod tests {
 			commit_rx.map_err(|_| panic!("should never error")),
 		);
 
-		commit_tx.unbounded_send(unknown_commit.clone()).unwrap();
+		commit_tx.unbounded_send((0, unknown_commit.clone())).unwrap();
 
 		let inner_chain_state = chain_state.clone();
 		let work = until_imported
@@ -512,7 +514,7 @@ mod tests {
 			});
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some(unknown_commit));
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, unknown_commit)));
 	}
 
 	#[test]
@@ -524,7 +526,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let unknown_commit = CompactCommit::<Block> {
+		let known_commit = CompactCommit::<Block> {
 			target_hash: h1.hash(),
 			target_number: 5,
 			precommits: vec![
@@ -552,11 +554,11 @@ mod tests {
 			commit_rx.map_err(|_| panic!("should never error")),
 		);
 
-		commit_tx.unbounded_send(unknown_commit.clone()).unwrap();
+		commit_tx.unbounded_send((0, known_commit.clone())).unwrap();
 
 		let work = until_imported.into_future();
 
 		let mut runtime = Runtime::new().unwrap();
-		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some(unknown_commit));
+		assert_eq!(runtime.block_on(work).map_err(|(e, _)| e).unwrap().0, Some((0, known_commit)));
 	}
 }
