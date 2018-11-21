@@ -60,11 +60,15 @@ use runtime_support::Parameter;
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{
-	MaybeSerializeDebugButNotDeserialize, CurrentHeight, Convert,
-};
+use primitives::traits::{CurrentHeight, Convert};
 use substrate_primitives::AuthorityId;
 use system::ensure_signed;
+
+#[cfg(feature = "std")]
+use primitives::traits::MaybeSerializeDebug;
+
+#[cfg(not(feature = "std"))]
+use primitives::traits::MaybeSerializeDebugButNotDeserialize;
 
 mod mock;
 mod tests;
@@ -124,7 +128,12 @@ pub trait Trait: system::Trait {
 	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 
 	/// The session key type used by authorities.
+	#[cfg(not(feature = "std"))]
 	type SessionKey: Parameter + Default + MaybeSerializeDebugButNotDeserialize;
+
+	/// The session key type used by authorities.
+	#[cfg(feature = "std")]
+	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 
 	/// The event type of this module.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
