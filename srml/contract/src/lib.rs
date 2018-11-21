@@ -150,14 +150,30 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
+		/// Updates the schedule for metering contracts.
+		///
+		/// The schedule should have a greater version than the stored schedule.
+		fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
+			if <Module<T>>::current_schedule().version >= schedule.version {
+				return Err("Schedule should have a greater version");
+			}
+
+			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
+			<CurrentSchedule<T>>::put(schedule);
+
+			Ok(())
+		}
+
 		fn put_code(origin, code: Vec<u8>) -> Result {
 			let origin = ensure_signed(origin)?;
+			let schedule = <Module<T>>::current_schedule();
 
 			// TODO: deduct some freebalance according to price per byte according to
 			// the schedule.
-			// TODO: get the hash of the code
-			// TODO: validate the code. If the code is not valid, then don't store it.
-			// TODO: put code directly into the storage under a key equal to hash, without involving `AccountDb`.
+
+			// TODO: Return code hash and deposit an event?
+
+			code::save::<T>(&code, &schedule)?;
 
 			Ok(())
 		}
@@ -281,6 +297,9 @@ decl_event! {
 
 		/// Contract deployed by address at the specified address.
 		Created(AccountId, AccountId),
+
+		/// Triggered when the current schedule is updated.
+		ScheduleUpdated(u32),
 	}
 }
 
@@ -362,8 +381,11 @@ impl<T: Trait> Config<T> {
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq)]
 pub struct Schedule<Gas> {
+	/// Version of the schedule.
+	pub version: u32,
+
 	/// Gas cost of a growing memory by single page.
 	pub grow_mem_cost: Gas,
 
@@ -393,6 +415,7 @@ pub struct Schedule<Gas> {
 impl<Gas: As<u64>> Default for Schedule<Gas> {
 	fn default() -> Schedule<Gas> {
 		Schedule {
+			version: 0,
 			grow_mem_cost: Gas::sa(1),
 			regular_op_cost: Gas::sa(1),
 			return_data_per_byte_cost: Gas::sa(1),

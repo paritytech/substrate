@@ -15,7 +15,8 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use codec::Compact;
-use ::Trait;
+use runtime_primitives::traits::Hash;
+use {Schedule, Trait};
 
 mod prepare;
 
@@ -32,18 +33,35 @@ pub struct MemoryDefinition {
 
 #[derive(Encode, Decode)]
 pub struct InstrumentedWasmModule {
+	/// Version of the schedule with which the code was instrumented.
+	#[codec(compact)]
+	schedule_version: u32,
 	memory_def: MemoryDefinition,
 	/// Code instrumented with the latest schedule.
 	code: Vec<u8>,
 }
 
-pub fn save<T: Trait>(original_code: Vec<u8>) {
-	panic!()
+pub fn save<T: Trait>(
+	original_code: &[u8],
+	schedule: &Schedule<T::Gas>,
+) -> Result<(), &'static str> {
+	let code_hash = T::Hashing::hash(&original_code);
 
+	// The first time instrumentation is on the user. However, consequent reinstrumentation
+	// due to the schedule changes is on governance system.
+	let instrumented_module = prepare::prepare_contract::<T, _>(
+		&original_code,
+		schedule,
+		|_, _| true, // TODO: Use real validation function.
+	)?;
+
+	// TODO: validate the code. If the code is not valid, then don't store it.
+	// TODO: put code directly into the storage under a key equal to hash, without involving `AccountDb`.
+
+	panic!()
 }
 
-pub fn load<T: Trait>(hash: CodeHash<T::Hash>) -> InstrumentedWasmModule {
+pub fn load<T: Trait>(hash: CodeHash<T::Hash>) -> Result<InstrumentedWasmModule, &'static str> {
 	// TODO: Load the version of schedule for the code. Reinstrument if it doesn't match.
 	panic!()
 }
-
