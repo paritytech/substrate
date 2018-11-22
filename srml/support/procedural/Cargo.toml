@@ -1,19 +1,26 @@
 [package]
-name = "srml-support"
+name = "srml-support-procedural"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+proc-macro = true
 
 [dependencies]
 hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "2.1", default-features = false }
-substrate-metadata = { path = "../metadata", default-features = false }
-sr-std = { path = "../../core/sr-std", default-features = false }
-sr-io = { path = "../../core/sr-io", default-features = false }
-sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-srml-support-procedural = { path = "./procedural" }
+substrate-metadata = { path = "../../metadata", default-features = false }
+sr-std = { path = "../../../core/sr-std", default-features = false }
+sr-io = { path = "../../../core/sr-io", default-features = false }
+sr-primitives = { path = "../../../core/sr-primitives", default-features = false }
+srml-support-procedural-tools = { path = "./tools" }
 mashup = "0.1.7"
+
+proc-macro2 = "0.4.24"
+quote = { version = "0.6.10", features = ["proc-macro"] }
+syn = { version = "0.15.21", features = ["proc-macro" ,"full", "extra-traits", "parsing"] }
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"

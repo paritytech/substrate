@@ -40,6 +40,9 @@ members = [
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
 	"srml/support",
+	"srml/support/procedural",
+	"srml/support/procedural/tests", # TODO switch to examples
+	"srml/support/procedural/tools",
 	"srml/assets",
 	"srml/balances",
 	"srml/consensus",
