@@ -232,7 +232,7 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
-		Grandpa: grandpa::{Module, Storage, Config<T>, Log(), Event<T>},
+		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		UpgradeKey: upgrade_key,
