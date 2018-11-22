@@ -27,10 +27,6 @@ pub use runtime_version::{ApiId, RuntimeVersion};
 /// decl_runtime_apis!{
 ///     pub trait Test<Event> ExtraClientSide<ClientArg> {
 ///         fn test<AccountId>(event: Event) -> AccountId;
-///
-///         /// A function that will have the extra parameter `param` on the client side,
-///         /// the runtime does not have any parameter.
-///         fn testWithExtraParams() ExtraClientSide(param: &Self::ClientArg);
 ///     }
 /// }
 /// ```
@@ -39,16 +35,14 @@ pub use runtime_version::{ApiId, RuntimeVersion};
 ///
 /// ```nocompile
 /// mod runtime {
-///     pub trait Test<Event, AccountId> {
+///     pub trait Test {
 ///         fn test(event: Event) -> AccountId;
 ///     }
 /// }
 ///
 /// pub trait Test<Block: BlockT, Event> {
 ///     type Error;
-///     type ClientArg;
-///     fn test<AccountId: Encode + Decode>(&self, at: &BlockId<Block>, event: Event) -> Result<Event, Self::Error>;
-///     fn testWithExtraParams(&self, at: &BlockId<Block>, param: &Client) -> Result<Event, Self::Error>;
+///     fn test(&self, at: &BlockId<Block>, event: Event) -> Result<AccountId, Self::Error>;
 /// }
 /// ```
 ///
@@ -60,15 +54,10 @@ macro_rules! decl_runtime_apis {
 	(
 		$(
 			$( #[$attr:meta] )*
-			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:path )* ),* >)*
-				$( ExtraClientSide < $( $client_generic_param:ident $( : $client_generic_bound:ident )* ),+ > )*
-			{
+			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:path )* ),* >)* {
 				$(
 					$( #[$fn_attr:meta] )*
-					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-						$( $param_name:ident : $param_type:ty ),*
-					)
-					$( ExtraClientSide ( $( $client_param_name:ident : $client_param_type:ty ),+ ) )*
+					fn $fn_name:ident ( $( $param_name:ident : $param_type:ty ),* )
 					$( -> $return_ty:ty)*;
 				)*
 			}
@@ -79,13 +68,9 @@ macro_rules! decl_runtime_apis {
 				@GENERATE_RETURN_TYPES
 				$( #[$attr] )*
 				pub trait $name < Block: $crate::runtime_api::BlockT $( $(, $generic_param $( : $generic_bound )* )* )* > {
-					$( $( type $client_generic_param $( : $client_generic_bound )*; )* )*
 					$(
 						$( #[$fn_attr] )*
-						fn $fn_name $( < $( $fn_generic ),* > )* (
-							$( $( $client_param_name: $client_param_type, )* )*
-							$( $param_name : &$param_type, )*
-						) $( -> $return_ty )*;
+						fn $fn_name ( $( $param_name : &$param_type, )* ) $( -> $return_ty )*;
 					)*
 				};
 				{};
@@ -99,7 +84,7 @@ macro_rules! decl_runtime_apis {
 				pub trait $name < Block: $crate::runtime_api::BlockT $( $(, $generic_param $( : $generic_bound )* )* )* > {
 					$(
 						$( #[$fn_attr] )*
-						fn $fn_name $( < $( $fn_generic ),* > )* ( $( $param_name : $param_type ),* ) $( -> $return_ty )*;
+						fn $fn_name ( $( $param_name : $param_type ),* ) $( -> $return_ty )*;
 					)*
 				}
 			)*
@@ -108,12 +93,9 @@ macro_rules! decl_runtime_apis {
 	(@GENERATE_RETURN_TYPES
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty)*;
+				fn $fn_name:ident ( $( $param_name:ident : $param_type:ty, )* ) $( -> $return_ty:ty)*;
 			)*
 		};
 		{ $( $result_return_ty:ty; )* };
@@ -124,12 +106,9 @@ macro_rules! decl_runtime_apis {
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
-				$( type $client_generic_param $( : $client_generic_bound )*; )*
 				$(
 					$( #[$fn_attr] )*
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type, )*
-					) $( -> $return_ty )*;
+					fn $fn_name ( $( $param_name : $param_type, )* ) $( -> $return_ty )*;
 				)*
 			};
 			{ $( $result_return_ty; )* $crate::error::Result<$return_ty_current>; };
@@ -139,12 +118,9 @@ macro_rules! decl_runtime_apis {
 	(@GENERATE_RETURN_TYPES
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty)*;
+				fn $fn_name:ident ( $( $param_name:ident : $param_type:ty, )* ) $( -> $return_ty:ty)*;
 			)*
 		};
 		{ $( $result_return_ty:ty; )* };
@@ -155,12 +131,9 @@ macro_rules! decl_runtime_apis {
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
-				$( type $client_generic_param $( : $client_generic_bound )*; )*
 				$(
 					$( #[$fn_attr] )*
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type, )*
-					) $( -> $return_ty )*;
+					fn $fn_name ( $( $param_name : $param_type, )* ) $( -> $return_ty )*;
 				)*
 			};
 			{ $( $result_return_ty; )* $crate::error::Result<()>; };
@@ -170,12 +143,9 @@ macro_rules! decl_runtime_apis {
 	(@GENERATE_RETURN_TYPES
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty)*;
+				fn $fn_name:ident ( $( $param_name:ident : $param_type:ty, )* ) $( -> $return_ty:ty)*;
 			)*
 		};
 		{ $( $result_return_ty:ty; )* };
@@ -184,12 +154,9 @@ macro_rules! decl_runtime_apis {
 			@GENERATE_CLIENT_TRAITS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
-				$( type $client_generic_param $( : $client_generic_bound )*; )*
 				$(
 					$( #[$fn_attr] )*
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type, )*
-					) $( -> $return_ty )*;
+					fn $fn_name ( $( $param_name : $param_type, )* ) $( -> $return_ty )*;
 				)*
 			};
 			{ $( $result_return_ty; )* };
@@ -198,12 +165,9 @@ macro_rules! decl_runtime_apis {
 	(@GENERATE_CLIENT_TRAITS
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:path )* ),* >)* {
-			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty, )*
-				) $( -> $return_ty:ty)*;
+				fn $fn_name:ident ( $( $param_name:ident : $param_type:ty, )* ) $( -> $return_ty:ty)*;
 			)*
 		};
 		{ $( $result_return_ty:ty; )* };
@@ -211,12 +175,12 @@ macro_rules! decl_runtime_apis {
 		$( #[$attr] )*
 		#[cfg(feature = "std")]
 		pub trait $name $( < $( $generic_param $( : $generic_bound )* ),* > )* : $crate::runtime_api::Core<Block> {
-			$( type $client_generic_param $( : $client_generic_bound )*; )*
-
 			$(
 				$( #[$fn_attr] )*
-				fn $fn_name $( < $( $fn_generic: $crate::runtime_api::Encode + $crate::runtime_api::Decode ),* > )* (
-					&self, at: &$crate::runtime_api::BlockId<Block> $(, $param_name: $param_type )*
+				fn $fn_name (
+					 &self,
+					 at: &$crate::runtime_api::BlockId<Block>
+					 $(, $param_name: $param_type )*
 				) -> $result_return_ty;
 			)*
 		}
@@ -227,9 +191,7 @@ macro_rules! decl_runtime_apis {
 			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:path )* ),* > {
 				$(
 					$( #[$fn_attr:meta] )*
-					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-						$( $param_name:ident : $param_type:ty ),*
-					) $( -> $return_ty:ty )*;
+					fn $fn_name:ident ( $( $param_name:ident : $param_type:ty ),* ) $( -> $return_ty:ty )*;
 				)*
 			}
 		)*
@@ -243,11 +205,7 @@ macro_rules! decl_runtime_apis {
 				pub trait $name < $( $generic_param $( : $generic_bound )* ),* > {
 					$(
 						$( #[$fn_attr] )*
-						fn $fn_name
-							$(
-								< $( $fn_generic: $crate::runtime_api::Encode + $crate::runtime_api::Decode ),* >
-							)*
-						( $( $param_name: $param_type ),* ) $( -> $return_ty )*;
+						fn $fn_name ( $( $param_name: $param_type ),* ) $( -> $return_ty )*;
 					)*
 				}
 			)*
