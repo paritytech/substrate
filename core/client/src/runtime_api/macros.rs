@@ -99,15 +99,15 @@ macro_rules! decl_runtime_apis {
 				pub trait $name < Block: $crate::runtime_api::BlockT $( $(, $generic_param $( : $generic_bound )* )* )* > {
 					$(
 						$( #[$fn_attr] )*
-						fn $fn_name $( < $( $fn_generic ),* > )* ($( $param_name : $param_type )* ) $( -> $return_ty )*;
+						fn $fn_name $( < $( $fn_generic ),* > )* ( $( $param_name : $param_type ),* ) $( -> $return_ty )*;
 					)*
-				};
+				}
 			)*
 		}
 	};
 	(@GENERATE_RETURN_TYPES
-        $( #[$attr:meta] )*
-        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
+		$( #[$attr:meta] )*
+		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
 			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
@@ -115,7 +115,7 @@ macro_rules! decl_runtime_apis {
 					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
-        };
+		};
 		{ $( $result_return_ty:ty; )* };
 		$return_ty_current:ty;
 		$( $( $return_ty_rest:ty )*; )*
@@ -137,8 +137,8 @@ macro_rules! decl_runtime_apis {
 		);
 	};
 	(@GENERATE_RETURN_TYPES
-        $( #[$attr:meta] )*
-        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
+		$( #[$attr:meta] )*
+		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
 			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
@@ -146,7 +146,7 @@ macro_rules! decl_runtime_apis {
 					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
-        };
+		};
 		{ $( $result_return_ty:ty; )* };
 		;
 		$( $( $return_ty_rest:ty )*; )*
@@ -168,8 +168,8 @@ macro_rules! decl_runtime_apis {
 		);
 	};
 	(@GENERATE_RETURN_TYPES
-        $( #[$attr:meta] )*
-        pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
+		$( #[$attr:meta] )*
+		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:path )* ),* >)* {
 			$( type $client_generic_param:ident $( : $client_generic_bound:ident )*; )*
 			$(
 				$( #[$fn_attr:meta] )*
@@ -177,7 +177,7 @@ macro_rules! decl_runtime_apis {
 					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
-        };
+		};
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		decl_runtime_apis!(
@@ -224,36 +224,12 @@ macro_rules! decl_runtime_apis {
 	(@GENERATE_RUNTIME_TRAITS
 		$(
 			$( #[$attr:meta] )*
-			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:path )* ),* >)* {
+			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:path )* ),* > {
 				$(
 					$( #[$fn_attr:meta] )*
 					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-						$( $param_name:ident : $param_type:ty )*
-					) $( -> $return_ty:ty)*;
-				)*
-			};
-		)*
-	) => {
-		decl_runtime_apis! {
-			@GENERATE_RUNTIME_TRAITS_WITH_JOINED_GENERICS
-			$(
-				$( #[$attr] )*
-				pub trait $name < $( $( $generic_param $( : $generic_bound )*, )* )* $( $( $( $fn_generic, )* )* )* > {
-					$(
-						$( #[$fn_attr] )*
-						fn $fn_name ($( $param_name: $param_type ),*) $( -> $return_ty )*;
-					)*
-				}
-			)*
-		}
-	};
-	(@GENERATE_RUNTIME_TRAITS_WITH_JOINED_GENERICS
-		$(
-			$( #[$attr:meta] )*
-			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:path )*, )* > {
-				$(
-					$( #[$fn_attr:meta] )*
-					fn $fn_name:ident($( $param_name:ident : $param_type:ty ),*) $( -> $return_ty:ty)*;
+						$( $param_name:ident : $param_type:ty ),*
+					) $( -> $return_ty:ty )*;
 				)*
 			}
 		)*
@@ -267,7 +243,11 @@ macro_rules! decl_runtime_apis {
 				pub trait $name < $( $generic_param $( : $generic_bound )* ),* > {
 					$(
 						$( #[$fn_attr] )*
-						fn $fn_name ($( $param_name: $param_type ),*) $( -> $return_ty )*;
+						fn $fn_name
+							$(
+								< $( $fn_generic: $crate::runtime_api::Encode + $crate::runtime_api::Decode ),* >
+							)*
+						( $( $param_name: $param_type ),* ) $( -> $return_ty )*;
 					)*
 				}
 			)*

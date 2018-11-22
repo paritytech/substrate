@@ -71,7 +71,7 @@ use node_primitives::Block as GBlock;
 use client::{
 	block_builder::api as block_builder_api, runtime_api::{self as client_api, id::*}
 };
-use runtime_primitives::ApplyResult;
+use runtime_primitives::{ApplyResult, CheckInherentError};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor};
@@ -291,13 +291,11 @@ impl client::block_builder::api::BlockBuilder<GBlock> for RuntimeApi {
 		self.call_api_at(at, "finalise_block", &())
 	}
 
-	fn inherent_extrinsics<Inherent: Decode + Encode, Unchecked: Decode + Encode>(
-		&self, at: &GBlockId, inherent: &Inherent
-	) -> Result<Vec<Unchecked>, client::error::Error> {
+	fn inherent_extrinsics(&self, at: &GBlockId, inherent: &runtime_primitives::InherentData) -> Result<Vec<<GBlock as BlockT>::Extrinsic>, client::error::Error> {
 		self.call_api_at(at, "inherent_extrinsics", inherent)
 	}
 
-	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &GBlockId, block: &GBlock, inherent: &Inherent) -> Result<Result<(), Error>, client::error::Error> {
+	fn check_inherents(&self, at: &GBlockId, block: &GBlock, inherent: &runtime_primitives::InherentData) -> Result<Result<(), CheckInherentError>, client::error::Error> {
 		self.call_api_at(at, "check_inherents", &(block, inherent))
 	}
 
@@ -362,7 +360,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<InherentData, UncheckedExtrinsic, InherentData, InherentError> for Runtime {
+	impl block_builder_api::BlockBuilder for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
@@ -371,12 +369,12 @@ impl_runtime_apis! {
 			Executive::finalise_block()
 		}
 
-		fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
-			data.create_inherent_extrinsics()
+		fn inherent_extrinsics(data: runtime_primitives::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+			unimplemented!("AHH")
 		}
 
-		fn check_inherents(block: Block, data: InherentData) -> Result<(), InherentError> {
-			data.check_inherents(block)
+		fn check_inherents(block: Block, data: runtime_primitives::InherentData) -> Result<(), CheckInherentError> {
+			unimplemented!("AHH")
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {

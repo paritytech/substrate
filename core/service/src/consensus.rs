@@ -25,10 +25,11 @@ use std;
 use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::{block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{id::BLOCK_BUILDER, Core}};
 use codec::{Decode, Encode};
-use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
+use consensus_common::{self, evaluation, offline_tracker::OfflineTracker};
 use primitives::{H256, AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::InherentData;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use parking_lot::RwLock;

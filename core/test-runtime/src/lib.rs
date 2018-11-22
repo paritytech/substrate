@@ -51,11 +51,13 @@ use rstd::prelude::*;
 use codec::{Encode, Decode};
 
 use client::{runtime_api as client_api, block_builder::api as block_builder_api};
-use runtime_primitives::traits::{
-	BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
-	GetRuntimeBlockType
+use runtime_primitives::{
+	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
+	traits::{
+		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
+		GetNodeBlockType, GetRuntimeBlockType
+	}, InherentData, CheckInherentError
 };
-use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
 #[cfg(feature = "std")]
 use runtime_primitives::generic::BlockId;
 use runtime_version::RuntimeVersion;
@@ -171,9 +173,11 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 }
 
 pub mod test_api {
+	use super::AccountId;
+
 	decl_runtime_apis! {
 		pub trait TestAPI {
-			fn balance_of<AccountId>(id: AccountId) -> u64;
+			fn balance_of(id: AccountId) -> u64;
 		}
 	}
 }
@@ -207,13 +211,18 @@ impl client::block_builder::api::BlockBuilder<Block> for RuntimeApi {
 		self.call_api_at(at, "finalise_block", &())
 	}
 
-	fn inherent_extrinsics<Inherent: Decode + Encode, Unchecked: Decode + Encode>(
-		&self, at: &BlockId<Block>, inherent: &Inherent
-	) -> Result<Vec<Unchecked>, client::error::Error> {
+	fn inherent_extrinsics(
+		&self, at: &BlockId<Block>, inherent: &InherentData
+	) -> Result<Vec<<Block as BlockT>::Extrinsic>, client::error::Error> {
 		self.call_api_at(at, "inherent_extrinsics", inherent)
 	}
 
-	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &BlockId<Block>, block: &Block, inherent: &Inherent) -> Result<Result<(), Error>, client::error::Error> {
+	fn check_inherents(
+		&self,
+		at: &BlockId<Block>,
+		block: &Block,
+		inherent: &InherentData,
+	) -> Result<Result<(), CheckInherentError>, client::error::Error> {
 		self.call_api_at(at, "check_inherents", &(block, inherent))
 	}
 
@@ -242,7 +251,7 @@ impl client::runtime_api::Metadata<Block> for RuntimeApi {
 
 #[cfg(feature = "std")]
 impl test_api::TestAPI<Block> for RuntimeApi {
-	fn balance_of<AccountId: Encode + Decode>(&self, at: &BlockId<Block>, id: &AccountId) -> Result<u64, client::error::Error> {
+	fn balance_of(&self, at: &BlockId<Block>, id: &AccountId) -> Result<u64, client::error::Error> {
 		self.call_api_at(at, "balance_of", id)
 	}
 }
@@ -282,7 +291,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<u32, u32, u32, u32> for Runtime {
+	impl block_builder_api::BlockBuilder for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
@@ -291,11 +300,11 @@ impl_runtime_apis! {
 			system::finalise_block()
 		}
 
-		fn inherent_extrinsics(_data: u32) -> Vec<u32> {
+		fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
 			unimplemented!()
 		}
 
-		fn check_inherents(_block: Block, _data: u32) -> Result<(), u32> {
+		fn check_inherents(_block: Block, _data: InherentData) -> Result<(), CheckInherentError> {
 			unimplemented!()
 		}
 
@@ -304,7 +313,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl self::test_api::TestAPI<AccountId> for Runtime {
+	impl self::test_api::TestAPI for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
 		}

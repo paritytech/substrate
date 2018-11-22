@@ -35,7 +35,7 @@ extern crate substrate_client as client;
 extern crate sr_std as rstd;
 
 use substrate_primitives::AuthorityId;
-use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
+use sr_primitives::traits::{DigestFor, NumberFor};
 use rstd::vec::Vec;
 
 /// A scheduled change of authority set.

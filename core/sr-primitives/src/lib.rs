@@ -462,6 +462,37 @@ macro_rules! impl_outer_log {
 	};
 }
 
+//TODO: https://github.com/paritytech/substrate/issues/1022
+/// Inherent data to include in a block.
+#[derive(Encode, Decode)]
+pub struct InherentData {
+	/// Current timestamp.
+	pub timestamp: u64,
+	/// Indices of offline validators.
+	pub offline_indices: Vec<u32>,
+}
+
+impl InherentData {
+	/// Create a new `InherentData` instance.
+	pub fn new(timestamp: u64, offline_indices: Vec<u32>) -> Self {
+		Self {
+			timestamp,
+			offline_indices
+		}
+	}
+}
+
+//TODO: https://github.com/paritytech/substrate/issues/1022
+/// Error type used while checking inherents.
+#[derive(Encode, Decode)]
+pub enum CheckInherentError {
+	TimestampInFuture(u64),
+	#[cfg(feature = "std")]
+	Other(String),
+	#[cfg(not(feature = "std"))]
+	Other(&'static str),
+}
+
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;
