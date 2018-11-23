@@ -93,6 +93,9 @@ pub trait BlockchainEvents<Block: BlockT> {
 pub trait ChainHead<Block: BlockT> {
 	/// Get best block header.
 	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, error::Error>;
+	/// Get all leaves of the chain: block hashes that have no children currently.
+	/// Leaves that can never be finalized will not be returned.
+	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error>;
 }
 
 /// Fetch block body by ID.
@@ -1188,6 +1191,10 @@ where
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
+	}
+
+	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error> {
+		self.backend.blockchain().leaves()
 	}
 }
 
