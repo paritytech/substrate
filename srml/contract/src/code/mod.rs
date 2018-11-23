@@ -42,7 +42,7 @@ pub struct InstrumentedWasmModule {
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
 	schedule: &Schedule<T::Gas>,
-) -> Result<(), &'static str> {
+) -> Result<CodeHash<T>, &'static str> {
 	let code_hash = T::Hashing::hash(&original_code);
 
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
@@ -58,7 +58,7 @@ pub fn save<T: Trait>(
 	<CodeStorage<T>>::insert(code_hash, instrumented_module);
 	<PrestineCode<T>>::insert(code_hash, original_code);
 
-	panic!()
+	Ok(code_hash)
 }
 
 pub fn load<T: Trait>(code_hash: &CodeHash<T>, schedule: &Schedule<T::Gas>,) -> Result<InstrumentedWasmModule, &'static str> {

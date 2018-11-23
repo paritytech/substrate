@@ -172,9 +172,8 @@ decl_module! {
 			// TODO: deduct some freebalance according to price per byte according to
 			// the schedule.
 
-			// TODO: Return code hash and deposit an event?
-
-			code::save::<T>(code, &schedule)?;
+			let code_hash = code::save::<T>(code, &schedule)?;
+			Self::deposit_event(RawEvent::CodeStored(code_hash));
 
 			Ok(())
 		}
@@ -291,13 +290,17 @@ decl_event! {
 	pub enum Event<T>
 	where
 		<T as balances::Trait>::Balance,
-		<T as system::Trait>::AccountId
+		<T as system::Trait>::AccountId,
+		<T as system::Trait>::Hash
 	{
 		/// Transfer happened `from` -> `to` with given `value` as part of a `message-call` or `create`.
 		Transfer(AccountId, AccountId, Balance),
 
 		/// Contract deployed by address at the specified address.
 		Created(AccountId, AccountId),
+
+		/// Code with the specified hash has been stored.
+		CodeStored(Hash),
 
 		/// Triggered when the current schedule is updated.
 		ScheduleUpdated(u32),
