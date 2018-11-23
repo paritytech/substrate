@@ -445,24 +445,12 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		SinkError = Self::Error,
 	> + Send>;
 
-	// commit message streams; cross-round.
-	type CommitIn = Box<dyn Stream<
-		Item = (u64, ::grandpa::CompactCommit<
-			Block::Hash, NumberFor<Block>, Self::Signature, Self::Id
-		>),
-		Error = Self::Error,
-	> + Send>;
-	type CommitOut = Box<dyn Sink<
-		SinkItem = (u64, Commit<Block>),
-		SinkError = Self::Error,
-	> + Send>;
-
 	type Error = ExitOrError<Block::Hash, NumberFor<Block>>;
 
 	fn round_data(
 		&self,
 		round: u64
-	) -> voter::RoundData<Self::Timer, Self::Id, Self::In, Self::Out> {
+	) -> voter::RoundData<Self::Timer, Self::In, Self::Out> {
 		let now = Instant::now();
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
@@ -500,7 +488,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		voter::RoundData {
 			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
 			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
-			voters: (&*self.voters).clone(),
 			incoming,
 			outgoing,
 		}
@@ -602,36 +589,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		} else {
 			Ok(())
 		}
-	}
-
-	fn committer_data(&self) -> (Self::CommitIn, Self::CommitOut) {
-		// verification stream
-		let commit_in = ::communication::checked_commit_stream::<Block, _>(
-			self.set_id,
-			self.network.commit_messages(self.set_id),
-			self.voters.clone(),
-		);
-
-		// block commit messages until relevant blocks are imported.
-		let commit_in = UntilCommitBlocksImported::new(
-			self.inner.import_notification_stream(),
-			self.inner.clone(),
-			commit_in,
-		);
-
-		let commit_out = ::communication::CommitsOut::<Block, _>::new(
-			self.network.clone(),
-			self.set_id,
-		);
-
-		let commit_in = commit_in.map_err(Into::into);
-		let commit_out = commit_out.sink_map_err(Into::into);
-
-		(Box::new(commit_in), Box::new(commit_out))
-	}
-
-	fn voters(&self, _round: u64) -> &HashMap<AuthorityId, u64> {
-		&*self.voters
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
@@ -808,6 +765,52 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	))
 }
 
+fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+	set_id: u64,
+	voters: &Arc<HashMap<AuthorityId, u64>>,
+	client: &Arc<Client<B, E, Block, RA>>,
+	network: &N,
+) -> (
+	impl Stream<
+		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, ed25519::Signature, AuthorityId>),
+		Error = ExitOrError<H256, NumberFor<Block>>,
+	>,
+	impl Sink<
+		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, ed25519::Signature, AuthorityId>),
+		SinkError = ExitOrError<H256, NumberFor<Block>>,
+	>,
+) where
+	B: Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	N: Network,
+	RA: Send + Sync,
+	NumberFor<Block>: BlockNumberOps,
+{
+	// verification stream
+	let commit_in = ::communication::checked_commit_stream::<Block, _>(
+		set_id,
+		network.commit_messages(set_id),
+		voters.clone(),
+	);
+
+	// block commit messages until relevant blocks are imported.
+	let commit_in = UntilCommitBlocksImported::new(
+		client.import_notification_stream(),
+		client.clone(),
+		commit_in,
+	);
+
+	let commit_out = ::communication::CommitsOut::<Block, _>::new(
+		network.clone(),
+		set_id,
+	);
+
+	let commit_in = commit_in.map_err(Into::into);
+	let commit_out = commit_out.sink_map_err(Into::into);
+
+	(commit_in, commit_out)
+}
+
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
@@ -866,7 +869,23 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			chain_info.chain.finalized_number,
 		);
 
-		let voter = voter::Voter::new(env, last_round_number, last_state, last_finalized);
+		let committer_data = committer_communication(
+			env.set_id,
+			&env.voters,
+			&client,
+			&network,
+		);
+
+		let voters = (*env.voters).clone();
+
+		let voter = voter::Voter::new(
+			env,
+			voters,
+			committer_data,
+			last_round_number,
+			last_state,
+			last_finalized,
+		);
 		let client = client.clone();
 		let config = config.clone();
 		let network = network.clone();
