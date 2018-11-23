@@ -70,12 +70,48 @@ use syn::token::{CustomKeyword};
 #[proc_macro]
 pub fn decl_storage2(input: TokenStream) -> TokenStream {
   let def = parse_macro_input!(input as StorageDefinition);
-  panic!("{:?}", &def);
-  let expanded = quote!{ #def };
+//  panic!("{:?}", &def);
 
- panic!("{:?}", &expanded);
-  expanded.into()
- // TokenStream::new()
+  // old macro naming convention (s replaces $)
+  let StorageDefinition {
+    visibility: spub,
+    ident: sstoretype,
+    module_ident: smodulename,
+    mod_param: strait,
+    crate_ident: scratename,
+    content: ext::Braces { content: st, ..},
+    ..
+  } = def;
+  if let syn::GenericParam::Type(syn::TypeParam {
+    ident: straitinstance,
+    bounds: straittypes,
+    ..
+  }) = strait {
+    let straittype = straittypes.first().expect("a trait bound expected").into_value();
+      //__decl_storage_items!($cratename $traittype $traitinstance $(#st)*);
+    let expanded = quote!{
+      __decl_storage_items!(#scratename #straittype #straitinstance #st);
+      #spub trait #sstoretype {
+        __decl_store_items!(#st);
+      }
+      impl<#straitinstance: #straittype> #sstoretype for #smodulename<#straitinstance> {
+        __impl_store_items!(#straitinstance #st);
+      }
+      impl<#straitinstance: #straittype> #smodulename<#straitinstance> {
+        __impl_store_fns!(#straitinstance #st);
+        __impl_store_metadata!(#scratename; #st);
+      }
+
+      // TODO generic 
+
+    };
+
+    expanded.into()
+    // TokenStream::new()
+  } else {
+    panic!("Missing declare store generic params");
+  }
+
 }
 
 
@@ -97,17 +133,17 @@ struct StorageDefinition {
    pub for_token: Token![for],
    pub module_ident: Ident,
    // pub module_generics: syn::Generics,
-   pub mod_lt_token: Option<Token![<]>,
+   pub mod_lt_token: Token![<],
    // single param only TODO not compatible with option on tokens!!!
    pub mod_param: syn::GenericParam,
-   pub mod_gt_token: Option<Token![>]>,
-   pub mod_where_clause: Option<syn::WhereClause>,
+   pub mod_gt_token: Token![>],
+   //pub mod_where_clause: Option<syn::WhereClause>,
  
    pub as_token: Token![as],
    pub crate_ident: Ident,
 	 //	$($t:tt)*
    pub content: ext::Braces<ext::StopParse>,
-   pub content2: Option<AddExtraGenesis>,
+   pub extra_genesis: Option<AddExtraGenesis>,
 }
 
 

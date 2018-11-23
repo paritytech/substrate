@@ -2762,6 +2762,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
+ "srml-support 0.1.0",
  "srml-support-procedural 0.1.0",
  "substrate-metadata 0.1.0",
 ]

@@ -35,6 +35,10 @@ extern crate mashup;
 
 #[cfg(test)]
 #[macro_use]
+extern crate srml_support_procedural;
+
+#[cfg(test)]
+#[macro_use]
 extern crate pretty_assertions;
 #[cfg(test)]
 #[macro_use]
