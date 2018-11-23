@@ -31,6 +31,7 @@ use parking_lot::{Condvar, Mutex, RwLock};
 use network_libp2p::{NodeIndex, Severity};
 use primitives::AuthorityId;
 
+use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 pub use blocks::BlockData;
@@ -57,7 +58,7 @@ pub trait Verifier<B: BlockT>: Send + Sync + Sized {
 		&self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Vec<u8>,
+		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String>;
 }
@@ -411,7 +412,7 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 	let block = block.block;
 
 	let (header, justification) = match (block.header, block.justification) {
-		(Some(header), Some(justification)) => (header, justification),
+		(Some(header), justification) => (header, justification),
 		(None, _) => {
 			if let Some(peer) = peer {
 				debug!(target: "sync", "Header {} was not provided by {} ", block.hash, peer);
@@ -420,14 +421,6 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 			}
 			return Err(BlockImportError::IncompleteHeader(peer)) //TODO: use persistent ID
 		},
-		(_, None) => {
-			if let Some(peer) = peer {
-				debug!(target: "sync", "Justification set for block {} was not provided by {} ", block.hash, peer);
-			} else {
-				debug!(target: "sync", "Justification set for block {} was not provided", block.hash);
-			}
-			return Err(BlockImportError::IncompleteJustification(peer)) //TODO: use persistent ID
-		}
 	};
 
 	let number = header.number().clone();
@@ -555,7 +548,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		&self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Vec<u8>,
+		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
 		Ok((ImportBlock {
@@ -563,7 +556,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			header,
 			body,
 			finalized: self.0,
-			justification: justification,
+			justification,
 			post_digests: vec![],
 			auxiliary: Vec::new(),
 		}, None))
@@ -745,15 +738,16 @@ pub mod tests {
 		);
 	}
 
-	#[test]
-	fn import_single_good_block_without_justification_fails() {
-		let (_, _, _, mut block) = prepare_good_block();
-		block.block.justification = None;
-		assert_eq!(
-			import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-			Err(BlockImportError::IncompleteJustification(Some(0)))
-		);
-	}
+	// FIXME: replace with test where `IncompleteJustification` error is created by the `BlockImport` handle
+	// #[test]
+	// fn import_single_good_block_without_justification_fails() {
+	// 	let (_, _, _, mut block) = prepare_good_block();
+	// 	block.block.justification = None;
+	// 	assert_eq!(
+	// 		import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
+	// 		Err(BlockImportError::IncompleteJustification(Some(0)))
+	// 	);
+	// }
 
 	#[test]
 	fn process_import_result_works() {

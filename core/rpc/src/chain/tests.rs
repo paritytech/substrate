@@ -72,11 +72,10 @@ fn should_return_a_block() {
 	let block_hash = block.hash();
 	api.client.justify_and_import(BlockOrigin::Own, block).unwrap();
 
-
-	// Genesis block is not justified, so we can't query it?
+	// Genesis block is not justified
 	assert_matches!(
 		api.block(Some(api.client.genesis_hash()).into()),
-		Ok(None)
+		Ok(Some(SignedBlock { justification: None, .. }))
 	);
 
 	assert_matches!(

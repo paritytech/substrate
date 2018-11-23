@@ -593,7 +593,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		import_headers: PrePostHeader<Block::Header>,
-		justification: Justification,
+		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
@@ -678,7 +678,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		transaction.set_block_data(
 			import_headers.post().clone(),
 			body,
-			Some(justification),
+			justification,
 			leaf_state,
 		)?;
 
@@ -858,7 +858,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		-> error::Result<Option<SignedBlock<Block>>>
 	{
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), Some(justification)) =>
+			(Some(header), Some(extrinsics), justification) =>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
 			_ => None,
 		})
