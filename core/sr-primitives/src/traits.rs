@@ -582,8 +582,6 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 pub trait ProvideInherent {
 	/// The inherent that is provided.
 	type Inherent: Encode + MaybeDecode;
-	/// The error used by this trait.
-	type Error: Encode + MaybeDecode;
 	/// The call for setting the inherent.
 	type Call: Encode + MaybeDecode;
 
@@ -597,7 +595,7 @@ pub trait ProvideInherent {
 	/// Check that the given inherent is valid.
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
-	) -> Result<(), Self::Error>;
+	) -> Result<(), super::CheckInherentError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

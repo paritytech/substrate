@@ -201,10 +201,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 			)
 		}
 
-		let inherent_data = InherentData {
-			timestamp,
-			offline_indices,
-		};
+		let inherent_data = InherentData::new(timestamp, offline_indices);
 
 		let block = self.client.build_block(
 			&self.parent_id,

@@ -469,28 +469,26 @@ pub struct InherentData {
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// Indices of offline validators.
-	pub offline_indices: Vec<u32>,
+	pub consensus: Vec<u32>,
 }
 
 impl InherentData {
 	/// Create a new `InherentData` instance.
-	pub fn new(timestamp: u64, offline_indices: Vec<u32>) -> Self {
+	pub fn new(timestamp: u64, consensus: Vec<u32>) -> Self {
 		Self {
 			timestamp,
-			offline_indices
+			consensus,
 		}
 	}
 }
 
 //TODO: https://github.com/paritytech/substrate/issues/1022
 /// Error type used while checking inherents.
-#[derive(Encode, Decode)]
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Decode))]
 pub enum CheckInherentError {
 	TimestampInFuture(u64),
-	#[cfg(feature = "std")]
-	Other(String),
-	#[cfg(not(feature = "std"))]
-	Other(&'static str),
+	Other(RuntimeString),
 }
 
 #[cfg(test)]

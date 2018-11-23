@@ -74,7 +74,9 @@ use client::{
 use runtime_primitives::{ApplyResult, CheckInherentError};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor};
+use runtime_primitives::traits::{
+	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, ProvideInherent
+};
 #[cfg(feature = "std")]
 use substrate_primitives::AuthorityId;
 use version::RuntimeVersion;
@@ -218,8 +220,7 @@ impl grandpa::Trait for Runtime {
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
-		NodeBlock = node_primitives::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		NodeBlock = node_primitives::Block
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
@@ -370,11 +371,26 @@ impl_runtime_apis! {
 		}
 
 		fn inherent_extrinsics(data: runtime_primitives::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-			unimplemented!("AHH")
+			let mut inherent = Vec::new();
+
+			inherent.extend(
+				Timestamp::create_inherent_extrinsics(data.timestamp)
+					.into_iter()
+					.map(|v| (v.0, UncheckedExtrinsic::new_unsigned(Call::Timestamp(v.1))))
+			);
+
+			inherent.extend(
+				Consensus::create_inherent_extrinsics(data.consensus)
+					.into_iter()
+					.map(|v| (v.0, UncheckedExtrinsic::new_unsigned(Call::Consensus(v.1))))
+			);
+
+			inherent.as_mut_slice().sort_unstable_by_key(|v| v.0);
+			inherent.into_iter().map(|v| v.1).collect()
 		}
 
 		fn check_inherents(block: Block, data: runtime_primitives::InherentData) -> Result<(), CheckInherentError> {
-			unimplemented!("AHH")
+			InherentData::check_inherents(data, block)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
