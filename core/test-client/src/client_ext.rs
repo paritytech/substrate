@@ -18,18 +18,19 @@
 
 use client::{self, Client};
 use consensus::{ImportBlock, BlockImport, BlockOrigin};
+use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
 use runtime;
 
 /// Extension trait for a test client.
 pub trait TestClient: Sized {
-	/// Justify and import block to the chain. No finality.
-	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
+	/// Import block to the chain. No finality.
+	fn import(&self, origin: BlockOrigin, block: runtime::Block)
 		-> client::error::Result<()>;
 
 	/// Finalize a block.
-	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()>;
+	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
 	fn genesis_hash(&self) -> runtime::Hash;
@@ -41,13 +42,13 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 		E: client::CallExecutor<runtime::Block, Blake2Hasher>,
 		Self: BlockImport<runtime::Block, Error=client::error::Error>,
 {
-	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
+	fn import(&self, origin: BlockOrigin, block: runtime::Block)
 		-> client::error::Result<()>
 	{
 		let import = ImportBlock {
 			origin,
 			header: block.header,
-			justification: Some(vec![]),
+			justification: None,
 			post_digests: vec![],
 			body: Some(block.extrinsics),
 			finalized: false,
@@ -57,8 +58,8 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 		self.import_block(import, None).map(|_| ())
 	}
 
-	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()> {
-		self.finalize_block(id, true)
+	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()> {
+		self.finalize_block(id, justification, true)
 	}
 
 	fn genesis_hash(&self) -> runtime::Hash {

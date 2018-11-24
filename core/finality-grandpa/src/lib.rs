@@ -517,7 +517,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, _commit: Commit<Block>) -> Result<(), Self::Error> {
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), true) {
+		// TODO: produce justification (i.e. commit + precommits ancestry up to commit target)
+		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), None, true) {
 			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 
 			// we return without error because not being able to finalize (temporarily) is
