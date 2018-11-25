@@ -94,9 +94,24 @@ decl_module! {
 		fn set_approvals(origin, votes: Vec<bool>, index: Compact<VoteIndex>) -> Result {
 			let who = ensure_signed(origin)?;
 			let index: VoteIndex = index.into();
+			let active_council = Self::active_council();
+			let desired_seats = Self::desired_seats() as usize;
+			let number = <system::Module<T>>::block_number();
+			let expiring = active_council.iter().take_while(|i| i.1 == number).map(|i| i.0.clone()).collect::<Vec<_>>();
+			let retaining_seats = active_council.len() - expiring.len();
+			let empty_seats = desired_seats - retaining_seats;
 
 			ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 			ensure!(index == Self::vote_index(), "incorrect vote index");
+			// Prevent a vote from voters that provide a list of votes that exceeds the desired seats length
+			// since otherise an attacker may be able to submit a very long list of `votes` that far exceeds
+			// the amount of candidates and waste more computation than a reasonable voting bond would cover.
+			ensure!(desired_seats >= votes.len(), "length of candidate approval votes cannot exceed length of desired seats");
+			// Prevent further voting if the desired seat count is modified to a value such that the there
+			// are no longer any  using `set_desired_seats` during the
+			// candidate approval voting period
+			ensure!(empty_seats > 0, "expired council seats are not up for election when desired seat count changes during the voting period such that there are no longer any empty seats");
+
 			if !<LastActiveOf<T>>::exists(&who) {
 				// not yet a voter - deduct bond.
 				// NOTE: this must be the last potential bailer, since it changes state.
@@ -133,7 +148,7 @@ decl_module! {
 			ensure!(Self::voter_last_active(&reporter).is_some(), "reporter must be a voter");
 			let last_active = Self::voter_last_active(&who).ok_or("target for inactivity cleanup must be active")?;
 			ensure!(assumed_vote_index == Self::vote_index(), "vote index not current");
-			ensure!(last_active < assumed_vote_index - Self::inactivity_grace_period(), "cannot reap during grace perid");
+			ensure!(assumed_vote_index > last_active + Self::inactivity_grace_period(), "cannot reap during grace period");
 			let voters = Self::voters();
 			let reporter_index: u32 = reporter_index.into();
 			let reporter_index = reporter_index as usize;
@@ -158,7 +173,7 @@ decl_module! {
 				voters
 			);
 			if valid {
-				// This only fails if `who` doesn't exist, which it clearly must do since its the origin.
+				// This only fails if `reporter` doesn't exist, which it clearly must do since its the origin.
 				// Still, it's no more harmful to propagate any error at this point.
 				<balances::Module<T>>::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
@@ -332,7 +347,7 @@ decl_storage! {
 		pub CarryCount get(carry_count) config(): u32 = 2;
 		/// How long to give each top candidate to present themselves after the vote ends.
 		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
-		/// How many votes need to go by after a voter's last vote before they can be reaped if their
+		/// How many vote indexes need to go by after a target voter's last vote before they can be reaped if their
 		/// approvals are moot.
 		pub InactiveGracePeriod get(inactivity_grace_period) config(inactive_grace_period): VoteIndex = 1;
 		/// How often (in blocks) to check for new votes.
@@ -350,7 +365,7 @@ decl_storage! {
 		pub VoteCount get(vote_index): VoteIndex;
 
 		// persistent state (always relevant, changes constantly)
-		/// The last cleared vote index that this voter was last active at.
+		/// A voters list of votes for the last cleared vote index that this voter was last active at.
 		pub ApprovalsOf get(approvals_of): map T::AccountId => Vec<bool>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 		/// currently registered.
@@ -467,8 +482,9 @@ impl<T: Trait> Module<T> {
 		let desired_seats = Self::desired_seats() as usize;
 		let number = <system::Module<T>>::block_number();
 		let expiring = active_council.iter().take_while(|i| i.1 == number).map(|i| i.0.clone()).collect::<Vec<_>>();
-		if active_council.len() - expiring.len() < desired_seats {
-			let empty_seats = desired_seats - (active_council.len() - expiring.len());
+		let retaining_seats = active_council.len() - expiring.len();
+		if retaining_seats < desired_seats {
+			let empty_seats = desired_seats - retaining_seats;
 			<NextFinalise<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
 
 			let voters = Self::voters();
@@ -720,7 +736,7 @@ mod tests {
 			assert_ok!(Council::submit_candidacy(Origin::signed(3), 2.into()));
 
 			assert_ok!(Council::set_approvals(Origin::signed(2), vec![false, true, true], 0.into()));
-			assert_ok!(Council::set_approvals(Origin::signed(3), vec![false, true, true], 0.into()));
+			assert_ok!(Council::set_approvals(Origin::signed(3), vec![false, true, true, false], 0.into()));
 
 			assert_eq!(Council::approvals_of(1), vec![true]);
 			assert_eq!(Council::approvals_of(4), vec![true]);
@@ -728,6 +744,18 @@ mod tests {
 			assert_eq!(Council::approvals_of(3), vec![false, true, true]);
 
 			assert_eq!(Council::voters(), vec![1, 4, 2, 3]);
+		});
+	}
+
+	#[test]
+	fn setting_an_approval_vote_count_more_than_candidate_count_should_not_work() {
+		with_externalities(&mut new_test_ext(false), || {
+			System::set_block_number(1);
+
+			assert_ok!(Council::submit_candidacy(Origin::signed(5), 0.into()));
+
+			assert_ok!(Council::set_approvals(Origin::signed(1), vec![true], 0.into()));
+			assert_noop!(Council::set_approvals(Origin::signed(4), vec![true, true], 0.into()), "length of candidate approval votes cannot exceed length of desired seats");
 		});
 	}
 
