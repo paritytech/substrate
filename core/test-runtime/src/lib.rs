@@ -58,12 +58,9 @@ use runtime_primitives::{
 		GetNodeBlockType, GetRuntimeBlockType
 	}, InherentData, CheckInherentError
 };
-#[cfg(feature = "std")]
-use runtime_primitives::generic::BlockId;
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
 use primitives::AuthorityId;
-#[cfg(feature = "std")]
 use primitives::OpaqueMetadata;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
@@ -182,80 +179,6 @@ pub mod test_api {
 	}
 }
 
-#[cfg(feature = "std")]
-impl client::runtime_api::Core<Block> for RuntimeApi {
-	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, client::error::Error> {
-		self.call_api_at(at, "version", &())
-	}
-
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, client::error::Error> {
-		self.call_api_at(at, "authorities", &())
-	}
-
-	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), client::error::Error> {
-		self.call_api_at(at, "execute_block", block)
-	}
-
-	fn initialise_block(&self, at: &BlockId<Block>, header: &<Block as BlockT>::Header) -> Result<(), client::error::Error> {
-		self.call_api_at(at, "initialise_block", header)
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::block_builder::api::BlockBuilder<Block> for RuntimeApi {
-	fn apply_extrinsic(&self, at: &BlockId<Block>, extrinsic: &<Block as BlockT>::Extrinsic) -> Result<ApplyResult, client::error::Error> {
-		self.call_api_at(at, "apply_extrinsic", extrinsic)
-	}
-
-	fn finalise_block(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Header, client::error::Error> {
-		self.call_api_at(at, "finalise_block", &())
-	}
-
-	fn inherent_extrinsics(
-		&self, at: &BlockId<Block>, inherent: &InherentData
-	) -> Result<Vec<<Block as BlockT>::Extrinsic>, client::error::Error> {
-		self.call_api_at(at, "inherent_extrinsics", inherent)
-	}
-
-	fn check_inherents(
-		&self,
-		at: &BlockId<Block>,
-		block: &Block,
-		inherent: &InherentData,
-	) -> Result<Result<(), CheckInherentError>, client::error::Error> {
-		self.call_api_at(at, "check_inherents", &(block, inherent))
-	}
-
-	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, client::error::Error> {
-		self.call_api_at(at, "random_seed", &())
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::runtime_api::TaggedTransactionQueue<Block> for RuntimeApi {
-	fn validate_transaction(
-		&self,
-		at: &BlockId<Block>,
-		utx: &<Block as BlockT>::Extrinsic
-	) -> Result<TransactionValidity, client::error::Error> {
-		self.call_api_at(at, "validate_transaction", utx)
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::runtime_api::Metadata<Block> for RuntimeApi {
-	fn metadata(&self, at: &BlockId<Block>) -> Result<OpaqueMetadata, client::error::Error> {
-		self.call_api_at(at, "metadata", &())
-	}
-}
-
-#[cfg(feature = "std")]
-impl test_api::TestAPI<Block> for RuntimeApi {
-	fn balance_of(&self, at: &BlockId<Block>, id: &AccountId) -> Result<u64, client::error::Error> {
-		self.call_api_at(at, "balance_of", id)
-	}
-}
-
 pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
@@ -267,7 +190,7 @@ impl GetRuntimeBlockType for Runtime {
 }
 
 impl_runtime_apis! {
-	impl client_api::Core for Runtime {
+	impl client_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			version()
 		}
@@ -285,13 +208,19 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::TaggedTransactionQueue for Runtime {
+	impl client_api::Metadata<Block> for Runtime {
+		fn metadata() -> OpaqueMetadata {
+			unimplemented!()
+		}
+	}
+
+	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}
 	}
 
-	impl block_builder_api::BlockBuilder for Runtime {
+	impl block_builder_api::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
@@ -313,7 +242,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl self::test_api::TestAPI for Runtime {
+	impl self::test_api::TestAPI<Block> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
 		}

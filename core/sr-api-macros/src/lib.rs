@@ -28,7 +28,8 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
 	spanned::Spanned, parse_macro_input, Ident, Token, Type, ItemImpl, MethodSig, FnArg, Path,
-	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument
+	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
+	fold::{self, Fold}, FnDecl
 };
 
 use std::{env, iter};
@@ -137,36 +138,33 @@ fn extract_impl_trait<'a>(impl_: &'a ItemImpl) -> Result<&'a Path> {
 	})
 }
 
-/// Adds the `RuntimeBlock` as generic parameter to the given trait.
-fn add_runtime_block_generic_param(runtime: &Type, mut trait_: Path) -> Result<Path> {
-	{
-		let span = trait_.span();
-		let mut segment = trait_
-			.segments
-			.last_mut()
-			.ok_or_else(
-				|| Error::new(span, "Empty path not supported")
-			)?;
-		let generics = segment.value_mut();
+/// Extracts the runtime block identifier.
+fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
+	let span = trait_.span();
+	let segment = trait_
+		.segments
+		.last()
+		.ok_or_else(
+			|| Error::new(span, "Empty path not supported")
+		)?;
+	let generics = segment.value();
 
-		let (block, _) = generate_runtime_block_and_block_id_ty(runtime);
-
-		if generics.arguments.is_empty() {
-			generics.arguments = PathArguments::AngleBracketed(parse_quote!( <#block> ));
-		} else {
-			match &mut generics.arguments {
-				PathArguments::AngleBracketed(ref mut args) => {
-					args.args.insert(0, GenericArgument::Type(parse_quote!( #block )));
-				},
-				PathArguments::None => unreachable!(),
-				PathArguments::Parenthesized(_) => {
-					return Err(Error::new(span, "Unexpected parentheses in path!"));
-				}
+	if generics.arguments.is_empty() {
+		Err(Error::new(span, "Missing `Block` generic parameter."))
+	} else {
+		match &generics.arguments {
+			PathArguments::AngleBracketed(ref args) => {
+				args.args.first().and_then(|v| match v.value() {
+					GenericArgument::Type(Type::Path(block)) => Some(block),
+					_ => None
+				}).ok_or_else(|| Error::new(span, "Missing `Block` generic parameter."))
+			},
+			PathArguments::None => unreachable!(),
+			PathArguments::Parenthesized(_) => {
+				Err(Error::new(span, "Unexpected parentheses in path!"))
 			}
 		}
 	}
-
-	Ok(trait_)
 }
 
 /// Generate all the implementation calls for the given functions.
@@ -175,7 +173,6 @@ fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, 
 
 	for impl_ in impls {
 		let impl_trait = extend_with_runtime_path(extract_impl_trait(impl_)?.clone());
-		let impl_trait = add_runtime_block_generic_param(&impl_.self_ty, impl_trait)?;
 
 		for item in &impl_.items {
 			match item {
@@ -261,10 +258,6 @@ fn generate_block_and_block_id_ty(
 	let block_id = quote!( #crate_::runtime_api::BlockId<#block> );
 
 	(block, block_id)
-}
-
-fn generate_runtime_block_and_block_id_ty(runtime: &Type) -> (TokenStream, TokenStream) {
-	generate_block_and_block_id_ty(runtime, "GetRuntimeBlockType", "RuntimeBlock")
 }
 
 fn generate_node_block_and_block_id_ty(runtime: &Type) -> (TokenStream, TokenStream) {
@@ -388,7 +381,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	for impl_ in impls.iter() {
 		let mut impl_ = impl_.clone();
 		let trait_ = extract_impl_trait(&impl_)?.clone();
-		let trait_ = add_runtime_block_generic_param(&impl_.self_ty, trait_)?;
 		let trait_ = extend_with_runtime_path(trait_);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
@@ -396,6 +388,110 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	}
 
 	Ok(quote!( #( #impls_prepared )* ))
+}
+
+/// Auxilariy data structure that is used to convert `impl Api for Runtime` to
+/// `impl Api for RuntimeApi`.
+/// This requires us to replace the runtime `Block` with the node `Block`,
+/// `impl Api for Runtime` with `impl Api for RuntimeApi` and replace the method implementations
+/// with code that calls into the runtime.
+struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
+	node_block: &'a TokenStream,
+	runtime_block: &'a TypePath,
+	node_block_id: &'a TokenStream,
+}
+
+impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
+	fn fold_type_path(&mut self, input: TypePath) -> TypePath {
+		let new_ty_path = if input == *self.runtime_block {
+			let node_block = self.node_block;
+			parse_quote!( #node_block )
+		} else {
+			input
+		};
+
+		fold::fold_type_path(self, new_ty_path)
+	}
+
+	fn fold_fn_decl(&mut self, mut input: FnDecl) -> FnDecl {
+		// Add `&` to all parameter types.
+		input.inputs
+			.iter_mut()
+			.filter_map(|i| match i {
+				FnArg::Captured(ref mut arg) => Some(&mut arg.ty),
+				_ => None,
+			})
+			.filter_map(|i| match i {
+				Type::Reference(_) => None,
+				r => Some(r),
+			})
+			.for_each(|i| *i = parse_quote!( &#i ));
+
+		// Add `&self, at:& BlockId` as parameters to each function at the beginning.
+		let block_id = self.node_block_id;
+		input.inputs.insert(0, parse_quote!( at: &#block_id ));
+		input.inputs.insert(0, parse_quote!( &self ));
+
+		// Wrap the output in a `Result`
+		input.output = {
+			let c = generate_crate_access();
+
+			let generate_result = |ty: &Type| {
+				parse_quote!( -> ::std::result::Result<#ty, #c::error::Error> )
+			};
+
+			match &input.output {
+				syn::ReturnType::Default => generate_result(&parse_quote!( () )),
+				syn::ReturnType::Type(_, ref ty) => generate_result(&ty),
+			}
+		};
+
+		fold::fold_fn_decl(self, input)
+	}
+
+	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
+		{
+			let arg_names = input.sig.decl.inputs.iter().filter_map(|i| match i {
+				FnArg::Captured(ref arg) => Some(&arg.pat),
+				_ => None,
+			});
+			let name = input.sig.ident.to_string();
+
+			// Generate the new method implementation that calls into the runime.
+			input.block = parse_quote!( { self.call_api_at(at, #name, &( #( #arg_names ),* )) } );
+		}
+
+		fold::fold_impl_item_method(self, input)
+	}
+
+	fn fold_item_impl(&mut self, mut input: ItemImpl) -> ItemImpl {
+		// Implement the trait for the `RuntimeApi`
+		input.self_ty = Box::new(parse_quote!( RuntimeApi ));
+
+		// The implementation for the `RuntimeApi` is only required when compiling with `std`.
+		input.attrs.push(parse_quote!( #[cfg(feature = "std")] ));
+
+		fold::fold_item_impl(self, input)
+	}
+}
+
+fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> {
+	let mut result = Vec::with_capacity(impls.len());
+
+	for impl_ in impls {
+		let runtime_block = extract_runtime_block_ident(extract_impl_trait(&impl_)?)?;
+		let (node_block, node_block_id) = generate_node_block_and_block_id_ty(&impl_.self_ty);
+
+		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
+			runtime_block,
+			node_block: &node_block,
+			node_block_id: &node_block_id,
+		};
+
+		result.push(visitor.fold_item_impl(impl_.clone()));
+	}
+
+	Ok(quote!( #( #result )* ))
 }
 
 /// Unwrap the given result, if it is an error, `compile_error!` will be generated.
@@ -412,13 +508,16 @@ pub fn impl_runtime_apis(input: proc_macro::TokenStream) -> proc_macro::TokenStr
 	let hidden_includes = generate_hidden_includes();
 	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
 	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
+	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
 
 	quote!(
 		#hidden_includes
 
 		#base_runtime_api
 
-		#( #api_impls_for_runtime )*
+		#api_impls_for_runtime
+
+		#api_impls_for_runtime_api
 
 		pub mod api {
 			use super::*;

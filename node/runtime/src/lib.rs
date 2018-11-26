@@ -260,84 +260,8 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
-#[cfg(feature = "std")]
-type GBlockId = generic::BlockId<GBlock>;
-
-#[cfg(feature = "std")]
-impl client::runtime_api::Core<GBlock> for RuntimeApi {
-	fn version(&self, at: &GBlockId) -> Result<RuntimeVersion, client::error::Error> {
-		self.call_api_at(at, "version", &())
-	}
-
-	fn authorities(&self, at: &GBlockId) -> Result<Vec<AuthorityId>, client::error::Error> {
-		self.call_api_at(at, "authorities", &())
-	}
-
-	fn execute_block(&self, at: &GBlockId, block: &GBlock) -> Result<(), client::error::Error> {
-		self.call_api_at(at, "execute_block", block)
-	}
-
-	fn initialise_block(&self, at: &GBlockId, header: &<GBlock as BlockT>::Header) -> Result<(), client::error::Error> {
-		self.call_api_at(at, "initialise_block", header)
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::block_builder::api::BlockBuilder<GBlock> for RuntimeApi {
-	fn apply_extrinsic(&self, at: &GBlockId, extrinsic: &<GBlock as BlockT>::Extrinsic) -> Result<ApplyResult, client::error::Error> {
-		self.call_api_at(at, "apply_extrinsic", extrinsic)
-	}
-
-	fn finalise_block(&self, at: &GBlockId) -> Result<<GBlock as BlockT>::Header, client::error::Error> {
-		self.call_api_at(at, "finalise_block", &())
-	}
-
-	fn inherent_extrinsics(&self, at: &GBlockId, inherent: &runtime_primitives::InherentData) -> Result<Vec<<GBlock as BlockT>::Extrinsic>, client::error::Error> {
-		self.call_api_at(at, "inherent_extrinsics", inherent)
-	}
-
-	fn check_inherents(&self, at: &GBlockId, block: &GBlock, inherent: &runtime_primitives::InherentData) -> Result<Result<(), CheckInherentError>, client::error::Error> {
-		self.call_api_at(at, "check_inherents", &(block, inherent))
-	}
-
-	fn random_seed(&self, at: &GBlockId) -> Result<<GBlock as BlockT>::Hash, client::error::Error> {
-		self.call_api_at(at, "random_seed", &())
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::runtime_api::TaggedTransactionQueue<GBlock> for RuntimeApi {
-	fn validate_transaction(
-		&self,
-		at: &GBlockId,
-		utx: &<GBlock as BlockT>::Extrinsic
-	) -> Result<TransactionValidity, client::error::Error> {
-		self.call_api_at(at, "validate_transaction", utx)
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::runtime_api::Metadata<GBlock> for RuntimeApi {
-	fn metadata(&self, at: &GBlockId) -> Result<OpaqueMetadata, client::error::Error> {
-		self.call_api_at(at, "metadata", &())
-	}
-}
-
-#[cfg(feature = "std")]
-impl substrate_finality_grandpa_primitives::GrandpaApi<GBlock> for RuntimeApi {
-	fn grandpa_pending_change(&self, at: &GBlockId, digest: &DigestFor<GBlock>)
-		-> Result<Option<ScheduledChange<NumberFor<GBlock>>>, client::error::Error> {
-		self.call_api_at(at, "grandpa_pending_change", digest)
-	}
-
-	fn grandpa_authorities(&self, at: &GBlockId)
-		-> Result<Vec<(AuthorityId, u64)>, client::error::Error> {
-		self.call_api_at(at, "grandpa_authorities", &())
-	}
-}
-
 impl_runtime_apis! {
-	impl client_api::Core for Runtime {
+	impl client_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
 		}
@@ -355,13 +279,13 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::Metadata for Runtime {
+	impl client_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			Runtime::metadata().into()
 		}
 	}
 
-	impl block_builder_api::BlockBuilder for Runtime {
+	impl block_builder_api::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
@@ -398,13 +322,12 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl client_api::TaggedTransactionQueue for Runtime {
+	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}
 	}
 
-<<<<<<< HEAD
 	impl GrandpaApi<Block> for Runtime {
 		fn grandpa_pending_change(digest: DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>
@@ -418,13 +341,6 @@ impl_runtime_apis! {
 				}
 			}
 			None
-=======
-
-	impl grandpa_api::GrandpaApi for Runtime {
-		fn grandpa_pending_change(_digest: DigestFor<Block>)
-			-> Option<ScheduledChange<NumberFor<Block>>> {
-			unimplemented!("Robert, where is the impl?")
->>>>>>> Require the `impl_runtime_apis` to use a path for accessing the trait
 		}
 
 		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
