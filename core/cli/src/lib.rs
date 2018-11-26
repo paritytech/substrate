@@ -338,17 +338,17 @@ where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
-	if let Some(matches) = matches.subcommand_matches("build_spec") {
+	if let Some(matches) = matches.subcommand_matches("build-spec") {
 		build_spec::<F>(matches, spec)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("export_blocks") {
+	if let Some(matches) = matches.subcommand_matches("export-blocks") {
 		export_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("import_blocks") {
+	if let Some(matches) = matches.subcommand_matches("import-blocks") {
 		import_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
