@@ -106,7 +106,7 @@ pub use client::{
 	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	Client, ClientInfo, ChainHead,
+	BlockImportNotification, Client, ClientInfo, ChainHead,
 };
 #[cfg(feature = "std")]
 pub use notifications::{StorageEventStream, StorageChangeSet};
