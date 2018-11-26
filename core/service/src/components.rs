@@ -16,7 +16,7 @@
 
 //! Substrate service components.
 
-use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref};
+use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
 use chain_spec::{ChainSpec, Properties};
@@ -366,6 +366,12 @@ impl<Factory: ServiceFactory> Deref for FullComponents<Factory> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.service
+	}
+}
+
+impl<Factory: ServiceFactory> DerefMut for FullComponents<Factory> {
+	fn deref_mut(&mut self) -> &mut Service<Self> {
+		&mut self.service
 	}
 }
 
