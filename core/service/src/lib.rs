@@ -310,10 +310,6 @@ impl<Components> Service<Components>
 			None
 		}
 	}
-
-	pub fn config(&self) -> &FactoryFullConfiguration<Components::Factory> {
-		&self.config
-	}
 }
 
 impl<Components> Service<Components> where Components: components::Components {

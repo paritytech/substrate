@@ -79,10 +79,9 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
-			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
-				let (block_import, link_half) = service.config().custom.grandpa_import_setup.as_ref().take()
-					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed")
-					.clone();
+			|mut service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
+				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
+					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 				if service.config.custom.grandpa_authority {
 					info!("Running Grandpa session as Authority {}", key.public());
@@ -90,7 +89,7 @@ construct_service_factory! {
 						grandpa::Config {
 							gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
 							local_key: Some(key.clone()),
-							name: Some(service.config().name.clone())
+							name: Some(service.config.name.clone())
 						},
 						link_half,
 						grandpa::NetworkBridge::new(service.network())
