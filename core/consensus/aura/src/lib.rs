@@ -146,17 +146,19 @@ impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, Autho
 }
 
 /// Start the aura worker. This should be run in a tokio runtime.
-pub fn start_aura<B, C, E, SO, Error>(
+pub fn start_aura<B, C, E, I, SO, Error>(
 	config: Config,
 	client: Arc<C>,
+	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
 )
 	-> impl Future<Item=(),Error=()> where
 	B: Block,
-	C: Authorities<B, Error=Error> + BlockImport<B, Error=Error> + ChainHead<B>,
+	C: Authorities<B, Error=Error> + ChainHead<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
+	I: BlockImport<B, Error=Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
@@ -164,6 +166,7 @@ pub fn start_aura<B, C, E, SO, Error>(
 	let make_authorship = move || {
 		let config = config.clone();
 		let client = client.clone();
+		let block_import = block_import.clone();
 		let env = env.clone();
 		let sync_oracle = sync_oracle.clone();
 
@@ -225,7 +228,7 @@ pub fn start_aura<B, C, E, SO, Error>(
 					}
 				};
 
-				let block_import = client.clone();
+				let block_import = block_import.clone();
 				Either::A(proposal_work
 					.map(move |b| {
 						let (header, body) = b.deconstruct();
@@ -542,6 +545,7 @@ mod tests {
 					local_key: Some(Arc::new(key.clone().into())),
 					slot_duration: SLOT_DURATION
 				},
+				client.clone(),
 				client,
 				environ.clone(),
 				DummyOracle,
