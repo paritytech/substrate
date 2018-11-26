@@ -358,7 +358,7 @@ where
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("purge_chain") {
+	if let Some(matches) = matches.subcommand_matches("purge-chain") {
 		purge_chain::<F>(matches, spec)?;
 		return Ok(Action::ExecutedInternally);
 	}
