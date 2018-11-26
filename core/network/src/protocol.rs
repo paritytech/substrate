@@ -296,10 +296,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		send_message::<B, H>(&self.context_data.peers, io, who, message)
 	}
 
-	pub fn send_consensus_message(&self, io: &mut SyncIo, topic: B::Hash, data: Vec<u8>) {
+	pub fn gossip_consensus_message(&self, io: &mut SyncIo, topic: B::Hash, message: Vec<u8>) {
 		let gossip = self.consensus_gossip();
 		self.with_spec(io, move |_s, context|{
-			gossip.write().multicast(context, topic, data);
+			gossip.write().multicast(context, topic, message);
 		});
 	}
 

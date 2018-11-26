@@ -229,7 +229,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
-		self.sync.send_consensus_message(&mut TestIo::new(&self.queue, None), topic, data);
+		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
