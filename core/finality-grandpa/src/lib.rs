@@ -626,6 +626,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	authority_set_change: mpsc::UnboundedSender<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
 	api: Arc<PRA>,
 }
 
@@ -700,19 +701,7 @@ where
 pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-}
-impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for LinkHalf<B, E, Block, RA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
-{
-	fn clone(&self) -> Self {
-		LinkHalf {
-			client: self.client.clone(),
-			authority_set: self.authority_set.clone()
-		}
-	}
+	authority_set_change: mpsc::UnboundedReceiver<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
 }
 
 /// Make block importer and link half necessary to tie the background voter
@@ -753,13 +742,20 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			.into(),
 	};
 
+	let (authority_set_change_tx, authority_set_change_rx) = mpsc::unbounded();
+
 	Ok((
 		GrandpaBlockImport {
 			inner: client.clone(),
 			authority_set: authority_set.clone(),
+			authority_set_change: authority_set_change_tx,
 			api
 		},
-		LinkHalf { client, authority_set },
+		LinkHalf {
+			client,
+			authority_set,
+			authority_set_change: authority_set_change_rx
+		},
 	))
 }
 
@@ -828,7 +824,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	use futures::future::{self, Loop as FutureLoop};
 	use runtime_primitives::traits::Zero;
 
-	let LinkHalf { client, authority_set } = link;
+	let LinkHalf { client, authority_set, authority_set_change } = link;
+
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
 
@@ -853,8 +850,9 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		authority_set: authority_set.clone(),
 	});
 
-	let work = future::loop_fn((initial_environment, last_round_number, last_state), move |params| {
-		let (env, last_round_number, last_state) = params;
+	let initial_state = (initial_environment, last_round_number, last_state, authority_set_change.into_future());
+	let work = future::loop_fn(initial_state, move |params| {
+		let (env, last_round_number, last_state, authority_set_change) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
 
 		let chain_info = match client.info() {
@@ -888,28 +886,52 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let config = config.clone();
 		let network = network.clone();
 		let authority_set = authority_set.clone();
-		future::Either::A(voter.then(move |res| match res {
-			// voters don't conclude naturally; this could reasonably be an error.
-			Ok(()) => Ok(FutureLoop::Break(())),
-			Err(ExitOrError::Error(e)) => Err(e),
-			Err(ExitOrError::AuthoritiesChanged(new)) => {
-				let env = Arc::new(Environment {
-					inner: client,
-					config,
-					voters: Arc::new(new.authorities.into_iter().collect()),
-					set_id: new.set_id,
-					network,
-					authority_set,
-				});
 
-				// start the new authority set using the block where the
-				// set changed (not where the signal happened!) as the base.
-				Ok(FutureLoop::Continue((
-					env,
-					0, // always start at round 0 when changing sets.
-					RoundState::genesis((new.canon_hash, new.canon_number)),
-				)))
+		let trigger_authority_set_change = |new: NewAuthoritySet<_, _>, authority_set_change| {
+			let env = Arc::new(Environment {
+				inner: client,
+				config,
+				voters: Arc::new(new.authorities.into_iter().collect()),
+				set_id: new.set_id,
+				network,
+				authority_set,
+			});
+
+			// start the new authority set using the block where the
+			// set changed (not where the signal happened!) as the base.
+			Ok(FutureLoop::Continue((
+				env,
+				0, // always start at round 0 when changing sets.
+				RoundState::genesis((new.canon_hash, new.canon_number)),
+				authority_set_change,
+			)))
+		};
+
+		future::Either::A(voter.select2(authority_set_change).then(move |res| match res {
+			Ok(future::Either::A(((), _))) => {
+				// voters don't conclude naturally; this could reasonably be an error.
+				Ok(FutureLoop::Break(()))
+			},
+			Err(future::Either::B(_)) => {
+				// the `authority_set_change` stream should not fail.
+				Ok(FutureLoop::Break(()))
+			},
+			Ok(future::Either::B(((None, _), _))) => {
+				// the `authority_set_change` stream should never conclude since it's never closed.
+				Ok(FutureLoop::Break(()))
+			},
+			Err(future::Either::A((ExitOrError::Error(e), _))) => {
+				// return inner voter error
+				Err(e)
 			}
+			Ok(future::Either::B(((Some(new), authority_set_change), _))) => {
+				// authority set change triggered externally through the channel
+				trigger_authority_set_change(new, authority_set_change.into_future())
+			}
+			Err(future::Either::A((ExitOrError::AuthoritiesChanged(new), authority_set_change))) => {
+				// authority set change triggered internally by finalizing a change block
+				trigger_authority_set_change(new, authority_set_change)
+			},
 		}))
 	});
 
