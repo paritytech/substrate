@@ -28,12 +28,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
-	let mut v = message.encode();
-
-	round.using_encoded(|s| v.extend(s));
-	set_id.using_encoded(|s| v.extend(s));
-
-	v
+	(message, round, set_id).encode()
 }
 
 // check a message.
@@ -129,10 +124,7 @@ impl<Block: BlockT, N: Network> Sink for OutgoingMessages<Block, N> {
 
 	fn close(&mut self) -> Poll<(), Error> {
 		// ignore errors since we allow this inner sender to be closed already.
-		match self.sender.close() {
-			Ok(Async::NotReady) => Ok(Async::NotReady),
-			_ => Ok(Async::Ready(()))
-		}
+		self.sender.close().or_else(|_| Ok(Async::Ready(())))
 	}
 }
 

@@ -107,10 +107,9 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 
 	fn poll(&mut self) -> Poll<Option<M::Blocked>, Error> {
 		loop {
-			match self.inner.poll() {
-				Err(e) => return Err(e),
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(None)),
-				Ok(Async::Ready(Some(input))) => {
+			match self.inner.poll()? {
+				Async::Ready(None) => return Ok(Async::Ready(None)),
+				Async::Ready(Some(input)) => {
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
 					let mut ready = &mut self.ready;
@@ -125,7 +124,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 						|ready_item| ready.push_back(ready_item),
 					)?;
 				}
-				Ok(Async::NotReady) => break,
+				Async::NotReady => break,
 			}
 		}
 
@@ -170,7 +169,6 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 			}
 		}
 
-		println!("Ready items? {}", self.ready.len());
 		if let Some(ready) = self.ready.pop_front() {
 			return Ok(Async::Ready(Some(ready)))
 		}
@@ -342,7 +340,6 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 		// if this is taking a long time.
 		for (hash, is_known) in checked_hashes {
 			if let KnownOrUnknown::Unknown(target_number) = is_known {
-				println!("scheduling wait for hash {:?}", (&target_number, &hash));
 				wait(hash, BlockCommitMessage {
 					inner: locked_commit.clone(),
 					target_number,
@@ -364,8 +361,6 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 
 		// CAS loop to ensure that we always have a last reader.
 		loop {
-			println!("wait completed for number {:?}. remaining waiters for commit: {}", &self.target_number, last_count);
-
 			if last_count == 1 { // we are the last one left.
 				return self.inner.1.lock().take();
 			}

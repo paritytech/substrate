@@ -514,7 +514,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		}
 	}
 
-	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, commit: Commit<Block>) -> Result<(), Self::Error> {
+	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, _commit: Commit<Block>) -> Result<(), Self::Error> {
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), true) {
@@ -576,9 +576,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			} else {
 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
-
-			// TODO [now]: write commit to DB in a way where it can be fetched for syncing
-			// peers.
 
 			Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
 				canon_hash,
