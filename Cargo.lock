@@ -3106,7 +3106,7 @@ dependencies = [
  "heck 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 0.4.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "syn 0.15.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.15.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -65,7 +65,7 @@ use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
-use grandpa::fg_primitives::{runtime::GrandpaApi, ScheduledChange, id::*};
+use grandpa::fg_primitives::{self, ScheduledChange, id::*};
 #[cfg(feature = "std")]
 use node_primitives::Block as GBlock;
 use client::{
@@ -86,7 +86,6 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-use substrate_finality_grandpa_primitives::{self as grandpa_api, ScheduledChange};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -328,7 +327,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl GrandpaApi<Block> for Runtime {
+	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_pending_change(digest: DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>
 		{

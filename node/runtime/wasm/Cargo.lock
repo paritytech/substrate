@@ -897,6 +897,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sr-api-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2 0.4.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.15.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "sr-io"
 version = "0.1.0"
 dependencies = [
@@ -1240,6 +1249,7 @@ dependencies = [
  "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api-macros 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "sr-version 0.1.0",

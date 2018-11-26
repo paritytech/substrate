@@ -125,7 +125,7 @@ construct_service_factory! {
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block, grandpa::BlockImportForService<Self>, NothingExtra>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
-				let (block_import, link_half) = grandpa::block_import::<_, _, _, ClientWithApi, FullClient<Self>>(client.clone(), client)?;
+				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client)?;
 				let block_import = Arc::new(block_import);
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));

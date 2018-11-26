@@ -415,6 +415,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 	fn fold_fn_decl(&mut self, mut input: FnDecl) -> FnDecl {
 		// Add `&` to all parameter types.
+		// TODO: Do not enforce `&`.
 		input.inputs
 			.iter_mut()
 			.filter_map(|i| match i {
