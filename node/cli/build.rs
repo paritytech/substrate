@@ -14,12 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use]
 extern crate clap;
-
 extern crate substrate_cli as cli;
-
-#[macro_use]
 extern crate structopt;
 
 use std::fs;
