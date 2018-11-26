@@ -157,6 +157,21 @@ fn make_topic(round: u64, set_id: u64) -> Hash {
 	hash
 }
 
+fn make_commit_topic(set_id: u64) -> Hash {
+	let mut hash = Hash::default();
+
+	{
+		let raw = hash.as_mut();
+		raw[16..22].copy_from_slice(b"commit");
+	}
+	set_id.using_encoded(|s| {
+		let raw = hash.as_mut();
+		raw[24..].copy_from_slice(s);
+	});
+
+	hash
+}
+
 impl Network for MessageRouting {
 	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
@@ -189,6 +204,27 @@ impl Network for MessageRouting {
 		peer.with_spec(move |_, _| {
 			gossip.collect_garbage(|t| t == &topic)
 		});
+	}
+
+	fn commit_messages(&self, set_id: u64) -> Self::In {
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		let messages = peer.with_spec(move |_, _| {
+			gossip.messages_for(make_commit_topic(set_id))
+		});
+
+		let messages = messages.map_err(
+			move |_| panic!("Commit messages for set {} dropped too early", set_id)
+		);
+
+		Box::new(messages)
+	}
+
+	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+		let mut inner = self.inner.lock();
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message);
+		inner.route_until_complete();
 	}
 }
 
