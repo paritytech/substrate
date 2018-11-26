@@ -50,7 +50,7 @@ pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 
 	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
 	// https://github.com/paritytech/substrate/issues/1134
-	pub grandpa_link_half: Option<grandpa::LinkHalfForService<F>>,
+	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
 }
 
 impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
@@ -58,7 +58,7 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 		NodeConfig {
 			grandpa_authority: false,
 			grandpa_authority_only: false,
-			grandpa_link_half: None
+			grandpa_import_setup: None,
 		}
 	}
 }
@@ -79,18 +79,19 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
-			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
+			|mut service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
+				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
+					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+
 				if service.config.custom.grandpa_authority {
 					info!("Running Grandpa session as Authority {}", key.public());
-					let link_half = service.config().custom.grandpa_link_half.as_ref().take()
-						.expect("Link Half is present for Full Services or setup failed before. qed");
 					let grandpa_fut = grandpa::run_grandpa(
 						grandpa::Config {
 							gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
 							local_key: Some(key.clone()),
-							name: Some(service.config().name.clone())
+							name: Some(service.config.name.clone())
 						},
-						(*link_half).clone(),
+						link_half,
 						grandpa::NetworkBridge::new(service.network())
 					)?;
 
@@ -104,6 +105,7 @@ construct_service_factory! {
 							slot_duration: AURA_SLOT_DURATION,
 						},
 						service.client(),
+						block_import.clone(),
 						service.proposer(),
 						service.network(),
 					));
@@ -116,14 +118,16 @@ construct_service_factory! {
 		FullImportQueue = AuraImportQueue<Self::Block, grandpa::BlockImportForService<Self>, NothingExtra>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				let (block_import, link_half) = grandpa::block_import::<_, _, _, ClientWithApi, FullClient<Self>>(client.clone(), client)?;
-				config.custom.grandpa_link_half = Some(link_half);
+				let block_import = Arc::new(block_import);
+
+				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				Ok(import_queue(
 					AuraConfig {
 						local_key: None,
 						slot_duration: 5
 					},
-					Arc::new(block_import),
+					block_import,
 					NothingExtra,
 				))
 			}},
