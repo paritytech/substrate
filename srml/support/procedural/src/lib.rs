@@ -80,6 +80,7 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
     mod_param: strait,
     crate_ident: scratename,
     content: ext::Braces { content: st, ..},
+    extra_genesis,
     ..
   } = def;
   if let syn::GenericParam::Type(syn::TypeParam {
@@ -88,7 +89,43 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
     ..
   }) = strait {
     let straittype = straittypes.first().expect("a trait bound expected").into_value();
-      //__decl_storage_items!($cratename $traittype $traitinstance $(#st)*);
+
+    // extra genesis
+
+    let (slines, sbuild) = if let Some(eg) = extra_genesis {
+      let mut sbuild = None;
+      let mut lines = Vec::new();
+      for ex_content in eg.content.content.lines.inner {
+        match ex_content {
+          AddExtraGenesisLineEnum::AddExtraGenesisLine(AddExtraGenesisLine {
+            attrs,
+            extra_field,
+            extra_type,
+            default_seq,
+            ..
+          }) => {
+            let extrafield = extra_field.content;
+            lines.push(quote!{
+              #attrs #extrafield : #extra_type #default_seq ;
+            });
+          },
+          AddExtraGenesisLineEnum::AddExtraGenesisBuild(AddExtraGenesisBuild{expr, ..}) => {
+            if sbuild.is_some() { panic!( "Only one build expression allowed for extra genesis" ) }
+            sbuild = Some(expr.content);
+          },
+        }
+      }
+      (lines, sbuild)
+    } else {
+      (Vec::new(), None)
+    };
+
+    let scall = sbuild.map(|sb| quote!{ #sb }).unwrap_or_else(|| quote!{ |_, _|{} });
+
+    let extra_genesis = quote!{
+ 	    __decl_genesis_config_items!([#straittype #straitinstance] [] [] [] [#( #slines )* ] [#scall] #st);
+    };
+
     let expanded = quote!{
       __decl_storage_items!(#scratename #straittype #straitinstance #st);
       #spub trait #sstoretype {
@@ -102,7 +139,7 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
         __impl_store_metadata!(#scratename; #st);
       }
 
-      // TODO generic 
+      #extra_genesis
 
     };
 
@@ -119,7 +156,7 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
 struct StorageDefinition {
 // $pub:vis trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident> as $cratename:ident
 // TODO attr support ??  pub attrs: Vec<Attribute>,
-  pub visibility: syn::Visibility,
+   pub visibility: syn::Visibility,
 // TODO ?  pub unsafety: Option<Token![unsafe]>,
 // unneeded  pub auto_token: Option<Token![auto]>,
    pub trait_token: Token![trait],
@@ -207,6 +244,7 @@ macro_rules! custom_keyword {
   }
 
 }}
+
 custom_keyword!(ConfigKeyword, "config", "config as keyword"); 
 custom_keyword!(BuildKeyword, "build", "build as keyword"); 
 
