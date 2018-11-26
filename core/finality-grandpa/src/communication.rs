@@ -238,10 +238,9 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 			}
 			decoded
 		})
-		.map(move |(round, msg)| {
+		.filter_map(move |(round, msg)| {
 			check_compact_commit::<Block>(msg, &*voters, round, set_id).map(move |c| (round, c))
 		})
-		.filter_map(|x| x)
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
