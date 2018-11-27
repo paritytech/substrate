@@ -103,6 +103,7 @@ use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
@@ -640,6 +641,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	authority_set_change: mpsc::UnboundedSender<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
+	authority_set_oracle: SharedGrandpaOracle<Block>,
 	api: Arc<PRA>,
 }
 
@@ -715,6 +717,7 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	authority_set_change: mpsc::UnboundedReceiver<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
+	authority_set_oracle: SharedGrandpaOracle<Block>,
 }
 
 /// Make block importer and link half necessary to tie the background voter
@@ -757,17 +760,21 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 	let (authority_set_change_tx, authority_set_change_rx) = mpsc::unbounded();
 
+	let authority_set_oracle = SharedGrandpaOracle::empty();
+
 	Ok((
 		GrandpaBlockImport {
 			inner: client.clone(),
 			authority_set: authority_set.clone(),
 			authority_set_change: authority_set_change_tx,
+			authority_set_oracle: authority_set_oracle.clone(),
 			api
 		},
 		LinkHalf {
 			client,
 			authority_set,
-			authority_set_change: authority_set_change_rx
+			authority_set_change: authority_set_change_rx,
+			authority_set_oracle,
 		},
 	))
 }
@@ -818,6 +825,47 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	(commit_in, commit_out)
 }
 
+struct GrandpaOracle<Block: BlockT> {
+	unfiltered_commits_stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>,
+	last_commit_target: Option<(Block::Hash, NumberFor<Block>)>,
+}
+
+impl<Block: BlockT> GrandpaOracle<Block> {
+	fn new(stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>) -> GrandpaOracle<Block> {
+		GrandpaOracle {
+			unfiltered_commits_stream: stream,
+			last_commit_target: None,
+		}
+	}
+
+	fn is_live(&mut self) -> Result<bool, Error> {
+		// TODO: improve this maybe with some measure of how
+		// often we're seeing commits?
+		while let Async::Ready(Some((_, commit))) = self.unfiltered_commits_stream.poll()? {
+			self.last_commit_target = Some((commit.target_hash, commit.target_number));
+		}
+
+		Ok(self.last_commit_target.is_some())
+	}
+}
+
+#[derive(Clone)]
+struct SharedGrandpaOracle<Block: BlockT> {
+	inner: Arc<Mutex<Option<GrandpaOracle<Block>>>>,
+}
+
+impl<Block: BlockT> SharedGrandpaOracle<Block> {
+	fn empty() -> SharedGrandpaOracle<Block> {
+		SharedGrandpaOracle { inner: Arc::new(Mutex::new(None)) }
+	}
+
+	fn is_live(&self) -> Result<bool, Error> {
+		self.inner.lock().as_mut()
+			.map(|inner| inner.is_live())
+			.unwrap_or(Ok(false))
+	}
+}
+
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
@@ -837,7 +885,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	use futures::future::{self, Loop as FutureLoop};
 	use runtime_primitives::traits::Zero;
 
-	let LinkHalf { client, authority_set, authority_set_change } = link;
+	let LinkHalf {
+		client,
+		authority_set,
+		authority_set_change,
+		authority_set_oracle
+	} = link;
 
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
@@ -884,6 +937,14 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			&client,
 			&network,
 		);
+
+		let unfiltered_commits_stream = Box::new(::communication::checked_commit_stream::<Block, _>(
+			env.set_id,
+			network.commit_messages(env.set_id),
+			env.voters.clone(),
+		));
+
+		*authority_set_oracle.inner.lock() = Some(GrandpaOracle::new(unfiltered_commits_stream));
 
 		let voters = (*env.voters).clone();
 
