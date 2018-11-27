@@ -679,7 +679,7 @@ macro_rules! __generate_genesis_config {
 /// module type. Currently you must disambiguate by using `<Module as Store>::Item` rather than
 /// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
 #[macro_export]
-macro_rules! decl_storage {
+macro_rules! decl_storage_old {
 	(
 		$pub:vis trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident> as $cratename:ident {
 			$($t:tt)*

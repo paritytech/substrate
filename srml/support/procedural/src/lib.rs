@@ -20,7 +20,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
-
+#![recursion_limit="128"]
 
 extern crate proc_macro;
 extern crate proc_macro2;
@@ -68,9 +68,9 @@ use syn::token::{CustomKeyword};
 
 
 #[proc_macro]
-pub fn decl_storage2(input: TokenStream) -> TokenStream {
+pub fn decl_storage(input: TokenStream) -> TokenStream {
   let def = parse_macro_input!(input as StorageDefinition);
-//  panic!("{:?}", &def);
+  //  panic!("{:?}", &def);
 
   // old macro naming convention (s replaces $)
   let StorageDefinition {
@@ -86,22 +86,96 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
 
   // make this as another parsing temporarily (switch one macro a time)
   let toparse = st.inner.clone().into();
-  // TODO when covers all macro move it as inner field parso of storage definition!! (corrently inner
-  // macros need st.
-  let storage_lines  = parse_macro_input!(toparse as ext::Punctuated<DeclStorageLine, Token![;]>);
-  panic!("{:?}",&storage_lines);
+  //panic!("{}",quote!{ #storage_lines });
   if let syn::GenericParam::Type(syn::TypeParam {
     ident: straitinstance,
     bounds: straittypes,
     ..
   }) = strait {
     let straittype = straittypes.first().expect("a trait bound expected").into_value();
+    // TODO when covers all macro move it as inner field parso of storage definition!! (corrently inner
+    // macros need st.
+    let storage_lines  = parse_macro_input!(toparse as ext::Punctuated<DeclStorageLine, Token![;]>);
 
+    let (config_field, config_field_default, builders) = {
+      let mut config_field = Vec::new();
+      let mut config_field_default = Vec::new();
+      let mut builders = Vec::new();
+      for sline in storage_lines.inner {
+        let DeclStorageLine {
+          attrs,
+          visibility,
+          name,
+          getter,
+          config,
+          build,
+          storage_type,
+          default_value,
+          ..
+        } = sline;
+
+        let is_simple = if let DeclStorageType::Simple(..) = storage_type { true } else { false };
+
+        let mut opt_build = None; 
+        // TODO find a name for this eg // normal
+        if getter.is_some() && config.is_some() {
+          let ident = if let Some(ident) = config.as_ref().expect("previous condition; qed").expr.content.as_ref() {
+            quote!{ #ident }
+          } else {
+            let ident = &getter.as_ref().expect("previous condition; qed").getfn.content;
+            quote!{ #ident }
+          };
+          let option_extracteed = if let DeclStorageType::Simple(ref st) = storage_type {
+            ext::extract_type_option(st)
+          } else { None };
+          let is_option = option_extracteed.is_some();
+          let storage_type = option_extracteed.unwrap_or_else(||quote!{ #storage_type });
+          config_field.push(quote!{ pub #ident : #storage_type , });
+          opt_build = Some(build.as_ref().map(|b|&b.expr.content).map(|b|quote!{ #b })
+            .unwrap_or_else(|| quote!{ (|config: &GenesisConfig<#straitinstance>| config.#ident.clone()) })); 
+          let fielddefault = default_value.inner.get(0).as_ref().map(|d|&d.expr).map(|d|
+            if is_option {
+              quote!{ #d.unwrap_or_default() } 
+            } else {
+              quote!{ #d } 
+            })
+          .unwrap_or_else(|| quote!{ Default::default() });
+          config_field_default.push(quote!{ #ident : #fielddefault , });
+        } else {
+          opt_build = build.as_ref().map(|b|&b.expr.content).map(|b|quote!{ #b });
+        }
+
+        if let Some(builder) = opt_build {
+          if is_simple {
+            builders.push(quote!{
+            {
+              use ::codec::Encode;
+              let v = (#builder)(&self);
+              r.insert(Self::hash(<#name<#straitinstance>>::key()).to_vec(), v.encode());
+            }
+            });
+          } else {
+            builders.push(quote!{
+            {
+              use ::codec::Encode;
+              let data = (#builder)(&self);
+              for (k, v) in data.into_iter() {
+                r.insert(Self::hash(<#name<#straitinstance>>::key_for(k)).to_vec(), v.encode());
+              }
+            }
+            });
+          }
+        }
+
+      }
+      (config_field, config_field_default, builders)
+    };
     // extra genesis
-
-    let (slines, sbuild) = if let Some(eg) = extra_genesis {
+    let (slines, genesis_extrafields, genesis_extrafields_default, sbuild) = if let Some(eg) = extra_genesis {
       let mut sbuild = None;
       let mut lines = Vec::new();
+      let mut extra_lines = Vec::new();
+      let mut extra_lines_default = Vec::new();
       for ex_content in eg.content.content.lines.inner {
         match ex_content {
           AddExtraGenesisLineEnum::AddExtraGenesisLine(AddExtraGenesisLine {
@@ -115,6 +189,14 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
             lines.push(quote!{
               #attrs #extrafield : #extra_type #default_seq ;
             });
+            extra_lines.push(quote!{
+              #attrs #extrafield : #extra_type ,
+            });
+            let extra_default = default_seq.inner.get(0).map(|d|&d.expr).map(|e|quote!{ #e })
+              .unwrap_or_else(|| quote!{ Default::default() });
+            extra_lines_default.push(quote!{
+              #extrafield : #extra_default ,
+            });
           },
           AddExtraGenesisLineEnum::AddExtraGenesisBuild(AddExtraGenesisBuild{expr, ..}) => {
             if sbuild.is_some() { panic!( "Only one build expression allowed for extra genesis" ) }
@@ -122,22 +204,54 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
           },
         }
       }
-      (lines, sbuild)
+      (lines, extra_lines, extra_lines_default, sbuild)
     } else {
-      (Vec::new(), None)
+      (Vec::new(), Vec::new(), Vec::new(), None)
     };
 
-    let scall = sbuild.map(|sb| quote!{ #sb }).unwrap_or_else(|| quote!{ |_, _|{} });
 
-    // TODO need to check this condition (hard to read from macro), seems to be either one normal
-    // getter or one extra genesis field
-    let has_normal_getter = storage_lines.inner.iter()
-      .any(|lines| if let DeclStorageType::Simple(..) = lines.storage_type { true } else { false }); // TODO may also require default value
-    let has_extra_genesis_field = slines.len() > 0;
-    let is_extra_genesis_needed = has_normal_getter || has_extra_genesis_field;
-    let extra_genesis = quote!{
- 	    __decl_genesis_config_items!([#straittype #straitinstance] [] [] [] [#( #slines )* ] [#scall] #st);
-    };
+    let is_extra_genesis_needed = sbuild.is_some() || config_field.len() > 0 || genesis_extrafields.len() > 0 || builders.len() > 0;
+    let extra_genesis = if is_extra_genesis_needed { 
+      let scall = sbuild.map(|sb| quote!{ ( #sb ) }).unwrap_or_else(|| quote!{ ( |_, _|{} ) });
+      quote!{
+
+        //__decl_genesis_config_items!([#straittype #straitinstance] [] [] [] [#( #slines )* ] [#scall] #st);
+      
+        #[derive(Serialize, Deserialize)]
+        #[cfg(feature = "std")]
+        #[serde(rename_all = "camelCase")]
+        #[serde(deny_unknown_fields)]
+        pub struct GenesisConfig<#straitinstance: #straittype> {
+          #( #config_field )*
+          #( #genesis_extrafields )*
+        }
+
+        #[cfg(feature = "std")]
+        impl<#straitinstance: #straittype> Default for GenesisConfig<#straitinstance> {
+          fn default() -> Self {
+            GenesisConfig {
+              #( #config_field_default )*
+              #( #genesis_extrafields_default )*
+            }
+          }
+        }
+
+        #[cfg(feature = "std")]
+        impl<#straitinstance: #straittype> ::runtime_primitives::BuildStorage for GenesisConfig<#straitinstance>
+        {
+          fn build_storage(self) -> ::std::result::Result<::runtime_primitives::StorageMap, String> {
+            let mut r: ::runtime_primitives::StorageMap = Default::default();
+
+            #( #builders )*
+
+            // extra call
+            #scall(&mut r, &self);
+
+            Ok(r)
+          }
+        }
+      } 
+    } else { quote!{} };
 
     let expanded = quote!{
       __decl_storage_items!(#scratename #straittype #straitinstance #st);
@@ -157,7 +271,7 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
     };
 
     expanded.into()
-    // TokenStream::new()
+      // TokenStream::new()
   } else {
     panic!("Missing declare store generic params");
   }
@@ -167,44 +281,44 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
 
 #[derive(ParseStruct, ToTokensStruct, Debug)]
 struct StorageDefinition {
-// $pub:vis trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident> as $cratename:ident
-// TODO attr support ??  pub attrs: Vec<Attribute>,
-   pub visibility: syn::Visibility,
-// TODO ?  pub unsafety: Option<Token![unsafe]>,
-// unneeded  pub auto_token: Option<Token![auto]>,
-   pub trait_token: Token![trait],
-   pub ident: Ident,
-// TODO?  pub generics: Generics,
-   /* could be an idea to allow others trait pub colon_token: Option<Token![:]>,
-   pub supertraits: Punctuated<TypeParamBound, Token![+]>,
-            pub brace_token: token::Brace,
-            pub items: Vec<TraitItem>,*/
- 
-   pub for_token: Token![for],
-   pub module_ident: Ident,
-   // pub module_generics: syn::Generics,
-   pub mod_lt_token: Token![<],
-   // single param only TODO not compatible with option on tokens!!!
-   pub mod_param: syn::GenericParam,
-   pub mod_gt_token: Token![>],
-   //pub mod_where_clause: Option<syn::WhereClause>,
- 
-   pub as_token: Token![as],
-   pub crate_ident: Ident,
-	 //	$($t:tt)*
-   pub content: ext::Braces<ext::StopParse>,
-   pub extra_genesis: Option<AddExtraGenesis>,
+  // $pub:vis trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident> as $cratename:ident
+  // TODO attr support ??  pub attrs: Vec<Attribute>,
+  pub visibility: syn::Visibility,
+  // TODO ?  pub unsafety: Option<Token![unsafe]>,
+  // unneeded  pub auto_token: Option<Token![auto]>,
+  pub trait_token: Token![trait],
+  pub ident: Ident,
+  // TODO?  pub generics: Generics,
+  /* could be an idea to allow others trait pub colon_token: Option<Token![:]>,
+     pub supertraits: Punctuated<TypeParamBound, Token![+]>,
+     pub brace_token: token::Brace,
+     pub items: Vec<TraitItem>,*/
+
+  pub for_token: Token![for],
+  pub module_ident: Ident,
+  // pub module_generics: syn::Generics,
+  pub mod_lt_token: Token![<],
+  // single param only TODO not compatible with option on tokens!!!
+  pub mod_param: syn::GenericParam,
+  pub mod_gt_token: Token![>],
+  //pub mod_where_clause: Option<syn::WhereClause>,
+
+  pub as_token: Token![as],
+  pub crate_ident: Ident,
+  // $($t:tt)*
+  pub content: ext::Braces<ext::StopParse>,
+  pub extra_genesis: Option<AddExtraGenesis>,
 }
 
 
-/*		add_extra_genesis {
-			$( $(#[$attr:meta])* config($extrafield:ident) : $extraty:ty $(= $default:expr)* ;)*
-			build($call:expr);
-		}*/
+  /*    add_extra_genesis {
+        $( $(#[$attr:meta])* config($extrafield:ident) : $extraty:ty $(= $default:expr)* ;)*
+        build($call:expr);
+        }*/
 #[derive(ParseStruct, ToTokensStruct, Debug)]
 struct AddExtraGenesis {
   pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
-  pub content: ext::Braces<AddExtraGenesisContent>,
+    pub content: ext::Braces<AddExtraGenesisContent>,
 }
 
 #[derive(ParseStruct, ToTokensStruct, Debug)]
@@ -242,23 +356,23 @@ struct AddExtraGenesisBuild {
 }
 
 macro_rules! custom_keyword_impl {
-    ($name:ident, $keyident:expr, $keydisp:expr) => {
+  ($name:ident, $keyident:expr, $keydisp:expr) => {
 
-  impl CustomKeyword for $name {
-    fn ident() -> &'static str { $keyident }
-    fn display() -> &'static str { $keydisp }
-  }
-}}
+    impl CustomKeyword for $name {
+      fn ident() -> &'static str { $keyident }
+      fn display() -> &'static str { $keydisp }
+    }
+  }}
 
 macro_rules! custom_keyword {
-    ($name:ident, $keyident:expr, $keydisp:expr) => {
- 
-  #[derive(Debug)]
-  struct $name;
+  ($name:ident, $keyident:expr, $keydisp:expr) => {
 
-  custom_keyword_impl!($name, $keyident, $keydisp);
+    #[derive(Debug)]
+    struct $name;
 
-}}
+    custom_keyword_impl!($name, $keyident, $keydisp);
+
+  }}
 
 
 
@@ -275,7 +389,8 @@ struct DeclStorageLine {
   pub build: Option<DeclStorageBuild>,
   pub coldot_token: Token![:],
   pub storage_type: DeclStorageType,
-  pub default_value: Option<DeclStorageDefault>,
+  // TODO issue using keyword optional with equal token : TODO make an ext::Option ?
+  pub default_value: ext::Seq<DeclStorageDefault>,
 }
 
 
@@ -314,19 +429,20 @@ struct DeclStorageMap {
 
 #[derive(ParseStruct, ToTokensStruct, Debug)]
 struct DeclStorageDefault {
+  //pub eq_keyword: ext::CustomToken<DeclStorageDefault>,
   pub equal_token: Token![=],
   pub expr: syn::Expr,
 }
 
 
 
-custom_keyword_impl!(DeclStorageConfig, "build", "build as keyword"); 
-custom_keyword!(ConfigKeyword, "config", "config as keyword"); 
-custom_keyword!(BuildKeyword, "build", "build as keyword"); 
-custom_keyword_impl!(DeclStorageBuild, "build", "storage build config"); 
-custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesis"); 
-custom_keyword_impl!(DeclStorageGetter, "get", "storage getter"); 
-custom_keyword!(MapKeyword, "map", "map as keyword"); 
-custom_keyword_impl!(DeclStorageDefault, "=", "optional decl storage default"); 
+custom_keyword_impl!(DeclStorageConfig, "config", "build as keyword");
+custom_keyword!(ConfigKeyword, "config", "config as keyword");
+custom_keyword!(BuildKeyword, "build", "build as keyword");
+custom_keyword_impl!(DeclStorageBuild, "build", "storage build config");
+custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesis");
+custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
+custom_keyword!(MapKeyword, "map", "map as keyword");
+//custom_keyword_impl!(DeclStorageDefault, "=", "optional decl storage default");
 
 

@@ -218,4 +218,29 @@ impl<P: ToTokens> ToTokens for Seq<P> {
   }
 }
 
+// TODO rewrite with map...
+pub fn extract_type_option(typ: &syn::Type) -> Option<proc_macro2::TokenStream> {
+  if let syn::Type::Path(ref path) = typ {
+    if let Some(v) = path.path.segments.last() {
+      if v.value().ident == "Option" {
+        if let syn::PathArguments::AngleBracketed(ref a) = v.value().arguments {
+          let args = &a.args;
+          Some(quote!{ #args })
+          //let ts: TokenStream = quote!{ #args }.into();
+          //let typ = parse_macro_input!(ts as syn::Type);
+          //panic!("{:?}", typ);
+          //Some(typ)
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    } else {
+      None
+    }
+  } else {
+    None 
+  }
+}
 

@@ -49,7 +49,7 @@ pub extern crate parity_codec as codec;
 
 /*
 mod ex1 { 
-decl_storage2! {
+decl_storage! {
 	trait Store for Module<T: Trait> as UpgradeKey {
 		Key get(key) config(): T::AccountId;
 	}

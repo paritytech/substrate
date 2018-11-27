@@ -183,7 +183,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
-		decl_storage2! {
+		decl_storage! {
 			trait Store for Module<T: Trait> as TestStorage {
 				StorageMethod : Option<u32>;
 			}
