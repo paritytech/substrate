@@ -63,7 +63,7 @@ use std::collections::HashMap;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 use futures::prelude::*;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -80,7 +80,6 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
-use consensus_common::offline_tracker::OfflineTracker;
 pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
@@ -105,7 +104,6 @@ pub struct Service<Components: components::Components> {
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
 	_telemetry: Option<tel::Telemetry>,
@@ -249,13 +247,6 @@ impl<Components> Service<Components>
 			task_executor.clone(), transaction_pool.clone()
 		)?;
 
-		let proposer = Arc::new(ProposerFactory {
-			client: client.clone(),
-			transaction_pool: transaction_pool.clone(),
-			offline: Arc::new(RwLock::new(OfflineTracker::new())),
-			force_delay: 0 // FIXME: allow this to be configured
-		});
-
 		// Telemetry
 		let telemetry = match config.telemetry_url.clone() {
 			Some(url) => {
@@ -290,7 +281,6 @@ impl<Components> Service<Components>
 			signal: Some(signal),
 			keystore: keystore,
 			config,
-			proposer,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
@@ -316,13 +306,6 @@ impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
-	}
-
-	/// Get shared proposer instance
-	pub fn proposer(&self)
-		-> Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>
-	{
-		self.proposer.clone()
 	}
 
 	/// Get shared network instance.
