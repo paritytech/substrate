@@ -63,7 +63,7 @@ use std::collections::HashMap;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 use futures::prelude::*;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -80,7 +80,6 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
-use consensus_common::offline_tracker::OfflineTracker;
 pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
