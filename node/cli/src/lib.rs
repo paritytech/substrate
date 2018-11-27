@@ -43,7 +43,6 @@ extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;
-#[macro_use]
 extern crate structopt;
 
 pub use cli::error;

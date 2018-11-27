@@ -338,17 +338,17 @@ where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
-	if let Some(matches) = matches.subcommand_matches("build_spec") {
+	if let Some(matches) = matches.subcommand_matches("build-spec") {
 		build_spec::<F>(matches, spec)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("export_blocks") {
+	if let Some(matches) = matches.subcommand_matches("export-blocks") {
 		export_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
 
-	if let Some(matches) = matches.subcommand_matches("import_blocks") {
+	if let Some(matches) = matches.subcommand_matches("import-blocks") {
 		import_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
@@ -394,7 +394,7 @@ fn export_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	};
 	let json = matches.is_present("json");
 
-	let file: Box<Write> = match matches.value_of("OUTPUT") {
+	let file: Box<Write> = match matches.value_of("output") {
 		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
@@ -427,7 +427,7 @@ fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 		};
 	}
 
-	let file: Box<Read> = match matches.value_of("INPUT") {
+	let file: Box<Read> = match matches.value_of("input") {
 		Some(filename) => Box::new(File::open(filename)?),
 		None => Box::new(stdin()),
 	};
@@ -442,7 +442,7 @@ fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
-	let blocks = match matches.value_of("NUM") {
+	let blocks = match matches.value_of("num") {
 		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
 		None => 256,
 	};
