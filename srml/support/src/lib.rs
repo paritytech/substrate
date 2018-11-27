@@ -33,7 +33,6 @@ extern crate substrate_metadata;
 
 extern crate mashup;
 
-#[cfg(test)]
 #[macro_use]
 extern crate srml_support_procedural;
 
@@ -72,6 +71,8 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
+
+pub use srml_support_procedural::decl_storage;
 
 #[macro_export]
 macro_rules! fail {

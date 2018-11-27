@@ -69,6 +69,11 @@ use syn::token::{CustomKeyword};
 
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
+  let scrate = if std::env::var("CARGO_PKG_NAME").unwrap() == "srml-support" {
+    quote!( crate )
+  } else {
+    quote!( runtime_support )
+  };
   let def = parse_macro_input!(input as StorageDefinition);
   //  panic!("{:?}", &def);
 
@@ -149,7 +154,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
           if is_simple {
             builders.push(quote!{
             {
-              use ::codec::Encode;
+              use #scrate::codec::Encode;
               let v = (#builder)(&self);
               r.insert(Self::hash(<#name<#straitinstance>>::key()).to_vec(), v.encode());
             }
@@ -157,7 +162,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
           } else {
             builders.push(quote!{
             {
-              use ::codec::Encode;
+              use #scrate::codec::Encode;
               let data = (#builder)(&self);
               for (k, v) in data.into_iter() {
                 r.insert(Self::hash(<#name<#straitinstance>>::key_for(k)).to_vec(), v.encode());
@@ -237,10 +242,10 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
         }
 
         #[cfg(feature = "std")]
-        impl<#straitinstance: #straittype> ::runtime_primitives::BuildStorage for GenesisConfig<#straitinstance>
+        impl<#straitinstance: #straittype> #scrate::runtime_primitives::BuildStorage for GenesisConfig<#straitinstance>
         {
-          fn build_storage(self) -> ::std::result::Result<::runtime_primitives::StorageMap, String> {
-            let mut r: ::runtime_primitives::StorageMap = Default::default();
+          fn build_storage(self) -> ::std::result::Result<#scrate::runtime_primitives::StorageMap, String> {
+            let mut r: #scrate::runtime_primitives::StorageMap = Default::default();
 
             #( #builders )*
 

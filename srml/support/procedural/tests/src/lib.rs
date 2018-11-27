@@ -56,6 +56,7 @@ decl_storage! {
 }
 }
 */
+/*
 mod ex2 {
 
 	use super::*;
@@ -310,4 +311,4 @@ mod ex2 {
 
 		assert_eq!(EXPECTED_METADATA, metadata_decoded.unwrap());
 	}
-}
+}*/
