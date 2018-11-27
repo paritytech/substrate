@@ -514,79 +514,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		}
 	}
 
-	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, _commit: Commit<Block>) -> Result<(), Self::Error> {
-		// ideally some handle to a synchronization oracle would be used
-		// to avoid unconditionally notifying.
-		// TODO: produce justification (i.e. commit + precommits ancestry up to commit target)
-		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), None, true) {
-			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-
-			// we return without error because not being able to finalize (temporarily) is
-			// non-fatal.
-			return Ok(());
-		}
-
-		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
-
-		// lock must be held through writing to DB to avoid race
-		let mut authority_set = self.authority_set.inner().write();
-		let client = &self.inner;
-		let status = authority_set.apply_changes(number, |canon_number| {
-			client.block_hash_from_id(&BlockId::number(canon_number))
-				.map(|h| h.expect("given number always less than newly-finalized number; \
-					thus there is a block with that number finalized already; qed"))
-		})?;
-
-		if status.changed {
-			// write new authority set state to disk.
-			let encoded_set = authority_set.encode();
-
-			let write_result = if let Some((ref canon_hash, ref canon_number)) = status.new_set_block {
-				// we also overwrite the "last completed round" entry with a blank slate
-				// because from the perspective of the finality gadget, the chain has
-				// reset.
-				let round_state = RoundState::genesis((*canon_hash, *canon_number));
-				let last_completed: LastCompleted<_, _> = (0, round_state);
-				let encoded = last_completed.encode();
-
-				client.backend().insert_aux(
-					&[
-						(AUTHORITY_SET_KEY, &encoded_set[..]),
-						(LAST_COMPLETED_KEY, &encoded[..]),
-					],
-					&[]
-				)
-			} else {
-				client.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
-			};
-
-			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
-
-				return Err(e.into());
-			}
-		}
-
-		if let Some((canon_hash, canon_number)) = status.new_set_block {
-			// the authority set has changed.
-			let (new_id, set_ref) = authority_set.current();
-
-			if set_ref.len() > 16 {
-				info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
-			} else {
-				info!("Applying GRANDPA set change to new set {:?}", set_ref);
-			}
-
-			Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
-				canon_hash,
-				canon_number,
-				set_id: new_id,
-				authorities: set_ref.to_vec(),
-			}))
-		} else {
-			Ok(())
-		}
+	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, commit: Commit<Block>) -> Result<(), Self::Error> {
+		finalize_block(&*self.inner, &self.authority_set, hash, number, commit)
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
@@ -615,6 +544,90 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet
+	}
+}
+
+fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
+	client: &Client<B, E, Block, RA>,
+	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	hash: Block::Hash,
+	number: NumberFor<Block>,
+	_commit: Commit<Block>,
+) -> Result<(), ExitOrError<Block::Hash, NumberFor<Block>>> where
+	B: Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	RA: Send + Sync,
+{
+	// ideally some handle to a synchronization oracle would be used
+	// to avoid unconditionally notifying.
+	// TODO: produce justification (i.e. commit + precommits ancestry up to commit target)
+	if let Err(e) = client.finalize_block(BlockId::Hash(hash), None, true) {
+		warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+
+		// we return without error because not being able to finalize (temporarily) is
+		// non-fatal.
+		return Ok(());
+	}
+
+	debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+
+	// lock must be held through writing to DB to avoid race
+	let mut authority_set = authority_set.inner().write();
+	let status = authority_set.apply_changes(number, |canon_number| {
+		client.block_hash_from_id(&BlockId::number(canon_number))
+			.map(|h| h.expect("given number always less than newly-finalized number; \
+							   thus there is a block with that number finalized already; qed"))
+	})?;
+
+	if status.changed {
+		// write new authority set state to disk.
+		let encoded_set = authority_set.encode();
+
+		let write_result = if let Some((ref canon_hash, ref canon_number)) = status.new_set_block {
+			// we also overwrite the "last completed round" entry with a blank slate
+			// because from the perspective of the finality gadget, the chain has
+			// reset.
+			let round_state = RoundState::genesis((*canon_hash, *canon_number));
+			let last_completed: LastCompleted<_, _> = (0, round_state);
+			let encoded = last_completed.encode();
+
+			client.backend().insert_aux(
+				&[
+					(AUTHORITY_SET_KEY, &encoded_set[..]),
+					(LAST_COMPLETED_KEY, &encoded[..]),
+				],
+				&[]
+			)
+		} else {
+			client.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
+		};
+
+		if let Err(e) = write_result {
+			warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
+			warn!(target: "finality", "Node is in a potentially inconsistent state.");
+
+			return Err(e.into());
+		}
+	}
+
+	if let Some((canon_hash, canon_number)) = status.new_set_block {
+		// the authority set has changed.
+		let (new_id, set_ref) = authority_set.current();
+
+		if set_ref.len() > 16 {
+			info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
+		} else {
+			info!("Applying GRANDPA set change to new set {:?}", set_ref);
+		}
+
+		Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
+			canon_hash,
+			canon_number,
+			set_id: new_id,
+			authorities: set_ref.to_vec(),
+		}))
+	} else {
+		Ok(())
 	}
 }
 
