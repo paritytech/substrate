@@ -83,6 +83,13 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
     extra_genesis,
     ..
   } = def;
+
+  // make this as another parsing temporarily (switch one macro a time)
+  let toparse = st.inner.clone().into();
+  // TODO when covers all macro move it as inner field parso of storage definition!! (corrently inner
+  // macros need st.
+  let storage_lines  = parse_macro_input!(toparse as ext::Punctuated<DeclStorageLine, Token![;]>);
+  panic!("{:?}",&storage_lines);
   if let syn::GenericParam::Type(syn::TypeParam {
     ident: straitinstance,
     bounds: straittypes,
@@ -122,6 +129,12 @@ pub fn decl_storage2(input: TokenStream) -> TokenStream {
 
     let scall = sbuild.map(|sb| quote!{ #sb }).unwrap_or_else(|| quote!{ |_, _|{} });
 
+    // TODO need to check this condition (hard to read from macro), seems to be either one normal
+    // getter or one extra genesis field
+    let has_normal_getter = storage_lines.inner.iter()
+      .any(|lines| if let DeclStorageType::Simple(..) = lines.storage_type { true } else { false }); // TODO may also require default value
+    let has_extra_genesis_field = slines.len() > 0;
+    let is_extra_genesis_needed = has_normal_getter || has_extra_genesis_field;
     let extra_genesis = quote!{
  	    __decl_genesis_config_items!([#straittype #straitinstance] [] [] [] [#( #slines )* ] [#scall] #st);
     };
@@ -194,11 +207,6 @@ struct AddExtraGenesis {
   pub content: ext::Braces<AddExtraGenesisContent>,
 }
 
-impl CustomKeyword for AddExtraGenesis {
-  fn ident() -> &'static str { "add_extra_genesis" }
-  fn display() -> &'static str { "storage extra genesis" }
-}
-
 #[derive(ParseStruct, ToTokensStruct, Debug)]
 struct AddExtraGenesisContent {
   pub lines: ext::Punctuated<AddExtraGenesisLineEnum, Token![;]>,
@@ -217,6 +225,7 @@ struct AddExtraGenesisLine {
   pub extra_field: ext::Parens<Ident>,
   pub coldot_token: Token![:],
   pub extra_type: syn::Type,
+  // this is probably wrong reading from previous macro ()* use as a shorthand for ()+ TODO ask
   pub default_seq: ext::Seq<AddExtraGenesisLineDefault>,
 }
 
@@ -232,19 +241,92 @@ struct AddExtraGenesisBuild {
   pub expr: ext::Parens<syn::Expr>,
 }
 
+macro_rules! custom_keyword_impl {
+    ($name:ident, $keyident:expr, $keydisp:expr) => {
+
+  impl CustomKeyword for $name {
+    fn ident() -> &'static str { $keyident }
+    fn display() -> &'static str { $keydisp }
+  }
+}}
+
 macro_rules! custom_keyword {
     ($name:ident, $keyident:expr, $keydisp:expr) => {
  
   #[derive(Debug)]
   struct $name;
 
-  impl CustomKeyword for $name {
-    fn ident() -> &'static str { $keyident }
-    fn display() -> &'static str { $keydisp }
-  }
+  custom_keyword_impl!($name, $keyident, $keydisp);
 
 }}
 
+
+
+#[derive(ParseStruct, ToTokensStruct, Debug)]
+struct DeclStorageLine {
+  // attrs (main use case is doc)
+  pub attrs: ext::OuterAttributes,
+  // visibility (no need to make optional
+  pub visibility: syn::Visibility,
+  // name
+  pub name: Ident,
+  pub getter: Option<DeclStorageGetter>,
+  pub config: Option<DeclStorageConfig>,
+  pub build: Option<DeclStorageBuild>,
+  pub coldot_token: Token![:],
+  pub storage_type: DeclStorageType,
+  pub default_value: Option<DeclStorageDefault>,
+}
+
+
+#[derive(ParseStruct, ToTokensStruct, Debug)]
+struct DeclStorageGetter {
+  pub getter_keyword: ext::CustomToken<DeclStorageGetter>,
+  pub getfn: ext::Parens<Ident>,
+}
+
+#[derive(ParseStruct, ToTokensStruct, Debug)]
+struct DeclStorageConfig {
+  pub config_keyword: ext::CustomToken<DeclStorageConfig>,
+  pub expr: ext::Parens<Option<syn::Ident>>,
+}
+
+// same as genesys build, does it make sense to merge?
+#[derive(ParseStruct, ToTokensStruct, Debug)]
+struct DeclStorageBuild {
+  pub build_keyword: ext::CustomToken<DeclStorageBuild>,
+  pub expr: ext::Parens<syn::Expr>,
+}
+
+#[derive(ParseEnum, ToTokensEnum, Debug)]
+enum DeclStorageType {
+  Map(DeclStorageMap),
+  Simple(syn::Type),
+}
+
+#[derive(ParseStruct, ToTokensStruct, Debug)]
+struct DeclStorageMap {
+  pub map_keyword: ext::CustomToken<MapKeyword>,
+  pub key: syn::Type,
+  pub ass_keyword: Token![=>],
+  pub value: syn::Type,
+}
+
+#[derive(ParseStruct, ToTokensStruct, Debug)]
+struct DeclStorageDefault {
+  pub equal_token: Token![=],
+  pub expr: syn::Expr,
+}
+
+
+
+custom_keyword_impl!(DeclStorageConfig, "build", "build as keyword"); 
 custom_keyword!(ConfigKeyword, "config", "config as keyword"); 
 custom_keyword!(BuildKeyword, "build", "build as keyword"); 
+custom_keyword_impl!(DeclStorageBuild, "build", "storage build config"); 
+custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesis"); 
+custom_keyword_impl!(DeclStorageGetter, "get", "storage getter"); 
+custom_keyword!(MapKeyword, "map", "map as keyword"); 
+custom_keyword_impl!(DeclStorageDefault, "=", "optional decl storage default"); 
+
 
