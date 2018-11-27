@@ -259,10 +259,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = message_topic::<B>(round, set_id);
-		let gossip = self.service.consensus_gossip();
-		self.service.with_spec(move |_s, context|{
-			gossip.write().multicast(context, topic, message);
-		});
+		self.service.gossip_consensus_message(topic, message);
 	}
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
@@ -276,10 +273,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
-		let gossip = self.service.consensus_gossip();
-		self.service.with_spec(move |_s, context|{
-			gossip.write().multicast(context, topic, message);
-		});
+		self.service.gossip_consensus_message(topic, message);
 	}
 }
 
