@@ -17,92 +17,122 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+/// CLI Parameters provided by default
 #[derive(Debug, StructOpt)]
 #[structopt(name = "Substrate")]
 pub struct CoreParams {
-    #[structopt(short = "l", long = "log", value_name = "LOG_PATTERN", help = "Sets a custom logging filter")]
+    ///Sets a custom logging filter
+    #[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
     log: Option<String>,
 
-    #[structopt(long = "base-path", short = "d", value_name = "PATH", help = "Specify custom base path", parse(from_os_str))]
+    /// Specify custom base path
+    #[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
     base_path: Option<PathBuf>,
 
-    #[structopt(long = "keystore-path", value_name = "PATH", help = "Specify custom keystore path", parse(from_os_str))]
+    /// Specify custom keystore path
+    #[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
     keystore_path: Option<PathBuf>,
 
-    #[structopt(long = "key", value_name = "STRING", help = "Specify additional key seed")]
+    /// Specify additional key seed
+    #[structopt(long = "key", value_name = "STRING")]
     key: Option<String>,
 
-    #[structopt(long = "node-key", value_name = "KEY", help = "Specify node secret key (64-character hex string)")]
+    /// Specify node secret key (64-character hex string)
+    #[structopt(long = "node-key", value_name = "KEY")]
     node_key: Option<String>,
     
-    #[structopt(long = "validator",help = "Enable validator mode")]
+    /// Enable validator mode
+    #[structopt(long = "validator")]
     validator: bool,
 
-    #[structopt(long = "light", help = "Run in light client mode")]
+    /// Run in light client mode
+    #[structopt(long = "light")]
     light: bool,
   
-    #[structopt(long = "dev", help = "Run in development mode; implies --chain=dev --validator --key Alice")]
+    /// Run in development mode; implies --chain=dev --validator --key Alice
+    #[structopt(long = "dev")]
     dev: bool,
   
-    #[structopt(long = "listen-addr", value_name = "LISTEN_ADDR", help = "Listen on this multiaddress")]
+    /// Listen on this multiaddress
+    #[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
     listen_addr: Vec<String>,
   
-    #[structopt(long = "port", value_name = "PORT", help = "Specify p2p protocol TCP port. Only used if --listen-addr is not specified.")]
+    /// Specify p2p protocol TCP port. Only used if --listen-addr is not specified.
+    #[structopt(long = "port", value_name = "PORT")]
     port: Option<u32>,
   
-    #[structopt(long = "rpc-external", help = "Listen to all RPC interfaces (default is local)")]
+    /// Listen to all RPC interfaces (default is local)
+    #[structopt(long = "rpc-external")]
     rpc_external: bool,
   
-    #[structopt(long = "ws-external", help = "Listen to all Websocket interfaces (default is local)")]
+    /// Listen to all Websocket interfaces (default is local)
+    #[structopt(long = "ws-external")]
     ws_external: bool,
   
-    #[structopt(long = "rpc-port", value_name = "PORT", help = "Specify HTTP RPC server TCP port")]
+    /// Specify HTTP RPC server TCP port
+    #[structopt(long = "rpc-port", value_name = "PORT")]
     rpc_port: Option<u32>,
   
-    #[structopt(long = "ws-port", value_name = "PORT", help = "Specify WebSockets RPC server TCP port")]
+    /// Specify WebSockets RPC server TCP port
+    #[structopt(long = "ws-port", value_name = "PORT")]
     ws_port: Option<u32>,
   
-    #[structopt(long = "bootnodes", value_name = "URL", help = "Specify a list of bootnodes")]
+    /// Specify a list of bootnodes
+    #[structopt(long = "bootnodes", value_name = "URL")]
     bootnodes: Vec<String>,
   
-    #[structopt(long = "reserved-nodes", value_name = "URL", help = "Specify a list of reserved node addresses")]
+    /// Specify a list of reserved node addresses
+    #[structopt(long = "reserved-nodes", value_name = "URL")]
     reserved_nodes: Vec<String>,
   
-    #[structopt(long = "out-peers", value_name = "OUT_PEERS", help = "Specify the number of outgoing connections we're trying to maintain")]
+    /// Specify the number of outgoing connections we're trying to maintain
+    #[structopt(long = "out-peers", value_name = "OUT_PEERS")]
     out_peers: Option<u8>,
   
-    #[structopt(long = "in-peers", value_name = "IN_PEERS", help = "Specify the maximum number of incoming connections we're accepting")]
+    /// Specify the maximum number of incoming connections we're accepting
+    #[structopt(long = "in-peers", value_name = "IN_PEERS")]
     in_peers: Option<u8>,
   
-    #[structopt(long = "chain", value_name = "CHAIN_SPEC", help = "Specify the chain specification (one of dev, local or staging)")]
+    /// Specify the chain specification (one of dev, local or staging)
+    #[structopt(long = "chain", value_name = "CHAIN_SPEC")]
     chain: Option<String>,
   
-    #[structopt(long = "pruning", value_name = "PRUNING_MODE", help = "Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.")]
+    /// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
+    #[structopt(long = "pruning", value_name = "PRUNING_MODE")]
     pruning: Option<u32>,
   
-    #[structopt(long = "name", value_name = "NAME", help = "The human-readable name for this node, as reported to the telemetry server, if enabled")]
+    /// The human-readable name for this node, as reported to the telemetry server, if enabled
+    #[structopt(long = "name", value_name = "NAME")]
     name: Option<String>,
   
-    #[structopt(short = "t", long = "telemetry", help = "Should connect to the Substrate telemetry server (telemetry is off by default on local chains)")]
+    /// Should connect to the Substrate telemetry server (telemetry is off by default on local chains)
+    #[structopt(short = "t", long = "telemetry")]
     telemetry: bool,
   
-    #[structopt(long = "no-telemetry", help = "Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)")]
+    /// Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
+    #[structopt(long = "no-telemetry")]
     no_telemetry: bool,
   
-    #[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL", help = "The URL of the telemetry server. Implies --telemetry")]
+    /// The URL of the telemetry server. Implies --telemetry
+    #[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL")]
     telemetry_url: Option<String>,
 
-    #[structopt(long = "execution", value_name = "STRATEGY", help = "The means of execution used when calling into the runtime. Can be either wasm, native or both.")]
+    /// The means of execution used when calling into the runtime. Can be either wasm, native or both.
+    #[structopt(long = "execution", value_name = "STRATEGY")]
     execution: Option<ExecutionStrategy>,
 
     #[structopt(subcommand)]
     cmds: Option<CoreCommands>,
 }
 
+/// How to execute blocks
 #[derive(Debug, StructOpt)]
 pub enum ExecutionStrategy {
+    /// Execute native only
     Native,
+    /// Execute wasm only
     Wasm,
+    /// Execute natively when possible, wasm otherwise
     Both,
 }
 
@@ -125,92 +155,121 @@ impl std::str::FromStr for ExecutionStrategy {
     }
 }
 
+/// Subcommands provided by Default
 #[derive(Debug, StructOpt)]
 pub enum CoreCommands {
-    #[structopt(name = "build-spec", about = "Build a spec.json file, outputing to stdout")]
+    /// Build a spec.json file, outputing to stdout
+    #[structopt(name = "build-spec")]
     BuildSpec {
-        #[structopt(long = "raw", help = "Force raw genesis storage output.")]  
+        /// Force raw genesis storage output.
+        #[structopt(long = "raw")]
         raw: bool,
         
-        #[structopt(long = "chain", value_name = "CHAIN_SPEC", help = "Specify the chain specification (one of dev, local or staging)")]
+        /// Specify the chain specification (one of dev, local or staging)
+        #[structopt(long = "chain", value_name = "CHAIN_SPEC")]
         chain: Option<String>,
         
-        #[structopt(long = "dev", help = "Specify the development chain")]
+        /// Specify the development chain
+        #[structopt(long = "dev")]
         dev: bool,
     },
 
-    #[structopt(name = "export-blocks", about = "Export blocks to a file")]
+    /// Export blocks to a file
+    #[structopt(name = "export-blocks")]
     ExportBlocks {
-        #[structopt(help = "Output file name or stdout if unspecified.", parse(from_os_str))]    
-        OUTPUT: Option<PathBuf>,
+        /// Output file name or stdout if unspecified.
+        #[structopt(parse(from_os_str))]
+        output: Option<PathBuf>,
         
-        #[structopt(long = "chain", value_name = "CHAIN_SPEC", help = "Specify the chain specification.")]
+        /// Specify the chain specification.
+        #[structopt(long = "chain", value_name = "CHAIN_SPEC")]
         chain: Option<String>,
         
-        #[structopt(long = "dev", help = "Specify the development chain")]
+        /// Specify the development chain
+        #[structopt(long = "dev")]
         dev: bool,
         
-        #[structopt(long = "base-path", short = "d", value_name = "PATH", help = "Specify custom base path.")]
+        /// Specify custom base path.
+        #[structopt(long = "base-path", short = "d", value_name = "PATH")]
         base_path: Option<String>,
         
-        #[structopt(long = "from", value_name = "BLOCK", help = "Specify starting block number. 1 by default.")]
+        /// Specify starting block number. 1 by default.
+        #[structopt(long = "from", value_name = "BLOCK")]
         from: Option<u128>,
         
-        #[structopt(long = "to", value_name = "BLOCK", help = "Specify last block number. Best block by default.")]
+        /// Specify last block number. Best block by default.
+        #[structopt(long = "to", value_name = "BLOCK")]
         to: Option<u128>,
         
-        #[structopt(long = "json", help = "Use JSON output rather than binary.")]
+        /// Use JSON output rather than binary.
+        #[structopt(long = "json")]
         json: bool,
     },
 
-    #[structopt(name = "import-blocks", about = "Import blocks from file.")]
+    /// Import blocks from file.
+    #[structopt(name = "import-blocks")]
     ImportBlocks {
-        #[structopt(help = "Input file or stdin if unspecified.", parse(from_os_str))]    
-        INPUT: Option<PathBuf>,
+        /// Input file or stdin if unspecified.
+        #[structopt(parse(from_os_str))]
+        input: Option<PathBuf>,
         
-        #[structopt(long = "chain", value_name = "CHAIN_SPEC", help = "Specify the chain specification.")]
+        /// Specify the chain specification.
+        #[structopt(long = "chain", value_name = "CHAIN_SPEC")]
         chain: Option<String>,
           
-        #[structopt(long = "dev", help = "Specify the development chain")]
+        /// Specify the development chain
+        #[structopt(long = "dev")]
         dev: bool,
         
-        #[structopt(long = "base-path", short = "d", value_name = "PATH", help = "Specify custom base path.", parse(from_os_str))]
+        /// Specify custom base path.
+        #[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
         base_path: Option<PathBuf>,
         
-        #[structopt(long = "execution", value_name = "STRATEGY", help = "The means of execution used when executing blocks. Can be either wasm, native or both.")]
+        /// The means of execution used when executing blocks. Can be either wasm, native or both.
+        #[structopt(long = "execution", value_name = "STRATEGY")]
         execution: ExecutionStrategy,
         
-        #[structopt(long = "api-execution", value_name = "STRATEGY", help = "The means of execution used when calling into the runtime. Can be either wasm, native or both.")]
+        /// The means of execution used when calling into the runtime. Can be either wasm, native or both.
+        #[structopt(long = "api-execution", value_name = "STRATEGY")]
         api_execution: ExecutionStrategy,
         
-        #[structopt(long = "max-heap-pages", value_name = "COUNT", help = "The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.")]
+        /// The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
+        #[structopt(long = "max-heap-pages", value_name = "COUNT")]
         max_heap_pages: Option<u32>,
     },
 
-    #[structopt(name = "revert", about = "Revert chain to the previous state")]
+    ///Revert chain to the previous state
+    #[structopt(name = "revert")]
     Revert {
-        #[structopt(help = "Number of blocks to revert. Default is 256.")]    
-        NUM: Option<u32>,
+        /// Number of blocks to revert. Default is 256.
+        num: Option<u32>,
         
-        #[structopt(long = "chain", value_name = "CHAIN_SPEC", help = "Specify the chain specification.")]
+        /// Specify the chain specification.
+        #[structopt(long = "chain", value_name = "CHAIN_SPEC")]
         chain: Option<String>,
         
-        #[structopt(long = "dev", help = "Specify the development chain")]
+        /// Specify the development chain
+        #[structopt(long = "dev")]
         dev: bool,
         
-        #[structopt(long = "base-path", short = "d", value_name = "PATH", help = "Specify custom base path.", parse(from_os_str))]
+        /// Specify custom base path.
+        #[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
         base_path: Option<PathBuf>,
     },
 
-    #[structopt(name = "purge-chain", about = "Remove the whole chain data.")]
+    /// Remove the whole chain data.
+    #[structopt(name = "purge-chain")]
     PurgeChain {
-        #[structopt(long = "chain", value_name = "CHAIN_SPEC", help = "Specify the chain specification.")]    
+        /// Specify the chain specification.
+        #[structopt(long = "chain", value_name = "CHAIN_SPEC")]
         chain: Option<String>,
         
-        #[structopt(long = "dev", help = "Specify the development chain")]
+        /// Specify the development chain
+        #[structopt(long = "dev")]
         dev: bool,
         
-        #[structopt(long = "base-path", short = "d", value_name = "PATH", help = "Specify custom base path.", parse(from_os_str))]
+        /// Specify custom base path.
+        #[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
         base_path: Option<PathBuf>
     }
 }
