@@ -29,7 +29,6 @@
 //! ## Finalization
 //!
 //! This module should be hooked up to the finalization routine.
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -38,10 +37,6 @@ extern crate sr_std as rstd;
 
 #[macro_use]
 extern crate srml_support as runtime_support;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 
 #[cfg(test)]
 extern crate substrate_primitives;
@@ -215,8 +210,11 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> {
+			period: 5,
+			_genesis_phantom_data: Default::default()
+		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
@@ -228,8 +226,11 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> {
+			period: 5,
+			_genesis_phantom_data: Default::default()
+		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
@@ -241,8 +242,11 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
 	fn block_period_is_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> {
+			period: 5,
+			_genesis_phantom_data: Default::default()
+		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);

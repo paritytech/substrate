@@ -34,13 +34,6 @@ extern crate substrate_primitives;
 // Needed for various traits. In our case, `OnFinalise`.
 extern crate sr_primitives;
 
-// Needed for deriving `Serialize` and `Deserialize` for various types.
-// We only implement the serde traits for std builds - they're unneeded
-// in the wasm runtime.
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 // Needed for deriving `Encode` and `Decode` for `RawEvent`.
 #[macro_use]
 extern crate parity_codec_derive;
@@ -49,6 +42,7 @@ extern crate parity_codec as codec;
 // Needed for type-safe access to storage DB.
 #[macro_use]
 extern crate srml_support as support;
+extern crate srml_support as runtime_support;
 // `system` module provides us with all sorts of useful stuff and macros
 // depend on it being around.
 extern crate srml_system as system;
@@ -314,13 +308,14 @@ mod tests {
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
+		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
 			foo: 24,
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		t.into()
 	}
 

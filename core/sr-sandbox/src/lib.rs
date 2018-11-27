@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! This crate provides means to instantiate and execute wasm modules.
 //!
 //! It works even when the user of this library executes from
@@ -30,12 +29,10 @@
 //! When this crate is used in the `std` environment all these functions are implemented by directly
 //! calling the wasm VM.
 //!
-//! Example of possible use-cases for this library are the following:
+//! Examples of possible use-cases for this library are not limited to the following:
 //!
 //! - implementing smart-contract runtimes that use wasm for contract code
 //! - executing a wasm substrate runtime inside of a wasm parachain
-//! - etc
-// end::description[]
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]

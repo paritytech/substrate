@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
 //! Manages communication between them.
-// end::description[]
 
 #![warn(unused_extern_crates)]
 
@@ -65,7 +63,7 @@ use std::collections::HashMap;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 use futures::prelude::*;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -78,19 +76,21 @@ use codec::{Encode, Decode};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::ChainSpec;
+pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
-use consensus_common::offline_tracker::OfflineTracker;
 pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
 };
+use components::{StartRPC, CreateNetworkParams};
+#[doc(hidden)]
+pub use network::OnDemand;
 
 const DEFAULT_PROTOCOL_ID: &'static str = "sup";
 
@@ -102,7 +102,8 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
-	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
+	/// Configuration of this Service
+	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
 	_telemetry: Option<tel::Telemetry>,
@@ -124,12 +125,11 @@ impl<Components> Service<Components>
 	where
 		Components: components::Components,
 		<Components as components::Components>::Executor: std::clone::Clone,
-		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
-		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
+		// <Components as components::Components>::RuntimeApi: client::runtime_api::BlockBuilder<<<Components as components::Components>::Factory as ServiceFactory>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Sync + Send + client::runtime_api::Core<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, primitives::AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + client::runtime_api::ConstructRuntimeApi<Block=<<Components as components::Components>::Factory as ServiceFactory>::Block> + client::runtime_api::Metadata<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, Vec<u8>, Error=client::error::Error> + client::runtime_api::TaggedTransactionQueue<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, Error=client::error::Error>,
 {
 	/// Creates a new service.
 	pub fn new(
-		config: FactoryFullConfiguration<Components::Factory>,
+		mut config: FactoryFullConfiguration<Components::Factory>,
 		task_executor: TaskExecutor,
 	)
 		-> Result<Self, error::Error>
@@ -140,10 +140,12 @@ impl<Components> Service<Components>
 		let executor = NativeExecutor::new();
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+
+		// This is meant to be for testing only
+		// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
-
 		// Keep the public key for telemetry
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
@@ -157,7 +159,7 @@ impl<Components> Service<Components>
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Components::build_import_queue(&config, client.clone())?;
+		let import_queue = Arc::new(Components::build_import_queue(&mut config, client.clone())?);
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
@@ -166,7 +168,7 @@ impl<Components> Service<Components>
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
-			Components::build_transaction_pool(config.transaction_pool, client.clone())?
+			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
 		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
 			imports_external_transactions: !(config.roles == Roles::LIGHT),
@@ -174,27 +176,31 @@ impl<Components> Service<Components>
 			client: client.clone(),
 		 };
 
-		let network_params = network::Params {
-			config: network::ProtocolConfig {
-				roles: config.roles,
-			},
-			network_config: config.network,
-			chain: client.clone(),
-			on_demand: on_demand.clone()
-				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
-			transaction_pool: Arc::new(transaction_pool_adapter),
-			specialization: network_protocol,
+		let network_params = Components::CreateNetworkParams::create_network_params(
+			client.clone(),
+			config.roles,
+			config.network.clone(),
+			on_demand.clone(),
+			transaction_pool_adapter,
+			network_protocol,
+		);
+
+		let protocol_id = {
+			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
+			let mut protocol_id = network::ProtocolId::default();
+			if protocol_id_full.len() > protocol_id.len() {
+				warn!("Protocol ID truncated to {} chars", protocol_id.len());
+			}
+			let id_len = protocol_id_full.len().min(protocol_id.len());
+			&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+			protocol_id
 		};
 
-		let mut protocol_id = network::ProtocolId::default();
-		let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
-		if protocol_id_full.len() > protocol_id.len() {
-			warn!("Protocol ID truncated to {} chars", protocol_id.len());
-		}
-		let id_len = protocol_id_full.len().min(protocol_id.len());
-		&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
-
-		let network = network::Service::new(network_params, protocol_id, import_queue)?;
+		let network = network::Service::new(
+			network_params,
+			protocol_id,
+			import_queue
+		)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
 		{
@@ -233,42 +239,16 @@ impl<Components> Service<Components>
 			task_executor.spawn(events);
 		}
 
+
 		// RPC
-		let rpc_config = RpcConfig {
-			chain_name: config.chain_spec.name().to_string(),
-			impl_name: config.impl_name,
-			impl_version: config.impl_version,
-		};
-
-		let (rpc_http, rpc_ws) = {
-			let handler = || {
-				let client = client.clone();
-				let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
-				let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
-				let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
-				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), subscriptions.clone());
-				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
-					state,
-					chain,
-					author,
-					rpc_config.clone(),
-				)
-			};
-			(
-				maybe_start_server(config.rpc_http, |address| rpc::start_http(address, handler()))?,
-				maybe_start_server(config.rpc_ws, |address| rpc::start_ws(address, handler()))?,
-			)
-		};
-
-		let proposer = Arc::new(ProposerFactory {
-			client: client.clone(),
-			transaction_pool: transaction_pool.clone(),
-			offline: Arc::new(RwLock::new(OfflineTracker::new())),
-			force_delay: 0 // FIXME: allow this to be configured
-		});
+		let (rpc_http, rpc_ws) = Components::RPC::start_rpc(
+			client.clone(), config.chain_spec.name().to_string(), config.impl_name,
+			config.impl_version, config.rpc_http, config.rpc_ws, config.chain_spec.properties(),
+			task_executor.clone(), transaction_pool.clone()
+		)?;
 
 		// Telemetry
-		let telemetry = match config.telemetry_url {
+		let telemetry = match config.telemetry_url.clone() {
 			Some(url) => {
 				let is_authority = config.roles == Roles::AUTHORITY;
 				let pubkey = format!("{}", public_key);
@@ -300,28 +280,32 @@ impl<Components> Service<Components>
 			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
-			proposer,
+			config,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
 			_telemetry: telemetry,
 		})
 	}
+
+	/// give the authority key, if we are an authority and have a key
+	pub fn authority_key(&self) -> Option<primitives::ed25519::Pair> {
+		if self.config.roles != Roles::AUTHORITY { return None }
+		let keystore = &self.keystore;
+		if let Ok(Some(Ok(key))) =  keystore.contents().map(|keys| keys.get(0)
+				.map(|k| keystore.load(k, "")))
+		{
+			Some(key)
+		} else {
+			None
+		}
+	}
 }
 
-impl<Components> Service<Components> where
-	Components: components::Components,
-{
+impl<Components> Service<Components> where Components: components::Components {
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
-	}
-
-	/// Get shared proposer instance
-	pub fn proposer(&self)
-		-> Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>
-	{
-		self.proposer.clone()
 	}
 
 	/// Get shared network instance.
@@ -379,6 +363,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
+	properties: Properties,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -394,6 +379,10 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(self.chain_name.clone())
+	}
+
+	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
+		Ok(self.properties.clone())
 	}
 }
 
@@ -415,7 +404,7 @@ impl<C: Components> TransactionPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync{
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		self.pool.ready()
 			.map(|t| {
@@ -463,41 +452,6 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
-/// Creates a simple `Service` implementation.
-/// This `Service` just holds an instance to a `service::Service` and implements `Deref`.
-/// It also provides a `new` function that takes a `config` and a `TaskExecutor`.
-#[macro_export]
-macro_rules! construct_simple_service {
-	(
-		$name: ident
-	) => {
-		pub struct $name<C: $crate::Components> {
-			inner: $crate::Arc<$crate::Service<C>>,
-		}
-
-		impl<C: $crate::Components> $name<C> {
-			fn new(
-				config: FactoryFullConfiguration<C::Factory>,
-				executor: $crate::TaskExecutor
-			) -> $crate::Result<Self, $crate::Error> {
-				Ok(
-					Self {
-						inner: $crate::Arc::new($crate::Service::new(config, executor)?)
-					}
-				)
-			}
-		}
-
-		impl<C: $crate::Components> $crate::Deref for $name<C> {
-			type Target = $crate::Service<C>;
-
-			fn deref(&self) -> &Self::Target {
-				&self.inner
-			}
-		}
-	}
-}
-
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
 /// by `{}` blocks. These blocks are required and used to initialize the given parameter.
@@ -522,14 +476,17 @@ macro_rules! construct_simple_service {
 /// 		Configuration = (),
 /// 		FullService = Service<FullComponents<Self>>
 /// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+///         // Setup as Consensus Authority (if the role and key are given)
+/// 		AuthoritySetup = {
+/// 			|service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| { Ok(service) }},
 /// 		LightService = Service<LightComponents<Self>>
 /// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
 ///         // Declare the import queue. The import queue is special as it takes two initializers.
 ///         // The first one is for the initializing the full import queue and the second for the
 ///         // light import queue.
 /// 		ImportQueue = BasicQueue<Block, NoneVerifier>
-/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
-/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) },
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) }
+/// 			{ |_, client| Ok(BasicQueue::new(Arc::new(NoneVerifier {}, client))) },
 /// 	}
 /// }
 /// ```
@@ -539,6 +496,7 @@ macro_rules! construct_service_factory {
 		$(#[$attr:meta])*
 		struct $name:ident {
 			Block = $block:ty,
+			RuntimeApi = $runtime_api:ty,
 			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
 			RuntimeDispatch = $dispatch:ty,
 			FullTransactionPoolApi = $full_transaction:ty { $( $full_transaction_init:tt )* },
@@ -546,6 +504,7 @@ macro_rules! construct_service_factory {
 			Genesis = $genesis:ty,
 			Configuration = $config:ty,
 			FullService = $full_service:ty { $( $full_service_init:tt )* },
+			AuthoritySetup = { $( $authority_setup:tt )* },
 			LightService = $light_service:ty { $( $light_service_init:tt )* },
 			FullImportQueue = $full_import_queue:ty
 				{ $( $full_import_queue_init:tt )* },
@@ -559,6 +518,7 @@ macro_rules! construct_service_factory {
 		#[allow(unused_variables)]
 		impl $crate::ServiceFactory for $name {
 			type Block = $block;
+			type RuntimeApi = $runtime_api;
 			type NetworkProtocol = $protocol;
 			type RuntimeDispatch = $dispatch;
 			type FullTransactionPoolApi = $full_transaction;
@@ -593,14 +553,14 @@ macro_rules! construct_service_factory {
 			}
 
 			fn build_full_import_queue(
-				config: &$crate::FactoryFullConfiguration<Self>,
+				config: &mut $crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
 			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
 				( $( $full_import_queue_init )* ) (config, client)
 			}
 
 			fn build_light_import_queue(
-				config: &FactoryFullConfiguration<Self>,
+				config: &mut FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
 			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
@@ -619,7 +579,13 @@ macro_rules! construct_service_factory {
 				executor: $crate::TaskExecutor
 			) -> Result<Self::FullService, $crate::Error>
 			{
-				( $( $full_service_init )* ) (config, executor)
+				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {
+					if let Some(key) = (&service).authority_key() {
+						($( $authority_setup )*)(service, executor, Arc::new(key))
+					} else {
+						Ok(service)
+					}
+				})
 			}
 		}
 	}

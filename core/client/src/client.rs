@@ -16,36 +16,42 @@
 
 //! Substrate Client
 
-use std::sync::Arc;
-use error::{Error, ErrorKind};
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
+use error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{
 	Justification,
-	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
+	generic::{BlockId, SignedBlock},
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
 use consensus::{ImportBlock, ImportResult, BlockOrigin};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
-use runtime_primitives::{ApplyResult, BuildStorage};
-use runtime_api as api;
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
+	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
+};
+use runtime_primitives::BuildStorage;
+use runtime_api::{Core as CoreAPI, CallApiAt, TaggedTransactionQueue, ConstructRuntimeApi};
+use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::{Encode, Decode};
+use codec::Decode;
 use state_machine::{
-	Backend as StateBackend, CodeExecutor,
+	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
+	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges
 };
+use codec::Encode;
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, in_mem, block_builder, genesis, consensus};
+use light::fetcher::ChangesProof;
+use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -54,7 +60,7 @@ pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotific
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
 
 /// Substrate Client
-pub struct Client<B, E, Block> where Block: BlockT {
+pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
@@ -64,7 +70,7 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
-	changes_trie_config: Option<ChangesTrieConfiguration>,
+	_phantom: PhantomData<RA>,
 }
 
 /// A source of blockchain events.
@@ -87,6 +93,9 @@ pub trait BlockchainEvents<Block: BlockT> {
 pub trait ChainHead<Block: BlockT> {
 	/// Get best block header.
 	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, error::Error>;
+	/// Get all leaves of the chain: block hashes that have no children currently.
+	/// Leaves that can never be finalized will not be returned.
+	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error>;
 }
 
 /// Fetch block body by ID.
@@ -180,41 +189,39 @@ impl<H> PrePostHeader<H> {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, Block, S>(
+pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block>>
+) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block, RA>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
+		Block: BlockT<Hash=H256>,
 {
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
 
 /// Create a client with the explicitely provided backend.
 /// This is useful for testing backend implementations.
-pub fn new_with_backend<B, E, Block, S>(
+pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: S,
-) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block>>
+) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
+		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
 }
 
-impl<B, E, Block> Client<B, E, Block> where
+impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
@@ -225,11 +232,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		api_execution_strategy: ExecutionStrategy,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let genesis_storage = build_genesis_storage.build_storage()?;
-			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
-			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
+			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
-			op.reset_storage(genesis_storage.into_iter())?;
+			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
+
+			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
+			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			op.set_block_data(
 				genesis_block.deconstruct().0,
 				Some(vec![]),
@@ -238,12 +246,6 @@ impl<B, E, Block> Client<B, E, Block> where
 			)?;
 			backend.commit_operation(op)?;
 		}
-
-		// changes trie configuration should never change => we can read it in advance
-		let changes_trie_config = backend.state_at(BlockId::Number(backend.blockchain().info()?.best_number))?
-			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
-			.map_err(|e| error::Error::from_state(Box::new(e)))?
-			.and_then(|c| Decode::decode(&mut &*c));
 
 		Ok(Client {
 			backend,
@@ -255,7 +257,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			importing_block: Default::default(),
 			block_execution_strategy,
 			api_execution_strategy,
-			changes_trie_config,
+			_phantom: Default::default(),
 		})
 	}
 
@@ -324,126 +326,13 @@ impl<B, E, Block> Client<B, E, Block> where
 		self.header_proof_with_cht_size(id, cht::SIZE)
 	}
 
-	/// Reads given header and generates CHT-based header proof for CHT of given size.
-	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
-		let proof_error = || error::ErrorKind::Backend(format!("Failed to generate header proof for {:?}", id));
-		let header = self.header(id)?.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", id)))?;
-		let block_num = *header.number();
-		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
-		let cht_start = cht::start_number(cht_size, cht_num);
-		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
-		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _>(cht_size, cht_num, block_num, headers)
-			.ok_or_else(proof_error)?;
-		Ok((header, proof))
-	}
-
-	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
-	/// Works only for runtimes that are supporting changes tries.
-	pub fn key_changes(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		key: &[u8]
-	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
-		let config = self.changes_trie_config.as_ref();
-		let storage = self.backend.changes_trie_storage();
-		let (config, storage) = match (config, storage) {
-			(Some(config), Some(storage)) => (config, storage),
-			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
-		};
-
-		key_changes::<_, Blake2Hasher>(
-			config,
-			storage,
-			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
-			self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
-			self.backend.blockchain().info()?.best_number.as_(),
-			key)
-		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
-		.map(|r| r.into_iter().map(|(b, e)| (As::sa(b), e)).collect())
-	}
-
-	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
-	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
-	/// of this block.
-	/// Works only for runtimes that are supporting changes tries.
-	pub fn key_changes_proof(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		max: Block::Hash,
-		key: &[u8]
-	) -> error::Result<(NumberFor<Block>, Vec<Vec<u8>>)> {
-		let config = self.changes_trie_config.as_ref();
-		let storage = self.backend.changes_trie_storage();
-		let (config, storage) = match (config, storage) {
-			(Some(config), Some(storage)) => (config, storage),
-			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
-		};
-
-		let max_number = ::std::cmp::min(
-			self.backend.blockchain().info()?.best_number,
-			self.require_block_number_from_id(&BlockId::Hash(max))?,
-		);
-		key_changes_proof::<_, Blake2Hasher>(
-			config,
-			storage,
-			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
-			self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
-			max_number.as_(),
-			key)
-		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
-		.map(|proof| (max_number, proof))
-	}
-
-	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher>>
-	where E: Clone
-	{
-		block_builder::BlockBuilder::new(self)
-	}
-
-	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher>>
-	where E: Clone
-	{
-		block_builder::BlockBuilder::at_block(parent, &self)
-	}
-
-	/// Set up the native execution environment to call into a native runtime code.
-	pub fn call_api<A, R>(&self, function: &'static str, args: &A) -> error::Result<R>
-		where A: Encode, R: Decode
-	{
-		self.call_api_at(&BlockId::Number(self.info()?.chain.best_number), function, args)
-	}
-
-	/// Call a runtime function at given block.
-	pub fn call_api_at<A, R>(&self, at: &BlockId<Block>, function: &'static str, args: &A) -> error::Result<R>
-		where A: Encode, R: Decode
-	{
-		let parent = at;
-		let header = <<Block as BlockT>::Header as HeaderT>::new(
-			self.block_number_from_id(&parent)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))? + As::sa(1),
-			Default::default(),
-			Default::default(),
-			self.block_hash_from_id(&parent)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
-			Default::default()
-		);
-		let mut overlay = Default::default();
-
-		self.call_at_state(at, "initialise_block", &header, &mut overlay)?;
-		self.call_at_state(at, function, args, &mut overlay)
-	}
-
-	fn call_at_state<A: Encode, R: Decode>(
+	pub(crate) fn call_at_state(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
-		args: &A,
+		args: Vec<u8>,
 		changes: &mut OverlayedChanges
-	) -> error::Result<R> {
+	) -> error::Result<Vec<u8>> {
 		let state = self.state_at(at)?;
 
 		let execution_manager = || match self.api_execution_strategy {
@@ -458,27 +347,232 @@ impl<B, E, Block> Client<B, E, Block> where
 			}),
 		};
 
-		self.executor.call_at_state(
-			&state,
-			changes,
-			function,
-			&args.encode(),
-			execution_manager()
-		).and_then(|res|
-			R::decode(&mut &res.0[..])
-				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode(function)))
+		self.executor.call_at_state(&state, changes, function, &args, execution_manager())
+			.map(|res| res.0)
+	}
+
+	/// Get block hash by number.
+	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
+		self.backend.blockchain().hash(block_number)
+	}
+
+	/// Reads given header and generates CHT-based header proof for CHT of given size.
+	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+		let proof_error = || error::ErrorKind::Backend(format!("Failed to generate header proof for {:?}", id));
+		let header = self.header(id)?.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", id)))?;
+		let block_num = *header.number();
+		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
+		let cht_start = cht::start_number(cht_size, cht_num);
+		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)));
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, ::std::iter::once(block_num), headers)?;
+		Ok((header, proof))
+	}
+
+	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
+	/// Works only for runtimes that are supporting changes tries.
+	pub fn key_changes(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		key: &[u8]
+	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
+		let config = self.changes_trie_config()?;
+		let storage = self.backend.changes_trie_storage();
+		let (config, storage) = match (config, storage) {
+			(Some(config), Some(storage)) => (config, storage),
+			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
+		};
+
+		key_changes::<_, Blake2Hasher>(
+			&config,
+			storage,
+			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
+			&ChangesTrieAnchorBlockId {
+				hash: convert_hash(&last),
+				number: self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			},
+			self.backend.blockchain().info()?.best_number.as_(),
+			key)
+		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
+		.map(|r| r.into_iter().map(|(b, e)| (As::sa(b), e)).collect())
+	}
+
+	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
+	/// `min` is the hash of the first block, which changes trie root is known to the requester - when we're using
+	/// changes tries from ascendants of this block, we should provide proofs for changes tries roots
+	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
+	/// of this block.
+	/// Works only for runtimes that are supporting changes tries.
+	pub fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		min: Block::Hash,
+		max: Block::Hash,
+		key: &[u8]
+	) -> error::Result<ChangesProof<Block::Header>> {
+		self.key_changes_proof_with_cht_size(
+			first,
+			last,
+			min,
+			max,
+			key,
+			cht::SIZE,
 		)
 	}
 
+	/// Does the same work as `key_changes_proof`, but assumes that CHTs are of passed size.
+	pub fn key_changes_proof_with_cht_size(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		min: Block::Hash,
+		max: Block::Hash,
+		key: &[u8],
+		cht_size: u64,
+	) -> error::Result<ChangesProof<Block::Header>> {
+		struct AccessedRootsRecorder<'a, Block: BlockT> {
+			storage: &'a ChangesTrieStorage<Blake2Hasher>,
+			min: u64,
+			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, H256>>,
+		};
+
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+			fn root(&self, anchor: &ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
+				let root = self.storage.root(anchor, block)?;
+				if block < self.min {
+					if let Some(ref root) = root {
+						self.required_roots_proofs.lock().insert(
+							As::sa(block),
+							root.clone()
+						);
+					}
+				}
+				Ok(root)
+			}
+		}
+
+		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+			fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
+				self.storage.get(key)
+			}
+		}
+
+		let config = self.changes_trie_config()?;
+		let storage = self.backend.changes_trie_storage();
+		let (config, storage) = match (config, storage) {
+			(Some(config), Some(storage)) => (config, storage),
+			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
+		};
+
+		let min_number = self.require_block_number_from_id(&BlockId::Hash(min))?;
+		let recording_storage = AccessedRootsRecorder::<Block> {
+			storage,
+			min: min_number.as_(),
+			required_roots_proofs: Mutex::new(BTreeMap::new()),
+		};
+
+		let max_number = ::std::cmp::min(
+			self.backend.blockchain().info()?.best_number,
+			self.require_block_number_from_id(&BlockId::Hash(max))?,
+		);
+
+		// fetch key changes proof
+		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
+			&config,
+			&recording_storage,
+			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
+			&ChangesTrieAnchorBlockId {
+				hash: convert_hash(&last),
+				number: self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			},
+			max_number.as_(),
+			key
+		)
+		.map_err(|err| error::Error::from(error::ErrorKind::ChangesTrieAccessFailed(err)))?;
+
+		// now gather proofs for all changes tries roots that were touched during key_changes_proof
+		// execution AND are unknown (i.e. replaced with CHT) to the requester
+		let roots = recording_storage.required_roots_proofs.into_inner();
+		let roots_proof = self.changes_trie_roots_proof(cht_size, roots.keys().cloned())?;
+
+		Ok(ChangesProof {
+			max_block: max_number,
+			proof: key_changes_proof,
+			roots: roots.into_iter().map(|(n, h)| (n, convert_hash(&h))).collect(),
+			roots_proof,
+		})
+	}
+
+	/// Generate CHT-based proof for roots of changes tries at given blocks.
+	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(
+		&self,
+		cht_size: u64,
+		blocks: I
+	) -> error::Result<Vec<Vec<u8>>> {
+		// most probably we have touched several changes tries that are parts of the single CHT
+		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
+		let mut proof = HashSet::new();
+
+		cht::for_each_cht_group::<Block::Header, _, _, _>(cht_size, blocks, |_, cht_num, cht_blocks| {
+			let cht_proof = self.changes_trie_roots_proof_at_cht(cht_size, cht_num, cht_blocks)?;
+			proof.extend(cht_proof);
+			Ok(())
+		}, ())?;
+
+		Ok(proof.into_iter().collect())
+	}
+
+	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
+	fn changes_trie_roots_proof_at_cht(
+		&self,
+		cht_size: u64,
+		cht_num: NumberFor<Block>,
+		blocks: Vec<NumberFor<Block>>
+	) -> error::Result<Vec<Vec<u8>>> {
+		let cht_start = cht::start_number(cht_size, cht_num);
+		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
+			.map(|block| block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())));
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, blocks, roots)?;
+		Ok(proof)
+	}
+
+	/// Create a new block, built on the head of the chain.
+	pub fn new_block(
+		&self
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+		E: Clone + Send + Sync,
+		RA: BlockBuilderAPI<Block>
+	{
+		block_builder::BlockBuilder::new(self)
+	}
+
+	/// Create a new block, built on top of `parent`.
+	pub fn new_block_at(
+		&self, parent: &BlockId<Block>
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+		E: Clone + Send + Sync,
+		RA: BlockBuilderAPI<Block>
+	{
+		block_builder::BlockBuilder::at_block(parent, &self)
+	}
+
 	// TODO [ToDr] Optimize and re-use tags from the pool.
-	fn transaction_tags(&self, at: Block::Hash, body: &Option<Vec<Block::Extrinsic>>) -> error::Result<Vec<TransactionTag>> {
+	fn transaction_tags(
+		&self,
+		at: Block::Hash,
+		body: &Option<Vec<Block::Extrinsic>>
+	) -> error::Result<Vec<TransactionTag>> where
+		RA: TaggedTransactionQueue<Block>,
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	{
 		let id = BlockId::Hash(at);
 		Ok(match body {
 			None => vec![],
 			Some(ref extrinsics) => {
 				let mut tags = vec![];
 				for tx in extrinsics {
-					let tx = api::TaggedTransactionQueue::validate_transaction(self, &id, &tx)?;
+					let tx = self.runtime_api().validate_transaction(&id, &tx)?;
 					match tx {
 						TransactionValidity::Valid { mut provides, .. } => {
 							tags.append(&mut provides);
@@ -503,7 +597,11 @@ impl<B, E, Block> Client<B, E, Block> where
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
-	) -> error::Result<ImportResult> {
+		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	) -> error::Result<ImportResult> where
+		RA: TaggedTransactionQueue<Block>,
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	{
 		let parent_hash = import_headers.post().parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
@@ -593,6 +691,8 @@ impl<B, E, Block> Client<B, E, Block> where
 		if let Some(Some(changes_update)) = changes_update {
 			transaction.update_changes_trie(changes_update)?;
 		}
+
+		transaction.set_aux(aux)?;
 		self.backend.commit_operation(transaction)?;
 
 		if make_notifications {
@@ -732,30 +832,9 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 	}
 
-	/// Get block hash by number.
-	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
-		self.backend.blockchain().hash(block_number)
-	}
-
-	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_hash_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<Block::Hash>> {
-		match *id {
-			BlockId::Hash(h) => Ok(Some(h)),
-			BlockId::Number(n) => self.block_hash(n),
-		}
-	}
-
-	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<NumberFor<Block>>> {
-		match *id {
-			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number().clone())),
-			BlockId::Number(n) => Ok(Some(n)),
-		}
-	}
-
 	/// Convert an arbitrary block ID into a block hash, returning error if the block is unknown.
 	fn require_block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<NumberFor<Block>> {
-		self.block_number_from_id(id)
+		self.backend.blockchain().block_number_from_id(id)
 			.and_then(|n| n.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", id)).into()))
 	}
 
@@ -776,11 +855,11 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get full block by id.
 	pub fn block(&self, id: &BlockId<Block>)
-		-> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic>>>
+		-> error::Result<Option<SignedBlock<Block>>>
 	{
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), Some(justification)) =>
-				Some(SignedBlock { block: RuntimeBlock { header, extrinsics }, justification }),
+				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
 			_ => None,
 		})
 	}
@@ -799,7 +878,9 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
 	/// TODO [snd] write down time complexity
-	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>) -> error::Result<Option<Block::Hash>> {
+	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>)
+		-> error::Result<Option<Block::Hash>>
+	{
 		let target_header = {
 			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
@@ -889,13 +970,97 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		unreachable!("this is a bug. `target_hash` is in blockchain but wasn't found following all leaves backwards");
 	}
+
+	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
+		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info()?.best_number))?
+			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
+			.map_err(|e| error::Error::from_state(Box::new(e)))?
+			.and_then(|c| Decode::decode(&mut &*c)))
+	}
+}
+
+impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: Send + Sync
+{
+	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
+		self.backend.blockchain().header(id)
+	}
+
+	fn info(&self) -> error::Result<blockchain::Info<Block>> {
+		self.backend.blockchain().info()
+	}
+
+	fn status(&self, id: BlockId<Block>) -> error::Result<blockchain::BlockStatus> {
+		self.backend.blockchain().status(id)
+	}
+
+	fn number(&self, hash: Block::Hash) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+		self.backend.blockchain().number(hash)
+	}
+
+	fn hash(&self, number: NumberFor<Block>) -> error::Result<Option<Block::Hash>> {
+		self.backend.blockchain().hash(number)
+	}
+}
+
+impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: CoreAPI<Block>
+{
+	type Api = RA;
+
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+		Self::Api::construct_runtime_api(self)
+	}
+}
+
+impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: CoreAPI<Block>, // not strictly necessary at the moment
+						// but we want to bound to make sure the API is actually available.
+{
+	fn call_api_at(
+		&self,
+		at: &BlockId<Block>,
+		function: &'static str,
+		args: Vec<u8>,
+		changes: &mut OverlayedChanges,
+		initialised_block: &mut Option<BlockId<Block>>,
+	) -> error::Result<Vec<u8>> {
+		//TODO: Find a better way to prevent double block initialization
+		if function != "initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
+			let parent = at;
+			let header = <<Block as BlockT>::Header as HeaderT>::new(
+				self.block_number_from_id(parent)?
+					.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?
+				+ As::sa(1),
+				Default::default(),
+				Default::default(),
+				self.block_hash_from_id(&parent)?
+					.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
+				Default::default()
+			);
+			self.call_at_state(at, "initialise_block", header.encode(), changes)?;
+			*initialised_block = Some(*at);
+		}
+
+		self.call_at_state(at, function, args, changes)
+	}
 }
 
 
-impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
+impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
+	Block: BlockT<Hash=H256>,
+	RA: TaggedTransactionQueue<Block>
 {
 	type Error = Error;
 
@@ -910,11 +1075,11 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 		let ImportBlock {
 			origin,
 			header,
-			external_justification,
-			post_runtime_digests,
+			justification,
+			post_digests,
 			body,
 			finalized,
-			..
+			auxiliary,
 		} = import_block;
 		let parent_hash = header.parent_hash().clone();
 
@@ -923,11 +1088,11 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
 
-		let import_headers = if post_runtime_digests.is_empty() {
+		let import_headers = if post_digests.is_empty() {
 			PrePostHeader::Same(header)
 		} else {
 			let mut post_header = header.clone();
-			for item in post_runtime_digests {
+			for item in post_digests {
 				post_header.digest_mut().push(item);
 			}
 			PrePostHeader::Different(header, post_header)
@@ -942,10 +1107,11 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 			origin,
 			hash,
 			import_headers,
-			external_justification,
+			justification,
 			body,
 			new_authorities,
 			finalized,
+			auxiliary,
 		);
 
 		*self.importing_block.write() = None;
@@ -958,10 +1124,10 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> consensus::Authorities<Block> for Client<B, E, Block> where
+impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
@@ -969,10 +1135,10 @@ impl<B, E, Block> consensus::Authorities<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
+impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	fn current_height(&self) -> Self::BlockNumber {
@@ -980,10 +1146,10 @@ impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
+impl<B, E, Block, RA> BlockNumberToHash for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	type Hash = Block::Hash;
@@ -993,10 +1159,10 @@ impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 }
 
 
-impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
+impl<B, E, Block, RA> BlockchainEvents<Block> for Client<B, E, Block, RA>
 where
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
@@ -1017,125 +1183,29 @@ where
 	}
 }
 
-impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
+impl<B, E, Block, RA> ChainHead<Block> for Client<B, E, Block, RA>
 where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
 	}
+
+	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, error::Error> {
+		self.backend.blockchain().leaves()
+	}
 }
 
-impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
+impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block, Blake2Hasher>,
 		E: CallExecutor<Block, Blake2Hasher>,
-		Block: BlockT,
+		Block: BlockT<Hash=H256>,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
-	}
-}
-
-impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
-
-	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error> {
-		self.call_api_at(at, "version", &())
-	}
-
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
-		self.authorities_at(at)
-	}
-
-	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), Self::Error> {
-		self.call_api_at(at, "execute_block", &(block))
-	}
-}
-
-impl<B, E, Block> api::Metadata<Block, Vec<u8>> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
-
-	fn metadata(&self, at: &BlockId<Block>) -> Result<Vec<u8>, Self::Error> {
-		self.executor.call(at, "metadata",&[]).map(|v| v.return_data)
-	}
-}
-
-impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
-	type OverlayedChanges = OverlayedChanges;
-
-	fn initialise_block(
-		&self,
-		at: &BlockId<Block>,
-		changes: &mut OverlayedChanges,
-		header: &<Block as BlockT>::Header
-	) -> Result<(), Self::Error> {
-		self.call_at_state(at, "initialise_block", header, changes)
-	}
-
-	fn apply_extrinsic(
-		&self,
-		at: &BlockId<Block>,
-		changes: &mut OverlayedChanges,
-		extrinsic: &<Block as BlockT>::Extrinsic
-	) -> Result<ApplyResult, Self::Error> {
-		self.call_at_state(at, "apply_extrinsic", extrinsic, changes)
-	}
-
-	fn finalise_block(
-		&self,
-		at: &BlockId<Block>,
-		changes: &mut OverlayedChanges
-	) -> Result<<Block as BlockT>::Header, Self::Error> {
-		self.call_at_state(at, "finalise_block", &(), changes)
-	}
-
-	fn inherent_extrinsics<InherentExtrinsic: Encode + Decode, UncheckedExtrinsic: Encode + Decode>(
-		&self, at: &BlockId<Block>, inherent: &InherentExtrinsic
-	) -> Result<Vec<UncheckedExtrinsic>, Self::Error> {
-		self.call_api_at(at, "inherent_extrinsics", &(inherent))
-	}
-
-	fn check_inherents<InherentData: Encode + Decode, InherentError: Encode + Decode>(
-		&self,
-		at: &BlockId<Block>,
-		block: &Block,
-		data: &InherentData
-	) -> Result<Result<(), InherentError>, Self::Error> {
-		self.call_api_at(at, "check_inherents", &(block, data))
-	}
-
-	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, Self::Error> {
-		self.call_api_at(at, "random_seed", &())
-	}
-}
-
-impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
-
-	fn validate_transaction<TransactionValidity: Encode + Decode>(
-		&self, at: &BlockId<Block>, tx: &<Block as BlockT>::Extrinsic
-	) -> Result<TransactionValidity, Self::Error> {
-		self.call_api_at(at, "validate_transaction", &(tx))
 	}
 }
 
@@ -1145,20 +1215,20 @@ pub(crate) mod tests {
 	use super::*;
 	use keyring::Keyring;
 	use primitives::twox_128;
-	use runtime_primitives::traits::{Digest as DigestT, DigestItem as DigestItemT};
+	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer};
+	use test_client::runtime::{self, Block, Transfer, ClientWithApi, test_api::TestAPI};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
 	/// 2) roots of changes tries for these blocks
 	/// 3) test cases in form (begin, end, key, vec![(block, extrinsic)]) that are required to pass
 	pub fn prepare_client_with_key_changes() -> (
-		test_client::client::Client<test_client::Backend, test_client::Executor, Block>,
+		test_client::client::Client<test_client::Backend, test_client::Executor, Block, ClientWithApi>,
 		Vec<H256>,
 		Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
 	) {
@@ -1230,8 +1300,20 @@ pub(crate) mod tests {
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
 
-		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Alice.to_raw_public()).unwrap(), 1000);
-		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Ferdie.to_raw_public()).unwrap(), 0);
+		assert_eq!(
+			client.runtime_api().balance_of(
+				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&Keyring::Alice.to_raw_public()
+			).unwrap(),
+			1000
+		);
+		assert_eq!(
+			client.runtime_api().balance_of(
+				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&Keyring::Ferdie.to_raw_public()
+			).unwrap(),
+			0
+		);
 	}
 
 	#[test]
@@ -1274,8 +1356,20 @@ pub(crate) mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
-		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Alice.to_raw_public()).unwrap(), 958);
-		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Ferdie.to_raw_public()).unwrap(), 42);
+		assert_eq!(
+			client.runtime_api().balance_of(
+				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&Keyring::Alice.to_raw_public()
+			).unwrap(),
+			958
+		);
+		assert_eq!(
+			client.runtime_api().balance_of(
+				&BlockId::Number(client.info().unwrap().chain.best_number),
+				&Keyring::Ferdie.to_raw_public()
+			).unwrap(),
+			42
+		);
 	}
 
 	#[test]

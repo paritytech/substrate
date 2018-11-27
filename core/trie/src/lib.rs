@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
-// end::description[]
 
 // TODO: no_std
 
@@ -428,7 +426,7 @@ mod tests {
 
 	#[test]
 	fn random_should_work() {
-		let mut seed = <Blake2Hasher as Hasher>::Out::new();
+		let mut seed = <Blake2Hasher as Hasher>::Out::zero();
 		for test_i in 0..10000 {
 			if test_i % 50 == 0 {
 				println!("{:?} of 10000 stress tests done", test_i);
@@ -439,7 +437,7 @@ mod tests {
 				journal_key: 0,
 				value_mode: ValueMode::Index,
 				count: 100,
-			}.make_with(&mut seed.0);
+			}.make_with(seed.as_fixed_bytes_mut());
 
 			let real = trie_root::<Blake2Hasher,_, _, _>(x.clone());
 			let mut memdb = MemoryDB::default();

@@ -19,17 +19,16 @@ use std::sync::Arc;
 use std::{io, thread};
 use std::time::Duration;
 use futures::{self, Future, Stream, stream, sync::oneshot};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, ErrorKind};
 use network_libp2p::{start_service, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProtocol};
 use io::NetSyncIo;
+use consensus_gossip::ConsensusGossip;
 use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
-use config::{ProtocolConfig};
+use config::Params;
 use error::Error;
-use chain::Client;
-use specialization::Specialization;
-use on_demand::OnDemandService;
+use specialization::NetworkSpecialization;
 use import_queue::ImportQueue;
 use runtime_primitives::traits::{Block as BlockT};
 use tokio::{runtime::Runtime, timer::Interval};
@@ -40,40 +39,13 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
 const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 
-bitflags! {
-	/// Node roles bitmask.
-	pub struct Roles: u8 {
-		/// No network.
-		const NONE = 0b00000000;
-		/// Full node, does not participate in consensus.
-		const FULL = 0b00000001;
-		/// Light client node.
-		const LIGHT = 0b00000010;
-		/// Act as an authority
-		const AUTHORITY = 0b00000100;
-	}
-}
-
-impl ::codec::Encode for Roles {
-	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
-		dest.push_byte(self.bits())
-	}
-}
-
-impl ::codec::Decode for Roles {
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Self::from_bits(input.read_byte()?)
-	}
-}
-
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
-	/// Get this node id if available.
-	fn node_id(&self) -> Option<String>;
 }
 
+/// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static {}
 impl<T> ExHashT for T where T: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static {}
 
@@ -93,24 +65,8 @@ pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	fn execute_in_context<F: Fn(&mut Context<B>)>(&self, closure: F);
 }
 
-/// Service initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
-	/// Configuration.
-	pub config: ProtocolConfig,
-	/// Network layer configuration.
-	pub network_config: NetworkConfiguration,
-	/// Substrate relay chain access point.
-	pub chain: Arc<Client<B>>,
-	/// On-demand service reference.
-	pub on_demand: Option<Arc<OnDemandService<B>>>,
-	/// Transaction pool.
-	pub transaction_pool: Arc<TransactionPool<H, B>>,
-	/// Protocol specialization.
-	pub specialization: S,
-}
-
 /// Substrate network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
+pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Network service
 	network: Arc<Mutex<NetworkService>>,
 	/// Protocol handler
@@ -123,15 +79,13 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 	bg_thread: Option<(oneshot::Sender<()>, thread::JoinHandle<()>)>,
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S, H> {
 	/// Creates and register protocol with the network service
 	pub fn new<I: 'static + ImportQueue<B>>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
-		import_queue: I,
+		import_queue: Arc<I>,
 	) -> Result<Arc<Service<B, S, H>>, Error> {
-		let chain = params.chain.clone();
-		let import_queue = Arc::new(import_queue);
 		let handler = Arc::new(Protocol::new(
 			params.config,
 			params.chain,
@@ -144,20 +98,22 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
 		let (thread, network) = start_thread(params.network_config, handler.clone(), registered)?;
 
-		let sync = Arc::new(Service {
+		let service = Arc::new(Service {
 			network,
 			protocol_id,
 			handler,
-			bg_thread: Some(thread),
+			bg_thread: Some(thread)
 		});
 
-		import_queue.start(
-			Arc::downgrade(sync.handler.sync()),
-			Arc::downgrade(&sync),
-			Arc::downgrade(&chain)
-		)?;
+		// connect the import-queue to the network service.
+		let link = ::import_queue::NetworkLink {
+			sync: Arc::downgrade(service.handler.sync()),
+			context: Arc::downgrade(&service),
+		};
 
-		Ok(sync)
+		import_queue.start(link)?;
+
+		Ok(service)
 	}
 
 	/// Called when a new block is imported by the client.
@@ -170,21 +126,33 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));
 	}
 
+	/// Send a consensus message through the gossip
+	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>) {
+		self.handler.gossip_consensus_message(
+			&mut NetSyncIo::new(&self.network, self.protocol_id),
+			topic,
+			message)
+	}
 	/// Execute a closure with the chain-specific network specialization.
 	pub fn with_spec<F, U>(&self, f: F) -> U
 		where F: FnOnce(&mut S, &mut Context<B>) -> U
 	{
 		self.handler.with_spec(&mut NetSyncIo::new(&self.network, self.protocol_id), f)
 	}
+
+	/// access the underlying consensus gossip handler
+	pub fn consensus_gossip<'a>(&'a self) -> &'a RwLock<ConsensusGossip<B>> {
+		self.handler.consensus_gossip()
+	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
 	fn is_major_syncing(&self) -> bool {
 		self.handler.sync().read().status().is_major_syncing()
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H:ExHashT> Drop for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H:ExHashT> Drop for Service<B, S, H> {
 	fn drop(&mut self) {
 		self.handler.stop();
 		if let Some((sender, join)) = self.bg_thread.take() {
@@ -196,29 +164,16 @@ impl<B: BlockT + 'static, S: Specialization<B>, H:ExHashT> Drop for Service<B, S
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ExecuteInContext<B> for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ExecuteInContext<B> for Service<B, S, H> {
 	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
 		closure(&mut ProtocolContext::new(self.handler.context_data(), &mut NetSyncIo::new(&self.network, self.protocol_id)))
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> SyncProvider<B> for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> SyncProvider<B> for Service<B, S, H> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.status()
-	}
-
-	fn node_id(&self) -> Option<String> {
-		let network = self.network.lock();
-		let ret = network
-			.listeners()
-			.next()
-			.map(|addr| {
-				let mut addr = addr.clone();
-				addr.append(Libp2pProtocol::P2p(network.peer_id().clone().into()));
-				addr.to_string()
-			});
-		ret
 	}
 }
 
@@ -232,9 +187,11 @@ pub trait ManageNetwork: Send + Sync {
 	fn remove_reserved_peer(&self, peer: PeerId);
 	/// Add reserved peer
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
+	/// Returns a user-friendly identifier of our node.
+	fn node_id(&self) -> Option<String>;
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ManageNetwork for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork for Service<B, S, H> {
 	fn accept_unreserved_peers(&self) {
 		self.network.lock().accept_unreserved_peers();
 	}
@@ -264,10 +221,23 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ManageNetwork for Se
 		self.network.lock().add_reserved_peer(addr, peer_id);
 		Ok(())
 	}
+
+	fn node_id(&self) -> Option<String> {
+		let network = self.network.lock();
+		let ret = network
+			.listeners()
+			.next()
+			.map(|addr| {
+				let mut addr = addr.clone();
+				addr.append(Libp2pProtocol::P2p(network.peer_id().clone().into()));
+				addr.to_string()
+			});
+		ret
+	}
 }
 
 /// Starts the background thread that handles the networking.
-fn start_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
+fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	config: NetworkConfiguration,
 	protocol: Arc<Protocol<B, S, H>>,
 	registered: RegisteredProtocol,
@@ -308,7 +278,7 @@ fn start_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
 }
 
 /// Runs the background thread that handles the networking.
-fn run_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
+fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	network_service: Arc<Mutex<NetworkService>>,
 	protocol: Arc<Protocol<B, S, H>>,
 	protocol_id: ProtocolId,

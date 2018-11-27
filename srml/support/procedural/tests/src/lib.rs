@@ -33,7 +33,7 @@ pub extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]
 pub extern crate sr_primitives as runtime_primitives;
-extern crate substrate_metadata;
+extern crate srml_metadata;
 
 extern crate mashup;
 

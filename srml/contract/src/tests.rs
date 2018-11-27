@@ -121,7 +121,7 @@ impl ExtBuilder {
 	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
-			.unwrap();
+			.unwrap().0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				balances: vec![],
@@ -131,8 +131,9 @@ impl ExtBuilder {
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
 				reclaim_rebate: 0,
+				_genesis_phantom_data: Default::default(),
 			}.build_storage()
-			.unwrap(),
+			.unwrap().0,
 		);
 		t.extend(
 			GenesisConfig::<Test> {
@@ -142,8 +143,10 @@ impl ExtBuilder {
 				gas_price: self.gas_price,
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
+				current_schedule: Default::default(),
+				_genesis_phantom_data: Default::default(),
 			}.build_storage()
-			.unwrap(),
+			.unwrap().0,
 		);
 		runtime_io::TestExternalities::new(t)
 	}
@@ -204,10 +207,10 @@ fn contract_transfer() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 26 - gas used by the contract (26) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by the contract)
-			100_000_000 - 3 - (2 * 10) - (2 * 135) - (2 * 135),
+			100_000_000 - 3 - (2 * 26) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(
 			Balances::free_balance(&1),
@@ -261,10 +264,10 @@ fn contract_transfer_to_death() {
 
 		assert_eq!(
 			Balances::free_balance(&0),
-			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 26 - gas used by the contract (26) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by the contract)
-			100_000_000 - (2 * 10) - (2 * 135) - (2 * 135),
+			100_000_000 - (2 * 26) - (2 * 135) - (2 * 135),
 		);
 
 		assert!(!<CodeOf<Test>>::exists(1));
@@ -295,11 +298,11 @@ fn contract_transfer_takes_creation_fee() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 26 - gas used by the contract (26) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by the contract)
 			// 104 - (rounded) fee per creation (by the contract)
-			100_000_000 - 3 - (2 * 10) - (2 * 135) - (2 * 135) - 104,
+			100_000_000 - 3 - (2 * 26) - (2 * 135) - (2 * 135) - 104,
 		);
 		assert_eq!(
 			Balances::free_balance(&1),
@@ -336,12 +339,12 @@ fn contract_transfer_takes_transfer_fee() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 26 - gas used by the contract (26) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 44 - (rounded from 45) fee per transfer (by transaction)
 			// 2 * 135 - base gas fee for call (by the contract)
 			// 44 - (rounded from 45) fee per transfer (by the contract)
-			100_000_000 - 3 - (2 * 10) - (2 * 135) - 44 - (2 * 135) - 44,
+			100_000_000 - 3 - (2 * 26) - (2 * 135) - 44 - (2 * 135) - 44,
 		);
 		assert_eq!(
 			Balances::free_balance(&1),
@@ -412,10 +415,10 @@ fn contract_transfer_max_depth() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 10 * 100 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 26 * 100 - gas used by the contract (26) multiplied by gas price (2)
 			//                multiplied by max depth (100).
 			// 2 * 135 * 100 - base gas fee for call (by transaction) multiplied by max depth (100).
-			100_000_000 - 3 - (2 * 10 * 100) - (2 * 135 * 100),
+			100_000_000 - 3 - (2 * 26 * 100) - (2 * 135 * 100),
 		);
 		assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 14);
 	});
@@ -528,12 +531,12 @@ fn contract_create() {
 		);
 
 		// 11 - value sent with the transaction
-		// 2 * 139 - gas spent by the deployer contract (139) multiplied by gas price (2)
+		// 2 * 362 - gas spent by the deployer contract (362) multiplied by gas price (2)
 		// 2 * 135 - base gas fee for call (top level)
 		// 2 * 175 - base gas fee for create (by contract)
 		// ((21 / 2) * 2) - price per account creation
 		let expected_gas_after_create =
-			100_000_000 - 11 - (2 * 139) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
+			100_000_000 - 11 - (2 * 362) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
 		assert_eq!(Balances::free_balance(&0), expected_gas_after_create);
 		assert_eq!(Balances::free_balance(&1), 8);
 		assert_eq!(Balances::free_balance(&derived_address), 3);
@@ -565,10 +568,10 @@ fn contract_create() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 22 - value sent with the transaction
-			// (2 * 10) - gas used by the contract
+			// (2 * 26) - gas used by the contract
 			// (2 * 135) - base gas fee for call (top level)
 			// (2 * 135) - base gas fee for call (by transfer contract)
-			expected_gas_after_create - 22 - (2 * 10) - (2 * 135) - (2 * 135),
+			expected_gas_after_create - 22 - (2 * 26) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(Balances::free_balance(&derived_address), 22 - 3);
 		assert_eq!(Balances::free_balance(&9), 36);

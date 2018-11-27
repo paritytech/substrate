@@ -21,10 +21,6 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
@@ -36,6 +32,7 @@ extern crate substrate_primitives;
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[macro_use] extern crate srml_support;
+extern crate srml_support as runtime_support;
 extern crate sr_primitives as primitives;
 extern crate srml_balances as balances;
 extern crate srml_democracy as democracy;
@@ -79,7 +76,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -117,7 +114,7 @@ mod tests {
 	}
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			transaction_base_fee: 0,
@@ -126,12 +123,14 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 3,
 			minimum_deposit: 1,
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		t.extend(seats::GenesisConfig::<Test> {
 			candidacy_bond: 9,
 			voter_bond: 3,
@@ -147,11 +146,13 @@ mod tests {
 			presentation_duration: 2,
 			desired_seats: 2,
 			term_duration: 5,
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		t.extend(voting::GenesisConfig::<Test> {
 			cooloff_period: 2,
 			voting_period: 1,
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 

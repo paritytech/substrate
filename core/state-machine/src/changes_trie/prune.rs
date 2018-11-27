@@ -21,7 +21,7 @@ use heapsize::HeapSizeOf;
 use substrate_trie::Recorder;
 use proving_backend::ProvingBackendEssence;
 use trie_backend_essence::TrieBackendEssence;
-use changes_trie::{Configuration, Storage};
+use changes_trie::{AnchorBlockId, Configuration, Storage};
 use changes_trie::storage::TrieBackendAdapter;
 
 /// Prune obslete changes tries. Puning happens at the same block, where highest
@@ -33,21 +33,14 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	config: &Configuration,
 	storage: &S,
 	min_blocks_to_keep: u64,
-	current_block: u64,
+	current_block: &AnchorBlockId<H::Out>,
 	mut remove_trie_node: F,
 )
 	where
 		H::Out: HeapSizeOf,
 {
-	// we only CAN prune at block where max-level-digest is created
-	let digest_interval = match config.digest_level_at_block(current_block) {
-		Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
-			digest_interval,
-		_ => return,
-	};
-
 	// select range for pruning
-	let (first, last) = match pruning_range(min_blocks_to_keep, current_block, digest_interval) {
+	let (first, last) = match pruning_range(config, min_blocks_to_keep, current_block.number) {
 		Some((first, last)) => (first, last),
 		None => return,
 	};
@@ -55,7 +48,7 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	// delete changes trie for every block in range
 	// TODO: limit `max_digest_interval` so that this cycle won't involve huge ranges
 	for block in first..last+1 {
-		let root = match storage.root(block) {
+		let root = match storage.root(current_block, block) {
 			Ok(Some(root)) => root,
 			Ok(None) => continue,
 			Err(error) => {
@@ -85,16 +78,34 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 }
 
 /// Select blocks range (inclusive from both ends) for pruning changes tries in.
-fn pruning_range(min_blocks_to_keep: u64, block: u64, max_digest_interval: u64) -> Option<(u64, u64)> {
-	// compute maximal number of high-level digests to keep
-	let max_digest_intervals_to_keep = max_digest_intervals_to_keep(min_blocks_to_keep, max_digest_interval);
+fn pruning_range(config: &Configuration, min_blocks_to_keep: u64, block: u64) -> Option<(u64, u64)> {
+	// compute number of changes tries we actually want to keep
+	let (prune_interval, blocks_to_keep) = if config.is_digest_build_enabled() {
+		// we only CAN prune at block where max-level-digest is created
+		let max_digest_interval = match config.digest_level_at_block(block) {
+			Some((digest_level, digest_interval, _)) if digest_level == config.digest_levels =>
+				digest_interval,
+			_ => return None,
+		};
 
-	// number of blocks BEFORE current block where changes tries are not pruned
-	let blocks_to_keep = max_digest_intervals_to_keep.checked_mul(max_digest_interval);
+		// compute maximal number of high-level digests to keep
+		let max_digest_intervals_to_keep = max_digest_intervals_to_keep(min_blocks_to_keep, max_digest_interval);
+
+		// number of blocks BEFORE current block where changes tries are not pruned
+		(
+			max_digest_interval,
+			max_digest_intervals_to_keep.checked_mul(max_digest_interval)
+		)
+	} else {
+		(
+			1,
+			Some(min_blocks_to_keep)
+		)
+	};
 
 	// last block for which changes trie is pruned
 	let last_block_to_prune = blocks_to_keep.and_then(|b| block.checked_sub(b));
-	let first_block_to_prune = last_block_to_prune.clone().and_then(|b| b.checked_sub(max_digest_interval));
+	let first_block_to_prune = last_block_to_prune.clone().and_then(|b| b.checked_sub(prune_interval));
 
 	last_block_to_prune
 		.and_then(|last| first_block_to_prune.map(|first| (first + 1, last)))
@@ -129,6 +140,13 @@ mod tests {
 	use changes_trie::storage::InMemoryStorage;
 	use super::*;
 
+	fn config(interval: u64, levels: u32) -> Configuration {
+		Configuration {
+			digest_interval: interval,
+			digest_levels: levels,
+		}
+	}
+
 	fn prune_by_collect<S: Storage<H>, H: Hasher>(
 		config: &Configuration,
 		storage: &S,
@@ -139,11 +157,10 @@ mod tests {
 			H::Out: HeapSizeOf,
 	{
 		let mut pruned_trie_nodes = HashSet::new();
-		prune(config, storage, min_blocks_to_keep, current_block,
+		prune(config, storage, min_blocks_to_keep, &AnchorBlockId { hash: Default::default(), number: current_block },
 			|node| { pruned_trie_nodes.insert(node); });
 		pruned_trie_nodes
 	}
-
 
 	#[test]
 	fn prune_works() {
@@ -213,24 +230,34 @@ mod tests {
 
 	#[test]
 	fn pruning_range_works() {
-		assert_eq!(pruning_range(2, 0, 100), None);
-		assert_eq!(pruning_range(2, 30, 100), None);
-		assert_eq!(pruning_range(::std::u64::MAX, 1024, 1), None);
-		assert_eq!(pruning_range(1, 1024, ::std::u64::MAX), None);
-		assert_eq!(pruning_range(::std::u64::MAX, 1024, ::std::u64::MAX), None);
-		assert_eq!(pruning_range(1024, 512, 512), None);
-		assert_eq!(pruning_range(1024, 1024, 512), None);
+		// DIGESTS ARE NOT CREATED + NO TRIES ARE PRUNED
+		assert_eq!(pruning_range(&config(10, 0), 2, 2), None);
+
+		// DIGESTS ARE NOT CREATED + SOME TRIES ARE PRUNED
+		assert_eq!(pruning_range(&config(10, 0), 100, 110), Some((10, 10)));
+		assert_eq!(pruning_range(&config(10, 0), 100, 210), Some((110, 110)));
+
+		// DIGESTS ARE CREATED + NO TRIES ARE PRUNED
+
+		assert_eq!(pruning_range(&config(10, 2), 2, 0), None);
+		assert_eq!(pruning_range(&config(10, 2), 30, 100), None);
+		assert_eq!(pruning_range(&config(::std::u64::MAX, 2), 1, 1024), None);
+		assert_eq!(pruning_range(&config(::std::u64::MAX, 2), ::std::u64::MAX, 1024), None);
+		assert_eq!(pruning_range(&config(32, 2), 2048, 512), None);
+		assert_eq!(pruning_range(&config(32, 2), 2048, 1024), None);
+
+		// DIGESTS ARE CREATED + SOME TRIES ARE PRUNED
 
 		// when we do not want to keep any highest-level-digests
 		// (system forces to keep at least one)
-		assert_eq!(pruning_range(0, 32, 16), Some((1, 16)));
-		assert_eq!(pruning_range(0, 64, 16), Some((33, 48)));
+		assert_eq!(pruning_range(&config(4, 2), 0, 32), Some((1, 16)));
+		assert_eq!(pruning_range(&config(4, 2), 0, 64), Some((33, 48)));
 		// when we want to keep 1 (last) highest-level-digest
-		assert_eq!(pruning_range(16, 32, 16), Some((1, 16)));
-		assert_eq!(pruning_range(16, 64, 16), Some((33, 48)));
+		assert_eq!(pruning_range(&config(4, 2), 16, 32), Some((1, 16)));
+		assert_eq!(pruning_range(&config(4, 2), 16, 64), Some((33, 48)));
 		// when we want to keep 1 (last) + 1 additional level digests
-		assert_eq!(pruning_range(1024, 1536, 512), Some((1, 512)));
-		assert_eq!(pruning_range(1024, 2048, 512), Some((513, 1024)));
+		assert_eq!(pruning_range(&config(32, 2), 4096, 5120), Some((1, 1024)));
+		assert_eq!(pruning_range(&config(32, 2), 4096, 6144), Some((1025, 2048)));
 	}
 
 	#[test]

@@ -33,21 +33,31 @@ extern crate substrate_transaction_pool as transaction_pool;
 #[macro_use]
 extern crate substrate_network as network;
 extern crate substrate_consensus_aura as consensus;
+extern crate substrate_consensus_common as consensus_common;
+extern crate substrate_client as client;
+extern crate substrate_finality_grandpa as grandpa;
 extern crate node_primitives;
 #[macro_use]
 extern crate substrate_service;
 extern crate node_executor;
+extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;
+extern crate structopt;
+extern crate parking_lot;
 
 pub use cli::error;
-mod chain_spec;
+pub mod chain_spec;
 mod service;
+mod params;
 
 use tokio::runtime::Runtime;
 pub use cli::{VersionInfo, IntoExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
+use params::{Params as NodeParams};
+use structopt::StructOpt;
+use std::ops::Deref;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -97,9 +107,37 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	match cli::prepare_execution::<service::Factory, _, _, _, _>(args, exit, version, load_spec, "substrate-node")? {
+	let full_version = substrate_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+
+	let matches = match NodeParams::clap()
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(&(full_version + "\n")[..])
+		.get_matches_from_safe(args) {
+			Ok(m) => m,
+			Err(e) => e.exit(),
+		};
+
+	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(load_spec, version, "substrate-node", &matches)?;
+
+	if matches.is_present("grandpa_authority_only") {
+		config.custom.grandpa_authority = true;
+		config.custom.grandpa_authority_only = true;
+		// Authority Setup is only called if validator is set as true
+		config.roles = ServiceRoles::AUTHORITY;
+	} else if matches.is_present("grandpa_authority") {
+		config.custom.grandpa_authority = true;
+		// Authority Setup is only called if validator is set as true
+		config.roles = ServiceRoles::AUTHORITY;
+	}
+
+	match cli::execute_default::<service::Factory, _>(spec, exit, &matches)? {
 		cli::Action::ExecutedInternally => (),
-		cli::Action::RunService((config, exit)) => {
+		cli::Action::RunService(exit) => {
 			info!("Substrate Node");
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017, 2018");
@@ -117,12 +155,13 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	Ok(())
 }
 
-fn run_until_exit<C, E>(
+fn run_until_exit<T, C, E>(
 	runtime: &mut Runtime,
-	service: service::Service<C>,
+	service: T,
 	e: E,
 ) -> error::Result<()>
 	where
+	    T: Deref<Target=substrate_service::Service<C>>,
 		C: substrate_service::Components,
 		E: IntoExit,
 {

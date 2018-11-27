@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
@@ -27,12 +27,14 @@ use codec::{Encode, Decode};
 
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
-use specialization::Specialization;
+use consensus_gossip::ConsensusGossip;
+use specialization::NetworkSpecialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
-use service::{Roles, TransactionPool, ExHashT};
+use service::{TransactionPool, ExHashT};
 use import_queue::ImportQueue;
-use config::ProtocolConfig;
+use config::{ProtocolConfig, Roles};
 use chain::Client;
+use client::light::fetcher::ChangesProof;
 use on_demand::OnDemandService;
 use io::SyncIo;
 use error;
@@ -50,12 +52,13 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
+pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
 	sync: Arc<RwLock<ChainSync<B>>>,
 	specialization: RwLock<S>,
+	consensus_gossip: RwLock<ConsensusGossip<B>>,
 	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<NodeIndex, time::Instant>>,
@@ -184,7 +187,7 @@ pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	pub chain: Arc<Client<B>>,
 }
 
-impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
+impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new<I: 'static + ImportQueue<B>>(
 		config: ProtocolConfig,
@@ -206,6 +209,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			genesis_hash: info.chain.genesis_hash,
 			sync: Arc::new(RwLock::new(sync)),
 			specialization: RwLock::new(specialization),
+			consensus_gossip: RwLock::new(ConsensusGossip::new()),
 			handshaking_peers: RwLock::new(HashMap::new()),
 			transaction_pool: transaction_pool,
 		};
@@ -218,6 +222,10 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	pub(crate) fn sync(&self) -> &Arc<RwLock<ChainSync<B>>> {
 		&self.sync
+	}
+
+	pub(crate) fn consensus_gossip<'a>(&'a self) -> &'a RwLock<ConsensusGossip<B>> {
+		&self.consensus_gossip
 	}
 
 	/// Returns protocol status
@@ -277,12 +285,22 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
+			GenericMessage::Consensus(topic, msg) => {
+				self.consensus_gossip.write().on_incoming(&mut ProtocolContext::new(&self.context_data, io), who, topic, msg);	
+			},
 			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, &mut Some(other)),
 		}
 	}
 
 	pub fn send_message(&self, io: &mut SyncIo, who: NodeIndex, message: Message<B>) {
 		send_message::<B, H>(&self.context_data.peers, io, who, message)
+	}
+
+	pub fn gossip_consensus_message(&self, io: &mut SyncIo, topic: B::Hash, message: Vec<u8>) {
+		let gossip = self.consensus_gossip();
+		self.with_spec(io, move |_s, context|{
+			gossip.write().multicast(context, topic, message);
+		});
 	}
 
 	/// Called when a new peer is connected
@@ -296,6 +314,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: NodeIndex) {
 		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_debug_info(peer));
 
+
 		// lock all the the peer lists so that add/remove peer events are in order
 		let mut sync = self.sync.write();
 		let mut spec = self.specialization.write();
@@ -308,6 +327,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 		if removed {
 			let mut context = ProtocolContext::new(&self.context_data, io);
+			self.consensus_gossip.write().peer_disconnected(&mut context, peer);
 			sync.peer_disconnected(&mut context, peer);
 			spec.on_disconnect(&mut context, peer);
 			self.on_demand.as_ref().map(|s| s.on_disconnect(peer));
@@ -390,6 +410,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
+		self.consensus_gossip.write().collect_garbage(|_| true);
 		self.maintain_peers(io);
 		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
 	}
@@ -477,6 +498,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let mut context = ProtocolContext::new(&self.context_data, io);
 		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles, status.best_number));
 		self.sync.write().new_peer(&mut context, who);
+		self.consensus_gossip.write().new_peer(&mut context, who, status.roles);
 		self.specialization.write().on_connect(&mut context, who, status);
 	}
 
@@ -554,10 +576,12 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let mut spec = self.specialization.write();
 		let mut peers = self.context_data.peers.write();
 		let mut handshaking_peers = self.handshaking_peers.write();
+		let mut consensus_gossip = self.consensus_gossip.write();
 		sync.clear();
 		spec.on_abort();
 		peers.clear();
 		handshaking_peers.clear();
+		consensus_gossip.abort();
 	}
 
 	pub fn stop(&self) {
@@ -673,20 +697,29 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn on_remote_changes_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteChangesRequest<B::Hash>) {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id, who, request.key.to_hex(), request.first, request.last);
-		let (max, proof) = match self.context_data.chain.key_changes_proof(request.first, request.last, request.max, &request.key) {
-			Ok((max, proof)) => (max, proof),
+		let proof = match self.context_data.chain.key_changes_proof(request.first, request.last, request.min, request.max, &request.key) {
+			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
 					request.id, who, request.key.to_hex(), request.first, request.last, error);
-				(Zero::zero(), Default::default())
+				ChangesProof::<B::Header> {
+					max_block: Zero::zero(),
+					proof: vec![],
+					roots: BTreeMap::new(),
+					roots_proof: vec![],
+				}
 			},
 		};
  		self.send_message(io, who, GenericMessage::RemoteChangesResponse(message::RemoteChangesResponse {
-			id: request.id, max, proof,
+			id: request.id,
+			max: proof.max_block,
+			proof: proof.proof,
+			roots: proof.roots.into_iter().collect(),
+			roots_proof: proof.roots_proof,
 		}));
 	}
 
- 	fn on_remote_changes_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+ 	fn on_remote_changes_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
 		trace!(target: "sync", "Remote changes proof response {} from {} (max={})",
 			response.id, who, response.max);
 		self.on_demand.as_ref().map(|s| s.on_remote_changes_response(io, who, response));
@@ -761,7 +794,7 @@ macro_rules! construct_simple_protocol {
 			}
 		}
 
-		impl $crate::specialization::Specialization<$block> for $protocol {
+		impl $crate::specialization::NetworkSpecialization<$block> for $protocol {
 			fn status(&self) -> Vec<u8> {
 				$(
 					let status = self.$status_protocol_name.status();

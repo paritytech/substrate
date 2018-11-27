@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Client testing utilities.
-// end::description[]
 
 #![warn(missing_docs)]
 
@@ -29,6 +27,7 @@ pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;
 pub extern crate substrate_test_runtime as runtime;
 pub extern crate substrate_consensus_common as consensus;
+extern crate substrate_state_machine as state_machine;
 
 pub mod client_ext;
 pub mod trait_tests;
@@ -43,6 +42,7 @@ pub use executor::NativeExecutor;
 use std::sync::Arc;
 use primitives::Blake2Hasher;
 use runtime_primitives::StorageMap;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use keyring::Keyring;
 
@@ -66,12 +66,12 @@ pub type Executor = client::LocalCallExecutor<
 >;
 
 /// Creates new client instance used for tests.
-pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
+pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::ClientWithApi> {
 	new_with_backend(Arc::new(Backend::new()), false)
 }
 
 /// Creates new test client instance that suports changes trie creation.
-pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Block> {
+pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Block, runtime::ClientWithApi> {
 	new_with_backend(Arc::new(Backend::new()), true)
 }
 
@@ -80,7 +80,7 @@ pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Blo
 pub fn new_with_backend<B>(
 	backend: Arc<B>,
 	support_changes_trie: bool
-) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>
+) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block, runtime::ClientWithApi>
 	where
 		B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
@@ -98,7 +98,8 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 
 fn genesis_storage(support_changes_trie: bool) -> StorageMap {
 	let mut storage = genesis_config(support_changes_trie).genesis_map();
-	let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
+	let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(storage.clone().into_iter());
+	let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 	storage.extend(additional_storage_with_genesis(&block));
 	storage
 }

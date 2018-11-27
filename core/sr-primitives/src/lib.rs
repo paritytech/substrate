@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -79,6 +77,10 @@ pub use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
 
+/// A set of key value pairs for children storage;
+#[cfg(feature = "std")]
+pub type ChildrenStorageMap = HashMap<Vec<u8>, StorageMap>;
+
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
@@ -87,13 +89,13 @@ pub trait BuildStorage {
 		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
 		r
 	}
-	fn build_storage(self) -> Result<StorageMap, String>;
+	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String>;
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageMap {
-	fn build_storage(self) -> Result<StorageMap, String> {
-		Ok(self)
+	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String> {
+		Ok((self, Default::default()))
 	}
 }
 
@@ -194,7 +196,7 @@ pub struct Ed25519Signature(pub H512);
 impl Verify for Ed25519Signature {
 	type Signer = H256;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify(&(self.0).0, msg.get(), &signer.0[..])
+		runtime_io::ed25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
 	}
 }
 
@@ -308,14 +310,19 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
-			fn build_storage(self) -> ::std::result::Result<$crate::StorageMap, String> {
-				let mut s = $crate::StorageMap::new();
+			fn build_storage(self) -> ::std::result::Result<($crate::StorageMap, $crate::ChildrenStorageMap), String> {
+				let mut top = $crate::StorageMap::new();
+				let mut children = $crate::ChildrenStorageMap::new();
 				$(
 					if let Some(extra) = self.$snake {
-						s.extend(extra.build_storage()?);
+						let (other_top, other_children) = extra.build_storage()?;
+						top.extend(other_top);
+						for (other_child_key, other_child_map) in other_children {
+							children.entry(other_child_key).or_default().extend(other_child_map);
+						}
 					}
 				)*
-				Ok(s)
+				Ok((top, children))
 			}
 		}
 	}
@@ -347,7 +354,7 @@ macro_rules! impl_outer_log {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
@@ -355,7 +362,7 @@ macro_rules! impl_outer_log {
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -475,7 +482,7 @@ mod tests {
 		use super::RuntimeT;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
 		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
 	}
 
@@ -483,7 +490,7 @@ mod tests {
 		use super::RuntimeT;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 

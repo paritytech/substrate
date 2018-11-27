@@ -22,16 +22,14 @@ use super::{Member, Decode, Encode, As, Input, Output};
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash))]
+#[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub enum Address<AccountId, AccountIndex> where
 	AccountId: Member,
 	AccountIndex: Member,
 {
 	/// It's an account ID (pubkey).
-	#[cfg_attr(feature = "std", serde(deserialize_with="AccountId::deserialize"))]
 	Id(AccountId),
 	/// It's an account index.
-	#[cfg_attr(feature = "std", serde(deserialize_with="AccountIndex::deserialize"))]
 	Index(AccountIndex),
 }
 

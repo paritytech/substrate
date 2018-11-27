@@ -42,7 +42,7 @@ extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]
 extern crate sr_primitives as runtime_primitives;
-extern crate substrate_metadata;
+extern crate srml_metadata;
 
 extern crate mashup;
 
@@ -72,7 +72,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
   let scrate = if std::env::var("CARGO_PKG_NAME").unwrap() == "srml-support" {
     quote!( crate )
   } else {
-    quote!( runtime_support )
+    quote!( ::runtime_support )
   };
   let def = parse_macro_input!(input as StorageDefinition);
   //  panic!("{:?}", &def);
@@ -165,7 +165,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
               use #scrate::codec::Encode;
               let data = (#builder)(&self);
               for (k, v) in data.into_iter() {
-                r.insert(Self::hash(<#name<#straitinstance>>::key_for(k)).to_vec(), v.encode());
+                r.insert(Self::hash(&<#name<#straitinstance>>::key_for(k)).to_vec(), v.encode());
               }
             }
             });
@@ -195,7 +195,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
               #attrs #extrafield : #extra_type #default_seq ;
             });
             extra_lines.push(quote!{
-              #attrs #extrafield : #extra_type ,
+              #attrs pub #extrafield : #extra_type ,
             });
             let extra_default = default_seq.inner.get(0).map(|d|&d.expr).map(|e|quote!{ #e })
               .unwrap_or_else(|| quote!{ Default::default() });
@@ -217,7 +217,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 
     let is_extra_genesis_needed = sbuild.is_some() || config_field.len() > 0 || genesis_extrafields.len() > 0 || builders.len() > 0;
     let extra_genesis = if is_extra_genesis_needed { 
-      let scall = sbuild.map(|sb| quote!{ ( #sb ) }).unwrap_or_else(|| quote!{ ( |_, _|{} ) });
+      let scall = sbuild.map(|sb| quote!{ ( #sb ) }).unwrap_or_else(|| quote!{ ( |_, _, _|{} ) });
       quote!{
 
         //__decl_genesis_config_items!([#straittype #straitinstance] [] [] [] [#( #slines )* ] [#scall] #st);
@@ -227,6 +227,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
         #[serde(rename_all = "camelCase")]
         #[serde(deny_unknown_fields)]
         pub struct GenesisConfig<#straitinstance: #straittype> {
+			    #[serde(skip)]
+			    pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#straitinstance>,
           #( #config_field )*
           #( #genesis_extrafields )*
         }
@@ -235,6 +237,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
         impl<#straitinstance: #straittype> Default for GenesisConfig<#straitinstance> {
           fn default() -> Self {
             GenesisConfig {
+					    _genesis_phantom_data: Default::default(),
               #( #config_field_default )*
               #( #genesis_extrafields_default )*
             }
@@ -244,15 +247,18 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
         #[cfg(feature = "std")]
         impl<#straitinstance: #straittype> #scrate::runtime_primitives::BuildStorage for GenesisConfig<#straitinstance>
         {
-          fn build_storage(self) -> ::std::result::Result<#scrate::runtime_primitives::StorageMap, String> {
+
+          fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageMap, #scrate::runtime_primitives::ChildrenStorageMap), String> {
             let mut r: #scrate::runtime_primitives::StorageMap = Default::default();
+				    let mut c: #scrate::runtime_primitives::ChildrenStorageMap = Default::default();
+
 
             #( #builders )*
 
             // extra call
-            #scall(&mut r, &self);
+            #scall(&mut r, &mut c, &self);
 
-            Ok(r)
+            Ok((r, c))
           }
         }
       } 

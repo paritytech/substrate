@@ -19,10 +19,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -57,6 +53,15 @@ pub trait OnSessionChange<T> {
 
 impl<T> OnSessionChange<T> for () {
 	fn on_session_change(_: T, _: bool) {}
+}
+
+impl<T, A, B> OnSessionChange<T> for (A, B)
+	where T: Clone, A: OnSessionChange<T>, B: OnSessionChange<T>
+{
+	fn on_session_change(time_elapsed: T, should_reward: bool) {
+		A::on_session_change(time_elapsed.clone(), should_reward);
+		B::on_session_change(time_elapsed, should_reward);
+	}
 }
 
 pub trait Trait: timestamp::Trait {
@@ -270,18 +275,21 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![1, 2, 3],
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 

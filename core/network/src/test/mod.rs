@@ -24,11 +24,11 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use client;
+use client::error::Error as ClientError;
 use client::block_builder::BlockBuilder;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol, ProtocolContext};
-use primitives::{Blake2Hasher};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, PeerId, Severity};
@@ -36,9 +36,9 @@ use keyring::Keyring;
 use codec::Encode;
 use import_queue::{SyncImportQueue, PassThroughVerifier, Verifier};
 use consensus::BlockOrigin;
-use specialization::Specialization;
+use specialization::NetworkSpecialization;
 use consensus_gossip::ConsensusGossip;
-use import_queue::ImportQueue;
+use import_queue::{BlockImport, ImportQueue};
 use service::ExecuteInContext;
 use test_client;
 
@@ -58,31 +58,23 @@ impl ExecuteInContext<Block> for DummyContextExecutor {
 }
 
 /// The test specialization.
-pub struct DummySpecialization {
-	/// Consensus gossip handle.
-	pub gossip: ConsensusGossip<Block>,
-}
+pub struct DummySpecialization { }
 
-impl Specialization<Block> for DummySpecialization {
+impl NetworkSpecialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
-	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, status: ::message::Status<Block>) {
-		self.gossip.new_peer(ctx, peer_id, status.roles);
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: ::message::Status<Block>) {
 	}
 
-	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex) {
-		self.gossip.peer_disconnected(ctx, peer_id);
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
 	}
 
 	fn on_message(
 		&mut self,
-			ctx: &mut Context<Block>,
-			peer_id: NodeIndex,
-			message: &mut Option<::message::Message<Block>>
+		_ctx: &mut Context<Block>,
+		_peer_id: NodeIndex,
+		_message: &mut Option<::message::Message<Block>>
 	) {
-		if let Some(::message::generic::Message::Consensus(topic, data)) = message.take() {
-			self.gossip.on_incoming(ctx, peer_id, topic, data);
-		}
 	}
 }
 
@@ -137,41 +129,50 @@ pub struct TestPacket {
 	recipient: NodeIndex,
 }
 
-pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block>;
+pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>;
 
-pub struct Peer<V: Verifier<Block>> {
+pub struct Peer<V: Verifier<Block>, D> {
 	client: Arc<PeersClient>,
 	pub sync: Arc<Protocol<Block, DummySpecialization, Hash>>,
 	pub queue: Arc<RwLock<VecDeque<TestPacket>>>,
 	import_queue: Arc<SyncImportQueue<Block, V>>,
 	executor: Arc<DummyContextExecutor>,
+	/// Some custom data set up at initialization time.
+	pub data: D,
 }
 
-impl<V: 'static + Verifier<Block>> Peer<V> {
+impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	fn new(
 		client: Arc<PeersClient>,
 		sync: Arc<Protocol<Block, DummySpecialization, Hash>>,
 		queue: Arc<RwLock<VecDeque<TestPacket>>>,
 		import_queue: Arc<SyncImportQueue<Block, V>>,
+		data: D,
 	) -> Self {
 		let executor = Arc::new(DummyContextExecutor(sync.clone(), queue.clone()));
-		Peer { client, sync, queue, import_queue, executor}
+		Peer { client, sync, queue, import_queue, executor, data }
 	}
 	/// Called after blockchain has been populated to updated current state.
 	fn start(&self) {
 		// Update the sync state to the latest chain state.
 		let info = self.client.info().expect("In-mem client does not fail");
 		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
-		self.import_queue.start(
-				Arc::downgrade(&self.sync.sync()),
-				Arc::downgrade(&self.executor),
-				Arc::downgrade(&self.sync.context_data().chain)).expect("Test ImportQueue always starts");
+		let network_link = ::import_queue::NetworkLink {
+			sync: Arc::downgrade(self.sync.sync()),
+			context: Arc::downgrade(&self.executor),
+		};
+
+		self.import_queue.start(network_link).expect("Test ImportQueue always starts");
 		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
 	}
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: NodeIndex) {
 		self.sync.on_peer_connected(&mut TestIo::new(&self.queue, Some(other)), other);
+	}
+
+	pub fn consensus_gossip(&self) -> &RwLock<ConsensusGossip<Block>> {
+		self.sync.consensus_gossip()
 	}
 
 	/// Called on disconnect from other indicated peer.
@@ -186,6 +187,11 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 		self.sync.handle_packet(&mut io, from, &msg.data);
 		self.flush();
 		io.to_disconnect.clone()
+	}
+
+	fn with_io<'a, F, U>(&'a self, f: F) -> U where F: FnOnce(&mut TestIo<'a>) -> U {
+		let mut io = TestIo::new(&self.queue, None);
+		f(&mut io)
 	}
 
 	/// Produce the next pending message to send to another peer.
@@ -223,44 +229,57 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
-		self.sync.with_spec(&mut TestIo::new(&self.queue, None), |spec, ctx| {
-			spec.gossip.multicast(ctx, topic, data);
-		})
+		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>)
+		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
 	{
-		for _ in 0 .. count {
-			let mut builder = self.client.new_block().unwrap();
-			edit_block(&mut builder);
-			let block = builder.bake().unwrap();
+		use blocks::BlockData;
+
+		for _  in 0..count {
+			let builder = self.client.new_block().unwrap();
+			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!("Generating {}, (#{}, parent={})", hash, block.header.number, block.header.parent_hash);
 			let header = block.header.clone();
-			self.client.justify_and_import(origin, block).unwrap();
-			self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), hash, &header);
+
+			// NOTE: if we use a non-synchronous queue in the test-net in the future,
+			// this may not work.
+		 	self.import_queue.import_blocks(origin, vec![BlockData {
+				origin: None,
+				block: ::message::BlockData::<Block> {
+					hash,
+					header: Some(header),
+					body: Some(block.extrinsics),
+					receipt: None,
+					message_queue: None,
+					justification: Some(Vec::new()),
+				},
+			}]);
 		}
+
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
 	pub fn push_blocks(&self, count: usize, with_tx: bool) {
 		let mut nonce = 0;
 		if with_tx {
-			self.generate_blocks(count, BlockOrigin::File, |builder| {
+			self.generate_blocks(count, BlockOrigin::File, |mut builder| {
 				let transfer = Transfer {
 					from: Keyring::Alice.to_raw_public().into(),
 					to: Keyring::Alice.to_raw_public().into(),
 					amount: 1,
 					nonce,
 				};
-				let signature = Keyring::from_raw_public(transfer.from.0).unwrap().sign(&transfer.encode()).into();
+				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
 				builder.push(Extrinsic { transfer, signature }).unwrap();
 				nonce = nonce + 1;
+				builder.bake().unwrap()
 			});
 		} else {
-			self.generate_blocks(count, BlockOrigin::File, |_| ());
+			self.generate_blocks(count, BlockOrigin::File, |builder| builder.bake().unwrap());
 		}
 	}
 
@@ -293,6 +312,7 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 
 pub trait TestNetFactory: Sized {
 	type Verifier: 'static + Verifier<Block>;
+	type PeerData: Default;
 
 	/// These two need to be implemented!
 	fn from_config(config: &ProtocolConfig) -> Self;
@@ -300,12 +320,19 @@ pub trait TestNetFactory: Sized {
 
 
 	/// Get reference to peer.
-	fn peer(&self, i: usize) -> &Peer<Self::Verifier>;
-	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier>>>;
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier>>>)>(&mut self, closure: F );
+	fn peer(&self, i: usize) -> &Peer<Self::Verifier, Self::PeerData>;
+	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>;
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>)>(&mut self, closure: F);
 
 	fn started(&self) -> bool;
-	fn set_started(&mut self, now: bool); 
+	fn set_started(&mut self, now: bool);
+
+	/// Get custom block import handle for fresh client, along with peer data.
+	fn make_block_import(&self, client: Arc<PeersClient>)
+		-> (Arc<BlockImport<Block,Error=ClientError> + Send + Sync>, Self::PeerData)
+	{
+		(client, Default::default())
+	}
 
 	fn default_config() -> ProtocolConfig {
 		ProtocolConfig::default()
@@ -327,10 +354,10 @@ pub trait TestNetFactory: Sized {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(client.clone(), config);
-		let import_queue = Arc::new(SyncImportQueue::new(verifier));
-		let specialization = DummySpecialization {
-			gossip: ConsensusGossip::new(),
-		};
+		let (block_import, data) = self.make_block_import(client.clone());
+
+		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import));
+		let specialization = DummySpecialization { };
 		let sync = Protocol::new(
 			config.clone(),
 			client.clone(),
@@ -344,7 +371,8 @@ pub trait TestNetFactory: Sized {
 			client,
 			Arc::new(sync),
 			Arc::new(RwLock::new(VecDeque::new())),
-			import_queue
+			import_queue,
+			data,
 		));
 
 		self.mut_peers(|peers| {
@@ -454,12 +482,13 @@ pub trait TestNetFactory: Sized {
 }
 
 pub struct TestNet {
-	peers: Vec<Arc<Peer<PassThroughVerifier>>>,
+	peers: Vec<Arc<Peer<PassThroughVerifier, ()>>>,
 	started: bool
 }
 
 impl TestNetFactory for TestNet {
 	type Verifier = PassThroughVerifier;
+	type PeerData = ();
 
 	/// Create new test network with peers and given config.
 	fn from_config(_config: &ProtocolConfig) -> Self {
@@ -468,22 +497,22 @@ impl TestNetFactory for TestNet {
 			started: false
 		}
 	}
-	
+
 	fn make_verifier(&self, _client: Arc<PeersClient>, _config: &ProtocolConfig)
 		-> Arc<Self::Verifier>
 	{
 		Arc::new(PassThroughVerifier(false))
 	}
 
-	fn peer(&self, i: usize) -> &Peer<Self::Verifier> {
+	fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
 		&self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier>>> {
+	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier>>>)>(&mut self, closure: F ) {
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F ) {
 		closure(&mut self.peers);
 	}
 

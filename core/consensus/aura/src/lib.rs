@@ -130,22 +130,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)>;
 }
 
-impl CompatibleDigestItem for generic::DigestItem<primitives::H256, u64> {
-	/// Construct a digest item which is a slot number and a signature on the
-	/// hash.
-	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
-		generic::DigestItem::Seal(slot_number, signature)
-	}
-	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
-		match self {
-			generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
-			_ => None
-		}
-	}
-}
-
-impl CompatibleDigestItem for generic::DigestItem<primitives::H256, primitives::AuthorityId> {
+impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId> {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
 	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
@@ -161,17 +146,19 @@ impl CompatibleDigestItem for generic::DigestItem<primitives::H256, primitives::
 }
 
 /// Start the aura worker. This should be run in a tokio runtime.
-pub fn start_aura<B, C, E, SO, Error>(
+pub fn start_aura<B, C, E, I, SO, Error>(
 	config: Config,
 	client: Arc<C>,
+	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
 )
 	-> impl Future<Item=(),Error=()> where
 	B: Block,
-	C: Authorities<B, Error=Error> + BlockImport<B, Error=Error> + ChainHead<B>,
+	C: Authorities<B, Error=Error> + ChainHead<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
+	I: BlockImport<B, Error=Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
@@ -179,6 +166,7 @@ pub fn start_aura<B, C, E, SO, Error>(
 	let make_authorship = move || {
 		let config = config.clone();
 		let client = client.clone();
+		let block_import = block_import.clone();
 		let env = env.clone();
 		let sync_oracle = sync_oracle.clone();
 
@@ -240,7 +228,7 @@ pub fn start_aura<B, C, E, SO, Error>(
 					}
 				};
 
-				let block_import = client.clone();
+				let block_import = block_import.clone();
 				Either::A(proposal_work
 					.map(move |b| {
 						let (header, body) = b.deconstruct();
@@ -255,8 +243,8 @@ pub fn start_aura<B, C, E, SO, Error>(
 						let import_block = ImportBlock {
 							origin: BlockOrigin::Own,
 							header,
-							external_justification: Vec::new(),
-							post_runtime_digests: vec![item],
+							justification: Vec::new(),
+							post_digests: vec![item],
 							body: Some(body),
 							finalized: false,
 							auxiliary: Vec::new(),
@@ -301,7 +289,6 @@ enum CheckedHeader<H> {
 	Checked(H, u64, ed25519::Signature),
 }
 
-
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
@@ -343,15 +330,37 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 	}
 }
 
-/// A verifier for Aura blocks.
-pub struct AuraVerifier<C> {
-	config: Config,
-	client: Arc<C>,
+/// Extra verification for Aura blocks.
+pub trait ExtraVerification<B: Block>: Send + Sync {
+	/// Future that resolves when the block is verified or fails with error if not.
+	type Verified: IntoFuture<Item=(),Error=String>;
+
+	/// Do additional verification for this block.
+	fn verify(&self, header: &B::Header, body: Option<&[B::Extrinsic]>) -> Self::Verified;
 }
 
-impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
+/// No-op extra verification.
+#[derive(Debug, Clone, Copy)]
+pub struct NothingExtra;
+
+impl<B: Block> ExtraVerification<B> for NothingExtra {
+	type Verified = Result<(), String>;
+
+	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
+		Ok(())
+	}
+}
+/// A verifier for Aura blocks.
+pub struct AuraVerifier<C, E> {
+	config: Config,
+	client: Arc<C>,
+	extra: E,
+}
+
+impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 	C: Authorities<B> + BlockImport<B> + Send + Sync,
 	DigestItemFor<B>: CompatibleDigestItem,
+	E: ExtraVerification<B>,
 {
 	fn verify(
 		&self,
@@ -367,6 +376,8 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 		let authorities = self.client.authorities(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
+		let extra_verification = self.extra.verify(&header, body.as_ref().map(|x| &x[..]));
+
 		// we add one to allow for some small drift.
 		// FIXME: in the future, alter this queue to allow deferring of headers
 		// https://github.com/paritytech/substrate/issues/1019
@@ -377,11 +388,12 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 
 				debug!(target: "aura", "Checked {:?}; importing.", pre_header);
 
+				extra_verification.into_future().wait()?;
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
-					external_justification: Vec::new(),
-					post_runtime_digests: vec![item],
+					justification: Vec::new(),
+					post_digests: vec![item],
 					body,
 					finalized: false,
 					auxiliary: Vec::new(),
@@ -399,19 +411,18 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B, C> = BasicQueue<B, AuraVerifier<C>>;
+pub type AuraImportQueue<B, C, E> = BasicQueue<B, AuraVerifier<C, E>>;
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> AuraImportQueue<B, C> where
+pub fn import_queue<B, C, E>(config: Config, client: Arc<C>, extra: E) -> AuraImportQueue<B, C, E> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B> + Send + Sync,
+	C: Authorities<B> + BlockImport<B,Error=client::error::Error> + Send + Sync,
 	DigestItemFor<B>: CompatibleDigestItem,
+	E: ExtraVerification<B>,
 {
-	let verifier = Arc::new(AuraVerifier { config, client });
-	BasicQueue::new(verifier)
+	let verifier = Arc::new(AuraVerifier { config, client: client.clone(), extra, });
+	BasicQueue::new(verifier, client)
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -420,7 +431,7 @@ mod tests {
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
 	use runtime_primitives::traits::Block as BlockT;
-	use network::ProtocolConfig;
+	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::Keyring;
@@ -429,7 +440,7 @@ mod tests {
 
 	type Error = client::error::Error;
 
-	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock>;
+	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock, test_client::runtime::ClientWithApi>;
 
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);
@@ -458,12 +469,13 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<AuraVerifier<PeersClient>>>>,
+		peers: Vec<Arc<Peer<AuraVerifier<PeersClient, NothingExtra>, ()>>>,
 		started: bool
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersClient>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
+		type PeerData = ();
 
 		/// Create new test network with peers and given config.
 		fn from_config(_config: &ProtocolConfig) -> Self {
@@ -477,18 +489,18 @@ mod tests {
 			-> Arc<Self::Verifier>
 		{
 			let config = Config { local_key: None, slot_duration: SLOT_DURATION };
-			Arc::new(AuraVerifier { client, config })
+			Arc::new(AuraVerifier { client, config, extra: NothingExtra })
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::Verifier> {
+		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier>>> {
+		fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier>>>)>(&mut self, closure: F ) {
+		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 
@@ -533,6 +545,7 @@ mod tests {
 					local_key: Some(Arc::new(key.clone().into())),
 					slot_duration: SLOT_DURATION
 				},
+				client.clone(),
 				client,
 				environ.clone(),
 				DummyOracle,

@@ -17,9 +17,13 @@
 //! A `CodeExecutor` specialisation which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
 
+#![cfg_attr(feature = "benchmarks", feature(test))]
+
 extern crate node_runtime;
 #[macro_use] extern crate substrate_executor;
 #[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
+
+#[cfg(feature = "benchmarks")] extern crate test;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate sr_primitives as runtime_primitives;
@@ -32,6 +36,7 @@ extern crate node_runtime;
 #[cfg(test)] extern crate srml_timestamp as timestamp;
 #[cfg(test)] extern crate srml_treasury as treasury;
 #[cfg(test)] extern crate srml_contract as contract;
+#[cfg(test)] extern crate srml_grandpa as grandpa;
 #[cfg(test)] extern crate node_primitives;
 #[cfg(test)] extern crate parity_codec as codec;
 #[cfg(test)] extern crate sr_io as runtime_io;
@@ -62,7 +67,7 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, Event, Log};
+		SystemConfig, GrandpaConfig, Event, Log};
 	use wabt;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
@@ -230,10 +235,12 @@ mod tests {
 				transfer_fee: 0,
 				creation_fee: 0,
 				reclaim_rebate: 0,
+				_genesis_phantom_data: Default::default(),
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
+				_genesis_phantom_data: Default::default(),
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
@@ -247,6 +254,7 @@ mod tests {
 				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
+				_genesis_phantom_data: Default::default(),
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -255,24 +263,39 @@ mod tests {
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
 			upgrade_key: Some(Default::default()),
-		}.build_storage().unwrap())
+			grandpa: Some(GrandpaConfig {
+				authorities: vec![ // set these so no GRANDPA events fire when session changes
+					(Alice.to_raw_public().into(), 1),
+					(Bob.to_raw_public().into(), 1),
+					(Charlie.to_raw_public().into(), 1),
+				],
+				_genesis_phantom_data: Default::default(),
+			}),
+		}.build_storage().unwrap().0)
+	}
+
+	fn changes_trie_log(changes_root: Hash) -> Log {
+		Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root))
 	}
 
 	fn construct_block(
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
-		changes_root: Option<Hash>,
+		logs: Vec<Log>,
 		extrinsics: Vec<CheckedExtrinsic>
 	) -> (Vec<u8>, Hash) {
 		use trie::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
+		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter()
+			.map(Encode::encode))
+			.to_fixed_bytes()
+			.into();
 
 		let mut digest = generic::Digest::<Log>::default();
-		if let Some(changes_root) = changes_root {
-			digest.push(Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root)));
+		for item in logs {
+			digest.push(item);
 		}
 
 		let header = Header {
@@ -292,14 +315,16 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("978a3ff733a86638da39d36a349c693b5cf562bcc8db30fec6c2b6c40f925a9b").into()
+				hex!("df90128fe9ee27bd61d90308cc25ad262e518d4ba09e5077558be2389780d8e5").into()
 			} else {
-				hex!("7bbad534e3de3db3c8cda015c4e8ed8ba10dde7e3fca21f4fd4fbc686e6c1410").into()
+				hex!("3cb0654b6c47c6532108695327fc68e22f2e67a4b20029c3c9d05a285f9e80a2").into()
 			},
 			if support_changes_trie {
-				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
+				vec![changes_trie_log(
+					hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into(),
+				)]
 			} else {
-				None
+				vec![]
 			},
 			vec![
 				CheckedExtrinsic {
@@ -318,8 +343,14 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("7be30152ee2ee909047cffad5f0a28bf8c2b0a97c124b500aeac112f6917738e").into(),
-			None,
+			hex!("612d3e3c542b4ce62105f2f1fbc4fef1652d5ba38401795115042bee56a50752").into(),
+			vec![ // session changes here, so we add a grandpa change signal log.
+				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
+					(Keyring::One.to_raw_public().into(), 1),
+					(Keyring::Two.to_raw_public().into(), 1),
+					([3u8; 32].into(), 1),
+				]))
+			],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -341,8 +372,8 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("325a73726dc640af41becb42938e7152e218f130219c0695aae35b6a156f93f3").into(),
-			None,
+			hex!("17df8f360a4a1bd8d5dc23f05b044f5b14ece43555f97d2058ded47d5e7fb64d").into(),
+			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -449,6 +480,14 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::staking(staking::RawEvent::Reward(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
+						(Keyring::One.to_raw_public().into(), 1),
+						(Keyring::Two.to_raw_public().into(), 1),
+						([3u8; 32].into(), 1),
+					])),
 				},
 				EventRecord {
 					phase: Phase::Finalization,
@@ -623,8 +662,8 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("d68586d5098535e04ff7a12d71a9c9dc719960f318862e636e78a8e98cf4b8d4").into(),
-			None,
+			hex!("81f45b36d1c8f667ac948bc48f8fb61d12aae87d841b6303ab0320ca906d01d2").into(),
+			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -731,7 +770,7 @@ mod tests {
 		let mut t = new_test_ext(true);
 		Executor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0, true).0.unwrap();
 
-		assert!(t.storage_changes_root(1).is_some());
+		assert!(t.storage_changes_root(Default::default(), 0).is_some());
 	}
 
 	#[test]
@@ -739,6 +778,21 @@ mod tests {
 		let mut t = new_test_ext(true);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0).unwrap();
 
-		assert!(t.storage_changes_root(1).is_some());
+		assert!(t.storage_changes_root(Default::default(), 0).is_some());
+	}
+
+	#[cfg(feature = "benchmarks")]
+	mod benches {
+		use super::*;
+		use test::Bencher;
+
+		#[bench]
+		fn wasm_execute_block(b: &mut Bencher) {
+			b.iter(|| {
+				let mut t = new_test_ext(false);
+				WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(false).0).unwrap();
+				WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block2().0).unwrap();
+			});
+		}
 	}
 }

@@ -17,56 +17,8 @@
 //! Tests for the generic implementations of Extrinsic/Header/Block.
 
 use codec::{Decode, Encode};
-use substrate_primitives::{H256, H512};
-use super::{Digest, Header, DigestItem, UncheckedExtrinsic};
-
-type Block = super::Block<
-	Header<u64, ::traits::BlakeTwo256, DigestItem<H256, u32>>,
-	UncheckedExtrinsic<H256, u64, u64, ::Ed25519Signature>,
->;
-
-#[test]
-fn block_roundtrip_serialization() {
-	let block: Block = Block {
-		header: Header {
-			parent_hash: [0u8; 32].into(),
-			number: 100_000,
-			state_root: [1u8; 32].into(),
-			extrinsics_root: [2u8; 32].into(),
-			digest: Digest { logs: vec![
-				DigestItem::Other::<H256, u32>(vec![1, 2, 3]),
-				DigestItem::Other::<H256, u32>(vec![4, 5, 6]),
-			] },
-		},
-		extrinsics: vec![
-			UncheckedExtrinsic::new_signed(
-				0,
-				100,
-				[255u8; 32].into(),
-				H512::from([0u8; 64]).into()
-			),
-			UncheckedExtrinsic::new_signed(
-				100,
-				99,
-				[128u8; 32].into(),
-				H512::from([255u8; 64]).into()
-			)
-		]
-	};
-
-	{
-		let encoded = ::serde_json::to_vec(&block).unwrap();
-		let decoded: Block = ::serde_json::from_slice(&encoded).unwrap();
-
-		assert_eq!(block, decoded);
-	}
-	{
-		let encoded = block.encode();
-		let decoded = Block::decode(&mut &encoded[..]).unwrap();
-
-		assert_eq!(block, decoded);
-	}
-}
+use substrate_primitives::H256;
+use super::DigestItem;
 
 #[test]
 fn system_digest_item_encoding() {

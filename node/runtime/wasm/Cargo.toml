@@ -7,14 +7,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
-safe-mix = { version = "1.0", default-features = false}
+integer-sqrt = { version = "0.1.2" }
+safe-mix = { version = "1.0", default-features = false }
 parity-codec-derive = { version = "2.1" }
 parity-codec = { version = "2.1", default-features = false }
 substrate-primitives = { path = "../../../core/primitives", default-features = false }
-sr-api = { path = "../../../core/sr-api", default-features = false }
+substrate-client = { path = "../../../core/client", default-features = false }
 sr-std = { path = "../../../core/sr-std", default-features = false }
-sr-io = { path = "../../../core/sr-io", default-features = false }
 srml-support = { path = "../../../srml/support", default-features = false }
 srml-balances = { path = "../../../srml/balances", default-features = false }
 srml-consensus = { path = "../../../srml/consensus", default-features = false }
@@ -29,6 +28,7 @@ srml-system = { path = "../../../srml/system", default-features = false }
 srml-timestamp = { path = "../../../srml/timestamp", default-features = false }
 srml-treasury = { path = "../../../srml/treasury", default-features = false }
 srml-upgrade-key = { path = "../../../srml/upgrade-key", default-features = false }
+srml-grandpa = { path = "../../../srml/grandpa", default-features = false  }
 sr-version = { path = "../../../core/sr-version", default-features = false }
 node-primitives = { path = "../../primitives", default-features = false }
 
@@ -38,9 +38,9 @@ std = [
 	"safe-mix/std",
 	"parity-codec/std",
 	"substrate-primitives/std",
-	"sr-api/std",
+	"substrate-client/std",
 	"sr-std/std",
-	"sr-io/std",
+	"sr-primitives/std",
 	"srml-support/std",
 	"srml-balances/std",
 	"srml-consensus/std",
@@ -48,13 +48,13 @@ std = [
 	"srml-council/std",
 	"srml-democracy/std",
 	"srml-executive/std",
-	"sr-primitives/std",
 	"srml-session/std",
 	"srml-staking/std",
 	"srml-system/std",
 	"srml-timestamp/std",
 	"srml-treasury/std",
 	"srml-upgrade-key/std",
+	"srml-grandpa/std",
 	"sr-version/std",
 	"node-primitives/std",
 ]

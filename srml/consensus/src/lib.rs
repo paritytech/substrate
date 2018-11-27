@@ -25,10 +25,6 @@ extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 extern crate parity_codec;
 #[macro_use]
 extern crate parity_codec_derive;
@@ -79,7 +75,7 @@ pub type Log<T> = RawLog<
 >;
 
 /// A logs in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<SessionKey> {
 	/// Authorities set has been changed. Contains the new set of authorities.
@@ -130,7 +126,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			use codec::{Encode, KeyedVec};
 
 			let auth_count = config.authorities.len() as u32;

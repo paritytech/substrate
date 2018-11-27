@@ -27,12 +27,12 @@ members = [
 	"core/consensus/rhd",
 	"core/executor",
 	"core/finality-grandpa",
+	"core/finality-grandpa/primitives",
 	"core/keyring",
 	"core/network",
 	"core/primitives",
 	"core/rpc",
 	"core/rpc-servers",
-	"core/sr-api",
 	"core/sr-io",
 	"core/sr-sandbox",
 	"core/sr-std",
@@ -41,7 +41,6 @@ members = [
 	"core/transaction-pool/graph",
 	"srml/support",
 	"srml/support/procedural",
-	"srml/support/procedural/tests", # TODO switch to examples
 	"srml/support/procedural/tools",
 	"srml/assets",
 	"srml/balances",
@@ -51,6 +50,7 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
+	"srml/grandpa",
 	"srml/metadata",
 	"core/sr-primitives",
 	"srml/session",
@@ -79,6 +79,7 @@ exclude = [
 	"core/executor/wasm",
 	"pwasm-alloc",
 	"core/test-runtime/wasm",
+	"test-utils/chain-spec-builder"
 ]
 
 [badges]

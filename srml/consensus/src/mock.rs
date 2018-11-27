@@ -28,7 +28,7 @@ impl_outer_origin!{
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 impl Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
@@ -50,11 +50,12 @@ impl system::Trait for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(GenesisConfig::<Test>{
 		code: vec![],
 		authorities,
-	}.build_storage().unwrap());
+		_genesis_phantom_data: Default::default(),
+	}.build_storage().unwrap().0);
 	t.into()
 }
 

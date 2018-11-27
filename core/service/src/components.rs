@@ -16,21 +16,20 @@
 
 //! Substrate service components.
 
-use std::sync::Arc;
-use std::marker::PhantomData;
-use std::ops::Deref;
+use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
-use chain_spec::ChainSpec;
+use chain_spec::{ChainSpec, Properties};
 use client_db;
-use client::{self, Client};
-use {error, Service};
+use client::{self, Client, runtime_api::{TaggedTransactionQueue, Metadata}};
+use {error, Service, RpcConfig, maybe_start_server, TransactionPoolAdapter};
 use network::{self, OnDemand, import_queue::ImportQueue};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
+use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage, generic::SignedBlock};
 use config::Configuration;
-use primitives::{Blake2Hasher};
+use primitives::{Blake2Hasher, H256};
+use rpc;
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -70,10 +69,10 @@ pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
 >;
 
 /// Full client type for a factory.
-pub type FullClient<F> = Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block>;
+pub type FullClient<F> = Client<FullBackend<F>, FullExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>;
 
 /// Light client type for a factory.
-pub type LightClient<F> = Client<LightBackend<F>, LightExecutor<F>, <F as ServiceFactory>::Block>;
+pub type LightClient<F> = Client<LightBackend<F>, LightExecutor<F>, <F as ServiceFactory>::Block, <F as ServiceFactory>::RuntimeApi>;
 
 /// `ChainSpec` specialization for a factory.
 pub type FactoryChainSpec<F> = ChainSpec<<F as ServiceFactory>::Genesis>;
@@ -97,7 +96,8 @@ pub type FactoryFullConfiguration<F> = Configuration<<F as ServiceFactory>::Conf
 pub type ComponentClient<C> = Client<
 	<C as Components>::Backend,
 	<C as Components>::Executor,
-	FactoryBlock<<C as Components>::Factory>
+	FactoryBlock<<C as Components>::Factory>,
+	<C as Components>::RuntimeApi,
 >;
 
 /// Block type for `Components`
@@ -116,12 +116,116 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+/// Something that can start the RPC service.
+pub trait StartRPC<C: Components> {
+	fn start_rpc(
+		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
+		chain_name: String,
+		impl_name: &'static str,
+		impl_version: &'static str,
+		rpc_http: Option<SocketAddr>,
+		rpc_ws: Option<SocketAddr>,
+		properties: Properties,
+		task_executor: TaskExecutor,
+		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+	) -> Result<(Option<rpc::HttpServer>, Option<rpc::WsServer>), error::Error>;
+}
+
+impl<T: Components> StartRPC<Self> for T where
+	T::RuntimeApi: Metadata<ComponentBlock<T>>,
+	for<'de> SignedBlock<ComponentBlock<T>>: ::serde::Deserialize<'de>,
+{
+	fn start_rpc(
+		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
+		chain_name: String,
+		impl_name: &'static str,
+		impl_version: &'static str,
+		rpc_http: Option<SocketAddr>,
+		rpc_ws: Option<SocketAddr>,
+		properties: Properties,
+		task_executor: TaskExecutor,
+		transaction_pool: Arc<TransactionPool<T::TransactionPoolApi>>,
+	) -> Result<(Option<rpc::HttpServer>, Option<rpc::WsServer>), error::Error> {
+		let rpc_config = RpcConfig { properties, chain_name, impl_name, impl_version };
+
+		let handler = || {
+			let client = client.clone();
+			let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
+			let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
+			let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
+			let author = rpc::apis::author::Author::new(
+				client.clone(), transaction_pool.clone(), subscriptions
+			);
+			rpc::rpc_handler::<ComponentBlock<T>, ComponentExHash<T>, _, _, _, _>(
+				state,
+				chain,
+				author,
+				rpc_config.clone(),
+			)
+		};
+
+		Ok((
+			maybe_start_server(rpc_http, |address| rpc::start_http(address, handler()))?,
+			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, handler()))?,
+		))
+	}
+}
+
+/// Something that can create an instance of `network::Params`.
+pub trait CreateNetworkParams<C: Components> {
+	fn create_network_params<S>(
+		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
+		roles: network::config::Roles,
+		network_config: network::config::NetworkConfiguration,
+		on_demand: Option<Arc<OnDemand<FactoryBlock<C::Factory>, NetworkService<C::Factory>>>>,
+		transaction_pool_adapter: TransactionPoolAdapter<C>,
+		specialization: S,
+	) -> network::config::Params<ComponentBlock<C>, S, ComponentExHash<C>>;
+}
+
+impl<T: Components> CreateNetworkParams<Self> for T where
+	T::RuntimeApi: TaggedTransactionQueue<ComponentBlock<T>>
+{
+	fn create_network_params<S>(
+		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
+		roles: network::config::Roles,
+		network_config: network::config::NetworkConfiguration,
+		on_demand: Option<Arc<OnDemand<FactoryBlock<T::Factory>, NetworkService<T::Factory>>>>,
+		transaction_pool_adapter: TransactionPoolAdapter<T>,
+		specialization: S,
+	) -> network::config::Params<ComponentBlock<T>, S, ComponentExHash<T>> {
+		network::config::Params {
+			config: network::config::ProtocolConfig { roles },
+			network_config,
+			chain: client,
+			on_demand: on_demand.map(|d| d as Arc<network::OnDemandService<ComponentBlock<T>>>),
+			transaction_pool: Arc::new(transaction_pool_adapter),
+			specialization,
+		}
+	}
+}
+
+/// The super trait that combines all required traits a `Service` needs to implement.
+pub trait ServiceTrait<C: Components>:
+	Deref<Target = Service<C>>
+	+ Send
+	+ Sync
+	+ 'static
+	+ StartRPC<C>
+	+ CreateNetworkParams<C>
+{}
+impl<C: Components, T> ServiceTrait<C> for T where
+	T: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + CreateNetworkParams<C>
+{}
+
 /// A collection of types and methods to build a service on top of the substrate service.
 pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
-	type Block: BlockT;
+	type Block: BlockT<Hash=H256>;
+	/// The type that implements the runtime API.
+	type RuntimeApi: Send + Sync;
 	/// Network protocol extensions.
-	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
+	type NetworkProtocol: network::specialization::NetworkSpecialization<Self::Block>;
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.
@@ -133,9 +237,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Other configuration for service members.
 	type Configuration: Default;
 	/// Extended full service type.
-	type FullService: Deref<Target = Service<FullComponents<Self>>> + Send + Sync + 'static;
+	type FullService: ServiceTrait<FullComponents<Self>>;
 	/// Extended light service type.
-	type LightService: Deref<Target = Service<LightComponents<Self>>> + Send + Sync + 'static;
+	type LightService: ServiceTrait<LightComponents<Self>>;
 	/// ImportQueue for full client
 	type FullImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
 	/// ImportQueue for light clients
@@ -162,7 +266,7 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// ImportQueue for a full client
 	fn build_full_import_queue(
-		config: &FactoryFullConfiguration<Self>,
+		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<FullClient<Self>>
 	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
@@ -177,7 +281,7 @@ pub trait ServiceFactory: 'static + Sized {
 
 	/// ImportQueue for a light client
 	fn build_light_import_queue(
-		config: &FactoryFullConfiguration<Self>,
+		config: &mut FactoryFullConfiguration<Self>,
 		_client: Arc<LightClient<Self>>
 	) -> Result<Self::LightImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
@@ -192,7 +296,7 @@ pub trait ServiceFactory: 'static + Sized {
 }
 
 /// A collection of types and function to generalise over full / light client type.
-pub trait Components: 'static {
+pub trait Components: Sized + 'static {
 	/// Associated service factory.
 	type Factory: ServiceFactory;
 	/// Client backend.
@@ -204,6 +308,12 @@ pub trait Components: 'static {
 		Hash = <<Self::Factory as ServiceFactory>::Block as BlockT>::Hash,
 		Block = FactoryBlock<Self::Factory>
 	>;
+	/// The type that implements the runtime API.
+	type RuntimeApi: Send + Sync;
+	/// A type that can start the RPC.
+	type RPC: StartRPC<Self>;
+	/// A type that can create the network params.
+	type CreateNetworkParams: CreateNetworkParams<Self>;
 
 	/// Our Import Queue
 	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
@@ -212,11 +322,13 @@ pub trait Components: 'static {
 	fn build_client(
 		config: &FactoryFullConfiguration<Self::Factory>,
 		executor: CodeExecutor<Self::Factory>,
-	)
-		-> Result<(
+	) -> Result<
+		(
 			Arc<ComponentClient<Self>>,
 			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
-		), error::Error>;
+		),
+		error::Error
+	>;
 
 	/// Create extrinsic pool.
 	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
@@ -224,7 +336,7 @@ pub trait Components: 'static {
 
 	/// instance of import queue for clients
 	fn build_import_queue(
-		config: &FactoryFullConfiguration<Self::Factory>,
+		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error>;
 }
@@ -232,6 +344,35 @@ pub trait Components: 'static {
 /// A struct that implement `Components` for the full client.
 pub struct FullComponents<Factory: ServiceFactory> {
 	_factory: PhantomData<Factory>,
+	service: Service<FullComponents<Factory>>,
+}
+
+impl<Factory: ServiceFactory> FullComponents<Factory> {
+	pub fn new(
+		config: FactoryFullConfiguration<Factory>,
+		task_executor: TaskExecutor
+	) -> Result<Self, error::Error> {
+		Ok(
+			Self {
+				_factory: Default::default(),
+				service: Service::new(config, task_executor)?,
+			}
+		)
+	}
+}
+
+impl<Factory: ServiceFactory> Deref for FullComponents<Factory> {
+	type Target = Service<Self>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.service
+	}
+}
+
+impl<Factory: ServiceFactory> DerefMut for FullComponents<Factory> {
+	fn deref_mut(&mut self) -> &mut Service<Self> {
+		&mut self.service
+	}
 }
 
 impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
@@ -240,6 +381,9 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type Backend = FullBackend<Factory>;
 	type TransactionPoolApi = <Factory as ServiceFactory>::FullTransactionPoolApi;
 	type ImportQueue = Factory::FullImportQueue;
+	type RuntimeApi = Factory::RuntimeApi;
+	type RPC = Factory::FullService;
+	type CreateNetworkParams = Factory::FullService;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -271,7 +415,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	}
 
 	fn build_import_queue(
-		config: &FactoryFullConfiguration<Self::Factory>,
+		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_full_import_queue(config, client)
@@ -281,6 +425,29 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 /// A struct that implement `Components` for the light client.
 pub struct LightComponents<Factory: ServiceFactory> {
 	_factory: PhantomData<Factory>,
+	service: Service<LightComponents<Factory>>,
+}
+
+impl<Factory: ServiceFactory> LightComponents<Factory> {
+	pub fn new(
+		config: FactoryFullConfiguration<Factory>,
+		task_executor: TaskExecutor
+	) -> Result<Self, error::Error> {
+		Ok(
+			Self {
+				_factory: Default::default(),
+				service: Service::new(config, task_executor)?,
+			}
+		)
+	}
+}
+
+impl<Factory: ServiceFactory> Deref for LightComponents<Factory> {
+	type Target = Service<Self>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.service
+	}
 }
 
 impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
@@ -289,16 +456,19 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type Backend = LightBackend<Factory>;
 	type TransactionPoolApi = <Factory as ServiceFactory>::LightTransactionPoolApi;
 	type ImportQueue = <Factory as ServiceFactory>::LightImportQueue;
+	type RuntimeApi = Factory::RuntimeApi;
+	type RPC = Factory::LightService;
+	type CreateNetworkParams = Factory::LightService;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
 	)
-		-> Result<(
-			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>,
-			NetworkService<Self::Factory>>>>
-		), error::Error>
+		-> Result<
+			(
+				Arc<ComponentClient<Self>>,
+				Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+			), error::Error>
 	{
 		let db_settings = client_db::DatabaseSettings {
 			cache_size: None,
@@ -307,7 +477,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher>(executor));
+		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher, _, _, _>(light_blockchain.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
 		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;
@@ -321,7 +491,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	}
 
 	fn build_import_queue(
-		config: &FactoryFullConfiguration<Self::Factory>,
+		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)

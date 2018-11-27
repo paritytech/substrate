@@ -20,10 +20,6 @@
 
 #[cfg(test)]
 #[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]
@@ -295,7 +291,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+	#[derive(Clone, Eq, PartialEq)]
 	pub struct Runtime;
 	impl system::Trait for Runtime {
 		type Origin = Origin;
@@ -322,7 +318,7 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			transaction_base_fee: 10,
@@ -331,7 +327,8 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
+			_genesis_phantom_data: Default::default(),
+		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69.into()));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
@@ -344,8 +341,8 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
-		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
 		t.into()
 	}
 

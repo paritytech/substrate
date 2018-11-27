@@ -19,9 +19,13 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Deserializer};
+#[cfg(feature = "std")]
+use codec::Decode;
 use rstd::prelude::*;
 use codec::Codec;
-use traits::{self, Member, Block as BlockT, Header as HeaderT};
+use traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
 use ::Justification;
 
 /// Something to identify a block.
@@ -59,17 +63,28 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 
 /// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic> {
+pub struct Block<Header, Extrinsic: MaybeSerialize> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
+// TODO: Remove Deserialize for Block once RPC no longer needs it #1098
+#[cfg(feature = "std")]
+impl<'a, Header: 'a, Extrinsic: 'a + MaybeSerialize> Deserialize<'a> for Block<Header, Extrinsic> where
+	Block<Header, Extrinsic>: Decode,
+{
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
+	}
+}
+
+impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
 	Extrinsic: Member + Codec + traits::Extrinsic,
@@ -94,12 +109,25 @@ where
 
 /// Abstraction over a substrate block and justification.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct SignedBlock<H, E> {
+pub struct SignedBlock<Block> {
 	/// Full block.
-	pub block: Block<H, E>,
+	pub block: Block,
 	/// Block justification.
 	pub justification: Justification,
+}
+
+// TODO: Remove Deserialize for SignedBlock once RPC no longer needs it #1098
+#[cfg(feature = "std")]
+impl<'a, Block: BlockT,> Deserialize<'a> for SignedBlock<Block> where
+	Block::Header: 'a,
+	Block::Extrinsic: 'a + Codec + MaybeSerialize,
+	SignedBlock<Block>: Decode,
+{
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
+	}
 }

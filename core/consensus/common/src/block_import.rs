@@ -1,7 +1,25 @@
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Block import helpers.
 
 use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, DigestItemFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, DigestItemFor};
 use runtime_primitives::Justification;
+use std::borrow::Cow;
 
 /// Block import result.
 #[derive(Debug)]
@@ -44,7 +62,7 @@ pub struct ImportBlock<Block: BlockT> {
 	///
 	/// Consensus engines which alter the header (by adding post-runtime digests)
 	/// should strip those off in the initial verification process and pass them
-	/// via the `post_runtime_digests` field. During block authorship, they should
+	/// via the `post_digests` field. During block authorship, they should
 	/// not be pushed to the header directly.
 	///
 	/// The reason for this distinction is so the header can be directly
@@ -52,10 +70,10 @@ pub struct ImportBlock<Block: BlockT> {
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
 	/// Justification provided for this block from the outside:.
-	pub external_justification: Justification,
+	pub justification: Justification,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
-	pub post_runtime_digests: Vec<DigestItemFor<Block>>,
+	pub post_digests: Vec<DigestItemFor<Block>>,
 	/// Block's body
 	pub body: Option<Vec<Block::Extrinsic>>,
 	/// Is this block finalized already?
@@ -82,12 +100,30 @@ impl<Block: BlockT> ImportBlock<Block> {
 		(
 			self.origin,
 			self.header,
-			self.external_justification,
-			self.post_runtime_digests,
+			self.justification,
+			self.post_digests,
 			self.body,
 			self.finalized,
 			self.auxiliary,
 		)
+	}
+
+	/// Get a handle to full header (with post-digests applied).
+	pub fn post_header(&self) -> Cow<Block::Header> {
+		use runtime_primitives::traits::Digest;
+
+		if self.post_digests.is_empty() {
+			Cow::Borrowed(&self.header)
+		} else {
+			Cow::Owned({
+				let mut hdr = self.header.clone();
+				for digest_item in &self.post_digests {
+					hdr.digest_mut().push(digest_item.clone());
+				}
+
+				hdr
+			})
+		}
 	}
 }
 
