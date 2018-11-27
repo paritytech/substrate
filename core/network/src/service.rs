@@ -126,6 +126,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));
 	}
 
+	/// Send a consensus message through the gossip
+	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>) {
+		self.handler.gossip_consensus_message(
+			&mut NetSyncIo::new(&self.network, self.protocol_id),
+			topic,
+			message)
+	}
 	/// Execute a closure with the chain-specific network specialization.
 	pub fn with_spec<F, U>(&self, f: F) -> U
 		where F: FnOnce(&mut S, &mut Context<B>) -> U
