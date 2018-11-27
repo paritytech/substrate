@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::{TokenStream, Span};
-use syn::{Result, Ident};
+use syn::{Result, Ident, FnDecl, parse_quote, Type, FnArg};
 use quote::quote;
 use std::env;
 
@@ -51,4 +51,48 @@ pub fn generate_crate_access(unique_id: &'static str) -> TokenStream {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
 		quote!( self::#mod_name::sr_api_client )
 	}.into()
+}
+
+/// Generates the name of the module that contains the trait declaration for the runtime.
+pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
+	Ident::new(&format!("runtime_decl_for_{}", trait_.to_string()), Span::call_site())
+}
+
+/// Fold the given `FnDecl` to make it usable on the client side.
+pub fn fold_fn_decl_for_client_side(
+	mut input: FnDecl,
+	block_id: &TokenStream,
+	crate_: &TokenStream
+) -> FnDecl {
+	// Add `&` to all parameter types.
+	// TODO: Do not enforce `&`.
+	input.inputs
+		.iter_mut()
+		.filter_map(|i| match i {
+			FnArg::Captured(ref mut arg) => Some(&mut arg.ty),
+			_ => None,
+		})
+		.filter_map(|i| match i {
+			Type::Reference(_) => None,
+			r => Some(r),
+		})
+		.for_each(|i| *i = parse_quote!( &#i ));
+
+	// Add `&self, at:& BlockId` as parameters to each function at the beginning.
+	input.inputs.insert(0, parse_quote!( at: &#block_id ));
+	input.inputs.insert(0, parse_quote!( &self ));
+
+	// Wrap the output in a `Result`
+	input.output = {
+		let generate_result = |ty: &Type| {
+			parse_quote!( -> ::std::result::Result<#ty, #crate_::error::Error> )
+		};
+
+		match &input.output {
+			syn::ReturnType::Default => generate_result(&parse_quote!( () )),
+			syn::ReturnType::Type(_, ref ty) => generate_result(&ty),
+		}
+	};
+
+	input
 }

@@ -35,8 +35,6 @@ use error;
 pub use runtime_version::RuntimeVersion;
 
 mod core;
-#[macro_use]
-mod macros;
 mod traits;
 
 /// Something that can be constructed to a runtime api.
@@ -115,9 +113,3 @@ pub mod id {
 
 pub use self::core::*;
 pub use self::traits::*;
-
-/// The runtime apis that should be implemented for the `Runtime`.
-pub mod runtime {
-	pub use super::core::runtime::Core;
-	pub use super::traits::runtime::*;
-}

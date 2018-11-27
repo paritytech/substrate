@@ -44,7 +44,8 @@ pub trait Core<Block: BlockT>: 'static + Send + Sync + ConstructRuntimeApi<Block
 	) -> Result<()>;
 }
 
-pub mod runtime {
+#[doc(hidden)]
+pub mod runtime_decl_for_Core {
 	use super::*;
 
 	/// The `Core` api trait that is mandantory for each runtime.

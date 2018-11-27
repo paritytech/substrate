@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Macros for declaring and implementing runtime apis.
-
-use utils::{unwrap_or_error, generate_crate_access, generate_hidden_includes};
+use utils::{
+	unwrap_or_error, generate_crate_access, generate_hidden_includes,
+	generate_runtime_mod_name_for_trait, fold_fn_decl_for_client_side
+};
 
 use proc_macro;
 use proc_macro2::{Span, TokenStream};
@@ -24,7 +25,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Token, Type, ItemImpl, MethodSig, FnArg, Path,
+	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, MethodSig, FnArg, Path,
 	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
 	fold::{self, Fold}, FnDecl, parse_quote
 };
@@ -43,7 +44,7 @@ impl Parse for RuntimeApiImpls {
 	fn parse(input: ParseStream) -> Result<Self> {
 		let mut impls = Vec::new();
 
-		while input.peek(Token![impl]) {
+		while !input.is_empty() {
 			impls.push(ItemImpl::parse(input)?);
 		}
 
@@ -149,7 +150,7 @@ fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, 
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
-		let impl_trait = extend_with_runtime_path(extract_impl_trait(impl_)?.clone());
+		let impl_trait = extend_with_runtime_decl_path(extract_impl_trait(impl_)?.clone());
 
 		for item in &impl_.items {
 			match item {
@@ -340,10 +341,21 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 	))
 }
 
-/// Extend the given trait path with `runtime`.
-/// So, `my_api::MyApi` will be transformed to `my_api::runtime::MyApi`.
-fn extend_with_runtime_path(mut trait_: Path) -> Path {
-	let runtime = Ident::new("runtime", Span::call_site());
+/// Extend the given trait path with module that contains the declaration of the trait for the
+/// runtime.
+fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
+	let runtime = {
+		let trait_name = &trait_
+			.segments
+			.last()
+			.as_ref()
+			.expect("Trait path should always contain at least one item; qed")
+			.value()
+			.ident;
+
+		generate_runtime_mod_name_for_trait(trait_name)
+	};
+
 	let pos = trait_.segments.len() - 1;
 	trait_.segments.insert(pos, runtime.clone().into());
 	trait_
@@ -358,7 +370,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	for impl_ in impls.iter() {
 		let mut impl_ = impl_.clone();
 		let trait_ = extract_impl_trait(&impl_)?.clone();
-		let trait_ = extend_with_runtime_path(trait_);
+		let trait_ = extend_with_runtime_decl_path(trait_);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impls_prepared.push(impl_);
@@ -390,39 +402,12 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		fold::fold_type_path(self, new_ty_path)
 	}
 
-	fn fold_fn_decl(&mut self, mut input: FnDecl) -> FnDecl {
-		// Add `&` to all parameter types.
-		// TODO: Do not enforce `&`.
-		input.inputs
-			.iter_mut()
-			.filter_map(|i| match i {
-				FnArg::Captured(ref mut arg) => Some(&mut arg.ty),
-				_ => None,
-			})
-			.filter_map(|i| match i {
-				Type::Reference(_) => None,
-				r => Some(r),
-			})
-			.for_each(|i| *i = parse_quote!( &#i ));
-
-		// Add `&self, at:& BlockId` as parameters to each function at the beginning.
-		let block_id = self.node_block_id;
-		input.inputs.insert(0, parse_quote!( at: &#block_id ));
-		input.inputs.insert(0, parse_quote!( &self ));
-
-		// Wrap the output in a `Result`
-		input.output = {
-			let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-
-			let generate_result = |ty: &Type| {
-				parse_quote!( -> ::std::result::Result<#ty, #c::error::Error> )
-			};
-
-			match &input.output {
-				syn::ReturnType::Default => generate_result(&parse_quote!( () )),
-				syn::ReturnType::Type(_, ref ty) => generate_result(&ty),
-			}
-		};
+	fn fold_fn_decl(&mut self, input: FnDecl) -> FnDecl {
+		let input = fold_fn_decl_for_client_side(
+			input,
+			&self.node_block_id,
+			&generate_crate_access(HIDDEN_INCLUDES_ID)
+		);
 
 		fold::fold_fn_decl(self, input)
 	}
