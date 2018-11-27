@@ -137,7 +137,7 @@ where
 	/// Apply or prune any pending transitions. Provide a closure that can be used to check for the
 	/// finalized block with given number.
 	///
-	/// When the set has changed, the return value will be `Ok(Some((H, N)))` which is the cnaonical
+	/// When the set has changed, the return value will be `Ok(Some((H, N)))` which is the canonical
 	/// block where the set last changed.
 	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
 		-> Result<Status<H, N>, E>
