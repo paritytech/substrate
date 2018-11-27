@@ -28,9 +28,11 @@ use substrate_service::{
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
+use consensus_common::offline_tracker::OfflineTracker;
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
+use parking_lot::RwLock;
 use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
@@ -99,6 +101,12 @@ construct_service_factory! {
 				}
 				if !service.config.custom.grandpa_authority_only {
 					info!("Using authority key {}", key.public());
+					let proposer = Arc::new(substrate_service::ProposerFactory {
+						client: service.client(),
+						transaction_pool: service.transaction_pool(),
+						offline: Arc::new(RwLock::new(OfflineTracker::new())),
+						force_delay: 0 // FIXME: allow this to be configured https://github.com/paritytech/substrate/issues/1170
+					});
 					executor.spawn(start_aura(
 						AuraConfig {
 							local_key: Some(key),
@@ -106,7 +114,7 @@ construct_service_factory! {
 						},
 						service.client(),
 						block_import.clone(),
-						service.proposer(),
+						proposer,
 						service.network(),
 					));
 				}
