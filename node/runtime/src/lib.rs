@@ -66,8 +66,6 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
 use grandpa::fg_primitives::{self, ScheduledChange, id::*};
-#[cfg(feature = "std")]
-use node_primitives::Block as GBlock;
 use client::{
 	block_builder::api as block_builder_api, runtime_api::{self as client_api, id::*}
 };
@@ -77,8 +75,6 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{
 	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, ProvideInherent
 };
-#[cfg(feature = "std")]
-use substrate_primitives::AuthorityId;
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
