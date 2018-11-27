@@ -24,6 +24,7 @@ substrate-service = { path = "../../core/service" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-network = { path = "../../core/network" }
 substrate-consensus-aura = { path = "../../core/consensus/aura" }
+substrate-consensus-common = { path = "../../core/consensus/common" }
 substrate-finality-grandpa = { path = "../../core/finality-grandpa" }
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
