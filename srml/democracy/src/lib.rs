@@ -114,12 +114,9 @@ decl_module! {
 
 		/// Start a referendum.
 		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
-			let public_props = Self::public_props();
-			let mut public_props_into_iter = public_props.into_iter();
-
 			// Only allow starting a referendum for a given proposal if the proposal exists.
 			// Alternatively the council may start referendum directly by calling `internal_start_referendum`
-			if let Some((prop_index, _, _)) = public_props_into_iter.find(|ref v| *proposal == v.1) {
+			if let Some((prop_index, _, _)) = Self::public_props().into_iter().find(|ref v| *proposal == v.1) {
 				if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
 					// Emit event that proposal has been added to Table of Referenda
 					Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
@@ -237,10 +234,7 @@ impl<T: Trait> Module<T> {
 
 	/// Start a referendum. Can be called directly by the council.
 	pub fn internal_start_referendum(proposal: T::Proposal, vote_threshold: VoteThreshold) -> result::Result<ReferendumIndex, &'static str> {
-		let public_props = Self::public_props();
-		let mut public_props_into_iter = public_props.into_iter();
-
-		if let Some((prop_index, _, _)) = public_props_into_iter.find(|ref v| proposal == v.1) {
+		if let Some((prop_index, _, _)) = Self::public_props().into_iter().find(|ref v| proposal == v.1) {
 			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
 				// Emit event that proposal has been added to Table of Referenda
 				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
