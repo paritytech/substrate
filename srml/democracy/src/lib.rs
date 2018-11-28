@@ -67,15 +67,15 @@ decl_module! {
 			value: <T::Balance as HasCompact>::Type
 		) -> Result {
 			let who = ensure_signed(origin)?;
-			let value = value.into();
+			let deposit = value.into();
 
-			ensure!(value >= Self::minimum_deposit(), "value too low");
-			<balances::Module<T>>::reserve(&who, value)
+			ensure!(deposit >= Self::minimum_deposit(), "deposit too low");
+			<balances::Module<T>>::reserve(&who, deposit)
 				.map_err(|_| "proposer's balance too low")?;
 
 			let index = Self::public_prop_count();
 			<PublicPropCount<T>>::put(index + 1);
-			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
+			<DepositOf<T>>::insert(index, (deposit, vec![who.clone()]));
 
 			let mut props = Self::public_props();
 			props.push((index, (*proposal).clone(), who));
@@ -86,13 +86,13 @@ decl_module! {
 		/// Propose a sensitive action to be taken.
 		fn second(origin, proposal: Compact<PropIndex>) -> Result {
 			let who = ensure_signed(origin)?;
-			let proposal: PropIndex = proposal.into();
-			let mut deposit = Self::deposit_of(proposal)
+			let index: PropIndex = proposal.into();
+			let mut deposit = Self::deposit_of(index)
 				.ok_or("can only second an existing proposal")?;
 			<balances::Module<T>>::reserve(&who, deposit.0)
 				.map_err(|_| "seconder's balance too low")?;
 			deposit.1.push(who);
-			<DepositOf<T>>::insert(proposal, deposit);
+			<DepositOf<T>>::insert(index, deposit);
 			Ok(())
 		}
 
@@ -101,6 +101,7 @@ decl_module! {
 		fn vote(origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) -> Result {
 			let who = ensure_signed(origin)?;
 			let ref_index = ref_index.into();
+			// TODO - should we only allow voting after we also check that the data mapped to the ref_index in `ReferendumInfoOf` is valid
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 			ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
 					"transactor must have balance to signal approval.");
@@ -113,11 +114,24 @@ decl_module! {
 
 		/// Start a referendum.
 		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
-			Self::inject_referendum(
-				<system::Module<T>>::block_number() + Self::voting_period(),
-				*proposal,
-				vote_threshold
-			).map(|_| ())
+			let public_props = Self::public_props();
+			let mut public_props_into_iter = public_props.into_iter();
+
+			// Only allow starting a referendum for a given proposal if the proposal exists.
+			// Alternatively the council may start referendum directly by calling `internal_start_referendum`
+			if let Some((prop_index, _, _)) = public_props_into_iter.find(|ref v| *proposal == v.1) {
+				if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
+					// Emit event that proposal has been added to Table of Referenda
+					Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
+				}
+				Self::inject_referendum(
+					<system::Module<T>>::block_number() + Self::voting_period(),
+					*proposal,
+					vote_threshold
+				).map(|_| ())
+			} else {
+				Err("Cannot start referendum for given proposal if the proposal does not exist, unless called directly by council")?
+			}
 		}
 
 		/// Remove a referendum.
@@ -223,6 +237,15 @@ impl<T: Trait> Module<T> {
 
 	/// Start a referendum. Can be called directly by the council.
 	pub fn internal_start_referendum(proposal: T::Proposal, vote_threshold: VoteThreshold) -> result::Result<ReferendumIndex, &'static str> {
+		let public_props = Self::public_props();
+		let mut public_props_into_iter = public_props.into_iter();
+
+		if let Some((prop_index, _, _)) = public_props_into_iter.find(|ref v| proposal == v.1) {
+			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
+				// Emit event that proposal has been added to Table of Referenda
+				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
+			}
+		}
 		<Module<T>>::inject_referendum(<system::Module<T>>::block_number() + <Module<T>>::voting_period(), proposal, vote_threshold)
 	}
 
@@ -463,7 +486,7 @@ mod tests {
 	fn proposal_with_deposit_below_minimum_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_noop!(propose_set_balance(1, 2, 0), "value too low");
+			assert_noop!(propose_set_balance(1, 2, 0), "deposit too low");
 		});
 	}
 
@@ -481,6 +504,36 @@ mod tests {
 			System::set_block_number(1);
 			assert_ok!(propose_set_balance(2, 2, 11));
 			assert_noop!(Democracy::second(Origin::signed(1), 0.into()), "seconder\'s balance too low");
+		});
+	}
+
+	#[test]
+	fn voter_voting_with_zero_balance_should_not_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			assert_ok!(propose_set_balance(1, 2, 2));
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			System::set_block_number(2);
+			assert_eq!(Balances::total_balance(&1), 10);
+			assert_eq!(Balances::total_balance(&50), 0);
+			assert_noop!(Democracy::vote(Origin::signed(50), 0.into(), true), "transactor must have balance to signal approval.");
+		});
+	}
+
+	#[test]
+	fn voter_voting_with_smallest_balance_above_zero_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			assert_ok!(propose_set_balance(1, 2, 10));
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			System::set_block_number(2);
+			assert_eq!(Balances::total_balance(&1), 10);
+			// Slash Account ID's #1's balance from 10 to smallest balance possible of 1
+			assert_eq!(Balances::slash(&1, 9), None);
+			assert_eq!(Balances::total_balance(&1), 1);
+			assert_ok!(Democracy::vote(Origin::signed(1), 0.into(), true));
 		});
 	}
 
@@ -506,6 +559,28 @@ mod tests {
 			System::set_block_number(3);
 			assert_ok!(Democracy::vote(Origin::signed(1), 2.into(), true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+		});
+	}
+
+	#[test]
+	fn starting_referendum_before_proposing_proposal_should_not_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			assert_eq!(
+				Democracy::start_referendum(Box::new(set_balance_proposal(2)), VoteThreshold::SuperMajorityApprove),
+				Err("Cannot start referendum for given proposal if the proposal does not exist, unless called directly by council")
+			);
+		});
+	}
+
+	#[test]
+	fn internally_starting_referendum_before_proposing_proposal_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			assert_eq!(
+				Democracy::internal_start_referendum(set_balance_proposal(2), VoteThreshold::SuperMajorityApprove),
+				Ok(0)
+			);
 		});
 	}
 
