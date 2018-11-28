@@ -269,9 +269,9 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 
 	Ok(quote!(
 		/// Implements all runtime apis for the client side.
-		#[cfg(feature = "std")]
+		#[cfg(any(feature = "std", test))]
 		pub struct RuntimeApi {
-			call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<#block>>,
+			call: ::std::ptr::NonNull<#crate_::runtime_api::CallApiAt<#block>>,
 			commit_on_success: ::std::cell::RefCell<bool>,
 			initialised_block: ::std::cell::RefCell<Option<#block_id>>,
 			changes: ::std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
@@ -280,17 +280,17 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
 		// `ApiRef` object and `ApiRef` also has an associated lifetime. This lifetimes makes it
 		// impossible to move `RuntimeApi` into another thread.
-		#[cfg(feature = "std")]
+		#[cfg(any(feature = "std", test))]
 		unsafe impl Send for RuntimeApi {}
-		#[cfg(feature = "std")]
+		#[cfg(any(feature = "std", test))]
 		unsafe impl Sync for RuntimeApi {}
 
-		#[cfg(feature = "std")]
+		#[cfg(any(feature = "std", test))]
 		impl #crate_::runtime_api::ApiExt for RuntimeApi {
-			fn map_api_result<F: FnOnce(&Self) -> Result<R, E>, R, E>(
+			fn map_api_result<F: FnOnce(&Self) -> ::std::result::Result<R, E>, R, E>(
 				&self,
 				map_call: F
-			) -> Result<R, E> {
+			) -> ::std::result::Result<R, E> {
 				*self.commit_on_success.borrow_mut() = false;
 				let res = map_call(self);
 				*self.commit_on_success.borrow_mut() = true;
@@ -301,15 +301,15 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 			}
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(any(feature = "std", test))]
 		impl #crate_::runtime_api::ConstructRuntimeApi<#block> for RuntimeApi {
-			fn construct_runtime_api<'a, T: client::runtime_api::CallApiAt<#block>>(
+			fn construct_runtime_api<'a, T: #crate_::runtime_api::CallApiAt<#block>>(
 				call: &'a T
 			) -> #crate_::runtime_api::ApiRef<'a, Self> {
 				RuntimeApi {
 					call: unsafe {
 						::std::ptr::NonNull::new_unchecked(
-							call as &client::runtime_api::CallApiAt<#block> as *const _ as *mut _
+							call as &#crate_::runtime_api::CallApiAt<#block> as *const _ as *mut _
 						)
 					},
 					commit_on_success: true.into(),
@@ -319,14 +319,14 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 			}
 		}
 
-		#[cfg(feature = "std")]
+		#[cfg(any(feature = "std", test))]
 		impl RuntimeApi {
-			fn call_api_at<A: Encode, R: Decode>(
+			fn call_api_at<A: #crate_::runtime_api::Encode, R: #crate_::runtime_api::Decode>(
 				&self,
 				at: &#block_id,
 				function: &'static str,
 				args: &A
-			) -> client::error::Result<R> {
+			) -> #crate_::error::Result<R> {
 				let res = unsafe {
 					self.call.as_ref().call_api_at(
 						at,
@@ -346,7 +346,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				res
 			}
 
-			fn commit_on_ok<R, E>(&self, res: &Result<R, E>) {
+			fn commit_on_ok<R, E>(&self, res: &::std::result::Result<R, E>) {
 				if *self.commit_on_success.borrow() {
 					if res.is_err() {
 						self.changes.borrow_mut().discard_prospective();
@@ -450,7 +450,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		input.self_ty = Box::new(parse_quote!( RuntimeApi ));
 
 		// The implementation for the `RuntimeApi` is only required when compiling with `std`.
-		input.attrs.push(parse_quote!( #[cfg(feature = "std")] ));
+		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
 
 		fold::fold_item_impl(self, input)
 	}

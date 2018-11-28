@@ -39,7 +39,7 @@ mod compile_fail_tests;
 /// the declaration of the trait for the runtime side.
 ///
 /// The macro also generates the implementation of the apis for the client side by generating the
-/// `RuntimeApi` type.
+/// `RuntimeApi` type. The `RuntimeApi` is hidden behind a `feature` called `std`.
 ///
 /// # Example
 ///
