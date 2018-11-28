@@ -14,43 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(feature = "std")]
-use super::{ConstructRuntimeApi, ApiExt};
 use runtime_version::RuntimeVersion;
 use runtime_primitives::traits::Block as BlockT;
-#[cfg(feature = "std")]
-use runtime_primitives::generic::BlockId;
 use primitives::AuthorityId;
-#[cfg(feature = "std")]
-use error::Result;
 use rstd::vec::Vec;
 
-/// The `Core` api trait that is mandantory for each runtime.
-/// This is the side that should be implemented for the `RuntimeApi` that is used by the `Client`.
-/// Any modifications at one of these two traits, needs to be done on the other one as well.
-#[cfg(feature = "std")]
-pub trait Core<Block: BlockT>: 'static + Send + Sync + ConstructRuntimeApi<Block> + ApiExt {
-	/// Returns the version of the runtime.
-	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion>;
-	/// Returns the authorities.
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>>;
-	/// Execute the given block.
-	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<()>;
-	/// Initialise a block with the given header.
-	fn initialise_block(
-		&self,
-		at: &BlockId<Block>,
-		header: &<Block as BlockT>::Header
-	) -> Result<()>;
-}
-
-#[doc(hidden)]
-pub mod runtime_decl_for_Core {
-	use super::*;
-
+decl_runtime_apis! {
 	/// The `Core` api trait that is mandantory for each runtime.
-	/// This is the side that should be implemented for the `Runtime`.
-	pub trait Core<Block: BlockT> {
+	#[core_trait]
+	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Returns the authorities.
