@@ -1,5 +1,5 @@
 [package]
-name = "srml-support-procedural"
+name = "srml-support-procedural-tools-derive"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -7,17 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 proc-macro = true
 
 [dependencies]
-sr-std = { path = "../../../core/sr-std", default-features = false }
-srml-support-procedural-tools = { path = "./tools" }
-
 proc-macro2 = "0.4.24"
 quote = { version = "0.6.10", features = ["proc-macro"] }
 syn = { version = "0.15.21", features = ["proc-macro" ,"full", "extra-traits", "parsing"] }
 
-[features]
-default = ["std"]
-std = [
-	"sr-std/std",
-]
-nightly = []
-strict = []

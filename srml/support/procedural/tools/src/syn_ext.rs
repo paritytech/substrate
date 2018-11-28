@@ -20,7 +20,6 @@
 
 use syn::parse::{Parse, ParseStream, Result};
 use syn::token::{CustomKeyword};
-use proc_macro::TokenStream;
 use proc_macro2::TokenStream as T2;
 use quote::ToTokens;
 use std::iter::once;
@@ -38,7 +37,7 @@ pub enum TestEnum {
   End,
 }
 
-/// inner macro really dependant on syn naming convention
+// inner macro really dependant on syn naming convention, no need to export
 macro_rules! groups_impl {
     ($name:ident, $tok:ident, $deli:ident, $parse:ident ) => {
  
@@ -57,8 +56,8 @@ impl<P: Parse> Parse for $name<P> {
 }
 
 impl<P: ToTokens> ToTokens for $name<P> {
-  fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-    let mut inner_stream = proc_macro2::TokenStream::new();
+  fn to_tokens(&self, tokens: &mut T2) {
+    let mut inner_stream = T2::new();
     self.content.to_tokens(&mut inner_stream);
     let token_tree: proc_macro2::TokenTree = proc_macro2::Group::new(proc_macro2::Delimiter::$deli, inner_stream).into();
     tokens.extend(once(token_tree));
@@ -85,10 +84,15 @@ impl<T: CustomKeyword> Parse for CustomToken<T> {
 }
 
 impl<T: CustomKeyword> ToTokens for CustomToken<T> {
-  fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+  fn to_tokens(&self, tokens: &mut T2) {
     use std::str::FromStr;
-    tokens.extend(proc_macro2::TokenStream::from_str(T::ident()).expect("custom keyword should parse to ident"));
+    tokens.extend(T2::from_str(T::ident()).expect("custom keyword should parse to ident"));
   }
+}
+
+impl<T: CustomKeyword> CustomKeyword for CustomToken<T> {
+  fn ident() -> &'static str { <T as CustomKeyword>::ident() }
+  fn display() -> &'static str { <T as CustomKeyword>::display() }
 }
 
 #[derive(Debug)]
@@ -127,7 +131,7 @@ impl<P: Parse, T: Parse> Parse for PunctuatedInner<P,T,NoTrailing> {
 }
 
 impl<P: ToTokens, T: ToTokens, V> ToTokens for PunctuatedInner<P,T,V> {
-  fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+  fn to_tokens(&self, tokens: &mut T2) {
     self.inner.to_tokens(tokens)
   }
 }
@@ -148,7 +152,7 @@ impl Parse for Meta {
 }
 
 impl ToTokens for Meta {
-  fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+  fn to_tokens(&self, tokens: &mut T2) {
     match self.inner {
       syn::Meta::Word(ref ident) => {
         let ident = ident.clone();
@@ -178,7 +182,7 @@ impl Parse for OuterAttributes {
 }
 
 impl ToTokens for OuterAttributes {
-  fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+  fn to_tokens(&self, tokens: &mut T2) {
     for att in self.inner.iter() {
       att.to_tokens(tokens);
     }
@@ -211,36 +215,28 @@ impl<P: Parse> Parse for Seq<P> {
 }
 
 impl<P: ToTokens> ToTokens for Seq<P> {
-  fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+  fn to_tokens(&self, tokens: &mut T2) {
     for p in self.inner.iter() {
       p.to_tokens(tokens);
     }
   }
 }
 
-// TODO rewrite with map...
-pub fn extract_type_option(typ: &syn::Type) -> Option<proc_macro2::TokenStream> {
+pub fn extract_type_option(typ: &syn::Type) -> Option<T2> {
   if let syn::Type::Path(ref path) = typ {
-    if let Some(v) = path.path.segments.last() {
+    path.path.segments.last().and_then(|v| {
       if v.value().ident == "Option" {
         if let syn::PathArguments::AngleBracketed(ref a) = v.value().arguments {
           let args = &a.args;
           Some(quote!{ #args })
-          //let ts: TokenStream = quote!{ #args }.into();
-          //let typ = parse_macro_input!(ts as syn::Type);
-          //panic!("{:?}", typ);
-          //Some(typ)
         } else {
           None
         }
       } else {
         None
       }
-    } else {
-      None
-    }
+    })
   } else {
     None 
   }
 }
-
