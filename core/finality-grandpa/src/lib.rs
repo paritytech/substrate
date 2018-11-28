@@ -84,7 +84,8 @@ extern crate parity_codec_derive;
 use futures::prelude::*;
 use futures::sync::mpsc;
 use client::{
-	Client, error::Error as ClientError, backend::Backend, CallExecutor, BlockchainEvents
+	BlockchainEvents, CallExecutor, Client, backend::Backend,
+	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
 };
 use client::blockchain::HeaderBackend;
 use client::runtime_api::TaggedTransactionQueue;
@@ -706,6 +707,24 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	{
 		use authorities::PendingChange;
 
+		let enacts_change = self.authority_set.inner().read().enacts_change(*block.header.number(), |canon_number| {
+			self.inner.block_hash_from_id(&BlockId::number(canon_number))
+				.map(|h| h.expect("given number always less than block to finalize number; \
+								   block to finalize number less or equal than best block number; \
+								   thus there is a block with that number in the canon chain already; qed"))
+		})?;
+		let is_live = self.authority_set_oracle.is_live().unwrap_or(false);
+		let justification_provided = block.justification.is_some();
+
+		// a pending change is enacted by the given block, if the current
+		// grandpa authority set isn't live anymore the provided `ImportBlock`
+		// should include a justification for finalizing the block.
+		if enacts_change && !is_live && !justification_provided {
+			return Err(ClientErrorKind::BadJustification(
+				"missing justification for block that enacts authority set changes".to_string()
+			).into());
+		}
+
 		let maybe_change = self.api.runtime_api().grandpa_pending_change(
 			&BlockId::hash(*block.header.parent_hash()),
 			&block.header.digest().clone(),
@@ -731,15 +750,54 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			(old_set, authorities)
 		});
 
-		let result = self.inner.import_block(block, new_authorities);
-		if let Err(ref e) = result {
+		let hash = block.header.hash();
+		let number = *block.header.number();
+		let justification = block.justification.clone();
+
+		let import_result = self.inner.import_block(block, new_authorities).map_err(|e| {
 			if let Some((old_set, mut authorities)) = just_in_case {
 				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
 				*authorities = old_set;
 			}
+			e
+		})?;
+
+		if let Some(justification) = justification {
+			// FIXME: validate justification
+			let justification = GrandpaJustification::decode(&mut &*justification).unwrap();
+
+			let result = finalize_block(
+				&*self.inner,
+				&self.authority_set,
+				hash,
+				number,
+				justification.into(),
+			);
+
+			match result {
+				Ok(_) if enacts_change => {
+					unreachable!("returns Ok when no authority set change should be enacted; \
+								  verified previously that finalizing the current block enacts a change; \
+								  qed;");
+				},
+				Err(ExitOrError::AuthoritiesChanged(new)) => {
+					if let Err(_) = self.authority_set_change.unbounded_send(new) {
+						return Err(ClientErrorKind::Backend(
+							"imported and finalized change block but grandpa voter is no longer running".to_string()
+						).into());
+					}
+				},
+				Err(ExitOrError::Error(_)) if enacts_change && !is_live => {
+					// FIXME: improve this
+					return Err(ClientErrorKind::Backend(
+						"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
+					).into());
+				},
+				_ => {},
+			}
 		}
 
-		result
+		Ok(import_result)
 	}
 }
 

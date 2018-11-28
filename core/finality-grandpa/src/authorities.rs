@@ -191,6 +191,21 @@ where
 
 		Ok(status)
 	}
+
+	pub fn enacts_change<F, E>(&self, just_finalized: N, mut canonical: F)
+		-> Result<bool, E>
+		where F: FnMut(N) -> Result<H, E>
+	{
+		for change in self.pending_changes.iter() {
+			if change.effective_number() > just_finalized { break };
+
+			// check if the block that signalled the change is canonical in
+			// our chain.
+			let canonical_at_height = canonical(change.canon_height.clone())?;
+			if canonical_at_height == change.canon_hash { return Ok(true); }
+		}
+		Ok(false)
+	}
 }
 
 /// A pending change to the authority set.
