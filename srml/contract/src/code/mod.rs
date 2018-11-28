@@ -16,7 +16,8 @@
 
 use codec::Compact;
 use runtime_support::StorageMap;
-use runtime_primitives::traits::Hash;
+use runtime_primitives::traits::{As, Hash, CheckedMul};
+use gas::GasMeter;
 use {Schedule, Trait, CodeHash, CodeStorage, PrestineCode};
 
 mod prepare;
@@ -41,8 +42,17 @@ pub struct InstrumentedWasmModule {
 
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
+	gas_meter: &mut GasMeter<T>,
 	schedule: &Schedule<T::Gas>,
 ) -> Result<CodeHash<T>, &'static str> {
+	let code_len_in_gas = <T::Gas as As<u64>>::sa(original_code.len() as u64);
+	let cost = schedule.put_code_per_byte_cost
+		.checked_mul(&code_len_in_gas)
+		.ok_or_else(|| "overflow occured when calculating put_code price")?;
+	if gas_meter.charge(cost).is_out_of_gas() {
+		return Err("there is not enough gas");
+	}
+
 	let code_hash = T::Hashing::hash(&original_code);
 
 	// The first time instrumentation is on the user. However, consequent reinstrumentation

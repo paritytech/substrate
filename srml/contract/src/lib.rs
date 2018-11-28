@@ -165,17 +165,25 @@ decl_module! {
 			Ok(())
 		}
 
-		fn put_code(origin, code: Vec<u8>) -> Result {
+		fn put_code(
+			origin,
+			gas_limit: <T::Gas as HasCompact>::Type,
+			code: Vec<u8>
+		) -> Result {
 			let origin = ensure_signed(origin)?;
+			let gas_limit = gas_limit.into();
 			let schedule = <Module<T>>::current_schedule();
 
-			// TODO: deduct some freebalance according to price per byte according to
-			// the schedule.
+			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
-			let code_hash = code::save::<T>(code, &schedule)?;
-			Self::deposit_event(RawEvent::CodeStored(code_hash));
+			let result = code::save::<T>(code, &mut gas_meter, &schedule);
+			if let Ok(code_hash) = result {
+				Self::deposit_event(RawEvent::CodeStored(code_hash));
+			}
 
-			Ok(())
+			gas::refund_unused_gas::<T>(&origin, gas_meter);
+
+			result.map(|_| ())
 		}
 
 		/// Make a call to a specified account, optionally transferring some balance.
@@ -391,6 +399,9 @@ pub struct Schedule<Gas> {
 	/// Version of the schedule.
 	pub version: u32,
 
+	/// Cost of putting a byte of code into the storage.
+	pub put_code_per_byte_cost: Gas,
+
 	/// Gas cost of a growing memory by single page.
 	pub grow_mem_cost: Gas,
 
@@ -421,6 +432,7 @@ impl<Gas: As<u64>> Default for Schedule<Gas> {
 	fn default() -> Schedule<Gas> {
 		Schedule {
 			version: 0,
+			put_code_per_byte_cost: Gas::sa(1),
 			grow_mem_cost: Gas::sa(1),
 			regular_op_cost: Gas::sa(1),
 			return_data_per_byte_cost: Gas::sa(1),
