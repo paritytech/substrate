@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! All the functionality required for declaring and implementing runtime api's.
-//! Core api's are also declared here.
+//! All the functionality required for declaring and implementing runtime apis.
 
 #[doc(hidden)]
 #[cfg(feature = "std")]

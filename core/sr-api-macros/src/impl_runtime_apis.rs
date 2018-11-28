@@ -250,7 +250,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 	let (block, block_id) = generate_node_block_and_block_id_ty(runtime);
 
 	Ok(quote!(
-		/// The struct that implements all runtime apis for a runtime.
+		/// Implements all runtime apis for the client side.
 		#[cfg(feature = "std")]
 		pub struct RuntimeApi {
 			call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<#block>>,

@@ -8,5 +8,13 @@ proc-macro = true
 
 [dependencies]
 quote = "0.6"
-syn = { version = "0.15", features = [ "full", "fold", "extra-traits" ] }
+syn = { version = "0.15", features = [ "full", "fold", "extra-traits", "visit" ] }
 proc-macro2 = "0.4"
+
+[dev-dependencies]
+substrate-client = { path = "../client" }
+sr-primitives = { path = "../sr-primitives" }
+substrate-primitives = { path = "../primitives" }
+parity-codec = "2.1"
+parity-codec-derive = "2.1"
+serde = "1.0"
