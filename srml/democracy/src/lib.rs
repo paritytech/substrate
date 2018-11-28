@@ -86,15 +86,15 @@ decl_module! {
 		}
 
 		/// Propose a sensitive action to be taken.
-		fn second(origin, proposal: Compact<PropIndex>) -> Result {
+		fn second(origin, prop_index: Compact<PropIndex>) -> Result {
 			let who = ensure_signed(origin)?;
-			let index: PropIndex = proposal.into();
-			let mut deposit = Self::deposit_of(index)
+			let prop_index: PropIndex = prop_index.into();
+			let mut deposit = Self::deposit_of(prop_index)
 				.ok_or("can only second an existing proposal")?;
 			<balances::Module<T>>::reserve(&who, deposit.0)
 				.map_err(|_| "seconder's balance too low")?;
 			deposit.1.push(who);
-			<DepositOf<T>>::insert(index, deposit);
+			<DepositOf<T>>::insert(prop_index, deposit);
 			Ok(())
 		}
 
@@ -194,10 +194,10 @@ decl_event!(
 impl<T: Trait> Module<T> {
 	// exposed immutables.
 
-	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
+	/// Get the amount locked in support of `prop_index`; `None` if proposal isn't a valid proposal
 	/// index.
-	pub fn locked_for(proposal: PropIndex) -> Option<T::Balance> {
-		Self::deposit_of(proposal).map(|(d, l)| d * T::Balance::sa(l.len() as u64))
+	pub fn locked_for(prop_index: PropIndex) -> Option<T::Balance> {
+		Self::deposit_of(prop_index).map(|(d, l)| d * T::Balance::sa(l.len() as u64))
 	}
 
 	/// Return true if `ref_index` is an on-going referendum.
@@ -303,18 +303,18 @@ impl<T: Trait> Module<T> {
 		}
 
 		// tally up votes for any expiring referenda.
-		for (index, _, proposal, vote_threshold) in Self::maturing_referendums_at(now) {
-			let (approve, against) = Self::tally(index);
+		for (ref_index, _, proposal, vote_threshold) in Self::maturing_referendums_at(now) {
+			let (approve, against) = Self::tally(ref_index);
 			let total_issuance = <balances::Module<T>>::total_issuance();
-			Self::clear_referendum(index);
+			Self::clear_referendum(ref_index);
 			if vote_threshold.approved(approve, against, total_issuance) {
-				Self::deposit_event(RawEvent::Passed(index));
+				Self::deposit_event(RawEvent::Passed(ref_index));
 				let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
-				Self::deposit_event(RawEvent::Executed(index, ok));
+				Self::deposit_event(RawEvent::Executed(ref_index, ok));
 			} else {
-				Self::deposit_event(RawEvent::NotPassed(index));
+				Self::deposit_event(RawEvent::NotPassed(ref_index));
 			}
-			<NextTally<T>>::put(index + 1);
+			<NextTally<T>>::put(ref_index + 1);
 		}
 		Ok(())
 	}
