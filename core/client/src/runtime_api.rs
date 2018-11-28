@@ -21,9 +21,10 @@
 pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef}, generic::BlockId
+	traits::{Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef}, generic::BlockId,
+	transaction_validity::TransactionValidity
 };
-pub use runtime_version::ApiId;
+pub use runtime_version::{ApiId, RuntimeVersion};
 #[doc(hidden)]
 pub use rstd::slice;
 #[cfg(feature = "std")]
@@ -31,10 +32,9 @@ use rstd::result;
 pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use error;
-pub use runtime_version::RuntimeVersion;
+use rstd::vec::Vec;
+use primitives::{AuthorityId, OpaqueMetadata};
 
-mod core;
-mod traits;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -110,5 +110,29 @@ pub mod id {
 	pub const METADATA: ApiId = *b"metadata";
 }
 
-pub use self::core::*;
-pub use self::traits::*;
+decl_runtime_apis! {
+	/// The `Core` api trait that is mandantory for each runtime.
+	#[core_trait]
+	pub trait Core {
+		/// Returns the version of the runtime.
+		fn version() -> RuntimeVersion;
+		/// Returns the authorities.
+		fn authorities() -> Vec<AuthorityId>;
+		/// Execute the given block.
+		fn execute_block(block: Block);
+		/// Initialise a block with the given header.
+		fn initialise_block(header: <Block as BlockT>::Header);
+	}
+
+	/// The `Metadata` api trait that returns metadata for the runtime.
+	pub trait Metadata {
+		/// Returns the metadata of a runtime.
+		fn metadata() -> OpaqueMetadata;
+	}
+
+	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
+	pub trait TaggedTransactionQueue {
+		/// Validate the given transaction.
+		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
+	}
+}

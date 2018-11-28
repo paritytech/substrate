@@ -118,4 +118,4 @@ pub use state_machine::ExecutionStrategy;
 pub use leaves::LeafSet;
 
 #[doc(inline)]
-pub use sr_api_macros::decl_runtime_apis, impl_runtime_apis};
+pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};
