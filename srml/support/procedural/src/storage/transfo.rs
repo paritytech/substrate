@@ -70,18 +70,51 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
       &storage_lines,
       &extra_genesis,
     );
-
+    let decl_storage_items = decl_storage_items(
+      &scrate,
+      &straitinstance,
+      &straittype,
+      &scratename,
+      &storage_lines,
+    );
+    let decl_store_items = decl_store_items(
+      &storage_lines,
+    );
+    let impl_store_items = impl_store_items(
+      &straitinstance,
+      &storage_lines,
+    );
+    let impl_store_fns = impl_store_fns(
+      &scrate,
+      &straitinstance,
+      &storage_lines,
+    );
+    let store_functions_to_metadata = store_functions_to_metadata(
+      &scrate,
+      &storage_lines,
+    );
     let expanded = quote!{
-      __decl_storage_items!(#scratename #straittype #straitinstance #st);
+      //__decl_storage_items!(#scratename #straittype #straitinstance #st);
+      #decl_storage_items
       #visibility trait #sstoretype {
-        __decl_store_items!(#st);
+        //__decl_store_items!(#st);
+        #decl_store_items
       }
       impl<#straitinstance: #straittype> #sstoretype for #smodulename<#straitinstance> {
-        __impl_store_items!(#straitinstance #st);
+        //__impl_store_items!(#straitinstance #st);
+        #impl_store_items
       }
       impl<#straitinstance: #straittype> #smodulename<#straitinstance> {
-        __impl_store_fns!(#straitinstance #st);
-        __impl_store_metadata!(#scratename; #st);
+        //__impl_store_fns!(#straitinstance #st);
+        #impl_store_fns
+        pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
+          #scrate::storage::generator::StorageMetadata {
+            prefix: #scrate::storage::generator::DecodeDifferent::Encode(stringify!(#scratename)),
+            //functions: __store_functions_to_metadata!(; #st ),
+            functions: #store_functions_to_metadata ,
+          }
+        }
+	
       }
 
       #extra_genesis
@@ -285,4 +318,330 @@ fn decl_store_extra_genesis(
     }
 }
 
+// __decl_storage_items!(#scratename #straittype #straitinstance #st);
+fn decl_storage_items(
+  scrate: &proc_macro2::TokenStream,
+  straitinstance: &Ident,
+  straittype: &syn::TypeParamBound,
+  scratename: &Ident,
+  storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+  ) -> proc_macro2::TokenStream {
 
+  let mut impls = Vec::new();
+  for sline in storage_lines.inner.iter() {
+    let DeclStorageLine {
+      name,
+      getter,
+      config,
+      build,
+      storage_type,
+      default_value,
+      visibility,
+      ..
+    } = sline;
+
+    let (is_simple, extracted_opt, stk, gettype) = match storage_type {
+      DeclStorageType::Simple(ref st) => (true, ext::extract_type_option(st), None, st),
+      DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
+    };
+    let is_option = extracted_opt.is_some();
+    let fielddefault = default_value.inner.get(0).as_ref().map(|d|&d.expr).map(|d|quote!{ #d })
+        .unwrap_or_else(|| quote!{ Default::default() });
+
+    let sty = extracted_opt.unwrap_or(quote!(#gettype));
+
+    let option_simple_1 = if !is_option {
+      // raw type case
+      quote!( unwrap_or_else )
+    } else {
+      // Option<> type case
+      quote!( or_else )
+    };
+    let imple = if is_simple {
+      let mutate_impl = if !is_option {
+        quote!{
+          <Self as #scrate::storage::generator::StorageValue<#sty>>::put(&val, storage)
+        }
+      } else {
+        quote!{
+          match val {
+            Some(ref val) => <Self as #scrate::storage::generator::StorageValue<#sty>>::put(&val, storage),
+            None => <Self as #scrate::storage::generator::StorageValue<#sty>>::kill(storage),
+          }
+        }
+      };
+
+      // generator for value
+      quote!{
+
+        #visibility struct #name<#straitinstance: #straittype>(#scrate::storage::generator::PhantomData<#straitinstance>);
+
+        impl<#straitinstance: #straittype> #scrate::storage::generator::StorageValue<#sty> for #name<#straitinstance> {
+          type Query = #gettype;
+
+          /// Get the storage key.
+          fn key() -> &'static [u8] {
+            stringify!(#scratename #name).as_bytes()
+          }
+
+          /// Load the value from the provided storage instance.
+          fn get<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
+            storage.get(<#name<#straitinstance> as #scrate::storage::generator::StorageValue<#sty>>::key())
+              .#option_simple_1(|| #fielddefault)
+          }
+
+          /// Take a value from storage, removing it afterwards.
+          fn take<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
+            storage.take(<#name<#straitinstance> as #scrate::storage::generator::StorageValue<#sty>>::key())
+              .#option_simple_1(|| #fielddefault)
+          }
+
+          /// Mutate the value under a key.
+          fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(f: F, storage: &S) -> R {
+            let mut val = <Self as #scrate::storage::generator::StorageValue<#sty>>::get(storage);
+
+            let ret = f(&mut val);
+            #mutate_impl ;
+            ret
+          }
+        }
+
+      }
+    } else {
+      let kty = stk.expect("is not simple; qed");
+      let mutate_impl = if !is_option {
+        quote!{
+          <Self as #scrate::storage::generator::StorageMap<#kty, #sty>>::insert(key, &val, storage)
+        }
+      } else {
+        quote!{
+          match val {
+            Some(ref val) => <Self as #scrate::storage::generator::StorageMap<#kty, #sty>>::insert(key, &val, storage),
+            None => <Self as #scrate::storage::generator::StorageMap<#kty, #sty>>::remove(key, storage),
+          }
+        }
+      };
+      // generator for map
+      quote!{
+        #visibility struct #name<#straitinstance: #straittype>(#scrate::storage::generator::PhantomData<#straitinstance>);
+
+        impl<#straitinstance: #straittype> #scrate::storage::generator::StorageMap<#kty, #sty> for #name<#straitinstance> {
+          type Query = #gettype;
+
+          /// Get the prefix key in storage.
+          fn prefix() -> &'static [u8] {
+				    stringify!(#scratename #name).as_bytes()
+          }
+
+          /// Get the storage key used to fetch a value corresponding to a specific key.
+          fn key_for(x: &#kty) -> #scrate::rstd::vec::Vec<u8> {
+				    let mut key = <#name<#straitinstance> as #scrate::storage::generator::StorageMap<#kty, #sty>>::prefix().to_vec();
+            #scrate::codec::Encode::encode_to(x, &mut key);
+            key
+          }
+
+          /// Load the value associated with the given key from the map.
+          fn get<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
+            let key = <#name<#straitinstance> as #scrate::storage::generator::StorageMap<#kty, #sty>>::key_for(key);
+            storage.get(&key[..]).#option_simple_1(|| #fielddefault)
+          }
+
+          /// Take the value, reading and removing it.
+          fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
+            let key = <#name<#straitinstance> as #scrate::storage::generator::StorageMap<#kty, #sty>>::key_for(key);
+            storage.take(&key[..]).#option_simple_1(|| #fielddefault)
+          }
+
+          /// Mutate the value under a key
+          fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
+            let mut val = <Self as #scrate::storage::generator::StorageMap<#kty, #sty>>::take(key, storage);
+
+            let ret = f(&mut val);
+            #mutate_impl ;
+    				ret
+	    		}
+
+        }
+
+      }
+    };
+    impls.push(imple)
+  }
+
+  quote!(#( #impls )*)
+
+}
+
+
+//  __decl_store_items!(#st);
+fn decl_store_items(
+  storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+  ) -> proc_macro2::TokenStream {
+  let mut items = Vec::new();
+  for sline in storage_lines.inner.iter() {
+    let DeclStorageLine {
+      name,
+      ..
+    } = sline;
+    items.push(quote!{
+      type #name;
+    });
+  }
+ 
+  quote!(#( #items )*)
+}
+
+// __impl_store_items!(#straitinstance #st);
+fn impl_store_items(
+  straitinstance: &Ident,
+  storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+  ) -> proc_macro2::TokenStream {
+  let mut items = Vec::new();
+  for sline in storage_lines.inner.iter() {
+    let DeclStorageLine {
+      name,
+      ..
+    } = sline;
+    items.push(quote!{
+      type #name = #name<#straitinstance>;
+    });
+  }
+ 
+  quote!(#( #items )*)
+}
+
+//  __impl_store_fns!(#straitinstance #st);
+fn impl_store_fns(
+  scrate: &proc_macro2::TokenStream,
+  straitinstance: &Ident,
+  storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+  ) -> proc_macro2::TokenStream {
+  let mut items = Vec::new();
+  for sline in storage_lines.inner.iter() {
+    let DeclStorageLine {
+      name,
+      getter,
+      config,
+      build,
+      storage_type,
+      default_value,
+      visibility,
+      ..
+    } = sline;
+
+    if let Some(getter) = getter {
+      let get_fn = &getter.getfn.content;
+      let (is_simple, extracted_opt, stk, gettype) = match storage_type {
+        DeclStorageType::Simple(ref st) => (true, ext::extract_type_option(st), None, st),
+        DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
+      };
+
+      let sty = extracted_opt.unwrap_or(quote!(#gettype));
+      let item = if is_simple {
+        quote!{
+          pub fn #get_fn() -> #gettype {
+            <#name<#straitinstance> as #scrate::storage::generator::StorageValue<#sty>> :: get(&#scrate::storage::RuntimeStorage)
+          }
+        }
+      } else {
+        let kty = stk.expect("is not simple; qed");
+        // map
+        quote!{
+          pub fn #get_fn<K: #scrate::storage::generator::Borrow<#kty>>(key: K) -> #gettype {
+            <#name<#straitinstance> as #scrate::storage::generator::StorageMap<#kty, #sty>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
+          }
+
+        }
+      };
+      items.push(item);
+    }
+  }
+ 
+  quote!(#( #items )*)
+}
+
+//  __impl_store_metadata!(#straitinstance #st);
+//	__store_functions_to_metadata!(; $( $rest )* ),
+fn store_functions_to_metadata (
+  scrate: &proc_macro2::TokenStream,
+  storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
+  ) -> proc_macro2::TokenStream {
+  let mut items = Vec::new();
+  for sline in storage_lines.inner.iter() {
+    let DeclStorageLine {
+      attrs,
+      name,
+      getter,
+      config,
+      build,
+      storage_type,
+      default_value,
+      visibility,
+      ..
+    } = sline;
+
+      let (is_simple, extracted_opt, stk, gettype) = match storage_type {
+        DeclStorageType::Simple(ref st) => (true, ext::extract_type_option(st), None, st),
+        DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
+      };
+
+      let is_option = extracted_opt.is_some();
+      let sty = extracted_opt.unwrap_or(quote!(#gettype));
+      let stype = if is_simple {
+        let ssty = sty.to_string().replace(" ","");
+        quote!{
+          #scrate::storage::generator::StorageFunctionType::Plain(
+            #scrate::storage::generator::DecodeDifferent::Encode(#ssty),
+          )
+        }
+      } else {
+        let kty = stk.expect("is not simple; qed");
+        let kty = quote!(#kty).to_string().replace(" ","");
+        let ssty = sty.to_string().replace(" ","");
+        quote!{
+          #scrate::storage::generator::StorageFunctionType::Map {
+            key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
+            value: #scrate::storage::generator::DecodeDifferent::Encode(#ssty),
+          }
+        }
+      };
+      let modifier = if !is_option {
+        quote!{
+				  #scrate::storage::generator::StorageFunctionModifier::Default
+        }
+      } else {
+        quote!{
+				  #scrate::storage::generator::StorageFunctionModifier::Optional
+        }
+      };
+      let mut docs = Vec::new();
+      for attr in attrs.inner.iter() {
+        if let Some(syn::Meta::NameValue(syn::MetaNameValue{
+          ref ident,
+          ref lit,
+          ..
+        })) = attr.interpret_meta() {
+          if ident == "doc" {
+            docs.push(quote!(#lit));
+          }
+        }
+      }
+      let str_name = quote!(#name).to_string().replace(" ","");
+      let item = quote! {
+          #scrate::storage::generator::StorageFunctionMetadata {
+            name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
+            modifier: #modifier,
+            ty: #stype,
+            documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #( #docs ),* ]),
+          }
+      };
+      items.push(item);
+  }
+ 
+
+  quote!{
+   	#scrate::storage::generator::DecodeDifferent::Encode(&[
+      #( #items ),*
+		])
+  }
+}
