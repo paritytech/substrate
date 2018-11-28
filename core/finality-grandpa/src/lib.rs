@@ -516,7 +516,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, commit: Commit<Block>) -> Result<(), Self::Error> {
-		finalize_block(&*self.inner, &self.authority_set, hash, number, commit)
+		finalize_block(&*self.inner, &self.authority_set, hash, number, commit.into())
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
@@ -548,36 +548,53 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 }
 
+#[derive(Encode, Decode)]
+struct GrandpaJustification<Block: BlockT> {
+	commit: Commit<Block>,
+	ancestry: Vec<Block::Header>,
+}
+
+enum JustificationOrCommit<Block: BlockT> {
+	Justification(GrandpaJustification<Block>),
+	Commit(Commit<Block>),
+}
+
+impl<Block: BlockT> From<Commit<Block>> for JustificationOrCommit<Block> {
+	fn from(commit: Commit<Block>) -> JustificationOrCommit<Block> {
+		JustificationOrCommit::Commit(commit)
+	}
+}
+
+impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<Block> {
+	fn from(justification: GrandpaJustification<Block>) -> JustificationOrCommit<Block> {
+		JustificationOrCommit::Justification(justification)
+	}
+}
+
 fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
-	_commit: Commit<Block>,
+	justification_or_commit: JustificationOrCommit<Block>,
 ) -> Result<(), ExitOrError<Block::Hash, NumberFor<Block>>> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 {
-	// ideally some handle to a synchronization oracle would be used
-	// to avoid unconditionally notifying.
-	// TODO: produce justification (i.e. commit + precommits ancestry up to commit target)
-	if let Err(e) = client.finalize_block(BlockId::Hash(hash), None, true) {
-		warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-
-		// we return without error because not being able to finalize (temporarily) is
-		// non-fatal.
+	if *client.best_block_header()?.number() < number {
+		// invalid block to finalize
+		// FIXME: return appropriate error
 		return Ok(());
 	}
-
-	debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
 
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
 	let status = authority_set.apply_changes(number, |canon_number| {
 		client.block_hash_from_id(&BlockId::number(canon_number))
-			.map(|h| h.expect("given number always less than newly-finalized number; \
-							   thus there is a block with that number finalized already; qed"))
+			.map(|h| h.expect("given number always less than block to finalize number; \
+							   block to finalize number less or equal than best block number; \
+							   thus there is a block with that number in the canon chain already; qed"))
 	})?;
 
 	if status.changed {
@@ -610,6 +627,34 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			return Err(e.into());
 		}
 	}
+
+	// NOTE: this code assumes that honest voters will never vote past a
+	// transition block, thus we don't have to worry about the case where
+	// we have a transition with `effective_block = N`, but we finalize
+	// `N+1`. this assumption is required to make sure we store
+	// justifications for transition blocks which will be requested by
+	// syncing clients.
+	let justification = match justification_or_commit {
+		JustificationOrCommit::Justification(justification) => Some(justification.encode()),
+		JustificationOrCommit::Commit(commit) =>
+			if status.new_set_block.is_some() {
+				// FIXME: produce ancestry proof
+				let justification: GrandpaJustification<Block> = GrandpaJustification { commit, ancestry: vec![] };
+				Some(justification.encode())
+			} else {
+				None
+			},
+	};
+
+	debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+
+	// ideally some handle to a synchronization oracle would be used
+	// to avoid unconditionally notifying.
+	client.finalize_block(BlockId::Hash(hash), justification, true).map_err(|e| {
+		warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+		warn!(target: "finality", "Node is in a potentially inconsistent state.");
+		e
+	})?;
 
 	if let Some((canon_hash, canon_number)) = status.new_set_block {
 		// the authority set has changed.
