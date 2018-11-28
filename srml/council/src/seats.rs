@@ -94,13 +94,7 @@ decl_module! {
 		fn set_approvals(origin, votes: Vec<bool>, index: Compact<VoteIndex>) -> Result {
 			let who = ensure_signed(origin)?;
 			let index: VoteIndex = index.into();
-			let active_council = Self::active_council();
-			let desired_seats = Self::desired_seats() as usize;
 			let candidates = Self::candidates();
-			let number = <system::Module<T>>::block_number();
-			let expiring = active_council.iter().take_while(|i| i.1 == number).map(|i| i.0.clone()).collect::<Vec<_>>();
-			let retaining_seats = active_council.len() - expiring.len();
-			let empty_seats = desired_seats - retaining_seats;
 
 			ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 			ensure!(index == Self::vote_index(), "incorrect vote index");
@@ -109,9 +103,6 @@ decl_module! {
 			// since otherise an attacker may be able to submit a very long list of `votes` that far exceeds
 			// the amount of candidates and waste more computation than a reasonable voting bond would cover.
 			ensure!(candidates.len() >= votes.len(), "amount of candidate approval votes cannot exceed amount of candidates");
-			// Prevent further voting if the desired seat count is modified during the candidate approval voting period
-			// to a value so low that there are no longer any empty seats.
-			ensure!(empty_seats > 0, "expired council seats are not up for election when desired seat count changes during the voting period such that there are no longer any empty seats");
 
 			if !<LastActiveOf<T>>::exists(&who) {
 				// not yet a voter - deduct bond.
@@ -1371,24 +1362,8 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			// moved before the next `set_approvals` to mitigate failing test from occurring:
-			// `expired council seats are not up for election when desired seat count changes during the voting period such that there are no longer any empty seats`
-			assert_ok!(Council::set_desired_seats(3.into()));
-
-			// verify that `empty_seats > 0` before calling `set_approvals`
-			let _active_council = Council::active_council();
-			let _desired_seats = Council::desired_seats() as usize;
-			let _candidates = Council::candidates();
-			let _number = System::block_number();
-			let _expiring = _active_council.iter().take_while(|i| i.1 == _number).map(|i| i.0.clone()).collect::<Vec<_>>();
-			let _retaining_seats = _active_council.len() - _expiring.len();
-			let _empty_seats = _desired_seats - _retaining_seats;
-			assert_eq!(Council::desired_seats(), 3);
-			assert_eq!(Council::active_council().len(), 2);
-			assert_eq!(_expiring.len(), 0);
-			assert_eq!(_empty_seats > 0, true);
-
 			assert_ok!(Council::set_approvals(Origin::signed(6), vec![false, false, true, false], 1.into()));
+			assert_ok!(Council::set_desired_seats(3.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
