@@ -65,13 +65,30 @@ fn generate_impl_call(
 	for input in signature.decl.inputs.iter() {
 		match input {
 			FnArg::Captured(arg) => {
+				match &arg.ty {
+					Type::Reference(_) => {
+						return Err(
+							Error::new(
+								arg.ty.span(),
+								"No type references are allowed in the api traits!"
+							)
+						)
+					},
+					_ => {},
+				}
+
 				pnames.push(&arg.pat);
 				ptypes.push(&arg.ty);
 			},
-			_ => return Err(Error::new(
-				input.span(), "Only function arguments with the following \
-								pattern are accepted: `name: type`!"
-			)),
+			_ => {
+				return Err(
+					Error::new(
+						input.span(),
+						"Only function arguments with the following \
+						pattern are accepted: `name: type`!"
+					)
+				)
+			}
 		}
 	}
 
@@ -128,6 +145,7 @@ fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 	let generics = segment.value();
 
 	if generics.arguments.is_empty() {
+		let span = trait_.segments.last().as_ref().unwrap().value().span();
 		Err(Error::new(span, "Missing `Block` generic parameter."))
 	} else {
 		match &generics.arguments {
@@ -135,11 +153,11 @@ fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 				args.args.first().and_then(|v| match v.value() {
 					GenericArgument::Type(Type::Path(block)) => Some(block),
 					_ => None
-				}).ok_or_else(|| Error::new(span, "Missing `Block` generic parameter."))
+				}).ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter."))
 			},
 			PathArguments::None => unreachable!(),
 			PathArguments::Parenthesized(_) => {
-				Err(Error::new(span, "Unexpected parentheses in path!"))
+				Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
 			}
 		}
 	}
