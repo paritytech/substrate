@@ -172,7 +172,6 @@ decl_storage! {
 		pub ProposalCount get(proposal_count): u32;
 	}
 	add_extra_genesis {
-		config(_marker): ::std::marker::PhantomData<T>;
 		build(|_, _, _| {});
 	}
 }

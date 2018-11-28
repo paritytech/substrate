@@ -104,6 +104,10 @@ fn decl_store_extra_genesis(
   extra_genesis: &Option<AddExtraGenesis>,
   ) -> proc_macro2::TokenStream {
 
+  let mut is_trait_needed = false;
+//      if getter.is_some() && config.is_some() {
+//    ||  build.is_some()
+
     let mut config_field = Vec::new();
     let mut config_field_default = Vec::new();
     let mut builders = Vec::new();
@@ -121,7 +125,7 @@ fn decl_store_extra_genesis(
       let is_simple = if let DeclStorageType::Simple(..) = storage_type { true } else { false };
 
       let mut opt_build; 
-      // TODO find a name for this eg // normal
+      // TODO find a name for this condition
       if getter.is_some() && config.is_some() {
         let ident = if let Some(ident) = config.as_ref().expect("previous condition; qed").expr.content.as_ref() {
           quote!{ #ident }
@@ -150,6 +154,7 @@ fn decl_store_extra_genesis(
       }
 
       if let Some(builder) = opt_build {
+        is_trait_needed = true;
         if is_simple {
           builders.push(quote!{
           {
@@ -189,6 +194,12 @@ fn decl_store_extra_genesis(
             default_seq,
             ..
           }) => {
+            // warning there is some false positive here
+            // TODO replace with `has_parametric_type(straitinstance)`
+            // at this time just one of those in project
+            if ext::has_parametric_type(&extra_type, straitinstance) {
+              is_trait_needed = true;
+            }
             let extrafield = &extra_field.content;
             genesis_extrafields.push(quote!{
               #attrs pub #extrafield : #extra_type ,
@@ -213,24 +224,38 @@ fn decl_store_extra_genesis(
     let is_extra_genesis_needed = has_scall || config_field.len() > 0 || genesis_extrafields.len() > 0 || builders.len() > 0;
     if is_extra_genesis_needed {
         //__decl_genesis_config_items!([#straittype #straitinstance] [] [] [] [#( #slines )* ] [#scall] #st);
+      let (fparam, sparam, ph_field, ph_default) = if is_trait_needed {
+        (
+          quote!(<#straitinstance: #straittype>),
+          quote!(<#straitinstance>),
+          quote!{
+			      #[serde(skip)]
+			      pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#straitinstance>,
+          },
+          quote!{
+				    _genesis_phantom_data: Default::default(),
+          },
+        )
+      } else {
+        (quote!(), quote!(), quote!(), quote!())
+      };
       quote!{
       
         #[derive(Serialize, Deserialize)]
         #[cfg(feature = "std")]
         #[serde(rename_all = "camelCase")]
         #[serde(deny_unknown_fields)]
-        pub struct GenesisConfig<#straitinstance: #straittype> {
-			    #[serde(skip)]
-			    pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#straitinstance>,
+        pub struct GenesisConfig#fparam {
+          #ph_field
           #( #config_field )*
           #( #genesis_extrafields )*
         }
 
         #[cfg(feature = "std")]
-        impl<#straitinstance: #straittype> Default for GenesisConfig<#straitinstance> {
+        impl#fparam Default for GenesisConfig#sparam {
           fn default() -> Self {
             GenesisConfig {
-					    _genesis_phantom_data: Default::default(),
+              #ph_default
               #( #config_field_default )*
               #( #genesis_extrafields_default )*
             }
@@ -238,7 +263,7 @@ fn decl_store_extra_genesis(
         }
 
         #[cfg(feature = "std")]
-        impl<#straitinstance: #straittype> #scrate::runtime_primitives::BuildStorage for GenesisConfig<#straitinstance>
+        impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam
         {
 
           fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageMap, #scrate::runtime_primitives::ChildrenStorageMap), String> {
@@ -254,7 +279,7 @@ fn decl_store_extra_genesis(
             Ok((r, c))
           }
         }
-      } 
+      }
     } else { 
       quote!{}
     }

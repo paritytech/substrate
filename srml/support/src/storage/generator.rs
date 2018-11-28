@@ -1964,7 +1964,6 @@ mod tests {
 			pub PUBGETMAPU32MYDEF get(pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
 		}
 		add_extra_genesis {
-			config(_marker) : ::std::marker::PhantomData<T>;
 			build(|_, _, _| {});
 		}
 	}

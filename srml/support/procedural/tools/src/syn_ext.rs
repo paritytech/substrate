@@ -23,6 +23,7 @@ use syn::token::{CustomKeyword};
 use proc_macro2::TokenStream as T2;
 use quote::ToTokens;
 use std::iter::once;
+use syn::Ident;
 
 /// stop parsing here getting remaining token as content
 /// Warn duplicate stream (part of)
@@ -34,7 +35,7 @@ pub struct StopParse{pub inner: T2}
 pub enum TestEnum {
   Vis(syn::Visibility),
   Brace(Braces<syn::Visibility>, syn::Visibility),
-  End,
+  //End,
 }
 
 // inner macro really dependant on syn naming convention, no need to export
@@ -228,6 +229,7 @@ pub fn extract_type_option(typ: &syn::Type) -> Option<T2> {
       if v.value().ident == "Option" {
         if let syn::PathArguments::AngleBracketed(ref a) = v.value().arguments {
           let args = &a.args;
+        //pub args: Punctuated<GenericArgument, Token![,]>,
           Some(quote!{ #args })
         } else {
           None
@@ -240,3 +242,87 @@ pub fn extract_type_option(typ: &syn::Type) -> Option<T2> {
     None 
   }
 }
+
+pub fn is_parametric_type_def(typ: &syn::Type, default: bool) -> bool {
+  match *typ {
+    syn::Type::Path(ref path) => {
+      path.path.segments.iter().any(|v| {
+        if let syn::PathArguments::AngleBracketed(..) = v.arguments {
+          true
+        } else {
+          false
+        }
+      })
+    },
+    syn::Type::Slice(ref inner) => is_parametric_type_def(&inner.elem, default),
+    syn::Type::Array(ref inner) => is_parametric_type_def(&inner.elem, default),
+    syn::Type::Ptr(ref inner) => is_parametric_type_def(&inner.elem, default),
+    syn::Type::Reference(ref inner) => is_parametric_type_def(&inner.elem, default),
+    syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
+    syn::Type::Never(..) => false,
+    syn::Type::Tuple(ref inner) => {
+      inner.elems.iter().any(|t|is_parametric_type_def(t, default))
+    },
+    syn::Type::TraitObject(..) => true,
+    syn::Type::ImplTrait(..) => true,
+    syn::Type::Paren(ref inner) => is_parametric_type_def(&inner.elem, default),
+    syn::Type::Group(ref inner) => is_parametric_type_def(&inner.elem, default),
+    syn::Type::Infer(..) => true,
+    syn::Type::Macro(..) => default,
+    syn::Type::Verbatim(..) => default,
+  }
+}
+
+/// check if type has any type parameter, defaults to true for some cases.
+pub fn is_parametric_type(typ: &syn::Type) -> bool {
+  is_parametric_type_def(typ, true)
+}
+
+pub fn has_parametric_type_def(typ: &syn::Type, ident: &Ident, default: bool) -> bool {
+  match *typ {
+    syn::Type::Path(ref path) => {
+      path.path.segments.iter().any(|v| {
+        if ident == &v.ident {
+          return true;
+        }
+        if let syn::PathArguments::AngleBracketed(ref a) = v.arguments {
+          for arg in a.args.iter() {
+            if let syn::GenericArgument::Type(ref typ) = arg {
+              if has_parametric_type_def(typ, ident, default) {
+                return true;
+              }
+            }
+            // potentially missing matches here
+          }
+          false
+        } else {
+          false
+        }
+      })
+    },
+    syn::Type::Slice(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
+    syn::Type::Array(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
+    syn::Type::Ptr(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
+    syn::Type::Reference(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
+    syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
+    syn::Type::Never(..) => false,
+    syn::Type::Tuple(ref inner) => {
+      inner.elems.iter().any(|t|has_parametric_type_def(t, ident, default))
+    },
+    syn::Type::TraitObject(..) => true, // TODO check bounds
+    syn::Type::ImplTrait(..) => true, // TODO check bounds
+    syn::Type::Paren(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
+    syn::Type::Group(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
+    syn::Type::Infer(..) => default,
+    syn::Type::Macro(..) => default,
+    syn::Type::Verbatim(..) => default,
+  }
+
+}
+
+/// check if type has a type parameter, defaults to true for some cases.
+pub fn has_parametric_type(typ: &syn::Type, ident: &Ident) -> bool {
+  has_parametric_type_def(typ, ident, true)
+}
+
+

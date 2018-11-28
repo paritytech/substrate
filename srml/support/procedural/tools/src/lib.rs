@@ -18,7 +18,6 @@
 //! Proc macro helpers for procedural macros
 // end::description[]
 
-#[macro_use]
 extern crate syn;
 #[macro_use]
 extern crate quote;
