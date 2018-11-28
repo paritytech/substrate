@@ -27,7 +27,7 @@ use quote::quote;
 use syn::{
 	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, MethodSig, FnArg, Path,
 	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
-	fold::{self, Fold}, FnDecl, parse_quote
+	fold::{self, Fold}, FnDecl, parse_quote, Pat
 };
 
 use std::iter;
@@ -62,6 +62,7 @@ fn generate_impl_call(
 ) -> Result<TokenStream> {
 	let mut pnames = Vec::new();
 	let mut ptypes = Vec::new();
+	let mut generated_pattern_counter = 0;
 	for input in signature.decl.inputs.iter() {
 		match input {
 			FnArg::Captured(arg) => {
@@ -77,7 +78,9 @@ fn generate_impl_call(
 					_ => {},
 				}
 
-				pnames.push(&arg.pat);
+				pnames.push(
+					generate_unique_pattern(arg.pat.clone(), &mut generated_pattern_counter)
+				);
 				ptypes.push(&arg.ty);
 			},
 			_ => {
@@ -397,6 +400,22 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	Ok(quote!( #( #impls_prepared )* ))
 }
 
+/// Generate an unique pattern based on the given counter, if the given pattern is a `_`.
+fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
+	match pat {
+		Pat::Wild(_) => {
+			let generated_name = Ident::new(
+				&format!("impl_runtime_api_generated_name_{}", counter),
+				pat.span()
+			);
+			*counter += 1;
+
+			parse_quote!( #generated_name )
+		},
+		_ => pat,
+	}
+}
+
 /// Auxilariy data structure that is used to convert `impl Api for Runtime` to
 /// `impl Api for RuntimeApi`.
 /// This requires us to replace the runtime `Block` with the node `Block`,
@@ -432,9 +451,13 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
 		{
-			let arg_names = input.sig.decl.inputs.iter().filter_map(|i| match i {
-				FnArg::Captured(ref arg) => Some(&arg.pat),
+			let mut generated_name_counter = 0;
+			let arg_names = input.sig.decl.inputs.iter_mut().filter_map(|i| match i {
+				FnArg::Captured(ref mut arg) => Some(&mut arg.pat),
 				_ => None,
+			}).map(|p| {
+				*p = generate_unique_pattern(p.clone(), &mut generated_name_counter);
+				p
 			});
 			let name = input.sig.ident.to_string();
 

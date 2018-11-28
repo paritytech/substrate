@@ -41,7 +41,7 @@ pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
 
 /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// trait are done by the `construct_runtime!` macro in a real runtime.
-struct Runtime {}
+pub struct Runtime {}
 impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
 }
@@ -50,16 +50,21 @@ decl_runtime_apis! {
 	pub trait Api {
 		fn test(data: u64);
 		fn something_with_block(block: Block) -> Block;
+		fn function_with_two_args(data: u64, block: Block);
 	}
 }
 
 impl_runtime_apis! {
 	impl self::Api<Block> for Runtime {
-		fn test(data: u64) {
+		fn test(_: u64) {
 			unimplemented!()
 		}
 
-		fn something_with_block(block: Block) -> Block {
+		fn something_with_block(_: Block) -> Block {
+			unimplemented!()
+		}
+
+		fn function_with_two_args(_: u64, _: Block) {
 			unimplemented!()
 		}
 	}
@@ -71,15 +76,16 @@ impl_runtime_apis! {
 		fn authorities() -> Vec<AuthorityId> {
 			unimplemented!()
 		}
-		fn execute_block(block: Block) {
+		fn execute_block(_: Block) {
 			unimplemented!()
 		}
-		fn initialise_block(header: <Block as BlockT>::Header) {
+		fn initialise_block(_: <Block as BlockT>::Header) {
 			unimplemented!()
 		}
 	}
 }
 
+#[test]
 fn test_client_side_function_signature() {
 	let _test: fn(&RuntimeApi, &BlockId<Block>, &u64) -> Result<()>  = RuntimeApi::test;
 	let _something_with_block: fn(&RuntimeApi, &BlockId<Block>, &Block) -> Result<Block> =
