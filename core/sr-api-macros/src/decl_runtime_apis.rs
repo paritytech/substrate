@@ -132,6 +132,9 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 			input.supertraits.push(parse_quote!( #crate_::runtime_api::Core<Block> ));
 		}
 
+		// The client side trait is only required when compiling with the feature `std` or `test`.
+		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
+
 		fold::fold_item_trait(self, input)
 	}
 }

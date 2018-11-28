@@ -472,7 +472,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		// Implement the trait for the `RuntimeApi`
 		input.self_ty = Box::new(parse_quote!( RuntimeApi ));
 
-		// The implementation for the `RuntimeApi` is only required when compiling with `std`.
+		// The implementation for the `RuntimeApi` is only required when compiling with the feature
+		// `std` or `test`.
 		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
 
 		fold::fold_item_impl(self, input)

@@ -58,8 +58,6 @@ extern crate srml_upgrade_key as upgrade_key;
 extern crate sr_version as version;
 extern crate node_primitives;
 
-#[cfg(feature = "std")]
-use codec::{Encode, Decode};
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
