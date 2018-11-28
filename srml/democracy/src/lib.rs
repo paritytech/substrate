@@ -66,10 +66,10 @@ decl_module! {
 		fn propose(
 			origin,
 			proposal: Box<T::Proposal>,
-			value: <T::Balance as HasCompact>::Type
+			deposit: <T::Balance as HasCompact>::Type
 		) -> Result {
 			let who = ensure_signed(origin)?;
-			let deposit = value.into();
+			let deposit = deposit.into();
 
 			ensure!(deposit >= Self::minimum_deposit(), "deposit too low");
 			<balances::Module<T>>::reserve(&who, deposit)
