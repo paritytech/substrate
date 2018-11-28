@@ -127,7 +127,7 @@ decl_module! {
 					vote_threshold
 				).map(|_| ())
 			} else {
-				Err("Cannot start referendum for given proposal if the proposal does not exist, unless called directly by council")?
+				Err("Cannot start referendum for given proposal if the proposal does not exist, unless called directly by council")
 			}
 		}
 
