@@ -103,7 +103,7 @@ decl_module! {
 		fn vote(origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) -> Result {
 			let who = ensure_signed(origin)?;
 			let ref_index = ref_index.into();
-			// TODO - should we only allow voting after we also check that the data mapped to the ref_index in `ReferendumInfoOf` is valid
+			// TODO Issue #1173 - should we only allow voting after we also check that the data mapped to the ref_index in `ReferendumInfoOf` is valid
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 			ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
 					"transactor must have balance to signal approval.");
