@@ -45,6 +45,8 @@ use system::ensure_signed;
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
 
+const ERR_MSG_PROP_NOT_EXIST: &str = "Cannot start referendum for given proposal if the proposal does not exist, unless called directly by council";
+
 /// A proposal index.
 pub type PropIndex = u32;
 /// A referendum index.
@@ -127,7 +129,7 @@ decl_module! {
 					vote_threshold
 				).map(|_| ())
 			} else {
-				Err("Cannot start referendum for given proposal if the proposal does not exist, unless called directly by council")
+				Err(ERR_MSG_PROP_NOT_EXIST)
 			}
 		}
 
@@ -562,7 +564,7 @@ mod tests {
 			System::set_block_number(1);
 			assert_eq!(
 				Democracy::start_referendum(Box::new(set_balance_proposal(2)), VoteThreshold::SuperMajorityApprove),
-				Err("Cannot start referendum for given proposal if the proposal does not exist, unless called directly by council")
+				Err(ERR_MSG_PROP_NOT_EXIST)
 			);
 		});
 	}
