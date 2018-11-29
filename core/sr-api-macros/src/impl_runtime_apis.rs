@@ -147,21 +147,19 @@ fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 		)?;
 	let generics = segment.value();
 
-	if generics.arguments.is_empty() {
-		let span = trait_.segments.last().as_ref().unwrap().value().span();
-		Err(Error::new(span, "Missing `Block` generic parameter."))
-	} else {
-		match &generics.arguments {
-			PathArguments::AngleBracketed(ref args) => {
-				args.args.first().and_then(|v| match v.value() {
-					GenericArgument::Type(Type::Path(block)) => Some(block),
-					_ => None
-				}).ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter."))
-			},
-			PathArguments::None => unreachable!(),
-			PathArguments::Parenthesized(_) => {
-				Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
-			}
+	match &generics.arguments {
+		PathArguments::AngleBracketed(ref args) => {
+			args.args.first().and_then(|v| match v.value() {
+			GenericArgument::Type(Type::Path(block)) => Some(block),
+				_ => None
+			}).ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter."))
+		},
+		PathArguments::None => {
+			let span = trait_.segments.last().as_ref().unwrap().value().span();
+			Err(Error::new(span, "Missing `Block` generic parameter."))
+		},
+		PathArguments::Parenthesized(_) => {
+			Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
 		}
 	}
 }

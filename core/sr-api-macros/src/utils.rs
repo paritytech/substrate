@@ -65,7 +65,6 @@ pub fn fold_fn_decl_for_client_side(
 	crate_: &TokenStream
 ) -> FnDecl {
 	// Add `&` to all parameter types.
-	// TODO: Do not enforce `&`.
 	input.inputs
 		.iter_mut()
 		.filter_map(|i| match i {
