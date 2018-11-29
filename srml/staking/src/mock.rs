@@ -88,7 +88,6 @@ pub fn new_test_ext(
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
 		authorities: vec![],
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
@@ -111,7 +110,6 @@ pub fn new_test_ext(
 		transfer_fee: 0,
 		creation_fee: 0,
 		reclaim_rebate: 0,
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,

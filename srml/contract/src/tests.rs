@@ -131,7 +131,6 @@ impl ExtBuilder {
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
 				reclaim_rebate: 0,
-				_genesis_phantom_data: Default::default(),
 			}.build_storage()
 			.unwrap().0,
 		);

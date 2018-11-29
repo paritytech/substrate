@@ -59,7 +59,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // TODO change
 			authorities: initial_authorities.clone(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
@@ -70,7 +69,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			transfer_fee: 1 * CENTS,
 			creation_fee: 1 * CENTS,
 			reclaim_rebate: 1 * CENTS,
-			_genesis_phantom_data: Default::default(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
@@ -142,7 +140,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		})
 	}
 }
@@ -190,7 +187,6 @@ pub fn testnet_genesis(
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
 			authorities: initial_authorities.clone(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
@@ -201,7 +197,6 @@ pub fn testnet_genesis(
 			creation_fee: 0,
 			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k| (k.into(), (1 << 60))).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
@@ -275,7 +270,6 @@ pub fn testnet_genesis(
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		})
 	}
 }

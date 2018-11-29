@@ -69,7 +69,6 @@ impl_outer_event!{
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(GenesisConfig::<Test> {
-		_genesis_phantom_data: Default::default(),
 		authorities,
 	}.build_storage().unwrap().0);
 	t.into()

@@ -359,7 +359,6 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,

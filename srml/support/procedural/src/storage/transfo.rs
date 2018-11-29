@@ -125,6 +125,7 @@ fn decl_store_extra_genesis(
 ) -> proc_macro2::TokenStream {
 
 	let mut is_trait_needed = false;
+	let mut has_trait_field = false;
 	let mut config_field = Vec::new();
 	let mut config_field_default = Vec::new();
 	let mut builders = Vec::new();
@@ -211,6 +212,7 @@ fn decl_store_extra_genesis(
 					}) => {
 						if ext::has_parametric_type(&extra_type, traitinstance) {
 							is_trait_needed = true;
+							has_trait_field = true;
 						}
 						let extrafield = &extra_field.content;
 						genesis_extrafields.push(quote!{
@@ -238,18 +240,30 @@ fn decl_store_extra_genesis(
 			|| builders.len() > 0;
 		if is_extra_genesis_needed {
 			let (fparam, sparam, ph_field, ph_default) = if is_trait_needed {
-				(
-					quote!(<#traitinstance: #traittype>),
-					quote!(<#traitinstance>),
-					quote!{
-						#[serde(skip)]
-						pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
-					},
-					quote!{
-						_genesis_phantom_data: Default::default(),
-					},
-				)
+				if has_trait_field {
+					// no phantom data required
+					(
+						quote!(<#traitinstance: #traittype>),
+						quote!(<#traitinstance>),
+						quote!(),
+						quote!(),
+					)
+				} else {
+					// need phantom data
+					(
+						quote!(<#traitinstance: #traittype>),
+						quote!(<#traitinstance>),
+						quote!{
+							#[serde(skip)]
+							pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
+						},
+						quote!{
+							_genesis_phantom_data: Default::default(),
+						},
+					)
+				}
 			} else {
+				// do not even need type parameter
 				(quote!(), quote!(), quote!(), quote!())
 			};
 			quote!{

@@ -235,7 +235,6 @@ mod tests {
 				transfer_fee: 0,
 				creation_fee: 0,
 				reclaim_rebate: 0,
-				_genesis_phantom_data: Default::default(),
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
@@ -269,7 +268,6 @@ mod tests {
 					(Bob.to_raw_public().into(), 1),
 					(Charlie.to_raw_public().into(), 1),
 				],
-				_genesis_phantom_data: Default::default(),
 			}),
 		}.build_storage().unwrap().0)
 	}
