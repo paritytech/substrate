@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! Proc macro helpers for procedural macros
+//! Use to derive parsing for parsing struct.
 // end::description[]
 
 
@@ -33,77 +33,85 @@ extern crate proc_macro2;
 use proc_macro::TokenStream;
 
 
-pub(crate) fn fields_idents(fields: impl Iterator<Item = syn::Field>) -> impl Iterator<Item = proc_macro2::TokenStream> {
-  fields.enumerate().map(|(ix, field)| {
-    field.ident.clone().map(|i|quote!{#i}).unwrap_or_else(||{
-      let f_ix: syn::Ident = syn::parse_str(&format!("f_{}", ix)).expect("not reserved; qed");
-      quote!{#f_ix}
-    })
-  })
+pub(crate) fn fields_idents(
+	fields: impl Iterator<Item = syn::Field>,
+) -> impl Iterator<Item = proc_macro2::TokenStream> {
+	fields.enumerate().map(|(ix, field)| {
+		field.ident.clone().map(|i|quote!{#i}).unwrap_or_else(|| {
+			let f_ix: syn::Ident = syn::parse_str(&format!("f_{}", ix))
+				.expect("not reserved; qed");
+			quote!( #f_ix )
+		})
+	})
 }
 
-pub(crate) fn fields_access(fields: impl Iterator<Item = syn::Field>) -> impl Iterator<Item = proc_macro2::TokenStream> {
-  fields.enumerate().map(|(ix, field)| {
-    field.ident.clone().map(|i|quote!{#i}).unwrap_or_else(||{
-      let f_ix: syn::Index = syn::parse_str(&ix.to_string()).expect("not reserved; qed");
-      quote!{#f_ix}
-    })
-  })
+pub(crate) fn fields_access(
+	fields: impl Iterator<Item = syn::Field>,
+) -> impl Iterator<Item = proc_macro2::TokenStream> {
+	fields.enumerate().map(|(ix, field)| {
+		field.ident.clone().map(|i|quote!( #i )).unwrap_or_else(|| {
+			let f_ix: syn::Index = syn::parse_str(&ix.to_string())
+				.expect("not reserved; qed");
+			quote!( #f_ix )
+		})
+	})
 }
 
 /// self defined parsing struct (use where clause on struct for it: not meant for good struct
 /// design but fast parse impl).
 #[proc_macro_derive(ParseStruct)]
 pub fn derive_parse_struct(input: TokenStream) -> TokenStream {
-  let syn::ItemStruct {
-    ident,
-    generics,
-    fields,
-    ..
-  } = parse_macro_input!(input as syn::ItemStruct);
-  let field_names = {
-    let name = fields_idents(fields.iter().map(Clone::clone));
-    quote!{#(
-        #name,
-        )*}
-  };
-  let field = fields_idents(fields.iter().map(Clone::clone));
-  let tokens = quote! {
-    impl #generics syn::parse::Parse for #ident #generics {
-      fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
-        #(
-          let #field = input.parse()?;
-         )*
-          Ok(Self {
-            #field_names
-          })
-      }
-    }
-  };
-  tokens.into()
+	let syn::ItemStruct {
+		ident,
+		generics,
+		fields,
+		..
+	} = parse_macro_input!(input as syn::ItemStruct);
+	let field_names = {
+		let name = fields_idents(fields.iter().map(Clone::clone));
+		quote!{
+			#(
+				#name,
+				)*
+		}
+	};
+	let field = fields_idents(fields.iter().map(Clone::clone));
+	let tokens = quote! {
+		impl #generics syn::parse::Parse for #ident #generics {
+			fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+				#(
+					let #field = input.parse()?;
+				)*
+				Ok(Self {
+					#field_names
+				})
+			}
+		}
+	};
+	tokens.into()
 }
 
 #[proc_macro_derive(ToTokensStruct)]
 pub fn derive_totokens_struct(input: TokenStream) -> TokenStream {
-  let syn::ItemStruct {
-    ident,
-    generics,
-    fields,
-    ..
-  } = parse_macro_input!(input as syn::ItemStruct);
-  let fields = fields_access(fields.iter().map(Clone::clone));
-  let tokens = quote! {
+	let syn::ItemStruct {
+		ident,
+		generics,
+		fields,
+		..
+	} = parse_macro_input!(input as syn::ItemStruct);
+	let fields = fields_access(fields.iter().map(Clone::clone));
+	let tokens = quote! {
 
-    impl #generics quote::ToTokens for #ident #generics {
-      fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        #(
-          self.#fields.to_tokens(tokens);
-         )*
-      }
-    }
+		impl #generics quote::ToTokens for #ident #generics {
+			fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+				#(
+					self.#fields.to_tokens(tokens);
+				)*
+			}
+		}
 
-  };
-  tokens.into()
+	};
+	tokens.into()
 }
 
 
@@ -113,100 +121,107 @@ pub fn derive_totokens_struct(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ParseEnum)]
 pub fn derive_parse_enum(input: TokenStream) -> TokenStream {
 
-  let syn::ItemEnum {
-    ident,
-    generics,
-    variants,
-    ..
-  } = parse_macro_input!(input as syn::ItemEnum);
-  let variants = variants.iter().map(|v| {
-    let variant_ident = v.ident.clone();
-    let fields_build = if v.fields.iter().count() > 0 {
-      let fields_id = fields_idents(v.fields.iter().map(Clone::clone));
-      quote!{ (#(#fields_id), *) }
-    } else {
-      quote!{ }
-    };
+	let syn::ItemEnum {
+		ident,
+		generics,
+		variants,
+		..
+	} = parse_macro_input!(input as syn::ItemEnum);
+	let variants = variants.iter().map(|v| {
+		let variant_ident = v.ident.clone();
+		let fields_build = if v.fields.iter().count() > 0 {
+			let fields_id = fields_idents(v.fields.iter().map(Clone::clone));
+			quote!( (#(#fields_id), *) )
+		} else {
+			quote!()
+		};
 
-    let fields_procs = fields_idents(v.fields.iter().map(Clone::clone)).map(|fident| {
-      quote!{
-        let mut #fident = match fork.parse() {
-          Ok(r) => r,
-          Err(_e) => break,
-        };
-      }
-    });
-    let fields_procs_again = fields_idents(v.fields.iter().map(Clone::clone)).map(|fident| {
-      quote!{
-        #fident = input.parse().expect("was parsed just before");
-      }
-    });
- 
-    quote!{
-      let mut fork = input.fork();
-      loop {
-        #(#fields_procs)*
-        // double parse to update input cursor position (TODO check next syn version for a
-        // possibility to copy pos from a fork)
-        #(#fields_procs_again)*
-        return Ok(#ident::#variant_ident#fields_build);
-      }
-    }
-  });
+		let fields_procs = fields_idents(v.fields.iter().map(Clone::clone))
+			.map(|fident| {
+			quote!{
+				let mut #fident = match fork.parse() {
+					Ok(r) => r,
+					Err(_e) => break,
+				};
+			}
+		});
+		let fields_procs_again = fields_idents(v.fields.iter().map(Clone::clone))
+			.map(|fident| {
+			quote!{
+				#fident = input.parse().expect("was parsed just before");
+			}
+		});
 
-  let tokens = quote! {
-    impl #generics syn::parse::Parse for #ident #generics {
-      fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
-        #(
-          #variants
-         )*
-          Err(syn::parse::Error::new(proc_macro2::Span::call_site(), "derived enum no matching variants"))
-      }
-    }
+		// double parse to update input cursor position
+		// TODO check next syn crate for a way
+		// to copy position/state from a fork
+		quote!{
+			let mut fork = input.fork();
+			loop {
+				#(#fields_procs)*
+				#(#fields_procs_again)*
+				return Ok(#ident::#variant_ident#fields_build);
+			}
+		}
+	});
 
-  };
-  tokens.into()
+	let tokens = quote! {
+		impl #generics syn::parse::Parse for #ident #generics {
+			fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+				#(
+					#variants
+				)*
+				// no early return from any variants
+				Err(
+					syn::parse::Error::new(
+						proc_macro2::Span::call_site(),
+						"derived enum no matching variants"
+					)
+				)
+			}
+		}
+
+	};
+	tokens.into()
 }
 
 /// only output field (empty field act as a None)
 #[proc_macro_derive(ToTokensEnum)]
 pub fn derive_totokens_enum(input: TokenStream) -> TokenStream {
-  let syn::ItemEnum {
-    ident,
-    generics,
-    variants,
-    ..
-  } = parse_macro_input!(input as syn::ItemEnum);
-  let variants = variants.iter().map(|v|{
-    let v_ident = v.ident.clone();
-    let fields_build = if v.fields.iter().count() > 0 {
-      let fields_id = fields_idents(v.fields.iter().map(Clone::clone));
-      quote!{ (#(#fields_id), *) }
-    } else {
-      quote!{ }
-    };
-    let field = fields_idents(v.fields.iter().map(Clone::clone));
-    quote! {
-      #ident::#v_ident#fields_build => {
-        #(
-          #field.to_tokens(tokens);
-         )*
-      },
-    }
-  });
-  let tokens = quote! {
-    impl #generics quote::ToTokens for #ident #generics {
-      fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        match self {
-          #(
-            #variants
-           )*
-        }
-      }
-    }
-  };
+	let syn::ItemEnum {
+		ident,
+		generics,
+		variants,
+		..
+	} = parse_macro_input!(input as syn::ItemEnum);
+	let variants = variants.iter().map(|v| {
+		let v_ident = v.ident.clone();
+		let fields_build = if v.fields.iter().count() > 0 {
+			let fields_id = fields_idents(v.fields.iter().map(Clone::clone));
+			quote!( (#(#fields_id), *) )
+		} else {
+			quote!()
+		};
+		let field = fields_idents(v.fields.iter().map(Clone::clone));
+		quote! {
+			#ident::#v_ident#fields_build => {
+				#(
+					#field.to_tokens(tokens);
+				)*
+			},
+		}
+	});
+	let tokens = quote! {
+		impl #generics quote::ToTokens for #ident #generics {
+			fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+				match self {
+					#(
+						#variants
+					)*
+				}
+			}
+		}
+	};
 
-  tokens.into()
+	tokens.into()
 }
-
-

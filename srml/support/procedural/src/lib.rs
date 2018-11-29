@@ -18,8 +18,6 @@
 //! Proc macro of Support code for the runtime.
 // end::description[]
 
-#![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 #![recursion_limit="256"]
 
 extern crate proc_macro;
@@ -36,12 +34,15 @@ extern crate srml_support_procedural_tools;
 
 mod storage;
 
-
 use proc_macro::TokenStream;
 
-
+/// Declares strongly-typed wrappers around codec-compatible types in storage.
+///
+/// For now we implement a convenience trait with pre-specialised associated types, one for each
+/// storage item. This allows you to gain access to publicly visible storage items from a
+/// module type. Currently you must disambiguate by using `<Module as Store>::Item` rather than
+/// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
   storage::transfo::decl_storage_impl(input)
 }
-
