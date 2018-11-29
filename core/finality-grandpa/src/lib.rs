@@ -97,7 +97,7 @@ use runtime_primitives::traits::{
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
-use tokio::timer::Delay;
+use tokio::timer::{Delay, Interval};
 
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
@@ -713,7 +713,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 								   block to finalize number less or equal than best block number; \
 								   thus there is a block with that number in the canon chain already; qed"))
 		})?;
-		let is_live = self.authority_set_oracle.is_live().unwrap_or(false);
+		let is_live = self.authority_set_oracle.is_live();
 		let justification_provided = block.justification.is_some();
 
 		// a pending change is enacted by the given block, if the current
@@ -941,14 +941,15 @@ impl<Block: BlockT> GrandpaOracle<Block> {
 		}
 	}
 
-	fn is_live(&mut self) -> Result<bool, Error> {
-		// TODO: improve this maybe with some measure of how
-		// often we're seeing commits?
-		while let Async::Ready(Some((_, commit))) = self.unfiltered_commits_stream.poll()? {
+	fn poll(&mut self) {
+		self.last_commit_target = None;
+		while let Ok(Async::Ready(Some((_, commit)))) = self.unfiltered_commits_stream.poll() {
 			self.last_commit_target = Some((commit.target_hash, commit.target_number));
 		}
+	}
 
-		Ok(self.last_commit_target.is_some())
+	fn is_live(&self) -> bool {
+		self.last_commit_target.is_some()
 	}
 }
 
@@ -962,10 +963,17 @@ impl<Block: BlockT> SharedGrandpaOracle<Block> {
 		SharedGrandpaOracle { inner: Arc::new(Mutex::new(None)) }
 	}
 
-	fn is_live(&self) -> Result<bool, Error> {
-		self.inner.lock().as_mut()
+	fn poll(&self) {
+		if let Some(inner) = self.inner.lock().as_mut() {
+			inner.poll();
+		}
+	}
+
+	fn is_live(&self) -> bool {
+		self.inner.lock()
+			.as_ref()
 			.map(|inner| inner.is_live())
-			.unwrap_or(Ok(false))
+			.unwrap_or(false)
 	}
 }
 
@@ -1019,10 +1027,26 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		authority_set: authority_set.clone(),
 	});
 
+	let mut authority_set_oracle_task = {
+		let authority_set_oracle = authority_set_oracle.clone();
+		Some(move || {
+			const AUTHORITY_SET_ORACLE_POLL_PERIOD: u64 = 10;
+			let task = Interval::new(Instant::now(), Duration::from_secs(AUTHORITY_SET_ORACLE_POLL_PERIOD))
+				.for_each(move |_| Ok(authority_set_oracle.poll()))
+				.map_err(|_| ());
+
+			tokio::spawn(task);
+		})
+	};
+
 	let initial_state = (initial_environment, last_round_number, last_state, authority_set_change.into_future());
 	let work = future::loop_fn(initial_state, move |params| {
 		let (env, last_round_number, last_state, authority_set_change) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
+
+		if let Some(task) = authority_set_oracle_task.take() {
+			task();
+		}
 
 		let chain_info = match client.info() {
 			Ok(i) => i,
