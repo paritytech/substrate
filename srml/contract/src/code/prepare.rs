@@ -24,6 +24,7 @@ use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use runtime_primitives::traits::As;
+use vm::env_def::ImportSatisfyCheck;
 use {Schedule, Trait};
 
 struct ContractModule<'a, Gas: 'a> {
@@ -107,10 +108,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 	/// - checks any imported function against defined host functions set, incl.
 	///   their signatures.
 	/// - if there is a memory import, returns it's descriptor
-	fn scan_imports<C: Fn(&[u8], &FunctionType) -> bool>(
-		&self,
-		check: C,
-	) -> Result<Option<&MemoryType>, &'static str> {
+	fn scan_imports<C: ImportSatisfyCheck>(&self) -> Result<Option<&MemoryType>, &'static str> {
 		let module = self
 			.module
 			.as_ref()
@@ -144,7 +142,7 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 				.get(*type_idx as usize)
 				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
 
-			if !check(import.field().as_bytes(), func_ty) {
+			if !C::can_satisfy(import.field().as_bytes(), func_ty) {
 				return Err("module imports a non-existent function");
 			}
 		}
@@ -171,17 +169,16 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 /// - all imported functions from the external environment matches defined by `env` module,
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
-pub fn prepare_contract<T: Trait, C: Fn(&[u8], &FunctionType) -> bool>(
+pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 	original_code: &[u8],
 	schedule: &Schedule<T::Gas>,
-	check: C,
 ) -> Result<InstrumentedWasmModule, &'static str> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
 	contract_module.inject_stack_height_metering()?;
 
-	let memory_def = if let Some(memory_type) = contract_module.scan_imports(check)? {
+	let memory_def = if let Some(memory_type) = contract_module.scan_imports::<C>()? {
 		// Inspect the module to extract the initial and maximum page count.
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {

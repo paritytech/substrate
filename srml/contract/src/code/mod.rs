@@ -18,6 +18,7 @@ use codec::Compact;
 use runtime_support::StorageMap;
 use runtime_primitives::traits::{As, Hash, CheckedMul};
 use gas::GasMeter;
+use vm::runtime::Env;
 use {Schedule, Trait, CodeHash, CodeStorage, PrestineCode};
 
 mod prepare;
@@ -57,10 +58,9 @@ pub fn save<T: Trait>(
 
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
 	// due to the schedule changes is on governance system.
-	let instrumented_module = prepare::prepare_contract::<T, _>(
+	let instrumented_module = prepare::prepare_contract::<T, Env>(
 		&original_code,
 		schedule,
-		|_, _| true, // TODO: Use real validation function.
 	)?;
 
 	// TODO: validate the code. If the code is not valid, then don't store it.
@@ -77,10 +77,9 @@ pub fn load<T: Trait>(code_hash: &CodeHash<T>, schedule: &Schedule<T::Gas>,) -> 
 	if instrumented_module.schedule_version < schedule.version {
 		let original_code = <PrestineCode<T>>::get(code_hash).ok_or_else(|| "prestine code is not found")?;
 
-		let instrumented_module = prepare::prepare_contract::<T, _>(
+		let instrumented_module = prepare::prepare_contract::<T, Env>(
 			&original_code,
 			schedule,
-			|_, _| true, // TODO: Use real validation function.
 		)?;
 
 		<CodeStorage<T>>::insert(code_hash, instrumented_module.clone());

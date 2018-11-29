@@ -17,7 +17,7 @@
 //! Definition of macros that hides boilerplate of defining external environment
 //! for a wasm module.
 //!
-//! Typically you should use `define_env` macro.
+//! Most likely you should use `define_env` macro.
 
 #[macro_export]
 macro_rules! convert_args {

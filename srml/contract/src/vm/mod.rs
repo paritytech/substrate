@@ -29,8 +29,8 @@ type BalanceOf<T> = <T as balances::Trait>::Balance;
 type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
 #[macro_use]
-mod env_def;
-mod runtime;
+pub mod env_def;
+pub mod runtime;
 
 use self::runtime::{to_execution_result, Runtime};
 
@@ -140,10 +140,10 @@ pub fn execute<'a, E: Ext>(
 		");
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
+	imports.add_memory("env", "memory", memory.clone());
 	runtime::Env::impls(&mut |name, func_ptr| {
 		imports.add_host_func("env", name, func_ptr);
 	});
-	imports.add_memory("env", "memory", memory.clone());
 
 	let mut runtime = Runtime::new(ext, input_data, output_data, &schedule, memory, gas_meter);
 

@@ -66,52 +66,6 @@ impl ConvertibleToWasm for u64 {
 	}
 }
 
-/// Represents a set of function that defined in this particular environment and
-/// which can be imported and called by the module.
-pub(crate) struct HostFunctionSet<E: Ext> {
-	/// Functions which defined in the environment.
-	pub funcs: BTreeMap<Vec<u8>, HostFunction<E>>,
-}
-impl<E: Ext> HostFunctionSet<E> {
-	pub fn new() -> Self {
-		HostFunctionSet {
-			funcs: BTreeMap::new(),
-		}
-	}
-}
-
-pub(crate) struct HostFunction<E: Ext> {
-	pub(crate) f: fn(&mut Runtime<E>, &[sandbox::TypedValue])
-		-> Result<sandbox::ReturnValue, sandbox::HostError>,
-	func_type: FunctionType,
-}
-impl<E: Ext> HostFunction<E> {
-	/// Create a new instance of a host function.
-	pub fn new(
-		func_type: FunctionType,
-		f: fn(&mut Runtime<E>, &[sandbox::TypedValue])
-			-> Result<sandbox::ReturnValue, sandbox::HostError>,
-	) -> Self {
-		HostFunction { func_type, f }
-	}
-
-	/// Returns a function pointer of this host function.
-	pub fn raw_fn_ptr(
-		&self,
-	) -> fn(&mut Runtime<E>, &[sandbox::TypedValue])
-		-> Result<sandbox::ReturnValue, sandbox::HostError> {
-		self.f
-	}
-
-	/// Check if the this function could be invoked with the given function signature.
-	pub fn func_type_matches(&self, func_type: &FunctionType) -> bool {
-		&self.func_type == func_type
-	}
-}
-
-// TODO: Can we abstract the macro generation over different State objects (i.e. different from Runtime)
-// TODO: Move env def to the root ?
-
 pub(crate) type HostFunc<E> =
 	fn(
 		&mut Runtime<E>,
