@@ -131,8 +131,8 @@ mod missing_block_generic_parameter {
 		pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 		#[derive(Clone, PartialEq, Eq, Encode, Decode, Debug)]
 		pub struct Extrinsic {}
-		impl serde::Serialize for Extrinsic
-		{
+
+		impl serde::Serialize for Extrinsic {
 			fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 				unimplemented!()
 			}

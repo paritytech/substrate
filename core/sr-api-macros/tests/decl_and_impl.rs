@@ -22,8 +22,8 @@ pub type DigestItem = runtime_primitives::generic::DigestItem<H256, u64>;
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Debug)]
 pub struct Extrinsic {}
-impl serde::Serialize for Extrinsic
-{
+
+impl serde::Serialize for Extrinsic {
 	fn serialize<S>(
 		&self,
 		_: S
