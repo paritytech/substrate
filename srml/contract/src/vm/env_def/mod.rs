@@ -108,3 +108,25 @@ impl<E: Ext> HostFunction<E> {
 		&self.func_type == func_type
 	}
 }
+
+// TODO: Can we abstract the macro generation over different State objects (i.e. different from Runtime)
+// TODO: Move env def to the root ?
+
+pub(crate) type HostFunc<E> =
+	fn(
+		&mut Runtime<E>,
+		&[sandbox::TypedValue]
+	) -> Result<sandbox::ReturnValue, sandbox::HostError>;
+
+pub(crate) trait FunctionImplProvider<E: Ext> {
+	fn impls<F: FnMut(&[u8], HostFunc<E>)>(&self, f: &mut F);
+}
+
+/// This trait can be used to check whether the host environment can satisfy
+/// a requested function import.
+pub trait ImportSatisfyCheck {
+	/// Returns `true` if the host environment contains a function with
+	/// the specified name and its type matches to the given type, or `false`
+	/// otherwise.
+	fn can_satisfy(&self, name: &[u8], func_type: &FunctionType) -> bool;
+}

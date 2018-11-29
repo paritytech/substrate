@@ -42,6 +42,22 @@ macro_rules! gen_signature {
 	);
 }
 
+#[macro_export]
+macro_rules! gen_signature_dispatch {
+	( $needle_name:ident, $needle_sig:ident ; $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* , $($rest:tt)* ) => {
+		if stringify!($name).as_bytes() == $needle_name {
+			let signature = gen_signature!( ( $( $params ),* ) $( -> $returns )* );
+			if $needle_sig == &signature {
+				return true;
+			}
+		} else {
+			gen_signature_dispatch!($needle_name, $needle_sig ; $($rest)*);
+		}
+	};
+	( $needle_name:ident, $needle_sig:ident ; ) => {
+	};
+}
+
 /// Unmarshall arguments and then execute `body` expression and return its result.
 macro_rules! unmarshall_then_body {
 	( $body:tt, $ctx:ident, $args_iter:ident, $( $names:ident : $params:ty ),* ) => ({
@@ -120,6 +136,24 @@ macro_rules! define_func {
 	};
 }
 
+#[macro_export]
+macro_rules! register_func {
+	( $reg_cb:ident, < E: $ext_ty:tt > ; ) => {};
+
+	( $reg_cb:ident, < E: $ext_ty:tt > ; $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* => $body:tt $($rest:tt)* ) => {
+		$reg_cb(
+			stringify!($name).as_bytes(),
+			{
+				define_func!(
+					< E: $ext_ty > $name ( $ctx $(, $names : $params )* ) $( -> $returns )* => $body
+				);
+				$name::<E>
+			}
+		);
+		register_func!( $reg_cb, < E: $ext_ty > ; $($rest)* );
+	};
+}
+
 /// Define a function set that can be imported by executing wasm code.
 ///
 /// **NB**: Be advised that all functions defined by this macro
@@ -132,6 +166,23 @@ macro_rules! define_env {
 		$( $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
+		// pub struct $init_name;
+		pub struct derp;
+
+		impl $crate::vm::env_def::ImportSatisfyCheck for derp {
+			fn can_satisfy(&self, name: &[u8], func_type: &$crate::parity_wasm::elements::FunctionType) -> bool {
+				gen_signature_dispatch!( name, func_type ; $( $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )* );
+
+				return false;
+			}
+		}
+
+		impl<E: Ext> $crate::vm::env_def::FunctionImplProvider<E> for derp {
+			fn impls<F: FnMut(&[u8], $crate::vm::env_def::HostFunc<E>)>(&self, f: &mut F) {
+				register_func!(f, < E: $ext_ty > ; $( $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )* );
+			}
+		}
+
 		pub(crate) fn $init_name<E: Ext>() -> $crate::vm::env_def::HostFunctionSet<E> {
 			let mut env = $crate::vm::env_def::HostFunctionSet::new();
 
