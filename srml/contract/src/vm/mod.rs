@@ -18,6 +18,7 @@
 //! represented in wasm.
 
 use exec::CreateReceipt;
+use vm::env_def::FunctionImplProvider;
 use gas::GasMeter;
 use code::MemoryDefinition;
 use rstd::prelude::*;
@@ -127,8 +128,6 @@ pub fn execute<'a, E: Ext>(
 	schedule: &Schedule<<E::T as Trait>::Gas>,
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<(), Error> {
-	let env = runtime::init_env();
-
 	let memory =
 		sandbox::Memory::new(
 			memory_def.initial,
@@ -141,9 +140,9 @@ pub fn execute<'a, E: Ext>(
 		");
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
-	for (func_name, ext_func) in &env.funcs {
-		imports.add_host_func("env", &func_name[..], ext_func.raw_fn_ptr());
-	}
+	runtime::Env::impls(&mut |name, func_ptr| {
+		imports.add_host_func("env", name, func_ptr);
+	});
 	imports.add_memory("env", "memory", memory.clone());
 
 	let mut runtime = Runtime::new(ext, input_data, output_data, &schedule, memory, gas_meter);

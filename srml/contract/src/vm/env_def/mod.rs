@@ -119,7 +119,7 @@ pub(crate) type HostFunc<E> =
 	) -> Result<sandbox::ReturnValue, sandbox::HostError>;
 
 pub(crate) trait FunctionImplProvider<E: Ext> {
-	fn impls<F: FnMut(&[u8], HostFunc<E>)>(&self, f: &mut F);
+	fn impls<F: FnMut(&[u8], HostFunc<E>)>(f: &mut F);
 }
 
 /// This trait can be used to check whether the host environment can satisfy
@@ -128,5 +128,5 @@ pub trait ImportSatisfyCheck {
 	/// Returns `true` if the host environment contains a function with
 	/// the specified name and its type matches to the given type, or `false`
 	/// otherwise.
-	fn can_satisfy(&self, name: &[u8], func_type: &FunctionType) -> bool;
+	fn can_satisfy(name: &[u8], func_type: &FunctionType) -> bool;
 }

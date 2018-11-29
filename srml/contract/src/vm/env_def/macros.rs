@@ -166,42 +166,20 @@ macro_rules! define_env {
 		$( $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
-		// pub struct $init_name;
-		pub struct derp;
+		pub struct $init_name;
 
-		impl $crate::vm::env_def::ImportSatisfyCheck for derp {
-			fn can_satisfy(&self, name: &[u8], func_type: &$crate::parity_wasm::elements::FunctionType) -> bool {
+		impl $crate::vm::env_def::ImportSatisfyCheck for $init_name {
+			fn can_satisfy(name: &[u8], func_type: &$crate::parity_wasm::elements::FunctionType) -> bool {
 				gen_signature_dispatch!( name, func_type ; $( $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )* );
 
 				return false;
 			}
 		}
 
-		impl<E: Ext> $crate::vm::env_def::FunctionImplProvider<E> for derp {
-			fn impls<F: FnMut(&[u8], $crate::vm::env_def::HostFunc<E>)>(&self, f: &mut F) {
+		impl<E: Ext> $crate::vm::env_def::FunctionImplProvider<E> for $init_name {
+			fn impls<F: FnMut(&[u8], $crate::vm::env_def::HostFunc<E>)>(f: &mut F) {
 				register_func!(f, < E: $ext_ty > ; $( $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )* );
 			}
-		}
-
-		pub(crate) fn $init_name<E: Ext>() -> $crate::vm::env_def::HostFunctionSet<E> {
-			let mut env = $crate::vm::env_def::HostFunctionSet::new();
-
-			$(
-				env.funcs.insert(
-					stringify!( $name ).into(),
-					$crate::vm::env_def::HostFunction::new(
-						gen_signature!( ( $( $params ),* ) $( -> $returns )* ),
-						{
-							define_func!(
-								< E: $ext_ty > $name ( $ctx $(, $names : $params )* ) $( -> $returns )* => $body
-							);
-							$name::<E>
-						},
-					),
-				);
-			)*
-
-			env
 		}
 	};
 }

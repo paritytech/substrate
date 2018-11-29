@@ -163,7 +163,7 @@ fn write_sandbox_memory<T: Trait>(
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
 // a function set which can be imported by an executed contract.
-define_env!(init_env, <E: Ext>,
+define_env!(Env, <E: Ext>,
 
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
