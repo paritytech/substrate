@@ -40,7 +40,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		module_ident,
 		mod_param: strait,
 		crate_ident: cratename,
-		content: ext::Braces { content: st, ..},
+		content: ext::Braces { content: storage_lines, ..},
 		extra_genesis,
 		..
 	} = def;
@@ -52,8 +52,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			quote!( ::runtime_support )
 	});
 
-	// make this as another parsing temporarily (switch one macro a time)
-	let toparse = st.inner.clone().into();
 	let (
 		traitinstance,
 		traittypes,
@@ -62,9 +60,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	} else { panic!("Missing declare store generic params") };
 
 	let traittype = traittypes.first().expect("a trait bound expected").into_value();
-	// TODO when covers all macro move it as inner field parso of storage definition!! (corrently inner
-	// macros need st.
-	let storage_lines	= parse_macro_input!(toparse as ext::Punctuated<DeclStorageLine, Token![;]>);
 
 	let extra_genesis = decl_store_extra_genesis(
 		&scrate,

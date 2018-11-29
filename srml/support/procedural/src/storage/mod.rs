@@ -39,7 +39,7 @@ struct StorageDefinition {
 	pub mod_gt_token: Token![>],
 	pub as_token: Token![as],
 	pub crate_ident: Ident,
-	pub content: ext::Braces<ext::StopParse>,
+	pub content: ext::Braces<ext::Punctuated<DeclStorageLine, Token![;]>>,
 	pub extra_genesis: Option<AddExtraGenesis>,
 }
 
