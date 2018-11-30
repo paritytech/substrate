@@ -22,7 +22,7 @@ use runtime_primitives::Justification;
 use std::borrow::Cow;
 
 /// Block import result.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
 	/// Added to the import queue.
 	Queued,

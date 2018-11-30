@@ -105,7 +105,7 @@ use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
@@ -551,8 +551,81 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 
 #[derive(Encode, Decode)]
 struct GrandpaJustification<Block: BlockT> {
+	round: u64,
 	commit: Commit<Block>,
 	ancestry: Vec<Block::Header>,
+}
+
+impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
+	// called by voter, commit is not validated it is assumed to be well-formed
+	fn from_commit<B, E, RA>(
+		client: &Client<B, E, Block, RA>,
+		round: u64,
+		commit: Commit<Block>,
+	) -> Result<GrandpaJustification<Block>, Error> where
+		B: Backend<Block, Blake2Hasher>,
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+		RA: Send + Sync,
+	{
+		let mut ancestry_hashes = HashSet::new();
+		let mut ancestry = Vec::new();
+		for signed in commit.precommits.iter() {
+			let mut current_hash = signed.precommit.target_hash.clone();
+			loop {
+				if current_hash == commit.target_hash { break; }
+				// FIXME: error with commit referencing unknown block
+				let current_header = client.backend().blockchain().header(BlockId::Hash(current_hash)).unwrap().unwrap();
+				if *current_header.number() <= commit.target_number { break; }
+
+				let parent_hash = current_header.parent_hash().clone();
+				if ancestry_hashes.insert(current_hash) {
+					ancestry.push(current_header);
+				}
+				current_hash = parent_hash;
+			}
+		}
+
+		Ok(GrandpaJustification {
+			round, commit, ancestry
+		})
+	}
+
+	// commit decoded as block justification must be verified and validated
+	fn decode_and_verify(
+		encoded: Vec<u8>,
+		set_id: u64,
+	) -> Result<GrandpaJustification<Block>, Error> {
+		// FIXME
+		let justification = GrandpaJustification::decode(&mut &*encoded).unwrap();
+
+		let ancestry: HashMap<_, _> = justification.ancestry
+			.iter()
+			.cloned()
+			.map(|h: Block::Header| (h.hash(), h))
+			.collect();
+
+		for signed in justification.commit.precommits.iter() {
+			// FIXME: handle error
+			communication::check_message_sig::<Block>(
+				&grandpa::Message::Precommit(signed.precommit.clone()),
+				&signed.id,
+				&signed.signature,
+				justification.round,
+				set_id,
+			).unwrap();
+
+			let mut current_hash = signed.precommit.target_hash.clone();
+			loop {
+				if current_hash == justification.commit.target_hash { break; }
+				// FIXME: error with commit referencing unknown block
+				let current_header = ancestry.get(&current_hash).unwrap();
+				if *current_header.number() <= justification.commit.target_number { break; }
+				current_hash = current_header.parent_hash().clone();
+			}
+		}
+
+		Ok(justification)
+	}
 }
 
 enum JustificationOrCommit<Block: BlockT> {
@@ -639,8 +712,14 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		JustificationOrCommit::Justification(justification) => Some(justification.encode()),
 		JustificationOrCommit::Commit(commit) =>
 			if status.new_set_block.is_some() {
-				// FIXME: produce ancestry proof
-				let justification: GrandpaJustification<Block> = GrandpaJustification { commit, ancestry: vec![] };
+				// FIXME: must update `finality-grandpa` to pass along round number with commit
+				let round = 0;
+				let justification = GrandpaJustification::from_commit(
+					client,
+					round,
+					commit,
+				)?;
+
 				Some(justification.encode())
 			} else {
 				None
@@ -707,38 +786,26 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	{
 		use authorities::PendingChange;
 
-		let enacts_change = self.authority_set.inner().read().enacts_change(*block.header.number(), |canon_number| {
-			self.inner.block_hash_from_id(&BlockId::number(canon_number))
-				.map(|h| h.expect("given number always less than block to finalize number; \
-								   block to finalize number less or equal than best block number; \
-								   thus there is a block with that number in the canon chain already; qed"))
-		})?;
+		// we don't want to finalize on `inner.import_block`
+		let justification = block.justification.take();
+		let number = block.header.number().clone();
+		let hash = block.post_header().hash();
+		let parent_hash = *block.header.parent_hash();
+		let digest = block.header.digest().clone();
 		let is_live = self.authority_set_oracle.is_live();
-		let justification_provided = block.justification.is_some();
 
-		// a pending change is enacted by the given block, if the current
-		// grandpa authority set isn't live anymore the provided `ImportBlock`
-		// should include a justification for finalizing the block.
-		if enacts_change && !is_live && !justification_provided {
-			return Err(ClientErrorKind::BadJustification(
-				"missing justification for block that enacts authority set changes".to_string()
-			).into());
+		let import_result = self.inner.import_block(block, new_authorities)?;
+		if import_result != ImportResult::Queued {
+			return Ok(import_result);
 		}
 
 		let maybe_change = self.api.runtime_api().grandpa_pending_change(
-			&BlockId::hash(*block.header.parent_hash()),
-			&block.header.digest().clone(),
+			&BlockId::hash(parent_hash),
+			&digest,
 		)?;
 
-		// when we update the authorities, we need to hold the lock
-		// until the block is written to prevent a race if we need to restore
-		// the old authority set on error.
-		let just_in_case = maybe_change.map(|change| {
-			let hash = block.post_header().hash();
-			let number = block.header.number().clone();
-
+		if let Some(change) = maybe_change {
 			let mut authorities = self.authority_set.inner().write();
-			let old_set = authorities.clone();
 			authorities.add_pending_change(PendingChange {
 				next_authorities: change.next_authorities,
 				finalization_depth: change.delay,
@@ -746,55 +813,66 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				canon_hash: hash,
 			});
 
-			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
-			(old_set, authorities)
-		});
+			let encoded = authorities.encode();
+			self.inner.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
+		};
 
-		let hash = block.header.hash();
-		let number = *block.header.number();
-		let justification = block.justification.clone();
-
-		let import_result = self.inner.import_block(block, new_authorities).map_err(|e| {
-			if let Some((old_set, mut authorities)) = just_in_case {
-				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
-				*authorities = old_set;
-			}
-			e
+		// FIXME: the closure may panic
+		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
+			self.inner.block_hash_from_id(&BlockId::number(canon_number))
+				.map(|h| h.expect("given number always less than block to finalize number; \
+								   block to finalize number less or equal than best block number; \
+								   thus there is a block with that number in the canon chain already; qed"))
 		})?;
 
-		if let Some(justification) = justification {
-			// FIXME: validate justification
-			let justification = GrandpaJustification::decode(&mut &*justification).unwrap();
+		// a pending change is enacted by the given block, if the current
+		// grandpa authority set isn't live anymore the provided `ImportBlock`
+		// should include a justification for finalizing the block.
+		match justification {
+			Some(justification) => {
+				if enacts_change && !is_live {
+					// FIXME: handle error
+					let justification = GrandpaJustification::decode_and_verify(
+						justification,
+						self.authority_set.set_id(),
+					).unwrap();
 
-			let result = finalize_block(
-				&*self.inner,
-				&self.authority_set,
-				hash,
-				number,
-				justification.into(),
-			);
+					let result = finalize_block(
+						&*self.inner,
+						&self.authority_set,
+						hash,
+						number,
+						justification.into(),
+					);
 
-			match result {
-				Ok(_) if enacts_change => {
-					unreachable!("returns Ok when no authority set change should be enacted; \
-								  verified previously that finalizing the current block enacts a change; \
-								  qed;");
-				},
-				Err(ExitOrError::AuthoritiesChanged(new)) => {
-					if let Err(_) = self.authority_set_change.unbounded_send(new) {
-						return Err(ClientErrorKind::Backend(
-							"imported and finalized change block but grandpa voter is no longer running".to_string()
-						).into());
+					match result {
+						Ok(_) => {
+							unreachable!("returns Ok when no authority set change should be enacted; \
+										  verified previously that finalizing the current block enacts a change; \
+										  qed;");
+						},
+						Err(ExitOrError::AuthoritiesChanged(new)) => {
+							debug!(target: "finality", "Imported justified block #{} that enacts authority set change, signalling voter.", number);
+							if let Err(_) = self.authority_set_change.unbounded_send(new) {
+								return Err(ClientErrorKind::Backend(
+									"imported and finalized change block but grandpa voter is no longer running".to_string()
+								).into());
+							}
+						},
+						Err(ExitOrError::Error(_)) => {
+							return Err(ClientErrorKind::Backend(
+								"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
+							).into());
+						},
 					}
-				},
-				Err(ExitOrError::Error(_)) if enacts_change && !is_live => {
-					// FIXME: improve this
-					return Err(ClientErrorKind::Backend(
-						"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
-					).into());
-				},
-				_ => {},
-			}
+				}
+			},
+			None if enacts_change && !is_live => {
+				return Err(ClientErrorKind::BadJustification(
+					"missing justification for block that enacts authority set change".to_string()
+				).into());
+			},
+			_ => {}
 		}
 
 		Ok(import_result)

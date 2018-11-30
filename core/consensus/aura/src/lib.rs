@@ -366,7 +366,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		&self,
 		origin: BlockOrigin,
 		header: B::Header,
-		_justification: Option<Justification>,
+		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
 		let slot_now = slot_now(self.config.slot_duration)
@@ -389,13 +389,14 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 				debug!(target: "aura", "Checked {:?}; importing.", pre_header);
 
 				extra_verification.into_future().wait()?;
+
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
-					justification: None,
 					post_digests: vec![item],
 					body,
 					finalized: false,
+					justification,
 					auxiliary: Vec::new(),
 				};
 
