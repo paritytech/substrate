@@ -375,7 +375,10 @@ where
 fn with_default_boot_node<F>(
 	spec: &ChainSpec<FactoryGenesis<F>>,
 	config: &NetworkConfiguration
-) -> error::Result<ChainSpec<FactoryGenesis<F>>> where F: ServiceFactory {
+) -> error::Result<ChainSpec<FactoryGenesis<F>>>
+where
+	F: ServiceFactory
+{
 	let mut spec = spec.clone();
 	if spec.boot_nodes().is_empty() {
 		let network_keys =
@@ -398,7 +401,10 @@ fn build_spec<F>(
 	matches: &clap::ArgMatches,
 	spec: ChainSpec<FactoryGenesis<F>>,
 	config: &FactoryFullConfiguration<F>
-) -> error::Result<()> where F: ServiceFactory {
+) -> error::Result<()>
+where
+	F: ServiceFactory
+{
 	info!("Building chain spec");
 	let raw = matches.is_present("raw");
 	let spec = with_default_boot_node::<F>(&spec, &config.network)?;

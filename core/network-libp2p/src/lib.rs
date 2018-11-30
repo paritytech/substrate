@@ -25,7 +25,7 @@ extern crate tokio;
 extern crate tokio_io;
 extern crate tokio_timer;
 extern crate libc;
-#[macro_use(multiaddr)]
+#[macro_use]
 extern crate libp2p;
 extern crate rand;
 #[macro_use]
