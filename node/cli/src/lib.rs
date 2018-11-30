@@ -135,7 +135,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		config.roles = ServiceRoles::AUTHORITY;
 	}
 
-	match cli::execute_default::<service::Factory, _>(spec, exit, &matches)? {
+	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
 		cli::Action::ExecutedInternally => (),
 		cli::Action::RunService(exit) => {
 			info!("Substrate Node");

@@ -23,6 +23,7 @@ hex-literal = "0.1"
 substrate-service = { path = "../../core/service" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-network = { path = "../../core/network" }
+substrate-network-libp2p = { path = "../../core/network-libp2p" }
 substrate-consensus-aura = { path = "../../core/consensus/aura" }
 substrate-consensus-common = { path = "../../core/consensus/common" }
 substrate-finality-grandpa = { path = "../../core/finality-grandpa" }

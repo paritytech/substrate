@@ -34,6 +34,8 @@ extern crate sysinfo;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+#[macro_use]
+extern crate substrate_network_libp2p as network_libp2p;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_service as service;
 extern crate substrate_primitives as primitives;
@@ -63,7 +65,7 @@ use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
-use network::{Protocol, config::NonReservedPeerMode};
+use network::{Protocol, config::{NetworkConfiguration, NonReservedPeerMode}};
 use primitives::H256;
 
 use std::io::{Write, Read, stdin, stdout};
@@ -246,9 +248,11 @@ where
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
+
 		config.network.reserved_nodes.extend(matches
 			 .values_of("reserved_nodes")
 			 .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
+
 		if !config.network.reserved_nodes.is_empty() {
 			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
 		}
@@ -325,7 +329,8 @@ where
 pub fn execute_default<'a, F, E>(
 	spec: ChainSpec<FactoryGenesis<F>>,
 	exit: E,
-	matches: &clap::ArgMatches<'a>
+	matches: &clap::ArgMatches<'a>,
+	config: &FactoryFullConfiguration<F>
 ) -> error::Result<Action<E>>
 where
 	E: IntoExit,
@@ -339,7 +344,7 @@ where
 	fdlimit::raise_fd_limit();
 
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		build_spec::<F>(matches, spec)?;
+		build_spec::<F>(matches, spec, config)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
@@ -366,11 +371,36 @@ where
 	Ok(Action::RunService(exit))
 }
 
-fn build_spec<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>
-	where F: ServiceFactory,
-{
+fn with_default_boot_node<F>(
+	spec: &ChainSpec<FactoryGenesis<F>>,
+	config: &NetworkConfiguration
+) -> error::Result<ChainSpec<FactoryGenesis<F>>> where F: ServiceFactory {
+	let mut spec = spec.clone();
+	if spec.boot_nodes().is_empty() {
+		let network_keys =
+			network_libp2p::obtain_private_key(config)
+				.map_err(|err| format!("Error obtaining network key: {}", err))?;
+		let peer_id = network_keys.to_peer_id();
+		let addr = multiaddr![
+			Ip4([127, 0, 0, 1]),
+			Tcp(30333u16),
+			P2p(peer_id)
+		];
+		spec.add_boot_node(addr);
+		Ok(spec)
+	} else {
+		Ok(spec)
+	}
+}
+
+fn build_spec<F>(
+	matches: &clap::ArgMatches,
+	spec: ChainSpec<FactoryGenesis<F>>,
+	config: &FactoryFullConfiguration<F>
+) -> error::Result<()> where F: ServiceFactory {
 	info!("Building chain spec");
 	let raw = matches.is_present("raw");
+	let spec = with_default_boot_node::<F>(&spec, &config.network)?;
 	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, raw)?;
 	print!("{}", json);
 	Ok(())

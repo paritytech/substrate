@@ -23,6 +23,7 @@ use primitives::storage::{StorageKey, StorageData};
 use runtime_primitives::{BuildStorage, StorageMap, ChildrenStorageMap};
 use serde_json as json;
 use components::RuntimeGenesis;
+use network::Multiaddr;
 
 enum GenesisSource<G> {
 	File(PathBuf),
@@ -137,6 +138,10 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 	pub fn properties(&self) -> Properties {
 		// Return an empty JSON object if 'properties' not defined in config
 		self.spec.properties.as_ref().unwrap_or(&json::map::Map::new()).clone()
+	}
+
+	pub fn add_boot_node(&mut self, addr: Multiaddr) {
+		self.spec.boot_nodes.push(addr.to_string())
 	}
 
 	/// Parse json content into a `ChainSpec`
