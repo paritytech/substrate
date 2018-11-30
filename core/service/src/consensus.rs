@@ -25,10 +25,11 @@ use std;
 use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::{block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{id::BLOCK_BUILDER, Core}};
 use codec::{Decode, Encode};
-use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
+use consensus_common::{self, evaluation, offline_tracker::OfflineTracker};
 use primitives::{H256, AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::InherentData;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use parking_lot::RwLock;
@@ -200,10 +201,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 			)
 		}
 
-		let inherent_data = InherentData {
-			timestamp,
-			offline_indices,
-		};
+		let inherent_data = InherentData::new(timestamp, offline_indices);
 
 		let block = self.client.build_block(
 			&self.parent_id,

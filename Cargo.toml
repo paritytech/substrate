@@ -60,7 +60,7 @@ members = [
 	"core/serializer",
 	"core/service",
 	"core/service/test",
-	"core/state-db",
+	"core/sr-api-macros",
 	"core/state-machine",
 	"core/test-runtime",
 	"core/telemetry",

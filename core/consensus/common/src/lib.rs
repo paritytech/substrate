@@ -86,25 +86,6 @@ pub trait Proposer<B: Block> {
 	fn propose(&self) -> Self::Create;
 }
 
-/// Inherent data to include in a block.
-#[derive(Encode, Decode)]
-pub struct InherentData {
-	/// Current timestamp.
-	pub timestamp: u64,
-	/// Indices of offline validators.
-	pub offline_indices: Vec<u32>,
-}
-
-impl InherentData {
-	/// Create a new `InherentData` instance.
-	pub fn new(timestamp: u64, offline_indices: Vec<u32>) -> Self {
-		Self {
-			timestamp,
-			offline_indices
-		}
-	}
-}
-
 /// An oracle for when major synchronization work is being undertaken.
 ///
 /// Generally, consensus authoring work isn't undertaken while well behind
