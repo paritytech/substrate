@@ -23,16 +23,6 @@ use H256;
 #[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode)]
 pub struct AuthorityId(pub [u8; 32]);
 
-impl AuthorityId {
-	/// Create an id from a 32-byte slice. Panics with other lengths.
-	#[cfg(feature = "std")]
-	fn from_slice(data: &[u8]) -> Self {
-		let mut r = [0u8; 32];
-		r.copy_from_slice(data);
-		AuthorityId(r)
-	}
-}
-
 #[cfg(feature = "std")]
 impl ::std::fmt::Display for AuthorityId {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -94,14 +84,13 @@ impl Into<H256> for AuthorityId {
 #[cfg(feature = "std")]
 impl Serialize for AuthorityId {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		::bytes::serialize(&self.0, serializer)
+		::ed25519::serialize(&self, serializer)
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'de> Deserialize<'de> for AuthorityId {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		::bytes::deserialize_check_len(deserializer, ::bytes::ExpectedLen::Exact(32))
-			.map(|x| AuthorityId::from_slice(&x))
+		::ed25519::deserialize(deserializer)
 	}
 }
