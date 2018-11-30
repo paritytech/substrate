@@ -516,8 +516,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		}
 	}
 
-	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, commit: Commit<Block>) -> Result<(), Self::Error> {
-		finalize_block(&*self.inner, &self.authority_set, hash, number, commit.into())
+	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
+		finalize_block(&*self.inner, &self.authority_set, hash, number, (round, commit).into())
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
@@ -630,11 +630,11 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 
 enum JustificationOrCommit<Block: BlockT> {
 	Justification(GrandpaJustification<Block>),
-	Commit(Commit<Block>),
+	Commit((u64, Commit<Block>)),
 }
 
-impl<Block: BlockT> From<Commit<Block>> for JustificationOrCommit<Block> {
-	fn from(commit: Commit<Block>) -> JustificationOrCommit<Block> {
+impl<Block: BlockT> From<(u64, Commit<Block>)> for JustificationOrCommit<Block> {
+	fn from(commit: (u64, Commit<Block>)) -> JustificationOrCommit<Block> {
 		JustificationOrCommit::Commit(commit)
 	}
 }
@@ -710,13 +710,11 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	// syncing clients.
 	let justification = match justification_or_commit {
 		JustificationOrCommit::Justification(justification) => Some(justification.encode()),
-		JustificationOrCommit::Commit(commit) =>
+		JustificationOrCommit::Commit((round_number, commit)) =>
 			if status.new_set_block.is_some() {
-				// FIXME: must update `finality-grandpa` to pass along round number with commit
-				let round = 0;
 				let justification = GrandpaJustification::from_commit(
 					client,
-					round,
+					round_number,
 					commit,
 				)?;
 
