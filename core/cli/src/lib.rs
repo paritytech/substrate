@@ -249,11 +249,9 @@ where
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
-
 		config.network.reserved_nodes.extend(matches
 			 .values_of("reserved_nodes")
 			 .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
-
 		if !config.network.reserved_nodes.is_empty() {
 			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
 		}
