@@ -34,8 +34,6 @@ extern crate sysinfo;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
-#[macro_use]
-extern crate substrate_network_libp2p as network_libp2p;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_service as service;
 extern crate substrate_primitives as primitives;
@@ -65,7 +63,10 @@ use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
-use network::{Protocol, config::{NetworkConfiguration, NonReservedPeerMode}};
+use network::{
+	Protocol, config::{NetworkConfiguration, NonReservedPeerMode},
+	multiaddr,
+};
 use primitives::H256;
 
 use std::io::{Write, Read, stdin, stdout};
@@ -378,7 +379,7 @@ fn with_default_boot_node<F>(
 	let mut spec = spec.clone();
 	if spec.boot_nodes().is_empty() {
 		let network_keys =
-			network_libp2p::obtain_private_key(config)
+			network::obtain_private_key(config)
 				.map_err(|err| format!("Error obtaining network key: {}", err))?;
 		let peer_id = network_keys.to_peer_id();
 		let addr = multiaddr![
