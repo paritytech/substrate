@@ -388,11 +388,9 @@ where
 			Tcp(30333u16),
 			P2p(peer_id)
 		];
-		spec.add_boot_node(addr);
-		Ok(spec)
-	} else {
-		Ok(spec)
+		spec.add_boot_node(addr)
 	}
+	Ok(spec)
 }
 
 fn build_spec<F>(
