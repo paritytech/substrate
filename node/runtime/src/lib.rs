@@ -26,10 +26,6 @@ extern crate srml_support;
 #[macro_use]
 extern crate sr_primitives as runtime_primitives;
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 extern crate substrate_primitives;
 
 #[macro_use]
