@@ -259,9 +259,8 @@ pub fn is_parametric_type_def(typ: &syn::Type, default: bool) -> bool {
 		syn::Type::Reference(ref inner) => is_parametric_type_def(&inner.elem, default),
 		syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
 		syn::Type::Never(..) => false,
-		syn::Type::Tuple(ref inner) => {
-			inner.elems.iter().any(|t|is_parametric_type_def(t, default))
-		},
+		syn::Type::Tuple(ref inner) =>
+			inner.elems.iter().any(|t|is_parametric_type_def(t, default)),
 		syn::Type::TraitObject(..) => true,
 		syn::Type::ImplTrait(..) => true,
 		syn::Type::Paren(ref inner) => is_parametric_type_def(&inner.elem, default),
@@ -305,9 +304,8 @@ pub fn has_parametric_type_def(typ: &syn::Type, ident: &Ident, default: bool) ->
 		syn::Type::Reference(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
 		syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
 		syn::Type::Never(..) => false,
-		syn::Type::Tuple(ref inner) => {
-			inner.elems.iter().any(|t|has_parametric_type_def(t, ident, default))
-		},
+		syn::Type::Tuple(ref inner) =>
+			inner.elems.iter().any(|t|has_parametric_type_def(t, ident, default)),
 		syn::Type::TraitObject(..) => true, // TODO check bounds
 		syn::Type::ImplTrait(..) => true, // TODO check bounds
 		syn::Type::Paren(ref inner) => has_parametric_type_def(&inner.elem, ident, default),

@@ -138,19 +138,19 @@ pub fn derive_parse_enum(input: TokenStream) -> TokenStream {
 
 		let fields_procs = fields_idents(v.fields.iter().map(Clone::clone))
 			.map(|fident| {
-			quote!{
-				let mut #fident = match fork.parse() {
-					Ok(r) => r,
-					Err(_e) => break,
-				};
-			}
-		});
+				quote!{
+					let mut #fident = match fork.parse() {
+						Ok(r) => r,
+						Err(_e) => break,
+					};
+				}
+			});
 		let fields_procs_again = fields_idents(v.fields.iter().map(Clone::clone))
 			.map(|fident| {
-			quote!{
-				#fident = input.parse().expect("was parsed just before");
-			}
-		});
+				quote!{
+					#fident = input.parse().expect("was parsed just before");
+				}
+			});
 
 		// double parse to update input cursor position
 		// TODO check next syn crate for a way
