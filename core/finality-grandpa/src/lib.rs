@@ -930,7 +930,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 
 struct GrandpaOracle<Block: BlockT> {
 	unfiltered_commits_stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>,
-	last_commit_target: Option<(Block::Hash, NumberFor<Block>)>,
+	last_commit_target: Option<(Instant, Block::Hash, NumberFor<Block>)>,
 }
 
 impl<Block: BlockT> GrandpaOracle<Block> {
@@ -942,14 +942,15 @@ impl<Block: BlockT> GrandpaOracle<Block> {
 	}
 
 	fn poll(&mut self) {
-		self.last_commit_target = None;
 		while let Ok(Async::Ready(Some((_, commit)))) = self.unfiltered_commits_stream.poll() {
-			self.last_commit_target = Some((commit.target_hash, commit.target_number));
+			self.last_commit_target = Some((Instant::now(), commit.target_hash, commit.target_number));
 		}
 	}
 
 	fn is_live(&self) -> bool {
-		self.last_commit_target.is_some()
+		self.last_commit_target.map(|(instant, _, _)| {
+			instant.elapsed() < Duration::from_secs(30)
+		}).unwrap_or(false)
 	}
 }
 
@@ -983,7 +984,10 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
-) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
+) -> ::client::error::Result<(
+	impl Future<Item=(),Error=()> + Send + 'static,
+	impl Future<Item=(),Error=()> + Send + 'static,
+)> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -1002,6 +1006,13 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		authority_set_change,
 		authority_set_oracle
 	} = link;
+
+	let oracle_work = {
+		let authority_set_oracle = authority_set_oracle.clone();
+		Interval::new(Instant::now(), Duration::from_secs(1))
+			.for_each(move |_| Ok(authority_set_oracle.poll()))
+			.map_err(|_| ())
+	};
 
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
@@ -1027,26 +1038,10 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		authority_set: authority_set.clone(),
 	});
 
-	let mut authority_set_oracle_task = {
-		let authority_set_oracle = authority_set_oracle.clone();
-		Some(move || {
-			const AUTHORITY_SET_ORACLE_POLL_PERIOD: u64 = 10;
-			let task = Interval::new(Instant::now(), Duration::from_secs(AUTHORITY_SET_ORACLE_POLL_PERIOD))
-				.for_each(move |_| Ok(authority_set_oracle.poll()))
-				.map_err(|_| ());
-
-			tokio::spawn(task);
-		})
-	};
-
 	let initial_state = (initial_environment, last_round_number, last_state, authority_set_change.into_future());
-	let work = future::loop_fn(initial_state, move |params| {
+	let voter_work = future::loop_fn(initial_state, move |params| {
 		let (env, last_round_number, last_state, authority_set_change) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
-
-		if let Some(task) = authority_set_oracle_task.take() {
-			task();
-		}
 
 		let chain_info = match client.info() {
 			Ok(i) => i,
@@ -1134,7 +1129,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 				trigger_authority_set_change(new, authority_set_change)
 			},
 		}))
-	});
+	}).map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
 
-	Ok(work.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e)))
+	Ok((voter_work, oracle_work))
 }
