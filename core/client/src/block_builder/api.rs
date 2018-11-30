@@ -16,24 +16,20 @@
 
 //! The runtime api for building blocks.
 
-use runtime_primitives::{traits::Block as BlockT, ApplyResult};
+use runtime_primitives::{traits::Block as BlockT, ApplyResult, InherentData, CheckInherentError};
 use rstd::vec::Vec;
 
 decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-	pub trait BlockBuilder<Block: BlockT> {
+	pub trait BlockBuilder {
 		/// Apply the given extrinsics.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		/// Finish the current block.
 		fn finalise_block() -> <Block as BlockT>::Header;
 		/// Generate inherent extrinsics.
-		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(
-			inherent: InherentExtrinsic
-		) -> Vec<UncheckedExtrinsic>;
+		fn inherent_extrinsics(inherent: InherentData) -> Vec<<Block as BlockT>::Extrinsic>;
 		/// Check that the inherents are valid.
-		fn check_inherents<InherentData, Error>(
-			block: Block, data: InherentData
-		) -> Result<(), Error>;
+		fn check_inherents(block: Block, data: InherentData) -> Result<(), CheckInherentError>;
 		/// Generate a random seed.
 		fn random_seed() -> <Block as BlockT>::Hash;
 	}
