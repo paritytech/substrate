@@ -96,7 +96,11 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 		let mut decl = decl.clone();
 		extend_generics_with_block(&mut decl.generics);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
-		remove_supported_attributes(&mut decl.attrs);
+		let found_attributes = remove_supported_attributes(&mut decl.attrs);
+		let api_version = unwrap_or_error(get_api_version(&found_attributes).map(|v| {
+			generate_runtime_api_version(v as u32)
+		}));
+		let id = generate_runtime_api_id(&decl.ident.to_string());
 
 		result.push(quote!(
 			#[doc(hidden)]
@@ -104,6 +108,10 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 				use super::*;
 
 				#decl
+
+				#api_version
+
+				#id
 			}
 		));
 	}
@@ -189,28 +197,43 @@ fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 	}
 }
 
-/// Generates the identifier for the given `trait_name` by hashing the `trait_name`.
-fn generate_runtime_api_id(trait_name: &str) -> [u8; 8] {
+/// Generates the identifier as const variable for the given `trait_name`
+/// by hashing the `trait_name`.
+fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
 	let mut res = [0; 8];
 	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
-	res
+
+	quote!(	const ID: [u8; 8] = [ #( #res ),* ]; )
+}
+
+/// Generates the const variable that holds the runtime api version.
+fn generate_runtime_api_version(version: u32) -> TokenStream {
+	quote!( const VERSION: u32 = #version; )
 }
 
 /// Generates the implementation of `RuntimeApiInfo` for the given trait.
 fn generate_runtime_info_impl(trait_name: &Ident, version: u64) -> TokenStream {
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let id = generate_runtime_api_id(&trait_name.to_string());
-	let version = version as u32;
+	let version = generate_runtime_api_version(version as u32);
 
 	quote!(
-		#[cfg(any(feature = "std", test))]
+		 #[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::runtime_api::BlockT> #crate_::runtime_api::RuntimeApiInfo
 			for #trait_name<Block>
 		{
-			const ID: [u8; 8] = [ #( #id ),* ];
-			const VERSION: u32 = #version;
+			#id
+			#version
 		}
 	)
+}
+
+/// Get the api version from the user given attribute or `Ok(1)`, if no attribute was given.
+fn get_api_version(found_attributes: &HashMap<&'static str, Attribute>) -> Result<u64> {
+	match found_attributes.get(&API_VERSION_ATTRIBUTE) {
+		Some(attr) => parse_runtime_api_version(attr),
+		None => Ok(1),
+	}
 }
 
 /// Generate the decleration of the trait for the client side.
@@ -233,11 +256,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 			to_client_side.fold_item_trait(decl)
 		};
 
-		// If the user specified an `api_version`, try to parse it, otherwise it is just version 1.
-		let api_version = match found_attributes.get(&API_VERSION_ATTRIBUTE) {
-			Some(attr) => parse_runtime_api_version(attr),
-			None => Ok(1),
-		};
+		let api_version = get_api_version(&found_attributes);
 
 		let runtime_info = unwrap_or_error(
 			api_version.map(|v| generate_runtime_info_impl(&decl.ident, v))
