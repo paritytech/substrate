@@ -21,6 +21,7 @@ extern crate proc_macro;
 extern crate proc_macro2;
 extern crate quote;
 extern crate syn;
+extern crate blake2_rfc;
 
 use proc_macro::TokenStream;
 

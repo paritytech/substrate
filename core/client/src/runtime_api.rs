@@ -21,8 +21,8 @@
 pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef}, generic::BlockId,
-	transaction_validity::TransactionValidity
+	traits::{Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
+	generic::BlockId, transaction_validity::TransactionValidity
 };
 pub use runtime_version::{ApiId, RuntimeVersion};
 #[doc(hidden)]
@@ -38,9 +38,11 @@ use primitives::{AuthorityId, OpaqueMetadata};
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
-pub trait ConstructRuntimeApi<Block: BlockT>: Sized {
+pub trait ConstructRuntimeApi<Block: BlockT> {
 	/// Construct an instance of the runtime api.
-	fn construct_runtime_api<'a, T: CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self>;
+	fn construct_runtime_api<'a, T: CallApiAt<Block>>(
+		call: &'a T
+	) -> ApiRef<'a, Self> where Self: Sized;
 }
 
 /// An extension for the `RuntimeApi`.
@@ -54,7 +56,7 @@ pub trait ApiExt {
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
 		map_call: F
-	) -> result::Result<R, E>;
+	) -> result::Result<R, E> where Self: Sized;
 }
 
 /// Something that can call the runtime api at a given block.

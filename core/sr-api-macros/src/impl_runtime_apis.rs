@@ -291,7 +291,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 			fn map_api_result<F: FnOnce(&Self) -> ::std::result::Result<R, E>, R, E>(
 				&self,
 				map_call: F
-			) -> ::std::result::Result<R, E> {
+			) -> ::std::result::Result<R, E> where Self: Sized {
 				*self.commit_on_success.borrow_mut() = false;
 				let res = map_call(self);
 				*self.commit_on_success.borrow_mut() = true;
@@ -306,7 +306,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		impl #crate_::runtime_api::ConstructRuntimeApi<#block> for RuntimeApi {
 			fn construct_runtime_api<'a, T: #crate_::runtime_api::CallApiAt<#block>>(
 				call: &'a T
-			) -> #crate_::runtime_api::ApiRef<'a, Self> {
+			) -> #crate_::runtime_api::ApiRef<'a, Self> where Self: Sized {
 				RuntimeApi {
 					call: unsafe {
 						::std::ptr::NonNull::new_unchecked(

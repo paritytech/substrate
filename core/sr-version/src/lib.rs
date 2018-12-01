@@ -112,7 +112,13 @@ pub struct RuntimeVersion {
 #[cfg(feature = "std")]
 impl fmt::Display for RuntimeVersion {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}-{}:{}({}-{})", self.spec_name, self.spec_version, self.authoring_version, self.impl_name, self.impl_version)
+		write!(f, "{}-{}:{}({}-{})",
+			self.spec_name,
+			self.spec_version,
+			self.authoring_version,
+			self.impl_name,
+			self.impl_version
+		)
 	}
 }
 
