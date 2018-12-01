@@ -114,6 +114,11 @@ decl_module! {
 
 		/// Start a referendum.
 		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
+			if let Some((prop_index, _, _)) = Self::public_props().into_iter().find(|ref v| *proposal == v.1) {
+				if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
+					Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
+				}
+			}
 			Self::inject_referendum(
 				<system::Module<T>>::block_number() + Self::voting_period(),
 				*proposal,
@@ -224,6 +229,11 @@ impl<T: Trait> Module<T> {
 
 	/// Start a referendum. Can be called directly by the council.
 	pub fn internal_start_referendum(proposal: T::Proposal, vote_threshold: VoteThreshold) -> result::Result<ReferendumIndex, &'static str> {
+		if let Some((prop_index, _, _)) = Self::public_props().into_iter().find(|ref v| proposal == v.1) {
+			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {
+				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
+			}
+		}
 		<Module<T>>::inject_referendum(<system::Module<T>>::block_number() + <Module<T>>::voting_period(), proposal, vote_threshold)
 	}
 
