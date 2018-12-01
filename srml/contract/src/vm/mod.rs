@@ -119,7 +119,7 @@ pub enum Error {
 
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
-	entrypoint: &[u8],
+	entrypoint_name: &[u8],
 	code: &[u8],
 	memory_def: &MemoryDefinition,
 	input_data: &[u8],
@@ -152,7 +152,7 @@ pub fn execute<'a, E: Ext>(
 		// No errors or traps were generated on instantiation! That
 		// means we can now invoke the contract entrypoint.
 		Ok(mut instance) => {
-			let err = instance.invoke(entrypoint, &[], &mut runtime).err();
+			let err = instance.invoke(entrypoint_name, &[], &mut runtime).err();
 			to_execution_result(runtime, err)
 		}
 		// `start` function trapped. Treat it in the same manner as an execution error.
