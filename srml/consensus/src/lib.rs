@@ -44,7 +44,7 @@ use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::RuntimeString;
+use primitives::CheckInherentError;
 use primitives::traits::{
 	MaybeSerializeDebug, Member, ProvideInherent, Block as BlockT
 };
@@ -75,7 +75,7 @@ pub type Log<T> = RawLog<
 >;
 
 /// A logs in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<SessionKey> {
 	/// Authorities set has been changed. Contains the new set of authorities.
@@ -249,7 +249,6 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Inherent = Vec<u32>;
 	type Call = Call<T>;
-	type Error = RuntimeString;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
 		vec![(T::NOTE_OFFLINE_POSITION, Call::note_offline(data))]
@@ -257,7 +256,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
-	) -> result::Result<(), Self::Error> {
+	) -> result::Result<(), CheckInherentError> {
 		let noted_offline = block
 			.extrinsics().get(T::NOTE_OFFLINE_POSITION as usize)
 			.and_then(|xt| match extract_function(&xt) {
@@ -267,7 +266,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		noted_offline.iter().try_for_each(|n|
 			if !data.contains(n) {
-				Err("Online node marked offline".into())
+				Err(CheckInherentError::Other("Online node marked offline".into()))
 			} else {
 				Ok(())
 			}

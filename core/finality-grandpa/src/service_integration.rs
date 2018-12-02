@@ -14,22 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use primitives::OpaqueMetadata;
-use runtime_primitives::{
-	traits::{Block as BlockT},
-	transaction_validity::TransactionValidity
-};
+/// Integrate grandpa finality with substrate service
 
-decl_runtime_apis! {
-	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata {
-		/// Returns the metadata of a runtime.
-		fn metadata() -> OpaqueMetadata;
-	}
+use client;
+use service::{FullBackend, FullExecutor, ServiceFactory};
 
-	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
-	pub trait TaggedTransactionQueue<Block: BlockT> {
-		/// Validate the given transaction.
-		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
-	}
-}
+pub type BlockImportForService<F> = ::GrandpaBlockImport<
+	FullBackend<F>,
+	FullExecutor<F>,
+	<F as ServiceFactory>::Block,
+	<F as ServiceFactory>::RuntimeApi,
+	client::Client<
+        FullBackend<F>,
+        FullExecutor<F>,
+        <F as ServiceFactory>::Block,
+        <F as ServiceFactory>::RuntimeApi
+    >,
+>;
+
+pub type LinkHalfForService<F> = ::LinkHalf<
+	FullBackend<F>,
+	FullExecutor<F>,
+	<F as ServiceFactory>::Block,
+	<F as ServiceFactory>::RuntimeApi
+>;

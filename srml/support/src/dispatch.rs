@@ -56,6 +56,9 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 
 /// Declare a struct for this module, then implement dispatch logic to create a pairing of several
 /// dispatch traits and enums.
+///
+/// The `on_finalise` function is special, since it can either take no parameters,
+/// or one parameter, which has the runtime's block number type.
 #[macro_export]
 macro_rules! decl_module {
 	(

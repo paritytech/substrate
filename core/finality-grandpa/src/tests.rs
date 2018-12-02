@@ -43,7 +43,7 @@ type PeerData =
 				test_client::Backend,
 				test_client::Executor,
 				Block,
-				test_client::runtime::ClientWithApi,
+				test_client::runtime::RuntimeApi,
 			>
 		>
 	>;
@@ -157,12 +157,31 @@ fn make_topic(round: u64, set_id: u64) -> Hash {
 	hash
 }
 
+fn make_commit_topic(set_id: u64) -> Hash {
+	let mut hash = Hash::default();
+
+	{
+		let raw = hash.as_mut();
+		raw[16..22].copy_from_slice(b"commit");
+	}
+	set_id.using_encoded(|s| {
+		let raw = hash.as_mut();
+		raw[24..].copy_from_slice(s);
+	});
+
+	hash
+}
+
 impl Network for MessageRouting {
-	type In = Box<Stream<Item=Vec<u8>,Error=()>>;
+	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		let messages = self.inner.lock().peer(self.peer_id)
-			.with_spec(|spec, _| spec.gossip.messages_for(make_topic(round, set_id)));
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		let messages = peer.with_spec(move |_, _| {
+			gossip.messages_for(make_topic(round, set_id))
+		});
 
 		let messages = messages.map_err(
 			move |_| panic!("Messages for round {} dropped too early", round)
@@ -179,8 +198,33 @@ impl Network for MessageRouting {
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
 		let topic = make_topic(round, set_id);
-		self.inner.lock().peer(self.peer_id)
-			.with_spec(|spec, _| spec.gossip.collect_garbage(|t| t == &topic));
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		peer.with_spec(move |_, _| {
+			gossip.collect_garbage(|t| t == &topic)
+		});
+	}
+
+	fn commit_messages(&self, set_id: u64) -> Self::In {
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		let messages = peer.with_spec(move |_, _| {
+			gossip.messages_for(make_commit_topic(set_id))
+		});
+
+		let messages = messages.map_err(
+			move |_| panic!("Commit messages for set {} dropped too early", set_id)
+		);
+
+		Box::new(messages)
+	}
+
+	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+		let mut inner = self.inner.lock();
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message);
+		inner.route_until_complete();
 	}
 }
 
@@ -318,6 +362,8 @@ fn finalize_3_voters_no_observers() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(|_| Ok(()))
 		);
+		fn assert_send<T: Send>(_: &T) { }
+
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
@@ -327,6 +373,8 @@ fn finalize_3_voters_no_observers() {
 			link,
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
+
+		assert_send(&voter);
 
 		runtime.spawn(voter);
 	}

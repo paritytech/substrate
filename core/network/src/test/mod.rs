@@ -58,31 +58,23 @@ impl ExecuteInContext<Block> for DummyContextExecutor {
 }
 
 /// The test specialization.
-pub struct DummySpecialization {
-	/// Consensus gossip handle.
-	pub gossip: ConsensusGossip<Block>,
-}
+pub struct DummySpecialization { }
 
 impl NetworkSpecialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
-	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, status: ::message::Status<Block>) {
-		self.gossip.new_peer(ctx, peer_id, status.roles);
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: ::message::Status<Block>) {
 	}
 
-	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex) {
-		self.gossip.peer_disconnected(ctx, peer_id);
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
 	}
 
 	fn on_message(
 		&mut self,
-			ctx: &mut Context<Block>,
-			peer_id: NodeIndex,
-			message: &mut Option<::message::Message<Block>>
+		_ctx: &mut Context<Block>,
+		_peer_id: NodeIndex,
+		_message: &mut Option<::message::Message<Block>>
 	) {
-		if let Some(::message::generic::Message::Consensus(topic, data)) = message.take() {
-			self.gossip.on_incoming(ctx, peer_id, topic, data);
-		}
 	}
 }
 
@@ -137,7 +129,7 @@ pub struct TestPacket {
 	recipient: NodeIndex,
 }
 
-pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>;
+pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
 
 pub struct Peer<V: Verifier<Block>, D> {
 	client: Arc<PeersClient>,
@@ -177,6 +169,10 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: NodeIndex) {
 		self.sync.on_peer_connected(&mut TestIo::new(&self.queue, Some(other)), other);
+	}
+
+	pub fn consensus_gossip(&self) -> &RwLock<ConsensusGossip<Block>> {
+		self.sync.consensus_gossip()
 	}
 
 	/// Called on disconnect from other indicated peer.
@@ -233,9 +229,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
-		self.sync.with_spec(&mut TestIo::new(&self.queue, None), |spec, ctx| {
-			spec.gossip.multicast(ctx, topic, data);
-		})
+		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -363,9 +357,7 @@ pub trait TestNetFactory: Sized {
 		let (block_import, data) = self.make_block_import(client.clone());
 
 		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import));
-		let specialization = DummySpecialization {
-			gossip: ConsensusGossip::new(),
-		};
+		let specialization = DummySpecialization { };
 		let sync = Protocol::new(
 			config.clone(),
 			client.clone(),

@@ -544,8 +544,8 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
-pub trait Digest: Member + MaybeSerializeDebug + Default {
-	type Hash: Member + MaybeSerializeDebug;
+pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
+	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
@@ -567,9 +567,9 @@ pub trait Digest: Member + MaybeSerializeDebug + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
-	type Hash: Member + MaybeSerializeDebug;
-	type AuthorityId: Member + MaybeSerializeDebug;
+pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
+	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
+	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
@@ -582,8 +582,6 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
 pub trait ProvideInherent {
 	/// The inherent that is provided.
 	type Inherent: Encode + MaybeDecode;
-	/// The error used by this trait.
-	type Error: Encode + MaybeDecode;
 	/// The call for setting the inherent.
 	type Call: Encode + MaybeDecode;
 
@@ -597,7 +595,7 @@ pub trait ProvideInherent {
 	/// Check that the given inherent is valid.
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
-	) -> Result<(), Self::Error>;
+	) -> Result<(), super::CheckInherentError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -628,4 +626,16 @@ pub trait ProvideRuntimeApi {
 	/// the modifications will be `discarded`. The modifications will not be applied to the
 	/// storage, even on a `commit`.
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+}
+
+/// A marker trait for something that knows the type of the runtime block.
+pub trait GetRuntimeBlockType {
+	/// The `RuntimeBlock` type.
+	type RuntimeBlock: self::Block;
+}
+
+/// A marker trait for something that knows the type of the node block.
+pub trait GetNodeBlockType {
+	/// The `NodeBlock` type.
+	type NodeBlock: self::Block;
 }

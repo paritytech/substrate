@@ -25,7 +25,7 @@ use NetworkConfiguration;
 const SECRET_FILE: &str = "secret";
 
 /// Obtains or generates the local private key using the configuration.
-pub(crate) fn obtain_private_key(
+pub fn obtain_private_key(
 	config: &NetworkConfiguration
 ) -> Result<secio::SecioKeyPair, IoError> {
 	if let Some(ref secret) = config.use_secret {

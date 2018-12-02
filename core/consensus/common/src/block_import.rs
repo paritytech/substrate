@@ -1,7 +1,25 @@
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Block import helpers.
 
 use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, DigestItemFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, DigestItemFor};
 use runtime_primitives::Justification;
+use std::borrow::Cow;
 
 /// Block import result.
 #[derive(Debug)]
@@ -88,6 +106,24 @@ impl<Block: BlockT> ImportBlock<Block> {
 			self.finalized,
 			self.auxiliary,
 		)
+	}
+
+	/// Get a handle to full header (with post-digests applied).
+	pub fn post_header(&self) -> Cow<Block::Header> {
+		use runtime_primitives::traits::Digest;
+
+		if self.post_digests.is_empty() {
+			Cow::Borrowed(&self.header)
+		} else {
+			Cow::Owned({
+				let mut hdr = self.header.clone();
+				for digest_item in &self.post_digests {
+					hdr.digest_mut().push(digest_item.clone());
+				}
+
+				hdr
+			})
+		}
 	}
 }
 

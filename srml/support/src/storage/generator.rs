@@ -622,8 +622,8 @@ macro_rules! __generate_genesis_config {
 		// final build storage call
 		[$call:expr]
 	) => {
-		#[derive(Serialize, Deserialize)]
 		#[cfg(feature = "std")]
+		#[derive(Serialize, Deserialize)]
 		#[serde(rename_all = "camelCase")]
 		#[serde(deny_unknown_fields)]
 		pub struct GenesisConfig<$traitinstance: $traittype> {

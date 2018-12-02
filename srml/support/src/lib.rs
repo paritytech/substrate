@@ -122,4 +122,5 @@ pub enum Void {}
 pub use mashup::*;
 
 #[cfg(feature = "std")]
+#[doc(hidden)]
 pub use serde_derive::*;
