@@ -315,8 +315,8 @@ mod tests {
 		assert!(authorities.current_authorities.is_empty());
 
 		authorities.apply_changes(15, |n| match n {
-			5 => Ok("hash_a"),
-			15 => Ok("hash_15_canon"),
+			5 => Ok(Some("hash_a")),
+			15 => Ok(Some("hash_15_canon")),
 			_ => Err(()),
 		}).unwrap();
 
@@ -364,10 +364,10 @@ mod tests {
 		authorities.add_pending_change(change_c.clone());
 
 		authorities.apply_changes(26, |n| match n {
-			5 => Ok("hash_a"),
-			15 => Ok("hash_b"),
-			16 => Ok("hash_c"),
-			26 => Ok("hash_26"),
+			5 => Ok(Some("hash_a")),
+			15 => Ok(Some("hash_b")),
+			16 => Ok(Some("hash_c")),
+			26 => Ok(Some("hash_26")),
 			_ => Err(()),
 		}).unwrap();
 

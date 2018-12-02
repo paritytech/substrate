@@ -364,7 +364,7 @@ fn finalize_3_voters_no_observers() {
 		);
 		fn assert_send<T: Send>(_: &T) { }
 
-		let voter = run_grandpa(
+		let (voter, oracle) = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key: Some(Arc::new(key.clone().into())),
@@ -376,6 +376,7 @@ fn finalize_3_voters_no_observers() {
 
 		assert_send(&voter);
 
+		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
@@ -424,7 +425,7 @@ fn finalize_3_voters_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
-		let voter = run_grandpa(
+		let (voter, oracle) = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key,
@@ -434,6 +435,7 @@ fn finalize_3_voters_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
 
+		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
@@ -560,7 +562,7 @@ fn transition_3_voters_twice_1_observer() {
 					assert!(set.pending_changes().is_empty());
 				})
 		);
-		let voter = run_grandpa(
+		let (voter, oracle) = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key,
@@ -570,6 +572,7 @@ fn transition_3_voters_twice_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
 
+		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
