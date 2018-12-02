@@ -21,12 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate uint as uint_crate;
+extern crate primitive_types;
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -50,6 +45,10 @@ extern crate untrusted;
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate impl_serde;
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -83,8 +82,6 @@ macro_rules! map {
 use rstd::prelude::*;
 use rstd::ops::Deref;
 
-#[cfg(feature = "std")]
-pub mod bytes;
 #[cfg(feature = "std")]
 pub mod hashing;
 #[cfg(feature = "std")]
@@ -123,7 +120,7 @@ pub type Signature = hash::H512;
 /// Hex-serialised shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self { Bytes(s) }

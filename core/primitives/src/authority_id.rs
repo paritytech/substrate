@@ -14,9 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-
-#[cfg(feature = "std")]
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use H256;
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
@@ -92,16 +89,4 @@ impl Into<H256> for AuthorityId {
 }
 
 #[cfg(feature = "std")]
-impl Serialize for AuthorityId {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		::bytes::serialize(&self.0, serializer)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<'de> Deserialize<'de> for AuthorityId {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		::bytes::deserialize_check_len(deserializer, ::bytes::ExpectedLen::Exact(32))
-			.map(|x| AuthorityId::from_slice(&x))
-	}
-}
+impl_fixed_hash_serde!(AuthorityId, 32);
