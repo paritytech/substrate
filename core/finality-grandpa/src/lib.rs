@@ -199,6 +199,12 @@ impl From<GrandpaError> for Error {
 	}
 }
 
+impl From<ClientError> for Error {
+	fn from(e: ClientError) -> Self {
+		Error::Client(e)
+	}
+}
+
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
 ///
@@ -569,34 +575,49 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	{
 		let mut ancestry_hashes = HashSet::new();
 		let mut ancestry = Vec::new();
+
+		let error = {
+			let msg = "invalid precommits for target commit".to_string();
+			Err(Error::Client(ClientErrorKind::BadJustification(msg).into()))
+		};
+
 		for signed in commit.precommits.iter() {
 			let mut current_hash = signed.precommit.target_hash.clone();
 			loop {
 				if current_hash == commit.target_hash { break; }
-				// FIXME: error with commit referencing unknown block
-				let current_header = client.backend().blockchain().header(BlockId::Hash(current_hash)).unwrap().unwrap();
-				if *current_header.number() <= commit.target_number { break; }
 
-				let parent_hash = current_header.parent_hash().clone();
-				if ancestry_hashes.insert(current_hash) {
-					ancestry.push(current_header);
+				match client.backend().blockchain().header(BlockId::Hash(current_hash))? {
+					Some(current_header) => {
+						if *current_header.number() <= commit.target_number {
+							return error;
+						}
+
+						let parent_hash = current_header.parent_hash().clone();
+						if ancestry_hashes.insert(current_hash) {
+							ancestry.push(current_header);
+						}
+						current_hash = parent_hash;
+					},
+					_ => return error,
 				}
-				current_hash = parent_hash;
 			}
 		}
 
-		Ok(GrandpaJustification {
-			round, commit, ancestry
-		})
+		Ok(GrandpaJustification { round, commit, ancestry })
 	}
 
 	// commit decoded as block justification must be verified and validated
 	fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
-	) -> Result<GrandpaJustification<Block>, Error> {
-		// FIXME
-		let justification = GrandpaJustification::decode(&mut &*encoded).unwrap();
+	) -> Result<GrandpaJustification<Block>, ClientError> {
+		let justification = match GrandpaJustification::decode(&mut &*encoded) {
+			Some(justification) => justification,
+			_ => {
+				let msg = "failed to decode grandpa justification".to_string();
+				return Err(ClientErrorKind::BadJustification(msg).into());
+			}
+		};
 
 		let ancestry: HashMap<_, _> = justification.ancestry
 			.iter()
@@ -605,22 +626,29 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			.collect();
 
 		for signed in justification.commit.precommits.iter() {
-			// FIXME: handle error
-			communication::check_message_sig::<Block>(
+			if let Err(_) = communication::check_message_sig::<Block>(
 				&grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,
 				justification.round,
 				set_id,
-			).unwrap();
+			) {
+				return Err(ClientErrorKind::BadJustification(
+					"invalid signature for precommit in grandpa justification".to_string()).into());
+			}
 
 			let mut current_hash = signed.precommit.target_hash.clone();
 			loop {
 				if current_hash == justification.commit.target_hash { break; }
-				// FIXME: error with commit referencing unknown block
-				let current_header = ancestry.get(&current_hash).unwrap();
-				if *current_header.number() <= justification.commit.target_number { break; }
-				current_hash = current_header.parent_hash().clone();
+				match ancestry.get(&current_hash) {
+					Some(current_header) if *current_header.number() > justification.commit.target_number => {
+						current_hash = current_header.parent_hash().clone();
+					}
+					_ => {
+						return Err(ClientErrorKind::BadJustification(
+							"invalid ancestry proof in grandpa justification".to_string()).into());
+					}
+				}
 			}
 		}
 
@@ -866,11 +894,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		match justification {
 			Some(justification) => {
 				if enacts_change && !is_live {
-					// FIXME: handle error
 					let justification = GrandpaJustification::decode_and_verify(
 						justification,
 						self.authority_set.set_id(),
-					).unwrap();
+					)?;
 
 					let result = finalize_block(
 						&*self.inner,
