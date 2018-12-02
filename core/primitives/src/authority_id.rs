@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#[cfg(feature = "std")]
+use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use H256;
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
