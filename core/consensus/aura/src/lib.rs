@@ -155,10 +155,11 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 )
 	-> impl Future<Item=(),Error=()> where
 	B: Block,
-	C: Authorities<B, Error=Error> + ChainHead<B>,
+	C: Authorities<B> + ChainHead<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
-	I: BlockImport<B, Error=Error>,
+	I: BlockImport<B>,
+	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
