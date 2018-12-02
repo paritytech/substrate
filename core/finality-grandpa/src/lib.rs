@@ -656,19 +656,10 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 {
-	if *client.best_block_header()?.number() < number {
-		// invalid block to finalize
-		// FIXME: return appropriate error
-		return Ok(());
-	}
-
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
 	let status = authority_set.apply_changes(number, |canon_number| {
-		client.block_hash_from_id(&BlockId::number(canon_number))
-			.map(|h| h.expect("given number always less than block to finalize number; \
-							   block to finalize number less or equal than best block number; \
-							   thus there is a block with that number in the canon chain already; qed"))
+		canonical_at_height(client, (hash, number), canon_number)
 	})?;
 
 	if status.changed {
@@ -865,12 +856,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			self.inner.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
 		};
 
-		// FIXME: the closure may panic
 		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
-			self.inner.block_hash_from_id(&BlockId::number(canon_number))
-				.map(|h| h.expect("given number always less than block to finalize number; \
-								   block to finalize number less or equal than best block number; \
-								   thus there is a block with that number in the canon chain already; qed"))
+			canonical_at_height(&self.inner, (hash, number), canon_number)
 		})?;
 
 		// a pending change is enacted by the given block, if the current
@@ -925,6 +912,43 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		Ok(import_result)
 	}
+}
+
+fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
+	client: &Client<B, E, Block, RA>,
+	base: (Block::Hash, NumberFor<Block>),
+	height: NumberFor<Block>,
+) -> Result<Option<Block::Hash>, ClientError> where
+	B: Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+{
+	use runtime_primitives::traits::{One, Zero};
+
+	if height > base.1 {
+		return Ok(None);
+	}
+
+	if height == base.1 {
+		return Ok(Some(base.0));
+	}
+
+	let mut current = match client.header(&BlockId::Hash(base.0))? {
+		Some(header) => header,
+		_ => return Ok(None),
+	};
+
+	let mut steps = height - base.1;
+
+	while steps > NumberFor::<Block>::zero() {
+		current = match client.header(&BlockId::Hash(*current.parent_hash()))? {
+			Some(header) => header,
+			_ => return Ok(None),
+		};
+
+		steps -= NumberFor::<Block>::one();
+	}
+
+	Ok(Some(current.hash()))
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBlockImport<B, E, Block, RA, PRA>

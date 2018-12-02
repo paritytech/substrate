@@ -141,7 +141,7 @@ where
 	/// block where the set last changed.
 	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
 		-> Result<Status<H, N>, E>
-		where F: FnMut(N) -> Result<H, E>
+		where F: FnMut(N) -> Result<Option<H>, E>
 	{
 		let mut status = Status {
 			changed: false,
@@ -156,30 +156,37 @@ where
 
 					// check if the block that signalled the change is canonical in
 					// our chain.
-					let canonical_at_height = canonical(change.canon_height.clone())?;
+					let canonical_hash = canonical(change.canon_height.clone())?;
+					let effective_hash = canonical(effective_number.clone())?;
+
 					debug!(target: "afg", "Evaluating potential set change at block {:?}. Our canonical hash is {:?}",
-						(&change.canon_height, &change.canon_hash), canonical_at_height);
+						(&change.canon_height, &change.canon_hash), canonical_hash);
 
-					if canonical_at_height == change.canon_hash {
-						// apply this change: make the set canonical
-						info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
-							change.canon_height);
+					match (canonical_hash, effective_hash) {
+						(Some(canonical_hash), Some(effective_hash)) => {
+							if canonical_hash == change.canon_hash {
+								// apply this change: make the set canonical
+								info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
+									  change.canon_height);
 
-						self.current_authorities = change.next_authorities.clone();
-						self.set_id += 1;
+								self.current_authorities = change.next_authorities.clone();
+								self.set_id += 1;
 
-						status.new_set_block = Some((
-							canonical(effective_number.clone())?,
-							effective_number.clone(),
-						));
+								status.new_set_block = Some((
+									effective_hash,
+									effective_number.clone(),
+								));
 
-						// discard any signalled changes
-						// that happened before or equal to the effective number of the change.
-						self.pending_changes.iter()
-							.take_while(|c| c.canon_height <= effective_number)
-							.count()
-					} else {
-						1 // prune out this entry; it's no longer relevant.
+								// discard any signalled changes
+								// that happened before or equal to the effective number of the change.
+								self.pending_changes.iter()
+									.take_while(|c| c.canon_height <= effective_number)
+									.count()
+							} else {
+								1 // prune out this entry; it's no longer relevant.
+							}
+						},
+						_ => 1, // prune out this entry; it's no longer relevant.
 					}
 				}
 			};
@@ -194,16 +201,20 @@ where
 
 	pub fn enacts_change<F, E>(&self, just_finalized: N, mut canonical: F)
 		-> Result<bool, E>
-		where F: FnMut(N) -> Result<H, E>
+		where F: FnMut(N) -> Result<Option<H>, E>
 	{
 		for change in self.pending_changes.iter() {
 			if change.effective_number() > just_finalized { break };
 
 			// check if the block that signalled the change is canonical in
 			// our chain.
-			let canonical_at_height = canonical(change.canon_height.clone())?;
-			if canonical_at_height == change.canon_hash { return Ok(true); }
+			match canonical(change.canon_height.clone())? {
+				Some(ref canonical_hash) if *canonical_hash == change.canon_hash =>
+					return Ok(true),
+				_ => (),
+			}
 		}
+
 		Ok(false)
 	}
 }
