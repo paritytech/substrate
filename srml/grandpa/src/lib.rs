@@ -128,11 +128,6 @@ pub trait Trait: system::Trait {
 	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 
 	/// The session key type used by authorities.
-	#[cfg(not(feature = "std"))]
-	type SessionKey: Parameter + Default + MaybeSerializeDebugButNotDeserialize;
-
-	/// The session key type used by authorities.
-	#[cfg(feature = "std")]
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 
 	/// The event type of this module.
