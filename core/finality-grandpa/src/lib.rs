@@ -964,7 +964,7 @@ fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 		_ => return Ok(None),
 	};
 
-	let mut steps = height - base.1;
+	let mut steps = base.1 - height;
 
 	while steps > NumberFor::<Block>::zero() {
 		current = match client.header(&BlockId::Hash(*current.parent_hash()))? {
