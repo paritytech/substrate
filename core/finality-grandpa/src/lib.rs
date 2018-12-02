@@ -755,6 +755,56 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	}
 }
 
+struct GrandpaOracle<Block: BlockT> {
+	unfiltered_commits_stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>,
+	last_commit_target: Option<(Instant, Block::Hash, NumberFor<Block>)>,
+}
+
+impl<Block: BlockT> GrandpaOracle<Block> {
+	fn new(stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>) -> GrandpaOracle<Block> {
+		GrandpaOracle {
+			unfiltered_commits_stream: stream,
+			last_commit_target: None,
+		}
+	}
+
+	fn poll(&mut self) {
+		while let Ok(Async::Ready(Some((_, commit)))) = self.unfiltered_commits_stream.poll() {
+			self.last_commit_target = Some((Instant::now(), commit.target_hash, commit.target_number));
+		}
+	}
+
+	fn is_live(&self) -> bool {
+		self.last_commit_target.map(|(instant, _, _)| {
+			instant.elapsed() < Duration::from_secs(30)
+		}).unwrap_or(false)
+	}
+}
+
+#[derive(Clone)]
+struct SharedGrandpaOracle<Block: BlockT> {
+	inner: Arc<Mutex<Option<GrandpaOracle<Block>>>>,
+}
+
+impl<Block: BlockT> SharedGrandpaOracle<Block> {
+	fn empty() -> SharedGrandpaOracle<Block> {
+		SharedGrandpaOracle { inner: Arc::new(Mutex::new(None)) }
+	}
+
+	fn poll(&self) {
+		if let Some(inner) = self.inner.lock().as_mut() {
+			inner.poll();
+		}
+	}
+
+	fn is_live(&self) -> bool {
+		self.inner.lock()
+			.as_ref()
+			.map(|inner| inner.is_live())
+			.unwrap_or(false)
+	}
+}
+
 /// A block-import handler for GRANDPA.
 ///
 /// This scans each imported block for signals of changing authority set.
@@ -1002,56 +1052,6 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	let commit_out = commit_out.sink_map_err(Into::into);
 
 	(commit_in, commit_out)
-}
-
-struct GrandpaOracle<Block: BlockT> {
-	unfiltered_commits_stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>,
-	last_commit_target: Option<(Instant, Block::Hash, NumberFor<Block>)>,
-}
-
-impl<Block: BlockT> GrandpaOracle<Block> {
-	fn new(stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>) -> GrandpaOracle<Block> {
-		GrandpaOracle {
-			unfiltered_commits_stream: stream,
-			last_commit_target: None,
-		}
-	}
-
-	fn poll(&mut self) {
-		while let Ok(Async::Ready(Some((_, commit)))) = self.unfiltered_commits_stream.poll() {
-			self.last_commit_target = Some((Instant::now(), commit.target_hash, commit.target_number));
-		}
-	}
-
-	fn is_live(&self) -> bool {
-		self.last_commit_target.map(|(instant, _, _)| {
-			instant.elapsed() < Duration::from_secs(30)
-		}).unwrap_or(false)
-	}
-}
-
-#[derive(Clone)]
-struct SharedGrandpaOracle<Block: BlockT> {
-	inner: Arc<Mutex<Option<GrandpaOracle<Block>>>>,
-}
-
-impl<Block: BlockT> SharedGrandpaOracle<Block> {
-	fn empty() -> SharedGrandpaOracle<Block> {
-		SharedGrandpaOracle { inner: Arc::new(Mutex::new(None)) }
-	}
-
-	fn poll(&self) {
-		if let Some(inner) = self.inner.lock().as_mut() {
-			inner.poll();
-		}
-	}
-
-	fn is_live(&self) -> bool {
-		self.inner.lock()
-			.as_ref()
-			.map(|inner| inner.is_live())
-			.unwrap_or(false)
-	}
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
