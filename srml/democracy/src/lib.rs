@@ -350,6 +350,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+// TODO: These should be wired-in into the runtime.
+
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<Bondage<T>>::remove(who);

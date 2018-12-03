@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::HasCompact;
-use primitives::traits::{Hash, As};
+use primitives::traits::{Hash, As, Zero};
 use runtime_io::print;
 use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType};
@@ -216,8 +216,8 @@ impl<T: Trait> Module<T> {
 				if tally.0 > tally.1 + tally.2 {
 					Self::kill_veto_of(&proposal_hash);
 					match tally {
-						(_, 0, 0) => <democracy::Module<T>>::internal_start_referendum(proposal, democracy::VoteThreshold::SuperMajorityAgainst).map(|_| ())?,
-						_ => <democracy::Module<T>>::internal_start_referendum(proposal, democracy::VoteThreshold::SimpleMajority).map(|_| ())?,
+						(_, 0, 0) => <democracy::Module<T>>::internal_start_referendum(proposal, democracy::VoteThreshold::SuperMajorityAgainst, Zero::zero()).map(|_| ())?,
+						_ => <democracy::Module<T>>::internal_start_referendum(proposal, democracy::VoteThreshold::SimpleMajority, Zero::zero()).map(|_| ())?,
 					};
 				}
 			}

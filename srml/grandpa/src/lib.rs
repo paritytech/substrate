@@ -63,12 +63,7 @@ use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{CurrentHeight, Convert};
 use substrate_primitives::AuthorityId;
 use system::ensure_signed;
-
-#[cfg(feature = "std")]
 use primitives::traits::MaybeSerializeDebug;
-
-#[cfg(not(feature = "std"))]
-use primitives::traits::MaybeSerializeDebugButNotDeserialize;
 
 mod mock;
 mod tests;
