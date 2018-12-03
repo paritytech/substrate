@@ -98,7 +98,7 @@ decl_module! {
 
 			ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 			ensure!(index == Self::vote_index(), "incorrect vote index");
-			ensure!(candidates.len() > 0, "amount of candidates to receive approval votes must be greater than zero");
+			ensure!(!candidates.len().is_zero(), "amount of candidates to receive approval votes should be non-zero");
 			// Prevent a vote from voters that provide a list of votes that exceeds the candidates length
 			// since otherise an attacker may be able to submit a very long list of `votes` that far exceeds
 			// the amount of candidates and waste more computation than a reasonable voting bond would cover.
@@ -236,7 +236,7 @@ decl_module! {
 		) -> Result {
 			let who = ensure_signed(origin)?;
 			let total = total.into();
-			ensure!(total > T::Balance::sa(0), "stake deposited to present winner and be added to leaderboard must be greater than zero");
+			ensure!(!total.is_zero(), "stake deposited to present winner and be added to leaderboard should be non-zero");
 			let index: VoteIndex = index.into();
 
 			let candidate = <balances::Module<T>>::lookup(candidate)?;
@@ -750,7 +750,7 @@ mod tests {
 
 			assert_eq!(Council::candidates().len(), 0);
 
-			assert_noop!(Council::set_approvals(Origin::signed(4), vec![], 0.into()), "amount of candidates to receive approval votes must be greater than zero");
+			assert_noop!(Council::set_approvals(Origin::signed(4), vec![], 0.into()), "amount of candidates to receive approval votes should be non-zero");
 		});
 	}
 
@@ -895,6 +895,19 @@ mod tests {
 			assert_eq!(Council::vote_index(), 1);
 			assert_eq!(Council::voter_last_active(2), Some(0));
 			assert_eq!(Council::voter_last_active(5), Some(0));
+		});
+	}
+
+	#[test]
+	fn presentations_with_zero_staked_deposit_should_not_work() {
+		with_externalities(&mut new_test_ext(false), || {
+			System::set_block_number(4);
+			assert_ok!(Council::submit_candidacy(Origin::signed(2), 0.into()));
+			assert_ok!(Council::set_approvals(Origin::signed(2), vec![true], 0.into()));
+			assert_ok!(Council::end_block(System::block_number()));
+
+			System::set_block_number(6);
+			assert_noop!(Council::present_winner(Origin::signed(4), 2.into(), 0.into(), 0.into()), "stake deposited to present winner and be added to leaderboard should be non-zero");
 		});
 	}
 
