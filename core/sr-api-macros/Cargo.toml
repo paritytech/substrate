@@ -14,8 +14,6 @@ blake2-rfc = "0.2"
 
 [dev-dependencies]
 substrate-client = { path = "../client" }
+substrate-test-client = { path = "../test-client" }
 sr-primitives = { path = "../sr-primitives" }
 substrate-primitives = { path = "../primitives" }
-parity-codec = "2.1"
-parity-codec-derive = "2.1"
-serde = "1.0"

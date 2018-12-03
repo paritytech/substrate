@@ -26,7 +26,7 @@ pub use runtime_primitives::{
 };
 pub use runtime_version::{ApiId, RuntimeVersion};
 #[doc(hidden)]
-pub use rstd::slice;
+pub use rstd::{slice, mem};
 #[cfg(feature = "std")]
 use rstd::result;
 pub use codec::{Encode, Decode};

@@ -233,7 +233,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 				// Leak the output vector to avoid it being freed.
 				// This is fine in a WASM context since the heap
 				// will be discarded after the call.
-				::core::mem::forget(output);
+				#c::runtime_api::mem::forget(output);
 				res
 			}
 		)
