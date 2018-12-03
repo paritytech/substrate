@@ -122,7 +122,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			Err(e) => e.exit(),
 		};
 
-	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(load_spec, version, "substrate-node", &matches)?;
+	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(
+		load_spec, version, "substrate-node", &matches
+	)?;
 
 	if matches.is_present("grandpa_authority_only") {
 		config.custom.grandpa_authority = true;
