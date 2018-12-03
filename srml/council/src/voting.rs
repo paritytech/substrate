@@ -222,7 +222,7 @@ impl<T: Trait> Module<T> {
 						0 => Zero::zero(),
 						_ => Self::enact_delay_period(),
 					};
-					// If all council members voted yes, then it's strongly unconversial; we require a negative
+					// If all council members voted yes, then it's strongly uncontroversial; we require a negative
 					// super-majority at referendum in order to defeat it.
 					let threshold = match tally {
 						(_, 0, 0) => democracy::VoteThreshold::SuperMajorityAgainst,
