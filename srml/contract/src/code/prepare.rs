@@ -19,7 +19,7 @@
 
 use super::{InstrumentedWasmModule, MemoryDefinition};
 
-use parity_wasm::elements::{self, External, FunctionType, MemoryType, Type};
+use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
