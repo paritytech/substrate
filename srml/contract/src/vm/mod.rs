@@ -74,46 +74,6 @@ pub trait Ext {
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 }
 
-/// Error that can occur while preparing or executing wasm smart-contract.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
-	/// Error happened while serializing the module.
-	Serialization,
-
-	/// Error happened while deserializing the module.
-	Deserialization,
-
-	/// Internal memory declaration has been found in the module.
-	InternalMemoryDeclared,
-
-	/// Gas instrumentation failed.
-	///
-	/// This most likely indicates the module isn't valid.
-	GasInstrumentation,
-
-	/// Stack instrumentation failed.
-	///
-	/// This  most likely indicates the module isn't valid.
-	StackHeightInstrumentation,
-
-	/// Error happened during invocation of the contract's entrypoint.
-	///
-	/// Most likely because of trap.
-	Invoke,
-
-	/// Error happened during instantiation.
-	///
-	/// This might indicate that `start` function trapped, or module isn't
-	/// instantiable and/or unlinkable.
-	Instantiate,
-
-	/// Memory creation error.
-	///
-	/// This might happen when the memory import has invalid descriptor or
-	/// requested too much resources.
-	Memory,
-}
-
 // TODO: Instead of taking the code explicitly can we take the code hash?
 // TODO: Extract code injection stuff and expect the code to be already prepared?
 
@@ -127,7 +87,7 @@ pub fn execute<'a, E: Ext>(
 	ext: &'a mut E,
 	schedule: &Schedule<<E::T as Trait>::Gas>,
 	gas_meter: &mut GasMeter<E::T>,
-) -> Result<(), Error> {
+) -> Result<(), &'static str> {
 	let memory =
 		sandbox::Memory::new(
 			memory_def.initial,
@@ -159,7 +119,7 @@ pub fn execute<'a, E: Ext>(
 		Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
 		// Other instantiation errors.
 		// Return without executing anything.
-		Err(_) => return Err(Error::Instantiate),
+		Err(_) => return Err("failed to instantiate the contract"),
 	}
 }
 

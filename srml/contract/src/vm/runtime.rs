@@ -16,7 +16,7 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use super::{BalanceOf, Schedule, CreateReceipt, Error, Ext};
+use super::{BalanceOf, Schedule, CreateReceipt, Ext};
 use rstd::prelude::*;
 use codec::{Decode, Encode};
 use gas::{GasMeter, GasMeterResult};
@@ -75,7 +75,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_err: Option<sandbox::Error>,
-) -> Result<(), Error> {
+) -> Result<(), &'static str> {
 	// Check the exact type of the error. It could be plain trap or
 	// special runtime trap the we must recognize.
 	match (sandbox_err, runtime.special_trap) {
@@ -84,7 +84,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 		// Special case. The trap was the result of the execution `return` host function.
 		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return)) => Ok(()),
 		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => Err(Error::Invoke),
+		(Some(_), _) => Err("execution has lead to a trap"),
 		// Any other case (such as special trap flag without actual trap) signifies
 		// a logic error.
 		_ => unreachable!(),

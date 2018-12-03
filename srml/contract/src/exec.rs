@@ -99,7 +99,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 					},
 					&self.config.schedule,
 					gas_meter,
-				).map_err(|_| "vm execute returned error while call")?;
+				)?;
 			}
 
 			(nested.overlay.into_change_set(), nested.events)
@@ -178,7 +178,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				},
 				&self.config.schedule,
 				gas_meter,
-			).map_err(|_| "vm execute returned error while create")?;
+			)?;
 
 			(nested.overlay.into_change_set(), nested.events)
 		};
