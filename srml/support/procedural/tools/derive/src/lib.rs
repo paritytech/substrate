@@ -74,7 +74,7 @@ pub fn derive_parse_struct(input: TokenStream) -> TokenStream {
 		quote!{
 			#(
 				#name,
-				)*
+			)*
 		}
 	};
 	let field = fields_idents(fields.iter().map(Clone::clone));
