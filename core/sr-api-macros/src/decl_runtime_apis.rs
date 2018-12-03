@@ -109,9 +109,9 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 
 				#decl
 
-				#api_version
+				pub #api_version
 
-				#id
+				pub #id
 			}
 		));
 	}

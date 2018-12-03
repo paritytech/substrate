@@ -12,7 +12,7 @@ use runtime_primitives::traits::{
 	BlakeTwo256, GetNodeBlockType, Extrinsic as ExtrinsicT, Block as BlockT
 };
 use runtime_primitives::generic::BlockId;
-use substrate_client::runtime_api;
+use substrate_client::runtime_api::{self, RuntimeApiInfo};
 use primitives::AuthorityId;
 use substrate_client::error::Result;
 
@@ -52,6 +52,9 @@ decl_runtime_apis! {
 		fn something_with_block(block: Block) -> Block;
 		fn function_with_two_args(data: u64, block: Block);
 	}
+
+	#[api_version(2)]
+	pub trait ApiWithCustomVersion {}
 }
 
 impl_runtime_apis! {
@@ -90,4 +93,17 @@ fn test_client_side_function_signature() {
 	let _test: fn(&RuntimeApi, &BlockId<Block>, &u64) -> Result<()>  = RuntimeApi::test;
 	let _something_with_block: fn(&RuntimeApi, &BlockId<Block>, &Block) -> Result<Block> =
 		RuntimeApi::something_with_block;
+}
+
+#[test]
+fn check_runtime_api_info() {
+	assert_eq!(&Api::<Block>::ID, &runtime_decl_for_Api::ID);
+	assert_eq!(Api::<Block>::VERSION, runtime_decl_for_Api::VERSION);
+	assert_eq!(Api::<Block>::VERSION, 1);
+
+	assert_eq!(
+		ApiWithCustomVersion::<Block>::VERSION, runtime_decl_for_ApiWithCustomVersion::VERSION
+	);
+	assert_eq!(&ApiWithCustomVersion::<Block>::ID, &runtime_decl_for_ApiWithCustomVersion::ID);
+	assert_eq!(ApiWithCustomVersion::<Block>::VERSION, 2);
 }
