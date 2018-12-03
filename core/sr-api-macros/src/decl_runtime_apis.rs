@@ -27,7 +27,7 @@ use quote::quote;
 use syn::{
 	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error},
 	fold::{self, Fold}, FnDecl, parse_quote, ItemTrait, Generics, GenericParam, Attribute,
-	visit::{Visit, self}, FnArg, Pat, TraitBound, Type, Meta, NestedMeta, Lit, Ident,
+	visit::{Visit, self}, FnArg, Pat, TraitBound, Type, Meta, NestedMeta, Lit
 };
 
 use std::collections::HashMap;
@@ -212,15 +212,17 @@ fn generate_runtime_api_version(version: u32) -> TokenStream {
 }
 
 /// Generates the implementation of `RuntimeApiInfo` for the given trait.
-fn generate_runtime_info_impl(trait_name: &Ident, version: u64) -> TokenStream {
+fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
+	let trait_name = &trait_.ident;
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let id = generate_runtime_api_id(&trait_name.to_string());
 	let version = generate_runtime_api_version(version as u32);
+	let (impl_generics, ty_generics, where_clause) = trait_.generics.split_for_impl();
 
 	quote!(
 		 #[cfg(any(feature = "std", test))]
-		impl<Block: #crate_::runtime_api::BlockT> #crate_::runtime_api::RuntimeApiInfo
-			for #trait_name<Block>
+		impl #impl_generics #crate_::runtime_api::RuntimeApiInfo
+			for #trait_name #ty_generics #where_clause
 		{
 			#id
 			#version
@@ -259,7 +261,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 		let api_version = get_api_version(&found_attributes);
 
 		let runtime_info = unwrap_or_error(
-			api_version.map(|v| generate_runtime_info_impl(&decl.ident, v))
+			api_version.map(|v| generate_runtime_info_impl(&decl, v))
 		);
 
 		result.push(quote!( #decl #runtime_info ));
