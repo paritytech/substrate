@@ -27,7 +27,6 @@ extern crate parity_codec_derive;
 extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support;
-extern crate srml_support as runtime_support;
 
 extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;

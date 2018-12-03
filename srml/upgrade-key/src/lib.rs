@@ -30,7 +30,6 @@ extern crate parity_codec_derive;
 extern crate parity_codec as codec;
 #[macro_use]
 extern crate srml_support as support;
-extern crate srml_support as runtime_support;
 
 #[macro_use]
 extern crate srml_support_procedural as support_proc;

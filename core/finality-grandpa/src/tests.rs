@@ -43,7 +43,7 @@ type PeerData =
 				test_client::Backend,
 				test_client::Executor,
 				Block,
-				test_client::runtime::ClientWithApi,
+				test_client::runtime::RuntimeApi,
 			>
 		>
 	>;

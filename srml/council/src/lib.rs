@@ -32,7 +32,6 @@ extern crate substrate_primitives;
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[macro_use] extern crate srml_support;
-extern crate srml_support as runtime_support;
 extern crate sr_primitives as primitives;
 extern crate srml_balances as balances;
 extern crate srml_democracy as democracy;

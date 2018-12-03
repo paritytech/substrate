@@ -66,12 +66,12 @@ pub type Executor = client::LocalCallExecutor<
 >;
 
 /// Creates new client instance used for tests.
-pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::ClientWithApi> {
+pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	new_with_backend(Arc::new(Backend::new()), false)
 }
 
 /// Creates new test client instance that suports changes trie creation.
-pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Block, runtime::ClientWithApi> {
+pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	new_with_backend(Arc::new(Backend::new()), true)
 }
 
@@ -80,7 +80,7 @@ pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Blo
 pub fn new_with_backend<B>(
 	backend: Arc<B>,
 	support_changes_trie: bool
-) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block, runtime::ClientWithApi>
+) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block, runtime::RuntimeApi>
 	where
 		B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {

@@ -35,7 +35,7 @@ extern crate substrate_client as client;
 extern crate sr_std as rstd;
 
 use substrate_primitives::AuthorityId;
-use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
+use sr_primitives::traits::{DigestFor, NumberFor};
 use rstd::vec::Vec;
 
 /// A scheduled change of authority set.
@@ -79,7 +79,7 @@ decl_runtime_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
-	pub trait GrandpaApi<Block: BlockT> {
+	pub trait GrandpaApi {
 		/// Check a digest for pending changes.
 		/// Return `None` if there are no pending changes.
 		///

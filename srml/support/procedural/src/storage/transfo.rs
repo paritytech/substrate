@@ -19,6 +19,7 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
+use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 
 use proc_macro::TokenStream;
 
@@ -34,7 +35,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 
 	// old macro naming convention (s replaces $)
 	let StorageDefinition {
-		runtime_crate,
+		hidden_crate,
 		visibility,
 		ident: storetype,
 		module_ident,
@@ -44,13 +45,14 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		extra_genesis,
 		..
 	} = def;
-	let scrate = runtime_crate.map(|rc|rc.ident.content).map(|i|quote!(#i)).unwrap_or_else(||
-		if ::std::env::var("CARGO_PKG_NAME").unwrap() == "srml-support" {
-			quote!( crate )
-		} else {
-			// TODO switch to a more relevant srml_support? or use a rust2018 notation already
-			quote!( ::runtime_support )
-	});
+	let hidden_crate_name = hidden_crate.map(|rc|rc.ident.content).map(|i|i.to_string())
+		.unwrap_or_else(||"decl_storage".to_string());
+	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
+	let scrate_decl = generate_hidden_includes(
+		&hidden_crate_name,
+		"srml-support",
+		"srml_support",
+	);
 
 	let (
 		traitinstance,
@@ -92,6 +94,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&storage_lines,
 	);
 	let expanded = quote! {
+		#scrate_decl
 		#decl_storage_items
 		#visibility trait #storetype {
 		#decl_store_items

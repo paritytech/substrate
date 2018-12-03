@@ -28,7 +28,7 @@ pub mod transfo;
 /// Parsing usage only
 #[derive(ParseStruct, ToTokensStruct, Debug)]
 struct StorageDefinition {
-	pub runtime_crate: Option<SpecificRuntimeCrate>,
+	pub hidden_crate: Option<SpecificHiddenCrate>,
 	pub visibility: syn::Visibility,
 	pub trait_token: Token![trait],
 	pub ident: Ident,
@@ -45,9 +45,9 @@ struct StorageDefinition {
 
 
 #[derive(ParseStruct, ToTokensStruct, Debug)]
-struct SpecificRuntimeCrate {
-	pub keyword: ext::CustomToken<SpecificRuntimeCrate>,
-	pub ident: ext::Parens<syn::Ident>,
+struct SpecificHiddenCrate {
+	pub keyword: ext::CustomToken<SpecificHiddenCrate>,
+	pub ident: ext::Parens<Ident>,
 }
 
 #[derive(ParseStruct, ToTokensStruct, Debug)]
@@ -134,7 +134,7 @@ struct DeclStorageDefault {
 	pub expr: syn::Expr,
 }
 
-custom_keyword_impl!(SpecificRuntimeCrate, "runtimecrate", "runtimecrate as keyword");
+custom_keyword_impl!(SpecificHiddenCrate, "hiddencrate", "hiddencrate as keyword");
 custom_keyword_impl!(DeclStorageConfig, "config", "build as keyword");
 custom_keyword!(ConfigKeyword, "config", "config as keyword");
 custom_keyword!(BuildKeyword, "build", "build as keyword");

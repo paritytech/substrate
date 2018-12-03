@@ -42,7 +42,6 @@ extern crate parity_codec as codec;
 // Needed for type-safe access to storage DB.
 #[macro_use]
 extern crate srml_support as support;
-extern crate srml_support as runtime_support;
 // `system` module provides us with all sorts of useful stuff and macros
 // depend on it being around.
 extern crate srml_system as system;

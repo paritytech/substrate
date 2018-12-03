@@ -38,11 +38,22 @@ use proc_macro::TokenStream;
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 ///
+/// ## Example
+///
+/// ```compile_fail
+/// decl_storage! {
+/// 	trait Store for Module<T: Trait> as Example {
+/// 		Dummy get(dummy) config(): Option<T::Balance>;
+/// 		Foo get(foo) config(): T::Balance;
+/// 	}
+/// }
+/// ```
+///
 /// For now we implement a convenience trait with pre-specialised associated types, one for each
 /// storage item. This allows you to gain access to publicly visible storage items from a
 /// module type. Currently you must disambiguate by using `<Module as Store>::Item` rather than
 /// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
-  storage::transfo::decl_storage_impl(input)
+	storage::transfo::decl_storage_impl(input)
 }
