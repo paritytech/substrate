@@ -63,7 +63,7 @@ use grandpa::fg_primitives::{self, ScheduledChange, id::*};
 use client::{
 	block_builder::api as block_builder_api, runtime_api::{self as client_api, id::*}
 };
-use runtime_primitives::{ApplyResult, CheckInherentError, InherentData as BasicInherentData};
+use runtime_primitives::{ApplyResult, CheckInherentError, BasicInherentData};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{
@@ -209,7 +209,8 @@ impl grandpa::Trait for Runtime {
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
-		NodeBlock = node_primitives::Block
+		NodeBlock = node_primitives::Block,
+		InherentData = BasicInherentData
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
@@ -303,7 +304,7 @@ impl_runtime_apis! {
 		}
 
 		fn check_inherents(block: Block, data: BasicInherentData) -> Result<(), CheckInherentError> {
-			InherentData::check_inherents(data, block)
+			Runtime::check_inherents(block, data)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
