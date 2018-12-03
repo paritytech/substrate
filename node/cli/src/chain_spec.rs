@@ -95,6 +95,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			launch_period: 5 * MINUTES,    // 1 day per public referendum
 			voting_period: 5 * MINUTES,    // 3 days to discuss & vote on an active referendum
 			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
+			public_delay: 0,
 			_genesis_phantom_data: Default::default(),
 		}),
 		council_seats: Some(CouncilSeatsConfig {
@@ -113,6 +114,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		council_voting: Some(CouncilVotingConfig {
 			cooloff_period: 4 * DAYS,
 			voting_period: 1 * DAYS,
+			enact_delay_period: 0,
 			_genesis_phantom_data: Default::default(),
 		}),
 		timestamp: Some(TimestampConfig {
@@ -226,6 +228,7 @@ pub fn testnet_genesis(
 			launch_period: 9,
 			voting_period: 18,
 			minimum_deposit: 10,
+			public_delay: 0,
 			_genesis_phantom_data: Default::default(),
 		}),
 		council_seats: Some(CouncilSeatsConfig {
@@ -246,6 +249,7 @@ pub fn testnet_genesis(
 		council_voting: Some(CouncilVotingConfig {
 			cooloff_period: 75,
 			voting_period: 20,
+			enact_delay_period: 0,
 			_genesis_phantom_data: Default::default(),
 		}),
 		timestamp: Some(TimestampConfig {

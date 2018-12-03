@@ -581,7 +581,7 @@ mod tests {
 	fn simple_passing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(1), r.into(), true));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -598,7 +598,7 @@ mod tests {
 	fn cancel_referendum_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(1), r.into(), true));
 			assert_ok!(Democracy::cancel_referendum(r.into()));
 
@@ -612,7 +612,7 @@ mod tests {
 	fn simple_failing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(1), r.into(), false));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -629,7 +629,7 @@ mod tests {
 	fn controversial_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(1), r.into(), true));
 			assert_ok!(Democracy::vote(Origin::signed(2), r.into(), false));
 			assert_ok!(Democracy::vote(Origin::signed(3), r.into(), false));
@@ -649,7 +649,7 @@ mod tests {
 	fn controversial_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(5), r.into(), false));
 			assert_ok!(Democracy::vote(Origin::signed(6), r.into(), true));
 
@@ -668,7 +668,7 @@ mod tests {
 			assert_eq!(Balances::total_issuance(), 210);
 
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(4), r.into(), true));
 			assert_ok!(Democracy::vote(Origin::signed(5), r.into(), false));
 			assert_ok!(Democracy::vote(Origin::signed(6), r.into(), true));

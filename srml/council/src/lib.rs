@@ -128,6 +128,7 @@ mod tests {
 			launch_period: 1,
 			voting_period: 3,
 			minimum_deposit: 1,
+			public_delay: 0,
 			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(seats::GenesisConfig::<Test> {
@@ -150,6 +151,7 @@ mod tests {
 		t.extend(voting::GenesisConfig::<Test> {
 			cooloff_period: 2,
 			voting_period: 1,
+			enact_delay_period: 0,
 			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
