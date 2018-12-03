@@ -46,7 +46,7 @@ extern crate sr_primitives as primitives;
 extern crate srml_system as system;
 
 use runtime_support::{StorageValue, StorageMap, dispatch::Result, Parameter};
-use primitives::traits::{As, Member, SimpleArithmetic, Zero};
+use primitives::traits::{Member, SimpleArithmetic, Zero};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -84,8 +84,7 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let origin_account = (id, origin.clone());
 			let origin_balance = <Balances<T>>::get(&origin_account);
-			let min_amount = T::Balance::sa(1 as u64);
-			ensure!(amount >= min_amount, "transfer amount must be greater than or equal to one unit");
+			ensure!(!amount.is_zero(), "transfer amount should be non-zero");
 			ensure!(origin_balance >= amount, "origin account balance must be greater than or equal to the transfer amount");
 
 			Self::deposit_event(RawEvent::Transferred(id, origin, target.clone(), amount));
@@ -249,7 +248,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), "transfer amount must be greater than or equal to one unit");
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), "transfer amount should be non-zero");
 		});
 	}
 
