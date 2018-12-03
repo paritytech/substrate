@@ -56,7 +56,7 @@ use runtime_primitives::{
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType
-	}, InherentData, CheckInherentError
+	}, CheckInherentError
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
@@ -220,7 +220,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<Block> for Runtime {
+	impl block_builder_api::BlockBuilder<Block, ()> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
@@ -229,11 +229,11 @@ impl_runtime_apis! {
 			system::finalise_block()
 		}
 
-		fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+		fn inherent_extrinsics(_data: ()) -> Vec<<Block as BlockT>::Extrinsic> {
 			unimplemented!()
 		}
 
-		fn check_inherents(_block: Block, _data: InherentData) -> Result<(), CheckInherentError> {
+		fn check_inherents(_block: Block, _data: ()) -> Result<(), CheckInherentError> {
 			unimplemented!()
 		}
 

@@ -234,7 +234,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
+		where F: FnMut(BlockBuilder<Block, (), PeersClient>) -> Block
 	{
 		use blocks::BlockData;
 

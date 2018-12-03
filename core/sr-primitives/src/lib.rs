@@ -463,17 +463,17 @@ macro_rules! impl_outer_log {
 }
 
 //TODO: https://github.com/paritytech/substrate/issues/1022
-/// Inherent data to include in a block.
+/// Basic Inherent data to include in a block; used by simple runtimes.
 #[derive(Encode, Decode)]
-pub struct InherentData {
+pub struct BasicInherentData {
 	/// Current timestamp.
 	pub timestamp: u64,
 	/// Indices of offline validators.
 	pub consensus: Vec<u32>,
 }
 
-impl InherentData {
-	/// Create a new `InherentData` instance.
+impl BasicInherentData {
+	/// Create a new `BasicInherentData` instance.
 	pub fn new(timestamp: u64, consensus: Vec<u32>) -> Self {
 		Self {
 			timestamp,

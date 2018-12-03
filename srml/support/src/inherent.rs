@@ -18,7 +18,7 @@
 pub use rstd::{result::Result, vec::Vec};
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{ProvideInherent, Block as BlockT}, CheckInherentError, InherentData
+	traits::{ProvideInherent, Block as BlockT}, CheckInherentError
 };
 
 
@@ -40,62 +40,27 @@ pub use runtime_primitives::{
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
-		$(#[$attr:meta])*
-		pub struct $name:ident where Block = $block:ident {
-			$( $module:ident: $module_ty:ident, )*
+		for $runtime:ident,
+			Block = $block:ident,
+			InherentData = $inherent:ty
+		{
+			$( $module:ident: $module_ty:ident,)*
 		}
 	) => {
-		impl_outer_inherent!(
-			$( #[$attr] )*
-			pub struct $name where Block = $block, Call = Call {
-				$( $module: $module_ty, )*
-			}
-		);
-	};
-	(
-		$(#[$attr:meta])*
-		pub struct $name:ident where Block = $block:ident {
-			$( $module:ident: $module_ty:ident, )*
-		}
-	) => {
-		impl_outer_inherent!(
-			$( #[$attr] )*
-			pub struct $name where Block = $block, Call = Call {
-				$( $module: $module_ty, )*
-			}
-		);
-	};
-	(
-		$(#[$attr:meta])*
-		pub struct $name:ident where Block = $block:ident, Call = $call:ident {
-			$( $module:ident: $module_ty:ident, )*
-		}
-	) => {
-		$( #[$attr] )*
-		#[derive(Encode, Decode)]
-		/// Inherent data to include in a block.
-		pub struct $name {
-			$( $module: <$module_ty as $crate::inherent::ProvideInherent>::Inherent, )*
-		}
-
-		impl $name {
-			/// Create a new instance.
-			pub fn new( $( $module: <$module_ty as $crate::inherent::ProvideInherent>::Inherent ),* ) -> Self {
-				Self {
-					$( $module, )*
-				}
-			}
-
+		impl $runtime {
 			fn check_inherents(
-				data: $crate::inherent::InherentData,
-				block: $block
+				block: $block,
+				data: $inherent
 			) -> $crate::inherent::Result<(), $crate::inherent::CheckInherentError> {
 				$(
 					<$module_ty as $crate::inherent::ProvideInherent>::check_inherent(
-						&block, data.$module, &|xt| match xt.function {
+						&block,
+						data.$module,
+						&|xt| match xt.function {
 							Call::$module_ty(ref data) => Some(data),
 							_ => None,
-						})?;
+						},
+					)?;
 				)*
 				Ok(())
 			}
