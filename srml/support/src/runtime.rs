@@ -53,7 +53,8 @@ macro_rules! construct_runtime {
 		pub enum $runtime:ident with Log ($log_internal:ident: DigestItem<$( $log_genarg:ty ),+>)
 			where
 				Block = $block:ident,
-				NodeBlock = $node_block:ty
+				NodeBlock = $node_block:ty,
+				InherentData = $inherent:ty
 		{
 			$( $rest:tt )*
 		}
@@ -62,6 +63,7 @@ macro_rules! construct_runtime {
 			$runtime;
 			$block;
 			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			;
 			$( $rest )*
@@ -71,6 +73,7 @@ macro_rules! construct_runtime {
 		$runtime:ident;
 		$block:ident;
 		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -98,6 +101,7 @@ macro_rules! construct_runtime {
 			$runtime;
 			$block;
 			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -125,6 +129,7 @@ macro_rules! construct_runtime {
 		$runtime:ident;
 		$block:ident;
 		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -159,6 +164,7 @@ macro_rules! construct_runtime {
 			$runtime;
 			$block;
 			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -192,6 +198,7 @@ macro_rules! construct_runtime {
 		$runtime:ident;
 		$block:ident;
 		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -225,6 +232,7 @@ macro_rules! construct_runtime {
 			$runtime;
 			$block;
 			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -257,6 +265,7 @@ macro_rules! construct_runtime {
 		$runtime:ident;
 		$block:ident;
 		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$name:ident: $module:ident::{
@@ -271,7 +280,6 @@ macro_rules! construct_runtime {
 		mashup! {
 			$(
 				substrate_generate_ident_name["config-ident" $name] = $name Config;
-				substrate_generate_ident_name["inherent-error-ident" $name] = $name InherentError;
 			)*
 		}
 
@@ -337,6 +345,7 @@ macro_rules! construct_runtime {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
+			$inherent;
 			;
 			$(
 				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
@@ -1062,6 +1071,7 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
 			Inherent $(, $modules:ident $( <$modules_generic:ident> )* )*
@@ -1073,6 +1083,7 @@ macro_rules! __decl_outer_inherent {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
+			$inherent;
 			$( $parsed_modules :: $parsed_name, )* $module::$name;
 			$(
 				$rest_name: $rest_module::{
@@ -1084,6 +1095,7 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
 			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
@@ -1095,6 +1107,7 @@ macro_rules! __decl_outer_inherent {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
+			$inherent;
 			$( $parsed_modules :: $parsed_name ),*;
 			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
 			$(
@@ -1107,6 +1120,7 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{}
 		$(, $rest_name:ident : $rest_module:ident::{
@@ -1116,6 +1130,7 @@ macro_rules! __decl_outer_inherent {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
+			$inherent;
 			$( $parsed_modules :: $parsed_name ),*;
 			$(
 				$rest_name: $rest_module::{
@@ -1127,17 +1142,16 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		;
 	) => {
-		substrate_generate_ident_name! {
-			impl_outer_inherent!(
-				pub struct InherentData where Block = $block {
-					$(
-						$parsed_modules: $parsed_name,
-					)*
-				}
-			);
-		}
+		impl_outer_inherent!(
+			for $runtime,
+			Block = $block,
+			InherentData = $inherent {
+				$($parsed_modules : $parsed_name,)*
+			}
+		);
 	};
 }

@@ -16,6 +16,7 @@
 
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
+use std::marker::PhantomData;
 use codec::Encode;
 use blockchain::HeaderBackend;
 use runtime_primitives::traits::{
@@ -28,18 +29,19 @@ use error;
 use runtime_primitives::ApplyOutcome;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
+pub struct BlockBuilder<'a, Block, InherentData, A: ProvideRuntimeApi> where Block: BlockT {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
+	_marker: PhantomData<InherentData>,
 }
 
-impl<'a, Block, A> BlockBuilder<'a, Block, A>
+impl<'a, Block, A, InherentData> BlockBuilder<'a, Block, InherentData, A>
 where
 	Block: BlockT<Hash=H256>,
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
-	A::Api: BlockBuilderApi<Block>,
+	A::Api: BlockBuilderApi<Block, InherentData>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
@@ -72,6 +74,7 @@ where
 			extrinsics: Vec::new(),
 			api,
 			block_id: *block_id,
+			_marker: PhantomData,
 		})
 	}
 
@@ -79,12 +82,12 @@ where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		fn impl_push<'a, T, Block: BlockT>(
+		fn impl_push<'a, T, Block: BlockT, InherentData>(
 			api: &mut ApiRef<'a, T>,
 			block_id: &BlockId<Block>,
 			xt: Block::Extrinsic,
 			extrinsics: &mut Vec<Block::Extrinsic>
-		) -> error::Result<()> where T: BlockBuilderApi<Block> {
+		) -> error::Result<()> where T: BlockBuilderApi<Block, InherentData> {
 			api.map_api_result(|api| {
 				match api.apply_extrinsic(block_id, &xt)? {
 					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
