@@ -213,7 +213,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			period: 5,
-			_genesis_phantom_data: Default::default()
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
@@ -229,7 +228,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			period: 5,
-			_genesis_phantom_data: Default::default()
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
@@ -245,7 +243,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			period: 5,
-			_genesis_phantom_data: Default::default()
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {

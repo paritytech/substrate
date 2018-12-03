@@ -336,7 +336,6 @@ mod tests {
 			proposal_bond_minimum: 1,
 			spend_period: 2,
 			burn: Permill::from_percent(50),
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.into()
 	}

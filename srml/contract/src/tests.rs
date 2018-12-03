@@ -143,7 +143,6 @@ impl ExtBuilder {
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
 				current_schedule: Default::default(),
-				_genesis_phantom_data: Default::default(),
 			}.build_storage()
 			.unwrap().0,
 		);

@@ -364,7 +364,6 @@ mod tests {
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}

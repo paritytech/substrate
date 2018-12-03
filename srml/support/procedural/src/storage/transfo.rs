@@ -154,6 +154,10 @@ fn decl_store_extra_genesis(
 			quote!( #ident )
 		};
 		let option_extracteed = if let DeclStorageType::Simple(ref st) = storage_type {
+			if ext::has_parametric_type(st, traitinstance) {
+				is_trait_needed = true;
+				has_trait_field = true;
+			}
 			ext::extract_type_option(st)
 		} else { None };
 		let is_option = option_extracteed.is_some();
@@ -253,6 +257,7 @@ fn decl_store_extra_genesis(
 					(
 						quote!(<#traitinstance: #traittype>),
 						quote!(<#traitinstance>),
+
 						quote!{
 							#[serde(skip)]
 							pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
@@ -569,7 +574,7 @@ fn store_functions_to_metadata (
 			}
 		} else {
 			let kty = stk.expect("is not simple; qed");
-			let kty = quote!(#kty).to_string().replace(" ","");
+			let kty = quote!(#kty).to_string();
 			let styp = typ.to_string().replace(" ","");
 			quote!{
 				#scrate::storage::generator::StorageFunctionType::Map {

@@ -314,7 +314,6 @@ mod tests {
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
 			foo: 24,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.into()
 	}
