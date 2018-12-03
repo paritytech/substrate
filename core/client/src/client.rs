@@ -538,21 +538,21 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(
+	pub fn new_block<InherentData>(
 		&self
-	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block, InherentData>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(
+	pub fn new_block_at<InherentData>(
 		&self, parent: &BlockId<Block>
-	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block, InherentData>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}

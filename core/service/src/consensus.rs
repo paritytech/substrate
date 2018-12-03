@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! provide consensus service to substrate.
+//! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
 // FIXME: move this into substrate-consensus-common - https://github.com/paritytech/substrate/issues/1021
 
@@ -65,11 +65,13 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 	) -> Result<Self::Block, error::Error>;
 }
 
-impl<'a, B, E, Block, RA> BlockBuilder<Block> for client::block_builder::BlockBuilder<'a, Block, SubstrateClient<B, E, Block, RA>> where
+impl<'a, B, E, Block, RA> BlockBuilder<Block>
+	for client::block_builder::BlockBuilder<'a, Block, InherentData, SubstrateClient<B, E, Block, RA>>
+where
 	B: client::backend::Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
-	RA: BlockBuilderApi<Block>,
+	RA: BlockBuilderApi<Block, InherentData>,
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
@@ -80,7 +82,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
-	RA: BlockBuilderApi<Block>,
+	RA: BlockBuilderApi<Block, InherentData>,
 {
 	type Block = Block;
 	type Error = client::error::Error;
@@ -119,7 +121,7 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
 	C: AuthoringApi,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block, InherentData>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
@@ -174,7 +176,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, InherentData>,
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
