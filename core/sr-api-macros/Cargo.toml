@@ -16,4 +16,5 @@ blake2-rfc = "0.2"
 substrate-client = { path = "../client" }
 substrate-test-client = { path = "../test-client" }
 sr-primitives = { path = "../sr-primitives" }
+sr-version = { path = "../sr-version" }
 substrate-primitives = { path = "../primitives" }

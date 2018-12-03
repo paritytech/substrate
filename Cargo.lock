@@ -2714,6 +2714,7 @@ dependencies = [
  "proc-macro2 0.4.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
+ "sr-version 0.1.0",
  "substrate-client 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-test-client 0.1.0",

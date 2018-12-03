@@ -39,14 +39,19 @@ mod compile_fail_tests;
 /// by a path, e.g. `impl my_trait::MyTrait for Runtime`. The macro will use this path to access
 /// the declaration of the trait for the runtime side.
 ///
-/// The macro also generates the implementation of the apis for the client side by generating the
-/// `RuntimeApi` type. The `RuntimeApi` is hidden behind a `feature` called `std`.
+/// The macro also generates the api implementations for the client side and provides it through
+/// the `RuntimeApi` type. The `RuntimeApi` is hidden behind a `feature` called `std`.
+///
+/// To expose version information about all implemented api traits, the constant
+/// `RUNTIME_API_VERSIONS` is generated. This constant should be used to instantiate the `apis`
+/// field of `RuntimeVersion`.
 ///
 /// # Example
 ///
 /// ```rust
 /// #[macro_use]
 /// extern crate substrate_client;
+/// extern crate sr_version as version;
 /// # extern crate substrate_test_client as test_client;
 /// # extern crate sr_primitives as runtime_primitives;
 /// # extern crate substrate_primitives as primitives;
@@ -91,6 +96,17 @@ mod compile_fail_tests;
 ///         }
 ///     }
 /// }
+///
+/// /// Runtime version. This needs to be declared for each runtime.
+/// pub const VERSION: version::RuntimeVersion = version::RuntimeVersion {
+///     spec_name: create_runtime_str!("node"),
+///     impl_name: create_runtime_str!("test-node"),
+///     authoring_version: 1,
+///     spec_version: 1,
+///     impl_version: 0,
+///     // Here we are exposing the runtime api versions.
+///     apis: RUNTIME_API_VERSIONS,
+/// };
 ///
 /// # fn main() {}
 /// ```

@@ -44,6 +44,8 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl self::ApiWithCustomVersion<Block> for Runtime {}
+
 	impl runtime_api::Core<Block> for Runtime {
 		fn version() -> runtime_api::RuntimeVersion {
 			unimplemented!()
@@ -78,4 +80,15 @@ fn check_runtime_api_info() {
 	);
 	assert_eq!(&ApiWithCustomVersion::<Block>::ID, &runtime_decl_for_ApiWithCustomVersion::ID);
 	assert_eq!(ApiWithCustomVersion::<Block>::VERSION, 2);
+}
+
+fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
+	assert!(RUNTIME_API_VERSIONS.iter().any(|v| v == &(T::ID, T::VERSION)));
+}
+
+#[test]
+fn check_runtime_api_versions() {
+	check_runtime_api_versions_contains::<Api<Block>>();
+	check_runtime_api_versions_contains::<ApiWithCustomVersion<Block>>();
+	check_runtime_api_versions_contains::<runtime_api::Core<Block>>();
 }
