@@ -22,13 +22,29 @@ use srml_support_procedural_tools::syn_ext as ext;
 use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 
 use syn::{
 	Ident,
 	GenericParam,
+	spanned::Spanned,
+	parse::{
+		Error,
+		Result,
+	}
 };
 
 use super::*;
+
+// try macro but returning tokenized error
+macro_rules! try_tok(( $expre : expr ) => {
+	match $expre {
+		Ok(r) => r,
+		Err (err) => {
+			return err.to_compile_error().into()
+		}
+	}
+});
 
 pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	let def = parse_macro_input!(input as StorageDefinition);
@@ -45,8 +61,8 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		extra_genesis,
 		..
 	} = def;
-	let hidden_crate_name = hidden_crate.map(|rc|rc.ident.content).map(|i|i.to_string())
-		.unwrap_or_else(||"decl_storage".to_string());
+	let hidden_crate_name = hidden_crate.map(|rc| rc.ident.content).map(|i| i.to_string())
+		.unwrap_or_else(|| "decl_storage".to_string());
 	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
 	let scrate_decl = generate_hidden_includes(
 		&hidden_crate_name,
@@ -59,17 +75,19 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		traittypes,
 	) = if let GenericParam::Type(syn::TypeParam {ident, bounds, ..}) = strait {
 		(ident, bounds)
-	} else { panic!("Missing declare store generic params") };
+	} else {
+		return try_tok!(Err(Error::new(strait.span(), "Missing declare store generic params")));
+	};
 
 	let traittype = traittypes.first().expect("a trait bound expected").into_value();
 
-	let extra_genesis = decl_store_extra_genesis(
+	let extra_genesis = try_tok!(decl_store_extra_genesis(
 		&scrate,
 		&traitinstance,
 		&traittype,
 		&storage_lines,
 		&extra_genesis,
-	);
+	));
 	let decl_storage_items = decl_storage_items(
 		&scrate,
 		&traitinstance,
@@ -93,6 +111,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&scrate,
 		&storage_lines,
 	);
+	let cratename_string = cratename.to_string();
 	let expanded = quote! {
 		#scrate_decl
 		#decl_storage_items
@@ -106,7 +125,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			#impl_store_fns
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
-					prefix: #scrate::storage::generator::DecodeDifferent::Encode(stringify!(#cratename)),
+					prefix: #scrate::storage::generator::DecodeDifferent::Encode(#cratename_string),
 					functions: #store_functions_to_metadata ,
 				}
 			}
@@ -120,18 +139,18 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 }
 
 fn decl_store_extra_genesis(
-	scrate: &proc_macro2::TokenStream,
+	scrate: &TokenStream2,
 	traitinstance: &Ident,
 	traittype: &syn::TypeParamBound,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 	extra_genesis: &Option<AddExtraGenesis>,
-) -> proc_macro2::TokenStream {
+) -> Result<TokenStream2> {
 
 	let mut is_trait_needed = false;
 	let mut has_trait_field = false;
-	let mut config_field = Vec::new();
-	let mut config_field_default = Vec::new();
-	let mut builders = Vec::new();
+	let mut config_field = TokenStream2::new();
+	let mut config_field_default = TokenStream2::new();
+	let mut builders = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 
 		let DeclStorageLine {
@@ -147,185 +166,186 @@ fn decl_store_extra_genesis(
 		let is_simple = if let DeclStorageType::Simple(..) = storage_type { true } else { false };
 
 		let mut opt_build;
-		// TODO name this condition
-		if getter.is_some() && config.is_some() {
-
-			let ident = if let Some(ident) = config.as_ref().expect("previous condition; qed").expr.content.as_ref() {
-			quote!( #ident )
-		} else {
-			let ident = &getter.as_ref().expect("previous condition; qed").getfn.content;
-			quote!( #ident )
-		};
-		let option_extracteed = if let DeclStorageType::Simple(ref st) = storage_type {
-			if ext::has_parametric_type(st, traitinstance) {
-				is_trait_needed = true;
-				has_trait_field = true;
-			}
-			ext::extract_type_option(st)
-		} else { None };
-		let is_option = option_extracteed.is_some();
-		let storage_type = option_extracteed.unwrap_or_else(||quote!( #storage_type ));
-		config_field.push(quote!( pub #ident: #storage_type, ));
-		opt_build = Some(build.as_ref().map(|b|&b.expr.content).map(|b|quote!( #b ))
-			.unwrap_or_else(||quote!( (|config: &GenesisConfig<#traitinstance>| config.#ident.clone()) )));
-		let fielddefault = default_value.inner.get(0).as_ref().map(|d|&d.expr).map(|d|
-			if is_option {
-				quote!( #d.unwrap_or_default() )
+		// need build line
+		if let (Some(ref getter), Some(ref config)) = (getter, config) {
+			let ident = if let Some(ident) = config.expr.content.as_ref() {
+				quote!( #ident )
 			} else {
-				quote!( #d )
-			}).unwrap_or_else(|| quote!( Default::default() ));
-				config_field_default.push(quote!( #ident: #fielddefault, ));
-
-			} else {
-				opt_build = build.as_ref().map(|b|&b.expr.content).map(|b|quote!( #b ));
-			}
-
-			if let Some(builder) = opt_build {
-				is_trait_needed = true;
-				if is_simple {
-					builders.push(quote!{{
-						use #scrate::codec::Encode;
-						let v = (#builder)(&self);
-						r.insert(Self::hash(<#name<#traitinstance>>::key()).to_vec(), v.encode());
-					}});
-				} else {
-					builders.push(quote!{{
-						use #scrate::codec::Encode;
-						let data = (#builder)(&self);
-						for (k, v) in data.into_iter() {
-							r.insert(Self::hash(&<#name<#traitinstance>>::key_for(k)).to_vec(), v.encode());
-						}
-					}});
-				}
-			}
-
-		}
-
-		let mut has_scall = false;
-		let mut scall = quote!{ ( |_, _, _|{} ) };
-		let mut genesis_extrafields = Vec::new();
-		let mut genesis_extrafields_default = Vec::new();
-
-		// extra genesis
-		if let Some(eg) = extra_genesis {
-			for ex_content in eg.content.content.lines.inner.iter() {
-				match ex_content {
-					AddExtraGenesisLineEnum::AddExtraGenesisLine(AddExtraGenesisLine {
-						attrs,
-						extra_field,
-						extra_type,
-						default_value,
-						..
-					}) => {
-						if ext::has_parametric_type(&extra_type, traitinstance) {
-							is_trait_needed = true;
-							has_trait_field = true;
-						}
-						let extrafield = &extra_field.content;
-						genesis_extrafields.push(quote!{
-							#attrs pub #extrafield: #extra_type,
-						});
-						let extra_default = default_value.inner.get(0).map(|d|&d.expr).map(|e|quote!{ #e })
-							.unwrap_or_else(|| quote!( Default::default() ));
-						genesis_extrafields_default.push(quote!{
-							#extrafield: #extra_default,
-						});
-					},
-					AddExtraGenesisLineEnum::AddExtraGenesisBuild(DeclStorageBuild{ expr, .. }) => {
-						if has_scall { panic!( "Only one build expression allowed for extra genesis" ) }
-						let content = &expr.content;
-						scall = quote!( ( #content ) );
-						has_scall = true;
-					},
-				}
-			}
-		}
-
-		let is_extra_genesis_needed = has_scall
-			|| config_field.len() > 0
-			|| genesis_extrafields.len() > 0
-			|| builders.len() > 0;
-		if is_extra_genesis_needed {
-			let (fparam, sparam, ph_field, ph_default) = if is_trait_needed {
-				if has_trait_field {
-					// no phantom data required
-					(
-						quote!(<#traitinstance: #traittype>),
-						quote!(<#traitinstance>),
-						quote!(),
-						quote!(),
-					)
-				} else {
-					// need phantom data
-					(
-						quote!(<#traitinstance: #traittype>),
-						quote!(<#traitinstance>),
-
-						quote!{
-							#[serde(skip)]
-							pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
-						},
-						quote!{
-							_genesis_phantom_data: Default::default(),
-						},
-					)
-				}
-			} else {
-				// do not even need type parameter
-				(quote!(), quote!(), quote!(), quote!())
+				let ident = &getter.getfn.content;
+				quote!( #ident )
 			};
-			quote!{
-			
-				#[derive(Serialize, Deserialize)]
-				#[cfg(feature = "std")]
-				#[serde(rename_all = "camelCase")]
-				#[serde(deny_unknown_fields)]
-				pub struct GenesisConfig#fparam {
-					#ph_field
-					#( #config_field )*
-					#( #genesis_extrafields )*
+			let option_extracteed = if let DeclStorageType::Simple(ref st) = storage_type {
+				if ext::has_parametric_type(st, traitinstance) {
+					is_trait_needed = true;
+					has_trait_field = true;
 				}
+				ext::extract_type_option(st)
+			} else { None };
+			let is_option = option_extracteed.is_some();
+			let storage_type = option_extracteed.unwrap_or_else(|| quote!( #storage_type ));
+			config_field.extend(quote!( pub #ident: #storage_type, ));
+			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
+				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance>| config.#ident.clone()) )));
+			let fielddefault = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d|
+				if is_option {
+					quote!( #d.unwrap_or_default() )
+				} else {
+					quote!( #d )
+				}).unwrap_or_else(|| quote!( Default::default() ));
+					config_field_default.extend(quote!( #ident: #fielddefault, ));
 
-				#[cfg(feature = "std")]
-				impl#fparam Default for GenesisConfig#sparam {
-					fn default() -> Self {
-						GenesisConfig {
-							#ph_default
-							#( #config_field_default )*
-							#( #genesis_extrafields_default )*
-						}
+		} else {
+			opt_build = build.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
+		}
+
+		if let Some(builder) = opt_build {
+			is_trait_needed = true;
+			if is_simple {
+				builders.extend(quote!{{
+					use #scrate::codec::Encode;
+					let v = (#builder)(&self);
+					r.insert(Self::hash(<#name<#traitinstance>>::key()).to_vec(), v.encode());
+				}});
+			} else {
+				builders.extend(quote!{{
+					use #scrate::codec::Encode;
+					let data = (#builder)(&self);
+					for (k, v) in data.into_iter() {
+						r.insert(Self::hash(&<#name<#traitinstance>>::key_for(k)).to_vec(), v.encode());
 					}
-				}
+				}});
+			}
+		}
 
-				#[cfg(feature = "std")]
-				impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
+	}
 
-					fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageMap, #scrate::runtime_primitives::ChildrenStorageMap), String> {
-						let mut r: #scrate::runtime_primitives::StorageMap = Default::default();
-						let mut c: #scrate::runtime_primitives::ChildrenStorageMap = Default::default();
+	let mut has_scall = false;
+	let mut scall = quote!{ ( |_, _, _| {} ) };
+	let mut genesis_extrafields = TokenStream2::new();
+	let mut genesis_extrafields_default = TokenStream2::new();
 
-						#( #builders )*
+	// extra genesis
+	if let Some(eg) = extra_genesis {
+		for ex_content in eg.content.content.lines.inner.iter() {
+			match ex_content {
+				AddExtraGenesisLineEnum::AddExtraGenesisLine(AddExtraGenesisLine {
+					attrs,
+					extra_field,
+					extra_type,
+					default_value,
+					..
+				}) => {
+					if ext::has_parametric_type(&extra_type, traitinstance) {
+						is_trait_needed = true;
+						has_trait_field = true;
+					}
+					let extrafield = &extra_field.content;
+					genesis_extrafields.extend(quote!{
+						#attrs pub #extrafield: #extra_type,
+					});
+					let extra_default = default_value.inner.get(0).map(|d| &d.expr).map(|e| quote!{ #e })
+						.unwrap_or_else(|| quote!( Default::default() ));
+					genesis_extrafields_default.extend(quote!{
+						#extrafield: #extra_default,
+					});
+				},
+				AddExtraGenesisLineEnum::AddExtraGenesisBuild(DeclStorageBuild{ expr, .. }) => {
+					if has_scall {
+						return Err(Error::new(expr.span(), "Only one build expression allowed for extra genesis"));
+					}
+					let content = &expr.content;
+					scall = quote!( ( #content ) );
+					has_scall = true;
+				},
+			}
+		}
+	}
 
-						#scall(&mut r, &mut c, &self);
+	let is_extra_genesis_needed = has_scall
+		|| !config_field.is_empty()
+		|| !genesis_extrafields.is_empty()
+		|| !builders.is_empty();
+	Ok(if is_extra_genesis_needed {
+		let (fparam, sparam, ph_field, ph_default) = if is_trait_needed {
+			if has_trait_field {
+				// no phantom data required
+				(
+					quote!(<#traitinstance: #traittype>),
+					quote!(<#traitinstance>),
+					quote!(),
+					quote!(),
+				)
+			} else {
+				// need phantom data
+				(
+					quote!(<#traitinstance: #traittype>),
+					quote!(<#traitinstance>),
 
-						Ok((r, c))
+					quote!{
+						#[serde(skip)]
+						pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
+					},
+					quote!{
+						_genesis_phantom_data: Default::default(),
+					},
+				)
+			}
+		} else {
+			// do not even need type parameter
+			(quote!(), quote!(), quote!(), quote!())
+		};
+		quote!{
+
+			#[derive(Serialize, Deserialize)]
+			#[cfg(feature = "std")]
+			#[serde(rename_all = "camelCase")]
+			#[serde(deny_unknown_fields)]
+			pub struct GenesisConfig#fparam {
+				#ph_field
+				#config_field
+				#genesis_extrafields
+			}
+
+			#[cfg(feature = "std")]
+			impl#fparam Default for GenesisConfig#sparam {
+				fn default() -> Self {
+					GenesisConfig {
+						#ph_default
+						#config_field_default
+						#genesis_extrafields_default
 					}
 				}
 			}
-		} else {
-			quote!()
+
+			#[cfg(feature = "std")]
+			impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
+
+				fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageMap, #scrate::runtime_primitives::ChildrenStorageMap), String> {
+					let mut r: #scrate::runtime_primitives::StorageMap = Default::default();
+					let mut c: #scrate::runtime_primitives::ChildrenStorageMap = Default::default();
+
+					#builders
+
+					#scall(&mut r, &mut c, &self);
+
+					Ok((r, c))
+				}
+			}
 		}
+	} else {
+		quote!()
+	})
 }
 
 fn decl_storage_items(
-	scrate: &proc_macro2::TokenStream,
+	scrate: &TokenStream2,
 	traitinstance: &Ident,
 	traittype: &syn::TypeParamBound,
 	cratename: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> proc_macro2::TokenStream {
+) -> TokenStream2 {
 
-	let mut impls = Vec::new();
+	let mut impls = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
 			name,
@@ -340,7 +360,7 @@ fn decl_storage_items(
 			DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
 		};
 		let is_option = extracted_opt.is_some();
-		let fielddefault = default_value.inner.get(0).as_ref().map(|d|&d.expr).map(|d|quote!( #d ))
+		let fielddefault = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
 			.unwrap_or_else(|| quote!{ Default::default() });
 
 		let typ = extracted_opt.unwrap_or(quote!( #gettype ));
@@ -366,6 +386,7 @@ fn decl_storage_items(
 				}
 			};
 
+			let key_string = cratename.to_string() + " " + &name.to_string();
 			// generator for value
 			quote!{
 
@@ -376,7 +397,7 @@ fn decl_storage_items(
 
 					/// Get the storage key.
 					fn key() -> &'static [u8] {
-						stringify!(#cratename #name).as_bytes()
+						#key_string.as_bytes()
 					}
 
 					/// Load the value from the provided storage instance.
@@ -416,6 +437,7 @@ fn decl_storage_items(
 					}
 				}
 			};
+			let prefix_string = cratename.to_string() + " " + &name.to_string();
 			// generator for map
 			quote!{
 				#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
@@ -425,7 +447,7 @@ fn decl_storage_items(
 
 					/// Get the prefix key in storage.
 					fn prefix() -> &'static [u8] {
-						stringify!(#cratename #name).as_bytes()
+						#prefix_string.as_bytes()
 					}
 
 					/// Get the storage key used to fetch a value corresponding to a specific key.
@@ -460,55 +482,43 @@ fn decl_storage_items(
 
 			}
 		};
-		impls.push(implementation)
+		impls.extend(implementation)
 	}
-
-	quote!( #( #impls )* )
-
+	impls
 }
 
 
 fn decl_store_items(
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> proc_macro2::TokenStream {
-	let mut items = Vec::new();
-	for sline in storage_lines.inner.iter() {
-		let DeclStorageLine {
-			name,
-			..
-		} = sline;
-		items.push(quote!{
+) -> TokenStream2 {
+	let mut items = TokenStream2::new();
+	for name in storage_lines.inner.iter().map(|sline| &sline.name) {
+		items.extend(quote!{
 			type #name;
 		});
 	}
-
-	quote!( #( #items )* )
+	items
 }
 
 fn impl_store_items(
 	traitinstance: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> proc_macro2::TokenStream {
-	let mut items = Vec::new();
-	for sline in storage_lines.inner.iter() {
-		let DeclStorageLine {
-			name,
-			..
-		} = sline;
-		items.push(quote!{
+) -> TokenStream2 {
+	let mut items = TokenStream2::new();
+	for name in storage_lines.inner.iter().map(|sline| &sline.name) {
+		items.extend(quote!{
 			type #name = #name<#traitinstance>;
 		});
 	}
-
-	quote!( #( #items )* )
+	items
 }
 
 fn impl_store_fns(
-	scrate: &proc_macro2::TokenStream,
+	scrate: &TokenStream2,
 	traitinstance: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> proc_macro2::TokenStream {
-	let mut items = Vec::new();
+) -> TokenStream2 {
+	let mut items = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
 			name,
@@ -540,19 +550,18 @@ fn impl_store_fns(
 					}
 				}
 			};
-			items.push(item);
+			items.extend(item);
 		}
 	}
-
-	quote!( #( #items )* )
+	items
 }
 
 fn store_functions_to_metadata (
-	scrate: &proc_macro2::TokenStream,
+	scrate: &TokenStream2,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> proc_macro2::TokenStream {
+) -> TokenStream2 {
 
-	let mut items = Vec::new();
+	let mut items = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
 			attrs,
@@ -595,33 +604,33 @@ fn store_functions_to_metadata (
 				#scrate::storage::generator::StorageFunctionModifier::Optional
 			}
 		};
-		let mut docs = Vec::new();
-		for attr in attrs.inner.iter() {
-			if let Some(syn::Meta::NameValue(syn::MetaNameValue{
+		let mut docs = TokenStream2::new();
+		for attr in attrs.inner.iter().filter_map(|v| v.interpret_meta()) {
+			if let syn::Meta::NameValue(syn::MetaNameValue{
 				ref ident,
 				ref lit,
 				..
-			})) = attr.interpret_meta() {
+			}) = attr {
 				if ident == "doc" {
-					docs.push(quote!(#lit));
+					docs.extend(quote!(#lit,));
 				}
 			}
 		}
-		let str_name = quote!(#name).to_string().replace(" ","");
+		let str_name = name.to_string();
 		let item = quote! {
 			#scrate::storage::generator::StorageFunctionMetadata {
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
-				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #( #docs ),* ]),
-			}
+				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
+			},
 		};
-		items.push(item);
+		items.extend(item);
 	}
 
 	quote!{
 	 	#scrate::storage::generator::DecodeDifferent::Encode(&[
-			#( #items ),*
+			#items
 		])
 	}
 }

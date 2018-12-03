@@ -31,15 +31,15 @@ extern crate proc_macro;
 extern crate proc_macro2;
 
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 
 
 pub(crate) fn fields_idents(
 	fields: impl Iterator<Item = syn::Field>,
 ) -> impl Iterator<Item = proc_macro2::TokenStream> {
 	fields.enumerate().map(|(ix, field)| {
-		field.ident.clone().map(|i|quote!{#i}).unwrap_or_else(|| {
-			let f_ix: syn::Ident = syn::parse_str(&format!("f_{}", ix))
-				.expect("not reserved; qed");
+		field.ident.clone().map(|i| quote!{#i}).unwrap_or_else(|| {
+			let f_ix: syn::Ident = syn::Ident::new(&format!("f_{}", ix), Span::call_site());
 			quote!( #f_ix )
 		})
 	})
@@ -49,9 +49,11 @@ pub(crate) fn fields_access(
 	fields: impl Iterator<Item = syn::Field>,
 ) -> impl Iterator<Item = proc_macro2::TokenStream> {
 	fields.enumerate().map(|(ix, field)| {
-		field.ident.clone().map(|i|quote!( #i )).unwrap_or_else(|| {
-			let f_ix: syn::Index = syn::parse_str(&ix.to_string())
-				.expect("not reserved; qed");
+		field.ident.clone().map(|i| quote!( #i )).unwrap_or_else(|| {
+			let f_ix: syn::Index = syn::Index {
+				index: ix as u32,
+				span: Span::call_site(),
+			};
 			quote!( #f_ix )
 		})
 	})
@@ -153,7 +155,7 @@ pub fn derive_parse_enum(input: TokenStream) -> TokenStream {
 			});
 
 		// double parse to update input cursor position
-		// TODO check next syn crate for a way
+		// next syn crate version should be checked for a way
 		// to copy position/state from a fork
 		quote!{
 			let mut fork = input.fork();

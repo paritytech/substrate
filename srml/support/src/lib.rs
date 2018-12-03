@@ -31,7 +31,6 @@ extern crate srml_metadata;
 
 extern crate mashup;
 
-#[allow(unused_imports)]
 #[macro_use]
 extern crate srml_support_procedural;
 
@@ -39,7 +38,6 @@ extern crate srml_support_procedural;
 #[macro_use]
 extern crate pretty_assertions;
 #[cfg(feature = "std")]
-#[allow(unused_imports)]
 #[macro_use]
 extern crate serde_derive;
 #[cfg(test)]
@@ -72,6 +70,7 @@ pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
 
+#[doc(inline)]
 pub use srml_support_procedural::decl_storage;
 
 #[macro_export]

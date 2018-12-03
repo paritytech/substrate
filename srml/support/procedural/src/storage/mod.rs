@@ -23,7 +23,7 @@ use srml_support_procedural_tools::syn_ext as ext;
 use syn::Ident;
 use syn::token::CustomKeyword;
 
-pub mod transfo;
+pub mod transformation;
 
 /// Parsing usage only
 #[derive(ParseStruct, ToTokensStruct, Debug)]

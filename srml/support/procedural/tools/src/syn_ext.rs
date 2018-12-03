@@ -260,7 +260,7 @@ pub fn is_parametric_type_def(typ: &syn::Type, default: bool) -> bool {
 		syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
 		syn::Type::Never(..) => false,
 		syn::Type::Tuple(ref inner) =>
-			inner.elems.iter().any(|t|is_parametric_type_def(t, default)),
+			inner.elems.iter().any(|t| is_parametric_type_def(t, default)),
 		syn::Type::TraitObject(..) => true,
 		syn::Type::ImplTrait(..) => true,
 		syn::Type::Paren(ref inner) => is_parametric_type_def(&inner.elem, default),
@@ -276,28 +276,30 @@ pub fn is_parametric_type(typ: &syn::Type) -> bool {
 	is_parametric_type_def(typ, true)
 }
 
+fn has_parametric_type_def_in_path(path: &syn::Path, ident: &Ident, default: bool) -> bool {
+	path.segments.iter().any(|v| {
+		if ident == &v.ident {
+			return true;
+		}
+		if let syn::PathArguments::AngleBracketed(ref a) = v.arguments {
+			for arg in a.args.iter() {
+				if let syn::GenericArgument::Type(ref typ) = arg {
+					if has_parametric_type_def(typ, ident, default) {
+						return true;
+					}
+				}
+				// potentially missing matches here
+			}
+			false
+		} else {
+			false
+		}
+	})
+
+}
 pub fn has_parametric_type_def(typ: &syn::Type, ident: &Ident, default: bool) -> bool {
 	match *typ {
-		syn::Type::Path(ref path) => {
-			path.path.segments.iter().any(|v| {
-				if ident == &v.ident {
-					return true;
-				}
-				if let syn::PathArguments::AngleBracketed(ref a) = v.arguments {
-					for arg in a.args.iter() {
-						if let syn::GenericArgument::Type(ref typ) = arg {
-							if has_parametric_type_def(typ, ident, default) {
-								return true;
-							}
-						}
-						// potentially missing matches here
-					}
-					false
-				} else {
-					false
-				}
-			})
-		},
+		syn::Type::Path(ref path) => has_parametric_type_def_in_path(&path.path, ident, default),
 		syn::Type::Slice(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
 		syn::Type::Array(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
 		syn::Type::Ptr(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
@@ -305,9 +307,21 @@ pub fn has_parametric_type_def(typ: &syn::Type, ident: &Ident, default: bool) ->
 		syn::Type::BareFn(ref inner) => inner.variadic.is_some(),
 		syn::Type::Never(..) => false,
 		syn::Type::Tuple(ref inner) =>
-			inner.elems.iter().any(|t|has_parametric_type_def(t, ident, default)),
-		syn::Type::TraitObject(..) => true, // TODO check bounds
-		syn::Type::ImplTrait(..) => true, // TODO check bounds
+			inner.elems.iter().any(|t| has_parametric_type_def(t, ident, default)),
+		syn::Type::TraitObject(ref to) => {
+			to.bounds.iter().any(|bound| {
+				if let syn::TypeParamBound::Trait(ref t) = bound {
+					has_parametric_type_def_in_path(&t.path, ident, default)
+				} else { false }
+			})
+		},
+		syn::Type::ImplTrait(ref it) => {
+			it.bounds.iter().any(|bound| {
+				if let syn::TypeParamBound::Trait(ref t) = bound {
+					has_parametric_type_def_in_path(&t.path, ident, default)
+				} else { false }
+			})
+		},
 		syn::Type::Paren(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
 		syn::Type::Group(ref inner) => has_parametric_type_def(&inner.elem, ident, default),
 		syn::Type::Infer(..) => default,

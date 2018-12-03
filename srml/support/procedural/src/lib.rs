@@ -55,5 +55,5 @@ use proc_macro::TokenStream;
 /// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
-	storage::transfo::decl_storage_impl(input)
+	storage::transformation::decl_storage_impl(input)
 }
