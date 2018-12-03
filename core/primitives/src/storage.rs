@@ -17,18 +17,18 @@
 //! Contract execution data.
 
 #[cfg(feature = "std")]
-use impl_serde::serialize;
+use bytes;
 use rstd::vec::Vec;
 
 /// Contract storage key.
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
-pub struct StorageKey(#[cfg_attr(feature = "std", serde(with="serialize"))] pub Vec<u8>);
+pub struct StorageKey(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Contract storage entry data.
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord, Clone))]
-pub struct StorageData(#[cfg_attr(feature = "std", serde(with="serialize"))] pub Vec<u8>);
+pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Storage change set
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, PartialEq, Eq))]

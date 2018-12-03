@@ -83,6 +83,9 @@ use rstd::prelude::*;
 use rstd::ops::Deref;
 
 #[cfg(feature = "std")]
+pub use impl_serde::serialize as bytes;
+
+#[cfg(feature = "std")]
 pub mod hashing;
 #[cfg(feature = "std")]
 pub use hashing::{blake2_256, twox_128, twox_256};
@@ -120,7 +123,7 @@ pub type Signature = hash::H512;
 /// Hex-serialised shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash, PartialOrd, Ord))]
-pub struct Bytes(#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))] pub Vec<u8>);
+pub struct Bytes(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self { Bytes(s) }
