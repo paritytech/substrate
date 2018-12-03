@@ -24,7 +24,8 @@ pub use runtime_primitives::{
 	traits::{Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
 	generic::BlockId, transaction_validity::TransactionValidity
 };
-pub use runtime_version::{ApiId, RuntimeVersion};
+#[doc(hidden)]
+pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
 pub use rstd::{slice, mem};
 #[cfg(feature = "std")]

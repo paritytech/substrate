@@ -478,6 +478,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	}
 }
 
+/// Generate the implementations of the runtime apis for the `RuntimeApi` type.
 fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut result = Vec::with_capacity(impls.len());
 
@@ -497,6 +498,30 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 	Ok(quote!( #( #result )* ))
 }
 
+/// Generates `RUNTIME_API_VERSIONS` that holds all version information about the implemented
+/// runtime apis.
+fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
+	let mut result = Vec::with_capacity(impls.len());
+
+	for impl_ in impls {
+		let mut path = extend_with_runtime_decl_path(extract_impl_trait(&impl_)?.clone());
+		// Remove the trait
+		path.segments.pop();
+
+		let id: Path = parse_quote!( #path ID );
+		let version: Path = parse_quote!( #path VERSION );
+
+		result.push(quote!( (#id, #version) ));
+	}
+
+	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+
+	Ok(quote!(
+		const RUNTIME_API_VERSIONS: #c::runtime_api::ApisVec =
+			#c::runtime_api::create_apis_vec!([ #( #result ),* ]);
+	))
+}
+
 /// The implementation of the `impl_runtime_apis!` macro.
 pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
@@ -507,6 +532,7 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
 	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
+	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 
 	quote!(
 		#hidden_includes
@@ -516,6 +542,8 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 		#api_impls_for_runtime
 
 		#api_impls_for_runtime_api
+
+		#runtime_api_versions
 
 		pub mod api {
 			use super::*;

@@ -37,6 +37,7 @@ use std::fmt;
 use std::collections::HashSet;
 
 use runtime_primitives::RuntimeString;
+pub use runtime_primitives::create_runtime_str;
 
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
@@ -50,22 +51,16 @@ pub type ApisVec = ::std::borrow::Cow<'static, [(ApiId, u32)]>;
 #[cfg(not(feature = "std"))]
 pub type ApisVec = &'static [(ApiId, u32)];
 
-#[cfg(feature = "std")]
-#[macro_export]
-macro_rules! ver_str {
-	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
-}
-
-#[cfg(not(feature = "std"))]
-#[macro_export]
-macro_rules! ver_str {
-	( $y:expr ) => {{ $y }}
-}
-
 /// Create a vector of Api declarations.
 #[macro_export]
-macro_rules! apis_vec {
-	( $y:expr ) => { ver_str!(& $y) }
+#[cfg(feature = "std")]
+macro_rules! create_apis_vec {
+	( $y:expr ) => { ::std::borrow::Cow::Borrowed(& $y) }
+}
+#[macro_export]
+#[cfg(not(feature = "std"))]
+macro_rules! create_apis_vec {
+	( $y:expr ) => { $y }
 }
 
 /// Runtime version.
