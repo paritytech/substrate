@@ -110,6 +110,63 @@ mod adding_parameter_with_type_reference {
 	*/
 }
 
+mod invalid_api_version {
+	/*!
+	```compile_fail
+		#[macro_use]
+		extern crate substrate_client;
+		extern crate sr_primitives as runtime_primitives;
+
+		decl_runtime_apis! {
+			#[api_version]
+			pub trait Api {
+				fn test(data: u64);
+			}
+		}
+
+		fn main() {}
+	```
+	*/
+}
+
+mod invalid_api_version_2 {
+	/*!
+	```compile_fail
+		#[macro_use]
+		extern crate substrate_client;
+		extern crate sr_primitives as runtime_primitives;
+
+		decl_runtime_apis! {
+			#[api_version("1")]
+			pub trait Api {
+				fn test(data: u64);
+			}
+		}
+
+		fn main() {}
+	```
+	*/
+}
+
+mod invalid_api_version_3 {
+	/*!
+	```compile_fail
+		#[macro_use]
+		extern crate substrate_client;
+		extern crate sr_primitives as runtime_primitives;
+
+		decl_runtime_apis! {
+			#[api_version()]
+			pub trait Api {
+				fn test(data: u64);
+			}
+		}
+
+		fn main() {}
+	```
+	*/
+}
+
 mod missing_block_generic_parameter {
 	/*!
 	```compile_fail
