@@ -136,6 +136,33 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// # fn main() {}
 /// ```
+///
+/// # Runtime api trait versioning
+///
+/// To support versioning of the traits, the macro supports the attribute `#[api_version(1)]`.
+/// The attribute supports any `u32` as version. By default, each trait is at version `1`, if no
+/// version is provided.
+///
+/// ```rust
+/// #[macro_use]
+/// extern crate substrate_client;
+///
+/// decl_runtime_apis! {
+///     /// Declare the api trait.
+///     #[api_version(2)]
+///     pub trait Balance {
+///         /// Get the balance.
+///         fn get_balance() -> u64;
+///         /// Set the balance.
+///         fn set_balance(val: u64);
+///         /// In version 2, we added this new function.
+///         fn increase_balance(val: u64);
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
+
 #[proc_macro]
 pub fn decl_runtime_apis(input: TokenStream) -> TokenStream {
 	decl_runtime_apis::decl_runtime_apis_impl(input)
