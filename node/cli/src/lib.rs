@@ -107,20 +107,10 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	let full_version = substrate_service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
 
-	let matches = match NodeParams::clap()
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(&(full_version + "\n")[..])
-		.get_matches_from_safe(args) {
-			Ok(m) => m,
-			Err(e) => e.exit(),
-		};
+	// TODO [now]: provide the custom args
+	let matches = cli::parse_args(args, version, None)
+		.expect("node-specific args are well-formatted; qed");
 
 	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(
 		load_spec, version, "substrate-node", &matches

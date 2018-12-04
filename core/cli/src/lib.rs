@@ -31,6 +31,7 @@ extern crate tokio;
 extern crate names;
 extern crate backtrace;
 extern crate sysinfo;
+extern crate yaml_rust as yaml;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
@@ -50,10 +51,7 @@ extern crate clap;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate structopt;
 
-mod params;
 pub mod error;
 pub mod informant;
 mod panic_hook;
@@ -78,8 +76,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use names::{Generator, Name};
 use regex::Regex;
-use structopt::StructOpt;
-pub use params::{CoreParams, CoreCommands, ExecutionStrategy};
 
 use futures::Future;
 
@@ -155,25 +151,74 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-/// Parse command line arguments
-pub fn parse_args_default<'a, I, T>(args: I, version: VersionInfo) -> clap::ArgMatches<'a>
+/// The parsed YAML.
+pub struct ParsedYaml {
+	core: yaml::Yaml,
+	extra: Option<yaml::Yaml>,
+}
+
+impl ParsedYaml {
+	/// Create a new parsed YAML for borrowing argument matches from.
+	///
+	/// Extra CLI params, can be optionally provided. This can add more args and subcommands
+	/// the same way as described in Clap.
+	pub fn new(version: &VersionInfo, extra_cli: Option<&str>) -> Self {
+		let raw_yaml = format!(
+			include_str!("cli.yml"),
+			name = version.executable_name,
+			author = version.author,
+			description = version.description,
+		);
+		let mut core_yaml = clap::YamlLoader::load_from_str(&raw_yaml)
+			.expect("included CLI YAML file is valid; qed");
+
+		let extra = extra_cli.map(|extra| {
+			let mut extra_yaml = clap::YamlLoader::load_from_str(extra)
+				.expect("Providing extra CLI is invalid");
+
+			extra_yaml.remove(0)
+		});
+
+		ParsedYaml {
+			core: core_yaml.remove(0),
+			extra,
+		}
+	}
+}
+
+/// Parse command line arguments. You can provide an extra string which defines
+/// extra arguments and subcommands.
+///
+/// Subcommands must not overlap with any of the core-provided subcommands.
+pub fn parse_args<'a, I, T, F>(
+	args: I,
+	version: VersionInfo,
+	parsed_yaml: &'a ParsedYaml,
+) -> clap::ArgMatches<'a>
 where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
+	F: ServiceFactory,
 {
 	let full_version = service::config::full_version_from_strs(
 		version.version,
-		version.commit
-	);
+		version.commit,
+	) + "\n";
 
-	match CoreParams::clap()
+	let mut app = clap::App::from(&parsed_yaml.core)
 		.name(version.executable_name)
 		.author(version.author)
 		.about(version.description)
-		.version(&(full_version + "\n")[..])
-		.get_matches_from_safe(args) {
-			Ok(m) => m,
-			Err(e) => e.exit(),
+		.version(&full_version[..]);
+
+	// TODO [now]: include extra args.
+	if let Some(ref extra) = parsed_yaml.extra.as_ref() {
+		println!("{:?}", extra);
+	}
+
+	match app.get_matches_from_safe(args) {
+		Ok(m) => m,
+		Err(e) => e.exit(),
 	}
 }
 
@@ -187,7 +232,6 @@ pub fn parse_matches<'a, F, S>(
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-
 {
 	let spec = load_spec(&matches, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
@@ -359,7 +403,7 @@ where
 	} else if let Some(matches) = matches.subcommand_matches("revert") {
 		revert_chain::<F>(db_path, matches, spec)?;
 		return Ok(Action::ExecutedInternally);
-	} else if let Some(matches) = matches.subcommand_matches("purge-chain") {
+	} else if let Some(_matches) = matches.subcommand_matches("purge-chain") {
 		purge_chain::<F>(db_path)?;
 		return Ok(Action::ExecutedInternally);
 	}
