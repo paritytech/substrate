@@ -350,4 +350,24 @@ mod tests {
 
 		assert_eq!(consensus.messages.len(), 2);
 	}
+
+	#[test]
+	fn can_keep_multiple_subscribers_per_topic() {
+		use futures::Stream;
+
+		let mut consensus = ConsensusGossip::<Block>::new();
+
+		let message = vec![1, 2, 3];
+
+		let message_hash = HashFor::<Block>::hash(&message);
+		let topic = HashFor::<Block>::hash(&[1,2,3]);
+
+		consensus.register_message(message_hash, topic, || message.clone());
+
+		let stream1 = consensus.messages_for(topic);
+		let stream2 = consensus.messages_for(topic);
+
+		assert_eq!(stream1.wait().next(), Some(Ok(message.clone())));
+		assert_eq!(stream2.wait().next(), Some(Ok(message)));
+	}
 }
