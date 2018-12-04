@@ -97,13 +97,11 @@ decl_module! {
 		/// Destroy any assets of `id` owned by `origin`.
 		fn destroy(origin, id: AssetId) -> Result {
 			let origin = ensure_signed(origin)?;
-			let origin_account = (id, origin.clone());
-			let origin_balance_existing = <Balances<T>>::get(&origin_account);
-			ensure!(!origin_balance_existing.is_zero(), "origin balance should be non-zero");
-			let origin_balance_destroyed = <Balances<T>>::take((id, origin.clone()));
+			let balance = <Balances<T>>::take((id, origin.clone()));
+			ensure!(!balance.is_zero(), "origin balance should be non-zero");
 
-			<TotalSupply<T>>::mutate(id, |total_supply| *total_supply -= origin_balance_destroyed);
-			Self::deposit_event(RawEvent::Destroyed(id, origin, origin_balance_destroyed));
+			<TotalSupply<T>>::mutate(id, |total_supply| *total_supply -= balance);
+			Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
 
 			Ok(())
 		}
