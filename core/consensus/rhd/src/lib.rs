@@ -1177,7 +1177,7 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			&inherent,
 		) {
 			Ok(Ok(())) => None,
-			Ok(Err(BlockBuilderError::TimestampInFuture(timestamp))) => Some(timestamp),
+			Ok(Err(BlockBuilderError::ValidAtTimestamp(timestamp))) => Some(timestamp),
 			Ok(Err(e)) => {
 				debug!(target: "rhd", "Invalid proposal (check_inherents): {:?}", e);
 				return Box::new(future::ok(false));
