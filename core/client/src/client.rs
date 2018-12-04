@@ -1700,4 +1700,44 @@ pub(crate) mod tests {
 			}
 		}
 	}
+
+	#[test]
+	fn import_with_justification() {
+		use test_client::blockchain::Backend;
+
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		// A2 -> A3
+		let justification = vec![1, 2, 3];
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
+
+		assert_eq!(
+			client.backend().blockchain().last_finalized().unwrap(),
+			a3.hash(),
+		);
+
+		assert_eq!(
+			client.backend().blockchain().justification(BlockId::Hash(a3.hash())).unwrap(),
+			Some(justification),
+		);
+
+		assert_eq!(
+			client.backend().blockchain().justification(BlockId::Hash(a1.hash())).unwrap(),
+			None,
+		);
+
+		assert_eq!(
+			client.backend().blockchain().justification(BlockId::Hash(a2.hash())).unwrap(),
+			None,
+		)
+	}
 }

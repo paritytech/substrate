@@ -29,6 +29,10 @@ pub trait TestClient: Sized {
 	fn import(&self, origin: BlockOrigin, block: runtime::Block)
 		-> client::error::Result<()>;
 
+	/// Import block with justification, finalizes block.
+	fn import_justified(&self, origin: BlockOrigin, block: runtime::Block, justification: Justification)
+		-> client::error::Result<()>;
+
 	/// Finalize a block.
 	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()>;
 
@@ -52,6 +56,22 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 			post_digests: vec![],
 			body: Some(block.extrinsics),
 			finalized: false,
+			auxiliary: Vec::new(),
+		};
+
+		self.import_block(import, None).map(|_| ())
+	}
+
+	fn import_justified(&self, origin: BlockOrigin, block: runtime::Block, justification: Justification)
+		-> client::error::Result<()>
+	{
+		let import = ImportBlock {
+			origin,
+			header: block.header,
+			justification: Some(justification),
+			post_digests: vec![],
+			body: Some(block.extrinsics),
+			finalized: true,
 			auxiliary: Vec::new(),
 		};
 
