@@ -340,8 +340,6 @@ enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debug + 
 enum BlockImportError {
 	/// Block missed header, can't be imported
 	IncompleteHeader(Option<NodeIndex>),
-	/// Block missed justification, can't be imported
-	IncompleteJustification(Option<NodeIndex>),
 	/// Block verification failed, can't be imported
 	VerificationFailed(Option<NodeIndex>, String),
 	/// Block is known to be Bad
@@ -478,12 +476,6 @@ fn process_import_result<B: BlockT>(
 		Ok(BlockImportResult::ImportedUnknown(hash, number)) => {
 			link.block_imported(&hash, number);
 			1
-		},
-		Err(BlockImportError::IncompleteJustification(who)) => {
-			if let Some(peer) = who {
-				link.useless_peer(peer, "Sent block with incomplete justification to import");
-			}
-			0
 		},
 		Err(BlockImportError::IncompleteHeader(who)) => {
 			if let Some(peer) = who {
@@ -738,17 +730,6 @@ pub mod tests {
 		);
 	}
 
-	// FIXME: replace with test where `IncompleteJustification` error is created by the `BlockImport` handle
-	// #[test]
-	// fn import_single_good_block_without_justification_fails() {
-	// 	let (_, _, _, mut block) = prepare_good_block();
-	// 	block.block.justification = None;
-	// 	assert_eq!(
-	// 		import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-	// 		Err(BlockImportError::IncompleteJustification(Some(0)))
-	// 	);
-	// }
-
 	#[test]
 	fn process_import_result_works() {
 		let link = TestLink::new();
@@ -767,11 +748,6 @@ pub mod tests {
 
 		let link = TestLink::new();
 		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteHeader(Some(0)))), 0);
-		assert_eq!(link.total(), 1);
-		assert_eq!(link.disconnects.get(), 1);
-
-		let link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteJustification(Some(0)))), 0);
 		assert_eq!(link.total(), 1);
 		assert_eq!(link.disconnects.get(), 1);
 
