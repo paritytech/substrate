@@ -1,0 +1,9 @@
+args:
+  - grandpa-authority:
+      help: Run Node as a GRANDPA authority, implies --validator.
+      long: grandpa-authority
+      takes_value: false
+  - grandpa-authority-only:
+      help: Run Node as a GRANDPA authority, but not as a validator.
+      long: grandpa-authority-only
+      takes_value: false

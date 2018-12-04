@@ -80,6 +80,7 @@ use regex::Regex;
 use futures::Future;
 
 /// Executable version. Used to pass version information from the root crate.
+#[derive(Clone)]
 pub struct VersionInfo {
 	/// Implementation version.
 	pub version: &'static str,
@@ -151,13 +152,13 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-/// The parsed YAML.
-pub struct ParsedYaml {
+/// Structure for parsing arguments from core and chain-specific CLI params.
+pub struct ArgParser {
 	core: yaml::Yaml,
 	extra: Option<yaml::Yaml>,
 }
 
-impl ParsedYaml {
+impl ArgParser {
 	/// Create a new parsed YAML for borrowing argument matches from.
 	///
 	/// Extra CLI params, can be optionally provided. This can add more args and subcommands
@@ -174,58 +175,69 @@ impl ParsedYaml {
 
 		let extra = extra_cli.map(|extra| {
 			let mut extra_yaml = clap::YamlLoader::load_from_str(extra)
-				.expect("Providing extra CLI is invalid");
+				.expect("Provided extra CLI is invalid");
 
 			extra_yaml.remove(0)
 		});
 
-		ParsedYaml {
+		ArgParser {
 			core: core_yaml.remove(0),
 			extra,
 		}
 	}
-}
 
-/// Parse command line arguments. You can provide an extra string which defines
-/// extra arguments and subcommands.
-///
-/// Subcommands must not overlap with any of the core-provided subcommands.
-pub fn parse_args<'a, I, T, F>(
-	args: I,
-	version: VersionInfo,
-	parsed_yaml: &'a ParsedYaml,
-) -> clap::ArgMatches<'a>
-where
-	I: IntoIterator<Item = T>,
-	T: Into<std::ffi::OsString> + Clone,
-	F: ServiceFactory,
-{
-	let full_version = service::config::full_version_from_strs(
-		version.version,
-		version.commit,
-	) + "\n";
+	/// Create app from parsed yaml. Typically, this function doesn't need to
+	/// be used directly except when the app needs to be manipulated specially.
+	pub fn make_app<'a, 'b>(&'a self) -> clap::App<'a, 'b> {
+		let mut app = clap::App::from(&self.core);
 
-	let mut app = clap::App::from(&parsed_yaml.core)
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(&full_version[..]);
+		if let Some(ref extra) = self.extra.as_ref() {
+			// include extra args from the yaml.
+			let map = extra.as_hash().expect("Provided invalid extra CLI");
+			if let Some(args) = map.get(&yaml::Yaml::String("args".into())) {
+				let args_list = args.as_vec().expect("Provided invalid args in extra CLI");
+				for arg in args_list {
+					let arg_desc = arg.as_hash().expect("Provided invalid arg in extra CLI");
+					app = app.arg(clap::Arg::from_yaml(arg_desc));
+				}
+			}
+		}
 
-	// TODO [now]: include extra args.
-	if let Some(ref extra) = parsed_yaml.extra.as_ref() {
-		println!("{:?}", extra);
+		app
 	}
 
-	match app.get_matches_from_safe(args) {
-		Ok(m) => m,
-		Err(e) => e.exit(),
+	/// Get the matches from the args.
+	pub fn matches<'a, I, T>(
+		&'a self,
+		args: I,
+		version: &VersionInfo,
+	) -> clap::ArgMatches<'a>
+	where
+		I: IntoIterator<Item = T>,
+		T: Into<std::ffi::OsString> + Clone,
+	{
+		let full_version = service::config::full_version_from_strs(
+			version.version,
+			version.commit,
+		) + "\n";
+
+		let app = self.make_app()
+			.name(version.executable_name)
+			.author(version.author)
+			.about(version.description)
+			.version(&full_version[..]);
+
+		match app.get_matches_from_safe(args) {
+			Ok(m) => m,
+			Err(e) => e.exit(),
+		}
 	}
 }
 
 /// Parse clap::Matches into config and chain specification
 pub fn parse_matches<'a, F, S>(
 	spec_factory: S,
-	version: VersionInfo,
+	version: &VersionInfo,
 	impl_name: &'static str,
 	matches: &clap::ArgMatches<'a>
 ) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>

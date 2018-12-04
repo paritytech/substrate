@@ -44,19 +44,15 @@ extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;
-extern crate structopt;
 extern crate parking_lot;
 
 pub use cli::error;
 pub mod chain_spec;
 mod service;
-mod params;
 
 use tokio::runtime::Runtime;
 pub use cli::{VersionInfo, IntoExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
-use params::{Params as NodeParams};
-use structopt::StructOpt;
 use std::ops::Deref;
 
 /// The chain specification option.
@@ -107,13 +103,11 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-
-	// TODO [now]: provide the custom args
-	let matches = cli::parse_args(args, version, None)
-		.expect("node-specific args are well-formatted; qed");
+	let arg_parser = cli::ArgParser::new(&version, Some(include_str!("cli.yml")));
+	let matches = arg_parser.matches(args, &version);
 
 	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(
-		load_spec, version, "substrate-node", &matches
+		load_spec, &version, "substrate-node", &matches
 	)?;
 
 	if matches.is_present("grandpa_authority_only") {

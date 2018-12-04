@@ -16,14 +16,11 @@
 
 extern crate clap;
 extern crate substrate_cli as cli;
-extern crate structopt;
 
 use std::fs;
 use std::env;
 use clap::Shell;
 use std::path::Path;
-
-include!("src/params.rs");
 
 fn main() {
 	build_shell_completion();
@@ -40,11 +37,11 @@ fn build_shell_completion() {
 
 /// Build the shell auto-completion for a given Shell
 fn build_completion(shell: &Shell) {
-
 	let outdir = match env::var_os("OUT_DIR") {
         None => return,
         Some(dir) => dir,
     };
+
     let path = Path::new(&outdir)
     	.parent().unwrap()
     	.parent().unwrap()
@@ -53,9 +50,20 @@ fn build_completion(shell: &Shell) {
 
     fs::create_dir(&path).ok();
 
-    let mut app = Params::clap();
+	let version_info = cli::VersionInfo {
+		version: "<unknown>", // not needed for completions
+		commit: "<unknown>", // not needed for completions
+		executable_name: "substrate-node",
+		description: "Generic substrate node",
+		author: "Parity Technologies Ltd."
+	};
+
+	let arg_parser = cli::ArgParser::new(&version_info, Some(include_str!("src/cli.yml")));
+	let mut app = arg_parser.make_app();
+
     app.gen_completions(
     	"substrate-node",
     	*shell,
-    	&path);
+    	&path
+	);
 }
