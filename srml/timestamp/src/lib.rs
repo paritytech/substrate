@@ -46,8 +46,6 @@ extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 extern crate parity_codec as codec;
-#[macro_use]
-extern crate parity_codec_derive;
 
 use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
@@ -136,7 +134,8 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		vec![(T::TIMESTAMP_SET_POSITION, Call::set(data.into()))]
+		let next_time = ::rstd::cmp::max(data, Self::now() + Self::block_period());
+		vec![(T::TIMESTAMP_SET_POSITION, Call::set(next_time.into()))]
 	}
 
 	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
@@ -152,8 +151,11 @@ impl<T: Trait> ProvideInherent for Module<T> {
 			_ => return Err(CheckInherentError::Other("No valid timestamp inherent in block".into())),
 		}.into().as_();
 
+		let minimum = (Self::now() + Self::block_period()).as_();
 		if t > data.as_() + MAX_TIMESTAMP_DRIFT {
-			Err(CheckInherentError::TimestampInFuture(t))
+			Err(CheckInherentError::Other("Timestamp too far in future to accept".into()))
+		} else if t < minimum {
+			Err(CheckInherentError::ValidAtTimestamp(minimum))
 		} else {
 			Ok(())
 		}
