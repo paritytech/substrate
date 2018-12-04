@@ -311,22 +311,17 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 	}
 }
 
-/// The environment we run GRANDPA in.
-struct Environment<B, E, Block: BlockT, N: Network, RA> {
+// The chain interface exposed to GRANDPA.
+#[derive(Clone)]
+struct Chain<B, E, Block: BlockT, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
-	voters: Arc<HashMap<AuthorityId, u64>>,
-	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	network: N,
-	set_id: u64,
 }
 
-impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
+impl<Block: BlockT<Hash=H256>, B, E, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Chain<B, E, Block, RA> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	N: Network + 'static,
-	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -380,6 +375,32 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 				None
 			}
 		}
+	}
+}
+
+/// The environment we run GRANDPA in.
+struct Environment<B, E, Block: BlockT, N: Network, RA> {
+	chain: Chain<B, E, Block, RA>,
+	voters: Arc<HashMap<AuthorityId, u64>>,
+	config: Config,
+	network: N,
+	set_id: u64,
+}
+
+impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
+	Block: 'static,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	N: Network + 'static,
+	N::In: 'static,
+	NumberFor<Block>: BlockNumberOps,
+{
+	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
+		self.chain.ancestry(base, block)
+	}
+
+	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
+		self.chain.best_chain_containing(block)
 	}
 }
 
@@ -482,8 +503,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
 		let incoming = UntilVoteTargetImported::new(
-			self.inner.import_notification_stream(),
-			self.inner.clone(),
+			self.chain.inner.import_notification_stream(),
+			self.chain.inner.clone(),
 			incoming,
 		);
 
@@ -512,7 +533,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		);
 
 		let encoded_state = (round, state).encode();
-		if let Err(e) = self.inner.backend()
+		if let Err(e) = self.chain.inner.backend()
 			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
 		{
 			warn!(target: "afg", "Shutting down voter due to error bookkeeping last completed round in DB: {:?}", e);
@@ -523,7 +544,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-		finalize_block(&*self.inner, &self.authority_set, hash, number, (round, commit).into())
+		finalize_block(&*self.chain.inner, &self.chain.authority_set, hash, number, (round, commit).into())
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
@@ -559,7 +580,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 struct GrandpaJustification<Block: BlockT> {
 	round: u64,
 	commit: Commit<Block>,
-	ancestry: Vec<Block::Header>,
+	votes_ancestries: Vec<Block::Header>,
 }
 
 impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
@@ -573,8 +594,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 		RA: Send + Sync,
 	{
-		let mut ancestry_hashes = HashSet::new();
-		let mut ancestry = Vec::new();
+		let mut votes_ancestries_hashes = HashSet::new();
+		let mut votes_ancestries = Vec::new();
 
 		let error = {
 			let msg = "invalid precommits for target commit".to_string();
@@ -593,8 +614,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 						}
 
 						let parent_hash = current_header.parent_hash().clone();
-						if ancestry_hashes.insert(current_hash) {
-							ancestry.push(current_header);
+						if votes_ancestries_hashes.insert(current_hash) {
+							votes_ancestries.push(current_header);
 						}
 						current_hash = parent_hash;
 					},
@@ -603,14 +624,19 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			}
 		}
 
-		Ok(GrandpaJustification { round, commit, ancestry })
+		Ok(GrandpaJustification { round, commit, votes_ancestries })
 	}
 
 	// commit decoded as block justification must be verified and validated
-	fn decode_and_verify(
+	fn decode_and_verify<C>(
 		encoded: Vec<u8>,
 		set_id: u64,
-	) -> Result<GrandpaJustification<Block>, ClientError> {
+		voters: &HashMap<AuthorityId, u64>,
+		chain: &C,
+	) -> Result<GrandpaJustification<Block>, ClientError> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+		C: grandpa::Chain<Block::Hash, NumberFor<Block>>,
+	{
 		let justification = match GrandpaJustification::decode(&mut &*encoded) {
 			Some(justification) => justification,
 			_ => {
@@ -619,12 +645,26 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			}
 		};
 
-		let ancestry: HashMap<_, _> = justification.ancestry
+		match voter::validate_commit(
+			&justification.commit,
+			voters,
+			None,
+			chain,
+		) {
+			Ok(Some(_)) => {},
+			_ => {
+				let msg = "invalid commit in grandpa justification".to_string();
+				return Err(ClientErrorKind::BadJustification(msg).into());
+			}
+		}
+
+		let votes_ancestries: HashMap<_, _> = justification.votes_ancestries
 			.iter()
 			.cloned()
 			.map(|h: Block::Header| (h.hash(), h))
 			.collect();
 
+		let mut visited_hashes = HashSet::new();
 		for signed in justification.commit.precommits.iter() {
 			if let Err(_) = communication::check_message_sig::<Block>(
 				&grandpa::Message::Precommit(signed.precommit.clone()),
@@ -640,16 +680,22 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			let mut current_hash = signed.precommit.target_hash.clone();
 			loop {
 				if current_hash == justification.commit.target_hash { break; }
-				match ancestry.get(&current_hash) {
+				match votes_ancestries.get(&current_hash) {
 					Some(current_header) if *current_header.number() > justification.commit.target_number => {
 						current_hash = current_header.parent_hash().clone();
+						visited_hashes.insert(current_hash);
 					}
 					_ => {
 						return Err(ClientErrorKind::BadJustification(
-							"invalid ancestry proof in grandpa justification".to_string()).into());
+							"invalid precommit ancestry proof in grandpa justification".to_string()).into());
 					}
 				}
 			}
+		}
+
+		if visited_hashes != votes_ancestries.into_iter().map(|(k, _)| k).collect() {
+			return Err(ClientErrorKind::BadJustification(
+				"invalid precommit ancestries in grandpa justification with unused headers".to_string()).into());
 		}
 
 		Ok(justification)
@@ -830,8 +876,7 @@ impl<Block: BlockT> SharedGrandpaOracle<Block> {
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
 pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
-	inner: Arc<Client<B, E, Block, RA>>,
-	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	chain: Chain<B, E, Block, RA>,
 	authority_set_change: mpsc::UnboundedSender<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
 	authority_set_oracle: SharedGrandpaOracle<Block>,
 	api: Arc<PRA>,
@@ -839,6 +884,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
@@ -861,7 +907,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let digest = block.header.digest().clone();
 		let is_live = self.authority_set_oracle.is_live();
 
-		let import_result = self.inner.import_block(block, new_authorities)?;
+		let import_result = self.chain.inner.import_block(block, new_authorities)?;
 		if import_result != ImportResult::Queued {
 			return Ok(import_result);
 		}
@@ -872,7 +918,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		)?;
 
 		if let Some(change) = maybe_change {
-			let mut authorities = self.authority_set.inner().write();
+			let mut authorities = self.chain.authority_set.inner().write();
 			authorities.add_pending_change(PendingChange {
 				next_authorities: change.next_authorities,
 				finalization_depth: change.delay,
@@ -881,11 +927,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			});
 
 			let encoded = authorities.encode();
-			self.inner.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
+			self.chain.inner.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
 		};
 
-		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
-			canonical_at_height(&self.inner, (hash, number), canon_number)
+		let enacts_change = self.chain.authority_set.inner().read().enacts_change(number, |canon_number| {
+			canonical_at_height(&self.chain.inner, (hash, number), canon_number)
 		})?;
 
 		// a pending change is enacted by the given block, if the current
@@ -896,12 +942,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				if enacts_change && !is_live {
 					let justification = GrandpaJustification::decode_and_verify(
 						justification,
-						self.authority_set.set_id(),
+						self.chain.authority_set.set_id(),
+						&self.chain.authority_set.current_authorities(),
+						&self.chain,
 					)?;
 
 					let result = finalize_block(
-						&*self.inner,
-						&self.authority_set,
+						&*self.chain.inner,
+						&self.chain.authority_set,
 						hash,
 						number,
 						justification.into(),
@@ -987,7 +1035,7 @@ where
 
 	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
-		self.inner.authorities_at(at)
+		self.chain.inner.authorities_at(at)
 	}
 }
 
@@ -1042,10 +1090,14 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 	let authority_set_oracle = SharedGrandpaOracle::empty();
 
+	let chain = Chain {
+		inner: client.clone(),
+		authority_set: authority_set.clone(),
+	};
+
 	Ok((
 		GrandpaBlockImport {
-			inner: client.clone(),
-			authority_set: authority_set.clone(),
+			chain,
 			authority_set_change: authority_set_change_tx,
 			authority_set_oracle: authority_set_oracle.clone(),
 			api
@@ -1152,17 +1204,19 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			))?
 	};
 
-	let voters = authority_set.inner().read().current().1.iter()
-		.cloned()
-		.collect();
+	let voters = authority_set.current_authorities();
+
+	let chain = Chain {
+		inner: client.clone(),
+		authority_set: authority_set.clone(),
+	};
 
 	let initial_environment = Arc::new(Environment {
-		inner: client.clone(),
+		chain,
 		config: config.clone(),
 		voters: Arc::new(voters),
 		network: network.clone(),
 		set_id: authority_set.set_id(),
-		authority_set: authority_set.clone(),
 	});
 
 	let initial_state = (initial_environment, last_round_number, last_state, authority_set_change.into_future());
@@ -1211,13 +1265,17 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let authority_set = authority_set.clone();
 
 		let trigger_authority_set_change = |new: NewAuthoritySet<_, _>, authority_set_change| {
-			let env = Arc::new(Environment {
+			let chain = Chain {
 				inner: client,
+				authority_set,
+			};
+
+			let env = Arc::new(Environment {
+				chain,
 				config,
 				voters: Arc::new(new.authorities.into_iter().collect()),
 				set_id: new.set_id,
 				network,
-				authority_set,
 			});
 
 			// start the new authority set using the block where the
