@@ -1,6 +1,6 @@
 = Contributing
 
-`Substrate` projects is a **OPENISH Open Source Project**
+The `Substrate` project is an **OPENISH Open Source Project**
 
 == What?
 
