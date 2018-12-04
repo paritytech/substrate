@@ -134,7 +134,8 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		vec![(T::TIMESTAMP_SET_POSITION, Call::set(data.into()))]
+		let next_time = ::rstd::cmp::max(data, Self::now() + Self::block_period());
+		vec![(T::TIMESTAMP_SET_POSITION, Call::set(next_time.into()))]
 	}
 
 	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
