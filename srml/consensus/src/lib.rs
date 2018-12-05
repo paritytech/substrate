@@ -76,6 +76,9 @@ pub trait OfflineReport {
 	/// The report data type passed to the runtime during block authorship.
 	type Inherent: codec::Codec + Parameter;
 
+	/// Whether an inherent is empty and doesn't need to be included.
+	fn is_empty(inherent: &Self::Inherent) -> bool;
+
 	/// whether two reports are compatible.
 	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result;
 }
@@ -83,6 +86,7 @@ pub trait OfflineReport {
 impl OfflineReport for () {
 	type Inherent = ();
 
+	fn is_empty(_inherent: &()) -> bool { true }
 	fn check_inherent(_: &(), _: &()) -> Result { Ok(()) }
 }
 
@@ -93,6 +97,8 @@ pub struct InstantFinalityReportVec;
 
 impl OfflineReport for InstantFinalityReportVec {
 	type Inherent = Vec<u32>;
+
+	fn is_empty(inherent: &Self::Inherent) -> bool { inherent.is_empty() }
 
 	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result {
 		contained.iter().try_for_each(|n|
@@ -286,7 +292,11 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		vec![(T::NOTE_OFFLINE_POSITION, Call::note_offline(data))]
+		if <T::OfflineReport as OfflineReport>::is_empty(&data) {
+			vec![]
+		} else {
+			vec![(T::NOTE_OFFLINE_POSITION, Call::note_offline(data))]
+		}
 	}
 
 	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
