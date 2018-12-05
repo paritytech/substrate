@@ -115,6 +115,13 @@ fn duration_now() -> Option<Duration> {
 	}).ok()
 }
 
+fn timestamp_and_slot_now(slot_duration: u64) -> Option<(u64, u64)> {
+	duration_now().map(|s| {
+		let s = s.as_secs();
+		(s, s / slot_duration)
+	})
+}
+
 /// Get the slot for now.
 fn slot_now(slot_duration: u64) -> Option<u64> {
 	duration_now().map(|s| s.as_secs() / slot_duration)
@@ -337,20 +344,14 @@ pub trait ExtraVerification<B: Block>: Send + Sync {
 	type Verified: IntoFuture<Item=(),Error=String>;
 
 	/// Do additional verification for this block.
-	fn verify(&self, header: &B::Header, body: Option<&[B::Extrinsic]>) -> Self::Verified;
+	fn verify(
+		&self,
+		header: &B::Header,
+		body: Option<&[B::Extrinsic]>,
+		now: (u64, u64), // (timestamp, slot)
+	) -> Self::Verified;
 }
 
-/// No-op extra verification.
-#[derive(Debug, Clone, Copy)]
-pub struct NothingExtra;
-
-impl<B: Block> ExtraVerification<B> for NothingExtra {
-	type Verified = Result<(), String>;
-
-	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
-		Ok(())
-	}
-}
 /// A verifier for Aura blocks.
 pub struct AuraVerifier<C, E> {
 	config: Config,
@@ -370,14 +371,18 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		_justification: Vec<u8>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
-		let slot_now = slot_now(self.config.slot_duration)
+		let (timestamp_now, slot_now) = timestamp_and_slot_now(self.config.slot_duration)
 			.ok_or("System time is before UnixTime?".to_owned())?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let authorities = self.client.authorities(&BlockId::Hash(parent_hash))
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
-		let extra_verification = self.extra.verify(&header, body.as_ref().map(|x| &x[..]));
+		let extra_verification = self.extra.verify(
+			&header,
+			body.as_ref().map(|x| &x[..]),
+			(timestamp_now, slot_now),
+		);
 
 		// we add one to allow for some small drift.
 		// FIXME: in the future, alter this queue to allow deferring of headers

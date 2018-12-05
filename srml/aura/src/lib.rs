@@ -37,6 +37,7 @@ extern crate sr_io as runtime_io;
 
 use rstd::prelude::*;
 use runtime_support::storage::StorageValue;
+use runtime_support::dispatch::Result;
 use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 
@@ -96,7 +97,27 @@ impl AuraReport {
 impl<T: Trait> Module<T>
 	where T::OnOfflineValidator: consensus::OnOfflineValidator<AuraReport>,
 {
-	fn on_timestamp_set(now: T::Moment, step_duration: T::Moment) {
+	/// Determine the Aura slot-duration based on the timestamp module configuration.
+	pub fn slot_duration() -> u64 {
+		// we double the minimum block-period so each author can always propose within
+		// the majority of their slot.
+		<timestamp::Module<T>>::block_period().as_().saturating_mul(2)
+	}
+
+	/// Verify an inherent slot that is used in a block seal against a timestamp
+	/// extracted from the block.
+	// TODO: ensure `ProvideInherent` can deal with dependencies like this.
+	pub fn verify_inherent(timestamp: T::Moment, seal_slot: u64) -> Result {
+		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();
+
+		if timestamp_based_slot == seal_slot {
+			Ok(())
+		} else {
+			Err("timestamp set in block doesn't match slot in seal".into())
+		}
+	}
+
+	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();
 		<Self as Store>::LastTimestamp::put(now.clone());
 
@@ -104,32 +125,23 @@ impl<T: Trait> Module<T>
 			return;
 		}
 
-		assert!(step_duration > T::Moment::zero(), "Aura step duration cannot be zero.");
+		assert!(slot_duration > T::Moment::zero(), "Aura slot duration cannot be zero.");
 
-		let last_step = last / step_duration.clone();
-		let first_skipped = last_step.clone() + T::Moment::sa(1);
-		let cur_step = now / step_duration;
+		let last_slot = last / slot_duration.clone();
+		let first_skipped = last_slot.clone() + T::Moment::sa(1);
+		let cur_slot = now / slot_duration;
 
-		assert!(last_step < cur_step, "Only one block may be authored per step.");
-		if cur_step == first_skipped { return }
+		assert!(last_slot < cur_slot, "Only one block may be authored per slot.");
+		if cur_slot == first_skipped { return }
 
-		let step_to_usize = |step: T::Moment| { step.as_() as usize };
+		let slot_to_usize = |slot: T::Moment| { slot.as_() as usize };
 
-		let skipped_steps = cur_step - last_step - T::Moment::sa(1);
+		let skipped_slots = cur_slot - last_slot - T::Moment::sa(1);
 
 		<T::OnOfflineValidator as consensus::OnOfflineValidator<_>>::on_offline_validator(AuraReport {
-			start_idx: step_to_usize(first_skipped),
-			skipped: step_to_usize(skipped_steps),
+			start_idx: slot_to_usize(first_skipped),
+			skipped: slot_to_usize(skipped_slots),
 		})
-	}
-}
-
-impl<T: Trait> Module<T> {
-	/// Determine the Aura step-duration based on the timestamp module configuration.
-	pub fn step_duration() -> u64 {
-		// we double the minimum block-period so each author can always propose within
-		// the majority of their step.
-		<timestamp::Module<T>>::block_period().as_().saturating_mul(2)
 	}
 }
 
@@ -137,7 +149,7 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T>
 	where T::OnOfflineValidator: consensus::OnOfflineValidator<AuraReport>,
 {
 	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set(moment, T::Moment::sa(Self::step_duration()))
+		Self::on_timestamp_set(moment, T::Moment::sa(Self::slot_duration()))
 	}
 }
 
