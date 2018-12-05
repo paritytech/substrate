@@ -261,7 +261,7 @@ mod tests {
 				header: test_client::runtime::Header {
 					state_root: remote_root.into(),
 					parent_hash: Default::default(),
-					number: at + 1,
+					number: at,
 					extrinsics_root: Default::default(),
 					digest: Default::default(),
 				},
