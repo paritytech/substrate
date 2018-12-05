@@ -646,8 +646,13 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 					"invalid signature for precommit in grandpa justification".to_string()).into());
 			}
 
+			if justification.commit.target_hash == signed.precommit.target_hash {
+				continue;
+			}
+
 			match ancestry_chain.ancestry(justification.commit.target_hash, signed.precommit.target_hash) {
 				Ok(route) => {
+					// ancestry starts from parent hash but the precommit target hash has been visited
 					visited_hashes.insert(signed.precommit.target_hash);
 					for hash in route {
 						visited_hashes.insert(hash);
