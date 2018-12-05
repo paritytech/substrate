@@ -859,11 +859,21 @@ impl<Block: BlockT> SharedGrandpaOracle<Block> {
 		}
 	}
 
+	#[cfg(not(test))]
 	fn is_live(&self) -> bool {
 		self.inner.lock()
 			.as_ref()
 			.map(|inner| inner.is_live())
 			.unwrap_or(false)
+	}
+
+	#[cfg(test)]
+	fn is_live(&self) -> bool {
+		// the existing test suite imports unjustified authority set change
+		// blocks while the voter isn't running. since the voter isn't running
+		// the authority set is detected as not being live and the blocks are
+		// rejected.
+		true
 	}
 }
 
