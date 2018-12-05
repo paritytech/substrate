@@ -35,6 +35,8 @@ extern crate sr_primitives as runtime_primitives;
 use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+#[cfg(feature = "std")]
+use runtime_primitives::traits::RuntimeApiInfo;
 
 use runtime_primitives::RuntimeString;
 pub use runtime_primitives::create_runtime_str;
@@ -60,7 +62,7 @@ macro_rules! create_apis_vec {
 #[macro_export]
 #[cfg(not(feature = "std"))]
 macro_rules! create_apis_vec {
-	( $y:expr ) => { $y }
+	( $y:expr ) => { & $y }
 }
 
 /// Runtime version.
@@ -127,8 +129,10 @@ impl RuntimeVersion {
 	}
 
 	/// Check if this version supports a particular API.
-	pub fn has_api(&self, api: ApiId, version: u32) -> bool {
-		self.apis.iter().any(|&(ref s, v)| &api == s && version == v)
+	pub fn has_api<A: RuntimeApiInfo + ?Sized>(&self) -> bool {
+		self.apis.iter().any(|(s, v)| {
+			s == &A::ID && *v == A::VERSION
+		})
 	}
 }
 

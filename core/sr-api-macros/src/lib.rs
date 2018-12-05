@@ -16,7 +16,7 @@
 
 //! Macros for declaring and implementing runtime apis.
 
-#![recursion_limit = "128"]
+#![recursion_limit = "256"]
 extern crate proc_macro;
 extern crate proc_macro2;
 extern crate quote;
@@ -52,6 +52,8 @@ mod compile_fail_tests;
 /// #[macro_use]
 /// extern crate substrate_client;
 /// extern crate sr_version as version;
+///
+/// use version::create_runtime_str;
 /// # extern crate substrate_test_client as test_client;
 /// # extern crate sr_primitives as runtime_primitives;
 /// # extern crate substrate_primitives as primitives;
@@ -178,7 +180,10 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// # fn main() {}
 /// ```
-
+///
+/// To check if a given runtime implements a runtime api trait, the `RuntimeVersion` has the
+/// function `has_api<A>()`. Also the `ApiExt` provides a function `has_api<A>(at: &BlockId)` to
+/// check if the runtime at the given block id implements the requested runtime api trait.
 #[proc_macro]
 pub fn decl_runtime_apis(input: TokenStream) -> TokenStream {
 	decl_runtime_apis::decl_runtime_apis_impl(input)

@@ -32,7 +32,7 @@ use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
 };
 use runtime_primitives::BuildStorage;
-use runtime_api::{Core as CoreAPI, CallApiAt, TaggedTransactionQueue, ConstructRuntimeApi};
+use runtime_api::{Core as CoreAPI, CallRuntimeAt, TaggedTransactionQueue, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -1034,7 +1034,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
@@ -1067,6 +1067,10 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		}
 
 		self.call_at_state(at, function, args, changes)
+	}
+
+	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+		self.runtime_version_at(at)
 	}
 }
 
@@ -1238,7 +1242,7 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;
-	use test_client::client::backend::Backend as TestBackend;
+	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
 
@@ -1332,6 +1336,17 @@ pub(crate) mod tests {
 				&Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
+		);
+	}
+
+	#[test]
+	fn runtime_api_has_test_api() {
+		let client = test_client::new();
+
+		assert!(
+			client.runtime_api().has_api::<TestAPI<Block>>(
+				&BlockId::Number(client.info().unwrap().chain.best_number),
+			).unwrap()
 		);
 	}
 

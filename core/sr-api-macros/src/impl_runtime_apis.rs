@@ -272,7 +272,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		/// Implements all runtime apis for the client side.
 		#[cfg(any(feature = "std", test))]
 		pub struct RuntimeApi {
-			call: ::std::ptr::NonNull<#crate_::runtime_api::CallApiAt<#block>>,
+			call: ::std::ptr::NonNull<#crate_::runtime_api::CallRuntimeAt<#block>>,
 			commit_on_success: ::std::cell::RefCell<bool>,
 			initialised_block: ::std::cell::RefCell<Option<#block_id>>,
 			changes: ::std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
@@ -287,7 +287,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		unsafe impl Sync for RuntimeApi {}
 
 		#[cfg(any(feature = "std", test))]
-		impl #crate_::runtime_api::ApiExt for RuntimeApi {
+		impl #crate_::runtime_api::ApiExt<#block> for RuntimeApi {
 			fn map_api_result<F: FnOnce(&Self) -> ::std::result::Result<R, E>, R, E>(
 				&self,
 				map_call: F
@@ -300,17 +300,25 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 
 				res
 			}
+
+			fn has_api<A: #crate_::runtime_api::RuntimeApiInfo + ?Sized>(
+				&self,
+				at: &#block_id
+			) -> #crate_::error::Result<bool> where Self: Sized {
+				unsafe { self.call.as_ref().runtime_version_at(at) }.map(|r| r.has_api::<A>())
+			}
 		}
 
 		#[cfg(any(feature = "std", test))]
 		impl #crate_::runtime_api::ConstructRuntimeApi<#block> for RuntimeApi {
-			fn construct_runtime_api<'a, T: #crate_::runtime_api::CallApiAt<#block>>(
+			fn construct_runtime_api<'a, T: #crate_::runtime_api::CallRuntimeAt<#block>>(
 				call: &'a T
 			) -> #crate_::runtime_api::ApiRef<'a, Self> where Self: Sized {
 				RuntimeApi {
 					call: unsafe {
 						::std::ptr::NonNull::new_unchecked(
-							call as &#crate_::runtime_api::CallApiAt<#block> as *const _ as *mut _
+							call as
+								&#crate_::runtime_api::CallRuntimeAt<#block> as *const _ as *mut _
 						)
 					},
 					commit_on_success: true.into(),

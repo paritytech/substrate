@@ -41,14 +41,14 @@ use primitives::{AuthorityId, OpaqueMetadata};
 #[cfg(feature = "std")]
 pub trait ConstructRuntimeApi<Block: BlockT> {
 	/// Construct an instance of the runtime api.
-	fn construct_runtime_api<'a, T: CallApiAt<Block>>(
+	fn construct_runtime_api<'a, T: CallRuntimeAt<Block>>(
 		call: &'a T
 	) -> ApiRef<'a, Self> where Self: Sized;
 }
 
 /// An extension for the `RuntimeApi`.
 #[cfg(feature = "std")]
-pub trait ApiExt {
+pub trait ApiExt<Block: BlockT> {
 	/// The given closure will be called with api instance. Inside the closure any api call is
 	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
 	/// different `Result` type. This can be important, as the internal data structure that keeps
@@ -58,11 +58,17 @@ pub trait ApiExt {
 		&self,
 		map_call: F
 	) -> result::Result<R, E> where Self: Sized;
+
+	/// Checks if the given api is implemented and versions match.
+	fn has_api<A: RuntimeApiInfo + ?Sized>(
+		&self,
+		at: &BlockId<Block>
+	) -> error::Result<bool> where Self: Sized;
 }
 
-/// Something that can call the runtime api at a given block.
+/// Something that can call into the runtime at a given block.
 #[cfg(feature = "std")]
-pub trait CallApiAt<Block: BlockT> {
+pub trait CallRuntimeAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
 	fn call_api_at(
@@ -74,43 +80,8 @@ pub trait CallApiAt<Block: BlockT> {
 		initialised_block: &mut Option<BlockId<Block>>,
 	) -> error::Result<Vec<u8>>;
 
-	/// Call the given api function with strong arguments at the given block
-	/// and returns the decoded result.
-	fn call_api_at_strong<In: Encode, Out: Decode>(
-		&self,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: &In,
-		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
-	) -> error::Result<Out> where Self: Sized {
-		let raw = self.call_api_at(
-			at,
-			function,
-			args.encode(),
-			changes,
-			initialised_block,
-		)?;
-
-		match Out::decode(&mut &raw[..]) {
-			Some(out) => Ok(out),
-			None => bail!(error::ErrorKind::CallResultDecode(function)),
-		}
-	}
-}
-
-/// The ApiIds for the various standard runtime APIs.
-pub mod id {
-	use super::ApiId;
-
-	/// ApiId for the BlockBuilder trait.
-	pub const BLOCK_BUILDER: ApiId = *b"blkbuild";
-
-	/// ApiId for the TaggedTransactionQueue trait.
-	pub const TAGGED_TRANSACTION_QUEUE: ApiId = *b"validatx";
-
-	/// ApiId for the Metadata trait.
-	pub const METADATA: ApiId = *b"metadata";
+	/// Returns the runtime version at the given block.
+	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion>;
 }
 
 decl_runtime_apis! {

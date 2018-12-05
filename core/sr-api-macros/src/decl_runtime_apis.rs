@@ -152,7 +152,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 				+ Send
 				+ Sync
 				+ #crate_::runtime_api::ConstructRuntimeApi<Block>
-				+ #crate_::runtime_api::ApiExt
+				+ #crate_::runtime_api::ApiExt<Block>
 			);
 		} else {
 			// Add the `Core` runtime api as super trait.
