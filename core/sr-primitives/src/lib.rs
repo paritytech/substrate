@@ -462,6 +462,38 @@ macro_rules! impl_outer_log {
 	};
 }
 
+//TODO: https://github.com/paritytech/substrate/issues/1022
+/// Basic Inherent data to include in a block; used by simple runtimes.
+#[derive(Encode, Decode)]
+pub struct BasicInherentData {
+	/// Current timestamp.
+	pub timestamp: u64,
+	/// Indices of offline validators.
+	pub consensus: Vec<u32>,
+}
+
+impl BasicInherentData {
+	/// Create a new `BasicInherentData` instance.
+	pub fn new(timestamp: u64, consensus: Vec<u32>) -> Self {
+		Self {
+			timestamp,
+			consensus,
+		}
+	}
+}
+
+//TODO: https://github.com/paritytech/substrate/issues/1022
+/// Error type used while checking inherents.
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Decode))]
+pub enum CheckInherentError {
+	/// The inherents are generally valid but a delay until the given timestamp
+	/// is required.
+	ValidAtTimestamp(u64),
+	/// Some other error has occurred.
+	Other(RuntimeString),
+}
+
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;

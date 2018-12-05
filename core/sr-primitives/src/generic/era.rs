@@ -61,7 +61,7 @@ impl Era {
 		Era::Mortal(period, quantized_phase)
 	}
 
-	/// Create an "immortal" transaction. 
+	/// Create an "immortal" transaction.
 	pub fn immortal() -> Self {
 		Era::Immortal
 	}
@@ -75,7 +75,7 @@ impl Era {
 	}
 
 	/// Get the block number of the start of the era whose properties this object
-	/// describes that `current` belongs to. 
+	/// describes that `current` belongs to.
 	pub fn birth(self, current: u64) -> u64 {
 		match self {
 			Era::Immortal => 0,
@@ -189,7 +189,7 @@ mod tests {
 		assert_ne!(e.birth(10), 6);
 		assert_ne!(e.birth(5), 6);
 	}
-	
+
 	#[test]
 	fn current_less_than_phase() {
 		// should not panic

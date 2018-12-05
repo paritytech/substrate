@@ -684,7 +684,7 @@ pub mod tests {
 		}
 	}
 
-	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>, Hash, u64, BlockData<Block>) {
+	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>, Hash, u64, BlockData<Block>) {
 		let client = test_client::new();
 		let block = client.new_block().unwrap().bake().unwrap();
 		client.import(BlockOrigin::File, block).unwrap();

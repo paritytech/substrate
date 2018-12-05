@@ -15,9 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use rstd::{result::Result, vec::Vec};
+pub use rstd::{cmp, result::Result, vec::Vec};
 #[doc(hidden)]
-pub use runtime_primitives::traits::ProvideInherent;
+pub use runtime_primitives::{
+	traits::{ProvideInherent, Block as BlockT}, CheckInherentError
+};
 
 
 /// Implement the outer inherent.
@@ -38,91 +40,45 @@ pub use runtime_primitives::traits::ProvideInherent;
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
-		$(#[$attr:meta])*
-		pub struct $name:ident where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident {
-			$( $module:ident: $module_ty:ident $(export Error as $error_name:ident)*, )*
+		for $runtime:ident,
+			Block = $block:ident,
+			InherentData = $inherent:ty
+		{
+			$( $module:ident: $module_ty:ident,)*
 		}
 	) => {
-		impl_outer_inherent!(
-			$( #[$attr] )*
-			pub struct $name where Block = $block, UncheckedExtrinsic = $unchecked, Error = InherentError, Call = Call {
-				$( $module: $module_ty $(export Error as $error_name)*, )*
-			}
-		);
-	};
-	(
-		$(#[$attr:meta])*
-		pub struct $name:ident where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident, Error = $error:ident {
-			$( $module:ident: $module_ty:ident $(export Error as $error_name:ident)*, )*
-		}
-	) => {
-		impl_outer_inherent!(
-			$( #[$attr] )*
-			pub struct $name where Block = $block, UncheckedExtrinsic = $unchecked, Error = $error, Call = Call {
-				$( $module: $module_ty $(export Error as $error_name)*, )*
-			}
-		);
-	};
-	(
-		$(#[$attr:meta])*
-		pub struct $name:ident where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident, Error = $error:ident, Call = $call:ident {
-			$( $module:ident: $module_ty:ident $(export Error as $error_name:ident)*, )*
-		}
-	) => {
-		$( #[$attr] )*
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Encode, Decode)]
-		/// Inherent data to include in a block.
-		pub struct $name {
-			$( $module: <$module_ty as $crate::inherent::ProvideInherent>::Inherent, )*
-		}
+		impl $runtime {
+			fn check_inherents(
+				block: $block,
+				data: $inherent
+			) -> $crate::inherent::Result<(), $crate::inherent::CheckInherentError> {
+				use $crate::inherent::CheckInherentError;
 
-		$(
-			$(
-				pub type $error_name =<$module_ty as $crate::inherent::ProvideInherent>::Error;
-			)*
-		)*
-
-		impl $name {
-			/// Create a new instance.
-			pub fn new( $( $module: <$module_ty as $crate::inherent::ProvideInherent>::Inherent ),* ) -> Self {
-				Self {
-					$( $module, )*
-				}
-			}
-
-			fn create_inherent_extrinsics(self) -> Vec<$unchecked> {
-				let mut inherent = $crate::inherent::Vec::new();
-
+				let mut max_valid_after = None;
 				$(
-					inherent.extend(
-						<$module_ty as $crate::inherent::ProvideInherent>::create_inherent_extrinsics(self.$module)
-							.into_iter()
-							.map(|v| (v.0, $unchecked::new_unsigned($call::$module_ty(v.1))))
-					);
-				)*
-
-				inherent.as_mut_slice().sort_unstable_by_key(|v| v.0);
-				inherent.into_iter().map(|v| v.1).collect()
-			}
-
-			fn check_inherents(self, block: $block) -> $crate::inherent::Result<(), $error> {
-				$(
-					<$module_ty as $crate::inherent::ProvideInherent>::check_inherent(
-						&block, self.$module, &|xt| match xt.function {
+					let res = <$module_ty as $crate::inherent::ProvideInherent>::check_inherent(
+						&block,
+						data.$module,
+						&|xt| match xt.function {
 							Call::$module_ty(ref data) => Some(data),
 							_ => None,
-						}).map_err($error::$module_ty)?;
-				)*
-				Ok(())
-			}
-		}
+						},
+					);
 
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Encode)]
-		#[cfg_attr(feature = "std", derive(Decode))]
-		pub enum $error {
-			$( $module_ty(<$module_ty as $crate::inherent::ProvideInherent>::Error), )*
+					match res {
+						Err(CheckInherentError::ValidAtTimestamp(t)) =>
+							max_valid_after = $crate::inherent::cmp::max(max_valid_after, Some(t)),
+						res => res?
+					}
+				)*
+
+				// once everything else has checked out, take the maximum of
+				// all things which are timestamp-restricted.
+				match max_valid_after {
+					Some(t) => Err(CheckInherentError::ValidAtTimestamp(t)),
+					None => Ok(())
+				}
+			}
 		}
 	};
 }

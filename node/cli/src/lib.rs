@@ -33,6 +33,7 @@ extern crate substrate_transaction_pool as transaction_pool;
 #[macro_use]
 extern crate substrate_network as network;
 extern crate substrate_consensus_aura as consensus;
+extern crate substrate_consensus_common as consensus_common;
 extern crate substrate_client as client;
 extern crate substrate_finality_grandpa as grandpa;
 extern crate node_primitives;
@@ -43,8 +44,8 @@ extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;
-#[macro_use]
 extern crate structopt;
+extern crate parking_lot;
 
 pub use cli::error;
 pub mod chain_spec;
@@ -121,7 +122,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			Err(e) => e.exit(),
 		};
 
-	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(load_spec, version, "substrate-node", &matches)?;
+	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(
+		load_spec, version, "substrate-node", &matches
+	)?;
 
 	if matches.is_present("grandpa_authority_only") {
 		config.custom.grandpa_authority = true;
@@ -134,7 +137,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		config.roles = ServiceRoles::AUTHORITY;
 	}
 
-	match cli::execute_default::<service::Factory, _>(spec, exit, &matches)? {
+	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
 		cli::Action::ExecutedInternally => (),
 		cli::Action::RunService(exit) => {
 			info!("Substrate Node");

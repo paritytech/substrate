@@ -51,18 +51,35 @@ pub trait OnSessionChange<T> {
 	fn on_session_change(time_elapsed: T, should_reward: bool);
 }
 
-impl<T> OnSessionChange<T> for () {
-	fn on_session_change(_: T, _: bool) {}
-}
-
-impl<T, A, B> OnSessionChange<T> for (A, B)
-	where T: Clone, A: OnSessionChange<T>, B: OnSessionChange<T>
-{
-	fn on_session_change(time_elapsed: T, should_reward: bool) {
-		A::on_session_change(time_elapsed.clone(), should_reward);
-		B::on_session_change(time_elapsed, should_reward);
+macro_rules! for_each_tuple {
+	($m:ident) => {
+		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
+	};
+	(@IMPL $m:ident !!) => { $m! { } };
+	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
+		$m! { $h $($t)* }
+		for_each_tuple! { @IMPL $m !! $($t,)* }
 	}
 }
+
+macro_rules! impl_session_change {
+	() => (
+		impl<T> OnSessionChange<T> for () {
+			fn on_session_change(_: T, _: bool) {}
+		}
+	);
+
+	( $($t:ident)* ) => {
+		impl<T: Clone, $($t: OnSessionChange<T>),*> OnSessionChange<T> for ($($t,)*) {
+			fn on_session_change(time_elapsed: T, should_reward: bool) {
+				$($t::on_session_change(time_elapsed.clone(), should_reward);)*
+			}
+		}
+	}
+}
+
+for_each_tuple!(impl_session_change);
+
 
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;

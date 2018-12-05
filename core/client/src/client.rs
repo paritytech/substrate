@@ -538,21 +538,21 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(
+	pub fn new_block<InherentData>(
 		&self
-	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block, InherentData>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(
+	pub fn new_block_at<InherentData>(
 		&self, parent: &BlockId<Block>
-	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block, InherentData>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
@@ -1235,14 +1235,14 @@ pub(crate) mod tests {
 	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer, ClientWithApi, test_api::TestAPI};
+	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
 	/// 2) roots of changes tries for these blocks
 	/// 3) test cases in form (begin, end, key, vec![(block, extrinsic)]) that are required to pass
 	pub fn prepare_client_with_key_changes() -> (
-		test_client::client::Client<test_client::Backend, test_client::Executor, Block, ClientWithApi>,
+		test_client::client::Client<test_client::Backend, test_client::Executor, Block, RuntimeApi>,
 		Vec<H256>,
 		Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
 	) {
@@ -1317,14 +1317,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Alice.to_raw_public()
+				&Keyring::Alice.to_raw_public().into()
 			).unwrap(),
 			1000
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Ferdie.to_raw_public()
+				&Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
 		);
@@ -1373,14 +1373,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Alice.to_raw_public()
+				&Keyring::Alice.to_raw_public().into()
 			).unwrap(),
 			958
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Ferdie.to_raw_public()
+				&Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			42
 		);

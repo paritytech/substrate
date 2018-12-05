@@ -196,7 +196,7 @@ pub trait BlockBuilder<Block: BlockT> {
 pub trait AuthoringApi:
 	Send
 	+ Sync
-	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, InherentData, Error=<Self as AuthoringApi>::Error>
 	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
 	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 {
@@ -1174,10 +1174,10 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		let proposed_timestamp = match self.client.check_inherents(
 			&self.parent_id,
 			&unchecked_proposal,
-			&inherent
+			&inherent,
 		) {
 			Ok(Ok(())) => None,
-			Ok(Err(BlockBuilderError::TimestampInFuture(timestamp))) => Some(timestamp),
+			Ok(Err(BlockBuilderError::ValidAtTimestamp(timestamp))) => Some(timestamp),
 			Ok(Err(e)) => {
 				debug!(target: "rhd", "Invalid proposal (check_inherents): {:?}", e);
 				return Box::new(future::ok(false));

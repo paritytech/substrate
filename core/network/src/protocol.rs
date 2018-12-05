@@ -224,7 +224,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		&self.sync
 	}
 
-
 	pub(crate) fn consensus_gossip<'a>(&'a self) -> &'a RwLock<ConsensusGossip<B>> {
 		&self.consensus_gossip
 	}
@@ -295,6 +294,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	pub fn send_message(&self, io: &mut SyncIo, who: NodeIndex, message: Message<B>) {
 		send_message::<B, H>(&self.context_data.peers, io, who, message)
+	}
+
+	pub fn gossip_consensus_message(&self, io: &mut SyncIo, topic: B::Hash, message: Vec<u8>) {
+		let gossip = self.consensus_gossip();
+		self.with_spec(io, move |_s, context|{
+			gossip.write().multicast(context, topic, message);
+		});
 	}
 
 	/// Called when a new peer is connected

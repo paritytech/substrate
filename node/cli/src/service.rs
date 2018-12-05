@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-use node_runtime::{GenesisConfig, ClientWithApi};
+use node_runtime::{GenesisConfig, RuntimeApi};
 use node_primitives::Block;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
@@ -28,9 +28,11 @@ use substrate_service::{
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
+use consensus_common::offline_tracker::OfflineTracker;
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
+use parking_lot::RwLock;
 use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
@@ -66,12 +68,12 @@ impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		RuntimeApi = ClientWithApi,
+		RuntimeApi = RuntimeApi,
 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
-		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, ClientWithApi>, Block>
+		FullTransactionPoolApi = transaction_pool::ChainApi<client::Client<FullBackend<Self>, FullExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, ClientWithApi>, Block>
+		LightTransactionPoolApi = transaction_pool::ChainApi<client::Client<LightBackend<Self>, LightExecutor<Self>, Block, RuntimeApi>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = NodeConfig<Self>,
@@ -100,6 +102,12 @@ construct_service_factory! {
 				}
 				if !service.config.custom.grandpa_authority_only {
 					info!("Using authority key {}", key.public());
+					let proposer = Arc::new(substrate_service::ProposerFactory {
+						client: service.client(),
+						transaction_pool: service.transaction_pool(),
+						offline: Arc::new(RwLock::new(OfflineTracker::new())),
+						force_delay: 0 // FIXME: allow this to be configured https://github.com/paritytech/substrate/issues/1170
+					});
 					executor.spawn(start_aura(
 						AuraConfig {
 							local_key: Some(key),
@@ -107,7 +115,7 @@ construct_service_factory! {
 						},
 						service.client(),
 						block_import.clone(),
-						service.proposer(),
+						proposer,
 						service.network(),
 					));
 				}
@@ -118,7 +126,7 @@ construct_service_factory! {
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<Self::Block, grandpa::BlockImportForService<Self>, NothingExtra>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
-				let (block_import, link_half) = grandpa::block_import::<_, _, _, ClientWithApi, FullClient<Self>>(client.clone(), client)?;
+				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client)?;
 				let block_import = Arc::new(block_import);
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));

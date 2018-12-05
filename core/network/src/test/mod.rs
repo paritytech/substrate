@@ -129,7 +129,7 @@ pub struct TestPacket {
 	recipient: NodeIndex,
 }
 
-pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::ClientWithApi>;
+pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
 
 pub struct Peer<V: Verifier<Block>, D> {
 	client: Arc<PeersClient>,
@@ -229,15 +229,12 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
-		let gossip = self.sync.consensus_gossip();
-		self.sync.with_spec(&mut TestIo::new(&self.queue, None), move |_s, context|{
-			gossip.write().multicast(context, topic, data);
-		});
+		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
+		where F: FnMut(BlockBuilder<Block, (), PeersClient>) -> Block
 	{
 		use blocks::BlockData;
 
