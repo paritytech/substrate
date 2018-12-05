@@ -79,7 +79,7 @@ pub trait OfflineReport {
 	/// Whether an inherent is empty and doesn't need to be included.
 	fn is_empty(inherent: &Self::Inherent) -> bool;
 
-	/// whether two reports are compatible.
+	/// Whether two reports are compatible.
 	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result;
 }
 
@@ -185,10 +185,10 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Inherent some misbehaviour.
+		/// Report some misbehaviour.
 		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
 			ensure_signed(origin)?;
-			// TODO.
+			// TODO: requires extension trait.
 			Ok(())
 		}
 
