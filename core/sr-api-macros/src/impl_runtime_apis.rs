@@ -30,7 +30,7 @@ use syn::{
 	fold::{self, Fold}, FnDecl, parse_quote, Pat
 };
 
-use std::iter;
+use std::{collections::HashSet, iter};
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "IMPL_RUNTIME_APIS";
@@ -510,11 +510,29 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 /// runtime apis.
 fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut result = Vec::with_capacity(impls.len());
+	let mut processed_traits = HashSet::new();
 
 	for impl_ in impls {
 		let mut path = extend_with_runtime_decl_path(extract_impl_trait(&impl_)?.clone());
 		// Remove the trait
-		path.segments.pop();
+		let trait_ = path
+			.segments
+			.pop()
+			.expect("extract_impl_trait already checks that this is valid; qed")
+			.into_value()
+			.ident;
+
+		let span = trait_.span();
+		if !processed_traits.insert(trait_) {
+			return Err(
+				Error::new(
+					span,
+					"Two traits with the same name detected! \
+					The trait name is used to generate its ID. \
+					Please rename one trait at the declaration!"
+				)
+			)
+		}
 
 		let id: Path = parse_quote!( #path ID );
 		let version: Path = parse_quote!( #path VERSION );
