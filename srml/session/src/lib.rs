@@ -264,6 +264,7 @@ mod tests {
 		type Log = DigestItem;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
+		type OfflineReport = ();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
