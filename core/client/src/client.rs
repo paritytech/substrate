@@ -1738,6 +1738,6 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.backend().blockchain().justification(BlockId::Hash(a2.hash())).unwrap(),
 			None,
-		)
+		);
 	}
 }
