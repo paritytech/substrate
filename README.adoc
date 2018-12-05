@@ -191,11 +191,11 @@ You will also need to install the following packages:
 
  - Linux:
 [source, shell]
-sudo apt install cmake pkg-config libssl-dev git
+sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
 
  - Mac:
 [source, shell]
-brew install cmake pkg-config openssl git
+brew install cmake pkg-config openssl git llvm
 
 Then, grab the Substrate source code:
 
