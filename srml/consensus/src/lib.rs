@@ -62,12 +62,47 @@ impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
-pub trait OnOfflineValidator {
-	fn on_offline_validator(validator_index: usize);
+/// Handling offline validator reports in a generic way.
+pub trait OnOfflineValidator<Offline> {
+	fn on_offline_validator(offline: Offline);
 }
 
-impl OnOfflineValidator for () {
-	fn on_offline_validator(_validator_index: usize) {}
+impl<T> OnOfflineValidator<T> for () {
+	fn on_offline_validator(_: T) {}
+}
+
+/// Describes the offline-reporting extrinsic.
+pub trait OfflineReport {
+	/// The report data type passed to the runtime during block authorship.
+	type Inherent: codec::Codec + Parameter;
+
+	/// whether two reports are compatible.
+	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result;
+}
+
+impl OfflineReport for () {
+	type Inherent = ();
+
+	fn check_inherent(_: &(), _: &()) -> Result { Ok(()) }
+}
+
+/// A variant of the `OfflineReport` which is useful for instant-finality blocks.
+///
+/// This assumes blocks are only finalized
+pub struct InstantFinalityReportVec;
+
+impl OfflineReport for InstantFinalityReportVec {
+	type Inherent = Vec<u32>;
+
+	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result {
+		contained.iter().try_for_each(|n|
+			if !expected.contains(n) {
+				Err("Node we believe online marked offline")
+			} else {
+				Ok(())
+			}
+		)
+	}
 }
 
 pub type Log<T> = RawLog<
@@ -112,7 +147,10 @@ pub trait Trait: system::Trait {
 	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
-	type OnOfflineValidator: OnOfflineValidator;
+	/// Defines the offline-report type of the trait.
+	/// Set to `()` if offline-reports aren't needed for this runtime.
+	type OfflineReport: OfflineReport;
+	type OnOfflineValidator: OnOfflineValidator<<Self::OfflineReport as OfflineReport>::Inherent>;
 }
 
 decl_storage! {
@@ -141,7 +179,7 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Report some misbehaviour.
+		/// Inherent some misbehaviour.
 		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
 			ensure_signed(origin)?;
 			// TODO.
@@ -149,19 +187,16 @@ decl_module! {
 		}
 
 		/// Note the previous block's validator missed their opportunity to propose a block.
-		/// This only comes in if 2/3+1 of the validators agree that no proposal was submitted.
-		/// It's only relevant for the previous block.
-		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result {
+		fn note_offline(origin, offline: <T::OfflineReport as OfflineReport>::Inherent) -> Result {
 			ensure_inherent(origin)?;
+
 			assert!(
 				<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
 				"note_offline extrinsic must be at position {} in the block",
 				T::NOTE_OFFLINE_POSITION
 			);
 
-			for validator_index in offline_val_indices.into_iter() {
-				T::OnOfflineValidator::on_offline_validator(validator_index as usize);
-			}
+			T::OnOfflineValidator::on_offline_validator(offline);
 
 			Ok(())
 		}
@@ -247,7 +282,7 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
-	type Inherent = Vec<u32>;
+	type Inherent = <T::OfflineReport as OfflineReport>::Inherent;
 	type Call = Call<T>;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
@@ -255,21 +290,22 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
-		block: &Block, data: Self::Inherent, extract_function: &F
+		block: &Block, expected: Self::Inherent, extract_function: &F
 	) -> result::Result<(), CheckInherentError> {
 		let noted_offline = block
-			.extrinsics().get(T::NOTE_OFFLINE_POSITION as usize)
+			.extrinsics()
+			.get(T::NOTE_OFFLINE_POSITION as usize)
 			.and_then(|xt| match extract_function(&xt) {
-				Some(Call::note_offline(ref x)) => Some(&x[..]),
+				Some(Call::note_offline(ref x)) => Some(x),
 				_ => None,
-			}).unwrap_or(&[]);
+			});
 
-		noted_offline.iter().try_for_each(|n|
-			if !data.contains(n) {
-				Err(CheckInherentError::Other("Online node marked offline".into()))
-			} else {
-				Ok(())
-			}
-		)
+		// REVIEW: perhaps we should be passing a `None` to check_inherent.
+		if let Some(noted_offline) = noted_offline {
+			<T::OfflineReport as OfflineReport>::check_inherent(&noted_offline, &expected)
+				.map_err(|e| CheckInherentError::Other(e.into()))?;
+		}
+
+		Ok(())
 	}
 }

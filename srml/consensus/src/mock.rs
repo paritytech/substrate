@@ -35,6 +35,7 @@ impl Trait for Test {
 	type Log = DigestItem;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
+	type OfflineReport = ::InstantFinalityReportVec;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
