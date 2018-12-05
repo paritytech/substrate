@@ -19,7 +19,7 @@ substrate-keyring = { path = "../keyring", optional = true }
 substrate-trie = { path = "../trie", optional = true }
 substrate-telemetry = { path = "../telemetry", optional = true }
 hash-db = { git = "https://github.com/paritytech/trie", optional = true }
-kvdb = { version = "0.1", optional = true }
+kvdb = { git = "https://github.com/paritytech/parity-common", optional = true, rev="616b40150ded71f57f650067fcbc5c99d7c343e6" }
 
 parity-codec = { version = "2.1", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
@@ -30,7 +30,7 @@ sr-api-macros = { path = "../sr-api-macros" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }
-kvdb-memorydb = "0.1"
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="616b40150ded71f57f650067fcbc5c99d7c343e6" }
 
 [features]
 default = ["std"]
