@@ -167,7 +167,8 @@ pub fn prove_execution<Block, S, E>(
 		&trie_state,
 		&mut changes,
 		"initialise_block",
-		&header.encode())?;
+		&header.encode(),
+	)?;
 
 	// execute method + record execution proof
 	let (result, exec_proof) = executor.prove_at_trie_state(&trie_state, &mut changes, method, call_data)?;
@@ -213,7 +214,8 @@ pub fn check_execution_proof<Header, E, H>(
 		&mut changes,
 		executor,
 		"initialise_block",
-		&next_block.encode())?;
+		&next_block.encode(),
+	)?;
 
 	// execute method
 	let local_result = execution_proof_check_on_trie_backend::<H, _>(
@@ -221,7 +223,8 @@ pub fn check_execution_proof<Header, E, H>(
 		&mut changes,
 		executor,
 		&request.method,
-		&request.call_data)?;
+		&request.call_data,
+	)?;
 
 	Ok(CallResult { return_data: local_result, changes })
 }
