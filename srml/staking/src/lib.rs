@@ -500,33 +500,9 @@ impl<T: Trait> Module<T> {
 		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
 		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
 	}
-}
 
-impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
-	fn on_session_change(elapsed: T::Moment, should_reward: bool) {
-		Self::new_session(elapsed, should_reward);
-	}
-}
-
-impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
-	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		if Self::bondage(who) <= <system::Module<T>>::block_number() {
-			Ok(())
-		} else {
-			Err("cannot transfer illiquid funds")
-		}
-	}
-}
-
-impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(who: &T::AccountId) {
-		<Bondage<T>>::remove(who);
-	}
-}
-
-impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
-	fn on_offline_validator(validator_index: usize) {
-		let v = <session::Module<T>>::validators()[validator_index].clone();
+	/// Called when a validator is determined to be offline.
+	pub fn on_offline_validator(v: T::AccountId) {
 		let slash_count = Self::slash_count(&v);
 		<SlashCount<T>>::insert(v.clone(), slash_count + 1);
 		let grace = Self::offline_slash_grace();
@@ -552,5 +528,36 @@ impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
 			RawEvent::OfflineWarning(v, slash_count)
 		};
 		Self::deposit_event(event);
+	}
+}
+
+impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
+	fn on_session_change(elapsed: T::Moment, should_reward: bool) {
+		Self::new_session(elapsed, should_reward);
+	}
+}
+
+impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
+	fn ensure_account_liquid(who: &T::AccountId) -> Result {
+		if Self::bondage(who) <= <system::Module<T>>::block_number() {
+			Ok(())
+		} else {
+			Err("cannot transfer illiquid funds")
+		}
+	}
+}
+
+impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
+		<Bondage<T>>::remove(who);
+	}
+}
+
+impl<T: Trait> consensus::OnOfflineValidator<Vec<u32>> for Module<T> {
+	fn on_offline_validator(reported_indices: Vec<u32>) {
+		for validator_index in reported_indices {
+			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+			Self::on_offline_validator(v);
+		}
 	}
 }
