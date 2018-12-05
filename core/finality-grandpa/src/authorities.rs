@@ -20,7 +20,6 @@ use parking_lot::RwLock;
 use substrate_primitives::AuthorityId;
 
 use std::cmp::Ord;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
@@ -63,10 +62,6 @@ where
 	/// Get the current set ID. This is incremented every time the set changes.
 	pub(crate) fn set_id(&self) -> u64 {
 		self.inner.read().set_id
-	}
-
-	pub(crate) fn current_authorities(&self) -> HashMap<AuthorityId, u64> {
-		self.inner.read().current_authorities.iter().cloned().collect()
 	}
 }
 
