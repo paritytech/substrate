@@ -21,7 +21,7 @@
 use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
-use {GenesisConfig, Trait, Module, system};
+use {Trait, Module, consensus, system, timestamp};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -30,13 +30,15 @@ impl_outer_origin!{
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
-impl Trait for Test {
+
+impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
-	type OfflineReport = ::InstantFinalityReportVec;
+	type OfflineReport = ();
 }
+
 impl system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -50,9 +52,18 @@ impl system::Trait for Test {
 	type Log = DigestItem;
 }
 
+impl timestamp::Trait for Test {
+	const TIMESTAMP_SET_POSITION: u32 = 0;
+
+	type Moment = u64;
+	type OnTimestampSet = ();
+}
+
+impl Trait for Test { }
+
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(GenesisConfig::<Test>{
+	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
 		authorities,
 		_genesis_phantom_data: Default::default(),
@@ -61,4 +72,6 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 }
 
 pub type System = system::Module<Test>;
-pub type Consensus = Module<Test>;
+pub type Consensus = consensus::Module<Test>;
+pub type Timestamp = timestamp::Module<Test>;
+pub type Aura = Module<Test>;

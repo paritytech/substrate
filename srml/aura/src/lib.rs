@@ -40,8 +40,8 @@ use runtime_support::storage::StorageValue;
 use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 
-//mod mock;
-//mod tests;
+mod mock;
+mod tests;
 
 pub trait Trait: consensus::Trait + timestamp::Trait { }
 
@@ -81,6 +81,8 @@ impl AuraReport {
 			let slash_count = skipped_all + if i < skipped_after {
 				1
 			} else {
+				// avoid iterating over all authorities when skipping a couple.
+				if skipped_all == 0 { break }
 				0
 			};
 
