@@ -14,6 +14,7 @@ srml-support = { path = "../support", default-features = false }
 srml-system = { path = "../system", default-features = false }
 srml-consensus = { path = "../consensus", default-features = false }
 srml-timestamp = { path = "../timestamp", default-features = false }
+srml-staking = { path = "../staking", default-features = false }
 
 [features]
 default = ["std"]
@@ -27,4 +28,5 @@ std = [
 	"srml-system/std",
 	"srml-consensus/std",
 	"srml-timestamp/std",
+	"srml-staking/std",
 ]

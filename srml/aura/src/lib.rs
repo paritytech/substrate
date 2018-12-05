@@ -29,6 +29,7 @@ extern crate sr_primitives as primitives;
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 extern crate srml_timestamp as timestamp;
+extern crate srml_staking as staking;
 extern crate substrate_primitives;
 
 #[cfg(test)]
@@ -57,10 +58,37 @@ decl_module! {
 
 /// A report of skipped authorities in aura.
 pub struct AuraReport {
-	/// The first skipped authority.
-	pub start_idx: usize,
-	/// The number of times authorities were skipped.
-	pub skipped: usize,
+	// The first skipped authority.
+	start_idx: usize,
+	// The number of times authorities were skipped.
+	skipped: usize,
+}
+
+impl AuraReport {
+	/// Call the closure with (validator_indices, punishment_count) for each
+	/// validator to punish.
+	pub fn punish<F>(&self, validator_count: usize, punish_with: F)
+		where F: Fn(usize, usize)
+	{
+		let start_idx = self.start_idx % validator_count;
+
+		// the number of times everyone was skipped.
+		let skipped_all = self.skipped / validator_count;
+		// the number of validators who were skipped once after that.
+		let skipped_after = self.skipped % validator_count;
+
+		for i in (start_idx..).into_iter().chain(0..start_idx) {
+			let slash_count = skipped_all + if i < skipped_after {
+				1
+			} else {
+				0
+			};
+
+			if slash_count > 0 {
+				punish_with(i, slash_count);
+			}
+		}
+	}
 }
 
 impl<T: Trait> Module<T>
@@ -108,5 +136,22 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T>
 {
 	fn on_timestamp_set(moment: T::Moment) {
 		Self::on_timestamp_set(moment, T::Moment::sa(Self::step_duration()))
+	}
+}
+
+/// A type for performing slashing based on aura reports.
+pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
+
+impl<T: staking::Trait + Trait> consensus::OnOfflineValidator<AuraReport> for StakingSlasher<T> {
+	fn on_offline_validator(report: AuraReport) {
+		let validators = staking::Module::<T>::validators();
+
+		report.punish(
+			validators.len(),
+			|idx, slash_count| {
+				let v = validators[idx].clone();
+				staking::Module::<T>::on_offline_validator(v, slash_count);
+			}
+		);
 	}
 }

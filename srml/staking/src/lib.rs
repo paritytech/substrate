@@ -343,6 +343,11 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Get the current validators.
+	pub fn validators() -> Vec<T::AccountId> {
+		session::Module::<T>::validators()
+	}
+
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
