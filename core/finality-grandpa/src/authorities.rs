@@ -65,6 +65,7 @@ where
 		self.inner.read().set_id
 	}
 
+	/// Get the current authorities and their weights (for the current set ID).
 	pub(crate) fn current_authorities(&self) -> HashMap<AuthorityId, u64> {
 		self.inner.read().current_authorities.iter().cloned().collect()
 	}
@@ -204,6 +205,9 @@ where
 		Ok(status)
 	}
 
+	/// Check whether the given finalized block number enacts any authority set
+	/// change (without triggering it). Provide a closure that can be used to
+	/// check for the canonical block with a given number.
 	pub fn enacts_change<F, E>(&self, just_finalized: N, mut canonical: F)
 		-> Result<bool, E>
 		where F: FnMut(N) -> Result<Option<H>, E>

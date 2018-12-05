@@ -727,7 +727,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(ImportResult::Queued)
 	}
 
-	/// Finalizes all blocks up to given.
+	/// Finalizes all blocks up to given. If a justification is provided it is
+	/// stored with the given finalized block (any other finalized blocks are
+	/// left unjustified).
 	fn apply_finality(
 		&self,
 		block: Block::Hash,
@@ -1075,7 +1077,8 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 {
 	type Error = Error;
 
-	/// Import a checked and validated block
+	/// Import a checked and validated block. If a justification is provided in
+	/// `ImportBlock` then `finalized` *must* be true.
 	fn import_block(
 		&self,
 		import_block: ImportBlock<Block>,

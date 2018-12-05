@@ -549,6 +549,14 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 }
 
+/// A GRANDPA justification for block finality, it includes a commit message and
+/// an ancestry proof including all headers routing all precommit target blocks
+/// to the commit target block. Due to the current voting strategy the precommit
+/// targets should be the same as the commit target, since honest voters don't
+/// vote past authority set change blocks.
+///
+/// This is meant to be stored in the db and passed around the network to other
+/// nodes, and are used by syncing nodes to prove authority set handoffs.
 #[derive(Encode, Decode)]
 struct GrandpaJustification<Block: BlockT> {
 	round: u64,
@@ -557,7 +565,8 @@ struct GrandpaJustification<Block: BlockT> {
 }
 
 impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
-	// called by voter, commit is not validated it is assumed to be well-formed
+	/// Create a GRANDPA justification from the given commit. This method
+	/// assumes the commit is valid and well-formed.
 	fn from_commit<B, E, RA>(
 		client: &Client<B, E, Block, RA>,
 		round: u64,
@@ -600,7 +609,8 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		Ok(GrandpaJustification { round, commit, votes_ancestries })
 	}
 
-	// commit decoded as block justification must be verified and validated
+	/// Decode a GRANDPA justification and validate the commit and the votes'
+	/// ancestry proofs.
 	fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
@@ -696,6 +706,9 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 	}
 }
 
+/// Finalize the given block and apply any authority set changes. If an
+/// authority set change is enacted then a justification is created (if not
+/// given) and stored with the block when finalizing it.
 fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
@@ -797,6 +810,13 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	}
 }
 
+/// An oracle for liveness checking of a GRANDPA authority set. This is used
+/// when importing blocks, if the block enacts an authority set change then
+/// either it must provide a justification or if the GRANDPA authority set is
+/// still live then the block can be imported unjustified since the block will
+/// still be finalized by GRANDPA in a future round. The current heuristic for
+/// deciding whether an authority set is live is to check if there were any
+/// recent commit messages on an unfiltered stream).
 struct GrandpaOracle<Block: BlockT> {
 	unfiltered_commits_stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>,
 	last_commit_target: Option<(Instant, Block::Hash, NumberFor<Block>)>,
@@ -850,6 +870,10 @@ impl<Block: BlockT> SharedGrandpaOracle<Block> {
 /// A block-import handler for GRANDPA.
 ///
 /// This scans each imported block for signals of changing authority set.
+/// If the block being imported enacts an authority set change then:
+/// - If the current authority set is still live: we import the block
+/// - Otherwise, the block must include a valid justification.
+///
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
 pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
@@ -966,6 +990,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	}
 }
 
+/// Using the given base get the block at the given height on this chain. The
+/// target block must be an ancestor of base, therefore `height <= base.height`.
 fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: &Client<B, E, Block, RA>,
 	base: (Block::Hash, NumberFor<Block>),
