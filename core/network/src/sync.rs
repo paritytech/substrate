@@ -392,7 +392,7 @@ impl<B: BlockT> ChainSync<B> {
 				return;
 			}
 			// we should not download already queued blocks
-			let common_number = ::std::cmp::max(peer.common_number, import_status.best_importing_number);
+			let common_number = ::std::cmp::max(peer.common_number, self.best_queued_number);
 
 			trace!(target: "sync", "Considering new block download from {}, common block is {}, best is {:?}", who, common_number, peer.best_number);
 			match peer.state {
