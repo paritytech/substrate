@@ -33,7 +33,6 @@ extern crate substrate_transaction_pool as transaction_pool;
 #[macro_use]
 extern crate substrate_network as network;
 extern crate substrate_consensus_aura as consensus;
-extern crate substrate_consensus_common as consensus_common;
 extern crate substrate_client as client;
 extern crate substrate_finality_grandpa as grandpa;
 extern crate node_primitives;

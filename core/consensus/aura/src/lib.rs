@@ -410,7 +410,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 
 			// if the body is passed through, we need to use the runtime
 			// to check that the internally-set timestamp in the inherents
-			// actually maches the slot set in the seal.
+			// actually matches the slot set in the seal.
 			if let Some(inner_body) = body.take() {
 				let inherent = (self.make_inherent)(timestamp_now, slot_num);
 				let block = Block::new(pre_header.clone(), inner_body);

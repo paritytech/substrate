@@ -21,14 +21,13 @@
 use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_runtime::{GenesisConfig, RuntimeApi};
-use node_primitives::Block;
+use node_primitives::{Block, InherentData};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor
 };
 use node_executor;
 use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
-use consensus_common::offline_tracker::OfflineTracker;
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
@@ -104,7 +103,6 @@ construct_service_factory! {
 					let proposer = Arc::new(substrate_service::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-						offline: Arc::new(RwLock::new(OfflineTracker::new())),
 						force_delay: 0 // FIXME: allow this to be configured https://github.com/paritytech/substrate/issues/1170
 					});
 					executor.spawn(start_aura(
@@ -127,7 +125,7 @@ construct_service_factory! {
 			Self::Block,
 			grandpa::BlockImportForService<Self>,
 			NothingExtra,
-			consensus::InherentProducingFn,
+			::consensus::InherentProducingFn<InherentData>,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client)?;
@@ -142,13 +140,14 @@ construct_service_factory! {
 					},
 					block_import,
 					NothingExtra,
+					::consensus::make_basic_inherent as _,
 				))
 			}},
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
 			LightClient<Self>,
 			NothingExtra,
-			consensus::InherentProducingFn,
+			::consensus::InherentProducingFn<InherentData>,
 		>
 			{ |ref mut config, client| Ok(
 				import_queue(AuraConfig {
@@ -157,6 +156,7 @@ construct_service_factory! {
 				},
 				client,
 				NothingExtra,
+				::consensus::make_basic_inherent as _,
 			))
 			},
 	}
@@ -184,7 +184,6 @@ mod tests {
 				client: service.client().clone(),
 				transaction_pool: service.transaction_pool().clone(),
 				network: consensus_net,
-				offline: offline.clone(),
 				force_delay: 0,
 				handle: dummy_runtime.executor(),
 			};

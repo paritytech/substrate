@@ -688,12 +688,26 @@ where
 	}
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> ProvideRuntimeApi for GrandpaBlockImport<B, E, Block, RA, PRA>
+where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	PRA: ProvideRuntimeApi,
+{
+	type Api = PRA::Api;
+
+	fn runtime_api<'a>(&'a self) -> ::runtime_primitives::traits::ApiRef<'a, Self::Api> {
+		self.api.runtime_api()
+	}
+}
+
 /// Half of a link between a block-import worker and a the background voter.
 // This should remain non-clone.
 pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 }
+
 impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for LinkHalf<B, E, Block, RA>
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
