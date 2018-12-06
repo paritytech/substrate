@@ -93,7 +93,7 @@ build:rust:linux:release:          &build
 
 #### stage:                        publish
 
-.publish:                          &.publish
+.publish:                          &publish
   stage:                           publish
   dependencies:
     - build:rust:linux:release
@@ -104,14 +104,14 @@ build:rust:linux:release:          &build
     - web
     - ci-s3-upload
 
-.version:                          &.version
+.version:                          &version
     - VERSION="$(./target/release/substrate --version | sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p')"
     - export VERSION
     - echo "Substrate version = ${VERSION}"
 
 
 publish:docker:release:
-  <<:                              *.publish
+  <<:                              *publish
   tags:
     - shell
   variables:
@@ -122,7 +122,7 @@ publish:docker:release:
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
-    <<:                            *.version
+    <<:                            *version
   script:
     # - CONTAINER_TAG="${CI_COMMIT_TAG:-latest}"
     # - docker build --tag $CONTAINER_IMAGE:$CI_BUILD_REF --tag $CONTAINER_IMAGE:$CONTAINER_TAG -f $DOCKERFILE ./target/release/
@@ -137,7 +137,7 @@ publish:docker:release:
 
 
 publish:s3:release:
-  <<:                              *.publish
+  <<:                              *publish
   image:                           mesosphere/aws-cli
   variables:
     BUCKET:                        "releases.parity.io"
@@ -145,7 +145,7 @@ publish:s3:release:
   before_script:
     - test "$AWS_ACCESS_KEY_ID" -a "$AWS_SECRET_ACCESS_KEY" -a "$AWS_DEFAULT_REGION"
         || ( echo "no aws s3 credentials provided"; exit 1 )
-    <<:                            *.version
+    <<:                            *version
   script:
     - test -z "${VERSION}" && exit 1
     - aws s3 sync ./target/release/ s3://${BUCKET}/${PREFIX}/${VERSION}/ --dryrun
