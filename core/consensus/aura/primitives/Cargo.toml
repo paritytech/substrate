@@ -1,0 +1,26 @@
+[package]
+name = "substrate-consensus-aura-primitives"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Primitives for Aura consensus"
+
+[dependencies]
+parity-codec = { version = "2.1", default-features = false }
+substrate-client = { path = "../../../client", default-features = false }
+substrate-primitives = { path = "../../../primitives", default-features = false }
+srml-support = { path = "../../../../srml/support", default-features = false }
+sr-primitives = { path = "../../../sr-primitives", default-features = false }
+sr-version = { path = "../../../sr-version", default-features = false }
+sr-io = { path = "../../../sr-io", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"parity-codec/std",
+	"substrate-client/std",
+	"substrate-primitives/std",
+	"srml-support/std",
+	"sr-primitives/std",
+	"sr-version/std",
+	"sr-io/std",
+]

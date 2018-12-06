@@ -54,6 +54,7 @@ extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
+extern crate substrate_consensus_aura_primitives as consensus_aura;
 
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
@@ -77,6 +78,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
+use consensus_aura::{id::AURA_API, api as aura_api};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -101,6 +103,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 		(TAGGED_TRANSACTION_QUEUE, 1),
 		(METADATA, 1),
 		(GRANDPA_API, 1),
+		(AURA_API, 1),
 	]),
 };
 
@@ -363,6 +366,12 @@ impl_runtime_apis! {
 
 		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
 			Grandpa::grandpa_authorities()
+		}
+	}
+
+	impl aura_api::AuraApi<Block> for Runtime {
+		fn slot_duration() -> u64 {
+			Aura::slot_duration()
 		}
 	}
 }
