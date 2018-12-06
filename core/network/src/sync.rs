@@ -239,6 +239,13 @@ impl<B: BlockT> ChainSync<B> {
 							}
 						},
 						None => {
+							if n > As::sa(0) {
+								trace!(target:"sync", "Ancestry block not found for peer {}: block #{}", who, n);
+								let n = n - As::sa(1);
+								peer.state = PeerSyncState::AncestorSearch(n);
+								Self::request_ancestry(protocol, who, n);
+								return None;
+							}
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
 							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor"));
 							return None;
