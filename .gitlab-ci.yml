@@ -119,7 +119,7 @@ publish:docker:release:
     DOCKERFILE: scripts/docker/Dockerfile
     CONTAINER_IMAGE: parity/substrate
   <<:                              *version
-  before_script:
+  script:
     - test -z "${VERSION}" && exit 1
     - exit 0
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
@@ -139,7 +139,6 @@ publish:s3:release:
   variables:
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
-  before_script:
   <<:                              *version
   script:
     - test -z "${VERSION}" && exit 1
