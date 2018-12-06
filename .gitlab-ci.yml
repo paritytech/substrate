@@ -118,18 +118,14 @@ publish:docker:release:
   variables:
     DOCKERFILE: scripts/docker/Dockerfile
     CONTAINER_IMAGE: parity/substrate
+  <<:                              *version
   before_script:
+    - test -z "${VERSION}" && exit 1
+    - exit 0
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
-  <<:                              *version
-  script:
-    # - CONTAINER_TAG="${CI_COMMIT_TAG:-latest}"
-    # - docker build --tag $CONTAINER_IMAGE:$CI_BUILD_REF --tag $CONTAINER_IMAGE:$CONTAINER_TAG -f $DOCKERFILE ./target/release/
-    # - docker push $CONTAINER_IMAGE:$CONTAINER_TAG
-    - test -z "${VERSION}" && exit 1
-    - exit 0
     - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest -f $DOCKERFILE ./target/release/
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
@@ -144,14 +140,16 @@ publish:s3:release:
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   before_script:
-    - test "$AWS_ACCESS_KEY_ID" -a "$AWS_SECRET_ACCESS_KEY" -a "$AWS_DEFAULT_REGION"
-        || ( echo "no aws s3 credentials provided"; exit 1 )
   <<:                              *version
   script:
     - test -z "${VERSION}" && exit 1
+    - test "$AWS_ACCESS_KEY_ID" -a "$AWS_SECRET_ACCESS_KEY" -a "$AWS_DEFAULT_REGION"
+        || ( echo "no aws s3 credentials provided"; exit 1 )
     - aws s3 sync ./target/release/ s3://${BUCKET}/${PREFIX}/${VERSION}/ --dryrun
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
+  tags:
+    - linux-docker
 
 
 
