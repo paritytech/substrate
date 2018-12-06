@@ -41,6 +41,13 @@ extern crate srml_consensus as consensus;
 #[cfg(test)]
 extern crate sr_io as runtime_io;
 
+#[cfg(test)]
+#[macro_use]
+extern crate lazy_static;
+
+#[cfg(test)]
+extern crate parking_lot;
+
 use rstd::prelude::*;
 use runtime_support::storage::StorageValue;
 use runtime_support::dispatch::Result;
@@ -79,8 +86,8 @@ decl_module! {
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
-	// The first skipped authority.
-	start_idx: usize,
+	// The first skipped slot.
+	start_slot: usize,
 	// The number of times authorities were skipped.
 	skipped: usize,
 }
@@ -88,18 +95,22 @@ pub struct AuraReport {
 impl AuraReport {
 	/// Call the closure with (validator_indices, punishment_count) for each
 	/// validator to punish.
-	pub fn punish<F>(&self, validator_count: usize, punish_with: F)
-		where F: Fn(usize, usize)
+	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
+		where F: FnMut(usize, usize)
 	{
-		let start_idx = self.start_idx % validator_count;
+		let start_slot = self.start_slot % validator_count;
 
 		// the number of times everyone was skipped.
 		let skipped_all = self.skipped / validator_count;
 		// the number of validators who were skipped once after that.
 		let skipped_after = self.skipped % validator_count;
 
-		for i in (start_idx..).into_iter().chain(0..start_idx) {
-			let slash_count = skipped_all + if i < skipped_after {
+		let iter = (start_slot..validator_count).into_iter()
+			.chain(0..start_slot)
+			.enumerate();
+
+		for (rel_index, actual_index) in iter {
+			let slash_count = skipped_all + if rel_index < skipped_after {
 				1
 			} else {
 				// avoid iterating over all authorities when skipping a couple.
@@ -108,7 +119,7 @@ impl AuraReport {
 			};
 
 			if slash_count > 0 {
-				punish_with(i, slash_count);
+				punish_with(actual_index, slash_count);
 			}
 		}
 	}
@@ -135,7 +146,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn on_timestamp_set(now: T::Moment, slot_duration: T::Moment) {
+	fn on_timestamp_set<H: HandleReport>(now: T::Moment, slot_duration: T::Moment) {
 		let last = Self::last();
 		<Self as Store>::LastTimestamp::put(now.clone());
 
@@ -156,8 +167,8 @@ impl<T: Trait> Module<T> {
 
 		let skipped_slots = cur_slot - last_slot - T::Moment::sa(1);
 
-		<T::HandleReport as HandleReport>::handle_report(AuraReport {
-			start_idx: slot_to_usize(first_skipped),
+		H::handle_report(AuraReport {
+			start_slot: slot_to_usize(first_skipped),
 			skipped: slot_to_usize(skipped_slots),
 		})
 	}
@@ -165,7 +176,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(moment: T::Moment) {
-		Self::on_timestamp_set(moment, T::Moment::sa(Self::slot_duration()))
+		Self::on_timestamp_set::<T::HandleReport>(moment, T::Moment::sa(Self::slot_duration()))
 	}
 }
 

@@ -18,6 +18,10 @@ srml-consensus = { path = "../consensus", default-features = false }
 srml-timestamp = { path = "../timestamp", default-features = false }
 srml-staking = { path = "../staking", default-features = false }
 
+[dev-dependencies]
+lazy_static = "1.0"
+parking_lot = "0.6"
+
 [features]
 default = ["std"]
 std = [
