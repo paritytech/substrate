@@ -498,9 +498,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		);
 
 		let encoded_state = (round, state).encode();
-		if let Err(e) = self.inner.backend()
-			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
-		{
+		let res = Backend::insert_aux(&**self.inner.backend(), &[(LAST_COMPLETED_KEY, &encoded_state[..])], &[]);
+		if let Err(e) = res {
 			warn!(target: "afg", "Shutting down voter due to error bookkeeping last completed round in DB: {:?}", e);
 			Err(Error::Client(e).into())
 		} else {
@@ -542,7 +541,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 				let last_completed: LastCompleted<_, _> = (0, round_state);
 				let encoded = last_completed.encode();
 
-				client.backend().insert_aux(
+				Backend::insert_aux(
+					&**client.backend(),
 					&[
 						(AUTHORITY_SET_KEY, &encoded_set[..]),
 						(LAST_COMPLETED_KEY, &encoded[..]),
@@ -550,7 +550,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 					&[]
 				)
 			} else {
-				client.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
+				Backend::insert_aux(&**client.backend(), &[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
 			};
 
 			if let Err(e) = write_result {
@@ -736,7 +736,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		PRA::Api: GrandpaApi<Block>
 {
 	use runtime_primitives::traits::Zero;
-	let authority_set = match client.backend().get_aux(AUTHORITY_SET_KEY)? {
+	let authority_set = match Backend::get_aux(&**client.backend(), AUTHORITY_SET_KEY)? {
 		None => {
 			info!(target: "afg", "Loading GRANDPA authorities \
 				from genesis on what appears to be first startup.");
@@ -749,7 +749,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 			let authority_set = SharedAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.inner().read().encode();
-			client.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
+			Backend::insert_aux(&**client.backend(), &[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
 
 			authority_set
 		}
@@ -839,7 +839,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
 
-	let (last_round_number, last_state) = match client.backend().get_aux(LAST_COMPLETED_KEY)? {
+	let (last_round_number, last_state) = match Backend::get_aux(&**client.backend(), LAST_COMPLETED_KEY)? {
 		None => (0, RoundState::genesis((genesis_hash, <NumberFor<Block>>::zero()))),
 		Some(raw) => LastCompleted::decode(&mut &raw[..])
 			.ok_or_else(|| ::client::error::ErrorKind::Backend(

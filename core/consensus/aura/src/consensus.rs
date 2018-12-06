@@ -469,7 +469,7 @@ pub fn import_queue<B, C, E, MakeInherent, Inherent>(
 	client: Arc<C>,
 	extra: E,
 	make_inherent: MakeInherent,
-) -> ::client::error::Result<AuraImportQueue<B, C, E, MakeInherent>> where
+) -> AuraImportQueue<B, C, E, MakeInherent> where
 	B: Block,
 	C: Authorities<B> + BlockImport<B,Error=::client::error::Error> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
@@ -478,7 +478,7 @@ pub fn import_queue<B, C, E, MakeInherent, Inherent>(
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
 	let verifier = Arc::new(AuraVerifier { slot_duration, client: client.clone(), extra, make_inherent });
-	Ok(BasicQueue::new(verifier, client))
+	BasicQueue::new(verifier, client)
 }
 
 #[cfg(test)]

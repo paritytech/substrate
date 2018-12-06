@@ -27,7 +27,7 @@ use substrate_service::{
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor
 };
 use node_executor;
-use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
+use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
@@ -104,12 +104,13 @@ construct_service_factory! {
 						transaction_pool: service.transaction_pool(),
 						force_delay: 0 // FIXME: allow this to be configured https://github.com/paritytech/substrate/issues/1170
 					});
+
+					let client = service.client();
+					let slot_duration =
 					executor.spawn(start_aura(
-						AuraConfig {
-							local_key: Some(key),
-							slot_duration: AURA_SLOT_DURATION,
-						},
-						service.client(),
+						SlotDuration::get_or_compute(&*client)?,
+						key,
+						client,
 						block_import.clone(),
 						proposer,
 						service.network(),
@@ -127,16 +128,14 @@ construct_service_factory! {
 			::consensus::InherentProducingFn<InherentData>,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
+				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client)?;
 				let block_import = Arc::new(block_import);
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				Ok(import_queue(
-					AuraConfig {
-						local_key: None,
-						slot_duration: 5
-					},
+					slot_duration,
 					block_import,
 					NothingExtra,
 					::consensus::make_basic_inherent as _,
@@ -148,15 +147,13 @@ construct_service_factory! {
 			NothingExtra,
 			::consensus::InherentProducingFn<InherentData>,
 		>
-			{ |ref mut config, client| Ok(
-				import_queue(AuraConfig {
-					local_key: None,
-					slot_duration: 5
-				},
-				client,
-				NothingExtra,
-				::consensus::make_basic_inherent as _,
-			))
+			{ |ref mut config, client: Arc<LightClient<Self>>|
+				Ok(import_queue(
+					SlotDuration::get_or_compute(&*client)?,
+					client,
+					NothingExtra,
+					::consensus::make_basic_inherent as _,
+				))
 			},
 	}
 }
