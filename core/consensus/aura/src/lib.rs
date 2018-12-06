@@ -400,31 +400,6 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 			body.as_ref().map(|x| &x[..]),
 		);
 
-		if let Some(inner_body) = body.take() {
-			let inherent = (self.make_inherent)(timestamp_now, slot_now);
-			let block = Block::new(header.clone(), inner_body);
-
-			let inherent_res = self.client.runtime_api().check_inherents(
-				&BlockId::Hash(parent_hash),
-				&block,
-				&inherent,
-			).map_err(|e| format!("{:?}", e))?;
-
-			match inherent_res {
-				Ok(()) => {}
-				Err(CheckInherentError::ValidAtTimestamp(timestamp)) => {
-					loop {
-						let diff = timestamp.saturating_sub(timestamp_now);
-						::std::thread::sleep(Duration::from_secs(diff));
-					}
-				},
-				Err(CheckInherentError::Other(s)) => return Err(s.into_owned()),
-			}
-
-			let (_, inner_body) = block.deconstruct();
-			body = Some(inner_body);
-		}
-
 		// we add one to allow for some small drift.
 		// FIXME: in the future, alter this queue to allow deferring of headers
 		// https://github.com/paritytech/substrate/issues/1019
@@ -432,6 +407,33 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
 				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
+
+			// if the body is passed through, we need to use the runtime
+			// to check that the internally-set timestamp in the inherents
+			// actually maches the slot set in the seal.
+			if let Some(inner_body) = body.take() {
+				let inherent = (self.make_inherent)(timestamp_now, slot_num);
+				let block = Block::new(pre_header.clone(), inner_body);
+
+				let inherent_res = self.client.runtime_api().check_inherents(
+					&BlockId::Hash(parent_hash),
+					&block,
+					&inherent,
+				).map_err(|e| format!("{:?}", e))?;
+
+				match inherent_res {
+					Ok(()) => {}
+					Err(CheckInherentError::ValidAtTimestamp(timestamp)) => {
+						// halt import until timestamp is valid.
+						let diff = timestamp.saturating_sub(timestamp_now);
+						::std::thread::sleep(Duration::from_secs(diff));
+					},
+					Err(CheckInherentError::Other(s)) => return Err(s.into_owned()),
+				}
+
+				let (_, inner_body) = block.deconstruct();
+				body = Some(inner_body);
+			}
 
 				debug!(target: "aura", "Checked {:?}; importing.", pre_header);
 
