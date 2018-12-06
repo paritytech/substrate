@@ -16,6 +16,7 @@ substrate-primitives = { path = "../../core/primitives" }
 substrate-finality-grandpa-primitives = { path = "../../core/finality-grandpa/primitives" }
 substrate-client = { path = "../../core/client" }
 substrate-keyring = { path = "../../core/keyring" }
+srml-aura = { path = "../../srml/aura" }
 srml-balances = { path = "../../srml/balances" }
 srml-consensus = { path = "../../srml/consensus" }
 srml-contract = { path = "../../srml/contract" }

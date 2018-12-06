@@ -23,11 +23,14 @@
 extern crate sr_std as rstd;
 
 #[macro_use]
+extern crate parity_codec_derive;
+extern crate parity_codec;
+
+#[macro_use]
 extern crate srml_support as runtime_support;
 
 extern crate sr_primitives as primitives;
 extern crate srml_system as system;
-extern crate srml_consensus as consensus;
 extern crate srml_timestamp as timestamp;
 extern crate srml_staking as staking;
 extern crate substrate_primitives;
@@ -44,7 +47,19 @@ use timestamp::OnTimestampSet;
 mod mock;
 mod tests;
 
-pub trait Trait: consensus::Trait + timestamp::Trait { }
+/// Something which can handle Aura consensus reports.
+pub trait HandleReport {
+	fn handle_report(report: AuraReport);
+}
+
+impl HandleReport for () {
+	fn handle_report(_report: AuraReport) { }
+}
+
+pub trait Trait: timestamp::Trait {
+	/// The logic for handling reports.
+	type HandleReport: HandleReport;
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
@@ -58,6 +73,8 @@ decl_module! {
 }
 
 /// A report of skipped authorities in aura.
+#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
 	// The first skipped authority.
 	start_idx: usize,
@@ -94,9 +111,7 @@ impl AuraReport {
 	}
 }
 
-impl<T: Trait> Module<T>
-	where T::OnOfflineValidator: consensus::OnOfflineValidator<AuraReport>,
-{
+impl<T: Trait> Module<T> {
 	/// Determine the Aura slot-duration based on the timestamp module configuration.
 	pub fn slot_duration() -> u64 {
 		// we double the minimum block-period so each author can always propose within
@@ -138,16 +153,14 @@ impl<T: Trait> Module<T>
 
 		let skipped_slots = cur_slot - last_slot - T::Moment::sa(1);
 
-		<T::OnOfflineValidator as consensus::OnOfflineValidator<_>>::on_offline_validator(AuraReport {
+		<T::HandleReport as HandleReport>::handle_report(AuraReport {
 			start_idx: slot_to_usize(first_skipped),
 			skipped: slot_to_usize(skipped_slots),
 		})
 	}
 }
 
-impl<T: Trait> OnTimestampSet<T::Moment> for Module<T>
-	where T::OnOfflineValidator: consensus::OnOfflineValidator<AuraReport>,
-{
+impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(moment: T::Moment) {
 		Self::on_timestamp_set(moment, T::Moment::sa(Self::slot_duration()))
 	}
@@ -156,8 +169,8 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T>
 /// A type for performing slashing based on aura reports.
 pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
-impl<T: staking::Trait + Trait> consensus::OnOfflineValidator<AuraReport> for StakingSlasher<T> {
-	fn on_offline_validator(report: AuraReport) {
+impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
+	fn handle_report(report: AuraReport) {
 		let validators = staking::Module::<T>::validators();
 
 		report.punish(

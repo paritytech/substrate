@@ -216,7 +216,7 @@ mod tests {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
 		type SessionKey = u64;
-		type OnOfflineValidator = ();
+		type InherentOfflineReport = ();
 	}
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;

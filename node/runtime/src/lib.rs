@@ -37,6 +37,7 @@ extern crate parity_codec_derive;
 extern crate parity_codec as codec;
 
 extern crate sr_std as rstd;
+extern crate srml_aura as aura;
 extern crate srml_balances as balances;
 extern crate srml_consensus as consensus;
 extern crate srml_contract as contract;
@@ -125,6 +126,10 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
+impl aura::Trait for Runtime {
+	type HandleReport = aura::StakingSlasher<Runtime>;
+}
+
 impl balances::Trait for Runtime {
 	type Balance = Balance;
 	type AccountIndex = AccountIndex;
@@ -137,12 +142,16 @@ impl consensus::Trait for Runtime {
 	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type Log = Log;
 	type SessionKey = SessionKey;
-	type OnOfflineValidator = Staking;
+
+	// the aura module handles offline-reports internally
+	// rather than using an explicit report system.
+	type InherentOfflineReport = ();
 }
 
 impl timestamp::Trait for Runtime {
 	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 	type Moment = u64;
+	type OnTimestampSet = Aura;
 }
 
 /// Session key conversion.
@@ -212,6 +221,7 @@ construct_runtime!(
 		InherentData = BasicInherentData
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
+		Aura: aura::{Module},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Balances: balances,
@@ -303,7 +313,26 @@ impl_runtime_apis! {
 		}
 
 		fn check_inherents(block: Block, data: BasicInherentData) -> Result<(), CheckInherentError> {
-			Runtime::check_inherents(block, data)
+			let expected_slot = data.aura_expected_slot;
+
+			// draw timestamp out from extrinsics.
+			let set_timestamp = block.extrinsics()
+				.get(TIMESTAMP_SET_POSITION as usize)
+				.and_then(|xt: &UncheckedExtrinsic| match xt.function {
+					Call::Timestamp(TimestampCall::set(ref t)) => Some(t.clone()),
+					_ => None,
+				})
+				.ok_or_else(|| CheckInherentError::Other("No valid timestamp in block.".into()))?;
+
+			// take the "worse" result of normal verification and the timestamp vs. seal
+			// check.
+			CheckInherentError::combine_results(
+				Runtime::check_inherents(block, data),
+				|| {
+					Aura::verify_inherent(set_timestamp.into(), expected_slot)
+						.map_err(|s| CheckInherentError::Other(s.into()))
+				},
+			)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {

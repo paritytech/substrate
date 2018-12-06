@@ -498,14 +498,16 @@ pub enum CheckInherentError {
 }
 
 impl CheckInherentError {
-	/// Combine two errors, taking the "worse" of the two.
-	pub fn combine<F: FnOnce() -> Self>(self, other: F) -> Self {
-		match self {
-			CheckInherentError::Other(s) => CheckInherentError::Other(s),
-			CheckInherentError::ValidAtTimestamp(x) => match other() {
-				CheckInherentError::ValidAtTimestamp(y)
-					=> CheckInherentError::ValidAtTimestamp(rstd::cmp::max(x, y)),
-				CheckInherentError::Other(s) => CheckInherentError::Other(s),
+	/// Combine two results, taking the "worse" of the two.
+	pub fn combine_results<F: FnOnce() -> Result<(), Self>>(this: Result<(), Self>, other: F) -> Result<(), Self> {
+		match this {
+			Ok(()) => other(),
+			Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
+			Err(CheckInherentError::ValidAtTimestamp(x)) => match other() {
+				Ok(()) => Err(CheckInherentError::ValidAtTimestamp(x)),
+				Err(CheckInherentError::ValidAtTimestamp(y))
+					=> Err(CheckInherentError::ValidAtTimestamp(rstd::cmp::max(x, y))),
+				Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
 			}
 		}
 	}

@@ -457,6 +457,14 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 	}
 }
 
+/// A utility for making the basic-inherent data.
+pub fn make_basic_inherent(timestamp: u64, slot_now: u64) -> runtime_primitives::BasicInherentData {
+	runtime_primitives::BasicInherentData::new(timestamp, slot_now)
+}
+
+/// A type for a function which produces inherent.
+pub type InherentProducingFn<I> = fn(u64, u64) -> I;
+
 /// The Aura import queue type.
 pub type AuraImportQueue<B, C, E, MakeInherent> = BasicQueue<B, AuraVerifier<C, E, MakeInherent>>;
 

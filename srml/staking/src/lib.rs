@@ -561,8 +561,8 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> consensus::OnOfflineValidator<Vec<u32>> for Module<T> {
-	fn on_offline_validator(reported_indices: Vec<u32>) {
+impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
+	fn handle_report(reported_indices: Vec<u32>) {
 		for validator_index in reported_indices {
 			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
 			Self::on_offline_validator(v, 1);

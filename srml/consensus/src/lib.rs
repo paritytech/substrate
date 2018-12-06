@@ -63,42 +63,50 @@ impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// Handling offline validator reports in a generic way.
-pub trait OnOfflineValidator<Offline> {
-	fn on_offline_validator(offline: Offline);
+pub trait OnOfflineReport<Offline> {
+	fn handle_report(offline: Offline);
 }
 
-impl<T> OnOfflineValidator<T> for () {
-	fn on_offline_validator(_: T) {}
+impl<T> OnOfflineReport<T> for () {
+	fn handle_report(_: T) {}
 }
 
 /// Describes the offline-reporting extrinsic.
-pub trait OfflineReport {
+pub trait InherentOfflineReport {
 	/// The report data type passed to the runtime during block authorship.
 	type Inherent: codec::Codec + Parameter;
 
 	/// Whether an inherent is empty and doesn't need to be included.
 	fn is_empty(inherent: &Self::Inherent) -> bool;
 
+	/// Handle the report.
+	fn handle_report(report: Self::Inherent);
+
 	/// Whether two reports are compatible.
 	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result;
 }
 
-impl OfflineReport for () {
+impl InherentOfflineReport for () {
 	type Inherent = ();
 
 	fn is_empty(_inherent: &()) -> bool { true }
-	fn check_inherent(_: &(), _: &()) -> Result { Ok(()) }
+	fn handle_report(_: ()) { }
+	fn check_inherent(_: &(), _: &()) -> Result { Err("Explicit reporting not allowed") }
 }
 
 /// A variant of the `OfflineReport` which is useful for instant-finality blocks.
 ///
 /// This assumes blocks are only finalized
-pub struct InstantFinalityReportVec;
+pub struct InstantFinalityReportVec<T>(::rstd::marker::PhantomData<T>);
 
-impl OfflineReport for InstantFinalityReportVec {
+impl<T: OnOfflineReport<Vec<u32>>> InherentOfflineReport for InstantFinalityReportVec<T> {
 	type Inherent = Vec<u32>;
 
 	fn is_empty(inherent: &Self::Inherent) -> bool { inherent.is_empty() }
+
+	fn handle_report(report: Vec<u32>) {
+		T::handle_report(report)
+	}
 
 	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result {
 		contained.iter().try_for_each(|n|
@@ -155,8 +163,7 @@ pub trait Trait: system::Trait {
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 	/// Defines the offline-report type of the trait.
 	/// Set to `()` if offline-reports aren't needed for this runtime.
-	type OfflineReport: OfflineReport;
-	type OnOfflineValidator: OnOfflineValidator<<Self::OfflineReport as OfflineReport>::Inherent>;
+	type InherentOfflineReport: InherentOfflineReport;
 }
 
 decl_storage! {
@@ -193,7 +200,7 @@ decl_module! {
 		}
 
 		/// Note the previous block's validator missed their opportunity to propose a block.
-		fn note_offline(origin, offline: <T::OfflineReport as OfflineReport>::Inherent) -> Result {
+		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) -> Result {
 			ensure_inherent(origin)?;
 
 			assert!(
@@ -202,7 +209,7 @@ decl_module! {
 				T::NOTE_OFFLINE_POSITION
 			);
 
-			T::OnOfflineValidator::on_offline_validator(offline);
+			T::InherentOfflineReport::handle_report(offline);
 
 			Ok(())
 		}
@@ -288,11 +295,11 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
-	type Inherent = <T::OfflineReport as OfflineReport>::Inherent;
+	type Inherent = <T::InherentOfflineReport as InherentOfflineReport>::Inherent;
 	type Call = Call<T>;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		if <T::OfflineReport as OfflineReport>::is_empty(&data) {
+		if <T::InherentOfflineReport as InherentOfflineReport>::is_empty(&data) {
 			vec![]
 		} else {
 			vec![(T::NOTE_OFFLINE_POSITION, Call::note_offline(data))]
@@ -312,7 +319,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 		// REVIEW: perhaps we should be passing a `None` to check_inherent.
 		if let Some(noted_offline) = noted_offline {
-			<T::OfflineReport as OfflineReport>::check_inherent(&noted_offline, &expected)
+			<T::InherentOfflineReport as InherentOfflineReport>::check_inherent(&noted_offline, &expected)
 				.map_err(|e| CheckInherentError::Other(e.into()))?;
 		}
 
