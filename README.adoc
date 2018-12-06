@@ -135,7 +135,7 @@ First let's get a template chainspec that you can edit. We'll use the "staging" 
 
 [source, shell]
 ----
-substrate build-spec --chain=staging > ~/chainspec.json
+substrate --chain=staging build-spec > ~/chainspec.json
 ----
 
 Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the Webassembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
@@ -191,11 +191,11 @@ You will also need to install the following packages:
 
  - Linux:
 [source, shell]
-sudo apt install cmake pkg-config libssl-dev git
+sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
 
  - Mac:
 [source, shell]
-brew install cmake pkg-config openssl git
+brew install cmake pkg-config openssl git llvm
 
 Then, grab the Substrate source code:
 

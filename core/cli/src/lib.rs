@@ -78,7 +78,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use names::{Generator, Name};
 use regex::Regex;
-use structopt::StructOpt;   
+use structopt::StructOpt;
 pub use params::{CoreParams, CoreCommands, ExecutionStrategy};
 
 use futures::Future;
@@ -116,7 +116,9 @@ pub trait IntoExit {
 fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G>, String>
 	where G: RuntimeGenesis, F: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
-	let chain_key = matches.value_of("chain").unwrap_or_else(|| if matches.is_present("dev") { "dev" } else { "" });
+	let chain_key = matches.value_of("chain").unwrap_or_else(
+		|| if matches.is_present("dev") { "dev" } else { "" }
+	);
 	let spec = match factory(chain_key)? {
 		Some(spec) => spec,
 		None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
@@ -316,7 +318,7 @@ where
 	Ok((spec, config))
 }
 
-// 
+//
 // IANA unassigned port ranges that we could use:
 // 6717-6766		Unassigned
 // 8504-8553		Unassigned
@@ -342,28 +344,23 @@ where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
+	let base_path = base_path(matches);
+	let db_path = db_path(&base_path, spec.id());
+
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
 		build_spec::<F>(matches, spec, config)?;
 		return Ok(Action::ExecutedInternally);
-	}
-
-	if let Some(matches) = matches.subcommand_matches("export-blocks") {
-		export_blocks::<F, _>(matches, spec, exit.into_exit())?;
+	} else if let Some(matches) = matches.subcommand_matches("export-blocks") {
+		export_blocks::<F, _>(db_path, matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
-	}
-
-	if let Some(matches) = matches.subcommand_matches("import-blocks") {
-		import_blocks::<F, _>(matches, spec, exit.into_exit())?;
+	} else if let Some(matches) = matches.subcommand_matches("import-blocks") {
+		import_blocks::<F, _>(db_path, matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
-	}
-
-	if let Some(matches) = matches.subcommand_matches("revert") {
-		revert_chain::<F>(matches, spec)?;
+	} else if let Some(matches) = matches.subcommand_matches("revert") {
+		revert_chain::<F>(db_path, matches, spec)?;
 		return Ok(Action::ExecutedInternally);
-	}
-
-	if let Some(matches) = matches.subcommand_matches("purge-chain") {
-		purge_chain::<F>(matches, spec)?;
+	} else if let Some(matches) = matches.subcommand_matches("purge-chain") {
+		purge_chain::<F>(db_path)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
@@ -409,12 +406,16 @@ where
 	Ok(())
 }
 
-fn export_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>, exit: E) -> error::Result<()>
+fn export_blocks<F, E>(
+	db_path: PathBuf,
+	matches: &clap::ArgMatches,
+	spec: ChainSpec<FactoryGenesis<F>>,
+	exit: E
+) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static,
 {
-	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+	config.database_path = db_path.to_string_lossy().into();
 	info!("DB path: {}", config.database_path);
 	let from: u64 = match matches.value_of("from") {
 		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
@@ -435,12 +436,16 @@ fn export_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	Ok(service::chain_ops::export_blocks::<F, _, _>(config, exit, file, As::sa(from), to.map(As::sa), json)?)
 }
 
-fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>, exit: E) -> error::Result<()>
+fn import_blocks<F, E>(
+	db_path: PathBuf,
+	matches: &clap::ArgMatches,
+	spec: ChainSpec<FactoryGenesis<F>>,
+	exit: E
+) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static,
 {
-	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+	config.database_path = db_path.to_string_lossy().into();
 
 	if let Some(s) = matches.value_of("execution") {
 		config.block_execution_strategy = match s {
@@ -468,12 +473,15 @@ fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	Ok(service::chain_ops::import_blocks::<F, _, _>(config, exit, file)?)
 }
 
-fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>
+fn revert_chain<F>(
+	db_path: PathBuf,
+	matches: &clap::ArgMatches,
+	spec: ChainSpec<FactoryGenesis<F>>
+) -> error::Result<()>
 	where F: ServiceFactory,
 {
-	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+	config.database_path = db_path.to_string_lossy().into();
 
 	let blocks = match matches.value_of("num") {
 		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
@@ -483,13 +491,12 @@ fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>
 	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
 }
 
-fn purge_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>
+fn purge_chain<F>(
+	db_path: PathBuf,
+) -> error::Result<()>
 	where F: ServiceFactory,
 {
-	let base_path = base_path(matches);
-	let database_path = db_path(&base_path, spec.id());
-
-	print!("Are you sure to remove {:?}? (y/n)", &database_path);
+	print!("Are you sure to remove {:?}? (y/n)", &db_path);
 	stdout().flush().expect("failed to flush stdout");
 
 	let mut input = String::new();
@@ -498,8 +505,8 @@ fn purge_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>
 
 	match input.chars().nth(0) {
 		Some('y') | Some('Y') => {
-			fs::remove_dir_all(&database_path)?;
-			println!("{:?} removed.", &database_path);
+			fs::remove_dir_all(&db_path)?;
+			println!("{:?} removed.", &db_path);
 		},
 		_ => println!("Aborted"),
 	}
