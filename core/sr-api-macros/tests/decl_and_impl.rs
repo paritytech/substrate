@@ -23,10 +23,13 @@ decl_runtime_apis! {
 		fn test(data: u64);
 		fn something_with_block(block: Block) -> Block;
 		fn function_with_two_args(data: u64, block: Block);
+		fn same_name();
 	}
 
 	#[api_version(2)]
-	pub trait ApiWithCustomVersion {}
+	pub trait ApiWithCustomVersion {
+		fn same_name();
+	}
 }
 
 impl_runtime_apis! {
@@ -42,9 +45,13 @@ impl_runtime_apis! {
 		fn function_with_two_args(_: u64, _: Block) {
 			unimplemented!()
 		}
+
+		fn same_name() {}
 	}
 
-	impl self::ApiWithCustomVersion<Block> for Runtime {}
+	impl self::ApiWithCustomVersion<Block> for Runtime {
+		fn same_name() {}
+	}
 
 	impl runtime_api::Core<Block> for Runtime {
 		fn version() -> runtime_api::RuntimeVersion {
@@ -67,6 +74,13 @@ fn test_client_side_function_signature() {
 	let _test: fn(&RuntimeApi, &BlockId<Block>, &u64) -> Result<()>  = RuntimeApi::test;
 	let _something_with_block: fn(&RuntimeApi, &BlockId<Block>, &Block) -> Result<Block> =
 		RuntimeApi::something_with_block;
+}
+
+#[test]
+fn test_runtime_side_function_signature() {
+	let _api_same_name: fn(input_data: *mut u8, input_len: usize) -> u64 = api::Api_same_name;
+	let _api_with_version_same_name: fn(input_data: *mut u8, input_len: usize) -> u64 =
+		api::ApiWithCustomVersion_same_name;
 }
 
 #[test]

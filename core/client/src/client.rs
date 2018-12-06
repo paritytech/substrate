@@ -288,7 +288,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "authorities",&[])
+			None => self.executor.call(id, "Core_authorities",&[])
 				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 					.ok_or(error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
@@ -635,7 +635,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let mut r = self.executor.call_at_state(
 					transaction_state,
 					&mut overlay,
-					"execute_block",
+					"Core_execute_block",
 					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
@@ -1050,7 +1050,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		initialised_block: &mut Option<BlockId<Block>>,
 	) -> error::Result<Vec<u8>> {
 		//TODO: Find a better way to prevent double block initialization
-		if function != "initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
+		if function != "Core_initialise_block"
+			&& initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let parent = at;
 			let header = <<Block as BlockT>::Header as HeaderT>::new(
 				self.block_number_from_id(parent)?
@@ -1062,7 +1063,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 					.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
 				Default::default()
 			);
-			self.call_at_state(at, "initialise_block", header.encode(), changes)?;
+			self.call_at_state(at, "Core_initialise_block", header.encode(), changes)?;
 			*initialised_block = Some(*at);
 		}
 
