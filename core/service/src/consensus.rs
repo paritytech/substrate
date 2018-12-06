@@ -26,6 +26,7 @@ use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::{block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{id::BLOCK_BUILDER, Core}};
 use codec::{Decode, Encode};
 use consensus_common::{self, evaluation, offline_tracker::OfflineTracker};
+use consensus_aura::
 use primitives::{H256, AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
@@ -34,8 +35,6 @@ use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use parking_lot::RwLock;
 
-/// Shared offline validator tracker.
-pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 type Timestamp = u64;
 
 // block size limit.
@@ -113,8 +112,6 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub client: Arc<C>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<TransactionPool<A>>,
-	/// Offline-tracker.
-	pub offline: SharedOfflineTracker,
 	/// Force delay in evaluation this long.
 	pub force_delay: Timestamp,
 }
@@ -139,7 +136,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 		let id = BlockId::hash(parent_hash);
 
 		let authorities: Vec<AuthorityId> = self.client.runtime_api().authorities(&id)?;
-		self.offline.write().note_new_block(&authorities[..]);
 
 		info!("Starting consensus session on top of parent {:?}", parent_hash);
 
@@ -151,7 +147,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
-			offline: self.offline.clone(),
 			authorities,
 			minimum_timestamp: current_timestamp() + self.force_delay,
 		};
@@ -168,7 +163,6 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	offline: SharedOfflineTracker,
 	authorities: Vec<AuthorityId>,
 	minimum_timestamp: u64,
 }
@@ -191,19 +185,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 		let timestamp = ::std::cmp::max(self.minimum_timestamp, current_timestamp());
 
 		let elapsed_since_start = self.start.elapsed();
-		let offline_indices = if elapsed_since_start > MAX_VOTE_OFFLINE_SECONDS {
-			Vec::new()
-		} else {
-			self.offline.read().reports(&self.authorities[..])
-		};
-
-		if !offline_indices.is_empty() {
-			info!("Submitting offline authorities {:?} for slash-vote",
-				offline_indices.iter().map(|&i| self.authorities[i as usize]).collect::<Vec<_>>(),
-			)
-		}
-
-		let inherent_data = BasicInherentData::new(timestamp, offline_indices);
+		let inherent_data = BasicInherentData::new(timestamp, 0);
 
 		let block = self.client.build_block(
 			&self.parent_id,

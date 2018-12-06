@@ -59,9 +59,10 @@ use std::time::{Duration, Instant};
 use codec::Encode;
 use consensus_common::{Authorities, BlockImport, Environment, Proposer};
 use client::ChainHead;
+use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::{generic, generic::BlockId};
-use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor};
+use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, ProvideRuntimeApi};
 use network::import_queue::{Verifier, BasicQueue};
 use primitives::{AuthorityId, ed25519};
 
@@ -348,29 +349,45 @@ pub trait ExtraVerification<B: Block>: Send + Sync {
 		&self,
 		header: &B::Header,
 		body: Option<&[B::Extrinsic]>,
-		now: (u64, u64), // (timestamp, slot)
 	) -> Self::Verified;
 }
 
 /// A verifier for Aura blocks.
-pub struct AuraVerifier<C, E> {
+pub struct AuraVerifier<C, E, MakeInherent> {
 	config: Config,
 	client: Arc<C>,
+	make_inherent: MakeInherent,
 	extra: E,
 }
 
-impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
-	C: Authorities<B> + BlockImport<B> + Send + Sync,
+/// No-op extra verification.
+#[derive(Debug, Clone, Copy)]
+pub struct NothingExtra;
+
+impl<B: Block> ExtraVerification<B> for NothingExtra {
+	type Verified = Result<(), String>;
+
+	fn verify(&self, _: &B::Header, _: Option<&[B::Extrinsic]>) -> Self::Verified {
+		Ok(())
+	}
+}
+
+impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, MakeInherent> where
+	C: Authorities<B> + BlockImport<B> + ProvideRuntimeApi + Send + Sync,
+	C::Api: BlockBuilderApi<B, Inherent>,
 	DigestItemFor<B>: CompatibleDigestItem,
 	E: ExtraVerification<B>,
+	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
 	fn verify(
 		&self,
 		origin: BlockOrigin,
 		header: B::Header,
 		_justification: Vec<u8>,
-		body: Option<Vec<B::Extrinsic>>
+		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+		use runtime_primitives::CheckInherentError;
+
 		let (timestamp_now, slot_now) = timestamp_and_slot_now(self.config.slot_duration)
 			.ok_or("System time is before UnixTime?".to_owned())?;
 		let hash = header.hash();
@@ -381,8 +398,32 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		let extra_verification = self.extra.verify(
 			&header,
 			body.as_ref().map(|x| &x[..]),
-			(timestamp_now, slot_now),
 		);
+
+		if let Some(inner_body) = body.take() {
+			let inherent = (self.make_inherent)(timestamp_now, slot_now);
+			let block = Block::new(header.clone(), inner_body);
+
+			let inherent_res = self.client.runtime_api().check_inherents(
+				&BlockId::Hash(parent_hash),
+				&block,
+				&inherent,
+			).map_err(|e| format!("{:?}", e))?;
+
+			match inherent_res {
+				Ok(()) => {}
+				Err(CheckInherentError::ValidAtTimestamp(timestamp)) => {
+					loop {
+						let diff = timestamp.saturating_sub(timestamp_now);
+						::std::thread::sleep(Duration::from_secs(diff));
+					}
+				},
+				Err(CheckInherentError::Other(s)) => return Err(s.into_owned()),
+			}
+
+			let (_, inner_body) = block.deconstruct();
+			body = Some(inner_body);
+		}
 
 		// we add one to allow for some small drift.
 		// FIXME: in the future, alter this queue to allow deferring of headers
@@ -417,16 +458,23 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B, C, E> = BasicQueue<B, AuraVerifier<C, E>>;
+pub type AuraImportQueue<B, C, E, MakeInherent> = BasicQueue<B, AuraVerifier<C, E, MakeInherent>>;
 
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C, E>(config: Config, client: Arc<C>, extra: E) -> AuraImportQueue<B, C, E> where
+pub fn import_queue<B, C, E, MakeInherent, Inherent>(
+	config: Config,
+	client: Arc<C>,
+	extra: E,
+	make_inherent: MakeInherent,
+) -> AuraImportQueue<B, C, E, MakeInherent> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B,Error=client::error::Error> + Send + Sync,
+	C: Authorities<B> + BlockImport<B,Error=client::error::Error> + ProvideRuntimeApi + Send + Sync,
+	C::Api: BlockBuilderApi<B, Inherent>,
 	DigestItemFor<B>: CompatibleDigestItem,
 	E: ExtraVerification<B>,
+	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
-	let verifier = Arc::new(AuraVerifier { config, client: client.clone(), extra, });
+	let verifier = Arc::new(AuraVerifier { config, client: client.clone(), extra, make_inherent });
 	BasicQueue::new(verifier, client)
 }
 
