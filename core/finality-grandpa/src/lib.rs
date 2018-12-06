@@ -929,14 +929,40 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			&digest,
 		)?;
 
+		let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ClientError> {
+			let error = || {
+				Err(ClientErrorKind::Backend(
+					"invalid authority set change: multiple pending changes on the same chain".to_string()
+				).into())
+			};
+
+			if *base == hash { return error(); }
+			if *base == parent_hash { return error(); }
+
+			let tree_route = ::client::blockchain::tree_route(
+				self.inner.backend().blockchain(),
+				BlockId::Hash(parent_hash),
+				BlockId::Hash(*base),
+			)?;
+
+			if tree_route.common_block().hash == *base {
+				return error();
+			}
+
+			Ok(())
+		};
+
 		if let Some(change) = maybe_change {
 			let mut authorities = self.authority_set.inner().write();
-			authorities.add_pending_change(PendingChange {
-				next_authorities: change.next_authorities,
-				finalization_depth: change.delay,
-				canon_height: number,
-				canon_hash: hash,
-			});
+			authorities.add_pending_change(
+				PendingChange {
+					next_authorities: change.next_authorities,
+					finalization_depth: change.delay,
+					canon_height: number,
+					canon_hash: hash,
+				},
+				is_equal_or_descendent_of,
+			)?;
 
 			let encoded = authorities.encode();
 			self.inner.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
