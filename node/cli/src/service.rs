@@ -31,7 +31,6 @@ use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue,
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
-use parking_lot::RwLock;
 use grandpa;
 
 const AURA_SLOT_DURATION: u64 = 6;
@@ -174,7 +173,6 @@ mod tests {
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
 		let validators = vec![alice.public().0.into(), bob.public().0.into()];
 		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
-		let offline = Arc::new(RwLock::new(OfflineTracker::new()));
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
 			let block_id = BlockId::number(service.client().info().unwrap().chain.best_number);

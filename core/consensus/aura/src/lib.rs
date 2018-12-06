@@ -61,7 +61,7 @@ use consensus_common::{Authorities, BlockImport, Environment, Proposer};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
-use runtime_primitives::{generic, generic::BlockId};
+use runtime_primitives::{generic, generic::BlockId, BasicInherentData};
 use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, ProvideRuntimeApi};
 use network::import_queue::{Verifier, BasicQueue};
 use primitives::{AuthorityId, ed25519};
@@ -460,8 +460,8 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 }
 
 /// A utility for making the basic-inherent data.
-pub fn make_basic_inherent(timestamp: u64, slot_now: u64) -> runtime_primitives::BasicInherentData {
-	runtime_primitives::BasicInherentData::new(timestamp, slot_now)
+pub fn make_basic_inherent(timestamp: u64, slot_now: u64) -> BasicInherentData {
+	BasicInherentData::new(timestamp, slot_now)
 }
 
 /// A type for a function which produces inherent.
@@ -533,12 +533,16 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<AuraVerifier<PeersClient, NothingExtra>, ()>>>,
+		peers: Vec<Arc<Peer<AuraVerifier<
+			PeersClient,
+			NothingExtra,
+			InherentProducingFn<()>,
+		>, ()>>>,
 		started: bool
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
+		type Verifier = AuraVerifier<PeersClient, NothingExtra, InherentProducingFn<()>>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -552,8 +556,14 @@ mod tests {
 		fn make_verifier(&self, client: Arc<PeersClient>, _cfg: &ProtocolConfig)
 			-> Arc<Self::Verifier>
 		{
+			fn make_inherent(_: u64, _: u64) { () }
 			let config = Config { local_key: None, slot_duration: SLOT_DURATION };
-			Arc::new(AuraVerifier { client, config, extra: NothingExtra })
+			Arc::new(AuraVerifier {
+				client,
+				config,
+				extra: NothingExtra,
+				make_inherent: make_inherent as _,
+			})
 		}
 
 		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {

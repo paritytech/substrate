@@ -221,6 +221,7 @@ mod tests {
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
+		type OnTimestampSet = ();
 	}
 	type Timestamp = Module<Test>;
 

@@ -36,6 +36,9 @@ extern crate srml_staking as staking;
 extern crate substrate_primitives;
 
 #[cfg(test)]
+extern crate srml_consensus as consensus;
+
+#[cfg(test)]
 extern crate sr_io as runtime_io;
 
 use rstd::prelude::*;

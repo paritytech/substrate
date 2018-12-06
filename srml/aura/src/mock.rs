@@ -58,7 +58,9 @@ impl timestamp::Trait for Test {
 	type OnTimestampSet = ();
 }
 
-impl Trait for Test { }
+impl Trait for Test {
+	type HandleReport = ();
+}
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
