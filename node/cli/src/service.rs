@@ -33,8 +33,6 @@ use client;
 use std::time::Duration;
 use grandpa;
 
-const AURA_SLOT_DURATION: u64 = 6;
-
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
 	pub struct NodeProtocol where Block = Block { }
@@ -102,7 +100,6 @@ construct_service_factory! {
 					let proposer = Arc::new(substrate_service::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-						force_delay: 0 // FIXME: allow this to be configured https://github.com/paritytech/substrate/issues/1170
 					});
 
 					let client = service.client();
@@ -179,7 +176,6 @@ mod tests {
 				client: service.client().clone(),
 				transaction_pool: service.transaction_pool().clone(),
 				network: consensus_net,
-				force_delay: 0,
 				handle: dummy_runtime.executor(),
 			};
 			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();

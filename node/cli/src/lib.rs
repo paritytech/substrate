@@ -44,7 +44,6 @@ extern crate substrate_keystore;
 #[macro_use]
 extern crate log;
 extern crate structopt;
-extern crate parking_lot;
 
 pub use cli::error;
 pub mod chain_spec;

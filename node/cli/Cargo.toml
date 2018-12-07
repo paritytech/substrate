@@ -12,7 +12,6 @@ futures = "0.1"
 exit-future = "0.1"
 substrate-cli = { path = "../../core/cli" }
 parity-codec = { version = "2.1" }
-parking_lot = "0.4"
 slog = "^2"
 sr-io = { path = "../../core/sr-io" }
 substrate-client = { path = "../../core/client" }

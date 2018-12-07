@@ -109,8 +109,6 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub client: Arc<C>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<TransactionPool<A>>,
-	/// Force delay in evaluation this long.
-	pub force_delay: Timestamp,
 }
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
@@ -140,7 +138,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
-			minimum_timestamp: current_timestamp() + self.force_delay,
 		};
 
 		Ok(proposer)
@@ -154,7 +151,6 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	minimum_timestamp: u64,
 }
 
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
@@ -170,8 +166,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	fn propose(&self) -> Result<<C as AuthoringApi>::Block, error::Error> {
 		use runtime_primitives::traits::BlakeTwo256;
 
-		let timestamp = ::std::cmp::max(self.minimum_timestamp, current_timestamp());
-
+		let timestamp = current_timestamp();
 		let inherent_data = BasicInherentData::new(timestamp, 0);
 
 		let block = self.client.build_block(

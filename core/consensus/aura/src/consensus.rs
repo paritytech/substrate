@@ -30,7 +30,7 @@ use network::import_queue::{Verifier, BasicQueue};
 use primitives::{AuthorityId, ed25519};
 
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
-use tokio::timer::Interval;
+use tokio::timer::{Interval, Timeout};
 use super::api::AuraApi;
 
 pub use consensus_common::SyncOracle;
@@ -138,11 +138,17 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 		let public_key = pair.public();
 		let SlotDuration(slot_duration) = slot_duration;
 		let mut last_authored_slot = 0;
-		let next_slot_start = duration_now().map(|now| {
+
+		let make_deadline = move |now: Duration| {
 			let remaining_full_secs = slot_duration - (now.as_secs() % slot_duration) - 1;
 			let remaining_nanos = 1_000_000_000 - now.subsec_nanos();
-			Instant::now() + Duration::new(remaining_full_secs, remaining_nanos)
-		}).unwrap_or_else(|| Instant::now());
+			Duration::new(remaining_full_secs, remaining_nanos)
+		};
+
+		let next_slot_start = duration_now()
+			.map(make_deadline)
+			.map(|d| Instant::now() + d)
+			.unwrap_or_else(|| Instant::now());
 
 		Interval::new(next_slot_start, Duration::from_secs(slot_duration))
 			.filter(move |_| !sync_oracle.is_major_syncing()) // only propose when we are not syncing.
@@ -151,7 +157,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 				use futures::future;
 
 				let pair = pair.clone();
-				let slot_num = match slot_now(slot_duration) {
+				let (timestamp, slot_num) = match timestamp_and_slot_now(slot_duration) {
 					Some(n) => n,
 					None => return Either::B(future::err(())),
 				};
@@ -187,7 +193,12 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							}
 						};
 
-						proposer.propose().into_future()
+						// deadline our production to approx. the end of the
+						// slot
+						Timeout::new(
+							proposer.propose().into_future(),
+							make_deadline(Duration::from_secs(timestamp)),
+						)
 					} else {
 						return Either::B(future::ok(()));
 					}
@@ -196,6 +207,14 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 				let block_import = block_import.clone();
 				Either::A(proposal_work
 					.map(move |b| {
+						// minor hack since we don't have access to the timestamp
+						// that is actually set by the proposer.
+						let slot_after_building = slot_now(slot_duration);
+						if slot_after_building != Some(slot_num) {
+							info!("Discarding proposal for slot {}; block production took too long", slot_num);
+							return
+						}
+
 						let (header, body) = b.deconstruct();
 						let pre_hash = header.hash();
 						let parent_hash = header.parent_hash().clone();
@@ -364,32 +383,33 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
 				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
 
-			// if the body is passed through, we need to use the runtime
-			// to check that the internally-set timestamp in the inherents
-			// actually matches the slot set in the seal.
-			if let Some(inner_body) = body.take() {
-				let inherent = (self.make_inherent)(timestamp_now, slot_num);
-				let block = Block::new(pre_header.clone(), inner_body);
+				// if the body is passed through, we need to use the runtime
+				// to check that the internally-set timestamp in the inherents
+				// actually matches the slot set in the seal.
+				if let Some(inner_body) = body.take() {
+					let inherent = (self.make_inherent)(timestamp_now, slot_num);
+					let block = Block::new(pre_header.clone(), inner_body);
 
-				let inherent_res = self.client.runtime_api().check_inherents(
-					&BlockId::Hash(parent_hash),
-					&block,
-					&inherent,
-				).map_err(|e| format!("{:?}", e))?;
+					let inherent_res = self.client.runtime_api().check_inherents(
+						&BlockId::Hash(parent_hash),
+						&block,
+						&inherent,
+					).map_err(|e| format!("{:?}", e))?;
 
-				match inherent_res {
-					Ok(()) => {}
-					Err(CheckInherentError::ValidAtTimestamp(timestamp)) => {
-						// halt import until timestamp is valid.
-						let diff = timestamp.saturating_sub(timestamp_now);
-						::std::thread::sleep(Duration::from_secs(diff));
-					},
-					Err(CheckInherentError::Other(s)) => return Err(s.into_owned()),
+					match inherent_res {
+						Ok(()) => {}
+						Err(CheckInherentError::ValidAtTimestamp(timestamp)) => {
+							// halt import until timestamp is valid.
+							let diff = timestamp.saturating_sub(timestamp_now);
+							info!(target: "aura", "halting for block {} seconds in the future", diff);
+							::std::thread::sleep(Duration::from_secs(diff));
+						},
+						Err(CheckInherentError::Other(s)) => return Err(s.into_owned()),
+					}
+
+					let (_, inner_body) = block.deconstruct();
+					body = Some(inner_body);
 				}
-
-				let (_, inner_body) = block.deconstruct();
-				body = Some(inner_body);
-			}
 
 				debug!(target: "aura", "Checked {:?}; importing.", pre_header);
 
