@@ -104,6 +104,7 @@ build:rust:linux:release:          &build
 
 
 publish:docker:release:
+    GIT_STRATEGY: none
   <<:                              *publish
   tags:
     - shell
@@ -127,15 +128,15 @@ publish:docker:release:
 
 publish:s3:release:
   <<:                              *publish
-  image:                           mesosphere/aws-cli
+  image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   script:
-    - s3 sync ./target/release/ s3://${BUCKET}/${PREFIX}/$(cat ./target/release/VERSION)/
+    - aws s3 sync ./target/release/ s3://${BUCKET}/${PREFIX}/$(cat ./target/release/VERSION)/
   after_script:
-    - s3 ls s3://${BUCKET}/${PREFIX}/
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/
   tags:
     - linux-docker
 
