@@ -65,7 +65,7 @@ decl_module! {
 			origin,
 			proposal: Box<T::Proposal>,
 			value: <T::Balance as HasCompact>::Type
-		) -> Result {
+		) {
 			let who = ensure_signed(origin)?;
 			let value = value.into();
 
@@ -80,11 +80,10 @@ decl_module! {
 			let mut props = Self::public_props();
 			props.push((index, (*proposal).clone(), who));
 			<PublicProps<T>>::put(props);
-			Ok(())
 		}
 
 		/// Propose a sensitive action to be taken.
-		fn second(origin, proposal: Compact<PropIndex>) -> Result {
+		fn second(origin, proposal: Compact<PropIndex>) {
 			let who = ensure_signed(origin)?;
 			let proposal: PropIndex = proposal.into();
 			let mut deposit = Self::deposit_of(proposal)
@@ -93,12 +92,11 @@ decl_module! {
 				.map_err(|_| "seconder's balance too low")?;
 			deposit.1.push(who);
 			<DepositOf<T>>::insert(proposal, deposit);
-			Ok(())
 		}
 
 		/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
 		/// false would be a vote to keep the status quo.
-		fn vote(origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) -> Result {
+		fn vote(origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) {
 			let who = ensure_signed(origin)?;
 			let ref_index = ref_index.into();
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
@@ -108,7 +106,6 @@ decl_module! {
 				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
 			}
 			<VoteOf<T>>::insert(&(ref_index, who), approve_proposal);
-			Ok(())
 		}
 
 		/// Start a referendum.
@@ -121,9 +118,8 @@ decl_module! {
 		}
 
 		/// Remove a referendum.
-		fn cancel_referendum(ref_index: Compact<ReferendumIndex>) -> Result {
+		fn cancel_referendum(ref_index: Compact<ReferendumIndex>) {
 			Self::clear_referendum(ref_index.into());
-			Ok(())
 		}
 
 		fn on_finalise(n: T::BlockNumber) {

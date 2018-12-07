@@ -49,7 +49,6 @@ extern crate parity_codec as codec;
 
 use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
-use runtime_support::dispatch::Result;
 use runtime_primitives::CheckInherentError;
 use runtime_primitives::traits::{
 	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
@@ -75,7 +74,7 @@ decl_module! {
 		/// if this call hasn't been invoked by that time.
 		///
 		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result {
+		fn set(origin, now: <T::Moment as HasCompact>::Type) {
 			ensure_inherent(origin)?;
 			let now = now.into();
 
@@ -91,7 +90,6 @@ decl_module! {
 			);
 			<Self as Store>::Now::put(now);
 			<Self as Store>::DidUpdate::put(true);
-			Ok(())
 		}
 
 		fn on_finalise() {

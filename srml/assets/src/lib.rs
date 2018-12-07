@@ -45,7 +45,7 @@ extern crate sr_primitives as primitives;
 // depend on it being around.
 extern crate srml_system as system;
 
-use runtime_support::{StorageValue, StorageMap, dispatch::Result, Parameter};
+use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{Member, SimpleArithmetic, Zero};
 use system::ensure_signed;
 
@@ -66,7 +66,7 @@ decl_module! {
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
-		fn issue(origin, total: T::Balance) -> Result {
+		fn issue(origin, total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
 			let id = Self::next_asset_id();
@@ -75,11 +75,10 @@ decl_module! {
 			<Balances<T>>::insert((id, origin.clone()), total);
 
 			Self::deposit_event(RawEvent::Issued(id, origin, total));
-			Ok(())
 		}
 
 		/// Move some assets from one holder to another.
-		fn transfer(origin, id: AssetId, target: T::AccountId, amount: T::Balance) -> Result {
+		fn transfer(origin, id: AssetId, target: T::AccountId, amount: T::Balance) {
 			let origin = ensure_signed(origin)?;
 			let origin_account = (id, origin.clone());
 			let origin_balance = <Balances<T>>::get(&origin_account);
@@ -88,20 +87,16 @@ decl_module! {
 			Self::deposit_event(RawEvent::Transfered(id, origin, target.clone(), amount));
 			<Balances<T>>::insert(origin_account, origin_balance - amount);
 			<Balances<T>>::mutate((id, target), |balance| *balance += amount);
-
-			Ok(())
 		}
 
 		/// Destroy any assets of `id` owned by `origin`.
-		fn destroy(origin, id: AssetId) -> Result {
+		fn destroy(origin, id: AssetId) {
 			let origin = ensure_signed(origin)?;
 
 			let balance = <Balances<T>>::take((id, origin.clone()));
 			ensure!(!balance.is_zero(), "origin balance should be non-zero");
 
 			Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
-
-			Ok(())
 		}
 	}
 }
