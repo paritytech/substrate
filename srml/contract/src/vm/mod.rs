@@ -130,10 +130,11 @@ mod tests {
 	use std::collections::HashMap;
 	use tests::Test;
 	use wabt;
+	use runtime_primitives::testing::H256;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
-		code: Vec<u8>,
+		// TODO: code_hash: H256,
 		endowment: u64,
 		data: Vec<u8>,
 		gas_left: u64,
@@ -163,13 +164,13 @@ mod tests {
 		}
 		fn create(
 			&mut self,
-			code: &[u8],
+			_code_hash: &CodeHash<Test>,
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
 		) -> Result<CreateReceipt<Test>, ()> {
 			self.creates.push(CreateEntry {
-				code: code.to_vec(),
+				// code_hash: code_hash.clone(),
 				endowment,
 				data: data.to_vec(),
 				gas_left: gas_meter.gas_left(),
@@ -200,6 +201,11 @@ mod tests {
 		fn caller(&self) -> &u64 {
 			&42
 		}
+	}
+
+	fn prepare_code(wat: &str) -> (Vec<u8>, MemoryDefinition) {
+		let wasm = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -245,6 +251,7 @@ mod tests {
 
 		let mut mock_ext = MockExt::default();
 		execute(
+			"call",
 			&code_transfer,
 			&[],
 			&mut Vec::new(),
@@ -308,6 +315,7 @@ mod tests {
 
 		let mut mock_ext = MockExt::default();
 		execute(
+			"call",
 			&code_create,
 			&[],
 			&mut Vec::new(),
@@ -319,7 +327,7 @@ mod tests {
 		assert_eq!(
 			&mock_ext.creates,
 			&[CreateEntry {
-				code: vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00],
+				// code: vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00],
 				endowment: 3,
 				data: vec![
 					1, 2, 3, 4,
@@ -348,6 +356,7 @@ mod tests {
 
 		assert_matches!(
 			execute(
+				"call",
 				&code_mem,
 				&[],
 				&mut Vec::new(),
@@ -402,6 +411,7 @@ mod tests {
 
 		let mut mock_ext = MockExt::default();
 		execute(
+			"call",
 			&code_transfer,
 			&[],
 			&mut Vec::new(),
@@ -495,6 +505,7 @@ mod tests {
 
 		let mut return_buf = Vec::new();
 		execute(
+			"call",
 			&code_get_storage,
 			&[],
 			&mut return_buf,
