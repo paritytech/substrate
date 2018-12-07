@@ -5,53 +5,30 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
 
 [dependencies]
-parity-codec = { version = "2.1", default-features = false }
-substrate-client = { path = "../../client", default-features = false }
-substrate-primitives = { path = "../../primitives", default-features = false }
-srml-support = { path = "../../../srml/support", default-features = false }
-sr-primitives = { path = "../../sr-primitives", default-features = false }
-sr-version = { path = "../../sr-version", default-features = false }
-sr-io = { path = "../../sr-io", default-features = false }
-substrate-consensus-aura-primitives = { path = "primitives", default-features = false }
+parity-codec = "2.1"
+substrate-client = { path = "../../client" }
+substrate-primitives = { path = "../../primitives" }
+srml-support = { path = "../../../srml/support" }
+sr-primitives = { path = "../../sr-primitives" }
+sr-version = { path = "../../sr-version" }
+sr-io = { path = "../../sr-io" }
+substrate-consensus-aura-primitives = { path = "primitives" }
 
-srml-consensus = { path = "../../../srml/consensus", optional = true }
-futures = { version = "0.1.17", optional = true }
-tokio = { version = "0.1.7", optional = true }
-parking_lot = { version = "0.4", optional = true }
-error-chain = { version = "0.12", optional = true }
-log = { version = "0.3", optional = true }
-substrate-consensus-common = { path = "../common", optional = true }
-substrate-network = { path = "../../network", optional = true }
+srml-consensus = { path = "../../../srml/consensus" }
+futures = "0.1.17"
+tokio = "0.1.7"
+parking_lot = "0.4"
+error-chain = "0.12"
+log = "0.3"
+substrate-consensus-common = { path = "../common" }
+substrate-network = { path = "../../network" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 substrate-service = { path = "../../service" }
 substrate-test-client = { path = "../../test-client" }
-env_logger = { version = "0.4" }
+env_logger = "0.4"
 
 [target.'cfg(test)'.dependencies]
 substrate-network = { path = "../../network", features = ["test-helpers"], optional = true }
-
-[features]
-default = ["std"]
-std = [
-	"parity-codec/std",
-	"substrate-client/std",
-	"substrate-primitives/std",
-	"srml-support/std",
-	"sr-primitives/std",
-	"sr-version/std",
-	"sr-io/std",
-	"substrate-consensus-aura-primitives/std",
-
-	"srml-consensus",
-	"futures",
-	"tokio",
-	"parking_lot",
-	"error-chain",
-	"log",
-	"substrate-consensus-common",
-	"substrate-network",
-]
-

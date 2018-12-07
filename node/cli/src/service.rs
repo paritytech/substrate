@@ -103,14 +103,14 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
-					start_aura(
+					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key,
 						client,
 						block_import.clone(),
 						proposer,
 						service.network(),
-					);
+					));
 				}
 				Ok(service)
 			}
