@@ -28,7 +28,7 @@ cache:
     when:                          on_success
     expire_in:                     7 days
     paths:
-    - target/release/
+    - artifacts/
 
 
 
@@ -80,11 +80,13 @@ build:rust:linux:release:          &build
    - ./scripts/build.sh
   script:
     - time cargo build --release --verbose;
+    - mkdir -p ./artifacts
+    - mv ./target/release/substrate ./artifacts/.
     - echo -n "Substrate version = "
-    - ./target/release/substrate --version | 
+    - ./artifacts/substrate --version | 
       sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-      tee ./target/release/VERSION
-    - sha256sum ./target/release/substrate | tee ./target/release/substrate.sha256
+      tee ./artifacts/VERSION
+    - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
 
 
 
@@ -112,13 +114,13 @@ publish:docker:release:
     DOCKERFILE:                    scripts/docker/Dockerfile
     CONTAINER_IMAGE:               parity/substrate
   script:
-    - VERSION="$(cat ./target/release/VERSION)"
+    - VERSION="$(cat ./artifacts/VERSION)"
     - exit 0
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
-    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest -f $DOCKERFILE ./target/release/
+    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest -f $DOCKERFILE ./artifacts/
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
   after_script:
@@ -133,7 +135,7 @@ publish:s3:release:
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   script:
-    - aws s3 sync ./target/release/ s3://${BUCKET}/${PREFIX}/$(cat ./target/release/VERSION)/
+    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
   tags:
