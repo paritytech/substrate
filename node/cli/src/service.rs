@@ -103,15 +103,14 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
-					let slot_duration =
-					executor.spawn(start_aura(
+					start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key,
 						client,
 						block_import.clone(),
 						proposer,
 						service.network(),
-					));
+					);
 				}
 				Ok(service)
 			}
@@ -176,6 +175,7 @@ mod tests {
 				client: service.client().clone(),
 				transaction_pool: service.transaction_pool().clone(),
 				network: consensus_net,
+				force_delay: 0,
 				handle: dummy_runtime.executor(),
 			};
 			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
