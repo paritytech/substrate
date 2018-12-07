@@ -178,15 +178,6 @@ impl<Components: components::Components> Service<Components> {
 			specialization: network_protocol,
 		};
 
-		// let network_params = Components::CreateNetworkParams::create_network_params(
-		// 	client.clone(),
-		// 	config.roles,
-		// 	config.network.clone(),
-		// 	on_demand.clone(),
-		// 	transaction_pool_adapter.clone(),
-		// 	network_protocol,
-		// );
-
 		let protocol_id = {
 			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
 			let mut protocol_id = network::ProtocolId::default();
