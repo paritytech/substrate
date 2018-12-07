@@ -104,7 +104,6 @@ build:rust:linux:release:          &build
 
 
 publish:docker:release:
-    GIT_STRATEGY: none
   <<:                              *publish
   tags:
     - shell
