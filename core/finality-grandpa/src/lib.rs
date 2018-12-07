@@ -87,7 +87,6 @@ use client::{
 	Client, error::Error as ClientError, backend::Backend, CallExecutor, BlockchainEvents
 };
 use client::blockchain::HeaderBackend;
-use client::runtime_api::TaggedTransactionQueue;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
@@ -627,7 +626,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		RA: TaggedTransactionQueue<Block>,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>
 {
@@ -679,7 +677,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBloc
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
 {
 
 	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
@@ -698,7 +695,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> Clone for LinkHalf<B, E, Block, RA>
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
 {
 	fn clone(&self) -> Self {
 		LinkHalf {
