@@ -35,8 +35,6 @@ pub fn obtain_private_key(
 
 	} else {
 		if let Some(ref path) = config.net_config_path {
-			fs::create_dir_all(Path::new(path))?;
-
 			// Try fetch the key from a the file containing the secret.
 			let secret_path = Path::new(path).join(SECRET_FILE);
 			match load_private_key_from_file(&secret_path) {
