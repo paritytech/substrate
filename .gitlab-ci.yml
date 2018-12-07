@@ -108,8 +108,9 @@ publish:docker:release:
   tags:
     - shell
   variables:
-    DOCKERFILE: scripts/docker/Dockerfile
-    CONTAINER_IMAGE: parity/substrate
+    GIT_STRATEGY:                  none
+    DOCKERFILE:                    scripts/docker/Dockerfile
+    CONTAINER_IMAGE:               parity/substrate
   script:
     - VERSION="$(cat ./target/release/VERSION)"
     - exit 0
@@ -128,6 +129,7 @@ publish:s3:release:
   <<:                              *publish
   image:                           mesosphere/aws-cli
   variables:
+    GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   script:
