@@ -31,8 +31,6 @@ cache:
     - target/release/
 
 
-before_script:
- - ./scripts/build.sh
 
 
 #### stage:                        test
@@ -78,6 +76,8 @@ build:rust:linux:release:          &build
     - ci-s3-upload
   tags:
     - linux-docker
+  before_script:
+   - ./scripts/build.sh
   script:
     - time cargo build --release --verbose;
     - echo -n "Substrate version = "
