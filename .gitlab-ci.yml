@@ -49,9 +49,10 @@ test:rust:stable:                  &test
     - web
     - /^pr-[0-9]+$/
     - /^[0-9]+$/
-
   tags:
     - linux-docker
+  before_script:
+   - ./scripts/build.sh
   script:
     - time cargo test --all --release --verbose --locked
 
