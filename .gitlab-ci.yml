@@ -31,11 +31,6 @@ cache:
     - target/release/
 
 
-# not needed atm
-# .determine_version: &determine_version |
-#   export VERSION="$(sed -r -n '1,/^version/s/^version = "([^"]+)".*$/\1/p' Cargo.toml)";
-#   echo "Version = " $VERSION
-
 before_script:
  - ./scripts/build.sh
 
@@ -85,8 +80,11 @@ build:rust:linux:release:          &build
     - linux-docker
   script:
     - time cargo build --release --verbose;
-    - ./target/release/substrate --version
-    - sha256sum ./target/release/substrate | tee -a ./target/release/substrate.sha256
+    - echo -n "Substrate version = "
+    - ./target/release/substrate --version | 
+      sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+      tee ./target/release/VERSION
+    - sha256sum ./target/release/substrate | tee ./target/release/substrate.sha256
 
 
 
@@ -104,12 +102,6 @@ build:rust:linux:release:          &build
     - web
     - ci-s3-upload
 
-.version:                          &version
-  before_script:
-    - VERSION="$(./target/release/substrate --version | sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p')"
-    - export VERSION
-    - echo "Substrate version = ${VERSION}"
-
 
 publish:docker:release:
   <<:                              *publish
@@ -118,9 +110,8 @@ publish:docker:release:
   variables:
     DOCKERFILE: scripts/docker/Dockerfile
     CONTAINER_IMAGE: parity/substrate
-  <<:                              *version
   script:
-    - test -z "${VERSION}" && exit 1
+    - VERSION="$(cat ./target/release/VERSION)"
     - exit 0
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
@@ -139,14 +130,10 @@ publish:s3:release:
   variables:
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
-  <<:                              *version
   script:
-    - test -z "${VERSION}" && exit 1
-    - test "$AWS_ACCESS_KEY_ID" -a "$AWS_SECRET_ACCESS_KEY" -a "$AWS_DEFAULT_REGION"
-        || ( echo "no aws s3 credentials provided"; exit 1 )
-    - aws s3 sync ./target/release/ s3://${BUCKET}/${PREFIX}/${VERSION}/ --dryrun
+    - s3 sync ./target/release/ s3://${BUCKET}/${PREFIX}/$(cat ./target/release/VERSION)/
   after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/
+    - s3 ls s3://${BUCKET}/${PREFIX}/
   tags:
     - linux-docker
 
