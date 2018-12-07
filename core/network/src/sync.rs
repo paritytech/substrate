@@ -257,10 +257,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let Some((hash, number)) = new_blocks.last()
 			.and_then(|b| b.block.header.as_ref().map(|h|(b.block.hash.clone(), *h.number())))
 		{
-			if number > self.best_queued_number {
-				self.best_queued_number = number;
-				self.best_queued_hash = hash;
-			}
+			self.block_queued(&hash, number);
 		}
 		self.maintain_sync(protocol);
 		Some((origin, new_blocks))
@@ -274,6 +271,10 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		trace!(target: "sync", "Block imported successfully {} ({})", number, hash);
+	}
+
+	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		if number > self.best_queued_number {
 			self.best_queued_number = number;
 			self.best_queued_hash = *hash;
