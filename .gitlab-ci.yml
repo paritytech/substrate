@@ -73,7 +73,6 @@ build:rust:linux:release:          &build
     - master
     - tags
     - web
-    - ci-s3-upload
   tags:
     - linux-docker
   before_script:
@@ -102,7 +101,6 @@ build:rust:linux:release:          &build
     - master
     - tags
     - web
-    - ci-s3-upload
 
 
 publish:docker:release:
@@ -115,7 +113,6 @@ publish:docker:release:
     CONTAINER_IMAGE:               parity/substrate
   script:
     - VERSION="$(cat ./artifacts/VERSION)"
-    - exit 0
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
