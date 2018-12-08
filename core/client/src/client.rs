@@ -921,12 +921,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
 
 			if canon_hash == target_hash {
+				// if no block at the given max depth exists fallback to the best block
 				if let Some(max_number) = maybe_max_number {
-					// something has to guarantee that max_number is in chain
-					return Ok(Some(self.backend.blockchain().hash(max_number)?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", max_number)))?));
-				} else {
-					return Ok(Some(info.best_hash));
+					if let Some(header) = self.backend.blockchain().hash(max_number)? {
+						return Ok(Some(header));
+					}
 				}
+
+				return Ok(Some(info.best_hash));
 			}
 			(self.backend.blockchain().leaves()?, info.best_hash)
 		};
@@ -1686,6 +1688,26 @@ pub(crate) mod tests {
 		assert_eq!(None, client.best_containing(c3.hash().clone(), Some(0)).unwrap());
 
 		assert_eq!(None, client.best_containing(d2.hash().clone(), Some(0)).unwrap());
+	}
+
+	#[test]
+	fn best_containing_with_max_depth_higher_than_best() {
+		// block tree:
+		// G -> A1 -> A2
+
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+
+		assert_eq!(a2.hash(), client.best_containing(genesis_hash, Some(10)).unwrap().unwrap());
 	}
 
 	#[test]
