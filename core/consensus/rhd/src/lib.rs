@@ -417,7 +417,7 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			let import_block = ImportBlock {
 				origin: BlockOrigin::ConsensusBroadcast,
 				header: header,
-				justification: just.into(),
+				justification: Some(just),
 				body: Some(body),
 				finalized: true,
 				post_digests: Default::default(),

@@ -69,7 +69,7 @@ fn should_notify_about_storage_changes() {
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
-		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
 	// assert notification sent to transport
@@ -102,7 +102,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
-		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		api.client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
 	// assert initial values sent to transport
@@ -131,7 +131,7 @@ fn should_query_storage() {
 		}).unwrap();
 		let block = builder.bake().unwrap();
 		let hash = block.header.hash();
-		client.justify_and_import(BlockOrigin::Own, block).unwrap();
+		client.import(BlockOrigin::Own, block).unwrap();
 		hash
 	};
 	let block1_hash = add_block(0);

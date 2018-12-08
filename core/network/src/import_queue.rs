@@ -31,6 +31,7 @@ use parking_lot::{Condvar, Mutex, RwLock};
 use network_libp2p::{NodeIndex, Severity};
 use primitives::AuthorityId;
 
+use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 pub use blocks::BlockData;
@@ -57,7 +58,7 @@ pub trait Verifier<B: BlockT>: Send + Sync + Sized {
 		&self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Vec<u8>,
+		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String>;
 }
@@ -339,8 +340,6 @@ enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debug + 
 enum BlockImportError {
 	/// Block missed header, can't be imported
 	IncompleteHeader(Option<NodeIndex>),
-	/// Block missed justification, can't be imported
-	IncompleteJustification(Option<NodeIndex>),
 	/// Block verification failed, can't be imported
 	VerificationFailed(Option<NodeIndex>, String),
 	/// Block is known to be Bad
@@ -411,7 +410,7 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 	let block = block.block;
 
 	let (header, justification) = match (block.header, block.justification) {
-		(Some(header), Some(justification)) => (header, justification),
+		(Some(header), justification) => (header, justification),
 		(None, _) => {
 			if let Some(peer) = peer {
 				debug!(target: "sync", "Header {} was not provided by {} ", block.hash, peer);
@@ -420,14 +419,6 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 			}
 			return Err(BlockImportError::IncompleteHeader(peer)) //TODO: use persistent ID
 		},
-		(_, None) => {
-			if let Some(peer) = peer {
-				debug!(target: "sync", "Justification set for block {} was not provided by {} ", block.hash, peer);
-			} else {
-				debug!(target: "sync", "Justification set for block {} was not provided", block.hash);
-			}
-			return Err(BlockImportError::IncompleteJustification(peer)) //TODO: use persistent ID
-		}
 	};
 
 	let number = header.number().clone();
@@ -485,12 +476,6 @@ fn process_import_result<B: BlockT>(
 		Ok(BlockImportResult::ImportedUnknown(hash, number)) => {
 			link.block_imported(&hash, number);
 			1
-		},
-		Err(BlockImportError::IncompleteJustification(who)) => {
-			if let Some(peer) = who {
-				link.useless_peer(peer, "Sent block with incomplete justification to import");
-			}
-			0
 		},
 		Err(BlockImportError::IncompleteHeader(who)) => {
 			if let Some(peer) = who {
@@ -555,7 +540,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		&self,
 		origin: BlockOrigin,
 		header: B::Header,
-		justification: Vec<u8>,
+		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
 		Ok((ImportBlock {
@@ -563,7 +548,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			header,
 			body,
 			finalized: self.0,
-			justification: justification,
+			justification,
 			post_digests: vec![],
 			auxiliary: Vec::new(),
 		}, None))
@@ -702,7 +687,7 @@ pub mod tests {
 	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>, Hash, u64, BlockData<Block>) {
 		let client = test_client::new();
 		let block = client.new_block().unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::File, block).unwrap();
+		client.import(BlockOrigin::File, block).unwrap();
 
 		let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);
 		let block = message::BlockData::<Block> {
@@ -746,16 +731,6 @@ pub mod tests {
 	}
 
 	#[test]
-	fn import_single_good_block_without_justification_fails() {
-		let (_, _, _, mut block) = prepare_good_block();
-		block.block.justification = None;
-		assert_eq!(
-			import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-			Err(BlockImportError::IncompleteJustification(Some(0)))
-		);
-	}
-
-	#[test]
 	fn process_import_result_works() {
 		let link = TestLink::new();
 		assert_eq!(process_import_result::<Block>(&link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
@@ -773,11 +748,6 @@ pub mod tests {
 
 		let link = TestLink::new();
 		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteHeader(Some(0)))), 0);
-		assert_eq!(link.total(), 1);
-		assert_eq!(link.disconnects.get(), 1);
-
-		let link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteJustification(Some(0)))), 0);
 		assert_eq!(link.total(), 1);
 		assert_eq!(link.disconnects.get(), 1);
 

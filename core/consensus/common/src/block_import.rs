@@ -22,7 +22,7 @@ use runtime_primitives::Justification;
 use std::borrow::Cow;
 
 /// Block import result.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
 	/// Added to the import queue.
 	Queued,
@@ -69,8 +69,8 @@ pub struct ImportBlock<Block: BlockT> {
 	/// re-executed in a runtime that checks digest equivalence -- the
 	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
-	/// Justification provided for this block from the outside:.
-	pub justification: Justification,
+	/// Justification provided for this block from the outside.
+	pub justification: Option<Justification>,
 	/// Digest items that have been added after the runtime for external
 	/// work, like a consensus signature.
 	pub post_digests: Vec<DigestItemFor<Block>>,
@@ -91,7 +91,7 @@ impl<Block: BlockT> ImportBlock<Block> {
 		-> (
 			BlockOrigin,
 			<Block as BlockT>::Header,
-			Justification,
+			Option<Justification>,
 			Vec<DigestItemFor<Block>>,
 			Option<Vec<<Block as BlockT>::Extrinsic>>,
 			bool,

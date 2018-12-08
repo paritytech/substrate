@@ -797,7 +797,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Ok(())
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>) -> Result<(), client::error::Error> {
+	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>)
+		-> Result<(), client::error::Error>
+	{
 		use runtime_primitives::traits::Header;
 
 		if let Some(header) = ::client::blockchain::HeaderBackend::header(&self.blockchain, block)? {
@@ -805,6 +807,14 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			// TODO: ensure best chain contains this block.
 			let hash = header.hash();
 			self.note_finalized(&mut transaction, &header, hash.clone())?;
+			if let Some(justification) = justification {
+				let number = header.number().clone();
+				transaction.put(
+					columns::JUSTIFICATION,
+					&::utils::number_and_hash_to_lookup_key(number, hash.clone()),
+					&justification.encode(),
+				);
+			}
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, header.number().clone(), false, true);
 			Ok(())
@@ -1196,8 +1206,8 @@ mod tests {
 			assert!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().is_none());
 		}
 
-		backend.finalize_block(BlockId::Number(1)).unwrap();
-		backend.finalize_block(BlockId::Number(2)).unwrap();
+		backend.finalize_block(BlockId::Number(1), None).unwrap();
+		backend.finalize_block(BlockId::Number(2), None).unwrap();
 		assert!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().is_none());
 	}
 
@@ -1498,5 +1508,40 @@ mod tests {
 		assert_eq!(b"hello", &backend.get_aux(b"test").unwrap().unwrap()[..]);
 		backend.insert_aux(&[], &[&b"test"[..]]).unwrap();
 		assert!(backend.get_aux(b"test").unwrap().is_none());
+	}
+
+	#[test]
+	fn test_finalize_block_with_justification() {
+		use client::blockchain::{Backend as BlockChainBackend};
+
+		let backend = Backend::<Block>::new_test(0, 0);
+
+		{
+			let mut op = backend.begin_operation(BlockId::Hash(Default::default())).unwrap();
+			let header = Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			backend.commit_operation(op).unwrap();
+		}
+
+		let justification = Some(vec![1, 2, 3]);
+		backend.finalize_block(BlockId::Number(0), justification.clone()).unwrap();
+
+		assert_eq!(
+			backend.blockchain().justification(BlockId::Number(0)).unwrap(),
+			justification,
+		);
 	}
 }
