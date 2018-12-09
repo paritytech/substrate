@@ -79,7 +79,11 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		return try_tok!(Err(Error::new(strait.span(), "Missing declare store generic params")));
 	};
 
-	let traittype = traittypes.first().expect("a trait bound expected").into_value();
+	let traittype =	if let Some(traittype) = traittypes.first() {
+		traittype.into_value()
+	} else {
+		return try_tok!(Err(Error::new(traittypes.span(), "Trait bound expected")));
+	};
 
 	let extra_genesis = try_tok!(decl_store_extra_genesis(
 		&scrate,
@@ -491,26 +495,22 @@ fn decl_storage_items(
 fn decl_store_items(
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 ) -> TokenStream2 {
-	let mut items = TokenStream2::new();
-	for name in storage_lines.inner.iter().map(|sline| &sline.name) {
-		items.extend(quote!{
-			type #name;
-		});
-	}
-	items
+	storage_lines.inner.iter().map(|sline| &sline.name)
+		.fold(TokenStream2::new(), |mut items, name| {
+		items.extend(quote!(type #name;));
+		items
+	})
 }
 
 fn impl_store_items(
 	traitinstance: &Ident,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
 ) -> TokenStream2 {
-	let mut items = TokenStream2::new();
-	for name in storage_lines.inner.iter().map(|sline| &sline.name) {
-		items.extend(quote!{
-			type #name = #name<#traitinstance>;
-		});
-	}
-	items
+	storage_lines.inner.iter().map(|sline| &sline.name)
+		.fold(TokenStream2::new(), |mut items, name| {
+		items.extend(quote!(type #name = #name<#traitinstance>;));
+		items
+	})
 }
 
 fn impl_store_fns(
