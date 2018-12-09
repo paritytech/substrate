@@ -88,12 +88,10 @@ pub fn new_test_ext(
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
 		authorities: vec![],
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(balances::GenesisConfig::<Test>{
 		balances: if monied {
@@ -111,7 +109,6 @@ pub fn new_test_ext(
 		transfer_fee: 0,
 		creation_fee: 0,
 		reclaim_rebate: 0,
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
@@ -125,11 +122,9 @@ pub fn new_test_ext(
 		current_session_reward: reward,
 		current_offline_slash: 20,
 		offline_slash_grace: 0,
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5,
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	runtime_io::TestExternalities::new(t)
 }
