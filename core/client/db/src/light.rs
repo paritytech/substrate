@@ -60,14 +60,6 @@ pub struct LightStorage<Block: BlockT> {
 	cache: DbCacheSync<Block>,
 }
 
-#[derive(Clone, PartialEq, Debug)]
-struct BestAuthorities<N> {
-	/// first block, when this set became actual
-	valid_from: N,
-	/// None means that we do not know the set starting from `valid_from` block
-	authorities: Option<Vec<AuthorityId>>,
-}
-
 impl<Block> LightStorage<Block>
 	where
 		Block: BlockT,
