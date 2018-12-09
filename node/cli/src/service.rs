@@ -87,17 +87,18 @@ construct_service_factory! {
 
 				if service.config.custom.grandpa_authority {
 					info!("Running Grandpa session as Authority {}", key.public());
-					let grandpa_fut = grandpa::run_grandpa(
+					let (voter, oracle) = grandpa::run_grandpa(
 						grandpa::Config {
 							gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
 							local_key: Some(key.clone()),
 							name: Some(service.config.name.clone())
 						},
 						link_half,
-						grandpa::NetworkBridge::new(service.network())
+						grandpa::NetworkBridge::new(service.network()),
 					)?;
 
-					executor.spawn(grandpa_fut);
+					executor.spawn(oracle);
+					executor.spawn(voter);
 				}
 				if !service.config.custom.grandpa_authority_only {
 					info!("Using authority key {}", key.public());

@@ -109,7 +109,7 @@ publish:docker:release:
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
-    - VERSION="$(./target/release/substrate --version | sed -n -r 's/^substrate ([0-9.]+-.*-[0-9a-f]{8})-.*$/\1/p')"
+    - VERSION="$(./target/release/substrate --version | sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p')"
     - export VERSION
     - echo "Substrate version = ${VERSION}"
   script:

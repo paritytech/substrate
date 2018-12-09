@@ -32,7 +32,7 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 }
 
 // check a message.
-fn check_message_sig<Block: BlockT>(
+pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
 	id: &AuthorityId,
 	signature: &ed25519::Signature,

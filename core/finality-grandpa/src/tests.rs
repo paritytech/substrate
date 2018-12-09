@@ -364,7 +364,7 @@ fn finalize_3_voters_no_observers() {
 		);
 		fn assert_send<T: Send>(_: &T) { }
 
-		let voter = run_grandpa(
+		let (voter, oracle) = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key: Some(Arc::new(key.clone().into())),
@@ -376,6 +376,7 @@ fn finalize_3_voters_no_observers() {
 
 		assert_send(&voter);
 
+		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
@@ -424,7 +425,7 @@ fn finalize_3_voters_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
-		let voter = run_grandpa(
+		let (voter, oracle) = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key,
@@ -434,6 +435,7 @@ fn finalize_3_voters_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
 
+		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
@@ -476,59 +478,96 @@ fn transition_3_voters_twice_1_observer() {
 
 	let api = TestApi::new(genesis_voters);
 	let transitions = api.scheduled_changes.clone();
-	let add_transition = move |parent_hash, change| {
-		transitions.lock().insert(parent_hash, change);
-	};
+	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
-	let mut net = GrandpaTestNet::new(api, 9);
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
-	// first 20 blocks: transition at 15, applied at 20.
-	{
-		net.peer(0).push_blocks(14, false);
-		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-			let block = builder.bake().unwrap();
-			add_transition(*block.header.parent_hash(), ScheduledChange {
-				next_authorities: make_ids(peers_b),
-				delay: 4,
-			});
+	net.lock().peer(0).push_blocks(1, false);
+	net.lock().sync();
 
-			block
-		});
-		net.peer(0).push_blocks(5, false);
-	}
-
-	// at block 21 we do another transition, but this time instant.
-	// add more until we have 30.
-	{
-		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-			let block = builder.bake().unwrap();
-			add_transition(*block.header.parent_hash(), ScheduledChange {
-				next_authorities: make_ids(peers_c),
-				delay: 0,
-			});
-
-			block
-		});
-
-		net.peer(0).push_blocks(9, false);
-	}
-	net.sync();
-
-	for (i, peer) in net.peers().iter().enumerate() {
-		assert_eq!(peer.client().info().unwrap().chain.best_number, 30,
-			"Peer #{} failed to sync", i);
+	for (i, peer) in net.lock().peers().iter().enumerate() {
+		assert_eq!(peer.client().info().unwrap().chain.best_number, 1,
+				   "Peer #{} failed to sync", i);
 
 		let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
 		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
-		assert_eq!(set.pending_changes().len(), 2);
+		assert_eq!(set.pending_changes().len(), 0);
 	}
 
-	let net = Arc::new(Mutex::new(net));
-	let mut finality_notifications = Vec::new();
+	{
+		let net = net.clone();
+		let client = net.lock().peers[0].client().clone();
+		let transitions = transitions.clone();
+		let add_transition = move |parent_hash, change| {
+			transitions.lock().insert(parent_hash, change);
+		};
+		let peers_c = peers_c.clone();
+		let executor = runtime.executor().clone();
 
-	let mut runtime = current_thread::Runtime::new().unwrap();
+		// wait for blocks to be finalized before generating new ones
+		let block_production = client.finality_notification_stream()
+			.take_while(|n| Ok(n.header.number() < &30))
+			.for_each(move |n| {
+				match n.header.number() {
+					1 => {
+						// first 14 blocks.
+						net.lock().peer(0).push_blocks(13, false);
+					},
+					14 => {
+						// generate transition at block 15, applied at 20.
+						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+							let block = builder.bake().unwrap();
+							add_transition(*block.header.parent_hash(), ScheduledChange {
+								next_authorities: make_ids(peers_b),
+								delay: 4,
+							});
+
+							block
+						});
+						net.lock().peer(0).push_blocks(5, false);
+					},
+					20 => {
+						let net = net.clone();
+						let add_transition = add_transition.clone();
+
+						// at block 21 we do another transition, but this time instant.
+						// add more until we have 30.
+						let generate_blocks = move || {
+							net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+								let block = builder.bake().unwrap();
+								add_transition(*block.header.parent_hash(), ScheduledChange {
+									next_authorities: make_ids(&peers_c),
+									delay: 0,
+								});
+
+								block
+							});
+							net.lock().peer(0).push_blocks(9, false);
+						};
+
+						// delay block generation for a bit for the liveness tracker to be
+						// able to update due to the authority set change
+						let delay_generate = Delay::new(Instant::now() + Duration::from_millis(5000))
+							.and_then(move |_| {
+								generate_blocks();
+								Ok(())
+							})
+							.map_err(|_| ());
+
+						executor.spawn(delay_generate);
+					},
+					_ => {},
+				}
+
+				Ok(())
+			});
+
+		runtime.spawn(block_production);
+	}
+
+	let mut finality_notifications = Vec::new();
 	let all_peers = peers_a.iter()
 		.chain(peers_b)
 		.chain(peers_c)
@@ -560,7 +599,7 @@ fn transition_3_voters_twice_1_observer() {
 					assert!(set.pending_changes().is_empty());
 				})
 		);
-		let voter = run_grandpa(
+		let (voter, oracle) = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key,
@@ -570,6 +609,7 @@ fn transition_3_voters_twice_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
 
+		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
@@ -579,7 +619,11 @@ fn transition_3_voters_twice_1_observer() {
 		.map_err(|_| ());
 
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| { net.lock().route_until_complete(); Ok(()) })
+		.for_each(move |_| {
+			net.lock().send_import_notifications();
+			net.lock().sync();
+			Ok(())
+		})
 		.map(|_| ())
 		.map_err(|_| ());
 
