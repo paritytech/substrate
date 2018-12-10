@@ -131,7 +131,6 @@ impl ExtBuilder {
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
 				reclaim_rebate: 0,
-				_genesis_phantom_data: Default::default(),
 			}.build_storage()
 			.unwrap().0,
 		);
@@ -144,7 +143,6 @@ impl ExtBuilder {
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
 				current_schedule: Default::default(),
-				_genesis_phantom_data: Default::default(),
 			}.build_storage()
 			.unwrap().0,
 		);

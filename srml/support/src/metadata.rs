@@ -188,7 +188,6 @@ mod tests {
 				StorageMethod : Option<u32>;
 			}
 			add_extra_genesis {
-			    config(_marker) : ::std::marker::PhantomData<T>;
 			    build(|_, _, _| {});
 			}
 		}
