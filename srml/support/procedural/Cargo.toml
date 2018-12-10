@@ -1,0 +1,15 @@
+[package]
+name = "srml-support-procedural"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+srml-support-procedural-tools = { path = "./tools" }
+sr-api-macros = { path = "../../../core/sr-api-macros" }
+
+proc-macro2 = "0.4"
+quote = { version = "0.6" }
+syn = { version = "0.15", features = ["full"] }

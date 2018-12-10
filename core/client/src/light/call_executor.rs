@@ -166,7 +166,7 @@ pub fn prove_execution<Block, S, E>(
 	let (_, init_proof) = executor.prove_at_trie_state(
 		&trie_state,
 		&mut changes,
-		"initialise_block",
+		"Core_initialise_block",
 		&header.encode(),
 	)?;
 
@@ -213,7 +213,7 @@ pub fn check_execution_proof<Header, E, H>(
 		&trie_backend,
 		&mut changes,
 		executor,
-		"initialise_block",
+		"Core_initialise_block",
 		&next_block.encode(),
 	)?;
 
@@ -279,23 +279,24 @@ mod tests {
 		// prepare remote client
 		let remote_client = test_client::new();
 		for _ in 1..3 {
-			remote_client.justify_and_import(
+			remote_client.import_justified(
 				BlockOrigin::Own,
-				remote_client.new_block().unwrap().bake().unwrap()
+				remote_client.new_block().unwrap().bake().unwrap(),
+				Default::default(),
 			).unwrap();
 		}
 
 		// check method that doesn't requires environment
-		let (remote, local) = execute(&remote_client, 0, "authorities");
+		let (remote, local) = execute(&remote_client, 0, "Core_authorities");
 		assert_eq!(remote, local);
 
 		// check method that requires environment
-		let (_, block) = execute(&remote_client, 0, "finalise_block");
+		let (_, block) = execute(&remote_client, 0, "BlockBuilder_finalise_block");
 		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
 		assert_eq!(local_block.number, 1);
 
 		// check method that requires environment
-		let (_, block) = execute(&remote_client, 2, "finalise_block");
+		let (_, block) = execute(&remote_client, 2, "BlockBuilder_finalise_block");
 		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
 		assert_eq!(local_block.number, 3);
 	}

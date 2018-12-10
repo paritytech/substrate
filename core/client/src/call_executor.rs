@@ -190,9 +190,9 @@ where
 	) -> Result<Vec<u8>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
 		//TODO: Find a better way to prevent double block initialization
-		if method != "initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
+		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
-			self.call_at_state(&state, changes, "initialise_block", &header.encode(), manager.clone())?;
+			self.call_at_state(&state, changes, "Core_initialise_block", &header.encode(), manager.clone())?;
 			*initialised_block = Some(*at);
 		}
 

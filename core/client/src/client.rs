@@ -32,7 +32,7 @@ use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
 };
 use runtime_primitives::BuildStorage;
-use runtime_api::{Core as CoreAPI, CallApiAt, TaggedTransactionQueue, ConstructRuntimeApi};
+use runtime_api::{Core as CoreAPI, CallRuntimeAt, TaggedTransactionQueue, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -287,7 +287,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "authorities",&[])
+			None => self.executor.call(id, "Core_authorities",&[])
 				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 					.ok_or(error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
@@ -573,7 +573,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		import_headers: PrePostHeader<Block::Header>,
-		justification: Justification,
+		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
@@ -604,7 +604,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// ensure parent block is finalized to maintain invariant that
 		// finality is called sequentially.
 		if finalized {
-			self.apply_finality(parent_hash, last_best, make_notifications)?;
+			self.apply_finality(parent_hash, None, last_best, make_notifications)?;
 		}
 
 		let tags = self.transaction_tags(parent_hash, &body)?;
@@ -615,7 +615,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let mut r = self.executor.call_at_state(
 					transaction_state,
 					&mut overlay,
-					"execute_block",
+					"Core_execute_block",
 					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
@@ -658,7 +658,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		transaction.set_block_data(
 			import_headers.post().clone(),
 			body,
-			Some(justification),
+			justification,
 			leaf_state,
 		)?;
 
@@ -707,8 +707,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(ImportResult::Queued)
 	}
 
-	/// Finalizes all blocks up to given.
-	fn apply_finality(&self, block: Block::Hash, best_block: Block::Hash, notify: bool) -> error::Result<()> {
+	/// Finalizes all blocks up to given. If a justification is provided it is
+	/// stored with the given finalized block (any other finalized blocks are
+	/// left unjustified).
+	fn apply_finality(
+		&self,
+		block: Block::Hash,
+		justification: Option<Justification>,
+		best_block: Block::Hash,
+		notify: bool,
+	) -> error::Result<()> {
 		// find tree route from last finalized to given block.
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 
@@ -739,9 +747,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// `block`.
 		}
 
-		for finalize_new in route_from_finalized.enacted() {
-			self.backend.finalize_block(BlockId::Hash(finalize_new.hash))?;
+		let enacted = route_from_finalized.enacted();
+		assert!(enacted.len() > 0);
+		for finalize_new in &enacted[..enacted.len() - 1] {
+			self.backend.finalize_block(BlockId::Hash(finalize_new.hash), None)?;
 		}
+
+		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
+		self.backend.finalize_block(BlockId::Hash(block), justification)?;
 
 		if notify {
 			// sometimes when syncing, tons of blocks can be finalized at once.
@@ -771,10 +784,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Pass a flag to indicate whether finality notifications should be propagated.
 	/// This is usually tied to some synchronization state, where we don't send notifications
 	/// while performing major synchronization work.
-	pub fn finalize_block(&self, id: BlockId<Block>, notify: bool) -> error::Result<()> {
+	pub fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
 		let last_best = self.backend.blockchain().info()?.best_hash;
 		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.apply_finality(to_finalize_hash, last_best, notify)
+		self.apply_finality(to_finalize_hash, justification, last_best, notify)
 	}
 
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
@@ -827,7 +840,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		-> error::Result<Option<SignedBlock<Block>>>
 	{
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), Some(justification)) =>
+			(Some(header), Some(extrinsics), justification) =>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
 			_ => None,
 		})
@@ -877,12 +890,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
 
 			if canon_hash == target_hash {
+				// if no block at the given max depth exists fallback to the best block
 				if let Some(max_number) = maybe_max_number {
-					// something has to guarantee that max_number is in chain
-					return Ok(Some(self.backend.blockchain().hash(max_number)?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", max_number)))?));
-				} else {
-					return Ok(Some(info.best_hash));
+					if let Some(header) = self.backend.blockchain().hash(max_number)? {
+						return Ok(Some(header));
+					}
 				}
+
+				return Ok(Some(info.best_hash));
 			}
 			(self.backend.blockchain().leaves()?, info.best_hash)
 		};
@@ -999,7 +1014,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
@@ -1029,6 +1044,10 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		self.executor.contextual_call(at, function, &args, changes, initialised_block,
 			|| self.prepare_environment_block(at), execution_manager)
 	}
+
+	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+		self.runtime_version_at(at)
+	}
 }
 
 
@@ -1040,7 +1059,8 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 {
 	type Error = Error;
 
-	/// Import a checked and validated block
+	/// Import a checked and validated block. If a justification is provided in
+	/// `ImportBlock` then `finalized` *must* be true.
 	fn import_block(
 		&self,
 		import_block: ImportBlock<Block>,
@@ -1057,6 +1077,9 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			finalized,
 			auxiliary,
 		} = import_block;
+
+		assert!(justification.is_some() && finalized || justification.is_none());
+
 		let parent_hash = header.parent_hash().clone();
 
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
@@ -1195,7 +1218,7 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;
-	use test_client::client::backend::Backend as TestBackend;
+	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
 
@@ -1230,7 +1253,7 @@ pub(crate) mod tests {
 					nonce: *nonces.entry(from).and_modify(|n| { *n = *n + 1 }).or_default(),
 				}).unwrap();
 			}
-			remote_client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+			remote_client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 			let header = remote_client.header(&BlockId::Number(i as u64 + 1)).unwrap().unwrap();
 			let trie_root = header.digest().log(DigestItem::as_changes_trie_root)
@@ -1293,6 +1316,17 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn runtime_api_has_test_api() {
+		let client = test_client::new();
+
+		assert!(
+			client.runtime_api().has_api::<TestAPI<Block>>(
+				&BlockId::Number(client.info().unwrap().chain.best_number),
+			).unwrap()
+		);
+	}
+
+	#[test]
 	fn authorities_call_works() {
 		let client = test_client::new();
 
@@ -1310,7 +1344,7 @@ pub(crate) mod tests {
 
 		let builder = client.new_block().unwrap();
 
-		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 	}
@@ -1328,7 +1362,7 @@ pub(crate) mod tests {
 			nonce: 0,
 		}).unwrap();
 
-		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
@@ -1380,7 +1414,7 @@ pub(crate) mod tests {
 			nonce: 0,
 		}).is_err());
 
-		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
@@ -1420,11 +1454,11 @@ pub(crate) mod tests {
 
 		// G -> A1
 		let a1 = client.new_block().unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
 		let a2 = client.new_block().unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
@@ -1449,23 +1483,23 @@ pub(crate) mod tests {
 
 		// G -> A1
 		let a1 = client.new_block().unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
 		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		// A2 -> A3
 		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a3.clone()).unwrap();
+		client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 		// A3 -> A4
 		let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a4.clone()).unwrap();
+		client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 		// A4 -> A5
 		let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a5.clone()).unwrap();
+		client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 		// A1 -> B2
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
@@ -1477,15 +1511,15 @@ pub(crate) mod tests {
 			nonce: 0,
 		}).unwrap();
 		let b2 = builder.bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, b2.clone()).unwrap();
+		client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 		// B2 -> B3
 		let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, b3.clone()).unwrap();
+		client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 		// B3 -> B4
 		let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, b4.clone()).unwrap();
+		client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 		// // B2 -> C3
 		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
@@ -1497,7 +1531,7 @@ pub(crate) mod tests {
 			nonce: 1,
 		}).unwrap();
 		let c3 = builder.bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+		client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 		// A1 -> D2
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
@@ -1509,7 +1543,7 @@ pub(crate) mod tests {
 			nonce: 0,
 		}).unwrap();
 		let d2 = builder.bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, d2.clone()).unwrap();
+		client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
 
@@ -1648,6 +1682,26 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn best_containing_with_max_depth_higher_than_best() {
+		// block tree:
+		// G -> A1 -> A2
+
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block().unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+
+		assert_eq!(a2.hash(), client.best_containing(genesis_hash, Some(10)).unwrap().unwrap());
+	}
+
+	#[test]
 	fn key_changes_works() {
 		let (client, _, test_cases) = prepare_client_with_key_changes();
 
@@ -1661,5 +1715,45 @@ pub(crate) mod tests {
 					index, actual_result, expected_result)),
 			}
 		}
+	}
+
+	#[test]
+	fn import_with_justification() {
+		use test_client::blockchain::Backend;
+
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		// A2 -> A3
+		let justification = vec![1, 2, 3];
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		client.import_justified(BlockOrigin::Own, a3.clone(), justification.clone()).unwrap();
+
+		assert_eq!(
+			client.backend().blockchain().last_finalized().unwrap(),
+			a3.hash(),
+		);
+
+		assert_eq!(
+			client.backend().blockchain().justification(BlockId::Hash(a3.hash())).unwrap(),
+			Some(justification),
+		);
+
+		assert_eq!(
+			client.backend().blockchain().justification(BlockId::Hash(a1.hash())).unwrap(),
+			None,
+		);
+
+		assert_eq!(
+			client.backend().blockchain().justification(BlockId::Hash(a2.hash())).unwrap(),
+			None,
+		);
 	}
 }
