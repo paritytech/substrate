@@ -315,13 +315,13 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("df90128fe9ee27bd61d90308cc25ad262e518d4ba09e5077558be2389780d8e5").into()
+				hex!("b3299972eca350f2dce43343a1a72cf73e7b4f825ab8ddb276337e6e53ce0c0c").into()
 			} else {
 				hex!("acda83cb907e5bacd53e7c836e635be52a1da39ba22a9cfc8ccdf07a590d8153").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
-					hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into(),
+					hex!("cda28e5c630db8eb0e4309b58ce504597c6cbb59bda43fd65e96bb2be73a4586").into(),
 				)]
 			} else {
 				vec![]
