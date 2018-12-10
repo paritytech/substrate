@@ -13,6 +13,7 @@ parity-codec-derive = { version = "2.1", default-features = false }
 substrate-keyring = { path = "../keyring", optional = true }
 substrate-client = { path = "../client", optional = true }
 substrate-primitives = { path = "../primitives", default-features = false }
+substrate-consensus-aura-primitives = { path = "../consensus/aura/primitives", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 sr-io = { path = "../sr-io", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
@@ -35,4 +36,5 @@ std = [
 	"substrate-primitives/std",
 	"sr-primitives/std",
 	"sr-version/std",
+	"substrate-consensus-aura-primitives/std",
 ]

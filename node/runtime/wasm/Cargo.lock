@@ -507,6 +507,7 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "sr-version 0.1.0",
+ "srml-aura 0.1.0",
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
  "srml-contract 0.1.0",
@@ -522,6 +523,7 @@ dependencies = [
  "srml-treasury 0.1.0",
  "srml-upgrade-key 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-consensus-aura-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1064,6 +1066,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-aura"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-staking 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "srml-balances"
 version = "0.1.0"
 dependencies = [
@@ -1389,6 +1410,19 @@ dependencies = [
  "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.3.0",
  "substrate-trie 0.4.0",
+]
+
+[[package]]
+name = "substrate-consensus-aura-primitives"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-version 0.1.0",
+ "srml-support 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-primitives 0.1.0",
 ]
 
 [[package]]

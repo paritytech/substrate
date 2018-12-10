@@ -311,13 +311,13 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("7c00d30974b6d709766e5b231295b6b5ff7ffd42ef1385853c0a29859723d147").into()
+				hex!("dd0ab9b04b84b2a0704a6c38968d97a41e693345a9019dae880a80cf8176676c").into()
 			} else {
-				hex!("e96a29fe7f7aba0e4a06837d4a5a4201f60bf613b9947ce5772559ef525f4268").into()
+				hex!("f5d85f3baebdd85aff8acfdeab0c6e00322d8b64b10a277a0231f4ca10dca7ee").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
-					hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into(),
+					hex!("cda28e5c630db8eb0e4309b58ce504597c6cbb59bda43fd65e96bb2be73a4586").into(),
 				)]
 			} else {
 				vec![]
@@ -339,7 +339,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("80e77e443da5f81fab7265acae6cbdfff79e02eaa90306d9dd14dabddad5f99d").into(),
+			hex!("807f9952d1962fcc62e8ee58fb4a3b5dc0247f314e9920a25354c1a1915e6941").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -368,7 +368,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("337c94adf2041fa953d5afaf8919032e3b88ee440c88c48a231856306991dca1").into(),
+			hex!("5cc895b7c1d5fa824a2b6aefdcf34088156b3762509050bc384853106d48c7e4").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -658,7 +658,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("10cb18e5a4e000690aaa3e2f0165c1cc563d38eb6736aa79c5a0ea4868042671").into(),
+			hex!("06d7654fe2799df26ef3ae932b04d17c163b5a89e6e5bc4ad514acced17bf6c4").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {

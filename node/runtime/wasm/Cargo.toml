@@ -15,6 +15,7 @@ substrate-primitives = { path = "../../../core/primitives", default-features = f
 substrate-client = { path = "../../../core/client", default-features = false }
 sr-std = { path = "../../../core/sr-std", default-features = false }
 srml-support = { path = "../../../srml/support", default-features = false }
+srml-aura = { path = "../../../srml/aura", default-features = false }
 srml-balances = { path = "../../../srml/balances", default-features = false }
 srml-consensus = { path = "../../../srml/consensus", default-features = false }
 srml-contract = { path = "../../../srml/contract", default-features = false }
@@ -31,6 +32,7 @@ srml-upgrade-key = { path = "../../../srml/upgrade-key", default-features = fals
 srml-grandpa = { path = "../../../srml/grandpa", default-features = false  }
 sr-version = { path = "../../../core/sr-version", default-features = false }
 node-primitives = { path = "../../primitives", default-features = false }
+substrate-consensus-aura-primitives = { path = "../../../core/consensus/aura/primitives", default-features = false }
 
 [features]
 default = []

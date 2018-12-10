@@ -50,7 +50,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	const CENTS: u128 = 1_000 * MILLICENTS;    // assume this is worth about a cent.
 	const DOLLARS: u128 = 100 * CENTS;
 
-	const SECS_PER_BLOCK: u64 = 4;
+	const SECS_PER_BLOCK: u64 = 6;
 	const MINUTES: u64 = 60 / SECS_PER_BLOCK;
 	const HOURS: u64 = MINUTES * 60;
 	const DAYS: u64 = HOURS * 24;
@@ -111,7 +111,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
-			period: SECS_PER_BLOCK,
+			period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
 		}),
 		treasury: Some(TreasuryConfig {
 			proposal_bond: Permill::from_percent(5),
@@ -234,7 +234,7 @@ pub fn testnet_genesis(
 			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
-			period: 5,                    // 5 second block time.
+			period: 2,                    // 2*2=4 second block time.
 		}),
 		treasury: Some(TreasuryConfig {
 			proposal_bond: Permill::from_percent(5),

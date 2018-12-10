@@ -19,7 +19,6 @@
 #![cfg(test)]
 
 use super::*;
-use consensus::OnOfflineValidator;
 use runtime_io::with_externalities;
 use mock::{Balances, Session, Staking, System, Timestamp, Test, new_test_ext, Origin};
 
@@ -44,7 +43,7 @@ fn note_offline_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 70);
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Staking::slash_count(&10), 1);
 		assert_eq!(Balances::free_balance(&10), 50);
 		assert!(Staking::forcing_new_era().is_none());
@@ -59,11 +58,11 @@ fn note_offline_exponent_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 150);
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Staking::slash_count(&10), 1);
 		assert_eq!(Balances::free_balance(&10), 130);
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Staking::slash_count(&10), 2);
 		assert_eq!(Balances::free_balance(&10), 90);
 		assert!(Staking::forcing_new_era().is_none());
@@ -82,15 +81,15 @@ fn note_offline_grace_should_work() {
 		assert_eq!(Balances::free_balance(&10), 70);
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Staking::slash_count(&10), 1);
 		assert_eq!(Balances::free_balance(&10), 70);
 		assert_eq!(Staking::slash_count(&20), 0);
 		assert_eq!(Balances::free_balance(&20), 70);
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
-		Staking::on_offline_validator(1);
+		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(20, 1);
 		assert_eq!(Staking::slash_count(&10), 2);
 		assert_eq!(Balances::free_balance(&10), 50);
 		assert_eq!(Staking::slash_count(&20), 1);
@@ -105,20 +104,20 @@ fn note_offline_force_unstake_session_change_should_work() {
 		Balances::set_free_balance(&10, 70);
 		Balances::set_free_balance(&20, 70);
 		assert_ok!(Staking::stake(Origin::signed(1)));
-		
+
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 70);
 		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
 		assert_eq!(Session::validators(), vec![10, 20]);
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Balances::free_balance(&10), 50);
 		assert_eq!(Staking::slash_count(&10), 1);
 		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
+		Staking::on_offline_validator(10, 1);
 		assert_eq!(Staking::intentions(), vec![1, 20]);
 		assert_eq!(Balances::free_balance(&10), 10);
 		assert!(Staking::forcing_new_era().is_some());
@@ -131,33 +130,33 @@ fn note_offline_auto_unstake_session_change_should_work() {
 		Balances::set_free_balance(&10, 7000);
 		Balances::set_free_balance(&20, 7000);
 		assert_ok!(Staking::register_preferences(Origin::signed(10), 0.into(), ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
-		
+
 		assert_eq!(Staking::intentions(), vec![10, 20]);
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
-		Staking::on_offline_validator(1);
+		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(20, 1);
 		assert_eq!(Balances::free_balance(&10), 6980);
 		assert_eq!(Balances::free_balance(&20), 6980);
 		assert_eq!(Staking::intentions(), vec![10, 20]);
 		assert!(Staking::forcing_new_era().is_none());
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
-		Staking::on_offline_validator(1);
+		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(20, 1);
 		assert_eq!(Balances::free_balance(&10), 6940);
 		assert_eq!(Balances::free_balance(&20), 6940);
 		assert_eq!(Staking::intentions(), vec![20]);
 		assert!(Staking::forcing_new_era().is_some());
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(1);
+		Staking::on_offline_validator(20, 1);
 		assert_eq!(Balances::free_balance(&10), 6940);
 		assert_eq!(Balances::free_balance(&20), 6860);
 		assert_eq!(Staking::intentions(), vec![20]);
 
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(1);
+		Staking::on_offline_validator(20, 1);
 		assert_eq!(Balances::free_balance(&10), 6940);
 		assert_eq!(Balances::free_balance(&20), 6700);
 		assert_eq!(Staking::intentions(), vec![0u64; 0]);
@@ -220,8 +219,8 @@ fn slashing_should_work() {
 
 		System::set_block_number(7);
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
-		Staking::on_offline_validator(1);
+		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(20, 1);
 		assert_eq!(Balances::total_balance(&10), 1);
 	});
 }
@@ -235,7 +234,7 @@ fn staking_should_work() {
 		assert_eq!(Staking::era_length(), 2);
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Session::validators(), vec![10, 20]);
-		
+
 		assert_ok!(Staking::set_bonding_duration(2.into()));
 		assert_eq!(Staking::bonding_duration(), 2);
 
@@ -395,8 +394,8 @@ fn nominating_slashes_should_work() {
 
 		System::set_block_number(5);
 		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(0);
-		Staking::on_offline_validator(1);
+		Staking::on_offline_validator(1, 1);
+		Staking::on_offline_validator(3, 1);
 		assert_eq!(Balances::total_balance(&1), 0);			//slashed
 		assert_eq!(Balances::total_balance(&2), 20);		//not slashed
 		assert_eq!(Balances::total_balance(&3), 10);		//slashed

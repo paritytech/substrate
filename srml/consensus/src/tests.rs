@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{generic, testing, traits::OnFinalise};
+use primitives::{generic, testing, traits::{OnFinalise, ProvideInherent}};
 use runtime_io::with_externalities;
 use substrate_primitives::H256;
 use mock::{Consensus, System, new_test_ext};
@@ -61,5 +61,14 @@ fn authorities_change_is_not_logged_when_changed_back_to_original() {
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![],
 		});
+	});
+}
+
+#[test]
+fn offline_report_can_be_excluded() {
+	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
+		System::initialise(&1, &Default::default(), &Default::default());
+		assert!(Consensus::create_inherent_extrinsics(Vec::new()).is_empty());
+		assert_eq!(Consensus::create_inherent_extrinsics(vec![0]).len(), 1);
 	});
 }

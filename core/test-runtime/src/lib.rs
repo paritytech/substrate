@@ -24,6 +24,7 @@ extern crate serde;
 extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_aura_primitives as consensus_aura;
 
 #[macro_use]
 extern crate substrate_client as client;
@@ -64,6 +65,7 @@ use primitives::AuthorityId;
 use primitives::OpaqueMetadata;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
+use consensus_aura::api as aura_api;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -234,7 +236,7 @@ impl_runtime_apis! {
 		}
 
 		fn check_inherents(_block: Block, _data: ()) -> Result<(), CheckInherentError> {
-			unimplemented!()
+			Ok(())
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
@@ -246,5 +248,9 @@ impl_runtime_apis! {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
 		}
+	}
+
+	impl aura_api::AuraApi<Block> for Runtime {
+		fn slot_duration() -> u64 { 1 }
 	}
 }
