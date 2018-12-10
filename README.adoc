@@ -135,7 +135,7 @@ First let's get a template chainspec that you can edit. We'll use the "staging" 
 
 [source, shell]
 ----
-substrate build-spec --chain=staging > ~/chainspec.json
+substrate --chain=staging build-spec > ~/chainspec.json
 ----
 
 Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the Webassembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
