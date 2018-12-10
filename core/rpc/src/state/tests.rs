@@ -178,3 +178,39 @@ fn should_query_storage() {
 	});
 	assert_eq!(result.unwrap(), expected);
 }
+
+
+#[test]
+fn should_return_runtime_version() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+
+	let client = Arc::new(test_client::new());
+	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+
+	assert_matches!(
+		api.runtime_version(None.into()),
+		Ok(ref ver) if ver == &runtime::VERSION
+	);
+}
+
+#[test]
+fn should_notify_on_runtime_version_initially() {
+	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
+
+	{
+		let client = Arc::new(test_client::new());
+		let api = State::new(client.clone(), Subscriptions::new(core.executor()));
+
+		api.subscribe_runtime_version(Default::default(), subscriber);
+
+		// assert id assigned
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+	}
+
+	// assert initial version sent.
+	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	assert!(notification.is_some());
+		// no more notifications on this channel
+	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}

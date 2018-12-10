@@ -1055,7 +1055,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "jsonrpc-core"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#4beea5c0b4075fed219373c59d95b0e5137a6792"
+source = "git+https://github.com/paritytech/jsonrpc.git#0d78b8f145c18f08c1103f6b0b51991a89fb0a6f"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1067,7 +1067,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-http-server"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#4beea5c0b4075fed219373c59d95b0e5137a6792"
+source = "git+https://github.com/paritytech/jsonrpc.git#0d78b8f145c18f08c1103f6b0b51991a89fb0a6f"
 dependencies = [
  "hyper 0.12.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 9.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -1080,7 +1080,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-macros"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#4beea5c0b4075fed219373c59d95b0e5137a6792"
+source = "git+https://github.com/paritytech/jsonrpc.git#0d78b8f145c18f08c1103f6b0b51991a89fb0a6f"
 dependencies = [
  "jsonrpc-core 9.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
  "jsonrpc-pubsub 9.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -1090,7 +1090,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-pubsub"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#4beea5c0b4075fed219373c59d95b0e5137a6792"
+source = "git+https://github.com/paritytech/jsonrpc.git#0d78b8f145c18f08c1103f6b0b51991a89fb0a6f"
 dependencies = [
  "jsonrpc-core 9.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1100,7 +1100,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-server-utils"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#4beea5c0b4075fed219373c59d95b0e5137a6792"
+source = "git+https://github.com/paritytech/jsonrpc.git#0d78b8f145c18f08c1103f6b0b51991a89fb0a6f"
 dependencies = [
  "bytes 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "globset 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1116,7 +1116,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-ws-server"
 version = "9.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#4beea5c0b4075fed219373c59d95b0e5137a6792"
+source = "git+https://github.com/paritytech/jsonrpc.git#0d78b8f145c18f08c1103f6b0b51991a89fb0a6f"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 9.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
