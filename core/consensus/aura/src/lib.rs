@@ -461,6 +461,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
 		use runtime_primitives::CheckInherentError;
+		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
 		let (timestamp_now, slot_now) = timestamp_and_slot_now(self.slot_duration.0)
 			.ok_or("System time is before UnixTime?".to_owned())?;
@@ -499,6 +500,11 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 						Ok(()) => {}
 						Err(CheckInherentError::ValidAtTimestamp(timestamp)) => {
 							// halt import until timestamp is valid.
+							// reject when too far ahead.
+							if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
+								return Err("Rejecting block too far in future".into());
+							}
+
 							let diff = timestamp.saturating_sub(timestamp_now);
 							info!(target: "aura", "halting for block {} seconds in the future", diff);
 							::std::thread::sleep(Duration::from_secs(diff));

@@ -504,7 +504,13 @@ where
 	H: Hasher<Out=Block::Hash>,
 	H::Out: HeapSizeOf + Ord,
 {
-	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, insert: I, delete: D) -> error::Result<()> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> error::Result<()> {
 		let mut storage = self.blockchain.storage.write();
 		for (k, v) in insert {
 			storage.aux.insert(k.to_vec(), v.to_vec());

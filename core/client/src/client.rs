@@ -1177,7 +1177,13 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		Block: BlockT<Hash=H256>,
 {
 	/// Insert auxiliary data into key-value store.
-	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, insert: I, delete: D) -> error::Result<()> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> error::Result<()> {
 		::backend::AuxStore::insert_aux(&*self.backend, insert, delete)
 	}
 	/// Query auxiliary data from key-value store.

@@ -71,7 +71,13 @@ impl<S, F> Backend<S, F> {
 }
 
 impl<S, F> ::backend::AuxStore for Backend<S, F> {
-	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, _insert: I, _delete: D) -> ClientResult<()> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, _insert: I, _delete: D) -> ClientResult<()> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 

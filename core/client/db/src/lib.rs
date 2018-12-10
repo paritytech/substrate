@@ -643,9 +643,13 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 }
 
 impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
-	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>
-		(&self, insert: I, delete: D) -> Result<(), client::error::Error>
-	{
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> client::error::Result<()> {
 		let mut transaction = DBTransaction::new();
 		for (k, v) in insert {
 			transaction.put(columns::AUX, k, v);
