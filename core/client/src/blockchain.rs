@@ -36,11 +36,6 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
 
-	/// Get block header. Returns `UnknownBlock` error if block is not found.
-	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
-		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
-	}
-
 	/// Convert an arbitrary block ID into a block hash.
 	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<Block::Hash>> {
 		match *id {
@@ -55,6 +50,23 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 			BlockId::Hash(_) => Ok(self.header(*id)?.map(|h| h.number().clone())),
 			BlockId::Number(n) => Ok(Some(n)),
 		}
+	}
+
+	/// Get block header. Returns `UnknownBlock` error if block is not found.
+	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
+		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
+	}
+
+	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is not found.
+	fn expect_block_number_from_id(&self, id: &BlockId<Block>) -> Result<NumberFor<Block>> {
+		self.block_number_from_id(id)
+			.and_then(|n| n.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into()))
+	}
+
+	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is not found.
+	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
+		self.block_hash_from_id(id)
+			.and_then(|n| n.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into()))
 	}
 }
 

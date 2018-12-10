@@ -82,6 +82,11 @@ impl OverlayedChangeSet {
 }
 
 impl OverlayedChanges {
+	/// Whether the overlayed changes are empty.
+	pub fn is_empty(&self) -> bool {
+		self.prospective.is_empty() && self.committed.is_empty()
+	}
+
 	/// Sets the changes trie configuration.
 	///
 	/// Returns false if configuration has been set already and we now trying

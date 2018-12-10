@@ -43,14 +43,13 @@ use state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges
 };
-use codec::Encode;
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use light::fetcher::ChangesProof;
+use light::{call_executor::prove_execution, fetcher::ChangesProof};
 use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
 
 /// Type that implements `futures::Stream` of block import events.
@@ -318,37 +317,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	///
 	/// No changes are made.
 	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
-		self.state_at(id).and_then(|state| self.executor.prove_at_state(state, &mut Default::default(), method, call_data))
+		let state = self.state_at(id)?;
+		let header = self.prepare_environment_block(id)?;
+		prove_execution(state, header, &self.executor, method, call_data)
 	}
 
 	/// Reads given header and generates CHT-based header proof.
 	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
 		self.header_proof_with_cht_size(id, cht::SIZE)
-	}
-
-	pub(crate) fn call_at_state(
-		&self,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: Vec<u8>,
-		changes: &mut OverlayedChanges
-	) -> error::Result<Vec<u8>> {
-		let state = self.state_at(at)?;
-
-		let execution_manager = || match self.api_execution_strategy {
-			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-				warn!("   Function {:?}", function);
-				warn!("   Native result {:?}", native_result);
-				warn!("   Wasm result {:?}", wasm_result);
-				wasm_result
-			}),
-		};
-
-		self.executor.call_at_state(&state, changes, function, &args, execution_manager())
-			.map(|res| res.0)
 	}
 
 	/// Get block hash by number.
@@ -359,7 +335,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Reads given header and generates CHT-based header proof for CHT of given size.
 	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
 		let proof_error = || error::ErrorKind::Backend(format!("Failed to generate header proof for {:?}", id));
-		let header = self.header(id)?.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", id)))?;
+		let header = self.backend.blockchain().expect_header(*id)?;
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
@@ -383,13 +359,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
 		};
 
+		let first_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?.as_();
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?.as_();
 		key_changes::<_, Blake2Hasher>(
 			&config,
 			storage,
-			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
+			first_number,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last),
-				number: self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+				number: last_number,
 			},
 			self.backend.blockchain().info()?.best_number.as_(),
 			key)
@@ -465,7 +443,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
 		};
 
-		let min_number = self.require_block_number_from_id(&BlockId::Hash(min))?;
+		let min_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
 		let recording_storage = AccessedRootsRecorder::<Block> {
 			storage,
 			min: min_number.as_(),
@@ -474,17 +452,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let max_number = ::std::cmp::min(
 			self.backend.blockchain().info()?.best_number,
-			self.require_block_number_from_id(&BlockId::Hash(max))?,
+			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(max))?,
 		);
 
 		// fetch key changes proof
+		let first_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?.as_();
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?.as_();
 		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
 			&config,
 			&recording_storage,
-			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
+			first_number,
 			&ChangesTrieAnchorBlockId {
 				hash: convert_hash(&last),
-				number: self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+				number: last_number,
 			},
 			max_number.as_(),
 			key
@@ -806,12 +786,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// while performing major synchronization work.
 	pub fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
 		let last_best = self.backend.blockchain().info()?.best_hash;
-		let to_finalize_hash = match id {
-			BlockId::Hash(h) => h,
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("No block with number {:?}", n)))?,
-		};
-
+		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		self.apply_finality(to_finalize_hash, justification, last_best, notify)
 	}
 
@@ -843,12 +818,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
-	}
-
-	/// Convert an arbitrary block ID into a block hash, returning error if the block is unknown.
-	fn require_block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<NumberFor<Block>> {
-		self.backend.blockchain().block_number_from_id(id)
-			.and_then(|n| n.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", id)).into()))
 	}
 
 	/// Get block header by id.
@@ -992,6 +961,17 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
 			.and_then(|c| Decode::decode(&mut &*c)))
 	}
+
+	/// Prepare in-memory header that is used in execution environment.
+	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> error::Result<Block::Header> {
+		Ok(<<Block as BlockT>::Header as HeaderT>::new(
+			self.backend.blockchain().expect_block_number_from_id(parent)? + As::sa(1),
+			Default::default(),
+			Default::default(),
+			self.backend.blockchain().expect_block_hash_from_id(&parent)?,
+			Default::default(),
+		))
+	}
 }
 
 impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> where
@@ -1049,25 +1029,20 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 	) -> error::Result<Vec<u8>> {
-		//TODO: Find a better way to prevent double block initialization
-		if function != "Core_initialise_block"
-			&& initialised_block.map(|id| id != *at).unwrap_or(true) {
-			let parent = at;
-			let header = <<Block as BlockT>::Header as HeaderT>::new(
-				self.block_number_from_id(parent)?
-					.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?
-				+ As::sa(1),
-				Default::default(),
-				Default::default(),
-				self.block_hash_from_id(&parent)?
-					.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
-				Default::default()
-			);
-			self.call_at_state(at, "Core_initialise_block", header.encode(), changes)?;
-			*initialised_block = Some(*at);
-		}
+		let execution_manager = match self.api_execution_strategy {
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+				warn!("   Function {:?}", function);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
+				wasm_result
+			}),
+		};
 
-		self.call_at_state(at, function, args, changes)
+		self.executor.contextual_call(at, function, &args, changes, initialised_block,
+			|| self.prepare_environment_block(at), execution_manager)
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {
