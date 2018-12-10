@@ -21,15 +21,16 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
 use chain_spec::{ChainSpec, Properties};
 use client_db;
-use client::{self, Client, runtime_api::{TaggedTransactionQueue, Metadata}};
-use {error, Service, RpcConfig, maybe_start_server, TransactionPoolAdapter};
+use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
+use {error, Service, RpcConfig, maybe_start_server};
 use network::{self, OnDemand, import_queue::ImportQueue};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage, generic::SignedBlock};
+use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::{BlockId, SignedBlock}};
 use config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc;
+use parking_lot::Mutex;
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -118,8 +119,10 @@ impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Something that can start the RPC service.
 pub trait StartRPC<C: Components> {
+	type ServersHandle: Send + Sync;
+
 	fn start_rpc(
-		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
+		client: Arc<ComponentClient<C>>,
 		chain_name: String,
 		impl_name: &'static str,
 		impl_version: &'static str,
@@ -128,15 +131,17 @@ pub trait StartRPC<C: Components> {
 		properties: Properties,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
-	) -> Result<(Option<rpc::HttpServer>, Option<rpc::WsServer>), error::Error>;
+	) -> error::Result<Self::ServersHandle>;
 }
 
-impl<T: Components> StartRPC<Self> for T where
-	T::RuntimeApi: Metadata<ComponentBlock<T>>,
-	for<'de> SignedBlock<ComponentBlock<T>>: ::serde::Deserialize<'de>,
+impl<C: Components> StartRPC<Self> for C where
+	C::RuntimeApi: Metadata<ComponentBlock<C>>,
+	for<'de> SignedBlock<ComponentBlock<C>>: ::serde::Deserialize<'de>,
 {
+	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
+
 	fn start_rpc(
-		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
+		client: Arc<ComponentClient<C>>,
 		chain_name: String,
 		impl_name: &'static str,
 		impl_version: &'static str,
@@ -144,8 +149,8 @@ impl<T: Components> StartRPC<Self> for T where
 		rpc_ws: Option<SocketAddr>,
 		properties: Properties,
 		task_executor: TaskExecutor,
-		transaction_pool: Arc<TransactionPool<T::TransactionPoolApi>>,
-	) -> Result<(Option<rpc::HttpServer>, Option<rpc::WsServer>), error::Error> {
+		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
+	) -> error::Result<Self::ServersHandle> {
 		let rpc_config = RpcConfig { properties, chain_name, impl_name, impl_version };
 
 		let handler = || {
@@ -156,7 +161,7 @@ impl<T: Components> StartRPC<Self> for T where
 			let author = rpc::apis::author::Author::new(
 				client.clone(), transaction_pool.clone(), subscriptions
 			);
-			rpc::rpc_handler::<ComponentBlock<T>, ComponentExHash<T>, _, _, _, _>(
+			rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
 				state,
 				chain,
 				author,
@@ -166,44 +171,58 @@ impl<T: Components> StartRPC<Self> for T where
 
 		Ok((
 			maybe_start_server(rpc_http, |address| rpc::start_http(address, handler()))?,
-			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, handler()))?,
+			maybe_start_server(rpc_ws, |address| rpc::start_ws(address, handler()))?.map(Mutex::new),
 		))
 	}
 }
 
-/// Something that can create an instance of `network::Params`.
-pub trait CreateNetworkParams<C: Components> {
-	fn create_network_params<S>(
-		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
-		roles: network::config::Roles,
-		network_config: network::config::NetworkConfiguration,
-		on_demand: Option<Arc<OnDemand<FactoryBlock<C::Factory>, NetworkService<C::Factory>>>>,
-		transaction_pool_adapter: TransactionPoolAdapter<C>,
-		specialization: S,
-	) -> network::config::Params<ComponentBlock<C>, S, ComponentExHash<C>>;
+/// Something that can maintain transaction pool on every imported block.
+pub trait MaintainTransactionPool<C: Components> {
+	fn on_block_imported(
+		id: &BlockId<ComponentBlock<C>>,
+		client: &ComponentClient<C>,
+		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
+	) -> error::Result<()>;
 }
 
-impl<T: Components> CreateNetworkParams<Self> for T where
-	T::RuntimeApi: TaggedTransactionQueue<ComponentBlock<T>>
+impl<C: Components> MaintainTransactionPool<Self> for C where
+	ComponentClient<C>: ProvideRuntimeApi<Api = C::RuntimeApi>,
+	C::RuntimeApi: TaggedTransactionQueue<ComponentBlock<C>>,
 {
-	fn create_network_params<S>(
-		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
-		roles: network::config::Roles,
-		network_config: network::config::NetworkConfiguration,
-		on_demand: Option<Arc<OnDemand<FactoryBlock<T::Factory>, NetworkService<T::Factory>>>>,
-		transaction_pool_adapter: TransactionPoolAdapter<T>,
-		specialization: S,
-	) -> network::config::Params<ComponentBlock<T>, S, ComponentExHash<T>> {
-		network::config::Params {
-			config: network::config::ProtocolConfig { roles },
-			network_config,
-			chain: client,
-			on_demand: on_demand.map(|d| d as Arc<network::OnDemandService<ComponentBlock<T>>>),
-			transaction_pool: Arc::new(transaction_pool_adapter),
-			specialization,
-		}
+	// TODO [ToDr] Optimize and re-use tags from the pool.
+	fn on_block_imported(
+		id: &BlockId<ComponentBlock<C>>,
+		client: &ComponentClient<C>,
+		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
+	) -> error::Result<()> {
+		use runtime_primitives::transaction_validity::TransactionValidity;
+
+		let block = client.block(id)?;
+		let tags = match block {
+			None => return Ok(()),
+			Some(block) => {
+				let mut tags = vec![];
+				for tx in block.block.extrinsics() {
+					let tx = client.runtime_api().validate_transaction(id, &tx)?;
+					match tx {
+						TransactionValidity::Valid { mut provides, .. } => {
+							tags.append(&mut provides);
+						},
+						// silently ignore invalid extrinsics,
+						// cause they might just be inherent
+						_ => {}
+					}
+
+				}
+				tags
+			}
+		};
+
+		transaction_pool.prune_tags(id, tags).map_err(|e| format!("{:?}", e))?;
+		Ok(())
 	}
 }
+
 
 /// The super trait that combines all required traits a `Service` needs to implement.
 pub trait ServiceTrait<C: Components>:
@@ -212,10 +231,10 @@ pub trait ServiceTrait<C: Components>:
 	+ Sync
 	+ 'static
 	+ StartRPC<C>
-	+ CreateNetworkParams<C>
+	+ MaintainTransactionPool<C>
 {}
 impl<C: Components, T> ServiceTrait<C> for T where
-	T: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + CreateNetworkParams<C>
+	T: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + MaintainTransactionPool<C>
 {}
 
 /// A collection of types and methods to build a service on top of the substrate service.
@@ -245,7 +264,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// ImportQueue for light clients
 	type LightImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
 
-	//TODO: replace these with a constructor trait. that TransactionPool implements.
+	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<FullClient<Self>>)
 		-> Result<TransactionPool<Self::FullTransactionPoolApi>, error::Error>;
@@ -303,17 +322,18 @@ pub trait Components: Sized + 'static {
 	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher>;
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync + Clone;
-	/// Extrinsic pool type.
-	type TransactionPoolApi: 'static + txpool::ChainApi<
-		Hash = <<Self::Factory as ServiceFactory>::Block as BlockT>::Hash,
-		Block = FactoryBlock<Self::Factory>
-	>;
 	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
 	/// A type that can start the RPC.
 	type RPC: StartRPC<Self>;
-	/// A type that can create the network params.
-	type CreateNetworkParams: CreateNetworkParams<Self>;
+	// TODO [ToDr] Traitify transaction pool and allow people to implement their own. (#1242)
+	/// A type that can maintain transaction pool.
+	type TransactionPool: MaintainTransactionPool<Self>;
+	/// Extrinsic pool type.
+	type TransactionPoolApi: 'static + txpool::ChainApi<
+		Hash = <FactoryBlock<Self::Factory> as BlockT>::Hash,
+		Block = FactoryBlock<Self::Factory>
+	>;
 
 	/// Our Import Queue
 	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
@@ -383,7 +403,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type ImportQueue = Factory::FullImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RPC = Factory::FullService;
-	type CreateNetworkParams = Factory::FullService;
+	type TransactionPool = Factory::FullService;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -458,7 +478,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type ImportQueue = <Factory as ServiceFactory>::LightImportQueue;
 	type RuntimeApi = Factory::RuntimeApi;
 	type RPC = Factory::LightService;
-	type CreateNetworkParams = Factory::LightService;
+	type TransactionPool = Factory::LightService;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,

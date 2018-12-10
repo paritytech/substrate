@@ -24,7 +24,6 @@ use primitives::AuthorityId;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
-	transaction_validity::{TransactionValidity, TransactionTag},
 };
 use consensus::{ImportBlock, ImportResult, BlockOrigin};
 use runtime_primitives::traits::{
@@ -32,7 +31,7 @@ use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
 };
 use runtime_primitives::BuildStorage;
-use runtime_api::{Core as CoreAPI, CallRuntimeAt, TaggedTransactionQueue, ConstructRuntimeApi};
+use runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -139,8 +138,6 @@ pub struct BlockImportNotification<Block: BlockT> {
 	pub header: Block::Header,
 	/// Is this the new best block.
 	pub is_new_best: bool,
-	/// Tags provided by transactions imported in that block.
-	pub tags: Vec<TransactionTag>,
 }
 
 /// Summary of a finalized block.
@@ -537,37 +534,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
-	// TODO [ToDr] Optimize and re-use tags from the pool.
-	fn transaction_tags(
-		&self,
-		at: Block::Hash,
-		body: &Option<Vec<Block::Extrinsic>>
-	) -> error::Result<Vec<TransactionTag>> where
-		RA: TaggedTransactionQueue<Block>,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
-	{
-		let id = BlockId::Hash(at);
-		Ok(match body {
-			None => vec![],
-			Some(ref extrinsics) => {
-				let mut tags = vec![];
-				for tx in extrinsics {
-					let tx = self.runtime_api().validate_transaction(&id, &tx)?;
-					match tx {
-						TransactionValidity::Valid { mut provides, .. } => {
-							tags.append(&mut provides);
-						},
-						// silently ignore invalid extrinsics,
-						// cause they might just be inherent
-						_ => {}
-					}
-
-				}
-				tags
-			},
-		})
-	}
-
 	fn execute_and_import_block(
 		&self,
 		origin: BlockOrigin,
@@ -579,7 +545,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<ImportResult> where
-		RA: TaggedTransactionQueue<Block>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
@@ -607,7 +572,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.apply_finality(parent_hash, None, last_best, make_notifications)?;
 		}
 
-		let tags = self.transaction_tags(parent_hash, &body)?;
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
@@ -697,7 +661,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				origin,
 				header: import_headers.into_post(),
 				is_new_best,
-				tags,
 			};
 
 			self.import_notification_sinks.lock()
@@ -1055,7 +1018,6 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: TaggedTransactionQueue<Block>
 {
 	type Error = Error;
 
