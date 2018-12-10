@@ -16,11 +16,12 @@
 
 //! Macros for declaring and implementing runtime apis.
 
-#![recursion_limit = "128"]
+#![recursion_limit = "256"]
 extern crate proc_macro;
 extern crate proc_macro2;
 extern crate quote;
 extern crate syn;
+extern crate blake2_rfc;
 
 use proc_macro::TokenStream;
 
@@ -38,43 +39,27 @@ mod compile_fail_tests;
 /// by a path, e.g. `impl my_trait::MyTrait for Runtime`. The macro will use this path to access
 /// the declaration of the trait for the runtime side.
 ///
-/// The macro also generates the implementation of the apis for the client side by generating the
-/// `RuntimeApi` type. The `RuntimeApi` is hidden behind a `feature` called `std`.
+/// The macro also generates the api implementations for the client side and provides it through
+/// the `RuntimeApi` type. The `RuntimeApi` is hidden behind a `feature` called `std`.
+///
+/// To expose version information about all implemented api traits, the constant
+/// `RUNTIME_API_VERSIONS` is generated. This constant should be used to instantiate the `apis`
+/// field of `RuntimeVersion`.
 ///
 /// # Example
 ///
 /// ```rust
 /// #[macro_use]
 /// extern crate substrate_client;
+/// extern crate sr_version as version;
+///
+/// use version::create_runtime_str;
+/// # extern crate substrate_test_client as test_client;
 /// # extern crate sr_primitives as runtime_primitives;
 /// # extern crate substrate_primitives as primitives;
-/// # #[macro_use]
-/// # extern crate parity_codec_derive;
-/// # extern crate serde;
-/// # extern crate core;
 /// #
-/// # use primitives::hash::H256;
-/// # use runtime_primitives::traits::{BlakeTwo256, GetNodeBlockType, Extrinsic as ExtrinsicT};
-/// #
-/// # // All the stuff we need to declare our `Block`
-/// # pub type BlockNumber = u64;
-/// # pub type DigestItem = runtime_primitives::generic::DigestItem<H256, u64>;
-/// # pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
-/// # #[derive(Clone, PartialEq, Eq, Encode, Decode, Debug)]
-/// # pub struct Extrinsic {}
-/// #
-/// # impl serde::Serialize for Extrinsic {
-/// #     fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-/// #         unimplemented!()
-/// #     }
-/// # }
-/// # impl ExtrinsicT for Extrinsic {
-/// #     fn is_signed(&self) -> Option<bool> {
-/// #         unimplemented!()
-/// #     }
-/// # }
-/// # pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256, DigestItem>;
-/// # pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
+/// # use runtime_primitives::traits::GetNodeBlockType;
+/// # use test_client::runtime::Block;
 /// #
 /// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
 /// # /// trait are done by the `construct_runtime!` macro in a real runtime.
@@ -113,6 +98,17 @@ mod compile_fail_tests;
 ///         }
 ///     }
 /// }
+///
+/// /// Runtime version. This needs to be declared for each runtime.
+/// pub const VERSION: version::RuntimeVersion = version::RuntimeVersion {
+///     spec_name: create_runtime_str!("node"),
+///     impl_name: create_runtime_str!("test-node"),
+///     authoring_version: 1,
+///     spec_version: 1,
+///     impl_version: 0,
+///     // Here we are exposing the runtime api versions.
+///     apis: RUNTIME_API_VERSIONS,
+/// };
 ///
 /// # fn main() {}
 /// ```
@@ -158,6 +154,36 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// # fn main() {}
 /// ```
+///
+/// # Runtime api trait versioning
+///
+/// To support versioning of the traits, the macro supports the attribute `#[api_version(1)]`.
+/// The attribute supports any `u32` as version. By default, each trait is at version `1`, if no
+/// version is provided.
+///
+/// ```rust
+/// #[macro_use]
+/// extern crate substrate_client;
+///
+/// decl_runtime_apis! {
+///     /// Declare the api trait.
+///     #[api_version(2)]
+///     pub trait Balance {
+///         /// Get the balance.
+///         fn get_balance() -> u64;
+///         /// Set the balance.
+///         fn set_balance(val: u64);
+///         /// In version 2, we added this new function.
+///         fn increase_balance(val: u64);
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
+///
+/// To check if a given runtime implements a runtime api trait, the `RuntimeVersion` has the
+/// function `has_api<A>()`. Also the `ApiExt` provides a function `has_api<A>(at: &BlockId)` to
+/// check if the runtime at the given block id implements the requested runtime api trait.
 #[proc_macro]
 pub fn decl_runtime_apis(input: TokenStream) -> TokenStream {
 	decl_runtime_apis::decl_runtime_apis_impl(input)

@@ -54,7 +54,7 @@ pub type TransactionFor<A> = Arc<base::Transaction<ExHash<A>, ExtrinsicFor<A>>>;
 pub trait ChainApi: Send + Sync {
 	/// Block type.
 	type Block: traits::Block;
-	/// Hash type
+	/// Transaction Hash type
 	type Hash: hash::Hash + Eq + traits::Member + Serialize;
 	/// Error type.
 	type Error: From<error::Error> + error::IntoPoolError;

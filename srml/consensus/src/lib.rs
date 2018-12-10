@@ -41,7 +41,6 @@ use rstd::prelude::*;
 use rstd::result;
 use parity_codec::Encode;
 use runtime_support::{storage, Parameter};
-use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::CheckInherentError;
@@ -83,7 +82,7 @@ pub trait InherentOfflineReport {
 	fn handle_report(report: Self::Inherent);
 
 	/// Whether two reports are compatible.
-	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result;
+	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result<(), &'static str>;
 }
 
 impl InherentOfflineReport for () {
@@ -91,7 +90,9 @@ impl InherentOfflineReport for () {
 
 	fn is_empty(_inherent: &()) -> bool { true }
 	fn handle_report(_: ()) { }
-	fn check_inherent(_: &(), _: &()) -> Result { Err("Explicit reporting not allowed") }
+	fn check_inherent(_: &(), _: &()) -> Result<(), &'static str> {
+		Err("Explicit reporting not allowed")
+	}
 }
 
 /// A variant of the `OfflineReport` which is useful for instant-finality blocks.
@@ -108,7 +109,7 @@ impl<T: OnOfflineReport<Vec<u32>>> InherentOfflineReport for InstantFinalityRepo
 		T::handle_report(report)
 	}
 
-	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result {
+	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result<(), &'static str> {
 		contained.iter().try_for_each(|n|
 			if !expected.contains(n) {
 				Err("Node we believe online marked offline")
@@ -193,14 +194,13 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Report some misbehaviour.
-		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
+		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// TODO: requires extension trait.
-			Ok(())
 		}
 
 		/// Note the previous block's validator missed their opportunity to propose a block.
-		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) -> Result {
+		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) {
 			ensure_inherent(origin)?;
 
 			assert!(
@@ -210,34 +210,28 @@ decl_module! {
 			);
 
 			T::InherentOfflineReport::handle_report(offline);
-
-			Ok(())
 		}
 
 		/// Make some on-chain remark.
-		fn remark(origin, _remark: Vec<u8>) -> Result {
+		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
-			Ok(())
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		fn set_heap_pages(pages: u64) -> Result {
+		fn set_heap_pages(pages: u64) {
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
-			Ok(())
 		}
 
 		/// Set the new code.
-		pub fn set_code(new: Vec<u8>) -> Result {
+		pub fn set_code(new: Vec<u8>) {
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
-			Ok(())
 		}
 
 		/// Set some items of storage.
-		fn set_storage(items: Vec<KeyValue>) -> Result {
+		fn set_storage(items: Vec<KeyValue>) {
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
-			Ok(())
 		}
 
 		fn on_finalise() {

@@ -17,7 +17,7 @@
 use super::*;
 use jsonrpc_macros::pubsub;
 use test_client::{self, TestClient};
-use test_client::runtime::{Block, Header};
+use test_client::runtime::{Block, Header, VERSION};
 use consensus::BlockOrigin;
 
 #[test]
@@ -259,13 +259,6 @@ fn should_return_runtime_version() {
 
 	assert_matches!(
 		client.runtime_version(None.into()),
-		Ok(ref ver) if ver == &RuntimeVersion {
-			spec_name: "test".into(),
-			impl_name: "parity-test".into(),
-			authoring_version: 1,
-			spec_version: 1,
-			impl_version: 1,
-			apis: (&[][..]).into()
-		}
+		Ok(ref ver) if ver == &VERSION
 	);
 }

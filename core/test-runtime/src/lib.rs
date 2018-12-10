@@ -65,16 +65,16 @@ use primitives::AuthorityId;
 use primitives::OpaqueMetadata;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
-use consensus_aura::{id::AURA_API, api as aura_api};
+use consensus_aura::api as aura_api;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: ver_str!("test"),
-	impl_name: ver_str!("parity-test"),
+	spec_name: create_runtime_str!("test"),
+	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 1,
-	apis: apis_vec!([(AURA_API, 1)]),
+	apis: RUNTIME_API_VERSIONS,
 };
 
 fn version() -> RuntimeVersion {

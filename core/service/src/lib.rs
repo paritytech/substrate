@@ -63,11 +63,10 @@ use std::collections::HashMap;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 use futures::prelude::*;
-use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
-use runtime_primitives::traits::{Header, As};
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -88,7 +87,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
 };
-use components::{StartRPC, CreateNetworkParams};
+use components::{StartRPC, MaintainTransactionPool};
 #[doc(hidden)]
 pub use network::OnDemand;
 
@@ -104,8 +103,7 @@ pub struct Service<Components: components::Components> {
 	signal: Option<Signal>,
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
-	_rpc_http: Option<rpc::HttpServer>,
-	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
+	_rpc: Box<::std::any::Any + Send + Sync>,
 	_telemetry: Option<tel::Telemetry>,
 }
 
@@ -121,12 +119,7 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 	Ok(client)
 }
 
-impl<Components> Service<Components>
-	where
-		Components: components::Components,
-		<Components as components::Components>::Executor: std::clone::Clone,
-		// <Components as components::Components>::RuntimeApi: client::runtime_api::BlockBuilder<<<Components as components::Components>::Factory as ServiceFactory>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Sync + Send + client::runtime_api::Core<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, primitives::AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + client::runtime_api::ConstructRuntimeApi<Block=<<Components as components::Components>::Factory as ServiceFactory>::Block> + client::runtime_api::Metadata<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, Vec<u8>, Error=client::error::Error> + client::runtime_api::TaggedTransactionQueue<<<Components as components::Components>::Factory as components::ServiceFactory>::Block, Error=client::error::Error>,
-{
+impl<Components: components::Components> Service<Components> {
 	/// Creates a new service.
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
@@ -170,20 +163,20 @@ impl<Components> Service<Components>
 		let transaction_pool = Arc::new(
 			Components::build_transaction_pool(config.transaction_pool.clone(), client.clone())?
 		);
-		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
+		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter::<Components> {
 			imports_external_transactions: !(config.roles == Roles::LIGHT),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-		 };
+		 });
 
-		let network_params = Components::CreateNetworkParams::create_network_params(
-			client.clone(),
-			config.roles,
-			config.network.clone(),
-			on_demand.clone(),
-			transaction_pool_adapter,
-			network_protocol,
-		);
+		let network_params = network::config::Params {
+			config: network::config::ProtocolConfig { roles: config.roles },
+			network_config: config.network.clone(),
+			chain: client.clone(),
+			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
+			transaction_pool: transaction_pool_adapter.clone() as _,
+			specialization: network_protocol,
+		};
 
 		let protocol_id = {
 			let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
@@ -206,15 +199,21 @@ impl<Components> Service<Components>
 		{
 			// block notifications
 			let network = Arc::downgrade(&network);
-			let txpool = transaction_pool.clone();
+			let txpool = Arc::downgrade(&transaction_pool);
+			let wclient = Arc::downgrade(&client);
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
 					if let Some(network) = network.upgrade() {
 						network.on_block_imported(notification.hash, &notification.header);
 					}
-					txpool.prune_tags(&BlockId::hash(notification.hash), notification.tags)
-						.map_err(|e| warn!("Error removing extrinsics: {:?}", e))?;
+					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
+						Components::TransactionPool::on_block_imported(
+							&BlockId::hash(notification.hash),
+							&*client,
+							&*txpool,
+						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
+					}
 					Ok(())
 				})
 				.select(exit.clone())
@@ -241,7 +240,7 @@ impl<Components> Service<Components>
 
 
 		// RPC
-		let (rpc_http, rpc_ws) = Components::RPC::start_rpc(
+		let rpc = Components::RPC::start_rpc(
 			client.clone(), config.chain_spec.name().to_string(), config.impl_name,
 			config.impl_version, config.rpc_http, config.rpc_ws, config.chain_spec.properties(),
 			task_executor.clone(), transaction_pool.clone()
@@ -275,15 +274,14 @@ impl<Components> Service<Components>
 		};
 
 		Ok(Service {
-			client: client,
+			client,
 			network: Some(network),
-			transaction_pool: transaction_pool,
+			transaction_pool,
 			signal: Some(signal),
-			keystore: keystore,
+			keystore,
 			config,
 			exit,
-			_rpc_http: rpc_http,
-			_rpc_ws: rpc_ws.map(Mutex::new),
+			_rpc: Box::new(rpc),
 			_telemetry: telemetry,
 		})
 	}

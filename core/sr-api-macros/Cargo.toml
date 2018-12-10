@@ -10,11 +10,11 @@ proc-macro = true
 quote = "0.6"
 syn = { version = "^0.15.22", features = [ "full", "fold", "extra-traits", "visit" ] }
 proc-macro2 = "0.4"
+blake2-rfc = "0.2"
 
 [dev-dependencies]
 substrate-client = { path = "../client" }
+substrate-test-client = { path = "../test-client" }
 sr-primitives = { path = "../sr-primitives" }
+sr-version = { path = "../sr-version" }
 substrate-primitives = { path = "../primitives" }
-parity-codec = "2.1"
-parity-codec-derive = "2.1"
-serde = "1.0"

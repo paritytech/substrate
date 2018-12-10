@@ -189,10 +189,9 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report some misbehaviour.
-		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
+		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// TODO: https://github.com/paritytech/substrate/issues/1112
-			Ok(())
 		}
 
 		fn on_finalise(block_number: T::BlockNumber) {

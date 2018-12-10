@@ -16,6 +16,7 @@
 
 use std::sync::Arc;
 use std::cmp::Ord;
+use codec::Encode;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{self, OverlayedChanges, Ext,
@@ -45,7 +46,6 @@ where
 	B: BlockT,
 	H: Hasher<Out=B::Hash>,
 	H::Out: Ord,
-
 {
 	/// Externalities error type.
 	type Error: state_machine::Error;
@@ -53,11 +53,31 @@ where
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(&self,
+	fn call(
+		&self,
 		id: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
 	) -> Result<CallResult, error::Error>;
+
+	/// Execute a contextual call on top of state in a block of a given hash.
+	///
+	/// No changes are made.
+	/// Before executing the method, passed header is installed as the current header
+	/// of the execution context.
+	fn contextual_call<
+		PB: Fn() -> error::Result<B::Header>,
+		EM: Fn(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+	>(
+		&self,
+		at: &BlockId<B>,
+		method: &str,
+		call_data: &[u8],
+		changes: &mut OverlayedChanges,
+		initialised_block: &mut Option<BlockId<B>>,
+		prepare_environment_block: PB,
+		manager: ExecutionManager<EM>,
+	) -> error::Result<Vec<u8>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
@@ -81,8 +101,24 @@ where
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend<H>>(&self,
+	fn prove_at_state<S: state_machine::Backend<H>>(
+		&self,
 		state: S,
+		overlay: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8]
+	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+		let trie_state = state.try_into_trie_backend()
+			.ok_or_else(|| Box::new(state_machine::ExecutionError::UnableToGenerateProof) as Box<state_machine::Error>)?;
+		self.prove_at_trie_state(&trie_state, overlay, method, call_data)
+	}
+
+	/// Execute a call to a contract on top of given trie state, gathering execution proof.
+	///
+	/// No changes are made.
+	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<H>>(
+		&self,
+		trie_state: &state_machine::TrieBackend<S, H>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
@@ -139,6 +175,30 @@ where
 		Ok(CallResult { return_data, changes })
 	}
 
+	fn contextual_call<
+		PB: Fn() -> error::Result<Block::Header>,
+		EM: Fn(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+	>(
+		&self,
+		at: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+		changes: &mut OverlayedChanges,
+		initialised_block: &mut Option<BlockId<Block>>,
+		prepare_environment_block: PB,
+		manager: ExecutionManager<EM>,
+	) -> Result<Vec<u8>, error::Error> where ExecutionManager<EM>: Clone {
+		let state = self.backend.state_at(*at)?;
+		//TODO: Find a better way to prevent double block initialization
+		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
+			let header = prepare_environment_block()?;
+			self.call_at_state(&state, changes, "Core_initialise_block", &header.encode(), manager.clone())?;
+			*initialised_block = Some(*at);
+		}
+
+		self.call_at_state(&state, changes, method, call_data, manager).map(|cr| cr.0)
+	}
+
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
@@ -178,15 +238,16 @@ where
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend<Blake2Hasher>>(&self,
-		state: S,
-		changes: &mut OverlayedChanges,
+	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
+		&self,
+		trie_state: &state_machine::TrieBackend<S, Blake2Hasher>,
+		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
-		state_machine::prove_execution(
-			state,
-			changes,
+		state_machine::prove_execution_on_trie_backend(
+			trie_state,
+			overlay,
 			&self.executor,
 			method,
 			call_data,

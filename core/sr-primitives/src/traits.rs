@@ -639,3 +639,11 @@ pub trait GetNodeBlockType {
 	/// The `NodeBlock` type.
 	type NodeBlock: self::Block;
 }
+
+/// Something that provides information about a runtime api.
+pub trait RuntimeApiInfo {
+	/// The identifier of the runtime api.
+	const ID: [u8; 8];
+	/// The version of the runtime api.
+	const VERSION: u32;
+}

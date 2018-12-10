@@ -167,7 +167,9 @@ macro_rules! decl_module {
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		$fn_vis:vis fn $fn_name:ident($origin:ident $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
+		$fn_vis:vis fn $fn_name:ident(
+			$origin:ident $(, $param_name:ident : $param:ty)*
+		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
@@ -179,7 +181,9 @@ macro_rules! decl_module {
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
-				$fn_vis fn $fn_name($origin $( , $param_name : $param )* ) -> $result { $( $impl )* }
+				$fn_vis fn $fn_name(
+					$origin $( , $param_name : $param )*
+				) $( -> $result )* { $( $impl )* }
 			]
 			$($rest)*
 		);
@@ -192,12 +196,16 @@ macro_rules! decl_module {
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		$fn_vis:vis fn $fn_name:ident($origin:ident : T::Origin $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
+		$fn_vis:vis fn $fn_name:ident(
+			$origin:ident : T::Origin $(, $param_name:ident : $param:ty)*
+		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		compile_error!("\
-first parameter of dispatch should be marked `origin` only, with no type specified (a bit like `self`)\n\
-(For root-matching dispatches, ensure the first parameter does not use the `T::Origin` type.)")
+		compile_error!(
+			"First parameter of dispatch should be marked `origin` only, with no type specified \
+			(a bit like `self`). (For root-matching dispatches, ensure the first parameter does \
+			not use the `T::Origin` type.)"
+		)
 	};
 	(@normalize
 		$(#[$attr:meta])*
@@ -207,12 +215,16 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		$fn_vis:vis fn $fn_name:ident(origin : $origin:ty $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
+		$fn_vis:vis fn $fn_name:ident(
+			origin : $origin:ty $(, $param_name:ident : $param:ty)*
+		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		compile_error!("\
-first parameter of dispatch should be marked `origin` only, with no type specified (a bit like `self`)\n\
-(For root-matching dispatches, ensure the first parameter is not named`origin`.)")
+		compile_error!(
+			"First parameter of dispatch should be marked `origin` only, with no type specified \
+			(a bit like `self`). (For root-matching dispatches, ensure the first parameter does \
+			not use the `T::Origin` type.)"
+		)
 	};
 	(@normalize
 		$(#[$attr:meta])*
@@ -222,7 +234,9 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		$fn_vis:vis fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty { $( $impl:tt )* }
+		$fn_vis:vis fn $fn_name:ident(
+			$( $param_name:ident : $param:ty),*
+		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
@@ -234,7 +248,9 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
-				$fn_vis fn $fn_name(root $( , $param_name : $param )* ) -> $result { $( $impl )* }
+				$fn_vis fn $fn_name(
+					root $( , $param_name : $param )*
+				) $( -> $result )* { $( $impl )* }
 			]
 			$($rest)*
 		);
@@ -340,7 +356,23 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$origin_ty:ty;
 		root;
-		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) -> $result:ty { $( $impl:tt )* }
+		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
+				{ $( $impl )* }
+				Ok(())
+			}
+		}
+	};
+
+	(@impl_function
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$origin_ty:ty;
+		root;
+		$vis:vis fn $name:ident (
+			root $(, $param:ident : $param_ty:ty )*
+		) -> $result:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
 			$vis fn $name($( $param: $param_ty ),* ) -> $result {
@@ -348,11 +380,32 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 			}
 		}
 	};
+
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$origin_ty:ty;
 		$ignore:ident;
-		$vis:vis fn $name:ident ( $origin:ident $(, $param:ident : $param_ty:ty )* ) -> $result:ty { $( $impl:tt )* }
+		$vis:vis fn $name:ident (
+			$origin:ident $(, $param:ident : $param_ty:ty )*
+		) { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn $name(
+				$origin: $origin_ty $(, $param: $param_ty )*
+			) -> $crate::dispatch::Result {
+				{ $( $impl )* }
+				Ok(())
+			}
+		}
+	};
+
+	(@impl_function
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$origin_ty:ty;
+		$ignore:ident;
+		$vis:vis fn $name:ident (
+			$origin:ident $(, $param:ident : $param_ty:ty )*
+		) -> $result:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
 			$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
@@ -369,7 +422,7 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 				$(#[doc = $doc_attr:tt])*
 				$fn_vis:vis fn $fn_name:ident(
 					$from:ident $( , $param_name:ident : $param:ty)*
-				) -> $result:ty { $( $impl:tt )* }
+				) $( -> $result:ty )* { $( $impl:tt )* }
 			)*
 		}
 		{ $( $deposit_event:tt )* }
@@ -409,7 +462,9 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 				$mod_type<$trait_instance: $trait_name>;
 				$origin_type;
 				$from;
-				$fn_vis fn $fn_name ($from $(, $param_name : $param )* ) -> $result { $( $impl )* }
+				$fn_vis fn $fn_name (
+					$from $(, $param_name : $param )*
+				) $( -> $result )* { $( $impl )* }
 			}
 		)*
 
@@ -542,7 +597,7 @@ first parameter of dispatch should be marked `origin` only, with no type specifi
 		}
 		__dispatch_impl_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
-			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*) -> $result; )*}
+			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*); )*}
 		}
 	}
 }
@@ -764,13 +819,13 @@ macro_rules! __call_to_metadata {
 					$(
 						, $param_name:ident : $param:ty
 					)*
-				) -> $result:ty;
+				);
 			)*}
 	) => {
 		$crate::dispatch::CallMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
 			functions: __functions_to_metadata!(0; $origin_type;; $(
-				fn $fn_name( $( $param_name: $param ),* ) -> $result;
+				fn $fn_name( $( $param_name: $param ),* );
 				$( $doc_attr ),*;
 			)*),
 		}
@@ -789,14 +844,14 @@ macro_rules! __functions_to_metadata{
 			$(
 				$param_name:ident : $param:ty
 			),*
-		) -> $result:ty;
+		);
 		$( $fn_doc:expr ),*;
 		$( $rest:tt )*
 	) => {
 		__functions_to_metadata!(
 			$fn_id + 1; $origin_type;
 			$( $function_metadata, )* __function_to_metadata!(
-				fn $fn_name($( $param_name : $param ),*) -> $result; $( $fn_doc ),*; $fn_id;
+				fn $fn_name($( $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
 			);
 			$($rest)*
 		)
@@ -817,7 +872,7 @@ macro_rules! __function_to_metadata {
 	(
 		fn $fn_name:ident(
 			$($param_name:ident : $param:ty),*
-		) -> $result:ty;
+		);
 		$( $fn_doc:expr ),*;
 		$fn_id:expr;
 	) => {
