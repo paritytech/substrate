@@ -189,6 +189,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		io.to_disconnect.clone()
 	}
 
+	#[cfg(test)]
 	fn with_io<'a, F, U>(&'a self, f: F) -> U where F: FnOnce(&mut TestIo<'a>) -> U {
 		let mut io = TestIo::new(&self.queue, None);
 		f(&mut io)
