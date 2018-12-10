@@ -27,7 +27,7 @@ extern crate slog_async;
 extern crate slog_json;
 #[macro_use]
 extern crate log;
-#[macro_use(o, kv)]
+#[macro_use(o)]
 extern crate slog;
 extern crate slog_scope;
 

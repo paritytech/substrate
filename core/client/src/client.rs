@@ -31,7 +31,7 @@ use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
 };
 use runtime_primitives::BuildStorage;
-use runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi, TaggedTransactionQueue};
+use runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;

@@ -30,7 +30,6 @@ pub extern crate sr_primitives as runtime_primitives;
 extern crate srml_metadata;
 
 extern crate mashup;
-
 #[macro_use]
 extern crate srml_support_procedural;
 
