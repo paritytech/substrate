@@ -330,14 +330,12 @@ mod tests {
 			creation_fee: 0,
 			existential_deposit: 0,
 			reclaim_rebate: 0,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1,
 			spend_period: 2,
 			burn: Permill::from_percent(50),
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.into()
 	}

@@ -67,12 +67,12 @@ use runtime_version::NativeVersion;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: ver_str!("test"),
-	impl_name: ver_str!("parity-test"),
+	spec_name: create_runtime_str!("test"),
+	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 1,
-	apis: apis_vec!([]),
+	apis: RUNTIME_API_VERSIONS,
 };
 
 fn version() -> RuntimeVersion {

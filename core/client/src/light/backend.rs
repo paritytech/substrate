@@ -102,7 +102,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 		)
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>) -> ClientResult<()> {
+	fn finalize_block(&self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
 		self.blockchain.storage().finalize_header(block)
 	}
 

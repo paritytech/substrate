@@ -166,7 +166,7 @@ mod tests {
 			.unwrap().storage_root(::std::iter::empty()).0;
 
 		// 'fetch' execution proof from remote node
-		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
+		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "Core_authorities", &[]).unwrap().1;
 
 		// check remote execution proof locally
 		let local_executor = test_client::LocalExecutor::new();
@@ -179,7 +179,7 @@ mod tests {
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			},
-			method: "authorities".into(),
+			method: "Core_authorities".into(),
 			call_data: vec![],
 			retry_count: None,
 		}, remote_execution_proof).unwrap();

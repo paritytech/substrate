@@ -113,13 +113,17 @@ pub trait IntoExit {
 	fn into_exit(self) -> Self::Exit;
 }
 
+fn get_chain_key(matches: &clap::ArgMatches) -> String {
+	matches.value_of("chain").unwrap_or_else(
+		|| if matches.is_present("dev") { "dev" } else { "" }
+	).into()
+}
+
 fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G>, String>
 	where G: RuntimeGenesis, F: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
-	let chain_key = matches.value_of("chain").unwrap_or_else(
-		|| if matches.is_present("dev") { "dev" } else { "" }
-	);
-	let spec = match factory(chain_key)? {
+	let chain_key = get_chain_key(matches);
+	let spec = match factory(&chain_key)? {
 		Some(spec) => spec,
 		None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
 	};
@@ -130,6 +134,10 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 	matches.value_of("base_path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(default_base_path)
+}
+
+fn create_input_err<T: Into<String>>(msg: T) -> error::Error {
+	error::ErrorKind::Input(msg.into()).into()
 }
 
 /// Check whether a node name is considered as valid
@@ -202,8 +210,14 @@ where
 	};
 	match is_node_name_valid(&config.name) {
 		Ok(_) => (),
-		Err(msg) => return Err(error::ErrorKind::Input(
-			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.", config.name, msg)).into())
+		Err(msg) => bail!(
+			create_input_err(
+				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
+					config.name,
+					msg
+				)
+			)
+		)
 	}
 
 	let base_path = base_path(&matches);
@@ -220,7 +234,7 @@ where
 		Some("archive") => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
 		Some(s) => PruningMode::keep_blocks(s.parse()
-			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
+			.map_err(|_| create_input_err("Invalid pruning mode specified"))?),
 	};
 
 	let role =
@@ -240,7 +254,7 @@ where
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+			_ => bail!(create_input_err("Invalid execution mode specified")),
 		};
 	}
 
@@ -280,7 +294,7 @@ where
 		config.network.client_version = config.client_id();
 		config.network.use_secret = match matches.value_of("node_key").map(H256::from_str) {
 			Some(Ok(secret)) => Some(secret.into()),
-			Some(Err(err)) => return Err(format!("Error parsing node key: {}", err).into()),
+			Some(Err(err)) => bail!(create_input_err(format!("Error parsing node key: {}", err))),
 			None => None,
 		};
 
@@ -318,6 +332,47 @@ where
 	Ok((spec, config))
 }
 
+fn get_db_path_for_subcommand(
+	main_cmd: &clap::ArgMatches,
+	sub_cmd: &clap::ArgMatches
+) -> error::Result<PathBuf> {
+	if main_cmd.is_present("chain") && sub_cmd.is_present("chain") {
+		bail!(create_input_err("`--chain` option is present two times"));
+	}
+
+	fn check_contradicting_chain_dev_flags(
+		m0: &clap::ArgMatches,
+		m1: &clap::ArgMatches
+	) -> error::Result<()> {
+		if m0.is_present("dev") && m1.is_present("chain") {
+			bail!(create_input_err("`--dev` and `--chain` given on different levels"));
+		}
+
+		Ok(())
+	}
+
+	check_contradicting_chain_dev_flags(main_cmd, sub_cmd)?;
+	check_contradicting_chain_dev_flags(sub_cmd, main_cmd)?;
+
+	let spec_id = if sub_cmd.is_present("chain") || sub_cmd.is_present("dev") {
+		get_chain_key(sub_cmd)
+	} else {
+		get_chain_key(main_cmd)
+	};
+
+	if main_cmd.is_present("base_path") && sub_cmd.is_present("base_path") {
+		bail!(create_input_err("`--base_path` option is present two times"));
+	}
+
+	let base_path = if sub_cmd.is_present("base_path") {
+		base_path(sub_cmd)
+	} else {
+		base_path(main_cmd)
+	};
+
+	Ok(db_path(&base_path, &spec_id))
+}
+
 //
 // IANA unassigned port ranges that we could use:
 // 6717-6766		Unassigned
@@ -337,30 +392,40 @@ where
 	E: IntoExit,
 	F: ServiceFactory,
 {
-
 	panic_hook::set();
 
 	let log_pattern = matches.value_of("log").unwrap_or("");
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
-	let base_path = base_path(matches);
-	let db_path = db_path(&base_path, spec.id());
-
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
 		build_spec::<F>(matches, spec, config)?;
 		return Ok(Action::ExecutedInternally);
-	} else if let Some(matches) = matches.subcommand_matches("export-blocks") {
-		export_blocks::<F, _>(db_path, matches, spec, exit.into_exit())?;
+	} else if let Some(sub_matches) = matches.subcommand_matches("export-blocks") {
+		export_blocks::<F, _>(
+			get_db_path_for_subcommand(matches, sub_matches)?,
+			matches,
+			spec,
+			exit.into_exit()
+		)?;
 		return Ok(Action::ExecutedInternally);
-	} else if let Some(matches) = matches.subcommand_matches("import-blocks") {
-		import_blocks::<F, _>(db_path, matches, spec, exit.into_exit())?;
+	} else if let Some(sub_matches) = matches.subcommand_matches("import-blocks") {
+		import_blocks::<F, _>(
+			get_db_path_for_subcommand(matches, sub_matches)?,
+			matches,
+			spec,
+			exit.into_exit()
+		)?;
 		return Ok(Action::ExecutedInternally);
-	} else if let Some(matches) = matches.subcommand_matches("revert") {
-		revert_chain::<F>(db_path, matches, spec)?;
+	} else if let Some(sub_matches) = matches.subcommand_matches("revert") {
+		revert_chain::<F>(
+			get_db_path_for_subcommand(matches, sub_matches)?,
+			matches,
+			spec
+		)?;
 		return Ok(Action::ExecutedInternally);
-	} else if let Some(matches) = matches.subcommand_matches("purge-chain") {
-		purge_chain::<F>(db_path)?;
+	} else if let Some(sub_matches) = matches.subcommand_matches("purge-chain") {
+		purge_chain::<F>(get_db_path_for_subcommand(matches, sub_matches)?)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
@@ -514,10 +579,18 @@ fn purge_chain<F>(
 	Ok(())
 }
 
-fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = default.parse().ok().ok_or_else(|| format!("Invalid address specified for --{}.", port_param))?;
+fn parse_address(
+	default: &str,
+	port_param: &str,
+	matches: &clap::ArgMatches
+) -> Result<SocketAddr, String> {
+	let mut address: SocketAddr = default.parse().ok().ok_or_else(
+		|| format!("Invalid address specified for --{}.", port_param)
+	)?;
 	if let Some(port) = matches.value_of(port_param) {
-		let port: u16 = port.parse().ok().ok_or_else(|| format!("Invalid port for --{} specified.", port_param))?;
+		let port: u16 = port.parse().ok().ok_or_else(
+			|| format!("Invalid port for --{} specified.", port_param)
+		)?;
 		address.set_port(port);
 	}
 

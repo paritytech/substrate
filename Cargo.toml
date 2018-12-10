@@ -40,6 +40,9 @@ members = [
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
 	"srml/support",
+	"srml/support/procedural",
+	"srml/support/procedural/tools",
+	"srml/support/procedural/tools/derive",
 	"srml/assets",
 	"srml/balances",
 	"srml/consensus",
@@ -75,7 +78,6 @@ members = [
 exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
-	"pwasm-alloc",
 	"core/test-runtime/wasm",
 	"test-utils/chain-spec-builder"
 ]

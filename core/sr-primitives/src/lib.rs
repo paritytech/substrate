@@ -64,11 +64,23 @@ pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
 
-/// A String that is a `&'static str` on `no_std` and a `String` on `std`.
-#[cfg(not(feature = "std"))]
-pub type RuntimeString = &'static str;
+/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+#[cfg(not(feature = "std"))]
+pub type RuntimeString = &'static str;
+
+/// Create a const [RuntimeString].
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! create_runtime_str {
+	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
+}
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! create_runtime_str {
+	( $y:expr ) => {{ $y }}
+}
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};

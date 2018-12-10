@@ -32,6 +32,9 @@ extern crate log;
 use std::io;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 
+/// Maximal payload accepted by RPC servers
+const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
+
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
 pub type HttpServer = http::Server;
@@ -69,6 +72,7 @@ pub fn start_http(
 		.threads(4)
 		.rest_api(http::RestApi::Unsecure)
 		.cors(http::DomainsValidation::Disabled)
+		.max_request_body_size(MAX_PAYLOAD)
 		.start_http(addr)
 }
 
@@ -78,6 +82,7 @@ pub fn start_ws(
 	io: RpcHandler,
 ) -> io::Result<ws::Server> {
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
+		.max_payload(MAX_PAYLOAD)
 		.start(addr)
 		.map_err(|err| match err {
 			ws::Error(ws::ErrorKind::Io(io), _) => io,
