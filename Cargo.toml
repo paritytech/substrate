@@ -78,7 +78,6 @@ members = [
 exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
-	"pwasm-alloc",
 	"core/test-runtime/wasm",
 	"test-utils/chain-spec-builder"
 ]
