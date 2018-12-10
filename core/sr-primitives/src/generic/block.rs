@@ -116,7 +116,7 @@ pub struct SignedBlock<Block> {
 	/// Full block.
 	pub block: Block,
 	/// Block justification.
-	pub justification: Justification,
+	pub justification: Option<Justification>,
 }
 
 // TODO: Remove Deserialize for SignedBlock once RPC no longer needs it #1098

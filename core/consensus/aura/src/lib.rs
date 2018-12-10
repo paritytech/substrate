@@ -63,7 +63,7 @@ use consensus_common::{Authorities, BlockImport, Environment, Proposer};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
-use runtime_primitives::{generic, generic::BlockId, BasicInherentData};
+use runtime_primitives::{generic, generic::BlockId, Justification, BasicInherentData};
 use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, ProvideRuntimeApi};
 use network::import_queue::{Verifier, BasicQueue};
 use primitives::{AuthorityId, ed25519};
@@ -323,7 +323,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							let import_block = ImportBlock {
 								origin: BlockOrigin::Own,
 								header,
-								justification: Vec::new(),
+								justification: None,
 								post_digests: vec![item],
 								body: Some(body),
 								finalized: false,
@@ -457,7 +457,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 		&self,
 		origin: BlockOrigin,
 		header: B::Header,
-		_justification: Vec<u8>,
+		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
 		use runtime_primitives::CheckInherentError;
@@ -513,13 +513,14 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
 
 				extra_verification.into_future().wait()?;
+
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
-					justification: Vec::new(),
 					post_digests: vec![item],
 					body,
 					finalized: false,
+					justification,
 					auxiliary: Vec::new(),
 				};
 
