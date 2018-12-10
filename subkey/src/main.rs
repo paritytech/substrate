@@ -48,6 +48,9 @@ fn main() {
 			print_account(&key.seed);
 		}
 		("restore", Some(matches)) => {
+			// This subcommand is probably obsolete, see
+			// https://github.com/paritytech/substrate/issues/1063
+
 			let mut raw_seed = matches.value_of("seed")
 				.map(str::as_bytes)
 				.expect("seed parameter is required; thus it can't be None; qed");
