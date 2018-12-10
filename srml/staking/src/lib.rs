@@ -105,7 +105,7 @@ decl_module! {
 		/// Declare the desire to stake for the transactor.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn stake(origin) -> Result {
+		fn stake(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::nominating(&who).is_none(), "Cannot stake if already nominating.");
 			let mut intentions = <Intentions<T>>::get();
@@ -115,7 +115,6 @@ decl_module! {
 			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
 			intentions.push(who);
 			<Intentions<T>>::put(intentions);
-			Ok(())
 		}
 
 		/// Retract the desire to stake for the transactor.
@@ -131,7 +130,7 @@ decl_module! {
 			Self::apply_unstake(&who, intentions_index as usize)
 		}
 
-		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
+		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) {
 			let who = ensure_signed(origin)?;
 			let target = <balances::Module<T>>::lookup(target)?;
 
@@ -148,13 +147,11 @@ decl_module! {
 
 			// Update bondage
 			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
-
-			Ok(())
 		}
 
 		/// Will panic if called when source isn't currently nominating target.
 		/// Updates Nominating, NominatorsFor and NominationBalance.
-		fn unnominate(origin, target_index: Compact<u32>) -> Result {
+		fn unnominate(origin, target_index: Compact<u32>) {
 			let source = ensure_signed(origin)?;
 			let target_index: u32 = target_index.into();
 			let target_index = target_index as usize;
@@ -180,7 +177,6 @@ decl_module! {
 				source,
 				<system::Module<T>>::block_number() + Self::bonding_duration()
 			);
-			Ok(())
 		}
 
 		/// Set the given account's preference for slashing behaviour should they be a validator.
@@ -190,7 +186,7 @@ decl_module! {
 			origin,
 			intentions_index: Compact<u32>,
 			prefs: ValidatorPrefs<T::Balance>
-		) -> Result {
+		) {
 			let who = ensure_signed(origin)?;
 			let intentions_index: u32 = intentions_index.into();
 
@@ -199,27 +195,22 @@ decl_module! {
 			}
 
 			<ValidatorPreferences<T>>::insert(who, prefs);
-
-			Ok(())
 		}
 
 		/// Set the number of sessions in an era.
-		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) {
 			<NextSessionsPerEra<T>>::put(new.into());
-			Ok(())
 		}
 
 		/// The length of the bonding duration in eras.
-		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) {
 			<BondingDuration<T>>::put(new.into());
-			Ok(())
 		}
 
 		/// The ideal number of validators.
-		fn set_validator_count(new: Compact<u32>) -> Result {
+		fn set_validator_count(new: Compact<u32>) {
 			let new: u32 = new.into();
 			<ValidatorCount<T>>::put(new);
-			Ok(())
 		}
 
 		/// Force there to be a new era. This also forces a new session immediately after.
@@ -229,10 +220,9 @@ decl_module! {
 		}
 
 		/// Set the offline slash grace period.
-		fn set_offline_slash_grace(new: Compact<u32>) -> Result {
+		fn set_offline_slash_grace(new: Compact<u32>) {
 			let new: u32 = new.into();
 			<OfflineSlashGrace<T>>::put(new);
-			Ok(())
 		}
 	}
 }

@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles setting and retrieval of free balance, 
-//! retrieving total balance, reserve and unreserve balance, 
+//! Balances: Handles setting and retrieval of free balance,
+//! retrieving total balance, reserve and unreserve balance,
 //! repatriating a reserved balance to a beneficiary account that exists,
 //! transfering a balance between accounts (when not reserved),
 //! slashing an account balance, account removal, rewards,
@@ -134,7 +134,7 @@ decl_module! {
 			origin,
 			dest: RawAddress<T::AccountId, T::AccountIndex>,
 			value: <T::Balance as HasCompact>::Type
-		) -> Result {
+		) {
 			let transactor = ensure_signed(origin)?;
 
 			let dest = Self::lookup(dest)?;
@@ -170,8 +170,6 @@ decl_module! {
 				Self::set_free_balance_creating(&dest, new_to_balance);
 				Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
 			}
-
-			Ok(())
 		}
 
 		/// Set the balances of a given account.
@@ -179,11 +177,10 @@ decl_module! {
 			who: RawAddress<T::AccountId, T::AccountIndex>,
 			free: <T::Balance as HasCompact>::Type,
 			reserved: <T::Balance as HasCompact>::Type
-		) -> Result {
+		) {
 			let who = Self::lookup(who)?;
 			Self::set_free_balance(&who, free.into());
 			Self::set_reserved_balance(&who, reserved.into());
-			Ok(())
 		}
 	}
 }
