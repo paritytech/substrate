@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::HasCompact;
-use primitives::traits::{Hash, As};
+use primitives::traits::{Hash, As, Zero};
 use runtime_io::print;
 use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType};
@@ -116,6 +116,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as CouncilVoting {
 		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
+		/// Number of blocks by which to delay enactment of successful, non-unanimous-council-instigated referendum proposals.
+		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = T::BlockNumber::sa(0);
 		pub Proposals get(proposals) build(|_| vec![0u8; 0]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
 		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
 		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
@@ -209,10 +211,18 @@ impl<T: Trait> Module<T> {
 				Self::deposit_event(RawEvent::TallyReferendum(proposal_hash.clone(), tally.0, tally.1, tally.2));
 				if tally.0 > tally.1 + tally.2 {
 					Self::kill_veto_of(&proposal_hash);
-					match tally {
-						(_, 0, 0) => <democracy::Module<T>>::internal_start_referendum(proposal, democracy::VoteThreshold::SuperMajorityAgainst).map(|_| ())?,
-						_ => <democracy::Module<T>>::internal_start_referendum(proposal, democracy::VoteThreshold::SimpleMajority).map(|_| ())?,
+					// If there were no nay-votes from the council, then it's weakly uncontroversial; we enact immediately.
+					let period = match tally.1 {
+						0 => Zero::zero(),
+						_ => Self::enact_delay_period(),
 					};
+					// If all council members voted yes, then it's strongly uncontroversial; we require a negative
+					// super-majority at referendum in order to defeat it.
+					let threshold = match tally {
+						(_, 0, 0) => democracy::VoteThreshold::SuperMajorityAgainst,
+						_ => democracy::VoteThreshold::SimpleMajority,
+					};
+					<democracy::Module<T>>::internal_start_referendum(proposal, threshold, period).map(|_| ())?;
 				}
 			}
 		}
@@ -261,8 +271,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove, 0)]);
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
@@ -284,7 +294,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove), 0);
+			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
@@ -295,7 +305,7 @@ mod tests {
 
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
-			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove, 0)]);
 		});
 	}
 
@@ -304,7 +314,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove), 0);
+			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
@@ -314,7 +324,7 @@ mod tests {
 
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
-			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove, 0)]);
 		});
 	}
 
@@ -378,7 +388,7 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 7, set_balance_proposal(42), VoteThreshold::SimpleMajority)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 7, set_balance_proposal(42), VoteThreshold::SimpleMajority, 0)]);
 		});
 	}
 
@@ -443,7 +453,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SuperMajorityAgainst)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SuperMajorityAgainst, 0)]);
 		});
 	}
 
@@ -461,7 +471,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SimpleMajority)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SimpleMajority, 0)]);
 		});
 	}
 
