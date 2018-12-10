@@ -10,6 +10,9 @@ image:                             parity/rust:nightly
 variables:
   CI_SERVER_NAME:                  "GitLab CI"
   CARGO_HOME:                      "${CI_PROJECT_DIR}/.cargo"
+  # have OS based build containers in the future
+  DOCKER_OS:                       "ubuntu:xenial"
+  ARCH:                            "x86_64"
 
 
 
@@ -25,16 +28,9 @@ cache:
     when:                          on_success
     expire_in:                     7 days
     paths:
-    - target/release/
+    - artifacts/
 
 
-# not needed atm
-# .determine_version: &determine_version |
-#   export VERSION="$(sed -r -n '1,/^version/s/^version = "([^"]+)".*$/\1/p' Cargo.toml)";
-#   echo "Version = " $VERSION
-
-before_script:
- - ./scripts/build.sh
 
 
 #### stage:                        test
@@ -53,9 +49,10 @@ test:rust:stable:                  &test
     - web
     - /^pr-[0-9]+$/
     - /^[0-9]+$/
-
   tags:
     - linux-docker
+  before_script:
+   - ./scripts/build.sh
   script:
     - time cargo test --all --release --verbose --locked
 
@@ -79,18 +76,24 @@ build:rust:linux:release:          &build
     - web
   tags:
     - linux-docker
+  before_script:
+   - ./scripts/build.sh
   script:
     - time cargo build --release --verbose;
-    - ./target/release/substrate --version
-    - sha256sum ./target/release/substrate
-
+    - mkdir -p ./artifacts
+    - mv ./target/release/substrate ./artifacts/.
+    - echo -n "Substrate version = "
+    - ./artifacts/substrate --version | 
+      sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+      tee ./artifacts/VERSION
+    - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
 
 
 
 
 #### stage:                        publish
 
-publish:docker:release:
+.publish:                          &publish
   stage:                           publish
   dependencies:
     - build:rust:linux:release
@@ -99,28 +102,42 @@ publish:docker:release:
     - master
     - tags
     - web
+
+
+publish:docker:release:
+  <<:                              *publish
   tags:
     - shell
   variables:
-    DOCKERFILE: scripts/docker/Dockerfile
-    CONTAINER_IMAGE: parity/substrate
-  before_script:
+    GIT_STRATEGY:                  none
+    DOCKERFILE:                    scripts/docker/Dockerfile
+    CONTAINER_IMAGE:               parity/substrate
+  script:
+    - VERSION="$(cat ./artifacts/VERSION)"
     - test "$Docker_Hub_User_Parity" -a "$Docker_Hub_Pass_Parity"
         || ( echo "no docker credentials provided"; exit 1 )
     - docker login -u "$Docker_Hub_User_Parity" -p "$Docker_Hub_Pass_Parity"
     - docker info
-    - VERSION="$(./target/release/substrate --version | sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p')"
-    - export VERSION
-    - echo "Substrate version = ${VERSION}"
-  script:
-    # - CONTAINER_TAG="${CI_COMMIT_TAG:-latest}"
-    # - docker build --tag $CONTAINER_IMAGE:$CI_BUILD_REF --tag $CONTAINER_IMAGE:$CONTAINER_TAG -f $DOCKERFILE ./target/release/
-    # - docker push $CONTAINER_IMAGE:$CONTAINER_TAG
-    - test -z "${VERSION}" && exit 1
-    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest -f $DOCKERFILE ./target/release/
+    - docker build --tag $CONTAINER_IMAGE:$VERSION --tag $CONTAINER_IMAGE:latest -f $DOCKERFILE ./artifacts/
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
   after_script:
     - docker logout
+
+
+publish:s3:release:
+  <<:                              *publish
+  image:                           parity/awscli:latest
+  variables:
+    GIT_STRATEGY:                  none
+    BUCKET:                        "releases.parity.io"
+    PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
+  script:
+    - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
+  after_script:
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/
+  tags:
+    - linux-docker
+
 
 
