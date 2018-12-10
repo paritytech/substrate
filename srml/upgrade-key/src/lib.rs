@@ -35,7 +35,7 @@ extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 
 use sr_std::prelude::*;
-use support::{StorageValue, dispatch::Result};
+use support::StorageValue;
 use system::ensure_signed;
 
 pub trait Trait: consensus::Trait + system::Trait {
@@ -47,26 +47,22 @@ decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
-		fn upgrade(origin, new: Vec<u8>) -> Result {
+		fn upgrade(origin, new: Vec<u8>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
 
 			<consensus::Module<T>>::set_code(new)?;
 			Self::deposit_event(RawEvent::Upgraded);
-
-			Ok(())
 		}
 
-		fn set_key(origin, new: T::AccountId) -> Result {
+		fn set_key(origin, new: T::AccountId) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
-
-			Ok(())
 		}
 	}
 }
