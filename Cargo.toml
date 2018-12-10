@@ -44,6 +44,7 @@ members = [
 	"srml/support/procedural/tools",
 	"srml/support/procedural/tools/derive",
 	"srml/assets",
+	"srml/aura",
 	"srml/balances",
 	"srml/consensus",
 	"srml/contract",

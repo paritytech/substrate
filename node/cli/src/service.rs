@@ -21,21 +21,17 @@
 use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_runtime::{GenesisConfig, RuntimeApi};
-use node_primitives::Block;
+use node_primitives::{Block, InherentData};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor
 };
 use node_executor;
-use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue, NothingExtra};
-use consensus_common::offline_tracker::OfflineTracker;
+use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use primitives::ed25519::Pair;
 use client;
 use std::time::Duration;
-use parking_lot::RwLock;
 use grandpa;
-
-const AURA_SLOT_DURATION: u64 = 6;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -105,15 +101,13 @@ construct_service_factory! {
 					let proposer = Arc::new(substrate_service::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
-						offline: Arc::new(RwLock::new(OfflineTracker::new())),
-						force_delay: 0 // FIXME: allow this to be configured https://github.com/paritytech/substrate/issues/1170
 					});
+
+					let client = service.client();
 					executor.spawn(start_aura(
-						AuraConfig {
-							local_key: Some(key),
-							slot_duration: AURA_SLOT_DURATION,
-						},
-						service.client(),
+						SlotDuration::get_or_compute(&*client)?,
+						key,
+						client,
 						block_import.clone(),
 						proposer,
 						service.network(),
@@ -124,31 +118,39 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<Self::Block, grandpa::BlockImportForService<Self>, NothingExtra>
+		FullImportQueue = AuraImportQueue<
+			Self::Block,
+			grandpa::BlockImportForService<Self>,
+			NothingExtra,
+			::consensus::InherentProducingFn<InherentData>,
+		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
+				let slot_duration = SlotDuration::get_or_compute(&*client)?;
 				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client)?;
 				let block_import = Arc::new(block_import);
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				Ok(import_queue(
-					AuraConfig {
-						local_key: None,
-						slot_duration: 5
-					},
+					slot_duration,
 					block_import,
 					NothingExtra,
+					::consensus::make_basic_inherent as _,
 				))
 			}},
-		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>, NothingExtra>
-			{ |ref mut config, client| Ok(
-				import_queue(AuraConfig {
-					local_key: None,
-					slot_duration: 5
-				},
-				client,
-				NothingExtra,
-			))
+		LightImportQueue = AuraImportQueue<
+			Self::Block,
+			LightClient<Self>,
+			NothingExtra,
+			::consensus::InherentProducingFn<InherentData>,
+		>
+			{ |ref mut config, client: Arc<LightClient<Self>>|
+				Ok(import_queue(
+					SlotDuration::get_or_compute(&*client)?,
+					client,
+					NothingExtra,
+					::consensus::make_basic_inherent as _,
+				))
 			},
 	}
 }
@@ -165,7 +167,6 @@ mod tests {
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
 		let validators = vec![alice.public().0.into(), bob.public().0.into()];
 		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
-		let offline = Arc::new(RwLock::new(OfflineTracker::new()));
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
 			let block_id = BlockId::number(service.client().info().unwrap().chain.best_number);
@@ -175,7 +176,6 @@ mod tests {
 				client: service.client().clone(),
 				transaction_pool: service.transaction_pool().clone(),
 				network: consensus_net,
-				offline: offline.clone(),
 				force_delay: 0,
 				handle: dummy_runtime.executor(),
 			};

@@ -13,9 +13,10 @@ parity-codec-derive = "2.1"
 sr-std = { path = "../../core/sr-std" }
 srml-support = { path = "../../srml/support" }
 substrate-primitives = { path = "../../core/primitives" }
-substrate-finality-grandpa-primitives = { path = "../../core/finality-grandpa/primitives" }
+substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false }
 substrate-client = { path = "../../core/client" }
 substrate-keyring = { path = "../../core/keyring" }
+srml-aura = { path = "../../srml/aura" }
 srml-balances = { path = "../../srml/balances" }
 srml-consensus = { path = "../../srml/consensus" }
 srml-contract = { path = "../../srml/contract" }
@@ -59,5 +60,5 @@ std = [
 	"serde/std",
 	"safe-mix/std",
 	"substrate-client/std",
-	"substrate-finality-grandpa-primitives/std",
+	"substrate-consensus-aura-primitives/std",
 ]

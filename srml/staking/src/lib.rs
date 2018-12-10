@@ -333,6 +333,11 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Get the current validators.
+	pub fn validators() -> Vec<T::AccountId> {
+		session::Module::<T>::validators()
+	}
+
 	// PUBLIC MUTABLES (DANGEROUS)
 
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
@@ -490,6 +495,38 @@ impl<T: Trait> Module<T> {
 		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
 		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
 	}
+
+	/// Call when a validator is determined to be offline. `count` is the
+	/// number of offences the validator has committed.
+	pub fn on_offline_validator(v: T::AccountId, count: usize) {
+		for _ in 0..count {
+			let slash_count = Self::slash_count(&v);
+			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
+			let grace = Self::offline_slash_grace();
+
+			let event = if slash_count >= grace {
+				let instances = slash_count - grace;
+				let slash = Self::current_offline_slash() << instances;
+				let next_slash = slash << 1u32;
+				let _ = Self::slash_validator(&v, slash);
+				if instances >= Self::validator_preferences(&v).unstake_threshold
+					|| Self::slashable_balance(&v) < next_slash
+				{
+					if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
+						Self::apply_unstake(&v, pos)
+							.expect("pos derived correctly from Self::intentions(); \
+								apply_unstake can only fail if pos wrong; \
+								Self::intentions() doesn't change; qed");
+					}
+					let _ = Self::apply_force_new_era(false);
+				}
+				RawEvent::OfflineSlash(v.clone(), slash)
+			} else {
+				RawEvent::OfflineWarning(v.clone(), slash_count)
+			};
+			Self::deposit_event(event);
+		}
+	}
 }
 
 impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
@@ -514,33 +551,11 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
-	fn on_offline_validator(validator_index: usize) {
-		let v = <session::Module<T>>::validators()[validator_index].clone();
-		let slash_count = Self::slash_count(&v);
-		<SlashCount<T>>::insert(v.clone(), slash_count + 1);
-		let grace = Self::offline_slash_grace();
-
-		let event = if slash_count >= grace {
-			let instances = slash_count - grace;
-			let slash = Self::current_offline_slash() << instances;
-			let next_slash = slash << 1u32;
-			let _ = Self::slash_validator(&v, slash);
-			if instances >= Self::validator_preferences(&v).unstake_threshold
-				|| Self::slashable_balance(&v) < next_slash
-			{
-				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
-					Self::apply_unstake(&v, pos)
-						.expect("pos derived correctly from Self::intentions(); \
-							apply_unstake can only fail if pos wrong; \
-							Self::intentions() doesn't change; qed");
-				}
-				let _ = Self::apply_force_new_era(false);
-			}
-			RawEvent::OfflineSlash(v, slash)
-		} else {
-			RawEvent::OfflineWarning(v, slash_count)
-		};
-		Self::deposit_event(event);
+impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
+	fn handle_report(reported_indices: Vec<u32>) {
+		for validator_index in reported_indices {
+			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+			Self::on_offline_validator(v, 1);
+		}
 	}
 }

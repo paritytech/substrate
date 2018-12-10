@@ -36,7 +36,7 @@ impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
 	type SessionKey = u64;
-	type OnOfflineValidator = ();
+	type InherentOfflineReport = ();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -65,6 +65,7 @@ impl session::Trait for Test {
 impl timestamp::Trait for Test {
 	const TIMESTAMP_SET_POSITION: u32 = 0;
 	type Moment = u64;
+	type OnTimestampSet = ();
 }
 impl Trait for Test {
 	type OnRewardMinted = ();

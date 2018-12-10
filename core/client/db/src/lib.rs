@@ -642,6 +642,30 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
+impl<Block> client::backend::AuxStore for Backend<Block> where Block: BlockT<Hash=H256> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> client::error::Result<()> {
+		let mut transaction = DBTransaction::new();
+		for (k, v) in insert {
+			transaction.put(columns::AUX, k, v);
+		}
+		for k in delete {
+			transaction.delete(columns::AUX, k);
+		}
+		self.storage.db.write(transaction).map_err(db_err)?;
+		Ok(())
+	}
+
+	fn get_aux(&self, key: &[u8]) -> Result<Option<Vec<u8>>, client::error::Error> {
+		Ok(self.storage.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)?)
+	}
+}
+
 impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
@@ -882,24 +906,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			Err(e) => Err(e),
 			_ => Err(client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()),
 		}
-	}
-
-	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>
-		(&self, insert: I, delete: D) -> Result<(), client::error::Error>
-	{
-		let mut transaction = DBTransaction::new();
-		for (k, v) in insert {
-			transaction.put(columns::AUX, k, v);
-		}
-		for k in delete {
-			transaction.delete(columns::AUX, k);
-		}
-		self.storage.db.write(transaction).map_err(db_err)?;
-		Ok(())
-	}
-
-	fn get_aux(&self, key: &[u8]) -> Result<Option<Vec<u8>>, client::error::Error> {
-		Ok(self.storage.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)?)
 	}
 }
 
