@@ -30,7 +30,7 @@ use syn::{
 	fold::{self, Fold}, FnDecl, parse_quote, Pat
 };
 
-use std::iter;
+use std::{collections::HashSet, iter};
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "IMPL_RUNTIME_APIS";
@@ -165,11 +165,21 @@ fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
 }
 
 /// Generate all the implementation calls for the given functions.
-fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, TokenStream)>> {
+fn generate_impl_calls(
+	impls: &[ItemImpl],
+	input: &Ident
+) -> Result<Vec<(Ident, Ident, TokenStream)>> {
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
-		let impl_trait = extend_with_runtime_decl_path(extract_impl_trait(impl_)?.clone());
+		let impl_trait_path = extract_impl_trait(impl_)?;
+		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
+		let impl_trait_ident = &impl_trait_path
+			.segments
+			.last()
+			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
+			.value()
+			.ident;
 
 		for item in &impl_.items {
 			match item {
@@ -181,7 +191,9 @@ fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, 
 						&impl_trait
 					)?;
 
-					impl_calls.push((method.sig.ident.clone(), impl_call));
+					impl_calls.push(
+						(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call)
+					);
 				},
 				_ => {},
 			}
@@ -191,13 +203,19 @@ fn generate_impl_calls(impls: &[ItemImpl], input: &Ident) -> Result<Vec<(Ident, 
 	Ok(impl_calls)
 }
 
+fn prefix_function_with_trait(trait_: &Ident, function: &Ident) -> String {
+	format!("{}_{}", trait_.to_string(), function.to_string())
+}
+
 /// Generate the dispatch function that is used in native to call into the runtime.
 fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let data = Ident::new("data", Span::call_site());
-	let impl_calls = generate_impl_calls(impls, &data)?.into_iter().map(|(fn_name, impl_)| {
-		let fn_name = fn_name.to_string();
-		quote!( #fn_name => Some({ #impl_ }), )
-	});
+	let impl_calls = generate_impl_calls(impls, &data)?
+		.into_iter()
+		.map(|(trait_, fn_name, impl_)| {
+			let name = prefix_function_with_trait(&trait_, &fn_name);
+			quote!( #name => Some({ #impl_ }), )
+		});
 
 	Ok(quote!(
 		#[cfg(feature = "std")]
@@ -214,30 +232,37 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let input = Ident::new("input", Span::call_site());
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let impl_calls = generate_impl_calls(impls, &input)?.into_iter().map(|(fn_name, impl_)| {
-		quote!(
-			#[cfg(not(feature = "std"))]
-			#[no_mangle]
-			pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
-				let mut #input = if input_len == 0 {
-					&[0u8; 0]
-				} else {
-					unsafe {
-						#c::runtime_api::slice::from_raw_parts(input_data, input_len)
-					}
-				};
+	let impl_calls = generate_impl_calls(impls, &input)?
+		.into_iter()
+		.map(|(trait_, fn_name, impl_)| {
+			let fn_name = Ident::new(
+				&prefix_function_with_trait(&trait_, &fn_name),
+				Span::call_site()
+			);
 
-				let output = { #impl_ };
-				let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+			quote!(
+				#[cfg(not(feature = "std"))]
+				#[no_mangle]
+				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
+					let mut #input = if input_len == 0 {
+						&[0u8; 0]
+					} else {
+						unsafe {
+							#c::runtime_api::slice::from_raw_parts(input_data, input_len)
+						}
+					};
 
-				// Leak the output vector to avoid it being freed.
-				// This is fine in a WASM context since the heap
-				// will be discarded after the call.
-				::core::mem::forget(output);
-				res
-			}
-		)
-	});
+					let output = { #impl_ };
+					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+
+					// Leak the output vector to avoid it being freed.
+					// This is fine in a WASM context since the heap
+					// will be discarded after the call.
+					#c::runtime_api::mem::forget(output);
+					res
+				}
+			)
+		});
 
 	Ok(quote!( #( #impl_calls )* ))
 }
@@ -272,7 +297,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		/// Implements all runtime apis for the client side.
 		#[cfg(any(feature = "std", test))]
 		pub struct RuntimeApi {
-			call: ::std::ptr::NonNull<#crate_::runtime_api::CallApiAt<#block>>,
+			call: ::std::ptr::NonNull<#crate_::runtime_api::CallRuntimeAt<#block>>,
 			commit_on_success: ::std::cell::RefCell<bool>,
 			initialised_block: ::std::cell::RefCell<Option<#block_id>>,
 			changes: ::std::cell::RefCell<#crate_::runtime_api::OverlayedChanges>,
@@ -287,11 +312,11 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		unsafe impl Sync for RuntimeApi {}
 
 		#[cfg(any(feature = "std", test))]
-		impl #crate_::runtime_api::ApiExt for RuntimeApi {
+		impl #crate_::runtime_api::ApiExt<#block> for RuntimeApi {
 			fn map_api_result<F: FnOnce(&Self) -> ::std::result::Result<R, E>, R, E>(
 				&self,
 				map_call: F
-			) -> ::std::result::Result<R, E> {
+			) -> ::std::result::Result<R, E> where Self: Sized {
 				*self.commit_on_success.borrow_mut() = false;
 				let res = map_call(self);
 				*self.commit_on_success.borrow_mut() = true;
@@ -300,17 +325,25 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 
 				res
 			}
+
+			fn has_api<A: #crate_::runtime_api::RuntimeApiInfo + ?Sized>(
+				&self,
+				at: &#block_id
+			) -> #crate_::error::Result<bool> where Self: Sized {
+				unsafe { self.call.as_ref().runtime_version_at(at) }.map(|r| r.has_api::<A>())
+			}
 		}
 
 		#[cfg(any(feature = "std", test))]
 		impl #crate_::runtime_api::ConstructRuntimeApi<#block> for RuntimeApi {
-			fn construct_runtime_api<'a, T: #crate_::runtime_api::CallApiAt<#block>>(
+			fn construct_runtime_api<'a, T: #crate_::runtime_api::CallRuntimeAt<#block>>(
 				call: &'a T
-			) -> #crate_::runtime_api::ApiRef<'a, Self> {
+			) -> #crate_::runtime_api::ApiRef<'a, Self> where Self: Sized {
 				RuntimeApi {
 					call: unsafe {
 						::std::ptr::NonNull::new_unchecked(
-							call as &#crate_::runtime_api::CallApiAt<#block> as *const _ as *mut _
+							call as
+								&#crate_::runtime_api::CallRuntimeAt<#block> as *const _ as *mut _
 						)
 					},
 					commit_on_success: true.into(),
@@ -423,6 +456,7 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	node_block: &'a TokenStream,
 	runtime_block: &'a TypePath,
 	node_block_id: &'a TokenStream,
+	impl_trait_ident: &'a Ident,
 }
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -457,7 +491,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				*p = generate_unique_pattern(p.clone(), &mut generated_name_counter);
 				p
 			});
-			let name = input.sig.ident.to_string();
+			let name = prefix_function_with_trait(self.impl_trait_ident, &input.sig.ident);
 
 			// Generate the new method implementation that calls into the runime.
 			input.block = parse_quote!( { self.call_api_at(at, #name, &( #( #arg_names ),* )) } );
@@ -478,23 +512,74 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	}
 }
 
+/// Generate the implementations of the runtime apis for the `RuntimeApi` type.
 fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut result = Vec::with_capacity(impls.len());
 
 	for impl_ in impls {
-		let runtime_block = extract_runtime_block_ident(extract_impl_trait(&impl_)?)?;
+		let impl_trait = extract_impl_trait(&impl_)?;
+		let impl_trait_ident = &impl_trait
+			.segments
+			.last()
+			.ok_or_else(|| Error::new(impl_trait.span(), "Empty trait path not possible!"))?
+			.value()
+			.ident;
+		let runtime_block = extract_runtime_block_ident(impl_trait)?;
 		let (node_block, node_block_id) = generate_node_block_and_block_id_ty(&impl_.self_ty);
 
 		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
 			runtime_block,
 			node_block: &node_block,
 			node_block_id: &node_block_id,
+			impl_trait_ident: &impl_trait_ident,
 		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
 	}
 
 	Ok(quote!( #( #result )* ))
+}
+
+/// Generates `RUNTIME_API_VERSIONS` that holds all version information about the implemented
+/// runtime apis.
+fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
+	let mut result = Vec::with_capacity(impls.len());
+	let mut processed_traits = HashSet::new();
+
+	for impl_ in impls {
+		let mut path = extend_with_runtime_decl_path(extract_impl_trait(&impl_)?.clone());
+		// Remove the trait
+		let trait_ = path
+			.segments
+			.pop()
+			.expect("extract_impl_trait already checks that this is valid; qed")
+			.into_value()
+			.ident;
+
+		let span = trait_.span();
+		if !processed_traits.insert(trait_) {
+			return Err(
+				Error::new(
+					span,
+					"Two traits with the same name detected! \
+					The trait name is used to generate its ID. \
+					Please rename one trait at the declaration!"
+				)
+			)
+		}
+
+		let id: Path = parse_quote!( #path ID );
+		let version: Path = parse_quote!( #path VERSION );
+
+		result.push(quote!( (#id, #version) ));
+	}
+
+	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
+
+	Ok(quote!(
+		const RUNTIME_API_VERSIONS: #c::runtime_api::ApisVec =
+			#c::runtime_api::create_apis_vec!([ #( #result ),* ]);
+	))
 }
 
 /// The implementation of the `impl_runtime_apis!` macro.
@@ -507,6 +592,7 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
 	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
+	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 
 	quote!(
 		#hidden_includes
@@ -516,6 +602,8 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 		#api_impls_for_runtime
 
 		#api_impls_for_runtime_api
+
+		#runtime_api_versions
 
 		pub mod api {
 			use super::*;

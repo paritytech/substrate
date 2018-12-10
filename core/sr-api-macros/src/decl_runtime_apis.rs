@@ -16,7 +16,7 @@
 
 use utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
-	fold_fn_decl_for_client_side
+	fold_fn_decl_for_client_side, unwrap_or_error
 };
 
 use proc_macro;
@@ -27,11 +27,22 @@ use quote::quote;
 use syn::{
 	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error},
 	fold::{self, Fold}, FnDecl, parse_quote, ItemTrait, Generics, GenericParam, Attribute,
-	visit::{Visit, self}, FnArg, Pat, TraitBound, Type
+	visit::{Visit, self}, FnArg, Pat, TraitBound, Type, Meta, NestedMeta, Lit
 };
+
+use std::collections::HashMap;
+
+use blake2_rfc;
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "DECL_RUNTIME_APIS";
+
+/// The `core_trait` attribute.
+const CORE_TRAIT_ATTRIBUTE: &str = "core_trait";
+/// The `api_version` attribute.
+const API_VERSION_ATTRIBUTE: &str = "api_version";
+/// All attributes that we support in the declaratio of a runtime api trait.
+const SUPPORTED_ATTRIBUTE_NAMES: &[&str] = &[CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE];
 
 /// The structure used for parsing the runtime api declarations.
 struct RuntimeApiDecls {
@@ -59,15 +70,22 @@ fn extend_generics_with_block(generics: &mut Generics) {
 	generics.gt_token = Some(parse_quote!(>));
 }
 
-// Check if `core_trait` attribute is present and remove it. Returns if the attribute was found.
-fn remove_core_trait_attribute(attrs: &mut Vec<Attribute>) -> bool {
-	let mut found = false;
+/// Remove all attributes from the vector that are supported by us in the declaration of a runtime
+/// api trait. The returned hashmap contains all found attribute names as keys and the rest of the
+/// attribute body as `TokenStream`.
+fn remove_supported_attributes(attrs: &mut Vec<Attribute>) -> HashMap<&'static str, Attribute> {
+	let mut result = HashMap::new();
 	attrs.retain(|v| {
-		let res = v.path.is_ident("core_trait");
-		found |= res;
-		!res
+		match SUPPORTED_ATTRIBUTE_NAMES.iter().filter(|a| v.path.is_ident(a)).next() {
+			Some(attribute) => {
+				result.insert(*attribute, v.clone());
+				false
+			},
+			None => true,
+		}
 	});
-	found
+
+	result
 }
 
 /// Generate the decleration of the trait for the runtime.
@@ -78,7 +96,11 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 		let mut decl = decl.clone();
 		extend_generics_with_block(&mut decl.generics);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
-		remove_core_trait_attribute(&mut decl.attrs);
+		let found_attributes = remove_supported_attributes(&mut decl.attrs);
+		let api_version = unwrap_or_error(get_api_version(&found_attributes).map(|v| {
+			generate_runtime_api_version(v as u32)
+		}));
+		let id = generate_runtime_api_id(&decl.ident.to_string());
 
 		result.push(quote!(
 			#[doc(hidden)]
@@ -86,6 +108,10 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 				use super::*;
 
 				#decl
+
+				pub #api_version
+
+				pub #id
 			}
 		));
 	}
@@ -97,6 +123,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 struct ToClientSideDecl<'a> {
 	block_id: &'a TokenStream,
 	crate_: &'a TokenStream,
+	found_attributes: &'a mut HashMap<&'static str, Attribute>,
 }
 
 impl<'a> Fold for ToClientSideDecl<'a> {
@@ -113,8 +140,9 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 	fn fold_item_trait(&mut self, mut input: ItemTrait) -> ItemTrait {
 		extend_generics_with_block(&mut input.generics);
 
+		*self.found_attributes = remove_supported_attributes(&mut input.attrs);
 		// Check if this is the `Core` runtime api trait.
-		let is_core_trait = remove_core_trait_attribute(&mut input.attrs);
+		let is_core_trait = self.found_attributes.contains_key(CORE_TRAIT_ATTRIBUTE);
 
 		if is_core_trait {
 			// Add all the supertraits we want to have for `Core`.
@@ -124,7 +152,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 				+ Send
 				+ Sync
 				+ #crate_::runtime_api::ConstructRuntimeApi<Block>
-				+ #crate_::runtime_api::ApiExt
+				+ #crate_::runtime_api::ApiExt<Block>
 			);
 		} else {
 			// Add the `Core` runtime api as super trait.
@@ -139,6 +167,77 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 	}
 }
 
+/// Parse the given attribute as `API_VERSION_ATTRIBUTE`.
+fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
+	let meta = version.parse_meta()?;
+
+	let err = Err(Error::new(
+			meta.span(),
+			&format!(
+				"Unexpected `{api_version}` attribute. The supported format is `{api_version}(1)`",
+				api_version = API_VERSION_ATTRIBUTE
+			)
+		)
+	);
+
+	match meta {
+		Meta::List(list) => {
+			if list.nested.len() > 1 && list.nested.is_empty() {
+				err
+			} else {
+				match list.nested.first().as_ref().map(|v| v.value()) {
+					Some(NestedMeta::Literal(Lit::Int(i))) => {
+						Ok(i.value())
+					},
+					_ => err,
+				}
+			}
+		},
+		_ => err,
+	}
+}
+
+/// Generates the identifier as const variable for the given `trait_name`
+/// by hashing the `trait_name`.
+fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
+	let mut res = [0; 8];
+	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
+
+	quote!(	const ID: [u8; 8] = [ #( #res ),* ]; )
+}
+
+/// Generates the const variable that holds the runtime api version.
+fn generate_runtime_api_version(version: u32) -> TokenStream {
+	quote!( const VERSION: u32 = #version; )
+}
+
+/// Generates the implementation of `RuntimeApiInfo` for the given trait.
+fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
+	let trait_name = &trait_.ident;
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let id = generate_runtime_api_id(&trait_name.to_string());
+	let version = generate_runtime_api_version(version as u32);
+	let (impl_generics, ty_generics, where_clause) = trait_.generics.split_for_impl();
+
+	quote!(
+		 #[cfg(any(feature = "std", test))]
+		impl #impl_generics #crate_::runtime_api::RuntimeApiInfo
+			for #trait_name #ty_generics #where_clause
+		{
+			#id
+			#version
+		}
+	)
+}
+
+/// Get the api version from the user given attribute or `Ok(1)`, if no attribute was given.
+fn get_api_version(found_attributes: &HashMap<&'static str, Attribute>) -> Result<u64> {
+	match found_attributes.get(&API_VERSION_ATTRIBUTE) {
+		Some(attr) => parse_runtime_api_version(attr),
+		None => Ok(1),
+	}
+}
+
 /// Generate the decleration of the trait for the client side.
 fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 	let mut result = Vec::new();
@@ -148,9 +247,24 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 
 		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 		let block_id = quote!( #crate_::runtime_api::BlockId<Block> );
-		let mut to_client_side = ToClientSideDecl { crate_: &crate_, block_id: &block_id };
+		let mut found_attributes = HashMap::new();
 
-		result.push(to_client_side.fold_item_trait(decl));
+		let decl = {
+			let mut to_client_side = ToClientSideDecl {
+				crate_: &crate_,
+				block_id: &block_id,
+				found_attributes: &mut found_attributes
+			};
+			to_client_side.fold_item_trait(decl)
+		};
+
+		let api_version = get_api_version(&found_attributes);
+
+		let runtime_info = unwrap_or_error(
+			api_version.map(|v| generate_runtime_info_impl(&decl, v))
+		);
+
+		result.push(quote!( #decl #runtime_info ));
 	}
 
 	quote!( #( #result )* )

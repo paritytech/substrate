@@ -35,8 +35,11 @@ extern crate sr_primitives as runtime_primitives;
 use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+#[cfg(feature = "std")]
+use runtime_primitives::traits::RuntimeApiInfo;
 
 use runtime_primitives::RuntimeString;
+pub use runtime_primitives::create_runtime_str;
 
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
@@ -50,22 +53,16 @@ pub type ApisVec = ::std::borrow::Cow<'static, [(ApiId, u32)]>;
 #[cfg(not(feature = "std"))]
 pub type ApisVec = &'static [(ApiId, u32)];
 
-#[cfg(feature = "std")]
-#[macro_export]
-macro_rules! ver_str {
-	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
-}
-
-#[cfg(not(feature = "std"))]
-#[macro_export]
-macro_rules! ver_str {
-	( $y:expr ) => {{ $y }}
-}
-
 /// Create a vector of Api declarations.
 #[macro_export]
-macro_rules! apis_vec {
-	( $y:expr ) => { ver_str!(& $y) }
+#[cfg(feature = "std")]
+macro_rules! create_apis_vec {
+	( $y:expr ) => { ::std::borrow::Cow::Borrowed(& $y) }
+}
+#[macro_export]
+#[cfg(not(feature = "std"))]
+macro_rules! create_apis_vec {
+	( $y:expr ) => { & $y }
 }
 
 /// Runtime version.
@@ -112,7 +109,13 @@ pub struct RuntimeVersion {
 #[cfg(feature = "std")]
 impl fmt::Display for RuntimeVersion {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}-{}:{}({}-{})", self.spec_name, self.spec_version, self.authoring_version, self.impl_name, self.impl_version)
+		write!(f, "{}-{}:{}({}-{})",
+			self.spec_name,
+			self.spec_version,
+			self.authoring_version,
+			self.impl_name,
+			self.impl_version
+		)
 	}
 }
 
@@ -126,8 +129,10 @@ impl RuntimeVersion {
 	}
 
 	/// Check if this version supports a particular API.
-	pub fn has_api(&self, api: ApiId, version: u32) -> bool {
-		self.apis.iter().any(|&(ref s, v)| &api == s && version == v)
+	pub fn has_api<A: RuntimeApiInfo + ?Sized>(&self) -> bool {
+		self.apis.iter().any(|(s, v)| {
+			s == &A::ID && *v == A::VERSION
+		})
 	}
 }
 
