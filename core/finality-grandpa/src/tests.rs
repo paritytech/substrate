@@ -24,14 +24,14 @@ use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::Keyring;
 use client::{
-	BlockchainEvents, runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallApiAt},
-	error::Result
+	BlockchainEvents, error::Result,
+	runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallRuntimeAt},
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
 use consensus_common::BlockOrigin;
 use std::{collections::HashSet, result};
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
 use runtime_primitives::generic::BlockId;
 
 use authorities::AuthoritySet;
@@ -277,17 +277,21 @@ impl Core<Block> for RuntimeApi {
 	}
 }
 
-impl ApiExt for RuntimeApi {
+impl ApiExt<Block> for RuntimeApi {
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
 		_: F
 	) -> result::Result<R, E> {
 		unimplemented!("Not required for testing!")
 	}
+
+	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, _: &BlockId<Block>) -> Result<bool> {
+		unimplemented!("Not required for testing!")
+	}
 }
 
 impl ConstructRuntimeApi<Block> for RuntimeApi {
-	fn construct_runtime_api<'a, T: CallApiAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
+	fn construct_runtime_api<'a, T: CallRuntimeAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
 		unimplemented!("Not required for testing!")
 	}
 }

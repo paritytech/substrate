@@ -32,7 +32,7 @@ use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
 };
 use runtime_primitives::BuildStorage;
-use runtime_api::{Core as CoreAPI, CallApiAt, TaggedTransactionQueue, ConstructRuntimeApi};
+use runtime_api::{Core as CoreAPI, CallRuntimeAt, TaggedTransactionQueue, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -288,7 +288,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "authorities",&[])
+			None => self.executor.call(id, "Core_authorities",&[])
 				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 					.ok_or(error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
@@ -635,7 +635,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let mut r = self.executor.call_at_state(
 					transaction_state,
 					&mut overlay,
-					"execute_block",
+					"Core_execute_block",
 					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
@@ -1034,7 +1034,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
@@ -1050,7 +1050,8 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 		initialised_block: &mut Option<BlockId<Block>>,
 	) -> error::Result<Vec<u8>> {
 		//TODO: Find a better way to prevent double block initialization
-		if function != "initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
+		if function != "Core_initialise_block"
+			&& initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let parent = at;
 			let header = <<Block as BlockT>::Header as HeaderT>::new(
 				self.block_number_from_id(parent)?
@@ -1062,11 +1063,15 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 					.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
 				Default::default()
 			);
-			self.call_at_state(at, "initialise_block", header.encode(), changes)?;
+			self.call_at_state(at, "Core_initialise_block", header.encode(), changes)?;
 			*initialised_block = Some(*at);
 		}
 
 		self.call_at_state(at, function, args, changes)
+	}
+
+	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+		self.runtime_version_at(at)
 	}
 }
 
@@ -1238,7 +1243,7 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;
-	use test_client::client::backend::Backend as TestBackend;
+	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
 
@@ -1332,6 +1337,17 @@ pub(crate) mod tests {
 				&Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
+		);
+	}
+
+	#[test]
+	fn runtime_api_has_test_api() {
+		let client = test_client::new();
+
+		assert!(
+			client.runtime_api().has_api::<TestAPI<Block>>(
+				&BlockId::Number(client.info().unwrap().chain.best_number),
+			).unwrap()
 		);
 	}
 
