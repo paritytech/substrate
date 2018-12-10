@@ -264,7 +264,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// ImportQueue for light clients
 	type LightImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
 
-	//TODO: replace these with a constructor trait. that TransactionPool implements.
+	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<FullClient<Self>>)
 		-> Result<TransactionPool<Self::FullTransactionPoolApi>, error::Error>;
@@ -326,7 +326,7 @@ pub trait Components: Sized + 'static {
 	type RuntimeApi: Send + Sync;
 	/// A type that can start the RPC.
 	type RPC: StartRPC<Self>;
-	// TODO [ToDr] Tratify transaction pool and allow people to implement their own.
+	// TODO [ToDr] Traitify transaction pool and allow people to implement their own. (#1242)
 	/// A type that can maintain transaction pool.
 	type TransactionPool: MaintainTransactionPool<Self>;
 	/// Extrinsic pool type.
