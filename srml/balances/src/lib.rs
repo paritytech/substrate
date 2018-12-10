@@ -101,7 +101,16 @@ pub trait EnsureAccountLiquid<AccountId> {
 	/// with the reason why not otherwise.
 	fn ensure_account_liquid(who: &AccountId) -> Result;
 }
-
+impl<
+	AccountId,
+	X: EnsureAccountLiquid<AccountId>,
+	Y: EnsureAccountLiquid<AccountId>,
+> EnsureAccountLiquid<AccountId> for (X, Y) {
+	fn ensure_account_liquid(who: &AccountId) -> Result {
+		X::ensure_account_liquid(who)?;
+		Y::ensure_account_liquid(who)
+	}
+}
 impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 	fn ensure_account_liquid(_who: &AccountId) -> Result { Ok(()) }
 }

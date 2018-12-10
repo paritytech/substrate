@@ -130,8 +130,8 @@ impl aura::Trait for Runtime {
 impl balances::Trait for Runtime {
 	type Balance = Balance;
 	type AccountIndex = AccountIndex;
-	type OnFreeBalanceZero = (Staking, Contract);
-	type EnsureAccountLiquid = Staking;
+	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
 }
 

@@ -311,10 +311,12 @@ impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
 	}
 
 	fn useless_peer(&self, who: NodeIndex, reason: &str) {
+		trace!(target:"sync", "Useless peer {}, {}", who, reason);
 		self.with_sync(|_, protocol| protocol.report_peer(who, Severity::Useless(reason)))
 	}
 
 	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str) {
+		trace!(target:"sync", "Bad peer {}, {}", who, reason);
 		self.with_sync(|sync, protocol| {
 			protocol.report_peer(who, Severity::Useless(reason));	// is this actually malign or just useless?
 			sync.restart(protocol);
