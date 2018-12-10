@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use mock::{Consensus, System, Aura, Timestamp, new_test_ext};
+use mock::{System, Aura, new_test_ext};
 use primitives::traits::Header;
 use runtime_io::with_externalities;
 use parking_lot::Mutex;

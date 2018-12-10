@@ -77,6 +77,4 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 }
 
 pub type System = system::Module<Test>;
-pub type Consensus = consensus::Module<Test>;
-pub type Timestamp = timestamp::Module<Test>;
 pub type Aura = Module<Test>;

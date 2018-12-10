@@ -510,9 +510,11 @@ impl<T: Trait> Module<T> {
 	/// number of offences the validator has committed.
 	pub fn on_offline_validator(v: T::AccountId, count: usize) {
 		for _ in 0..count {
+			println!("slashing {:?}", v);
 			let slash_count = Self::slash_count(&v);
 			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
 			let grace = Self::offline_slash_grace();
+			println!("Slash count? {:?}", Self::slash_count(&v));
 
 			let event = if slash_count >= grace {
 				let instances = slash_count - grace;
