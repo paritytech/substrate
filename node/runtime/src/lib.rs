@@ -59,9 +59,9 @@ use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
-use grandpa::fg_primitives::{self, ScheduledChange, id::*};
+use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
-	block_builder::api as block_builder_api, runtime_api::{self as client_api, id::*}
+	block_builder::api as block_builder_api, runtime_api as client_api
 };
 use runtime_primitives::{ApplyResult, CheckInherentError, BasicInherentData};
 use runtime_primitives::transaction_validity::TransactionValidity;
@@ -91,17 +91,12 @@ const NOTE_OFFLINE_POSITION: u32 = 1;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: ver_str!("node"),
-	impl_name: ver_str!("substrate-node"),
+	spec_name: create_runtime_str!("node"),
+	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
-	apis: apis_vec!([
-		(BLOCK_BUILDER, 1),
-		(TAGGED_TRANSACTION_QUEUE, 1),
-		(METADATA, 1),
-		(GRANDPA_API, 1),
-	]),
+	apis: RUNTIME_API_VERSIONS,
 };
 
 /// Native version.

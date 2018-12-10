@@ -41,7 +41,6 @@ use rstd::prelude::*;
 use rstd::result;
 use parity_codec::Encode;
 use runtime_support::{storage, Parameter};
-use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::CheckInherentError;
@@ -142,16 +141,15 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Report some misbehaviour.
-		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
+		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// TODO.
-			Ok(())
 		}
 
 		/// Note the previous block's validator missed their opportunity to propose a block.
 		/// This only comes in if 2/3+1 of the validators agree that no proposal was submitted.
 		/// It's only relevant for the previous block.
-		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result {
+		fn note_offline(origin, offline_val_indices: Vec<u32>) {
 			ensure_inherent(origin)?;
 			assert!(
 				<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
@@ -162,34 +160,28 @@ decl_module! {
 			for validator_index in offline_val_indices.into_iter() {
 				T::OnOfflineValidator::on_offline_validator(validator_index as usize);
 			}
-
-			Ok(())
 		}
 
 		/// Make some on-chain remark.
-		fn remark(origin, _remark: Vec<u8>) -> Result {
+		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
-			Ok(())
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		fn set_heap_pages(pages: u64) -> Result {
+		fn set_heap_pages(pages: u64) {
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
-			Ok(())
 		}
 
 		/// Set the new code.
-		pub fn set_code(new: Vec<u8>) -> Result {
+		pub fn set_code(new: Vec<u8>) {
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
-			Ok(())
 		}
 
 		/// Set some items of storage.
-		fn set_storage(items: Vec<KeyValue>) -> Result {
+		fn set_storage(items: Vec<KeyValue>) {
 			for i in &items {
 				storage::unhashed::put_raw(&i.0, &i.1);
 			}
-			Ok(())
 		}
 
 		fn on_finalise() {

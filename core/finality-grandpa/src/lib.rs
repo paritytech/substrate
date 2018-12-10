@@ -88,7 +88,6 @@ use client::{
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
 };
 use client::blockchain::HeaderBackend;
-use client::runtime_api::TaggedTransactionQueue;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
@@ -890,9 +889,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
-		RA: TaggedTransactionQueue<Block>,
+		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>
+		PRA::Api: GrandpaApi<Block>,
 {
 	type Error = ClientError;
 
@@ -1059,7 +1058,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBloc
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	RA: TaggedTransactionQueue<Block>, // necessary for client to import `BlockImport`.
 {
 
 	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;

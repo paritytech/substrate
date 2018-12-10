@@ -2710,14 +2710,14 @@ dependencies = [
 name = "sr-api-macros"
 version = "0.1.0"
 dependencies = [
- "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 0.4.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
+ "sr-version 0.1.0",
  "substrate-client 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-test-client 0.1.0",
  "syn 0.15.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

@@ -29,7 +29,6 @@ extern crate sr_primitives as runtime_primitives;
 extern crate tokio;
 
 extern crate parity_codec as codec;
-#[macro_use]
 extern crate parity_codec_derive;
 
 #[macro_use]

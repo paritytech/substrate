@@ -35,7 +35,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		fn propose(origin, proposal: Box<T::Proposal>) -> Result {
+		fn propose(origin, proposal: Box<T::Proposal>) {
 			let who = ensure_signed(origin)?;
 
 			let expiry = <system::Module<T>>::block_number() + Self::voting_period();
@@ -54,11 +54,9 @@ decl_module! {
 			<ProposalOf<T>>::insert(proposal_hash, *proposal);
 			<ProposalVoters<T>>::insert(proposal_hash, vec![who.clone()]);
 			<CouncilVoteOf<T>>::insert((proposal_hash, who.clone()), true);
-
-			Ok(())
 		}
 
-		fn vote(origin, proposal: T::Hash, approve: bool) -> Result {
+		fn vote(origin, proposal: T::Hash, approve: bool) {
 			let who = ensure_signed(origin)?;
 
 			ensure!(Self::is_councillor(&who), "only councillors may vote on council proposals");
@@ -67,10 +65,9 @@ decl_module! {
 				<ProposalVoters<T>>::mutate(proposal, |voters| voters.push(who.clone()));
 			}
 			<CouncilVoteOf<T>>::insert((proposal, who), approve);
-			Ok(())
 		}
 
-		fn veto(origin, proposal_hash: T::Hash) -> Result {
+		fn veto(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 
 			ensure!(Self::is_councillor(&who), "only councillors may veto council proposals");
@@ -96,17 +93,14 @@ decl_module! {
 			for (c, _) in <Council<T>>::active_council() {
 				<CouncilVoteOf<T>>::remove((proposal_hash, c));
 			}
-			Ok(())
 		}
 
-		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) {
 			<CooloffPeriod<T>>::put(blocks.into());
-			Ok(())
 		}
 
-		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) {
 			<VotingPeriod<T>>::put(blocks.into());
-			Ok(())
 		}
 
 		fn on_finalise(n: T::BlockNumber) {
