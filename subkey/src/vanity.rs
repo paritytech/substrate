@@ -58,6 +58,10 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 }
 
 pub fn generate_key(desired: &str) -> Result<KeyPair, &str> {
+	if desired.is_empty() {
+		return Err("Pattern must not be empty");
+	}
+
 	println!("Generating key containing pattern '{}'", desired);
 
 	let top = 45 + (desired.len() * 48);
