@@ -107,7 +107,7 @@ pub trait Backend<Block, H>: Send + Sync where
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Finalize block with given Id. This should only be called if the parent of the given
 	/// block has been finalized.
-	fn finalize_block(&self, block: BlockId<Block>) -> error::Result<()>;
+	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns reference to changes trie storage.

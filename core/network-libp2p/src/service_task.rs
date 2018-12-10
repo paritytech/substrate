@@ -27,6 +27,7 @@ use libp2p::kad::{KadConnectionType, KadQueryEvent};
 use parking_lot::Mutex;
 use rand;
 use secret::obtain_private_key;
+use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::iter;
 use std::net::SocketAddr;
@@ -52,6 +53,11 @@ pub fn start_service<TProtos>(
 	registered_custom: TProtos,
 ) -> Result<Service, Error>
 where TProtos: IntoIterator<Item = RegisteredProtocol> {
+
+	if let Some(ref path) = config.net_config_path {
+	    fs::create_dir_all(Path::new(path))?;
+	}
+
 	// Private and public keys configuration.
 	let local_private_key = obtain_private_key(&config)?;
 	let local_public_key = local_private_key.to_public_key();

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use rstd::{result::Result, vec::Vec};
+pub use rstd::{cmp, result::Result, vec::Vec};
 #[doc(hidden)]
 pub use runtime_primitives::{
 	traits::{ProvideInherent, Block as BlockT}, CheckInherentError
@@ -52,17 +52,32 @@ macro_rules! impl_outer_inherent {
 				block: $block,
 				data: $inherent
 			) -> $crate::inherent::Result<(), $crate::inherent::CheckInherentError> {
+				use $crate::inherent::CheckInherentError;
+
+				let mut max_valid_after = None;
 				$(
-					<$module_ty as $crate::inherent::ProvideInherent>::check_inherent(
+					let res = <$module_ty as $crate::inherent::ProvideInherent>::check_inherent(
 						&block,
 						data.$module,
 						&|xt| match xt.function {
 							Call::$module_ty(ref data) => Some(data),
 							_ => None,
 						},
-					)?;
+					);
+
+					match res {
+						Err(CheckInherentError::ValidAtTimestamp(t)) =>
+							max_valid_after = $crate::inherent::cmp::max(max_valid_after, Some(t)),
+						res => res?
+					}
 				)*
-				Ok(())
+
+				// once everything else has checked out, take the maximum of
+				// all things which are timestamp-restricted.
+				match max_valid_after {
+					Some(t) => Err(CheckInherentError::ValidAtTimestamp(t)),
+					None => Ok(())
+				}
 			}
 		}
 	};

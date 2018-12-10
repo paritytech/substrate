@@ -487,7 +487,10 @@ impl BasicInherentData {
 #[derive(Encode)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum CheckInherentError {
-	TimestampInFuture(u64),
+	/// The inherents are generally valid but a delay until the given timestamp
+	/// is required.
+	ValidAtTimestamp(u64),
+	/// Some other error has occurred.
 	Other(RuntimeString),
 }
 

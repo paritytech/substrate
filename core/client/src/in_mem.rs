@@ -242,13 +242,26 @@ impl<Block: BlockT> Blockchain<Block> {
 		self.storage.write().header_cht_roots.insert(block, cht_root);
 	}
 
-	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
+	fn finalize_header(&self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
 		let hash = match self.header(id)? {
 			Some(h) => h.hash(),
 			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
 		};
 
-		self.storage.write().finalized_hash = hash;
+		let mut storage = self.storage.write();
+		storage.finalized_hash = hash;
+
+		if justification.is_some() {
+			let block = storage.blocks.get_mut(&hash)
+				.expect("hash was fetched from a block in the db; qed");
+
+			let block_justification = match block {
+				StoredBlock::Header(_, ref mut j) | StoredBlock::Full(_, ref mut j) => j
+			};
+
+			*block_justification = justification;
+		}
+
 		Ok(())
 	}
 
@@ -352,7 +365,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	}
 
 	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
-		Blockchain::finalize_header(self, id)
+		Blockchain::finalize_header(self, id, None)
 	}
 
 	fn header_cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
@@ -543,8 +556,8 @@ where
 		Ok(())
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>) -> error::Result<()> {
-		self.blockchain.finalize_header(block)
+	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+		self.blockchain.finalize_header(block, justification)
 	}
 
 	fn blockchain(&self) -> &Self::Blockchain {

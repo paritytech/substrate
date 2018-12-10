@@ -116,7 +116,7 @@ pub fn import_blocks<F, E, R>(mut config: FactoryFullConfiguration<F>, exit: E, 
 			let hash = header.hash();
 			let block  = message::BlockData::<F::Block> {
 				hash: hash,
-				justification: Some(signed.justification),
+				justification: signed.justification,
 				header: Some(header),
 				body: Some(extrinsics),
 				receipt: None,
