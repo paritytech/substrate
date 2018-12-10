@@ -1699,11 +1699,11 @@ pub(crate) mod tests {
 
 		// G -> A1
 		let a1 = client.new_block().unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 		// A1 -> A2
 		let a2 = client.new_block().unwrap().bake().unwrap();
-		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
