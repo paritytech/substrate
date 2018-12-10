@@ -2,6 +2,8 @@ name: subkey
 author: "Parity Team <admin@parity.io>"
 about: A substrate key utility
 subcommands:
+  - generate:
+      about: Generate a random account
   - restore:
       about: Gets a public key and a SS58 address from the provided seed phrase
       args:

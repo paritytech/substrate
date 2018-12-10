@@ -23,6 +23,7 @@ extern crate rand;
 #[macro_use]
 extern crate clap;
 
+use rand::{OsRng, Rng};
 use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 
 mod vanity;
@@ -41,6 +42,11 @@ fn main() {
 	let matches = clap::App::from_yaml(yaml).get_matches();
 
 	match matches.subcommand() {
+		("generate", Some(_matches)) => {
+			let mut seed = [0u8; 32];
+			OsRng::new().unwrap().fill_bytes(&mut seed[..]);
+			print_account(&seed);
+		}
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
 			let key = vanity::generate_key(&desired).expect("Key generation failed");
