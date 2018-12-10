@@ -17,7 +17,7 @@
 use super::*;
 use jsonrpc_macros::pubsub;
 use test_client::{self, TestClient};
-use test_client::runtime::{Block, Header, VERSION};
+use test_client::runtime::{Block, Header};
 use consensus::BlockOrigin;
 
 #[test]
@@ -245,20 +245,4 @@ fn should_notify_about_finalised_block() {
 	assert!(notification.is_some());
 	// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
-}
-
-#[test]
-fn should_return_runtime_version() {
-	let core = ::tokio::runtime::Runtime::new().unwrap();
-	let remote = core.executor();
-
-	let client = Chain {
-		client: Arc::new(test_client::new()),
-		subscriptions: Subscriptions::new(remote),
-	};
-
-	assert_matches!(
-		client.runtime_version(None.into()),
-		Ok(ref ver) if ver == &VERSION
-	);
 }
