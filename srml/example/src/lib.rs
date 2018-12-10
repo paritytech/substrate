@@ -173,12 +173,11 @@ decl_module! {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		fn set_dummy(new_value: T::Balance) -> Result {
+		// If you not specify `Result` explicitly as return value, it will be added automatically
+		// for you and `Ok(())` will be returned.
+		fn set_dummy(new_value: T::Balance) {
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
-
-			// All good.
-			Ok(())
 		}
 
 		// The signature could also look like: `fn on_finalise()`
