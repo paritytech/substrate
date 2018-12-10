@@ -677,7 +677,7 @@ mod tests {
 			StorageFunctionMetadata {
 				name: DecodeDifferent::Encode("GETU32"),
 				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("T::Origin")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("T :: Origin")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
