@@ -58,6 +58,16 @@ pub type LockPeriods = i8;
 pub struct Vote(i8);
 
 impl Vote {
+	/// Create a new instance.
+	pub fn new(aye: bool, multiplier: LockPeriods) -> Self {
+		let m = multiplier.max(1) - 1;
+		Vote(if aye {
+			-1 - m
+		} else {
+			m
+		})
+	}
+
 	/// Is this an aye vote?
 	pub fn is_aye(self) -> bool {
 		self.0 < 0
@@ -118,6 +128,7 @@ decl_module! {
 		fn vote(origin, ref_index: Compact<ReferendumIndex>, vote: Vote) {
 			let who = ensure_signed(origin)?;
 			let ref_index = ref_index.into();
+			ensure!(vote.multiplier() <= Self::max_lock_periods(), "vote has too great a strength");
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 			ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
 					"transactor must have balance to signal approval.");
@@ -350,13 +361,14 @@ impl<T: Trait> Module<T> {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = <balances::Module<T>>::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
+		let lock_period = Self::public_delay();
 
 		for (a, vote) in Self::voters_for(index).into_iter()
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed
 			.filter(|&(_, vote)| vote.is_aye() == approved)
 		{
-			let locked_until = now + info.delay * T::BlockNumber::sa((vote.multiplier() + 1) as u64);
+			let locked_until = now + lock_period * T::BlockNumber::sa((vote.multiplier()) as u64);
 			<Bondage<T>>::mutate(a, |b| if *b < locked_until { *b = locked_until });
 		}
 
@@ -462,6 +474,10 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		new_test_ext_with_public_delay(0)
+	}
+
+	fn new_test_ext_with_public_delay(public_delay: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
@@ -476,7 +492,7 @@ mod tests {
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
-			public_delay: 0,
+			public_delay,
 			max_lock_periods: 6,
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
@@ -495,6 +511,34 @@ mod tests {
 			assert_eq!(Democracy::referendum_count(), 0);
 			assert_eq!(Balances::free_balance(&42), 0);
 			assert_eq!(Balances::total_issuance(), 210);
+			assert_eq!(Democracy::public_delay(), 0);
+			assert_eq!(Democracy::max_lock_periods(), 6);
+		});
+	}
+
+	#[test]
+	fn vote_should_work() {
+		assert_eq!(Vote::new(true, 0).multiplier(), 1);
+		assert_eq!(Vote::new(true, 1).multiplier(), 1);
+		assert_eq!(Vote::new(true, 2).multiplier(), 2);
+		assert_eq!(Vote::new(true, 0).is_aye(), true);
+		assert_eq!(Vote::new(true, 1).is_aye(), true);
+		assert_eq!(Vote::new(true, 2).is_aye(), true);
+		assert_eq!(Vote::new(false, 0).multiplier(), 1);
+		assert_eq!(Vote::new(false, 1).multiplier(), 1);
+		assert_eq!(Vote::new(false, 2).multiplier(), 2);
+		assert_eq!(Vote::new(false, 0).is_aye(), false);
+		assert_eq!(Vote::new(false, 1).is_aye(), false);
+		assert_eq!(Vote::new(false, 2).is_aye(), false);
+	}
+
+	#[test]
+	fn invalid_vote_strength_should_not_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
+			assert_noop!(Democracy::vote(Origin::signed(1), r.into(), Vote::new(true, 7)), "vote has too great a strength");
+			assert_noop!(Democracy::vote(Origin::signed(1), r.into(), Vote::new(false, 7)), "vote has too great a strength");
 		});
 	}
 
@@ -684,6 +728,60 @@ mod tests {
 
 			assert_eq!(Democracy::tally(r), (110, 100, 210));
 
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Balances::free_balance(&42), 2);
+		});
+	}
+
+	#[test]
+	fn delayed_enactment_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 1).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(1), r.into(), AYE));
+			assert_ok!(Democracy::vote(Origin::signed(2), r.into(), AYE));
+			assert_ok!(Democracy::vote(Origin::signed(3), r.into(), AYE));
+			assert_ok!(Democracy::vote(Origin::signed(4), r.into(), AYE));
+			assert_ok!(Democracy::vote(Origin::signed(5), r.into(), AYE));
+			assert_ok!(Democracy::vote(Origin::signed(6), r.into(), AYE));
+
+			assert_eq!(Democracy::tally(r), (210, 0, 210));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			assert_eq!(Balances::free_balance(&42), 0);
+
+			System::set_block_number(2);
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Balances::free_balance(&42), 2);
+		});
+	}
+
+	#[test]
+	fn lock_voting_should_work() {
+		with_externalities(&mut new_test_ext_with_public_delay(1), || {
+			System::set_block_number(1);
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove, 0).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(1), r.into(), Vote::new(false, 6)));
+			assert_ok!(Democracy::vote(Origin::signed(2), r.into(), Vote::new(true, 5)));
+			assert_ok!(Democracy::vote(Origin::signed(3), r.into(), Vote::new(true, 4)));
+			assert_ok!(Democracy::vote(Origin::signed(4), r.into(), Vote::new(true, 3)));
+			assert_ok!(Democracy::vote(Origin::signed(5), r.into(), Vote::new(true, 2)));
+			assert_ok!(Democracy::vote(Origin::signed(6), r.into(), Vote::new(false, 1)));
+
+			assert_eq!(Democracy::tally(r), (440, 120, 210));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Democracy::bondage(1), 0);
+			assert_eq!(Democracy::bondage(2), 6);
+			assert_eq!(Democracy::bondage(3), 5);
+			assert_eq!(Democracy::bondage(4), 4);
+			assert_eq!(Democracy::bondage(5), 3);
+			assert_eq!(Democracy::bondage(6), 0);
+
+			System::set_block_number(2);
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			assert_eq!(Balances::free_balance(&42), 2);
