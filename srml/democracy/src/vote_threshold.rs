@@ -35,7 +35,7 @@ pub trait Approved<Balance> {
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
 	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
 	/// overall outcome is in favour of approval.
-	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool;
+	fn approved(&self, approve: Balance, against: Balance, voters: Balance, electorate: Balance) -> bool;
 }
 
 /// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
@@ -70,8 +70,7 @@ impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + 
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
 	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
 	/// overall outcome is in favour of approval.
-	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool {
-		let voters = approve + against;
+	fn approved(&self, approve: Balance, against: Balance, voters: Balance, electorate: Balance) -> bool {
 		let sqrt_voters = voters.integer_sqrt();
 		let sqrt_electorate = electorate.integer_sqrt();
 		if sqrt_voters.is_zero() { return false; }
@@ -91,7 +90,7 @@ mod tests {
 
 	#[test]
 	fn should_work() {
-		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(60, 50, 210), false);
-		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(100, 50, 210), true);
+		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(60, 50, 110, 210), false);
+		assert_eq!(VoteThreshold::SuperMajorityApprove.approved(100, 50, 150, 210), true);
 	}
 }
