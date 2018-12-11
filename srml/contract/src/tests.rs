@@ -926,7 +926,6 @@ fn caller_top_level() {
 
 #[test]
 fn caller_contract() {
-	const CONTRACT_SHOULD_TRANSFER_VALUE: u64 = 6;
 	const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;
 
 	let code_caller_logger = wabt::wat2wasm(CODE_CALLER_LOGGER).unwrap();
