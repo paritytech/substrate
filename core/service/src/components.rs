@@ -415,7 +415,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		), error::Error>
 	{
 		let db_settings = client_db::DatabaseSettings {
-			cache_size: None,
+			cache_size: config.database_cache_size.map(|u| u as usize),
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
