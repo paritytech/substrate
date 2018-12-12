@@ -188,7 +188,7 @@ mod tests {
 				StorageMethod : Option<u32>;
 			}
 			add_extra_genesis {
-			    build(|_, _, _| {});
+				build(|_, _, _| {});
 			}
 		}
 	}
@@ -311,15 +311,16 @@ mod tests {
 				)),
 				storage: Some(DecodeDifferent::Encode(FnEncode(||
 					StorageMetadata {
-					   prefix: DecodeDifferent::Encode("TestStorage"),
-					   functions: DecodeDifferent::Encode(&[
-						   StorageFunctionMetadata {
-							   name: DecodeDifferent::Encode("StorageMethod"),
-							   modifier: StorageFunctionModifier::Optional,
-							   ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
-							   documentation: DecodeDifferent::Encode(&[]),
-						   }
-					   ])
+						prefix: DecodeDifferent::Encode("TestStorage"),
+						functions: DecodeDifferent::Encode(&[
+							StorageFunctionMetadata {
+								name: DecodeDifferent::Encode("StorageMethod"),
+								modifier: StorageFunctionModifier::Optional,
+								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+								default: DecodeDifferent::Encode("Default::default()"),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
 					}
 				))),
 			}
