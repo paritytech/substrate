@@ -869,3 +869,85 @@ fn input_data() {
 		},
 	);
 }
+
+/// Stores the caller into the storage under the [0x00; 32] key in the contract's storage.
+const CODE_CALLER_LOGGER: &'static str = r#"
+(module
+	(import "env" "ext_caller" (func $ext_caller))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		;; Fill the scratch buffer with the caller.
+		(call $ext_caller)
+
+		;; Copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 32)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		(call $ext_set_storage
+			(i32.const 0)		;; the storage key
+			(i32.const 1)		;; value_not_null=1, i.e. we are not removing the value
+			(i32.const 32)		;; the pointer to the value to store
+			(i32.const 8)		;; the length of the value
+		)
+	)
+)
+"#;
+
+#[test]
+fn caller_top_level() {
+	let code_caller_logger = wabt::wat2wasm(CODE_CALLER_LOGGER).unwrap();
+	with_externalities(
+		&mut ExtBuilder::default().build(),
+		|| {
+			<CodeOf<Test>>::insert(1, code_caller_logger.to_vec());
+
+			Balances::set_free_balance(&2, 100_000_000);
+			Balances::increase_total_stake_by(100_000_000);
+
+			assert_ok!(Contract::call(Origin::signed(2), 1, 0.into(), 50_000.into(), vec![]));
+
+			// Load the zero-th slot of the storage of the caller logger contract.
+			// We verify here that the caller logger contract has witnessed the call coming from
+			// the account with address 0x02 (see the origin above) - the origin of the tx.
+			assert_eq!(
+				<StorageOf<Test>>::get(1, vec![0; 32]),
+				Some(vec![0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+			);
+		},
+	);
+}
+
+#[test]
+fn caller_contract() {
+	const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;
+
+	let code_caller_logger = wabt::wat2wasm(CODE_CALLER_LOGGER).unwrap();
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+		<CodeOf<Test>>::insert(CONTRACT_SHOULD_TRANSFER_TO, code_caller_logger);
+
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&1, 11);
+		Balances::increase_total_stake_by(11);
+
+		assert_ok!(Contract::call(Origin::signed(0), 1, 3.into(), 100_000.into(), Vec::new()));
+
+		// Load the zero-th slot of the storage of the caller logger contract.
+		// We verify here that the caller logger contract has witnessed the call coming from
+		// the caller contract - 0x01.
+		assert_eq!(
+			<StorageOf<Test>>::get(CONTRACT_SHOULD_TRANSFER_TO, vec![0; 32]),
+			Some(vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+		);
+	});
+}
