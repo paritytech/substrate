@@ -236,7 +236,7 @@ mod tests {
 	use ::tests::*;
 	use ::tests::{Call, Origin};
 	use srml_support::Hashable;
-	use democracy::VoteThreshold;
+	use democracy::{ReferendumInfo, VoteThreshold};
 
 	#[test]
 	fn basic_environment_works() {

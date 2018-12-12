@@ -128,6 +128,7 @@ mod tests {
 			voting_period: 3,
 			minimum_deposit: 1,
 			public_delay: 0,
+			max_lock_periods: 6,
 		}.build_storage().unwrap().0);
 		t.extend(seats::GenesisConfig::<Test> {
 			candidacy_bond: 9,
