@@ -159,14 +159,18 @@ impl rstd::ops::Deref for OpaqueMetadata {
 	}
 }
 
-pub trait Super: EncodeObj + Any {}
-impl<T: EncodeObj + Any> Super for T {}
+/// The super trait that is used by `NativeOrEncoded` for the native side.
+#[doc(hidden)]
+pub trait NativeOrEncodedTrait: Encode + Any {}
+impl<T: Encode + Any> NativeOrEncodedTrait for T {}
 
-pub trait EncodeObj {
+/// The `codec::Encode` wrapper trait that is implementable/callable on traits.
+#[doc(hidden)]
+pub trait Encode {
 	fn encode(&self) -> Vec<u8>;
 }
 
-impl<T: codec::Encode> EncodeObj for T {
+impl<T: codec::Encode> Encode for T {
 	fn encode(&self) -> Vec<u8> {
 		codec::Encode::encode(self)
 	}
@@ -175,7 +179,7 @@ impl<T: codec::Encode> EncodeObj for T {
 /// Something that is either a native or an encoded value.
 pub enum NativeOrEncoded {
 	/// The native representation.
-	Native(Box<dyn Super>),
+	Native(Box<dyn NativeOrEncodedTrait>),
 	/// The encoded representation.
 	Encoded(Vec<u8>)
 }
@@ -187,7 +191,7 @@ impl ::std::fmt::Debug for NativeOrEncoded {
 }
 
 impl NativeOrEncoded {
-	/// Return the value in the encoded format.
+	/// Return the value as the encoded format.
 	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
 		match self {
 			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
@@ -195,6 +199,7 @@ impl NativeOrEncoded {
 		}
 	}
 
+	/// Return the value as the encoded format.
 	pub fn into_encoded(self) -> Vec<u8> {
 		match self {
 			NativeOrEncoded::Encoded(e) => e,
