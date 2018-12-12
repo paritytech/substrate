@@ -30,7 +30,8 @@ extern crate substrate_trie;
 
 extern crate parking_lot;
 extern crate heapsize;
-#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
+#[cfg_attr(test, macro_use)]
+extern crate substrate_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate substrate_trie as trie;
 
@@ -38,7 +39,7 @@ use std::fmt;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use codec::Decode;
-use primitives::storage::well_known_keys;
+use primitives::{storage::well_known_keys, NativeOrEncoded};
 
 pub mod backend;
 mod changes_trie;
@@ -171,13 +172,14 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<E: Externalities<H>>(
+	fn call<'a, E: Externalities<H>>(
 		&self,
 		ext: &mut E,
 		method: &str,
 		data: &[u8],
-		use_native: bool
-	) -> (Result<Vec<u8>, Self::Error>, bool);
+		use_native: bool,
+		native_call: Option<&Fn() -> NativeOrEncoded>,
+	) -> (Result<NativeOrEncoded, Self::Error>, bool);
 }
 
 /// Strategy for executing a call into the runtime.
@@ -213,12 +215,20 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn native_when_possible<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+pub fn native_when_possible<E>() ->
+	ExecutionManager<
+		fn(Result<NativeOrEncoded, E>, Result<NativeOrEncoded, E>) -> Result<NativeOrEncoded, E>
+	>
+{
 	ExecutionManager::NativeWhenPossible
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn always_wasm<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+pub fn always_wasm<E>() ->
+	ExecutionManager<
+		fn(Result<NativeOrEncoded, E>, Result<NativeOrEncoded, E>) -> Result<NativeOrEncoded, E>
+	>
+{
 	ExecutionManager::AlwaysWasm
 }
 
@@ -246,6 +256,8 @@ where
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
 {
+	// We are not giving a native call and thus we are sure that the result can never be a native
+	// value.
 	execute_using_consensus_failure_handler(
 		backend,
 		changes_trie_storage,
@@ -257,14 +269,19 @@ where
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, native_result);
+				warn!(
+					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
+					wasm_result,
+					native_result
+				);
 				wasm_result
 			}),
 		},
 		true,
+		None,
 	)
 	.map(|(result, storage_tx, changes_tx)| (
-		result,
+		result.into_encoded(),
 		storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
 		changes_tx,
 	))
@@ -287,14 +304,18 @@ pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
 	compute_tx: bool,
-) -> Result<(Vec<u8>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
+	native_call: Option<&Fn() -> NativeOrEncoded>,
+) -> Result<(NativeOrEncoded, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
-	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
+	Handler: FnOnce(
+		Result<NativeOrEncoded, Exec::Error>,
+		Result<NativeOrEncoded, Exec::Error>
+	) -> Result<NativeOrEncoded, Exec::Error>
 {
 	let strategy: ExecutionStrategy = (&manager).into();
 
@@ -325,6 +346,7 @@ where
 					call_data,
 					// attempt to run native first, if we're not directed to run wasm only
 					strategy != ExecutionStrategy::AlwaysWasm,
+					native_call,
 				);
 				let (storage_delta, changes_delta) = if compute_tx {
 					let (storage_delta, changes_delta) = externalities.transaction();
@@ -351,6 +373,7 @@ where
 						method,
 						call_data,
 						false,
+						native_call,
 					);
 					let (storage_delta, changes_delta) = if compute_tx {
 						let (storage_delta, changes_delta) = externalities.transaction();
@@ -363,9 +386,9 @@ where
 				(result, storage_delta, changes_delta)
 			};
 
-			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
-				|| (result.is_err() && wasm_result.is_err())
-			{
+			if (result.is_ok() && wasm_result.is_ok()
+				&& result.as_ref().ok() == wasm_result.as_ref().ok())
+				|| result.is_err() && wasm_result.is_err() {
 				(result, storage_delta, changes_delta)
 			} else {
 				// Consensus error.
@@ -588,7 +611,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::{Blake2Hasher};
+	use primitives::Blake2Hasher;
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -605,8 +628,9 @@ mod tests {
 			ext: &mut E,
 			_method: &str,
 			_data: &[u8],
-			use_native: bool
-		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			use_native: bool,
+			_native_call: Option<&Fn() -> NativeOrEncoded>,
+		) -> (Result<NativeOrEncoded, Self::Error>, bool) {
 			if self.change_changes_trie_config {
 				ext.place_storage(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), Some(ChangesTrieConfig {
 					digest_interval: 777,
@@ -616,8 +640,19 @@ mod tests {
 
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _) | (false, _, true) =>
-					(Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]]), using_native),
+				(true, true, _) | (false, _, true) => {
+					(
+						Ok(
+							NativeOrEncoded::Encoded(
+								vec![
+									ext.storage(b"value1").unwrap()[0] +
+									ext.storage(b"value2").unwrap()[0]
+								]
+							)
+						),
+						using_native
+					)
+				},
 				_ => (Err(0), using_native),
 			}
 		}
@@ -664,6 +699,7 @@ mod tests {
 				we
 			}),
 			true,
+			None,
 		).is_err());
 		assert!(consensus_failed);
 	}

@@ -336,14 +336,13 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 
 		#[cfg(any(feature = "std", test))]
 		impl #crate_::runtime_api::ConstructRuntimeApi<#block> for RuntimeApi {
-			fn construct_runtime_api<'a, T: #crate_::runtime_api::CallRuntimeAt<#block>>(
-				call: &'a T
+			fn construct_runtime_api<'a>(
+				call: &'a #crate_::runtime_api::CallRuntimeAt<#block>
 			) -> #crate_::runtime_api::ApiRef<'a, Self> where Self: Sized {
-				RuntimeApi {
+				Self {
 					call: unsafe {
 						::std::ptr::NonNull::new_unchecked(
-							call as
-								&#crate_::runtime_api::CallRuntimeAt<#block> as *const _ as *mut _
+							call as *const _ as *mut _
 						)
 					},
 					commit_on_success: true.into(),
@@ -367,9 +366,10 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 						function,
 						args.encode(),
 						&mut *self.changes.borrow_mut(),
-						&mut *self.initialised_block.borrow_mut()
+						&mut *self.initialised_block.borrow_mut(),
+						None,
 					).and_then(|r|
-						R::decode(&mut &r[..])
+						R::decode(&mut &r.into_encoded()[..])
 							.ok_or_else(||
 								#crate_::error::ErrorKind::CallResultDecode(function).into()
 							)

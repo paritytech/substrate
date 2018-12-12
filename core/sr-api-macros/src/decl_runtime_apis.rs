@@ -27,7 +27,7 @@ use quote::quote;
 use syn::{
 	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error},
 	fold::{self, Fold}, FnDecl, parse_quote, ItemTrait, Generics, GenericParam, Attribute,
-	visit::{Visit, self}, FnArg, Pat, TraitBound, Type, Meta, NestedMeta, Lit
+	visit::{Visit, self}, FnArg, Pat, TraitBound, Type, Meta, NestedMeta, Lit,
 };
 
 use std::collections::HashMap;

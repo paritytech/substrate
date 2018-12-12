@@ -81,6 +81,8 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
+#[cfg(feature = "std")]
+use std::{borrow::Cow, any::Any};
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -154,5 +156,55 @@ impl rstd::ops::Deref for OpaqueMetadata {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+pub trait Super: EncodeObj + Any {}
+impl<T: EncodeObj + Any> Super for T {}
+
+pub trait EncodeObj {
+	fn encode(&self) -> Vec<u8>;
+}
+
+impl<T: codec::Encode> EncodeObj for T {
+	fn encode(&self) -> Vec<u8> {
+		codec::Encode::encode(self)
+	}
+}
+
+/// Something that is either a native or an encoded value.
+pub enum NativeOrEncoded {
+	/// The native representation.
+	Native(Box<dyn Super>),
+	/// The encoded representation.
+	Encoded(Vec<u8>)
+}
+
+impl ::std::fmt::Debug for NativeOrEncoded {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		self.as_encoded().as_ref().fmt(f)
+	}
+}
+
+impl NativeOrEncoded {
+	/// Return the value in the encoded format.
+	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
+		match self {
+			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
+			NativeOrEncoded::Native(n) => Cow::Owned(n.encode()),
+		}
+	}
+
+	pub fn into_encoded(self) -> Vec<u8> {
+		match self {
+			NativeOrEncoded::Encoded(e) => e,
+			NativeOrEncoded::Native(n) => n.encode(),
+		}
+	}
+}
+
+impl PartialEq for NativeOrEncoded {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_encoded() == other.as_encoded()
 	}
 }

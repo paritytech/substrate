@@ -20,6 +20,7 @@ use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
+use primitives::NativeOrEncoded;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
@@ -638,6 +639,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							wasm_result
 						}),
 					},
+					None,
 				);
 				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
@@ -1040,7 +1042,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
-	) -> error::Result<Vec<u8>> {
+		native_call: Option<&Fn() -> NativeOrEncoded>,
+	) -> error::Result<NativeOrEncoded> {
 		let execution_manager = match self.api_execution_strategy {
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
@@ -1053,8 +1056,16 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			}),
 		};
 
-		self.executor.contextual_call(at, function, &args, changes, initialised_block,
-			|| self.prepare_environment_block(at), execution_manager)
+		self.executor.contextual_call(
+			at,
+			function,
+			&args,
+			changes,
+			initialised_block,
+			|| self.prepare_environment_block(at),
+			execution_manager,
+			native_call,
+		)
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {
