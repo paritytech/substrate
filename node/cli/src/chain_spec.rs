@@ -272,7 +272,7 @@ fn development_config_genesis() -> GenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec {
-	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![], None, None, None, None)
+	ChainSpec::from_genesis("Development", "dev", development_config_genesis, vec![], None, None, None, None)
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
