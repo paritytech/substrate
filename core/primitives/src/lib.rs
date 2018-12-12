@@ -177,6 +177,7 @@ impl<T: codec::Encode> Encode for T {
 }
 
 /// Something that is either a native or an encoded value.
+#[cfg(feature = "std")]
 pub enum NativeOrEncoded {
 	/// The native representation.
 	Native(Box<dyn NativeOrEncodedTrait>),
@@ -184,12 +185,14 @@ pub enum NativeOrEncoded {
 	Encoded(Vec<u8>)
 }
 
+#[cfg(feature = "std")]
 impl ::std::fmt::Debug for NativeOrEncoded {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		self.as_encoded().as_ref().fmt(f)
 	}
 }
 
+#[cfg(feature = "std")]
 impl NativeOrEncoded {
 	/// Return the value as the encoded format.
 	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
@@ -208,6 +211,7 @@ impl NativeOrEncoded {
 	}
 }
 
+#[cfg(feature = "std")]
 impl PartialEq for NativeOrEncoded {
 	fn eq(&self, other: &Self) -> bool {
 		self.as_encoded() == other.as_encoded()
