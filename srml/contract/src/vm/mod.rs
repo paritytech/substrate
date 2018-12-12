@@ -69,6 +69,9 @@ pub trait Ext {
 		data: &[u8],
 		output_data: &mut Vec<u8>,
 	) -> Result<(), ()>;
+
+	/// Returns a reference to the account id of the caller.
+	fn caller(&self) -> &AccountIdOf<Self::T>;
 }
 
 /// Error that can occur while preparing or executing wasm smart-contract.
@@ -224,6 +227,9 @@ mod tests {
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
 			Ok(())
+		}
+		fn caller(&self) -> &u64 {
+			&42
 		}
 	}
 
@@ -532,5 +538,70 @@ mod tests {
 			return_buf,
 			[0x22; 32].to_vec(),
 		);
+	}
+
+
+	const CODE_CALLER: &'static str =
+r#"
+(module
+	(import "env" "ext_caller" (func $ext_caller))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; Fill the scratch buffer with the caller.
+		(call $ext_caller)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; Copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 42.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 42)
+			)
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn caller() {
+		let code_caller = wabt::wat2wasm(CODE_CALLER).unwrap();
+
+		let mut mock_ext = MockExt::default();
+		execute(
+			&code_caller,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&Schedule::<u64>::default(),
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
 	}
 }

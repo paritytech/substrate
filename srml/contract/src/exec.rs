@@ -90,7 +90,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 					output_data,
 					&mut CallContext {
 						ctx: &mut nested,
-						_caller: caller,
+						caller: caller,
 					},
 					&self.config.schedule,
 					gas_meter,
@@ -158,7 +158,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				&mut contract_code,
 				&mut CallContext {
 					ctx: &mut nested,
-					_caller: caller,
+					caller: caller,
 				},
 				&self.config.schedule,
 				gas_meter,
@@ -255,7 +255,7 @@ fn transfer<'a, T: Trait>(
 
 struct CallContext<'a, 'b: 'a, T: Trait + 'b> {
 	ctx: &'a mut ExecutionContext<'b, T>,
-	_caller: T::AccountId,
+	caller: T::AccountId,
 }
 
 impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
@@ -297,5 +297,9 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
 			.call(caller, to.clone(), value, gas_meter, data, output_data)
 			.map_err(|_| ())
 			.map(|_| ())
+	}
+
+	fn caller(&self) -> &T::AccountId {
+		&self.caller
 	}
 }
