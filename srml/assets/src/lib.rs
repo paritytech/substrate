@@ -129,7 +129,7 @@ decl_storage! {
 		/// The next asset identifier up for grabs.
 		NextAssetId get(next_asset_id): AssetId;
 		/// The total unit supply of an asset
-		TotalSupply: map (AssetId) => T::Balance;
+		TotalSupply: map AssetId => T::Balance;
 	}
 }
 
