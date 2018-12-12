@@ -57,10 +57,14 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 	0
 }
 
-pub fn generate_key(_desired: &str) -> Result<KeyPair, &str> {
-	println!("Generating key containing pattern '{}'", _desired);
+pub fn generate_key(desired: &str) -> Result<KeyPair, &str> {
+	if desired.is_empty() {
+		return Err("Pattern must not be empty");
+	}
 
-	let top = 45 + (_desired.len() * 48);
+	println!("Generating key containing pattern '{}'", desired);
+
+	let top = 45 + (desired.len() * 48);
 	let mut best = 0;
 	let mut seed = [0u8; 32];
 	let mut done = 0;
@@ -75,8 +79,8 @@ pub fn generate_key(_desired: &str) -> Result<KeyPair, &str> {
 
 		let p = Pair::from_seed(&seed);
 		let ss58 = p.public().to_ss58check();
-		let score = calculate_score(&_desired, &ss58);
-		if score > best || _desired.len() < 2 {
+		let score = calculate_score(&desired, &ss58);
+		if score > best || desired.len() < 2 {
 			best = score;
 			let keypair = KeyPair {
 				pair: p,
