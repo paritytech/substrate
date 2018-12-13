@@ -541,6 +541,8 @@ mod tests {
 	}
 
 
+	/// calls `ext_caller`, loads the address from the scratch buffer and
+	/// compares it with the constant 42.
 	const CODE_CALLER: &'static str =
 r#"
 (module
@@ -559,7 +561,7 @@ r#"
 	)
 
 	(func (export "call")
-		;; Fill the scratch buffer with the caller.
+		;; fill the scratch buffer with the caller.
 		(call $ext_caller)
 
 		;; assert $ext_scratch_size == 8
@@ -570,7 +572,7 @@ r#"
 			)
 		)
 
-		;; Copy contents of the scratch buffer into the contract's memory.
+		;; copy contents of the scratch buffer into the contract's memory.
 		(call $ext_scratch_copy
 			(i32.const 8)		;; Pointer in memory to the place where to copy.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
