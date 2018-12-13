@@ -225,8 +225,9 @@ decl_storage! {
 		/// Get the voters for the current proposal.
 		pub VotersFor get(voters_for): map ReferendumIndex => Vec<T::AccountId>;
 
-		/// Get the vote, if Some, of `who`. The is the additional periods that the voter offer to lock their
-		/// vote tokens in the case of success.
+		/// Get the vote in a given referendum of a particular voter. The result is meaningful only if `voters_for` includes the
+		/// voter when called with the referendum (you'll get the default `Vote` value otherwise). If you don't want to check
+		/// `voters_for`, then you can also check for simple existence with `VoteOf::exists` first.
 		pub VoteOf get(vote_of): map (ReferendumIndex, T::AccountId) => Vote;
 	}
 }
@@ -283,8 +284,13 @@ impl<T: Trait> Module<T> {
 				<balances::Module<T>>::total_balance(voter),
 				Self::vote_of((ref_index, voter.clone())),
 			))
-			.map(|(bal, vote)| if vote.is_aye() { (bal * T::Balance::sa(vote.multiplier() as u64), Zero::zero(), bal) } else { (Zero::zero(), bal * T::Balance::sa(vote.multiplier() as u64), bal) })
-			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(a, b, c), (d, e, f)| (a + d, b + e, c + f))
+			.map(|(bal, vote)|
+				if vote.is_aye() {
+					(bal * T::Balance::sa(vote.multiplier() as u64), Zero::zero(), bal)
+				} else {
+					(Zero::zero(), bal * T::Balance::sa(vote.multiplier() as u64), bal)
+				}
+			).fold((Zero::zero(), Zero::zero(), Zero::zero()), |(a, b, c), (d, e, f)| (a + d, b + e, c + f))
 	}
 
 	// Exposed mutables.
