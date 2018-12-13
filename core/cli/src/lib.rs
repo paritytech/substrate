@@ -228,7 +228,10 @@ where
 		.into();
 
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
-
+	config.database_cache_size = match matches.value_of("database_cache_size") {
+		Some(s) => Some(s.parse().map_err(|_| "Invalid Database Cache size specified")?),
+		_=> None
+	};
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
