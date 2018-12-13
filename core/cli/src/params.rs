@@ -45,6 +45,10 @@ pub struct CoreParams {
 	#[structopt(long = "light")]
 	light: bool,
 
+	/// Limit the memory the database cache can use
+	#[structopt(long = "db-cache", value_name = "MiB")]
+	database_cache_size: Option<u32>,
+
 	/// Listen on this multiaddress
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
 	listen_addr: Vec<String>,
