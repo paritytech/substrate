@@ -68,8 +68,11 @@ fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, 
 
 impl<Balance: IntegerSquareRoot + Zero + Ord + Add<Balance, Output = Balance> + Mul<Balance, Output = Balance> + Div<Balance, Output = Balance> + Rem<Balance, Output = Balance> + Copy> Approved<Balance> for VoteThreshold {
 	/// Given `approve` votes for and `against` votes against from a total electorate size of
-	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
+	/// `electorate` of whom `voters` voted (`electorate - voters` are abstainers) then returns true if the
 	/// overall outcome is in favour of approval.
+	///
+	/// We assume each *voter* may cast more than one *vote*, hence `voters` is not necessarily equal to
+	/// `approve + against`.
 	fn approved(&self, approve: Balance, against: Balance, voters: Balance, electorate: Balance) -> bool {
 		let sqrt_voters = voters.integer_sqrt();
 		let sqrt_electorate = electorate.integer_sqrt();
