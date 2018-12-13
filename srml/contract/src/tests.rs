@@ -879,19 +879,23 @@ const CODE_CALLER_LOGGER: &'static str = r#"
 	(import "env" "ext_set_storage" (func $ext_set_storage (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
+	;; Memory layout
+	;; [0..32]: the storage key (passed as the key for ext_set_storage)
+	;; [32..40]: contents of the scratch buffer (which is expected to be 8 bytes long)
+
 	(func (export "call")
 		;; Fill the scratch buffer with the caller.
 		(call $ext_caller)
 
 		;; Copy contents of the scratch buffer into the contract's memory.
 		(call $ext_scratch_copy
-			(i32.const 32)		;; Pointer in memory to the place where to copy.
+			(i32.const 32)		;; Store scratch's buffer contents at this address.
 			(i32.const 0)		;; Offset from the start of the scratch buffer.
 			(i32.const 8)		;; Count of bytes to copy.
 		)
 
 		(call $ext_set_storage
-			(i32.const 0)		;; the storage key
+			(i32.const 0)		;; The storage key to save the value at. 32 bytes long.
 			(i32.const 1)		;; value_not_null=1, i.e. we are not removing the value
 			(i32.const 32)		;; the pointer to the value to store
 			(i32.const 8)		;; the length of the value
