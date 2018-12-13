@@ -338,6 +338,29 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	}
 }
 
+impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> error::Result<()> {
+		let mut storage = self.storage.write();
+		for (k, v) in insert {
+			storage.aux.insert(k.to_vec(), v.to_vec());
+		}
+		for k in delete {
+			storage.aux.remove(*k);
+		}
+		Ok(())
+	}
+
+	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
+		Ok(self.storage.read().aux.get(key).cloned())
+	}
+}
+
 impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	where
 		Block::Hash: From<[u8; 32]>,
@@ -511,18 +534,11 @@ where
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
 	>(&self, insert: I, delete: D) -> error::Result<()> {
-		let mut storage = self.blockchain.storage.write();
-		for (k, v) in insert {
-			storage.aux.insert(k.to_vec(), v.to_vec());
-		}
-		for k in delete {
-			storage.aux.remove(*k);
-		}
-		Ok(())
+		self.blockchain.insert_aux(insert, delete)
 	}
 
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
-		Ok(self.blockchain.storage.read().aux.get(key).cloned())
+		self.blockchain.get_aux(key)
 	}
 }
 
