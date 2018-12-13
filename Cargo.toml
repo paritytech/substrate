@@ -40,7 +40,11 @@ members = [
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
 	"srml/support",
+	"srml/support/procedural",
+	"srml/support/procedural/tools",
+	"srml/support/procedural/tools/derive",
 	"srml/assets",
+	"srml/aura",
 	"srml/balances",
 	"srml/consensus",
 	"srml/contract",
@@ -48,6 +52,7 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
+	"srml/grandpa",
 	"srml/metadata",
 	"core/sr-primitives",
 	"srml/session",
@@ -59,7 +64,7 @@ members = [
 	"core/serializer",
 	"core/service",
 	"core/service/test",
-	"core/state-db",
+	"core/sr-api-macros",
 	"core/state-machine",
 	"core/test-runtime",
 	"core/telemetry",
@@ -74,7 +79,6 @@ members = [
 exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
-	"pwasm-alloc",
 	"core/test-runtime/wasm",
 	"test-utils/chain-spec-builder"
 ]

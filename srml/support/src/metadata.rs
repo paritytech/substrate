@@ -188,7 +188,6 @@ mod tests {
 				StorageMethod : Option<u32>;
 			}
 			add_extra_genesis {
-			    config(_marker) : ::std::marker::PhantomData<T>;
 			    build(|_, _, _| {});
 			}
 		}
@@ -197,7 +196,7 @@ mod tests {
 	type EventModule = event_module::Module<TestRuntime>;
 	type EventModule2 = event_module2::Module<TestRuntime>;
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct TestRuntime;
 
 	impl_outer_event! {

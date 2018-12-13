@@ -24,14 +24,11 @@ use rand::{self, Rng};
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
-use message::generic::{Message, ConsensusMessage};
+pub use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
 use config::Roles;
-use specialization::NetworkSpecialization;
-use StatusMessage;
-use generic_message;
 
-// TODO: Add additional spam/DoS attack protection.
+// FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
 
 struct PeerConsensus<H> {
@@ -49,16 +46,13 @@ struct MessageEntry<B: BlockT> {
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<NodeIndex, PeerConsensus<(B::Hash, B::Hash)>>,
-	live_message_sinks: HashMap<B::Hash, mpsc::UnboundedSender<ConsensusMessage>>,
+	live_message_sinks: HashMap<B::Hash, Vec<mpsc::UnboundedSender<ConsensusMessage>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: HashSet<(B::Hash, B::Hash)>,
 	session_start: Option<B::Hash>,
 }
 
-impl<B: BlockT> ConsensusGossip<B>
-where
-	B::Header: HeaderT<Number=u64>
-{
+impl<B: BlockT> ConsensusGossip<B> {
 	/// Create a new instance.
 	pub fn new() -> Self {
 		ConsensusGossip {
@@ -156,7 +150,10 @@ where
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
 	/// for pruning, which returns `false` when the items with a given topic should be pruned.
 	pub fn collect_garbage<P: Fn(&B::Hash) -> bool>(&mut self, predicate: P) {
-		self.live_message_sinks.retain(|_, sink| !sink.is_closed());
+		self.live_message_sinks.retain(|_, sinks| {
+			sinks.retain(|sink| !sink.is_closed());
+			!sinks.is_empty()
+		});
 
 		let hashes = &mut self.known_messages;
 		let before = self.messages.len();
@@ -181,7 +178,7 @@ where
 		for entry in self.messages.iter().filter(|e| e.topic == topic) {
 			tx.unbounded_send(entry.message.clone()).expect("receiver known to be live; qed");
 		}
-		self.live_message_sinks.insert(topic, tx);
+		self.live_message_sinks.entry(topic).or_default().push(tx);
 
 		rx
 	}
@@ -223,12 +220,14 @@ where
 			use std::collections::hash_map::Entry;
 			peer.known_messages.insert((topic, message_hash));
 			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry(topic) {
-				debug!(target: "gossip", "Pushing consensus message to sink for {}.", topic);
-				if let Err(e) = entry.get().unbounded_send(message.clone()) {
-					trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
-				}
-
-				if entry.get().is_closed() {
+				debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
+				entry.get_mut().retain(|sink| {
+					if let Err(e) = sink.unbounded_send(message.clone()) {
+						trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
+					}
+					!sink.is_closed()
+				});
+				if entry.get().is_empty() {
 					entry.remove_entry();
 				}
 			}
@@ -260,52 +259,6 @@ where
 		self.session_start = Some(parent_hash);
 		self.collect_garbage(|topic| old_session.as_ref().map_or(true, |h| topic != h));
 	}
-}
-
-impl<Block: BlockT> NetworkSpecialization<Block> for ConsensusGossip<Block> where
-	Block::Header: HeaderT<Number=u64>
-{
-	fn status(&self) -> Vec<u8> {
-		Vec::new()
-	}
-
-	fn on_connect(&mut self, ctx: &mut Context<Block>, who: NodeIndex, status: StatusMessage<Block>) {
-		self.new_peer(ctx, who, status.roles);
-	}
-
-	fn on_disconnect(&mut self, ctx: &mut Context<Block>, who: NodeIndex) {
-		self.peer_disconnected(ctx, who);
-	}
-
-	fn on_message(
-		&mut self,
-		ctx: &mut Context<Block>,
-		who: NodeIndex,
-		message: &mut Option<::message::Message<Block>>
-	) {
-		match message.take() {
-			Some(generic_message::Message::Consensus(topic, msg)) => {
-				trace!(target: "gossip", "Consensus message from {}: {:?}", who, msg);
-				self.on_incoming(ctx, who, topic, msg);
-			}
-			r => *message = r,
-		}
-	}
-
-	fn on_abort(&mut self) {
-		self.abort();
-	}
-
-	fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
-		self.collect_garbage(|_| true);
-	}
-
-	fn on_block_imported(
-		&mut self,
-		_ctx: &mut Context<Block>,
-		_hash: <Block as BlockT>::Hash,
-		_header: &<Block as BlockT>::Header)
-	{}
 }
 
 #[cfg(test)]
@@ -396,5 +349,25 @@ mod tests {
 		consensus.register_message(HashFor::<Block>::hash(&msg_b), topic, || msg_b.clone());
 
 		assert_eq!(consensus.messages.len(), 2);
+	}
+
+	#[test]
+	fn can_keep_multiple_subscribers_per_topic() {
+		use futures::Stream;
+
+		let mut consensus = ConsensusGossip::<Block>::new();
+
+		let message = vec![1, 2, 3];
+
+		let message_hash = HashFor::<Block>::hash(&message);
+		let topic = HashFor::<Block>::hash(&[1,2,3]);
+
+		consensus.register_message(message_hash, topic, || message.clone());
+
+		let stream1 = consensus.messages_for(topic);
+		let stream2 = consensus.messages_for(topic);
+
+		assert_eq!(stream1.wait().next(), Some(Ok(message.clone())));
+		assert_eq!(stream2.wait().next(), Some(Ok(message)));
 	}
 }

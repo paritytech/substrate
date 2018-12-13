@@ -147,15 +147,16 @@ impl<B: BlockT> ChainSync<B> {
 				(Ok(BlockStatus::Unknown), _) => {
 					let our_best = self.best_queued_number;
 					if our_best > As::sa(0) {
+						let common_best = ::std::cmp::min(our_best, info.best_number);
 						debug!(target:"sync", "New peer with unknown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
 						self.peers.insert(who, PeerSync {
 							common_hash: self.genesis_hash,
 							common_number: As::sa(0),
 							best_hash: info.best_hash,
 							best_number: info.best_number,
-							state: PeerSyncState::AncestorSearch(our_best),
+							state: PeerSyncState::AncestorSearch(common_best),
 						});
-						Self::request_ancestry(protocol, who, our_best)
+						Self::request_ancestry(protocol, who, common_best)
 					} else {
 						// We are at genesis, just start downloading
 						debug!(target:"sync", "New peer with best hash {} ({}).", info.best_hash, info.best_number);
@@ -254,13 +255,11 @@ impl<B: BlockT> ChainSync<B> {
 		let best_seen = self.best_seen_block();
 		let is_best = new_blocks.first().and_then(|b| b.block.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
 		let origin = if is_best.unwrap_or_default() { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
+
 		if let Some((hash, number)) = new_blocks.last()
-			.and_then(|b| b.block.header.as_ref().map(|h|(b.block.hash.clone(), *h.number())))
+			.and_then(|b| b.block.header.as_ref().map(|h| (b.block.hash.clone(), *h.number())))
 		{
-			if number > self.best_queued_number {
-				self.best_queued_number = number;
-				self.best_queued_hash = hash;
-			}
+			self.block_queued(&hash, number);
 		}
 		self.maintain_sync(protocol);
 		Some((origin, new_blocks))
@@ -274,6 +273,10 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		trace!(target: "sync", "Block imported successfully {} ({})", number, hash);
+	}
+
+	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		if number > self.best_queued_number {
 			self.best_queued_number = number;
 			self.best_queued_hash = *hash;
@@ -284,13 +287,16 @@ impl<B: BlockT> ChainSync<B> {
 			if peer.best_number >= number {
 				peer.common_number = number;
 				peer.common_hash = *hash;
+			} else {
+				peer.common_number = peer.best_number;
+				peer.common_hash = peer.best_hash;
 			}
 		}
 	}
 
 	pub(crate) fn update_chain_info(&mut self, best_header: &B::Header) {
 		let hash = best_header.hash();
-		self.block_imported(&hash, best_header.number().clone())
+		self.block_queued(&hash, best_header.number().clone())
 	}
 
 	pub(crate) fn on_block_announce(&mut self, protocol: &mut Context<B>, who: NodeIndex, hash: B::Hash, header: &B::Header) {
@@ -347,6 +353,7 @@ impl<B: BlockT> ChainSync<B> {
 			Ok(info) => {
 				self.best_queued_hash = info.best_queued_hash.unwrap_or(info.chain.best_hash);
 				self.best_queued_number = info.best_queued_number.unwrap_or(info.chain.best_number);
+				debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
 			},
 			Err(e) => {
 				debug!(target:"sync", "Error reading blockchain: {:?}", e);
@@ -391,13 +398,10 @@ impl<B: BlockT> ChainSync<B> {
 				trace!(target: "sync", "Too many blocks in the queue.");
 				return;
 			}
-			// we should not download already queued blocks
-			let common_number = ::std::cmp::max(peer.common_number, import_status.best_importing_number);
-
-			trace!(target: "sync", "Considering new block download from {}, common block is {}, best is {:?}", who, common_number, peer.best_number);
 			match peer.state {
 				PeerSyncState::Available => {
-					if let Some(range) = self.blocks.needed_blocks(who, MAX_BLOCKS_TO_REQUEST, peer.best_number, common_number) {
+					trace!(target: "sync", "Considering new block download from {}, common block is {}, best is {:?}", who, peer.common_number, peer.best_number);
+					if let Some(range) = self.blocks.needed_blocks(who, MAX_BLOCKS_TO_REQUEST, peer.best_number, peer.common_number) {
 						trace!(target: "sync", "Requesting blocks from {}, ({} to {})", who, range.start, range.end);
 						let request = message::generic::BlockRequest {
 							id: 0,

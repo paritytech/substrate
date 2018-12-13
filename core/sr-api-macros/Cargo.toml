@@ -1,0 +1,20 @@
+[package]
+name = "sr-api-macros"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "0.6"
+syn = { version = "^0.15.22", features = [ "full", "fold", "extra-traits", "visit" ] }
+proc-macro2 = "0.4"
+blake2-rfc = "0.2"
+
+[dev-dependencies]
+substrate-client = { path = "../client" }
+substrate-test-client = { path = "../test-client" }
+sr-primitives = { path = "../sr-primitives" }
+sr-version = { path = "../sr-version" }
+substrate-primitives = { path = "../primitives" }

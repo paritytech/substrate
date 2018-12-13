@@ -25,14 +25,14 @@ use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata
 use jsonrpc_macros::Trailing;
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
-use primitives::H256;
+use primitives::{H256, Blake2Hasher, Bytes};
 use primitives::hexdisplay::HexDisplay;
-use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
-use primitives::{Blake2Hasher, Bytes};
+use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi};
+use runtime_version::RuntimeVersion;
 
 use subscriptions::Subscriptions;
 
@@ -67,12 +67,26 @@ build_rpc_trait! {
 		#[rpc(name = "state_getMetadata")]
 		fn metadata(&self, Trailing<Hash>) -> Result<Bytes>;
 
+		/// Get the runtime version.
+		#[rpc(name = "state_getRuntimeVersion", alias = ["chain_getRuntimeVersion", ])]
+		fn runtime_version(&self, Trailing<Hash>) -> Result<RuntimeVersion>;
+
 		/// Query historical storage entries (by key) starting from a block given as the second parameter.
 		///
 		/// NOTE This first returned result contains the initial state of storage for all keys.
 		/// Subsequent values in the vector represent changes to the previous state (diffs).
 		#[rpc(name = "state_queryStorage")]
 		fn query_storage(&self, Vec<StorageKey>, Hash, Trailing<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
+
+		#[pubsub(name = "state_runtimeVersion")] {
+			/// New runtime version subscription
+			#[rpc(name = "state_subscribeRuntimeVersion", alias = ["chain_subscribeRuntimeVersion", ])]
+			fn subscribe_runtime_version(&self, Self::Metadata, pubsub::Subscriber<RuntimeVersion>);
+
+			/// Unsubscribe from runtime version subscription
+			#[rpc(name = "state_unsubscribeRuntimeVersion", alias = ["chain_unsubscribeRuntimeVersion", ])]
+			fn unsubscribe_runtime_version(&self, Self::Metadata, SubscriptionId) -> RpcResult<bool>;
+		}
 
 		#[pubsub(name = "state_storage")] {
 			/// New storage subscription
@@ -81,7 +95,7 @@ build_rpc_trait! {
 
 			/// Unsubscribe from storage subscription
 			#[rpc(name = "state_unsubscribeStorage")]
-			fn unsubscribe_storage(&self, SubscriptionId) -> RpcResult<bool>;
+			fn unsubscribe_storage(&self, Self::Metadata, SubscriptionId) -> RpcResult<bool>;
 		}
 	}
 }
@@ -268,7 +282,59 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		})
 	}
 
-	fn unsubscribe_storage(&self, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_storage(&self, _meta: Self::Metadata, id: SubscriptionId) -> RpcResult<bool> {
+		Ok(self.subscriptions.cancel(id))
+	}
+
+	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
+		let at = self.unwrap_or_best(at)?;
+		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
+	}
+
+	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<RuntimeVersion>) {
+		let stream = match self.client.storage_changes_notification_stream(Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])) {
+			Ok(stream) => stream,
+			Err(err) => {
+				let _ = subscriber.reject(error::Error::from(err).into());
+				return;
+			}
+		};
+
+		self.subscriptions.add(subscriber, |sink| {
+			let version = self.runtime_version(None.into())
+				.map_err(Into::into);
+
+			let client = self.client.clone();
+			let mut previous_version = version.clone();
+
+			let stream = stream
+				.map_err(|e| warn!("Error creating storage notification stream: {:?}", e))
+				.filter_map(move |_| {
+					let version = client.info().and_then(|info| {
+							client.runtime_version_at(&BlockId::hash(info.chain.best_hash))
+						})
+						.map_err(error::Error::from)
+						.map_err(Into::into);
+					if previous_version != version {
+						previous_version = version.clone();
+						Some(version)
+					} else {
+						None
+					}
+				});
+
+			sink
+				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+				.send_all(
+					stream::iter_result(vec![Ok(version)])
+					.chain(stream)
+				)
+				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
+				.map(|_| ())
+		});
+	}
+
+	fn unsubscribe_runtime_version(&self, _meta: Self::Metadata, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 }

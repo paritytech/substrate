@@ -23,25 +23,40 @@ extern crate rand;
 #[macro_use]
 extern crate clap;
 
+use rand::{OsRng, Rng};
 use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 
 mod vanity;
+
+fn print_account(seed: &[u8; 32]) {
+	let pair = Pair::from_seed(seed);
+	println!("Seed 0x{} is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+		HexDisplay::from(seed),
+		HexDisplay::from(&pair.public().0),
+		pair.public().to_ss58check()
+	);
+}
 
 fn main() {
 	let yaml = load_yaml!("cli.yml");
 	let matches = clap::App::from_yaml(yaml).get_matches();
 
 	match matches.subcommand() {
+		("generate", Some(_matches)) => {
+			let mut seed = [0u8; 32];
+			OsRng::new().unwrap().fill_bytes(&mut seed[..]);
+			print_account(&seed);
+		}
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
 			let key = vanity::generate_key(&desired).expect("Key generation failed");
-			println!("Seed {} (hex: 0x{}) - {} ({}%)",
-				key.pair.public().to_ss58check(),
-				HexDisplay::from(&key.pair.public().0),
-				HexDisplay::from(&key.seed),
-				key.score);
+			println!("Found account with score {}%", key.score);
+			print_account(&key.seed);
 		}
 		("restore", Some(matches)) => {
+			// This subcommand is probably obsolete, see
+			// https://github.com/paritytech/substrate/issues/1063
+
 			let mut raw_seed = matches.value_of("seed")
 				.map(str::as_bytes)
 				.expect("seed parameter is required; thus it can't be None; qed");
@@ -56,13 +71,7 @@ fn main() {
 			let mut seed = [' ' as u8; 32];
 			let len = raw_seed.len().min(32);
 			seed[..len].copy_from_slice(&raw_seed[..len]);
-			let pair = Pair::from_seed(&seed);
-
-			println!("Seed 0x{} is account:\n    Public key (hex): 0x{}\n    Address (SS58): {}",
-				HexDisplay::from(&seed),
-				HexDisplay::from(&pair.public().0),
-				pair.public().to_ss58check()
-			);
+			print_account(&seed);
 		},
 		_ => print_usage(&matches),
 	}

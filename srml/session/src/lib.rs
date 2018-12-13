@@ -51,9 +51,35 @@ pub trait OnSessionChange<T> {
 	fn on_session_change(time_elapsed: T, should_reward: bool);
 }
 
-impl<T> OnSessionChange<T> for () {
-	fn on_session_change(_: T, _: bool) {}
+macro_rules! for_each_tuple {
+	($m:ident) => {
+		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
+	};
+	(@IMPL $m:ident !!) => { $m! { } };
+	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
+		$m! { $h $($t)* }
+		for_each_tuple! { @IMPL $m !! $($t,)* }
+	}
 }
+
+macro_rules! impl_session_change {
+	() => (
+		impl<T> OnSessionChange<T> for () {
+			fn on_session_change(_: T, _: bool) {}
+		}
+	);
+
+	( $($t:ident)* ) => {
+		impl<T: Clone, $($t: OnSessionChange<T>),*> OnSessionChange<T> for ($($t,)*) {
+			fn on_session_change(time_elapsed: T, should_reward: bool) {
+				$($t::on_session_change(time_elapsed.clone(), should_reward);)*
+			}
+		}
+	}
+}
+
+for_each_tuple!(impl_session_change);
+
 
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
@@ -67,17 +93,15 @@ decl_module! {
 
 		/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 		/// session.
-		fn set_key(origin, key: T::SessionKey) -> Result {
+		fn set_key(origin, key: T::SessionKey) {
 			let who = ensure_signed(origin)?;
 			// set new value for next session
 			<NextKeyFor<T>>::insert(who, key);
-			Ok(())
 		}
 
 		/// Set a new session length. Won't kick in until the next session change (at current length).
-		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_length(new: <T::BlockNumber as HasCompact>::Type) {
 			<NextSessionLength<T>>::put(new.into());
-			Ok(())
 		}
 
 		/// Forces a new session.
@@ -237,7 +261,7 @@ mod tests {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
 		type SessionKey = u64;
-		type OnOfflineValidator = ();
+		type InherentOfflineReport = ();
 	}
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -254,6 +278,7 @@ mod tests {
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
+		type OnTimestampSet = ();
 	}
 	impl Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
@@ -270,16 +295,13 @@ mod tests {
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![1, 2, 3],
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}

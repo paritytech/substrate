@@ -61,8 +61,8 @@ pub use changes_trie::{
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries};
 pub use overlayed_changes::OverlayedChanges;
-pub use proving_backend::create_proof_check_backend_storage;
-pub use trie_backend_essence::Storage;
+pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
+pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 
 /// Default num of pages for the heap
@@ -191,6 +191,7 @@ pub enum ExecutionStrategy {
 }
 
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
+#[derive(Clone)]
 pub enum ExecutionManager<F> {
 	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
 	NativeWhenPossible,
@@ -259,7 +260,13 @@ where
 				wasm_result
 			}),
 		},
+		true,
 	)
+	.map(|(result, storage_tx, changes_tx)| (
+		result,
+		storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
+		changes_tx,
+	))
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -278,7 +285,8 @@ pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
 	method: &str,
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
-) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
+	compute_tx: bool,
+) -> Result<(Vec<u8>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
@@ -318,18 +326,22 @@ where
 		let (result, was_native, storage_delta, changes_delta) = {
 			let ((result, was_native), (storage_delta, changes_delta)) = {
 				let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-				(
-					exec.call(
-						&mut externalities,
-						heap_pages,
-						&code,
-						method,
-						call_data,
-						// attempt to run native first, if we're not directed to run wasm only
-						strategy != ExecutionStrategy::AlwaysWasm,
-					),
-					externalities.transaction()
-				)
+				let retval = exec.call(
+					&mut externalities,
+					heap_pages,
+					&code,
+					method,
+					call_data,
+					// attempt to run native first, if we're not directed to run wasm only
+					strategy != ExecutionStrategy::AlwaysWasm,
+				);
+				let (storage_delta, changes_delta) = if compute_tx {
+					let (storage_delta, changes_delta) = externalities.transaction();
+					(Some(storage_delta), changes_delta)
+				} else {
+					(None, None)
+				};
+				(retval, (storage_delta, changes_delta))
 			};
 			(result, was_native, storage_delta, changes_delta)
 		};
@@ -343,17 +355,21 @@ where
 			let (wasm_result, wasm_storage_delta, wasm_changes_delta) = {
 				let ((result, _), (storage_delta, changes_delta)) = {
 					let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-					(
-						exec.call(
-							&mut externalities,
-							heap_pages,
-							&code,
-							method,
-							call_data,
-							false,
-						),
-						externalities.transaction()
-					)
+					let retval = exec.call(
+						&mut externalities,
+						heap_pages,
+						&code,
+						method,
+						call_data,
+						false,
+					);
+					let (storage_delta, changes_delta) = if compute_tx {
+						let (storage_delta, changes_delta) = externalities.transaction();
+						(Some(storage_delta), changes_delta)
+					} else {
+						(None, None)
+					};
+					(retval, (storage_delta, changes_delta))
 				};
 				(result, storage_delta, changes_delta)
 			};
@@ -381,14 +397,6 @@ where
 }
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.
-/// Produces a state-backend-specific "transaction" which can be used to apply the changes
-/// to the backing store, such as the disk.
-/// Execution proof is the set of all 'touched' storage DBValues from the backend.
-///
-/// On an error, no prospective changes are written to the overlay.
-///
-/// Note: changes to code will be in place if this call is made again. For running partial
-/// blocks (e.g. a transaction at a time), ensure a different method is used.
 pub fn prove_execution<B, H, Exec>(
 	backend: B,
 	overlay: &mut OverlayedChanges,
@@ -404,15 +412,41 @@ where
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
-	let proving_backend = proving_backend::ProvingBackend::new(&trie_backend);
-	let (result, _, _) = execute::<H, _, changes_trie::InMemoryStorage<H>, _>(
+	prove_execution_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
+}
+
+/// Prove execution using the given trie backend, overlayed changes, and call executor.
+/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+/// to the backing store, such as the disk.
+/// Execution proof is the set of all 'touched' storage DBValues from the backend.
+///
+/// On an error, no prospective changes are written to the overlay.
+///
+/// Note: changes to code will be in place if this call is made again. For running partial
+/// blocks (e.g. a transaction at a time), ensure a different method is used.
+pub fn prove_execution_on_trie_backend<S, H, Exec>(
+	trie_backend: &TrieBackend<S, H>,
+	overlay: &mut OverlayedChanges,
+	exec: &Exec,
+	method: &str,
+	call_data: &[u8],
+) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<Error>>
+where
+	S: trie_backend_essence::TrieBackendStorage<H>,
+	H: Hasher,
+	Exec: CodeExecutor<H>,
+	H::Out: Ord + HeapSizeOf,
+{
+	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
+	let (result, _, _) = execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
 		&proving_backend,
 		None,
 		overlay,
 		exec,
 		method,
 		call_data,
-		ExecutionStrategy::NativeWhenPossible
+		native_when_possible(),
+		false,
 	)?;
 	let proof = proving_backend.extract_proof();
 	Ok((result, proof))
@@ -432,9 +466,33 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	let backend = proving_backend::create_proof_check_backend::<H>(root.into(), proof)?;
-	execute::<H, _, changes_trie::InMemoryStorage<H>, _>(&backend, None, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
-		.map(|(result, _, _)| result)
+	let trie_backend = proving_backend::create_proof_check_backend::<H>(root.into(), proof)?;
+	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
+}
+
+/// Check execution proof on proving backend, generated by `prove_execution` call.
+pub fn execution_proof_check_on_trie_backend<H, Exec>(
+	trie_backend: &TrieBackend<MemoryDB<H>, H>,
+	overlay: &mut OverlayedChanges,
+	exec: &Exec,
+	method: &str,
+	call_data: &[u8],
+) -> Result<Vec<u8>, Box<Error>>
+where
+	H: Hasher,
+	Exec: CodeExecutor<H>,
+	H::Out: Ord + HeapSizeOf,
+{
+	execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
+		trie_backend,
+		None,
+		overlay,
+		exec,
+		method,
+		call_data,
+		native_when_possible(),
+		false,
+	).map(|(result, _, _)| result)
 }
 
 /// Generate storage read proof.
@@ -447,7 +505,6 @@ where
 	H: Hasher,
 	H::Out: Ord + HeapSizeOf
 {
-
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	prove_read_on_trie_backend(&trie_backend, key)
@@ -619,6 +676,7 @@ mod tests {
 				println!("HELLO!");
 				we
 			}),
+			true,
 		).is_err());
 		assert!(consensus_failed);
 	}

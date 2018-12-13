@@ -30,6 +30,8 @@ pub extern crate sr_primitives as runtime_primitives;
 extern crate srml_metadata;
 
 extern crate mashup;
+#[macro_use]
+extern crate srml_support_procedural;
 
 #[cfg(test)]
 #[macro_use]
@@ -66,6 +68,9 @@ pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
+
+#[doc(inline)]
+pub use srml_support_procedural::decl_storage;
 
 #[macro_export]
 macro_rules! fail {
@@ -122,4 +127,5 @@ pub enum Void {}
 pub use mashup::*;
 
 #[cfg(feature = "std")]
+#[doc(hidden)]
 pub use serde_derive::*;

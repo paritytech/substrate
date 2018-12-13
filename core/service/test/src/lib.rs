@@ -123,6 +123,7 @@ fn node_config<F: ServiceFactory> (
 		network: network_config,
 		keystore_path: root.join("key").to_str().unwrap().into(),
 		database_path: root.join("db").to_str().unwrap().into(),
+		database_cache_size: None,
 		pruning: Default::default(),
 		keys: keys,
 		chain_spec: (*spec).clone(),
@@ -180,9 +181,9 @@ impl<F: ServiceFactory> TestNet<F> {
 	}
 }
 
-pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
+pub fn connectivity<F: ServiceFactory, Inherent>(spec: FactoryChainSpec<F>) where
 	<F as ServiceFactory>::RuntimeApi:
-		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block>
+		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block, Inherent>
 {
 	const NUM_NODES: u32 = 10;
 	{
@@ -224,7 +225,7 @@ where
 	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
 	<F as ServiceFactory>::RuntimeApi:
-		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block> +
+		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block, ()> +
 		client::runtime_api::TaggedTransactionQueue<<F as service::ServiceFactory>::Block>
 {
 	const NUM_NODES: u32 = 10;
@@ -263,7 +264,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 where
 	F: ServiceFactory,
 	<F as ServiceFactory>::RuntimeApi:
-		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block>
+		client::block_builder::api::BlockBuilder<<F as service::ServiceFactory>::Block, ()>
 {
 	const NUM_NODES: u32 = 20;
 	const NUM_BLOCKS: u64 = 200;

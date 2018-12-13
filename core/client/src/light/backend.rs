@@ -70,6 +70,22 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
+impl<S, F> ::backend::AuxStore for Backend<S, F> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, _insert: I, _delete: D) -> ClientResult<()> {
+		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+	}
+
+	fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+	}
+}
+
 impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
@@ -102,7 +118,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 		)
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>) -> ClientResult<()> {
+	fn finalize_block(&self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
 		self.blockchain.storage().finalize_header(block)
 	}
 
@@ -129,14 +145,6 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
-	}
-
-	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, _insert: I, _delete: D) -> ClientResult<()> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
-	}
-
-	fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 }

@@ -64,7 +64,7 @@ build_rpc_trait! {
 
 			/// Unsubscribe from extrinsic watching.
 			#[rpc(name = "author_unwatchExtrinsic")]
-			fn unwatch_extrinsic(&self, SubscriptionId) -> Result<bool>;
+			fn unwatch_extrinsic(&self, Self::Metadata, SubscriptionId) -> Result<bool>;
 		}
 
 	}
@@ -149,7 +149,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		})
 	}
 
-	fn unwatch_extrinsic(&self, id: SubscriptionId) -> Result<bool> {
+	fn unwatch_extrinsic(&self, _metadata: Self::Metadata, id: SubscriptionId) -> Result<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 }

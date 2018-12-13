@@ -275,6 +275,12 @@ This function receives a `data` buffer as an argument. Execution of the function
 
 **complexity**: The complexity of this function is proportional to the size of the `data` buffer.
 
+## ext_caller
+
+This function serializes the account ID of the caller into the scratch buffer.
+
+**complexity**: Assuming that the account ID is of constant size, this function has constant complexity.
+
 ## ext_input_size
 
 **complexity**: This function is of constant complexity.

@@ -61,7 +61,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 	let maybe_runtime_preproc = cache.entry(gen_cache_key(code))
 		.or_insert_with(|| match WasmModule::from_buffer(code) {
 			Ok(module) => {
-				let version = wasm_executor.call_in_wasm_module(ext, heap_pages, &module, "version", &[])
+				let version = wasm_executor.call_in_wasm_module(ext, heap_pages, &module, "Core_version", &[])
 					.ok()
 					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 				RuntimePreproc::ValidCode(module, version)

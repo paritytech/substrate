@@ -24,7 +24,7 @@ use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug};
 use substrate_primitives::hash::H512 as Signature;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct Digest<Item> {
 	pub logs: Vec<Item>,
 }
@@ -57,7 +57,7 @@ impl<Item> traits::Digest for Digest<Item> where
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub enum DigestItem<Hash, AuthorityId> {
 	/// System digest item announcing that authorities set has been changed
 	/// in the block. Contains the new set of authorities.
