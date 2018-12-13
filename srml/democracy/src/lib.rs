@@ -363,12 +363,18 @@ impl<T: Trait> Module<T> {
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
 		let lock_period = Self::public_delay();
 
+		// Logic defined in https://www.slideshare.net/gavofyork/governance-in-polkadot-poc3
+		// Essentially, we extend the lock-period of the coins behind the winning votes to be the
+		// vote strength times the public delay period from now.
 		for (a, vote) in Self::voters_for(index).into_iter()
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed
-			.filter(|&(_, vote)| vote.is_aye() == approved)
-		{
+			.filter(|&(_, vote)| vote.is_aye() == approved)	// Just the winning coins
+		{	
+			// now plus: the base lock period multiplied by the number of periods this voter offered to
+			// lock should they win...
 			let locked_until = now + lock_period * T::BlockNumber::sa((vote.multiplier()) as u64);
+			// ...extend their bondage until at least then.
 			<Bondage<T>>::mutate(a, |b| if *b < locked_until { *b = locked_until });
 		}
 
