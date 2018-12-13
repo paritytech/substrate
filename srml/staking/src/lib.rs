@@ -499,6 +499,8 @@ impl<T: Trait> Module<T> {
 	/// Call when a validator is determined to be offline. `count` is the
 	/// number of offences the validator has committed.
 	pub fn on_offline_validator(v: T::AccountId, count: usize) {
+		use primitives::traits::CheckedShl;
+
 		for _ in 0..count {
 			let slash_count = Self::slash_count(&v);
 			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
@@ -506,8 +508,23 @@ impl<T: Trait> Module<T> {
 
 			let event = if slash_count >= grace {
 				let instances = slash_count - grace;
-				let slash = Self::current_offline_slash() << instances;
-				let next_slash = slash << 1u32;
+
+				let base_slash = Self::current_offline_slash();
+				let slash = match base_slash.checked_shl(instances) {
+					Some(slash) => slash,
+					None => {
+						// freeze at last maximum valid slash if this starts
+						// to overflow.
+						<SlashCount<T>>::insert(v.clone(), slash_count);
+						base_slash.checked_shl(instances - 1)
+							.expect("slash count no longer incremented after overflow; \
+								prior check only fails with instances >= 1; \
+								thus instances - 1 always works and is a valid amount of bits; qed")
+					}
+				};
+
+				let next_slash = slash << 1;
+
 				let _ = Self::slash_validator(&v, slash);
 				if instances >= Self::validator_preferences(&v).unstake_threshold
 					|| Self::slashable_balance(&v) < next_slash
