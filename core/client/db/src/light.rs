@@ -297,7 +297,7 @@ impl<Block> AuxStore for LightStorage<Block>
 	}
 
 	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Ok(self.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)?)
+		self.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)
 	}
 }
 
