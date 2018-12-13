@@ -293,7 +293,6 @@ impl<Block> AuxStore for LightStorage<Block>
 			transaction.delete(columns::AUX, k);
 		}
 		self.db.write(transaction).map_err(db_err)
-		Ok(())
 	}
 
 	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
