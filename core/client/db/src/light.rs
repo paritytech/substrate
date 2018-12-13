@@ -292,7 +292,7 @@ impl<Block> AuxStore for LightStorage<Block>
 		for k in delete {
 			transaction.delete(columns::AUX, k);
 		}
-		self.db.write(transaction).map_err(db_err)?;
+		self.db.write(transaction).map_err(db_err)
 		Ok(())
 	}
 
