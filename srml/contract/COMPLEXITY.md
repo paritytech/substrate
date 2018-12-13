@@ -277,9 +277,9 @@ This function receives a `data` buffer as an argument. Execution of the function
 
 ## ext_caller
 
-This function serializes the account ID of the caller into the scratch buffer.
+This function serializes the address of the caller into the scratch buffer.
 
-**complexity**: Assuming that the account ID is of constant size, this function has constant complexity.
+**complexity**: Assuming that the address is of constant size, this function has constant complexity.
 
 ## ext_input_size
 
