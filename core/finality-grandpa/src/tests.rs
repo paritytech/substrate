@@ -192,7 +192,7 @@ impl Network for MessageRouting {
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message);
+		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message, false);
 		inner.route_until_complete();
 	}
 
@@ -223,7 +223,7 @@ impl Network for MessageRouting {
 
 	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message);
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
 		inner.route_until_complete();
 	}
 }

@@ -40,6 +40,7 @@ struct MessageEntry<B: BlockT> {
 	topic: B::Hash,
 	message_hash: B::Hash,
 	message: ConsensusMessage,
+	broadcast: bool,
 	instant: Instant,
 }
 
@@ -78,7 +79,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
 				known_messages.insert((entry.topic, entry.message_hash));
-				protocol.send_message(who, Message::Consensus(entry.topic.clone(), entry.message.clone()));
+				protocol.send_message(who, Message::Consensus(entry.topic.clone(), entry.message.clone(), entry.broadcast));
 			}
 			self.peers.insert(who, PeerConsensus {
 				known_messages,
@@ -98,10 +99,27 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		message_hash: B::Hash,
 		topic: B::Hash,
+		broadcast: bool,
 		get_message: F,
 	)
 		where F: Fn() -> ConsensusMessage,
 	{
+		if broadcast {
+			for (id, ref mut peer) in self.peers.iter_mut() {
+				if peer.known_messages.insert((topic.clone(), message_hash.clone())) {
+					let message = get_message();
+					if peer.is_authority {
+						trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
+					} else {
+						trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+					}
+					protocol.send_message(*id, Message::Consensus(topic, message, broadcast));
+				}
+			}
+
+			return;
+		}
+
 		let mut non_authorities: Vec<_> = self.peers.iter()
 			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&(topic, message_hash)) { Some(*id) } else { None })
 			.collect();
@@ -118,24 +136,25 @@ impl<B: BlockT> ConsensusGossip<B> {
 				if peer.known_messages.insert((topic.clone(), message_hash.clone())) {
 					let message = get_message();
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
-					protocol.send_message(*id, Message::Consensus(topic, message));
+					protocol.send_message(*id, Message::Consensus(topic, message, broadcast));
 				}
 			} else if non_authorities.contains(&id) {
 				let message = get_message();
 				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
 				peer.known_messages.insert((topic.clone(), message_hash.clone()));
-				protocol.send_message(*id, Message::Consensus(topic, message));
+				protocol.send_message(*id, Message::Consensus(topic, message, broadcast));
 			}
 		}
 	}
 
-	fn register_message<F>(&mut self, message_hash: B::Hash, topic: B::Hash, get_message: F)
+	fn register_message<F>(&mut self, message_hash: B::Hash, topic: B::Hash, broadcast: bool, get_message: F)
 		where F: Fn() -> ConsensusMessage
 	{
 		if self.known_messages.insert((topic, message_hash)) {
 			self.messages.push(MessageEntry {
 				topic,
 				message_hash,
+				broadcast,
 				instant: Instant::now(),
 				message: get_message(),
 			});
@@ -193,6 +212,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		who: NodeIndex,
 		topic: B::Hash,
 		message: ConsensusMessage,
+		broadcast: bool,
 	) -> Option<(B::Hash, ConsensusMessage)> {
 		let message_hash = HashFor::<B>::hash(&message[..]);
 
@@ -236,21 +256,34 @@ impl<B: BlockT> ConsensusGossip<B> {
 			return None;
 		}
 
-		self.multicast_inner(protocol, message_hash, topic, || message.clone());
+		self.multicast_inner(protocol, message_hash, topic, broadcast, || message.clone());
 		Some((topic, message))
 	}
 
 	/// Multicast a message to all peers.
-	pub fn multicast(&mut self, protocol: &mut Context<B>, topic: B::Hash, message: ConsensusMessage) {
+	pub fn multicast(
+		&mut self,
+		protocol: &mut Context<B>,
+		topic: B::Hash,
+		message: ConsensusMessage,
+		broadcast: bool,
+	) {
 		let message_hash = HashFor::<B>::hash(&message);
-		self.multicast_inner(protocol, message_hash, topic, || message.clone());
+		self.multicast_inner(protocol, message_hash, topic, broadcast, || message.clone());
 	}
 
-	fn multicast_inner<F>(&mut self, protocol: &mut Context<B>, message_hash: B::Hash, topic: B::Hash, get_message: F)
+	fn multicast_inner<F>(
+		&mut self,
+		protocol: &mut Context<B>,
+		message_hash: B::Hash,
+		topic: B::Hash,
+		broadcast: bool,
+		get_message: F,
+	)
 		where F: Fn() -> ConsensusMessage
 	{
-		self.register_message(message_hash, topic, &get_message);
-		self.propagate(protocol, message_hash, topic, get_message);
+		self.register_message(message_hash, topic, broadcast, &get_message);
+		self.propagate(protocol, message_hash, topic, broadcast, get_message);
 	}
 
 	/// Note new consensus session.
@@ -287,6 +320,7 @@ mod tests {
 					message_hash: $hash,
 					instant: $now,
 					message: $m,
+					broadcast: false,
 				})
 			}
 		}
@@ -331,7 +365,7 @@ mod tests {
 		let message_hash = HashFor::<Block>::hash(&message);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, || message.clone());
+		consensus.register_message(message_hash, topic, false, || message.clone());
 		let stream = consensus.messages_for(topic);
 
 		assert_eq!(stream.wait().next(), Some(Ok(message)));
@@ -345,8 +379,8 @@ mod tests {
 		let msg_a = vec![1, 2, 3];
 		let msg_b = vec![4, 5, 6];
 
-		consensus.register_message(HashFor::<Block>::hash(&msg_a), topic, || msg_a.clone());
-		consensus.register_message(HashFor::<Block>::hash(&msg_b), topic, || msg_b.clone());
+		consensus.register_message(HashFor::<Block>::hash(&msg_a), topic, false, || msg_a.clone());
+		consensus.register_message(HashFor::<Block>::hash(&msg_b), topic, false, || msg_b.clone());
 
 		assert_eq!(consensus.messages.len(), 2);
 	}
@@ -362,7 +396,7 @@ mod tests {
 		let message_hash = HashFor::<Block>::hash(&message);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, || message.clone());
+		consensus.register_message(message_hash, topic, false, || message.clone());
 
 		let stream1 = consensus.messages_for(topic);
 		let stream2 = consensus.messages_for(topic);
