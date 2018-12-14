@@ -317,7 +317,7 @@ mod tests {
 								name: DecodeDifferent::Encode("StorageMethod"),
 								modifier: StorageFunctionModifier::Optional,
 								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
-								default: DecodeDifferent::Encode("Default::default()"),
+								default: None,
 								documentation: DecodeDifferent::Encode(&[]),
 							}
 						])

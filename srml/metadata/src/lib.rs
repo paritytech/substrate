@@ -229,7 +229,7 @@ pub struct StorageFunctionMetadata {
 	pub name: DecodeDifferentStr,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
-	pub default: DecodeDifferentStr,
+	pub default: Option<DecodeDifferentStr>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 

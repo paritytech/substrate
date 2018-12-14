@@ -604,11 +604,12 @@ fn store_functions_to_metadata (
 				#scrate::storage::generator::StorageFunctionModifier::Optional
 			}
 		};
-		let default = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d| {
-			quote!( #d )
-		})
-			.map(|q|q.to_string())
-			.unwrap_or_else(|| "Default::default()".to_string());
+		let default = default_value.inner.get(0).as_ref().map(|d| &d.expr)
+			.map(|d| quote!(#d).to_string())
+			.map(|d| {
+				quote!( Some(#scrate::storage::generator::DecodeDifferent::Encode(#d)) )
+			})
+			.unwrap_or_else(|| quote!( None ));
 		let mut docs = TokenStream2::new();
 		for attr in attrs.inner.iter().filter_map(|v| v.interpret_meta()) {
 			if let syn::Meta::NameValue(syn::MetaNameValue{
@@ -627,7 +628,7 @@ fn store_functions_to_metadata (
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
-				default: #scrate::storage::generator::DecodeDifferent::Encode(#default),
+				default: #default,
 				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
 			},
 		};
