@@ -34,7 +34,6 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate parity_codec as codec;
 extern crate substrate_transaction_pool as transaction_pool;
-extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate target_info;
 extern crate tokio;
@@ -189,6 +188,7 @@ impl<Components: components::Components> Service<Components> {
 			protocol_id
 		};
 
+		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network = network::Service::new(
 			network_params,
 			protocol_id,
@@ -240,10 +240,14 @@ impl<Components: components::Components> Service<Components> {
 
 
 		// RPC
+		let system_info = rpc::apis::system::SystemInfo {
+			chain_name: config.chain_spec.name().into(),
+			impl_name: config.impl_name.into(),
+			impl_version: config.impl_version.into(),
+			properties: config.chain_spec.properties(),
+		};
 		let rpc = Components::RPC::start_rpc(
-			client.clone(), config.chain_spec.name().to_string(), config.impl_name,
-			config.impl_version, config.rpc_http, config.rpc_ws, config.chain_spec.properties(),
-			task_executor.clone(), transaction_pool.clone()
+			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http, config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
 		)?;
 
 		// Telemetry
@@ -356,32 +360,6 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 			})?),
 		None => None,
 	})
-}
-
-#[derive(Clone)]
-struct RpcConfig {
-	chain_name: String,
-	properties: Properties,
-	impl_name: &'static str,
-	impl_version: &'static str,
-}
-
-impl substrate_rpc::system::SystemApi for RpcConfig {
-	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.impl_name.into())
-	}
-
-	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.impl_version.into())
-	}
-
-	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.chain_name.clone())
-	}
-
-	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
-		Ok(self.properties.clone())
-	}
 }
 
 /// Transaction pool adapter.
