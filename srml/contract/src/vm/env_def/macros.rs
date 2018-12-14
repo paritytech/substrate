@@ -296,7 +296,9 @@ mod tests {
 
 	#[test]
 	fn macro_define_env() {
-		define_env!(init_env, <E: Ext>,
+		use vm::env_def::ImportSatisfyCheck;
+
+		define_env!(Env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {
 				let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
 				if !amount.is_zero() {
@@ -307,7 +309,6 @@ mod tests {
 			},
 		);
 
-		let env = init_env::<MockExt>();
-		assert!(env.funcs.get(&b"ext_gas"[..]).is_some());
+		assert!(Env::can_satisfy(b"ext_gas", &FunctionType::new(vec![ValueType::I32], None)));
 	}
 }
