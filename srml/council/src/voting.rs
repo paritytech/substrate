@@ -236,7 +236,7 @@ mod tests {
 	use ::tests::*;
 	use ::tests::{Call, Origin};
 	use srml_support::Hashable;
-	use democracy::VoteThreshold;
+	use democracy::{ReferendumInfo, VoteThreshold};
 
 	#[test]
 	fn basic_environment_works() {
@@ -272,7 +272,7 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove, 0), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove, 0)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
@@ -305,7 +305,7 @@ mod tests {
 
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
-			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove, 0)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
 		});
 	}
 
@@ -324,7 +324,7 @@ mod tests {
 
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
-			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove, 0)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(4, proposal, VoteThreshold::SuperMajorityApprove, 0))]);
 		});
 	}
 
@@ -388,7 +388,7 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 7, set_balance_proposal(42), VoteThreshold::SimpleMajority, 0)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(7, set_balance_proposal(42), VoteThreshold::SimpleMajority, 0))]);
 		});
 	}
 
@@ -453,7 +453,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SuperMajorityAgainst, 0)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(5, proposal, VoteThreshold::SuperMajorityAgainst, 0))]);
 		});
 	}
 
@@ -471,7 +471,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 5, proposal, VoteThreshold::SimpleMajority, 0)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, ReferendumInfo::new(5, proposal, VoteThreshold::SimpleMajority, 0))]);
 		});
 	}
 

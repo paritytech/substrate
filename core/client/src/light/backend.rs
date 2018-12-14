@@ -27,7 +27,7 @@ use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBac
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 
 use in_mem;
-use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
+use backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -70,19 +70,19 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F> ::backend::AuxStore for Backend<S, F> {
+impl<S: AuxStore, F> AuxStore for Backend<S, F> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
 		'c: 'a,
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
-	>(&self, _insert: I, _delete: D) -> ClientResult<()> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+	>(&self, insert: I, delete: D) -> ClientResult<()> {
+		self.blockchain.storage().insert_aux(insert, delete)
 	}
 
-	fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		self.blockchain.storage().get_aux(key)
 	}
 }
 

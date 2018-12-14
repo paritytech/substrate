@@ -92,6 +92,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			voting_period: 5 * MINUTES,    // 3 days to discuss & vote on an active referendum
 			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
 			public_delay: 0,
+			max_lock_periods: 6,
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: vec![],
@@ -213,6 +214,7 @@ pub fn testnet_genesis(
 			voting_period: 18,
 			minimum_deposit: 10,
 			public_delay: 0,
+			max_lock_periods: 6,
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
@@ -272,7 +274,7 @@ fn development_config_genesis() -> GenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec {
-	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![], None, None, None, None)
+	ChainSpec::from_genesis("Development", "dev", development_config_genesis, vec![], None, None, None, None)
 }
 
 fn local_testnet_genesis() -> GenesisConfig {

@@ -260,7 +260,13 @@ where
 				wasm_result
 			}),
 		},
+		true,
 	)
+	.map(|(result, storage_tx, changes_tx)| (
+		result,
+		storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
+		changes_tx,
+	))
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -279,7 +285,8 @@ pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
 	method: &str,
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
-) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
+	compute_tx: bool,
+) -> Result<(Vec<u8>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
@@ -319,18 +326,22 @@ where
 		let (result, was_native, storage_delta, changes_delta) = {
 			let ((result, was_native), (storage_delta, changes_delta)) = {
 				let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-				(
-					exec.call(
-						&mut externalities,
-						heap_pages,
-						&code,
-						method,
-						call_data,
-						// attempt to run native first, if we're not directed to run wasm only
-						strategy != ExecutionStrategy::AlwaysWasm,
-					),
-					externalities.transaction()
-				)
+				let retval = exec.call(
+					&mut externalities,
+					heap_pages,
+					&code,
+					method,
+					call_data,
+					// attempt to run native first, if we're not directed to run wasm only
+					strategy != ExecutionStrategy::AlwaysWasm,
+				);
+				let (storage_delta, changes_delta) = if compute_tx {
+					let (storage_delta, changes_delta) = externalities.transaction();
+					(Some(storage_delta), changes_delta)
+				} else {
+					(None, None)
+				};
+				(retval, (storage_delta, changes_delta))
 			};
 			(result, was_native, storage_delta, changes_delta)
 		};
@@ -344,17 +355,21 @@ where
 			let (wasm_result, wasm_storage_delta, wasm_changes_delta) = {
 				let ((result, _), (storage_delta, changes_delta)) = {
 					let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-					(
-						exec.call(
-							&mut externalities,
-							heap_pages,
-							&code,
-							method,
-							call_data,
-							false,
-						),
-						externalities.transaction()
-					)
+					let retval = exec.call(
+						&mut externalities,
+						heap_pages,
+						&code,
+						method,
+						call_data,
+						false,
+					);
+					let (storage_delta, changes_delta) = if compute_tx {
+						let (storage_delta, changes_delta) = externalities.transaction();
+						(Some(storage_delta), changes_delta)
+					} else {
+						(None, None)
+					};
+					(retval, (storage_delta, changes_delta))
 				};
 				(result, storage_delta, changes_delta)
 			};
@@ -423,14 +438,15 @@ where
 	H::Out: Ord + HeapSizeOf,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, _, _) = execute::<H, _, changes_trie::InMemoryStorage<H>, _>(
+	let (result, _, _) = execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
 		&proving_backend,
 		None,
 		overlay,
 		exec,
 		method,
 		call_data,
-		ExecutionStrategy::NativeWhenPossible
+		native_when_possible(),
+		false,
 	)?;
 	let proof = proving_backend.extract_proof();
 	Ok((result, proof))
@@ -467,13 +483,15 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	execute::<H, _, changes_trie::InMemoryStorage<H>, _>(
+	execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
 		trie_backend,
-		None, overlay,
+		None,
+		overlay,
 		exec,
 		method,
 		call_data,
-		ExecutionStrategy::NativeWhenPossible
+		native_when_possible(),
+		false,
 	).map(|(result, _, _)| result)
 }
 
@@ -658,6 +676,7 @@ mod tests {
 				println!("HELLO!");
 				we
 			}),
+			true,
 		).is_err());
 		assert!(consensus_failed);
 	}

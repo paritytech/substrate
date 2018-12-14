@@ -155,6 +155,7 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
+	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
 ) where
 	B: Block + 'static,
 	C: Authorities<B> + ChainHead<B> + Send + Sync + 'static,
@@ -177,14 +178,16 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 			}
 		};
 
-		runtime.block_on(start_aura(
+		runtime.spawn(start_aura(
 			slot_duration,
 			local_key,
 			client,
 			block_import,
 			env,
 			sync_oracle,
-		)).expect("aura authorship never returns error; qed");
+		));
+
+		runtime.block_on(on_exit).expect("Exit future should not fail");
 	});
 }
 

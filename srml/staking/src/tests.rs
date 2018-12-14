@@ -504,3 +504,40 @@ fn deducting_balance_when_bonded_should_not_work() {
 		assert_noop!(Balances::reserve(&1, 69), "cannot transfer illiquid funds");
 	});
 }
+
+#[test]
+fn slash_value_calculation_does_not_overflow() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		assert_eq!(Staking::era_length(), 9);
+		assert_eq!(Staking::sessions_per_era(), 3);
+		assert_eq!(Staking::last_era_length_change(), 0);
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert_eq!(Balances::total_balance(&10), 1);
+		assert_eq!(Staking::intentions(), vec![10, 20]);
+		assert_eq!(Staking::offline_slash_grace(), 0);
+
+		// set validator preferences so the validator doesn't back down after
+		// slashing.
+		<ValidatorPreferences<Test>>::insert(10, ValidatorPrefs {
+			unstake_threshold: u32::max_value(),
+			validator_payment: 0,
+		});
+
+		System::set_block_number(3);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 1);
+		assert_eq!(Balances::total_balance(&10), 11);
+
+		// the balance type is u64, so after slashing 64 times,
+		// the slash value should have overflowed. add a couple extra for
+		// good measure with the slash grace.
+		trait TypeEq {}
+		impl<A> TypeEq for (A, A) {}
+		fn assert_type_eq<A: TypeEq>() {}
+		assert_type_eq::<(u64, <Test as balances::Trait>::Balance)>();
+
+		Staking::on_offline_validator(10, 100);
+	});
+}

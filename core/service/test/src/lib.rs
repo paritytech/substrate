@@ -123,6 +123,7 @@ fn node_config<F: ServiceFactory> (
 		network: network_config,
 		keystore_path: root.join("key").to_str().unwrap().into(),
 		database_path: root.join("db").to_str().unwrap().into(),
+		database_cache_size: None,
 		pruning: Default::default(),
 		keys: keys,
 		chain_spec: (*spec).clone(),

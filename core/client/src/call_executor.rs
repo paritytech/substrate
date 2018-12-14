@@ -235,7 +235,14 @@ where
 			method,
 			call_data,
 			manager,
-		).map_err(Into::into)
+			true,
+		)
+		.map(|(result, storage_tx, changes_tx)| (
+			result,
+			storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
+			changes_tx,
+		))
+		.map_err(Into::into)
 	}
 
 	fn prove_at_trie_state<S: state_machine::TrieBackendStorage<Blake2Hasher>>(
