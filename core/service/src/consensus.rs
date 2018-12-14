@@ -111,7 +111,7 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
+impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Block, ConsensusData> for ProposerFactory<C, A> where
 	C: AuthoringApi,
 	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block, BasicInherentData>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
@@ -153,7 +153,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
+impl<Block, C, A, ConsensusData> consensus_common::Proposer<<C as AuthoringApi>::Block, ConsensusData> for Proposer<Block, C, A> where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
 	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
@@ -163,7 +163,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
 	type Error = error::Error;
 
-	fn propose(&self) -> Result<<C as AuthoringApi>::Block, error::Error> {
+	fn propose(&self, _consensus_data: ConsensusData) -> Result<<C as AuthoringApi>::Block, error::Error> {
 		use runtime_primitives::traits::BlakeTwo256;
 
 		let timestamp = current_timestamp();

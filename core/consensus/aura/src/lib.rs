@@ -147,6 +147,23 @@ impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, Autho
 	}
 }
 
+/// Aura consensus environmental data. Useful for block-proposing code.
+pub struct AuraConsensusData {
+	pub timestamp: u64,
+	pub slot: u64,
+	pub slot_duration: u64,
+}
+
+impl AuraConsensusData {
+	pub fn new(timestamp: u64, slot: u64, slot_duration: u64) -> Self {
+		Self {
+			timestamp: timestamp,
+			slot: slot,
+			slot_duration: slot_duration,
+		}
+	}
+}
+
 /// Start the aura worker in a separate thread.
 pub fn start_aura_thread<B, C, E, I, SO, Error>(
 	slot_duration: SlotDuration,
@@ -159,8 +176,8 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 ) where
 	B: Block + 'static,
 	C: Authorities<B> + ChainHead<B> + Send + Sync + 'static,
-	E: Environment<B, Error=Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error=Error> + 'static,
+	E: Environment<B, AuraConsensusData, Error=Error> + Send + Sync + 'static,
+	E::Proposer: Proposer<B, AuraConsensusData, Error=Error> + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
@@ -202,8 +219,8 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 ) -> impl Future<Item=(),Error=()> where
 	B: Block,
 	C: Authorities<B> + ChainHead<B>,
-	E: Environment<B, Error=Error>,
-	E::Proposer: Proposer<B, Error=Error>,
+	E: Environment<B, AuraConsensusData, Error=Error>,
+	E::Proposer: Proposer<B, AuraConsensusData, Error=Error>,
 	I: BlockImport<B>,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
@@ -287,10 +304,12 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 								}
 							};
 
+							let consensus_data = AuraConsensusData::new(timestamp, slot_num, slot_duration);
+
 							// deadline our production to approx. the end of the
 							// slot
 							Timeout::new(
-								proposer.propose().into_future(),
+								proposer.propose(consensus_data).into_future(),
 								time_until_next(Duration::from_secs(timestamp), slot_duration),
 							)
 						} else {
@@ -634,7 +653,7 @@ mod tests {
 	struct DummyFactory(Arc<TestClient>);
 	struct DummyProposer(u64, Arc<TestClient>);
 
-	impl Environment<TestBlock> for DummyFactory {
+	impl Environment<TestBlock, AuraConsensusData> for DummyFactory {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
@@ -645,11 +664,11 @@ mod tests {
 		}
 	}
 
-	impl Proposer<TestBlock> for DummyProposer {
+	impl Proposer<TestBlock, AuraConsensusData> for DummyProposer {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self) -> Result<TestBlock, Error> {
+		fn propose(&self, _consensus_data: AuraConsensusData) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}
