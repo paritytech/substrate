@@ -116,12 +116,15 @@ pub use fg_primitives::ScheduledChange;
 
 mod authorities;
 mod communication;
+mod finality_proof;
 mod until_imported;
 
 #[cfg(feature="service-integration")]
 mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService};
+
+pub use finality_proof::{prove_finality, check_finality_proof};
 
 #[cfg(test)]
 mod tests;
@@ -616,20 +619,23 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
+		GrandpaJustification::<Block>::decode(&mut &*encoded).ok_or_else(|| {
+			let msg = "failed to decode grandpa justification".to_string();
+			ClientErrorKind::BadJustification(msg).into()
+		}).and_then(|just| just.verify(set_id, voters).map(|_| just))
+	}
+
+	/// Validate the commit and the votes' ancestry proofs.
+	fn verify(&self, set_id: u64, voters: &HashMap<AuthorityId, u64>) -> Result<(), ClientError>
+	where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+	{
 		use grandpa::Chain;
 
-		let justification = match GrandpaJustification::decode(&mut &*encoded) {
-			Some(justification) => justification,
-			_ => {
-				let msg = "failed to decode grandpa justification".to_string();
-				return Err(ClientErrorKind::BadJustification(msg).into());
-			}
-		};
-
-		let ancestry_chain = AncestryChain::<Block>::new(&justification.votes_ancestries);
+		let ancestry_chain = AncestryChain::<Block>::new(&self.votes_ancestries);
 
 		match grandpa::validate_commit(
-			&justification.commit,
+			&self.commit,
 			voters,
 			None,
 			&ancestry_chain,
@@ -642,23 +648,23 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		}
 
 		let mut visited_hashes = HashSet::new();
-		for signed in justification.commit.precommits.iter() {
+		for signed in self.commit.precommits.iter() {
 			if let Err(_) = communication::check_message_sig::<Block>(
 				&grandpa::Message::Precommit(signed.precommit.clone()),
 				&signed.id,
 				&signed.signature,
-				justification.round,
+				self.round,
 				set_id,
 			) {
 				return Err(ClientErrorKind::BadJustification(
 					"invalid signature for precommit in grandpa justification".to_string()).into());
 			}
 
-			if justification.commit.target_hash == signed.precommit.target_hash {
+			if self.commit.target_hash == signed.precommit.target_hash {
 				continue;
 			}
 
-			match ancestry_chain.ancestry(justification.commit.target_hash, signed.precommit.target_hash) {
+			match ancestry_chain.ancestry(self.commit.target_hash, signed.precommit.target_hash) {
 				Ok(route) => {
 					// ancestry starts from parent hash but the precommit target hash has been visited
 					visited_hashes.insert(signed.precommit.target_hash);
@@ -673,7 +679,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 			}
 		}
 
-		let ancestry_hashes = justification.votes_ancestries
+		let ancestry_hashes = self.votes_ancestries
 			.iter()
 			.map(|h: &Block::Header| h.hash())
 			.collect();
@@ -683,7 +689,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 				"invalid precommit ancestries in grandpa justification with unused headers".to_string()).into());
 		}
 
-		Ok(justification)
+		Ok(())
 	}
 }
 
