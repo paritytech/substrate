@@ -840,6 +840,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		-> Result<ImportResult, Self::Error>
 	{
 		use authorities::PendingChange;
+		use client::blockchain::Backend;
 
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
@@ -907,51 +908,57 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			e
 		})?;
 
+		if import_result != ImportResult::Queued {
+			return Ok(import_result);
+		}
+
 		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
 			canonical_at_height(&self.inner, (hash, number), canon_number)
 		})?;
 
-		if enacts_change {
-			match justification {
-				Some(justification) => {
-					let justification = GrandpaJustification::decode_and_verify(
-						justification,
-						self.authority_set.set_id(),
-						&self.authority_set.current_authorities(),
-					)?;
+		if !enacts_change {
+			return Ok(import_result);
+		}
 
-					let result = finalize_block(
-						&*self.inner,
-						&self.authority_set,
-						hash,
-						number,
-						justification.into(),
-					);
+		match justification {
+			Some(justification) => {
+				let justification = GrandpaJustification::decode_and_verify(
+					justification,
+					self.authority_set.set_id(),
+					&self.authority_set.current_authorities(),
+				)?;
 
-					match result {
-						Ok(_) => {
-							unreachable!("returns Ok when no authority set change should be enacted; \
-										  verified previously that finalizing the current block enacts a change; \
-										  qed;");
-						},
-						Err(ExitOrError::AuthoritiesChanged(new)) => {
-							debug!(target: "finality", "Imported justified block #{} that enacts authority set change, signalling voter.", number);
-							if let Err(_) = self.authority_set_change.unbounded_send(new) {
-								return Err(ClientErrorKind::Backend(
-									"imported and finalized change block but grandpa voter is no longer running".to_string()
-								).into());
-							}
-						},
-						Err(ExitOrError::Error(_)) => {
+				let result = finalize_block(
+					&*self.inner,
+					&self.authority_set,
+					hash,
+					number,
+					justification.into(),
+				);
+
+				match result {
+					Ok(_) => {
+						unreachable!("returns Ok when no authority set change should be enacted; \
+									  verified previously that finalizing the current block enacts a change; \
+									  qed;");
+					},
+					Err(ExitOrError::AuthoritiesChanged(new)) => {
+						debug!(target: "finality", "Imported justified block #{} that enacts authority set change, signalling voter.", number);
+						if let Err(_) = self.authority_set_change.unbounded_send(new) {
 							return Err(ClientErrorKind::Backend(
-								"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
+								"imported and finalized change block but grandpa voter is no longer running".to_string()
 							).into());
-						},
-					}
-				},
-				None => {
-					trace!(target: "finality", "Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.", number);
+						}
+					},
+					Err(ExitOrError::Error(_)) => {
+						return Err(ClientErrorKind::Backend(
+							"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
+						).into());
+					},
 				}
+			},
+			None => {
+				trace!(target: "finality", "Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.", number);
 			}
 		}
 
@@ -1128,7 +1135,6 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	))
 }
 
-// FIXME: don't push commits if not local authority?
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	set_id: u64,
 	voters: &Arc<HashMap<AuthorityId, u64>>,
