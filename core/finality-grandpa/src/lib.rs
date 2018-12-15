@@ -96,14 +96,13 @@ use runtime_primitives::traits::{
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
-use tokio::timer::{Delay, Interval};
+use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
-use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
@@ -266,7 +265,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, message);
+		self.service.gossip_consensus_message(topic, message, false);
 	}
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
@@ -280,7 +279,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, message);
+		self.service.gossip_consensus_message(topic, message, true);
 	}
 }
 
@@ -809,63 +808,6 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	}
 }
 
-/// An oracle for liveness checking of a GRANDPA authority set. This is used
-/// when importing blocks, if the block enacts an authority set change then
-/// either it must provide a justification or if the GRANDPA authority set is
-/// still live then the block can be imported unjustified since the block will
-/// still be finalized by GRANDPA in a future round. The current heuristic for
-/// deciding whether an authority set is live is to check if there were any
-/// recent commit messages on an unfiltered stream).
-struct GrandpaOracle<Block: BlockT> {
-	unfiltered_commits_stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>,
-	last_commit_target: Option<(Instant, Block::Hash, NumberFor<Block>)>,
-}
-
-impl<Block: BlockT> GrandpaOracle<Block> {
-	fn new(stream: Box<dyn Stream<Item=(u64, CompactCommit<Block>), Error=Error> + Send>) -> GrandpaOracle<Block> {
-		GrandpaOracle {
-			unfiltered_commits_stream: stream,
-			last_commit_target: None,
-		}
-	}
-
-	fn poll(&mut self) {
-		while let Ok(Async::Ready(Some((_, commit)))) = self.unfiltered_commits_stream.poll() {
-			self.last_commit_target = Some((Instant::now(), commit.target_hash, commit.target_number));
-		}
-	}
-
-	fn is_live(&self) -> bool {
-		self.last_commit_target.map(|(instant, _, _)| {
-			instant.elapsed() < Duration::from_secs(30)
-		}).unwrap_or(false)
-	}
-}
-
-#[derive(Clone)]
-struct SharedGrandpaOracle<Block: BlockT> {
-	inner: Arc<Mutex<Option<GrandpaOracle<Block>>>>,
-}
-
-impl<Block: BlockT> SharedGrandpaOracle<Block> {
-	fn empty() -> SharedGrandpaOracle<Block> {
-		SharedGrandpaOracle { inner: Arc::new(Mutex::new(None)) }
-	}
-
-	fn poll(&self) {
-		if let Some(inner) = self.inner.lock().as_mut() {
-			inner.poll();
-		}
-	}
-
-	fn is_live(&self) -> bool {
-		self.inner.lock()
-			.as_ref()
-			.map(|inner| inner.is_live())
-			.unwrap_or(false)
-	}
-}
-
 /// A block-import handler for GRANDPA.
 ///
 /// This scans each imported block for signals of changing authority set.
@@ -879,7 +821,6 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	authority_set_change: mpsc::UnboundedSender<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
-	authority_set_oracle: SharedGrandpaOracle<Block>,
 	api: Arc<PRA>,
 }
 
@@ -900,49 +841,46 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	{
 		use authorities::PendingChange;
 
-		// we don't want to finalize on `inner.import_block`
-		let justification = block.justification.take();
-		let number = block.header.number().clone();
 		let hash = block.post_header().hash();
-		let parent_hash = *block.header.parent_hash();
-		let digest = block.header.digest().clone();
-		let is_live = self.authority_set_oracle.is_live();
-
-		let import_result = self.inner.import_block(block, new_authorities)?;
-		if import_result != ImportResult::Queued {
-			return Ok(import_result);
-		}
+		let number = block.header.number().clone();
 
 		let maybe_change = self.api.runtime_api().grandpa_pending_change(
-			&BlockId::hash(parent_hash),
-			&digest,
+			&BlockId::hash(*block.header.parent_hash()),
+			&block.header.digest().clone(),
 		)?;
 
-		let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ClientError> {
-			let error = || {
-				Err(ClientErrorKind::Backend(
-					"invalid authority set change: multiple pending changes on the same chain".to_string()
-				).into())
+		// when we update the authorities, we need to hold the lock
+		// until the block is written to prevent a race if we need to restore
+		// the old authority set on error.
+		let just_in_case = if let Some(change) = maybe_change {
+			let parent_hash = *block.header.parent_hash();
+
+			let mut authorities = self.authority_set.inner().write();
+			let old_set = authorities.clone();
+
+			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ClientError> {
+				let error = || {
+					Err(ClientErrorKind::Backend(
+						"invalid authority set change: multiple pending changes on the same chain".to_string()
+					).into())
+				};
+
+				if *base == hash { return error(); }
+				if *base == parent_hash { return error(); }
+
+				let tree_route = ::client::blockchain::tree_route(
+					self.inner.backend().blockchain(),
+					BlockId::Hash(parent_hash),
+					BlockId::Hash(*base),
+				)?;
+
+				if tree_route.common_block().hash == *base {
+					return error();
+				}
+
+				Ok(())
 			};
 
-			if *base == hash { return error(); }
-			if *base == parent_hash { return error(); }
-
-			let tree_route = ::client::blockchain::tree_route(
-				self.inner.backend().blockchain(),
-				BlockId::Hash(parent_hash),
-				BlockId::Hash(*base),
-			)?;
-
-			if tree_route.common_block().hash == *base {
-				return error();
-			}
-
-			Ok(())
-		};
-
-		if let Some(change) = maybe_change {
-			let mut authorities = self.authority_set.inner().write();
 			authorities.add_pending_change(
 				PendingChange {
 					next_authorities: change.next_authorities,
@@ -953,62 +891,74 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				is_equal_or_descendent_of,
 			)?;
 
-			let encoded = authorities.encode();
-			Backend::insert_aux(&**self.inner.backend(), &[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
+			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
+			Some((old_set, authorities))
+		} else {
+			None
 		};
+
+		// we don't want to finalize on `inner.import_block`
+		let justification = block.justification.take();
+		let import_result = self.inner.import_block(block, new_authorities).map_err(|e| {
+			if let Some((old_set, mut authorities)) = just_in_case {
+				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
+				*authorities = old_set;
+			}
+			e
+		})?;
+
+		if import_result != ImportResult::Queued {
+			return Ok(import_result);
+		}
 
 		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
 			canonical_at_height(&self.inner, (hash, number), canon_number)
 		})?;
 
-		// a pending change is enacted by the given block, if the current
-		// grandpa authority set isn't live anymore the provided `ImportBlock`
-		// should include a justification for finalizing the block.
+		if !enacts_change {
+			return Ok(import_result);
+		}
+
 		match justification {
 			Some(justification) => {
-				if enacts_change && !is_live {
-					let justification = GrandpaJustification::decode_and_verify(
-						justification,
-						self.authority_set.set_id(),
-						&self.authority_set.current_authorities(),
-					)?;
+				let justification = GrandpaJustification::decode_and_verify(
+					justification,
+					self.authority_set.set_id(),
+					&self.authority_set.current_authorities(),
+				)?;
 
-					let result = finalize_block(
-						&*self.inner,
-						&self.authority_set,
-						hash,
-						number,
-						justification.into(),
-					);
+				let result = finalize_block(
+					&*self.inner,
+					&self.authority_set,
+					hash,
+					number,
+					justification.into(),
+				);
 
-					match result {
-						Ok(_) => {
-							unreachable!("returns Ok when no authority set change should be enacted; \
-										  verified previously that finalizing the current block enacts a change; \
-										  qed;");
-						},
-						Err(ExitOrError::AuthoritiesChanged(new)) => {
-							debug!(target: "finality", "Imported justified block #{} that enacts authority set change, signalling voter.", number);
-							if let Err(_) = self.authority_set_change.unbounded_send(new) {
-								return Err(ClientErrorKind::Backend(
-									"imported and finalized change block but grandpa voter is no longer running".to_string()
-								).into());
-							}
-						},
-						Err(ExitOrError::Error(_)) => {
+				match result {
+					Ok(_) => {
+						unreachable!("returns Ok when no authority set change should be enacted; \
+									  verified previously that finalizing the current block enacts a change; \
+									  qed;");
+					},
+					Err(ExitOrError::AuthoritiesChanged(new)) => {
+						debug!(target: "finality", "Imported justified block #{} that enacts authority set change, signalling voter.", number);
+						if let Err(_) = self.authority_set_change.unbounded_send(new) {
 							return Err(ClientErrorKind::Backend(
-								"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
+								"imported and finalized change block but grandpa voter is no longer running".to_string()
 							).into());
-						},
-					}
+						}
+					},
+					Err(ExitOrError::Error(_)) => {
+						return Err(ClientErrorKind::Backend(
+							"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
+						).into());
+					},
 				}
 			},
-			None if enacts_change && !is_live => {
-				return Err(ClientErrorKind::BadJustification(
-					"missing justification for block that enacts authority set change".to_string()
-				).into());
-			},
-			_ => {}
+			None => {
+				trace!(target: "finality", "Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.", number);
+			}
 		}
 
 		Ok(import_result)
@@ -1085,7 +1035,6 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	authority_set_change: mpsc::UnboundedReceiver<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
-	authority_set_oracle: SharedGrandpaOracle<Block>,
 }
 
 struct AncestryChain<Block: BlockT> {
@@ -1170,21 +1119,17 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 	let (authority_set_change_tx, authority_set_change_rx) = mpsc::unbounded();
 
-	let authority_set_oracle = SharedGrandpaOracle::empty();
-
 	Ok((
 		GrandpaBlockImport {
 			inner: client.clone(),
 			authority_set: authority_set.clone(),
 			authority_set_change: authority_set_change_tx,
-			authority_set_oracle: authority_set_oracle.clone(),
 			api
 		},
 		LinkHalf {
 			client,
 			authority_set,
 			authority_set_change: authority_set_change_rx,
-			authority_set_oracle,
 		},
 	))
 }
@@ -1241,10 +1186,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
-) -> ::client::error::Result<(
-	impl Future<Item=(),Error=()> + Send + 'static,
-	impl Future<Item=(),Error=()> + Send + 'static,
-)> where
+) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -1261,15 +1203,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		client,
 		authority_set,
 		authority_set_change,
-		authority_set_oracle
 	} = link;
-
-	let oracle_work = {
-		let authority_set_oracle = authority_set_oracle.clone();
-		Interval::new(Instant::now(), Duration::from_secs(1))
-			.for_each(move |_| Ok(authority_set_oracle.poll()))
-			.map_err(|_| ())
-	};
 
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
@@ -1314,14 +1248,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 			&client,
 			&network,
 		);
-
-		let unfiltered_commits_stream = Box::new(::communication::checked_commit_stream::<Block, _>(
-			env.set_id,
-			network.commit_messages(env.set_id),
-			env.voters.clone(),
-		));
-
-		*authority_set_oracle.inner.lock() = Some(GrandpaOracle::new(unfiltered_commits_stream));
 
 		let voters = (*env.voters).clone();
 
@@ -1386,5 +1312,5 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		}))
 	}).map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
 
-	Ok((voter_work, oracle_work))
+	Ok(voter_work)
 }

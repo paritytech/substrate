@@ -173,7 +173,7 @@ pub mod generic {
 		/// Transactions.
 		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
-		Consensus(Hash, ConsensusMessage), // topic, opaque Vec<u8>
+		Consensus(Hash, ConsensusMessage, bool), // topic, opaque Vec<u8>, broadcast
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.

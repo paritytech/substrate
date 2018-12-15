@@ -127,11 +127,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 	}
 
 	/// Send a consensus message through the gossip
-	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>) {
+	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
 		self.handler.gossip_consensus_message(
 			&mut NetSyncIo::new(&self.network, self.protocol_id),
 			topic,
-			message)
+			message,
+			broadcast,
+		)
 	}
 	/// Execute a closure with the chain-specific network specialization.
 	pub fn with_spec<F, U>(&self, f: F) -> U

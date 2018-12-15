@@ -204,7 +204,7 @@ pub fn connectivity<F: ServiceFactory, Inherent>(spec: FactoryChainSpec<F>) wher
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
-			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES as u32, 0, vec![], 30400);
+			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES, 0, vec![], 30500);
 			info!("Checking linked topology");
 			let mut address = network.full_nodes[0].1.network().node_id().expect("No node address");
 			for (_, service) in network.full_nodes.iter().skip(1) {
