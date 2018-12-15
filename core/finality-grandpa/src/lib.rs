@@ -840,7 +840,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		-> Result<ImportResult, Self::Error>
 	{
 		use authorities::PendingChange;
-		use client::blockchain::Backend;
 
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
