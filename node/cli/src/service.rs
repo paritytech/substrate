@@ -77,42 +77,51 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, executor: TaskExecutor, key: Arc<Pair>| {
+			|mut service: Self::FullService, executor: TaskExecutor, key: Option<Arc<Pair>>| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				if service.config.custom.grandpa_authority {
-					info!("Running Grandpa session as Authority {}", key.public());
-					let (voter, oracle) = grandpa::run_grandpa(
-						grandpa::Config {
-							gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
-							local_key: Some(key.clone()),
-							name: Some(service.config.name.clone())
-						},
-						link_half,
-						grandpa::NetworkBridge::new(service.network()),
-					)?;
+				let local_key = if let Some(key) = key {
+					if !service.config.custom.grandpa_authority_only {
+						info!("Using authority key {}", key.public());
+						let proposer = Arc::new(substrate_service::ProposerFactory {
+							client: service.client(),
+							transaction_pool: service.transaction_pool(),
+						});
 
-					executor.spawn(oracle);
-					executor.spawn(voter);
-				}
-				if !service.config.custom.grandpa_authority_only {
-					info!("Using authority key {}", key.public());
-					let proposer = Arc::new(substrate_service::ProposerFactory {
-						client: service.client(),
-						transaction_pool: service.transaction_pool(),
-					});
+						let client = service.client();
+						executor.spawn(start_aura(
+							SlotDuration::get_or_compute(&*client)?,
+							key.clone(),
+							client,
+							block_import.clone(),
+							proposer,
+							service.network(),
+						));
+					}
 
-					let client = service.client();
-					executor.spawn(start_aura(
-						SlotDuration::get_or_compute(&*client)?,
-						key,
-						client,
-						block_import.clone(),
-						proposer,
-						service.network(),
-					));
-				}
+					if service.config.custom.grandpa_authority {
+						info!("Running Grandpa session as Authority {}", key.public());
+						Some(key)
+					} else {
+						None
+					}
+				} else {
+					None
+				};
+
+				let voter = grandpa::run_grandpa(
+					grandpa::Config {
+						local_key,
+						gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
+						name: Some(service.config.name.clone())
+					},
+					link_half,
+					grandpa::NetworkBridge::new(service.network()),
+				)?;
+
+				executor.spawn(voter);
+
 				Ok(service)
 			}
 		},
