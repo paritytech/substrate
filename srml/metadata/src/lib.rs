@@ -233,9 +233,11 @@ pub struct StorageFunctionMetadata {
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct DefaultByteGetter(pub fn() -> Option<Vec<u8>>);
+pub trait DefaultByte {
+  fn default_byte(&self) -> Vec<u8>;
+}
+#[derive(Clone)]
+pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 
 /*impl DefaultByteGetter {
   pub const fn new(i: fn() -> Option<Vec<u8>>) -> Self {
@@ -245,18 +247,29 @@ pub struct DefaultByteGetter(pub fn() -> Option<Vec<u8>>);
 
 impl Encode for DefaultByteGetter {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
-		self.0().encode_to(dest)
+		self.0.default_byte().encode_to(dest)
 	}
 }
 
+impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
+  fn eq(&self, other: &DefaultByteGetter) -> bool {
+    let left = self.0.default_byte();
+    let right = other.0.default_byte();
+    left.eq(&right)
+	}
+}
+
+
+impl Eq for DefaultByteGetter { }
+
+
 #[cfg(feature = "std")]
 impl Decode for DefaultByteGetter {
-	fn decode<I: Input>(_input: &mut I) -> Option<Self> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
     unimplemented!("Maybe using a lazy static cache over the fn result");
-/*    let o_v = <Option<Vec<u8>> as Decode>::decode(input);
-    if let Some(v) = o_v {
-      Some(DefaultByteGetter(Box::new(move || { v.clone() })))
-    } else { None }*/
+/*    let _bytes = <Vec<u8> as Decode>::decode(input);
+    // TODO err on different byte than fn call?
+    Some(DefaultByteGetter(::std::marker::PhantomData::new()))*/
 	}
 }
 
@@ -266,9 +279,17 @@ impl serde::Serialize for DefaultByteGetter {
     where
         S: serde::Serializer,
 	{
-    self.0().serialize(serializer)
+    self.0.default_byte().serialize(serializer)
 	}
 }
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for DefaultByteGetter {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    self.0.default_byte().fmt(f)
+  }
+}
+
 
 
 
