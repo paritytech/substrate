@@ -72,6 +72,7 @@ use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::{Delay, Timeout};
 use api::AuraApi;
 
+pub use aura_primitives::AuraConsensusData;
 pub use consensus_common::SyncOracle;
 
 /// A handle to the network. This is generally implemented by providing some
@@ -143,23 +144,6 @@ impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, Autho
 		match self {
 			generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
 			_ => None
-		}
-	}
-}
-
-/// Aura consensus environmental data. Useful for block-proposing code.
-pub struct AuraConsensusData {
-	pub timestamp: u64,
-	pub slot: u64,
-	pub slot_duration: u64,
-}
-
-impl AuraConsensusData {
-	pub fn new(timestamp: u64, slot: u64, slot_duration: u64) -> Self {
-		Self {
-			timestamp: timestamp,
-			slot: slot,
-			slot_duration: slot_duration,
 		}
 	}
 }
@@ -304,7 +288,11 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 								}
 							};
 
-							let consensus_data = AuraConsensusData::new(timestamp, slot_num, slot_duration);
+							let consensus_data = AuraConsensusData {
+								timestamp,
+								slot: slot_num,
+								slot_duration,
+							};
 
 							// deadline our production to approx. the end of the
 							// slot

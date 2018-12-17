@@ -76,6 +76,8 @@ pub trait Environment<B: Block, ConsensusData> {
 ///
 /// This will encapsulate creation and evaluation of proposals at a specific
 /// block.
+///
+/// Proposers are generic over bits of "consensus data" which are engine-specific.
 pub trait Proposer<B: Block, ConsensusData> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;

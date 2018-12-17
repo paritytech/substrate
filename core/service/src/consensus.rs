@@ -31,6 +31,7 @@ use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as Heade
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::BasicInherentData;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
+use aura_primitives::AuraConsensusData;
 
 type Timestamp = u64;
 
@@ -115,7 +116,8 @@ impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Blo
 	C: AuthoringApi,
 	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block, BasicInherentData>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
-	client::error::Error: From<<C as AuthoringApi>::Error>
+	client::error::Error: From<<C as AuthoringApi>::Error>,
+	Proposer<<C as AuthoringApi>::Block, C, A>: consensus_common::Proposer<<C as AuthoringApi>::Block, ConsensusData>,
 {
 	type Proposer = Proposer<<C as AuthoringApi>::Block, C, A>;
 	type Error = error::Error;
@@ -144,6 +146,10 @@ impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Blo
 	}
 }
 
+struct ConsensusData {
+	timestamp: Option<u64>,
+}
+
 /// The proposer logic.
 pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	client: Arc<C>,
@@ -153,7 +159,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<Block, C, A, ConsensusData> consensus_common::Proposer<<C as AuthoringApi>::Block, ConsensusData> for Proposer<Block, C, A> where
+impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block, AuraConsensusData> for Proposer<Block, C, A> where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
 	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
@@ -163,10 +169,41 @@ impl<Block, C, A, ConsensusData> consensus_common::Proposer<<C as AuthoringApi>:
 	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
 	type Error = error::Error;
 
-	fn propose(&self, _consensus_data: ConsensusData) -> Result<<C as AuthoringApi>::Block, error::Error> {
+	fn propose(&self, consensus_data: AuraConsensusData)
+		-> Result<<C as AuthoringApi>::Block, error::Error>
+	{
+		self.propose_with(ConsensusData { timestamp: Some(consensus_data.timestamp) })
+	}
+}
+
+impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block, ()> for Proposer<Block, C, A> where
+	Block: BlockT,
+	C: AuthoringApi<Block=Block>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	A: txpool::ChainApi<Block=Block>,
+	client::error::Error: From<<C as AuthoringApi>::Error>
+{
+	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
+	type Error = error::Error;
+
+	fn propose(&self, _consensus_data: ()) -> Result<<C as AuthoringApi>::Block, error::Error> {
+		self.propose_with(ConsensusData { timestamp: None })
+	}
+}
+
+impl<Block, C, A> Proposer<Block, C, A>	where
+	Block: BlockT,
+	C: AuthoringApi<Block=Block>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	A: txpool::ChainApi<Block=Block>,
+	client::error::Error: From<<C as AuthoringApi>::Error>,
+{
+	fn propose_with(&self, consensus_data: ConsensusData)
+		-> Result<<C as AuthoringApi>::Block, error::Error>
+	{
 		use runtime_primitives::traits::BlakeTwo256;
 
-		let timestamp = current_timestamp();
+		let timestamp = consensus_data.timestamp.unwrap_or_else(current_timestamp);
 		let inherent_data = BasicInherentData::new(timestamp, 0);
 
 		let block = self.client.build_block(
