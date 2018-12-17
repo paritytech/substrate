@@ -31,9 +31,9 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 /// Specialised `ChainSpec`.
 pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 
-/// BBQ birch testnet generator
-pub fn bbq_birch_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
+/// Cream Cherry testnet generator
+pub fn cream_cherry_config() -> Result<ChainSpec, String> {
+	ChainSpec::from_embedded(include_bytes!("../res/cream-cherry.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
