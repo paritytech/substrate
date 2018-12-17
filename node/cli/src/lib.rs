@@ -64,8 +64,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The BBQ Birch testnet.
-	BbqBirch,
+	/// The Ash Ash testnet.
+	AshAsh,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
 }
@@ -74,7 +74,7 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::BbqBirch => chain_spec::bbq_birch_config()?,
+			ChainSpec::AshAsh => chain_spec::ash_ash_config()?,
 			ChainSpec::Development => chain_spec::development_config(),
 			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
@@ -85,7 +85,7 @@ impl ChainSpec {
 		match s {
 			"dev" => Some(ChainSpec::Development),
 			"local" => Some(ChainSpec::LocalTestnet),
-			"" | "bbq-birch" => Some(ChainSpec::BbqBirch),
+			"" | "ash" | "ash-ash" => Some(ChainSpec::AshAsh),
 			"staging" => Some(ChainSpec::StagingTestnet),
 			_ => None,
 		}
