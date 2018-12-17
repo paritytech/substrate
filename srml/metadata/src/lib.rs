@@ -229,9 +229,64 @@ pub struct StorageFunctionMetadata {
 	pub name: DecodeDifferentStr,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
-	pub default: Option<DecodeDifferentStr>,
+	pub default: DefaultByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
+
+pub struct DefaultByteGetter(pub Box<Fn() -> Option<Vec<u8>>>);
+
+impl Encode for DefaultByteGetter {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.0().encode_to(dest)
+	}
+}
+
+impl Clone for DefaultByteGetter {
+	fn clone(&self) -> Self {
+    let proto = self.0();
+    DefaultByteGetter(Box::new(move || { proto.clone() }))
+	}
+}
+
+impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
+  fn eq(&self, other: &DefaultByteGetter) -> bool {
+    let left = self.0();
+    let right = other.0();
+    left.eq(&right)
+	}
+}
+
+impl Eq for DefaultByteGetter { }
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for DefaultByteGetter {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    self.0().fmt(f)
+  }
+}
+
+#[cfg(feature = "std")]
+impl Decode for DefaultByteGetter {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+    //unimplemented!("Need to use dyn Fn() -> Vec or maybe even boxed thing")
+    let o_v = <Option<Vec<u8>> as Decode>::decode(input);
+    if let Some(v) = o_v {
+      Some(DefaultByteGetter(Box::new(move || { v.clone() })))
+    } else { None }
+	}
+}
+
+#[cfg(feature = "std")]
+impl serde::Serialize for DefaultByteGetter {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+	{
+    self.0().serialize(serializer)
+	}
+}
+
+
 
 /// A storage function type.
 #[derive(Clone, PartialEq, Eq, Encode)]
