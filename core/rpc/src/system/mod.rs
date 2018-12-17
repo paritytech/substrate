@@ -18,10 +18,16 @@
 
 pub mod error;
 
+mod helpers;
 #[cfg(test)]
 mod tests;
 
+use std::sync::Arc;
+use network;
+use runtime_primitives::traits;
+
 use self::error::Result;
+pub use self::helpers::{Properties, SystemInfo, Health};
 
 build_rpc_trait! {
 	/// Substrate system RPC API
@@ -40,6 +46,73 @@ build_rpc_trait! {
 
 		/// Get a custom set of properties as a JSON object, defined in the chain spec.
 		#[rpc(name = "system_properties")]
-		fn system_properties(&self) -> Result<serde_json::map::Map<String, serde_json::Value>>;
+		fn system_properties(&self) -> Result<Properties>;
+
+		/// Return health status of the node.
+		///
+		/// Node is considered healthy if it is:
+		/// - connected to some peers (unless running in dev mode)
+		/// - not performing a major sync
+		#[rpc(name = "system_health")]
+		fn system_health(&self) -> Result<Health>;
+	}
+}
+
+/// System API implementation
+pub struct System<B: traits::Block> {
+	info: SystemInfo,
+	sync: Arc<network::SyncProvider<B>>,
+	should_have_peers: bool,
+}
+
+impl<B: traits::Block> System<B> {
+	/// Creates new `System` given the `SystemInfo`.
+	pub fn new(
+		info: SystemInfo,
+		sync: Arc<network::SyncProvider<B>>,
+		should_have_peers: bool,
+	) -> Self {
+		System {
+			info,
+			should_have_peers,
+			sync,
+		}
+	}
+}
+
+impl<B: traits::Block> SystemApi for System<B> {
+	fn system_name(&self) -> Result<String> {
+		Ok(self.info.impl_name.clone())
+	}
+
+	fn system_version(&self) -> Result<String> {
+		Ok(self.info.impl_version.clone())
+	}
+
+	fn system_chain(&self) -> Result<String> {
+		Ok(self.info.chain_name.clone())
+	}
+
+	fn system_properties(&self) -> Result<Properties> {
+		Ok(self.info.properties.clone())
+	}
+
+	fn system_health(&self) -> Result<Health> {
+		let status = self.sync.status();
+
+		let is_syncing = status.sync.is_major_syncing();
+		let peers = status.num_peers;
+
+		let health = Health {
+			peers,
+			is_syncing,
+		};
+
+		let has_no_peers = peers == 0 && self.should_have_peers;
+		if has_no_peers || is_syncing {
+			Err(error::ErrorKind::NotHealthy(health))?
+		} else {
+			Ok(health)
+		}
 	}
 }

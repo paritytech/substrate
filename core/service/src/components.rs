@@ -19,17 +19,17 @@
 use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
-use chain_spec::{ChainSpec, Properties};
+use chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
-use {error, Service, RpcConfig, maybe_start_server};
+use {error, Service, maybe_start_server};
 use network::{self, OnDemand, import_queue::ImportQueue};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::{BlockId, SignedBlock}};
 use config::Configuration;
 use primitives::{Blake2Hasher, H256};
-use rpc;
+use rpc::{self, apis::system::SystemInfo};
 use parking_lot::Mutex;
 
 // Type aliases.
@@ -123,12 +123,11 @@ pub trait StartRPC<C: Components> {
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		chain_name: String,
-		impl_name: &'static str,
-		impl_version: &'static str,
+		network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+		should_have_peers: bool,
+		system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
-		properties: Properties,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Self::ServersHandle>;
@@ -142,17 +141,14 @@ impl<C: Components> StartRPC<Self> for C where
 
 	fn start_rpc(
 		client: Arc<ComponentClient<C>>,
-		chain_name: String,
-		impl_name: &'static str,
-		impl_version: &'static str,
+		network: Arc<network::SyncProvider<ComponentBlock<C>>>,
+		should_have_peers: bool,
+		rpc_system_info: SystemInfo,
 		rpc_http: Option<SocketAddr>,
 		rpc_ws: Option<SocketAddr>,
-		properties: Properties,
 		task_executor: TaskExecutor,
 		transaction_pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<Self::ServersHandle> {
-		let rpc_config = RpcConfig { properties, chain_name, impl_name, impl_version };
-
 		let handler = || {
 			let client = client.clone();
 			let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
@@ -161,11 +157,14 @@ impl<C: Components> StartRPC<Self> for C where
 			let author = rpc::apis::author::Author::new(
 				client.clone(), transaction_pool.clone(), subscriptions
 			);
+			let system = rpc::apis::system::System::new(
+				rpc_system_info.clone(), network.clone(), should_have_peers
+			);
 			rpc::rpc_handler::<ComponentBlock<C>, ComponentExHash<C>, _, _, _, _>(
 				state,
 				chain,
 				author,
-				rpc_config.clone(),
+				system,
 			)
 		};
 
