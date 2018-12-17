@@ -332,7 +332,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				&self,
 				at: &#block_id
 			) -> #crate_::error::Result<bool> where Self: Sized {
-				unsafe { self.call.runtime_version_at(at) }.map(|r| r.has_api::<A>())
+				self.call.runtime_version_at(at).map(|r| r.has_api::<A>())
 			}
 		}
 
@@ -524,7 +524,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						#fn_name,
 						args,
 						move || {
-							<#runtime as #runtime_trait_> :: #fn_ident(#( #arg_names2 ),*)
+						//	<#runtime as #runtime_trait_> :: #fn_ident(#( #arg_names2 ),*)
+						unimplemented!()
 						}
 					)
 				}

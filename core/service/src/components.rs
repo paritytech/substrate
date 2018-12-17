@@ -135,7 +135,8 @@ pub trait StartRPC<C: Components> {
 }
 
 impl<C: Components> StartRPC<Self> for C where
-	C::RuntimeApi: Metadata<ComponentBlock<C>>,
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: Metadata<ComponentBlock<C>>,
 {
 	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
 
@@ -230,8 +231,8 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 }
 
 impl<C: Components> MaintainTransactionPool<Self> for C where
-	ComponentClient<C>: ProvideRuntimeApi<Api = C::RuntimeApi>,
-	C::RuntimeApi: TaggedTransactionQueue<ComponentBlock<C>>,
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
 {
 	// TODO [ToDr] Optimize and re-use tags from the pool.
 	fn on_block_imported(

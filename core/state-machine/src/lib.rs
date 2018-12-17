@@ -694,7 +694,7 @@ mod tests {
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
 		let mut consensus_failed = false;
-		assert!(execute_using_consensus_failure_handler(
+		assert!(execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),

@@ -24,7 +24,7 @@ decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
 	pub trait BlockBuilder<InherentData> {
 		/// Apply the given extrinsics.
-		fn apply_extrinsic(extrinsic: &<Block as BlockT>::Extrinsic) -> ApplyResult;
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		/// Finish the current block.
 		fn finalise_block() -> <Block as BlockT>::Header;
 		/// Generate inherent extrinsics. The inherent data will vary from chain to chain.
