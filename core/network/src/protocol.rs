@@ -285,8 +285,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
-			GenericMessage::Consensus(topic, msg) => {
-				self.consensus_gossip.write().on_incoming(&mut ProtocolContext::new(&self.context_data, io), who, topic, msg);	
+			GenericMessage::Consensus(topic, msg, broadcast) => {
+				self.consensus_gossip.write().on_incoming(&mut ProtocolContext::new(&self.context_data, io), who, topic, msg, broadcast);
 			},
 			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, &mut Some(other)),
 		}
@@ -296,10 +296,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		send_message::<B, H>(&self.context_data.peers, io, who, message)
 	}
 
-	pub fn gossip_consensus_message(&self, io: &mut SyncIo, topic: B::Hash, message: Vec<u8>) {
+	pub fn gossip_consensus_message(&self, io: &mut SyncIo, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
 		let gossip = self.consensus_gossip();
 		self.with_spec(io, move |_s, context|{
-			gossip.write().multicast(context, topic, message);
+			gossip.write().multicast(context, topic, message, broadcast);
 		});
 	}
 
