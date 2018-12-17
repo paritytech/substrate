@@ -7,10 +7,10 @@
 	"telemetryUrl": "wss://telemetry.polkadot.io/submit/",
 	"protocolId": null,
 	"bootNodes": [
-		"/ip4/104.211.54.233/tcp/30333/p2p/QmV6ttrdRBjuY6EV4Zh5saz8MaqY6anjXo4SrCWt5caANX",
-		"/ip4/104.211.48.51/tcp/30333/p2p/QmNWVCgizRFj96AkPv2Zi2MHUnSDBTF3y9eMsa3cJgAJV7",
-		"/ip4/104.211.48.247/tcp/30333/p2p/QmfPmL2L1cmupSgJSJgVg4KW8frGLq9AEH2iwHE3rCsfvg",
-		"/ip4/40.114.120.164/tcp/30333/p2p/QmYV2Dv6ZfHkxHtQgYMGPTkNbtaSHUb4r8CsP4Pp2PDTNs"
+    "/ip4/104.211.54.233/tcp/30333/p2p/QmWxNqJeKEBWjJXeX8s882ZdphuVPgUV43THfGAJn7UBWB",
+    "/ip4/104.211.48.51/tcp/30333/p2p/QmXd7MQAuXkQK1r3ejSbaXKgjXmT2FvbJ3yNfLZpsQ2t8S",
+		"/ip4/104.211.48.247/tcp/30333/p2p/QmV2zjgFRfxbgYZQC9qFr4aHsQt7tDBJRAdgqqxqTq1Kta",
+		"/ip4/40.114.120.164/tcp/30333/p2p/QmQbPCeurXuKhzCw6Ar6ovizNKATMTnkkqFJKgZzbF2MJs"
 	],
   "genesis": {
     "raw": {
