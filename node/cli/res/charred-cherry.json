@@ -1,8 +1,8 @@
 {
 	"name": "Ash Ash",
-	"id": "ash-ash",
+	"id": "charred-cherry",
 	"properties": {
-		"tokenSymbol": "ASH"
+		"tokenSymbol": "CHR"
 	},
 	"telemetryUrl": "wss://telemetry.polkadot.io/submit/",
 	"protocolId": null,
