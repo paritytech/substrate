@@ -27,7 +27,7 @@ use quote::quote;
 use syn::{
 	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error},
 	fold::{self, Fold}, FnDecl, parse_quote, ItemTrait, Generics, GenericParam, Attribute,
-	visit::{Visit, self}, FnArg, Pat, TraitBound, Type, Meta, NestedMeta, Lit,
+	visit::{Visit, self}, FnArg, Pat, TraitBound, Meta, NestedMeta, Lit,
 };
 
 use std::collections::HashMap;
@@ -151,7 +151,6 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 				'static
 				+ Send
 				+ Sync
-				+ #crate_::runtime_api::ConstructRuntimeApi<Block>
 				+ #crate_::runtime_api::ApiExt<Block>
 			);
 		} else {
@@ -290,19 +289,6 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 						)
 					},
 					_ => {}
-				}
-
-				match arg.ty {
-					Type::Reference(ref reference) => {
-						self.errors.push(
-							Error::new(
-								reference.span(),
-								"Do not use type references as arguments. The client side \
-								declaration will take all arguments as reference automatically."
-							)
-						)
-					},
-					_ => {},
 				}
 			},
 			FnArg::SelfRef(_) | FnArg::SelfValue(_) => {

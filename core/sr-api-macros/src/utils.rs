@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::{TokenStream, Span};
-use syn::{Result, Ident, FnDecl, parse_quote, Type, FnArg};
+use syn::{Result, Ident, FnDecl, parse_quote, Type};
 use quote::quote;
 use std::env;
 
@@ -64,19 +64,6 @@ pub fn fold_fn_decl_for_client_side(
 	block_id: &TokenStream,
 	crate_: &TokenStream
 ) -> FnDecl {
-	// Add `&` to all parameter types.
-	input.inputs
-		.iter_mut()
-		.filter_map(|i| match i {
-			FnArg::Captured(ref mut arg) => Some(&mut arg.ty),
-			_ => None,
-		})
-		.filter_map(|i| match i {
-			Type::Reference(_) => None,
-			r => Some(r),
-		})
-		.for_each(|i| *i = parse_quote!( &#i ));
-
 	// Add `&self, at:& BlockId` as parameters to each function at the beginning.
 	input.inputs.insert(0, parse_quote!( at: &#block_id ));
 	input.inputs.insert(0, parse_quote!( &self ));

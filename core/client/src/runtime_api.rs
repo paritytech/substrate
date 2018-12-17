@@ -20,6 +20,9 @@
 #[cfg(feature = "std")]
 pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
+#[cfg(feature = "std")]
+pub use primitives::NativeOrEncoded;
+#[doc(hidden)]
 pub use runtime_primitives::{
 	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
 	generic::BlockId, transaction_validity::TransactionValidity
@@ -34,17 +37,17 @@ pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use crate::error;
 use rstd::vec::Vec;
-use primitives::OpaqueMetadata;
 use sr_api_macros::decl_runtime_apis;
 use primitives::{OpaqueMetadata, NativeOrEncoded};
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
-pub trait ConstructRuntimeApi<Block: BlockT> {
+pub trait ConstructRuntimeApi<Block: BlockT, C: CallRuntimeAt<Block>> {
+	/// The actual runtime api that will be constructed.
+	type RuntimeApi;
+
 	/// Construct an instance of the runtime api.
-	fn construct_runtime_api<'a>(
-		call: &'a CallRuntimeAt<Block>
-	) -> ApiRef<'a, Self> where Self: Sized;
+	fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
 }
 
 /// An extension for the `RuntimeApi`.
@@ -72,15 +75,15 @@ pub trait ApiExt<Block: BlockT> {
 pub trait CallRuntimeAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
-	fn call_api_at(
+	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
-		native_call: Option<&Fn() -> NativeOrEncoded>,
-	) -> error::Result<NativeOrEncoded>;
+		native_call: Option<NC>,
+	) -> error::Result<NativeOrEncoded<R>>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion>;
@@ -97,7 +100,7 @@ decl_runtime_apis! {
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialise a block with the given header.
-		fn initialise_block(header: <Block as BlockT>::Header);
+		fn initialise_block(header: &<Block as BlockT>::Header);
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

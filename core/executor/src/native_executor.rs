@@ -181,14 +181,14 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D> {
 	type Error = Error;
 
-	fn call<'a, E: Externalities<Blake2Hasher>>(
+	fn call<'a, E: Externalities<Blake2Hasher>, R: Decode + Encode + PartialEq, NC: FnOnce() -> R>(
 		&self,
 		ext: &mut E,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
-		native_call: Option<&Fn() -> NativeOrEncoded>,
-	) -> (Result<NativeOrEncoded>, bool) {
+		native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>>, bool) {
 		RUNTIMES_CACHE.with(|c| {
 			let mut c = c.borrow_mut();
 			let (module, onchain_version) = match fetch_cached_runtime_version(&self.fallback, &mut c, ext) {
@@ -237,7 +237,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 					);
 
 					let result = (call)();
-					(Ok(result), true)
+					(Ok(NativeOrEncoded::Native(result)), true)
 				}
 				_ => {
 					trace!(

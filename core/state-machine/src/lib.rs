@@ -38,8 +38,8 @@ extern crate substrate_trie as trie;
 use std::fmt;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use codec::Decode;
-use primitives::{storage::well_known_keys, NativeOrEncoded};
+use codec::{Decode, Encode};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
 
 pub mod backend;
 mod changes_trie;
@@ -172,14 +172,14 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<'a, E: Externalities<H>>(
+	fn call<'a, E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
 		&self,
 		ext: &mut E,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
-		native_call: Option<&Fn() -> NativeOrEncoded>,
-	) -> (Result<NativeOrEncoded, Self::Error>, bool);
+		native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>, Self::Error>, bool);
 }
 
 /// Strategy for executing a call into the runtime.
@@ -215,18 +215,24 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn native_when_possible<E>() ->
+pub fn native_when_possible<E, R: Decode>() ->
 	ExecutionManager<
-		fn(Result<NativeOrEncoded, E>, Result<NativeOrEncoded, E>) -> Result<NativeOrEncoded, E>
+		fn(
+			Result<NativeOrEncoded<R>, E>,
+			Result<NativeOrEncoded<R>, E>
+		) -> Result<NativeOrEncoded<R>, E>
 	>
 {
 	ExecutionManager::NativeWhenPossible
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn always_wasm<E>() ->
+pub fn always_wasm<E, R: Decode>() ->
 	ExecutionManager<
-		fn(Result<NativeOrEncoded, E>, Result<NativeOrEncoded, E>) -> Result<NativeOrEncoded, E>
+		fn(
+			Result<NativeOrEncoded<R>, E>,
+			Result<NativeOrEncoded<R>, E>
+		) -> Result<NativeOrEncoded<R>, E>
 	>
 {
 	ExecutionManager::AlwaysWasm
@@ -258,7 +264,7 @@ where
 {
 	// We are not giving a native call and thus we are sure that the result can never be a native
 	// value.
-	execute_using_consensus_failure_handler(
+	execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
 		backend,
 		changes_trie_storage,
 		overlay,
@@ -295,7 +301,9 @@ where
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
+pub fn execute_using_consensus_failure_handler<
+	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> R
+>(
 	backend: &B,
 	changes_trie_storage: Option<&T>,
 	overlay: &mut OverlayedChanges,
@@ -304,8 +312,8 @@ pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
 	compute_tx: bool,
-	native_call: Option<&Fn() -> NativeOrEncoded>,
-) -> Result<(NativeOrEncoded, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
+	mut native_call: Option<NC>,
+) -> Result<(NativeOrEncoded<R>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
@@ -313,9 +321,9 @@ where
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
 	Handler: FnOnce(
-		Result<NativeOrEncoded, Exec::Error>,
-		Result<NativeOrEncoded, Exec::Error>
-	) -> Result<NativeOrEncoded, Exec::Error>
+		Result<NativeOrEncoded<R>, Exec::Error>,
+		Result<NativeOrEncoded<R>, Exec::Error>
+	) -> Result<NativeOrEncoded<R>, Exec::Error>
 {
 	let strategy: ExecutionStrategy = (&manager).into();
 
@@ -346,7 +354,7 @@ where
 					call_data,
 					// attempt to run native first, if we're not directed to run wasm only
 					strategy != ExecutionStrategy::AlwaysWasm,
-					native_call,
+					native_call.take(),
 				);
 				let (storage_delta, changes_delta) = if compute_tx {
 					let (storage_delta, changes_delta) = externalities.transaction();
@@ -623,19 +631,24 @@ mod tests {
 	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities<H>>(
+		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
 			&self,
 			ext: &mut E,
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
-			_native_call: Option<&Fn() -> NativeOrEncoded>,
-		) -> (Result<NativeOrEncoded, Self::Error>, bool) {
+			_native_call: Option<NC>,
+		) -> (Result<NativeOrEncoded<R>, Self::Error>, bool) {
 			if self.change_changes_trie_config {
-				ext.place_storage(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), Some(ChangesTrieConfig {
-					digest_interval: 777,
-					digest_levels: 333,
-				}.encode()));
+				ext.place_storage(
+					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+					Some(
+						ChangesTrieConfig {
+							digest_interval: 777,
+							digest_levels: 333,
+						}.encode()
+					)
+				);
 			}
 
 			let using_native = use_native && self.native_available;

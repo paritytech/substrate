@@ -190,10 +190,10 @@ decl_runtime_apis! {
 	pub trait TestAPI {
 		fn balance_of(id: AccountId) -> u64;
 		/// A benchmkark function that adds one to the given value and returns the result.
-		fn benchmark_add_one(val: u64) -> u64;
+		fn benchmark_add_one(val: &u64) -> u64;
 		/// A benchmark function that adds one to each value in the given vector and returns the
 		/// result.
-		fn benchmark_vector_add_one(vec: Vec<u64>) -> Vec<u64>;
+		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
 	}
 }
 
@@ -221,7 +221,7 @@ impl_runtime_apis! {
 			system::execute_block(block)
 		}
 
-		fn initialise_block(header: <Block as BlockT>::Header) {
+		fn initialise_block(header: &<Block as BlockT>::Header) {
 			system::initialise_block(header)
 		}
 	}
@@ -239,7 +239,7 @@ impl_runtime_apis! {
 	}
 
 	impl block_builder_api::BlockBuilder<Block, ()> for Runtime {
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+		fn apply_extrinsic(extrinsic: &<Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
 
@@ -265,11 +265,11 @@ impl_runtime_apis! {
 			system::balance_of(id)
 		}
 
-		fn benchmark_add_one(val: u64) -> u64 {
+		fn benchmark_add_one(val: &u64) -> u64 {
 			val + 1
 		}
 
-		fn benchmark_vector_add_one(vec: Vec<u64>) -> Vec<u64> {
+		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64> {
 			let mut vec = vec.clone();
 			vec.iter_mut().for_each(|v| *v += 1);
 			vec

@@ -279,8 +279,8 @@ impl_runtime_apis! {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			Executive::initialise_block(&header)
+		fn initialise_block(header: &<Block as BlockT>::Header) {
+			Executive::initialise_block(header)
 		}
 	}
 

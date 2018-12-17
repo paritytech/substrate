@@ -89,9 +89,11 @@ where
 	fn contextual_call<
 		PB: Fn() -> ClientResult<Block::Header>,
 		EM: Fn(
-			Result<NativeOrEncoded, Self::Error>,
-			Result<NativeOrEncoded, Self::Error>
-		) -> Result<NativeOrEncoded, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -101,8 +103,8 @@ where
 		initialised_block: &mut Option<BlockId<Block>>,
 		_prepare_environment_block: PB,
 		_manager: ExecutionManager<EM>,
-		_native_call: Option<&Fn() -> NativeOrEncoded>,
-	) -> ClientResult<NativeOrEncoded> where ExecutionManager<EM>: Clone {
+		_native_call: Option<NC>,
+	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
 		if !changes.is_empty() || initialised_block.is_some() {
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
@@ -120,17 +122,19 @@ where
 	fn call_at_state<
 		S: StateBackend<H>,
 		FF: FnOnce(
-			Result<NativeOrEncoded, Self::Error>,
-			Result<NativeOrEncoded, Self::Error>
-		) -> Result<NativeOrEncoded, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R,
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
 		_m: ExecutionManager<FF>,
-		_native_call: Option<&Fn() -> NativeOrEncoded>,
-	) -> ClientResult<(NativeOrEncoded, S::Transaction, Option<MemoryDB<H>>)> {
+		_native_call: Option<NC>,
+	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<H>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 

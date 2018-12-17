@@ -62,7 +62,7 @@ pub fn authorities() -> Vec<Ed25519AuthorityId> {
 		.collect()
 }
 
-pub fn initialise_block(header: Header) {
+pub fn initialise_block(header: &Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
@@ -146,9 +146,9 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
-pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
+pub fn execute_transaction(utx: &Extrinsic) -> ApplyResult {
 	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
-	let result = execute_transaction_backend(&utx);
+	let result = execute_transaction_backend(utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
 	result

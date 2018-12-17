@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate substrate_client;
+extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
 extern crate substrate_test_client as test_client;
@@ -62,17 +62,21 @@ impl_runtime_apis! {
 		fn execute_block(_: Block) {
 			unimplemented!()
 		}
-		fn initialise_block(_: <Block as BlockT>::Header) {
+		fn initialise_block(_: &<Block as BlockT>::Header) {
 			unimplemented!()
 		}
 	}
 }
 
+type TestClient = client::Client<test_client::Backend, test_client::Executor, Block, RuntimeApi>;
+
 #[test]
 fn test_client_side_function_signature() {
-	let _test: fn(&RuntimeApi, &BlockId<Block>, &u64) -> Result<()>  = RuntimeApi::test;
-	let _something_with_block: fn(&RuntimeApi, &BlockId<Block>, &Block) -> Result<Block> =
-		RuntimeApi::something_with_block;
+	let _test: fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>, u64) -> Result<()> =
+		RuntimeApiImpl::<TestClient>::test;
+	let _something_with_block:
+		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>, Block) -> Result<Block> =
+			RuntimeApiImpl::<TestClient>::something_with_block;
 }
 
 #[test]

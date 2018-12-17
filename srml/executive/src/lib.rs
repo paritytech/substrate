@@ -168,7 +168,7 @@ impl<
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
+	fn apply_extrinsic_no_note_with_len(uxt: &Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
