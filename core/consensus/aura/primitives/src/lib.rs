@@ -33,6 +33,16 @@ pub mod id {
 	pub const AURA_API: ApiId = *b"aura_api";
 }
 
+/// Aura consensus environmental data. Useful for block-proposing code.
+pub struct AuraConsensusData {
+	/// The timestamp the block should be authored with.
+	pub timestamp: u64,
+	/// The slot number.
+	pub slot: u64,
+	/// The duration of the slot, in seconds.
+	pub slot_duration: u64,
+}
+
 /// Runtime-APIs
 pub mod api {
 	use client::decl_runtime_apis;

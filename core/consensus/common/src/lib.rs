@@ -59,9 +59,9 @@ pub trait Authorities<B: Block> {
 }
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
-pub trait Environment<B: Block> {
+pub trait Environment<B: Block, ConsensusData> {
 	/// The proposer type this creates.
-	type Proposer: Proposer<B>;
+	type Proposer: Proposer<B, ConsensusData>;
 	/// Error which can occur upon creation.
 	type Error: From<Error>;
 
@@ -76,13 +76,15 @@ pub trait Environment<B: Block> {
 ///
 /// This will encapsulate creation and evaluation of proposals at a specific
 /// block.
-pub trait Proposer<B: Block> {
+///
+/// Proposers are generic over bits of "consensus data" which are engine-specific.
+pub trait Proposer<B: Block, ConsensusData> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
 	type Create: IntoFuture<Item=B,Error=Self::Error>;
 	/// Create a proposal.
-	fn propose(&self) -> Self::Create;
+	fn propose(&self, consensus_data: ConsensusData) -> Self::Create;
 }
 
 /// An oracle for when major synchronization work is being undertaken.
