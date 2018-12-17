@@ -628,10 +628,10 @@ fn store_functions_to_metadata (
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
-				default: #scrate::storage::generator::DefaultByteGetter(Box::new(|| {
+				default: #scrate::storage::generator::DefaultByteGetter({fn dummy() -> Option<Vec<u8>> {
           let def_val: Option<#gettype> = #default;
           def_val.map(|v|<#gettype as Encode>::encode(&v))
-        })),
+        } dummy}),
 				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
 			},
 		};
@@ -640,8 +640,11 @@ fn store_functions_to_metadata (
 
 	quote!{
     {
-      let store_functions_metadatas = vec![#items];
-	 	  #scrate::storage::generator::DecodeDifferent::Encode(&store_functions_metadatas[..])
+      //let store_functions_metadatas = vec![#items];
+	 	  //#scrate::storage::generator::DecodeDifferent::Encode(&store_functions_metadatas[..])
+	 	  #scrate::storage::generator::DecodeDifferent::Encode(&[
+        #items
+      ])
     }
 	}
 }

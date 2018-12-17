@@ -233,7 +233,15 @@ pub struct StorageFunctionMetadata {
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
-pub struct DefaultByteGetter(pub Box<Fn() -> Option<Vec<u8>>>);
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct DefaultByteGetter(pub fn() -> Option<Vec<u8>>);
+
+/*impl DefaultByteGetter {
+  pub const fn new(i: fn() -> Option<Vec<u8>>) -> Self {
+    DefaultByteGetter(i)
+  }
+}*/
 
 impl Encode for DefaultByteGetter {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -241,38 +249,14 @@ impl Encode for DefaultByteGetter {
 	}
 }
 
-impl Clone for DefaultByteGetter {
-	fn clone(&self) -> Self {
-    let proto = self.0();
-    DefaultByteGetter(Box::new(move || { proto.clone() }))
-	}
-}
-
-impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
-  fn eq(&self, other: &DefaultByteGetter) -> bool {
-    let left = self.0();
-    let right = other.0();
-    left.eq(&right)
-	}
-}
-
-impl Eq for DefaultByteGetter { }
-
-#[cfg(feature = "std")]
-impl std::fmt::Debug for DefaultByteGetter {
-  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    self.0().fmt(f)
-  }
-}
-
 #[cfg(feature = "std")]
 impl Decode for DefaultByteGetter {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-    //unimplemented!("Need to use dyn Fn() -> Vec or maybe even boxed thing")
-    let o_v = <Option<Vec<u8>> as Decode>::decode(input);
+	fn decode<I: Input>(_input: &mut I) -> Option<Self> {
+    unimplemented!("Maybe using a lazy static cache over the fn result");
+/*    let o_v = <Option<Vec<u8>> as Decode>::decode(input);
     if let Some(v) = o_v {
       Some(DefaultByteGetter(Box::new(move || { v.clone() })))
-    } else { None }
+    } else { None }*/
 	}
 }
 
