@@ -64,7 +64,7 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The Ash Ash testnet.
+	/// The Charred Cherry testnet.
 	CharredCherry,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
