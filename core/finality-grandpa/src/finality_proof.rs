@@ -79,22 +79,33 @@ pub fn prove_finality<Block: BlockT, B, G>(
 	// now that we know that the block is finalized, we can generate finalization proof
 
 	// we need to prove grandpa authorities set that has generated justification
-	let authorities_proof = generate_execution_proof(&block_id, "GrandpaApi_grandpa_authorities", &[])?;
+	// BUT since `GrandpaApi::grandpa_authorities` call returns the set that becames actual
+	// at the next block, the proof-of execution is generated using parent block' state
+	// (this will fail if we're trying to prove genesis finality, but such the call itself is redundant)
+	let mut current_header = blockchain.expect_header(BlockId::Hash(block))?;
+	let parent_block_id = BlockId::Hash(*current_header.parent_hash());
+	let authorities_proof = generate_execution_proof(
+		&parent_block_id,
+		"GrandpaApi_grandpa_authorities",
+		&[],
+	)?;
 
 	// search for earliest post-block (inclusive) justification
 	let mut finalization_path = Vec::new();
-	while block_number <= info.finalized_number {
-		let current_block_id = BlockId::Number(block_number);
-		let justified_header = blockchain.expect_header(current_block_id)?;
-		finalization_path.push(justified_header);
+	loop {
+		finalization_path.push(current_header);
 
-		match blockchain.justification(current_block_id)? {
+		match blockchain.justification(BlockId::Number(block_number))? {
 			Some(justification) => return Ok(Some(FinalityProof {
 				finalization_path,
 				justification,
 				authorities_proof,
 			}.encode())),
-			None => block_number = block_number + One::one(),
+			None if block_number == info.finalized_number => break,
+			None => {
+				block_number = block_number + One::one();
+				current_header = blockchain.expect_header(BlockId::Number(block_number))?;
+			},
 		}
 	}
 
@@ -110,6 +121,7 @@ pub fn prove_finality<Block: BlockT, B, G>(
 /// is invalid, all other MUST be considered invalid.
 pub fn check_finality_proof<Block: BlockT<Hash=H256>, C>(
 	check_execution_proof: C,
+	parent_header: Block::Header,
 	block: (NumberFor<Block>, Block::Hash),
 	set_id: u64,
 	remote_proof: Vec<u8>,
@@ -120,6 +132,7 @@ pub fn check_finality_proof<Block: BlockT<Hash=H256>, C>(
 {
 	do_check_finality_proof::<Block, C, GrandpaJustification<Block>>(
 		check_execution_proof,
+		parent_header,
 		block,
 		set_id,
 		remote_proof,
@@ -129,6 +142,7 @@ pub fn check_finality_proof<Block: BlockT<Hash=H256>, C>(
 /// Check proof-of-finality using given justification type.
 fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 	check_execution_proof: C,
+	parent_header: Block::Header,
 	block: (NumberFor<Block>, Block::Hash),
 	set_id: u64,
 	remote_proof: Vec<u8>,
@@ -170,7 +184,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 	// check authorities set proof && get grandpa authorities that should have signed justification
 	let grandpa_authorities = check_execution_proof(&RemoteCallRequest {
 		block: just_block.1,
-		header: proof.finalization_path[0].clone(),
+		header: parent_header,
 		method: "GrandpaApi_grandpa_authorities".into(),
 		call_data: vec![],
 		retry_count: None,
@@ -339,6 +353,7 @@ mod tests {
 		// block for which we're trying to request finality proof is missing from finalization_path
 		assert_eq!(do_check_finality_proof::<Block, _, ValidFinalityProof>(
 			|_| Ok(Vec::<u8>::new().encode()),
+			header(1),
 			(2, header(2).hash()),
 			1,
 			proof_of_2.encode(),
@@ -357,6 +372,7 @@ mod tests {
 		// justified block is missing from finalization_path
 		assert_eq!(do_check_finality_proof::<Block, _, ValidFinalityProof>(
 			|_| Ok(Vec::<u8>::new().encode()),
+			header(1),
 			(2, header(2).hash()),
 			1,
 			proof_of_2.encode(),
@@ -386,6 +402,7 @@ mod tests {
 		// justification is not valid
 		assert_eq!(do_check_finality_proof::<Block, _, InvalidFinalityProof>(
 			|_| Ok(Vec::<u8>::new().encode()),
+			header(1),
 			(2, header(2).hash()),
 			1,
 			proof_of_2.encode(),
@@ -402,6 +419,7 @@ mod tests {
 				(AuthorityId([2u8; 32]), 2u64),
 				(AuthorityId([3u8; 32]), 3u64),
 			].encode()),
+			header(1),
 			(2, header(2).hash()),
 			1,
 			proof_of_2,
