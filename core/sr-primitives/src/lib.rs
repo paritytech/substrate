@@ -145,7 +145,7 @@ impl From<f32> for Permill {
 	}
 }
 
-/// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
+/// Perbill is parts-per-billion. It stores a value between 0 and 4 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
@@ -159,6 +159,11 @@ impl Perbill {
 		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
 	}
 
+	/// Saturating multiply by another fraction.
+	pub fn mul(self, b: Self) -> Self {
+		Perbill(((self.0 as u64 * b.0 as u64) / 1_000_000_000).min(4_000_000_000) as u32)
+	}
+
 	/// Nothing.
 	pub fn zero() -> Perbill { Perbill(0) }
 
@@ -169,21 +174,21 @@ impl Perbill {
 	pub fn one() -> Perbill { Perbill(1_000_000_000) }
 
 	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
-	pub fn from_billionths(x: u32) -> Perbill { Perbill(x.min(1_000_000_000)) }
+	pub fn from_billionths(x: u32) -> Perbill { Perbill(x.min(4_000_000_000)) }
 
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
-	pub fn from_millionths(x: u32) -> Perbill { Perbill(x.min(1_000_000) * 1000) }
+	pub fn from_millionths(x: u32) -> Perbill { Perbill(x.min(4_000_000) * 1000) }
 
 	/// Construct new instance where `x` is a percent. Value equivalent to `x%`.
-	pub fn from_percent(x: u32) -> Perbill { Perbill(x.min(100) * 10_000_000) }
+	pub fn from_percent(x: u32) -> Perbill { Perbill(x.min(400) * 10_000_000) }
 
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
-	pub fn from_fraction(x: f64) -> Perbill { Perbill((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+	pub fn from_fraction(x: f64) -> Perbill { Perbill((x.max(0.0).min(4.0) * 1_000_000_000.0) as u32) }
 
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
-	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(4.0) * 1_000_000_000.0) as u32) }
 }
 
 #[cfg(feature = "std")]
