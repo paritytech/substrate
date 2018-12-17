@@ -223,10 +223,6 @@ You can start a development chain with:
 [source, shell]
 cargo run -- --dev
 
-Or you can join the BBQ Birch Testnet with:
-[source, shell]
-cargo run
-
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
 
 If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on [Telemetry](https://telemetry.polkadot.io/#/Local%20Testnet). You'll need two terminals windows open.
@@ -257,6 +253,41 @@ cargo run -- \
   --validator
 
 Additional Substate CLI usage options are available and may be shown by running `cargo run -- --help`.
+
+=== Joining the Krumme Lanke Testnet
+
+If you would like to join the Krumme Lanke testnet, you need version 0.2.42.
+
+[source, shell]
+----
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+git checkout v0.2.42
+./init.sh
+----
+
+Build the package:
+
+[source, shell]
+cargo build
+
+You can run the tests if you like:
+
+[source, shell]
+cargo test --all
+
+Start your node:
+
+[source, shell]
+cargo run
+
+Optional: Choose your own name:
+
+[source, shell]
+cargo run -- --name=my_custom_name
+
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Krumme%20Lanke 
+
 
 == Documentation
 
