@@ -50,7 +50,7 @@ use codec::Encode;
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::ChangesTrieConfiguration;
+use substrate_primitives::{AuthorityId, ChangesTrieConfiguration};
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -177,7 +177,7 @@ impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestIte
 	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
 		match log {
 			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot
-				::<substrate_primitives::H256, u64>(root),
+				::<substrate_primitives::H256, AuthorityId>(root),
 		}
 	}
 }

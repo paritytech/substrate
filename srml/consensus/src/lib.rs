@@ -50,6 +50,9 @@ use primitives::traits::{
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
 
+#[cfg(any(feature = "std", test))]
+use substrate_primitives::AuthorityId;
+
 mod mock;
 mod tests;
 
@@ -148,8 +151,9 @@ impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<u64> {
 		match log {
 			RawLog::AuthoritiesChange(authorities) =>
 				primitives::generic::DigestItem::AuthoritiesChange
-					::<substrate_primitives::H256, u64>(authorities.into_iter()
-						.map(Into::into).collect()),
+					::<substrate_primitives::H256, AuthorityId>(authorities.into_iter()
+						.map(|a| AuthorityId::from([(a.into() % 256) as u8; 32]))
+						.collect()),
 		}
 	}
 }

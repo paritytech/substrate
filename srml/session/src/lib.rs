@@ -248,7 +248,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Identity, BlakeTwo256};
+	use primitives::traits::{BlakeTwo256, Identity};
 	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{

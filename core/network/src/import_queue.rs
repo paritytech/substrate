@@ -32,7 +32,10 @@ use network_libp2p::{NodeIndex, Severity};
 use primitives::AuthorityId;
 
 use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::traits::{
+	Block as BlockT, Header as HeaderT, NumberFor, Zero,
+	Digest, DigestItem, DigestItemFor,
+};
 
 pub use blocks::BlockData;
 use client::error::Error as ClientError;
@@ -537,7 +540,10 @@ pub struct PassThroughVerifier(pub bool);
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// This Verifiyer accepts all data as valid
-impl<B: BlockT> Verifier<B> for PassThroughVerifier {
+impl<B: BlockT> Verifier<B> for PassThroughVerifier
+	where
+		DigestItemFor<B>: DigestItem<AuthorityId=AuthorityId>
+{
 	fn verify(
 		&self,
 		origin: BlockOrigin,
@@ -545,6 +551,8 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
+			.map(|auth| auth.iter().cloned().collect());
 		Ok((ImportBlock {
 			origin,
 			header,
@@ -553,7 +561,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			justification,
 			post_digests: vec![],
 			auxiliary: Vec::new(),
-		}, None))
+		}, new_authorities))
 	}
 }
 

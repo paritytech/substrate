@@ -70,7 +70,7 @@ mod tests {
 			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.to_fixed_bytes())).unwrap())
 				.sign(&tx.encode()).into();
 
-			Extrinsic { transfer: tx, signature }
+			Extrinsic::Transfer(tx, signature)
 		}).collect::<Vec<_>>();
 
 		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(transactions.iter().map(Encode::encode)).into();

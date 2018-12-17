@@ -20,7 +20,7 @@
 
 use primitives::{generic, testing, traits::{OnFinalise, ProvideInherent}};
 use runtime_io::with_externalities;
-use substrate_primitives::H256;
+use substrate_primitives::{AuthorityId, H256};
 use mock::{Consensus, System, new_test_ext};
 
 #[test]
@@ -32,7 +32,9 @@ fn authorities_change_logged() {
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
-				generic::DigestItem::AuthoritiesChange::<H256, u64>(vec![4, 5, 6]),
+				generic::DigestItem::AuthoritiesChange::<H256, AuthorityId>(
+					vec![AuthorityId::from([4; 32]), AuthorityId::from([5; 32]), AuthorityId::from([6; 32])]
+				),
 			],
 		});
 	});

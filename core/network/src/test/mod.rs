@@ -27,6 +27,7 @@ use client;
 use client::error::Error as ClientError;
 use client::block_builder::BlockBuilder;
 use runtime_primitives::generic::BlockId;
+use primitives::AuthorityId;
 use io::SyncIo;
 use protocol::{Context, Protocol, ProtocolContext};
 use config::ProtocolConfig;
@@ -275,13 +276,20 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 					nonce,
 				};
 				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
-				builder.push(Extrinsic { transfer, signature }).unwrap();
+				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()
 			});
 		} else {
 			self.generate_blocks(count, BlockOrigin::File, |builder| builder.bake().unwrap());
 		}
+	}
+
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<AuthorityId>) {
+		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
+			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
+			builder.bake().unwrap()
+		});
 	}
 
 	/// Execute a function with specialization for this peer.
