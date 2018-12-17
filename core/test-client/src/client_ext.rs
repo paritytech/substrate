@@ -17,7 +17,7 @@
 //! Client extension for tests.
 
 use client::{self, Client};
-use consensus::{ImportBlock, BlockImport, BlockOrigin};
+use consensus::{ImportBlock, BlockImport, BlockOrigin, Error as ConsensusError};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
@@ -27,11 +27,11 @@ use runtime;
 pub trait TestClient: Sized {
 	/// Import block to the chain. No finality.
 	fn import(&self, origin: BlockOrigin, block: runtime::Block)
-		-> client::error::Result<()>;
+		-> Result<(), ConsensusError>;
 
 	/// Import block with justification, finalizes block.
 	fn import_justified(&self, origin: BlockOrigin, block: runtime::Block, justification: Justification)
-		-> client::error::Result<()>;
+		-> Result<(), ConsensusError>;
 
 	/// Finalize a block.
 	fn finalize_block(&self, id: BlockId<runtime::Block>, justification: Option<Justification>) -> client::error::Result<()>;
@@ -44,10 +44,10 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 	where
 		B: client::backend::Backend<runtime::Block, Blake2Hasher>,
 		E: client::CallExecutor<runtime::Block, Blake2Hasher>,
-		Self: BlockImport<runtime::Block, Error=client::error::Error>,
+		Self: BlockImport<runtime::Block, Error=ConsensusError>,
 {
 	fn import(&self, origin: BlockOrigin, block: runtime::Block)
-		-> client::error::Result<()>
+		-> Result<(), ConsensusError>
 	{
 		let import = ImportBlock {
 			origin,
@@ -63,7 +63,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 	}
 
 	fn import_justified(&self, origin: BlockOrigin, block: runtime::Block, justification: Justification)
-		-> client::error::Result<()>
+		-> Result<(), ConsensusError>
 	{
 		let import = ImportBlock {
 			origin,
