@@ -21,7 +21,7 @@ tokio = "0.1.7"
 futures = "0.1.17"
 fdlimit = "0.1"
 exit-future = "0.1"
-sysinfo = "0.6.2"
+sysinfo = "0.7"
 substrate-client = { path = "../../core/client" }
 substrate-network = { path = "../../core/network" }
 sr-primitives = { path = "../../core/sr-primitives" }
