@@ -15,7 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use srml_metadata::{
-	DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata
+	DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata,
+	DefaultByteGetter,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -317,7 +318,11 @@ mod tests {
 								name: DecodeDifferent::Encode("StorageMethod"),
 								modifier: StorageFunctionModifier::Optional,
 								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
-								default: None,
+								default: DecodeDifferent::Encode(
+									DefaultByteGetter(
+										&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
+									)
+								),
 								documentation: DecodeDifferent::Encode(&[]),
 							}
 						])
