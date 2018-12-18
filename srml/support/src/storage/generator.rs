@@ -656,7 +656,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[ " Hello, this is doc!" ]),
 			},
@@ -665,7 +665,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -674,7 +674,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -683,7 +683,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -692,7 +692,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("T :: Origin")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructGETU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructGETU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -701,7 +701,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBGETU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBGETU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -710,7 +710,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructGETU32WITHCONFIG(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructGETU32WITHCONFIG(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -719,7 +719,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBGETU32WITHCONFIG(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBGETU32WITHCONFIG(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -728,7 +728,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructGETU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructGETU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -737,7 +737,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBGETU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBGETU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -746,7 +746,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructGETU32WITHCONFIGMYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructGETU32WITHCONFIGMYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -755,7 +755,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBGETU32WITHCONFIGMYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBGETU32WITHCONFIGMYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -764,7 +764,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Optional,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBGETU32WITHCONFIGMYDEFOPT(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBGETU32WITHCONFIGMYDEFOPT(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -776,7 +776,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructMAPU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructMAPU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -787,7 +787,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBMAPU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBMAPU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -798,7 +798,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructMAPU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructMAPU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -809,7 +809,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBMAPU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBMAPU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -820,7 +820,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructGETMAPU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructGETMAPU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -831,7 +831,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBGETMAPU32(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBGETMAPU32(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -842,7 +842,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructGETMAPU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructGETMAPU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
@@ -853,7 +853,7 @@ mod tests {
 					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&GetByteStructPUBGETMAPU32MYDEF(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructPUBGETMAPU32MYDEF(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},

@@ -320,7 +320,7 @@ mod tests {
 								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 								default: DecodeDifferent::Encode(
 									DefaultByteGetter(
-										&event_module2::GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
+										&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
 									)
 								),
 								documentation: DecodeDifferent::Encode(&[]),

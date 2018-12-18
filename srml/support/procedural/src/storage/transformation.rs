@@ -123,7 +123,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		#visibility trait #storetype {
 		#decl_store_items
 		}
-    #store_default_struct
+		#store_default_struct
 		impl<#traitinstance: #traittype> #storetype for #module_ident<#traitinstance> {
 			#impl_store_items
 		}
@@ -611,9 +611,7 @@ fn store_functions_to_metadata (
 			}
 		};
 		let default = default_value.inner.get(0).as_ref().map(|d| &d.expr)
-//			.map(|d| quote!(#d).to_string())
 			.map(|d| {
-				//quote!( Some(#scrate::storage::generator::DecodeDifferent::Encode(#d)) )
 				quote!( #d )
 			})
 			.unwrap_or_else(|| quote!( Default::default() ));
@@ -630,7 +628,8 @@ fn store_functions_to_metadata (
 			}
 		}
 		let str_name = name.to_string();
-    let struct_name = proc_macro2::Ident::new(&("GetByteStruct".to_string() + &str_name), name.span());
+		let struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
+		let cache_name = proc_macro2::Ident::new(&("__CacheGetByteStruct".to_string() + &str_name), name.span());
 		let item = quote! {
 			#scrate::storage::generator::StorageFunctionMetadata {
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
@@ -641,26 +640,26 @@ fn store_functions_to_metadata (
 			},
 		};
 		items.extend(item);
-    let def_get = quote! {
-      pub struct #struct_name<#traitinstance>(pub ::std::marker::PhantomData<#traitinstance>);
-      impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
-        fn default_byte(&self) -> Vec<u8> {
-				  use #scrate::codec::Encode;
-          let def_val: #gettype = #default;
-          <#gettype as Encode>::encode(&def_val)
-        }
-      }
-    };
-    default_getter_struct_def.extend(def_get);
+		let def_get = quote! {
+			pub struct #struct_name<#traitinstance>(pub ::std::marker::PhantomData<#traitinstance>);
+			static #cache_name: #scrate::once_cell::sync::OnceCell<Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
+				fn default_byte(&self) -> Vec<u8> {
+					use #scrate::codec::Encode;
+					#cache_name.get_or_init(|| {
+						let def_val: #gettype = #default;
+						<#gettype as Encode>::encode(&def_val)
+					}).clone()
+				}
+			}
+		};
+		default_getter_struct_def.extend(def_get);
 	}
-  (default_getter_struct_def,
-	quote!{
-    {
-      //let store_functions_metadatas = vec![#items];
-	 	  //#scrate::storage::generator::DecodeDifferent::Encode(&store_functions_metadatas[..])
-	 	  #scrate::storage::generator::DecodeDifferent::Encode(&[
-        #items
-      ])
-    }
+	(default_getter_struct_def, quote!{
+		{
+	 		#scrate::storage::generator::DecodeDifferent::Encode(&[
+				#items
+			])
+		}
 	})
 }
