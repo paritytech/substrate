@@ -636,7 +636,7 @@ fn store_functions_to_metadata (
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
-				default: #scrate::storage::generator::DefaultByteGetter(&#struct_name::<#traitinstance>(::std::marker::PhantomData)),
+				default: #scrate::storage::generator::DecodeDifferent::Encode(#scrate::storage::generator::DefaultByteGetter(&#struct_name::<#traitinstance>(::std::marker::PhantomData))),
 				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
 			},
 		};

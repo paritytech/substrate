@@ -229,7 +229,7 @@ pub struct StorageFunctionMetadata {
 	pub name: DecodeDifferentStr,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
-	pub default: DefaultByteGetter,
+	pub default: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
@@ -239,11 +239,7 @@ pub trait DefaultByte {
 #[derive(Clone)]
 pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 
-/*impl DefaultByteGetter {
-  pub const fn new(i: fn() -> Option<Vec<u8>>) -> Self {
-    DefaultByteGetter(i)
-  }
-}*/
+pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
 
 impl Encode for DefaultByteGetter {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -262,17 +258,6 @@ impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
 
 impl Eq for DefaultByteGetter { }
 
-
-#[cfg(feature = "std")]
-impl Decode for DefaultByteGetter {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-    unimplemented!("Maybe using a lazy static cache over the fn result");
-/*    let _bytes = <Vec<u8> as Decode>::decode(input);
-    // TODO err on different byte than fn call?
-    Some(DefaultByteGetter(::std::marker::PhantomData::new()))*/
-	}
-}
-
 #[cfg(feature = "std")]
 impl serde::Serialize for DefaultByteGetter {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -289,8 +274,6 @@ impl std::fmt::Debug for DefaultByteGetter {
     self.0.default_byte().fmt(f)
   }
 }
-
-
 
 
 /// A storage function type.
