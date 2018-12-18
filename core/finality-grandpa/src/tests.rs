@@ -661,3 +661,22 @@ fn justification_is_generated_periodically() {
 			.justification(BlockId::Number(32)).unwrap().is_some());
 	}
 }
+
+#[test]
+fn consensus_changes_works() {
+	let mut changes = ConsensusChanges::<H256, u64>::empty();
+
+	// pending changes are not finalized
+	changes.note_change((10, 1.into()));
+	assert_eq!(changes.finalize((5, 5.into()), |_| Ok(None)).unwrap(), (false, false));
+
+	// no change is selected from competing pending changes
+	changes.note_change((1, 1.into()));
+	changes.note_change((1, 101.into()));
+	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1001.into()))).unwrap(), (true, false));
+
+	// change is selected from competing pending changes
+	changes.note_change((1, 1.into()));
+	changes.note_change((1, 101.into()));
+	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1.into()))).unwrap(), (true, true));
+}
