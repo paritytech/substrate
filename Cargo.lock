@@ -3259,7 +3259,7 @@ dependencies = [
 
 [[package]]
 name = "substrate"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "ctrlc 3.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3664,6 +3664,7 @@ dependencies = [
  "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
  "substrate-client-db 0.1.0",
+ "substrate-consensus-aura-primitives 0.1.0",
  "substrate-consensus-common 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keystore 0.1.0",

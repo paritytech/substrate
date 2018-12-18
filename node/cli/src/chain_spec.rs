@@ -31,9 +31,9 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 /// Specialised `ChainSpec`.
 pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 
-/// BBQ birch testnet generator
-pub fn bbq_birch_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
+/// Charred Cherry testnet generator
+pub fn charred_cherry_config() -> Result<ChainSpec, String> {
+	ChainSpec::from_embedded(include_bytes!("../res/charred-cherry.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -83,15 +83,15 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			current_session_reward: 0,
 			validator_count: 7,
 			sessions_per_era: 12,
-			bonding_duration: 1 * DAYS,
+			bonding_duration: 60 * MINUTES,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 		}),
 		democracy: Some(DemocracyConfig {
-			launch_period: 5 * MINUTES,    // 1 day per public referendum
-			voting_period: 5 * MINUTES,    // 3 days to discuss & vote on an active referendum
+			launch_period: 10 * MINUTES,    // 1 day per public referendum
+			voting_period: 10 * MINUTES,    // 3 days to discuss & vote on an active referendum
 			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
-			public_delay: 0,
+			public_delay: 10 * MINUTES,
 			max_lock_periods: 6,
 		}),
 		council_seats: Some(CouncilSeatsConfig {
