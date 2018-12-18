@@ -192,7 +192,7 @@ impl Network for MessageRouting {
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message);
+		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message, false);
 		inner.route_until_complete();
 	}
 
@@ -223,7 +223,7 @@ impl Network for MessageRouting {
 
 	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message);
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
 		inner.route_until_complete();
 	}
 }
@@ -368,7 +368,7 @@ fn finalize_3_voters_no_observers() {
 		);
 		fn assert_send<T: Send>(_: &T) { }
 
-		let (voter, oracle) = run_grandpa(
+		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key: Some(Arc::new(key.clone().into())),
@@ -380,7 +380,6 @@ fn finalize_3_voters_no_observers() {
 
 		assert_send(&voter);
 
-		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
@@ -429,7 +428,7 @@ fn finalize_3_voters_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(move |_| Ok(()))
 		);
-		let (voter, oracle) = run_grandpa(
+		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key,
@@ -439,7 +438,6 @@ fn finalize_3_voters_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
 
-		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 
@@ -508,7 +506,6 @@ fn transition_3_voters_twice_1_observer() {
 			transitions.lock().insert(parent_hash, change);
 		};
 		let peers_c = peers_c.clone();
-		let executor = runtime.executor().clone();
 
 		// wait for blocks to be finalized before generating new ones
 		let block_production = client.finality_notification_stream()
@@ -533,34 +530,18 @@ fn transition_3_voters_twice_1_observer() {
 						net.lock().peer(0).push_blocks(5, false);
 					},
 					20 => {
-						let net = net.clone();
-						let add_transition = add_transition.clone();
-
 						// at block 21 we do another transition, but this time instant.
 						// add more until we have 30.
-						let generate_blocks = move || {
-							net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-								let block = builder.bake().unwrap();
-								add_transition(*block.header.parent_hash(), ScheduledChange {
-									next_authorities: make_ids(&peers_c),
-									delay: 0,
-								});
-
-								block
+						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+							let block = builder.bake().unwrap();
+							add_transition(*block.header.parent_hash(), ScheduledChange {
+								next_authorities: make_ids(&peers_c),
+								delay: 0,
 							});
-							net.lock().peer(0).push_blocks(9, false);
-						};
 
-						// delay block generation for a bit for the liveness tracker to be
-						// able to update due to the authority set change
-						let delay_generate = Delay::new(Instant::now() + Duration::from_millis(5000))
-							.and_then(move |_| {
-								generate_blocks();
-								Ok(())
-							})
-							.map_err(|_| ());
-
-						executor.spawn(delay_generate);
+							block
+						});
+						net.lock().peer(0).push_blocks(9, false);
 					},
 					_ => {},
 				}
@@ -603,7 +584,7 @@ fn transition_3_voters_twice_1_observer() {
 					assert!(set.pending_changes().is_empty());
 				})
 		);
-		let (voter, oracle) = run_grandpa(
+		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key,
@@ -613,7 +594,6 @@ fn transition_3_voters_twice_1_observer() {
 			MessageRouting::new(net.clone(), peer_id),
 		).expect("all in order with client and network");
 
-		runtime.spawn(oracle);
 		runtime.spawn(voter);
 	}
 

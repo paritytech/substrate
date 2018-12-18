@@ -70,6 +70,7 @@ pub fn start_http(
 ) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
+		.health_api(("/health", "system_health"))
 		.rest_api(http::RestApi::Unsecure)
 		.cors(http::DomainsValidation::Disabled)
 		.max_request_body_size(MAX_PAYLOAD)

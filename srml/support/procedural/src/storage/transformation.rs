@@ -657,7 +657,7 @@ fn store_functions_to_metadata (
 	}
 	(default_getter_struct_def, quote!{
 		{
-	 		#scrate::storage::generator::DecodeDifferent::Encode(&[
+			#scrate::storage::generator::DecodeDifferent::Encode(&[
 				#items
 			])
 		}

@@ -19,7 +19,7 @@ srml-system = { path = "../system", default-features = false }
 srml-balances = { path = "../balances", default-features = false }
 
 [dev-dependencies]
-wabt = "0.4"
+wabt = "0.7"
 assert_matches = "1.1"
 
 [features]

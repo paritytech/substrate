@@ -223,9 +223,6 @@ You can start a development chain with:
 [source, shell]
 cargo run -- --dev
 
-Or you can join the BBQ Birch Testnet with:
-[source, shell]
-cargo run
 
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
 
