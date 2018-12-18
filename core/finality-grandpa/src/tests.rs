@@ -357,6 +357,7 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
 				local_key: Some(Arc::new(key.clone().into())),
 				name: Some(format!("peer#{}", peer_id)),
 			},
@@ -439,6 +440,7 @@ fn finalize_3_voters_1_observer() {
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
@@ -595,6 +597,7 @@ fn transition_3_voters_twice_1_observer() {
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
@@ -637,4 +640,24 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	// ... and check that there's no justification for block#1
 	assert!(net.lock().peer(0).client().backend().blockchain().justification(BlockId::Number(1)).unwrap().is_some(),
 		"Missing justification for block#1");
+}
+
+#[test]
+fn justification_is_generated_periodically() {
+	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	net.peer(0).push_blocks(32, false);
+	net.sync();
+
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(32, net.clone(), peers);
+
+ 	// when block#32 (justification_period) is finalized, justification
+	// is required => generated
+	for i in 0..3 {
+		assert!(net.lock().peer(i).client().backend().blockchain()
+			.justification(BlockId::Number(32)).unwrap().is_some());
+	}
 }

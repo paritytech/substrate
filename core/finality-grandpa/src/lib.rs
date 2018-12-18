@@ -91,7 +91,7 @@ use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
+	As, NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT, Zero,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
@@ -168,6 +168,10 @@ pub type CompactCommit<Block> = grandpa::CompactCommit<
 pub struct Config {
 	/// The expected duration for a message to be gossiped across the network.
 	pub gossip_duration: Duration,
+	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
+	/// at least every justification_period blocks. There are some other events which might cause
+	/// justification generation.
+	pub justification_period: u64,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
 	/// Some local identifier of the voter.
@@ -571,7 +575,15 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
-		finalize_block(&*self.inner, &self.authority_set, &self.consensus_changes, hash, number, (round, commit).into())
+		finalize_block(
+			&*self.inner,
+			&self.authority_set,
+			&self.consensus_changes,
+			Some(As::sa(self.config.justification_period)),
+			hash,
+			number,
+			(round, commit).into(),
+		)
 	}
 
 	fn round_commit_timer(&self) -> Self::Timer {
@@ -770,6 +782,7 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: &SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
+	justification_period: Option<NumberFor<Block>>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
@@ -840,12 +853,23 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	let justification = match justification_or_commit {
 		JustificationOrCommit::Justification(justification) => Some(justification.encode()),
 		JustificationOrCommit::Commit((round_number, commit)) => {
-			let justification_required =
+			let mut justification_required =
 				// justification is always required when block that enacts new authorities
 				// set is finalized
 				status.new_set_block.is_some() ||
 				// justification is required when consensus changes are finalized
 				finalizes_consensus_changes;
+
+			// justification is required every N blocks to be able to prove blocks
+			// finalization to remote nodes
+			if !justification_required {
+				if let Some(justification_period) = justification_period {
+					let last_finalized_number = client.info()?.chain.finalized_number;
+					justification_required = (!last_finalized_number.is_zero() ||
+						number - last_finalized_number == justification_period) &&
+						(last_finalized_number / justification_period != number / justification_period);
+				}
+			}
 
 			if justification_required {
 				let justification = GrandpaJustification::from_commit(
@@ -1017,6 +1041,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					&*self.inner,
 					&self.authority_set,
 					&self.consensus_changes,
+					None,
 					hash,
 					number,
 					justification.into(),
