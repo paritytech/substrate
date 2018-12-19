@@ -635,6 +635,10 @@ mod tests {
 
 			GETMAPU32MYDEF get(map_u32_getter_mydef): map u32 => String = "map".into();
 			pub PUBGETMAPU32MYDEF get(pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
+
+			COMPLEX_TYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
+			COMPLEX_TYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
+			COMPLEX_TYPE3: ([u32;25]);
 		}
 		add_extra_genesis {
 			build(|_, _, _| {});
@@ -690,7 +694,7 @@ mod tests {
 			StorageFunctionMetadata {
 				name: DecodeDifferent::Encode("GETU32"),
 				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("T :: Origin")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("T::Origin")),
 				default: DecodeDifferent::Encode(
 					DefaultByteGetter(&__GetByteStructGETU32(PhantomData::<TraitImpl>))
 				),
@@ -857,6 +861,33 @@ mod tests {
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("COMPLEX_TYPE1"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("::std::vec::Vec<<T as Trait>::Origin>")),
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructCOMPLEX_TYPE1(PhantomData::<TraitImpl>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("COMPLEX_TYPE2"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("(Vec<Vec<(u16, Box<()>)>>, u32)")),
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructCOMPLEX_TYPE2(PhantomData::<TraitImpl>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("COMPLEX_TYPE3"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("([u32; 25])")),
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructCOMPLEX_TYPE3(PhantomData::<TraitImpl>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
 		])
 	};
 
@@ -877,6 +908,7 @@ mod tests {
 		assert_eq!(config.pub_u32_getter_with_config_mydef, 1u32);
 		assert_eq!(config.pub_u32_getter_with_config_mydef_opt, 100u32);
 	}
+
 }
 
 #[cfg(test)]
