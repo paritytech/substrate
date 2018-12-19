@@ -4,35 +4,36 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-rustc-hex = "1.0"
-hex-literal = "0.1.0"
-serde = { version = "1.0", default-features = false }
+integer-sqrt = { version = "0.1.2" }
 safe-mix = { version = "1.0", default-features = false }
-parity-codec = "2.1"
-parity-codec-derive = "2.1"
-sr-std = { path = "../../core/sr-std" }
-srml-support = { path = "../../srml/support" }
-substrate-primitives = { path = "../../core/primitives" }
+parity-codec-derive = { version = "2.1" }
+parity-codec = { version = "2.1", default-features = false }
+substrate-primitives = { path = "../../core/primitives", default-features = false }
+substrate-client = { path = "../../core/client", default-features = false }
+sr-std = { path = "../../core/sr-std", default-features = false }
+srml-support = { path = "../../srml/support", default-features = false }
+srml-aura = { path = "../../srml/aura", default-features = false }
+srml-balances = { path = "../../srml/balances", default-features = false }
+srml-consensus = { path = "../../srml/consensus", default-features = false }
+srml-contract = { path = "../../srml/contract", default-features = false }
+srml-council = { path = "../../srml/council", default-features = false }
+srml-democracy = { path = "../../srml/democracy", default-features = false }
+srml-executive = { path = "../../srml/executive", default-features = false }
+sr-primitives = { path = "../../core/sr-primitives", default-features = false }
+srml-session = { path = "../../srml/session", default-features = false }
+srml-staking = { path = "../../srml/staking", default-features = false }
+srml-system = { path = "../../srml/system", default-features = false }
+srml-timestamp = { path = "../../srml/timestamp", default-features = false }
+srml-treasury = { path = "../../srml/treasury", default-features = false }
+srml-upgrade-key = { path = "../../srml/upgrade-key", default-features = false }
+srml-grandpa = { path = "../../srml/grandpa", default-features = false }
+sr-version = { path = "../../core/sr-version", default-features = false }
+node-primitives = { path = "../primitives", default-features = false }
 substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives", default-features = false }
-substrate-client = { path = "../../core/client" }
-substrate-keyring = { path = "../../core/keyring" }
-srml-aura = { path = "../../srml/aura" }
-srml-balances = { path = "../../srml/balances" }
-srml-consensus = { path = "../../srml/consensus" }
-srml-contract = { path = "../../srml/contract" }
-srml-council = { path = "../../srml/council" }
-srml-democracy = { path = "../../srml/democracy" }
-srml-executive = { path = "../../srml/executive" }
-srml-grandpa = { path = "../../srml/grandpa" }
-sr-primitives = { path = "../../core/sr-primitives" }
-srml-session = { path = "../../srml/session" }
-srml-staking = { path = "../../srml/staking" }
-srml-system = { path = "../../srml/system" }
-srml-timestamp = { path = "../../srml/timestamp" }
-srml-treasury = { path = "../../srml/treasury" }
-srml-upgrade-key = { path = "../../srml/upgrade-key" }
-sr-version = { path = "../../core/sr-version" }
-node-primitives = { path = "../primitives" }
+rustc-hex = { version = "1.0", optional = true }
+hex-literal = { version = "0.1.0", optional = true }
+serde = { version = "1.0", optional = true }
+substrate-keyring = { path = "../../core/keyring", optional = true }
 
 [features]
 default = ["std"]
@@ -61,4 +62,8 @@ std = [
 	"safe-mix/std",
 	"substrate-client/std",
 	"substrate-consensus-aura-primitives/std",
+	"rustc-hex",
+	"hex-literal",
+	"serde",
+	"substrate-keyring",
 ]
