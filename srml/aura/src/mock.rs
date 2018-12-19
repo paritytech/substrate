@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
+use primitives::{BuildStorage, testing::{Digest, DigestItem, Header, UintAuthorityId}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use {Trait, Module, consensus, system, timestamp};
@@ -34,7 +34,7 @@ pub struct Test;
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
-	type SessionKey = u64;
+	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ();
 }
 

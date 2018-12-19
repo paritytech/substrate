@@ -20,16 +20,16 @@ use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecu
 use client::error::Error;
 use client::light::fetcher::ChangesProof;
 use consensus::BlockImport;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, AuthorityIdFor};
 use runtime_primitives::generic::{BlockId};
 use consensus::{ImportBlock, ImportResult};
 use runtime_primitives::Justification;
-use primitives::{H256, Blake2Hasher, AuthorityId};
+use primitives::{H256, Blake2Hasher};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
-	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityIdFor<Block>>>)
 		-> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
@@ -77,7 +77,7 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
-	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityIdFor<Block>>>)
 		-> Result<ImportResult, Error>
 	{
 		(self as &SubstrateClient<B, E, Block, RA>).import_block(block, new_authorities)

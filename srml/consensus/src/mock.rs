@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
+use primitives::{BuildStorage, testing::{Digest, DigestItem, Header, UintAuthorityId}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use {GenesisConfig, Trait, Module, system};
@@ -33,7 +33,7 @@ pub struct Test;
 impl Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
-	type SessionKey = u64;
+	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ::InstantFinalityReportVec<()>;
 }
 impl system::Trait for Test {
@@ -53,7 +53,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(GenesisConfig::<Test>{
 		code: vec![],
-		authorities,
+		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);
 	t.into()
 }

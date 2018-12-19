@@ -190,7 +190,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::BlakeTwo256;
-	use runtime_primitives::testing::{Digest, DigestItem, Header};
+	use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -213,7 +213,7 @@ mod tests {
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
-		type SessionKey = u64;
+		type SessionKey = UintAuthorityId;
 		type InherentOfflineReport = ();
 	}
 	impl Trait for Test {

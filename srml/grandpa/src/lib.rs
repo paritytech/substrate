@@ -61,7 +61,7 @@ use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{CurrentHeight, Convert};
-use substrate_primitives::AuthorityId;
+use substrate_primitives::Ed25519AuthorityId;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
 
@@ -105,7 +105,7 @@ impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
 }
 
 impl<N, SessionKey> GrandpaChangeSignal<N> for RawLog<N, SessionKey>
-	where N: Clone, SessionKey: Clone + Into<AuthorityId>,
+	where N: Clone, SessionKey: Clone + Into<Ed25519AuthorityId>,
 {
 	fn as_signal(&self) -> Option<ScheduledChange<N>> {
 		RawLog::as_signal(self).map(|(delay, next_authorities)| ScheduledChange {
@@ -243,7 +243,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T> where AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
+impl<T: Trait> Module<T> where Ed25519AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
 	/// See if the digest contains any scheduled change.
 	pub fn scrape_digest_change(log: &Log<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>

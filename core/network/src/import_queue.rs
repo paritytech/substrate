@@ -29,10 +29,9 @@ use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
 use network_libp2p::{NodeIndex, Severity};
-use primitives::AuthorityId;
 
 use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
 pub use blocks::BlockData;
 use client::error::Error as ClientError;
@@ -60,7 +59,7 @@ pub trait Verifier<B: BlockT>: Send + Sync + Sized {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String>;
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String>;
 }
 
 /// Blocks import queue API.
@@ -544,7 +543,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
 		Ok((ImportBlock {
 			origin,
 			header,
