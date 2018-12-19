@@ -64,7 +64,7 @@ use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::{generic, generic::BlockId, Justification, BasicInherentData};
-use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, ProvideRuntimeApi};
+use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi};
 use network::import_queue::{Verifier, BasicQueue};
 use primitives::{Ed25519AuthorityId, ed25519};
 
@@ -165,7 +165,7 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + 'static,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	use tokio::runtime::current_thread::Runtime;
@@ -208,7 +208,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 	I: BlockImport<B>,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
 	let make_authorship = move || {
@@ -280,7 +280,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 								slot_num, timestamp);
 
 							// we are the slot author. make a block and sign it.
-							let proposer = match env.init(&chain_head, &authorities, pair.clone()) {
+							let proposer = match env.init(&chain_head, &authorities) {
 								Ok(p) => p,
 								Err(e) => {
 									warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -459,7 +459,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, MakeInherent> where
 	C: Authorities<B> + BlockImport<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
@@ -612,7 +612,7 @@ pub fn import_queue<B, C, E, MakeInherent, Inherent>(
 	B: Block,
 	C: Authorities<B> + BlockImport<B,Error=::client::error::Error> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
@@ -645,7 +645,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Ed25519AuthorityId], _sign_with: Arc<ed25519::Pair>)
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Ed25519AuthorityId])
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))

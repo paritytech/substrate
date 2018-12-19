@@ -66,7 +66,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
-		authorities,
+		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 1,
