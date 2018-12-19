@@ -205,9 +205,10 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 		let tags = match block {
 			None => return Ok(()),
 			Some(block) => {
+				let parent_id = BlockId::hash(*block.block.header().parent_hash());
 				let mut tags = vec![];
 				for tx in block.block.extrinsics() {
-					let tx = client.runtime_api().validate_transaction(id, &tx)?;
+					let tx = client.runtime_api().validate_transaction(&parent_id, &tx)?;
 					match tx {
 						TransactionValidity::Valid { mut provides, .. } => {
 							tags.append(&mut provides);
