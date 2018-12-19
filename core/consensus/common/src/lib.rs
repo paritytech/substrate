@@ -37,7 +37,7 @@ extern crate error_chain;
 use std::sync::Arc;
 
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{BlockAuthorityId, Block};
+use runtime_primitives::traits::{AuthorityIdFor, Block};
 use futures::prelude::*;
 
 pub mod offline_tracker;
@@ -54,7 +54,7 @@ pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult};
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
 	type Error: ::std::error::Error + Send + 'static;	/// Get the authorities at the given block.
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<BlockAuthorityId<B>>, Self::Error>;
+	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
 }
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
@@ -66,7 +66,7 @@ pub trait Environment<B: Block, ConsensusData> {
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
-	fn init(&self, parent_header: &B::Header, authorities: &[BlockAuthorityId<B>])
+	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityIdFor<B>])
 		-> Result<Self::Proposer, Self::Error>;
 }
 

@@ -25,7 +25,7 @@ use light;
 use primitives::storage::well_known_keys;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, As, Digest, DigestItem, BlockAuthorityId};
+	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
 use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
 use blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
@@ -108,7 +108,7 @@ pub struct Blockchain<Block: BlockT> {
 
 struct Cache<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
-	authorities_at: RwLock<HashMap<Block::Hash, Option<Vec<BlockAuthorityId<Block>>>>>,
+	authorities_at: RwLock<HashMap<Block::Hash, Option<Vec<AuthorityIdFor<Block>>>>>,
 }
 
 impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
@@ -368,7 +368,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<BlockAuthorityId<Block>>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<()> {
@@ -409,7 +409,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
-	pending_authorities: Option<Vec<BlockAuthorityId<Block>>>,
+	pending_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
@@ -444,7 +444,7 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<BlockAuthorityId<Block>>) {
+	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
 		self.pending_authorities = Some(authorities);
 	}
 
@@ -632,13 +632,13 @@ where
 {}
 
 impl<Block: BlockT> Cache<Block> {
-	fn insert(&self, at: Block::Hash, authorities: Option<Vec<BlockAuthorityId<Block>>>) {
+	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityIdFor<Block>>>) {
 		self.authorities_at.write().insert(at, authorities);
 	}
 }
 
 impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<BlockAuthorityId<Block>>> {
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>> {
 		let hash = match block {
 			BlockId::Hash(hash) => hash,
 			BlockId::Number(number) => self.storage.read().hashes.get(&number).cloned()?,
@@ -652,7 +652,7 @@ impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
 pub fn cache_authorities_at<Block: BlockT>(
 	blockchain: &Blockchain<Block>,
 	at: Block::Hash,
-	authorities: Option<Vec<BlockAuthorityId<Block>>>
+	authorities: Option<Vec<AuthorityIdFor<Block>>>
 ) {
 	blockchain.cache.insert(at, authorities);
 }

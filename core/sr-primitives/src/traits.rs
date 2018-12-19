@@ -467,9 +467,6 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	}
 }
 
-/// `AuthorityId` type of a block.
-pub type BlockAuthorityId<B> = <<<<B as Block>::Header as Header>::Digest as Digest>::Item as DigestItem>::AuthorityId;
-
 /// Something which fulfills the abstract idea of a Substrate block. It has types for an
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
@@ -503,6 +500,8 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
 /// Extract the digest item type for a block.
 pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
+/// Extract the authority ID type for a block.
+pub type AuthorityIdFor<B> = <DigestFor<B> as Digest>::AuthorityId;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.

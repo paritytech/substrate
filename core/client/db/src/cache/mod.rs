@@ -25,7 +25,7 @@ use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
 use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, BlockAuthorityId};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, AuthorityIdFor};
 use utils::{self, COLUMN_META};
 
 use self::list_cache::ListCache;
@@ -64,7 +64,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
-	authorities_at: ListCache<Block, Vec<BlockAuthorityId<Block>>, self::list_storage::DbStorage>,
+	authorities_at: ListCache<Block, Vec<AuthorityIdFor<Block>>, self::list_storage::DbStorage>,
 }
 
 impl<Block: BlockT> DbCache<Block> {
@@ -111,14 +111,14 @@ impl<Block: BlockT> DbCache<Block> {
 
 /// Cache operations that are to be committed after database transaction is committed.
 pub struct DbCacheTransactionOps<Block: BlockT> {
-	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<BlockAuthorityId<Block>>>>,
+	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<AuthorityIdFor<Block>>>>,
 }
 
 /// Database-backed blockchain data cache transaction valid for single block import.
 pub struct DbCacheTransaction<'a, Block: BlockT> {
 	cache: &'a mut DbCache<Block>,
 	tx: &'a mut DBTransaction,
-	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<BlockAuthorityId<Block>>>>,
+	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<AuthorityIdFor<Block>>>>,
 }
 
 impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
@@ -134,7 +134,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		mut self,
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
-		authorities_at: Option<Vec<BlockAuthorityId<Block>>>,
+		authorities_at: Option<Vec<AuthorityIdFor<Block>>>,
 		is_final: bool,
 	) -> ClientResult<Self> {
 		assert!(self.authorities_at_op.is_none());
@@ -178,7 +178,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
-	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<BlockAuthorityId<Block>>> {
+	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>> {
 		let cache = self.0.read();
 		let storage = cache.authorities_at.storage();
 		let db = storage.db();
