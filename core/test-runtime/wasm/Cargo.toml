@@ -35,6 +35,7 @@ std = [
 
 [lib]
 crate-type = ["cdylib"]
+path = "../src/lib.rs"
 
 [profile.release]
 panic = "abort"

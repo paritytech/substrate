@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [lib]
 crate-type = ["cdylib"]
+path = "../src/lib.rs"
 
 [dependencies]
 integer-sqrt = { version = "0.1.2" }
