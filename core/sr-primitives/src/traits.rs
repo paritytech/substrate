@@ -414,6 +414,16 @@ pub trait MaybeDisplay {}
 impl<T> MaybeDisplay for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeHash: ::rstd::hash::Hash {}
+#[cfg(feature = "std")]
+impl<T: ::rstd::hash::Hash> MaybeHash for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeHash {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeHash for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeDecode: ::codec::Decode {}
 #[cfg(feature = "std")]
 impl<T: ::codec::Decode> MaybeDecode for T {}
@@ -577,7 +587,7 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
-	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize + rstd::hash::Hash + codec::Encode + codec::Decode;
+	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize + MaybeHash + codec::Encode + codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
