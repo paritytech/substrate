@@ -124,7 +124,7 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 
 impl<
 	Hash: Codec + Member + MaybeSerializeDebug,
-	AuthorityId: Codec + Member + MaybeSerializeDebug
+	AuthorityId: Codec + Member + MaybeSerializeDebug + rstd::hash::Hash
 > traits::DigestItem for DigestItem<Hash, AuthorityId> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;

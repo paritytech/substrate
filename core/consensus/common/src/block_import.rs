@@ -16,8 +16,7 @@
 
 //! Block import helpers.
 
-use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, DigestItemFor};
+use runtime_primitives::traits::{BlockAuthorityId, Block as BlockT, Header as HeaderT, DigestItemFor};
 use runtime_primitives::Justification;
 use std::borrow::Cow;
 
@@ -135,6 +134,6 @@ pub trait BlockImport<B: BlockT> {
 	/// Import a Block alongside the new authorities valid form this block forward
 	fn import_block(&self,
 		block: ImportBlock<B>,
-		new_authorities: Option<Vec<AuthorityId>>
+		new_authorities: Option<Vec<BlockAuthorityId<B>>>
 	) -> Result<ImportResult, Self::Error>;
 }

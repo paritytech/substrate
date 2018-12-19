@@ -578,7 +578,7 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
-	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize;
+	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize + rstd::hash::Hash + codec::Encode + codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;

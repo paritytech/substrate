@@ -44,13 +44,13 @@ error_chain! {
 		}
 
 		/// Error checking signature
-		InvalidSignature(s: ::primitives::ed25519::Signature, a: ::primitives::AuthorityId) {
+		InvalidSignature(s: ::primitives::ed25519::Signature, a: ::primitives::Ed25519AuthorityId) {
 			description("Message signature is invalid"),
 			display("Message signature {:?} by {:?} is invalid.", s, a),
 		}
 
 		/// Account is not an authority.
-		InvalidAuthority(a: ::primitives::AuthorityId) {
+		InvalidAuthority(a: ::primitives::Ed25519AuthorityId) {
 			description("Message sender is not a valid authority"),
 			display("Message sender {:?} is not a valid authority.", a),
 		}
