@@ -30,8 +30,8 @@ extern crate parity_codec as codec;
 extern crate srml_system as system;
 extern crate srml_balances as balances;
 
-use sr_primitives::{Perbill, traits::{As, One}};
-use support::{StorageValue, StorageMap, dispatch::Result};
+use sr_primitives::{traits::{As, One, Zero}};
+use support::{StorageValue, StorageMap, Parameter, dispatch::Result};
 use system::ensure_signed;
 use balances::{OnFreeBalanceZero, EnsureAccountLiquid};
 
@@ -57,12 +57,17 @@ pub trait Trait: balances::Trait {
 // 0 0 0 1 1 1 2 2 2 3
 //
 
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum State<BlockNumber: Parameter> {
 	Idle,
 	BeganAt(BlockNumber),
 	EndingAt(BlockNumber),
+}
+impl<BlockNumber: Parameter> Default for State<BlockNumber> {
+	fn default() -> Self {
+		State::Idle
+	}
 }
 
 enum ConsolidatedState {
@@ -81,25 +86,34 @@ pub struct Betting<BlockNumber: Parameter, Balance: Parameter> {
 	locked_until: Option<BlockNumber>,
 
 	/// The balance with which we are betting.
-	bet: Balance,
+	balance: Balance,
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Bet {
-		/// Period in which betting happens.
+		/// Period in which betting happens, measured in blocks.
 		Period get(period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+
+		/// Factor controlling the attenuation speed of the target when missed.
+		/// The price is reduced by a factor of one divided by this. It *must* be greater
+		/// than one.
+		TargetAttenuation get(target_attenuation) config(): T::Balance;
+
+		/// The number of times to sample the spot price per period in order to determine the
+		/// average price.
+		Samples get(samples) config(): u64;
+
+		/// The target price to beat.
+		Target get(target) config(): T::Balance;
 
 		/// Index of current period.
 		Index get(index): T::BlockNumber;
 
 		/// Betting information.
-		Bets get(bets): map T::AccountId => Betting;
+		Bets get(bets): map T::AccountId => Betting<T::BlockNumber, T::Balance>;
 
 		/// This period's prices.
 		Prices get(prices): Vec<T::Balance>;
-
-		/// The price to beat.
-		Target get(target): T::Balance;
 
 		/// The pot.
 		Pot get(pot): T::Balance;
@@ -189,7 +203,7 @@ decl_module! {
 			let next = current + One::one();
 
 			let balance_at_stake_is_zero = <Bets<T>>::mutate(&sender, |b| {
-				let cs = Self::consolidate(sender, b);
+				let cs = Self::consolidate(&sender, b);
 
 				// We are now guaranteed that b.state will be one of:
 				// - Idle
@@ -204,7 +218,7 @@ decl_module! {
 
 				match cs {
 					ConsolidatedState::Idle => {
-						b.state = State::BeganAt(next.clone());
+						b.state = State::BeganAt(next);
 						b.balance = <balances::Module<T>>::free_balance(&sender);
 					}
 					ConsolidatedState::JustBegan => {
@@ -216,17 +230,17 @@ decl_module! {
 						// be accounted for, so we reset to BeginAt the current. We can't update the balance to
 						// `account_balance` since it would invalidate the current period's win calculation;
 						// instead we use the old betted balance.
-						b.state = State::BeganAt(current.clone());
+						b.state = State::BeganAt(current);
 					}
 				};
 
-				<NextTotal<T>>::mutate(|total| *total += &b.balance)
+				<NextTotal<T>>::mutate(|total| *total += b.balance);
 				b.balance.is_zero()
 			});
 
 			// We've been wiped out: kill entry.
 			if balance_at_stake_is_zero {
-				<Bets<T>>::kill(&sender)
+				<Bets<T>>::remove(&sender)
 			}
 		}
 
@@ -237,7 +251,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 
 			let balance_at_stake_is_zero = <Bets<T>>::mutate(&sender, |b| {
-				let cs = Self::consolidate(sender, b);
+				let cs = Self::consolidate(&sender, b);
 
 				// We are now guaranteed that b.state will be one of:
 				// - Idle
@@ -252,18 +266,19 @@ decl_module! {
 
 				match cs {
 					ConsolidatedState::JustBegan => {
-						b.state = State::EndingAt(next.clone);
-						b.locked_until = Self::index() + 2;
-						<NextTotal<T>>::mutate(|total| *total -= &b.balance)
+						let next = Self::index() + One::one();
+						b.state = State::EndingAt(next);
+						b.locked_until = Some(next + One::one());
+						<NextTotal<T>>::mutate(|total| *total -= b.balance)
 					}
 					_ => {}
 				};
 				false
-			}
+			});
 
 			// We've been wiped out: kill entry.
 			if balance_at_stake_is_zero {
-				<Bets<T>>::kill(&sender)
+				<Bets<T>>::remove(&sender)
 			}
 		}
 
@@ -273,42 +288,49 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 
 			let is_unlocked = <Bets<T>>::mutate(&sender, |b| {
-				Self::consolidate(sender, b);
-				b.state == State::Idle && b.locked_until <= Self::index()
+				Self::consolidate(&sender, b);
+				b.state == State::Idle && b.locked_until.map_or(true, |l| l <= Self::index())
 			});
 
 			if is_unlocked {
-				<Bets<T>>::kill(&sender);
+				<Bets<T>>::remove(&sender);
 			}
 		}
 
 		// The signature could also look like: `fn on_finalise()`
 		fn on_finalise(n: T::BlockNumber) {
-			let segments = 16;
+			let samples = Self::samples();
+			let samples_bn = T::BlockNumber::sa(samples);
 			let p = Self::period();
-			let mp = Self::period() / T::BlockNumber::sa(segments as u64);
-			let off = p - mp * segments;
+			let mp = Self::period() / T::BlockNumber::sa(samples);
+			let ph = p - One::one() - n % p;
 
-			if (n + off) % mp == 0 {
+			// For samples = 3, period = 7, mp = 2
+			// n:   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6
+			// n%p: 0 1 2 3 4 5 6 0 1 2 3 4 5 6 0 1 2
+			// ph:  6 5 4 3 2 1 0 6 5 4 3 2 1 0 6 5 4 
+			//          +   +   *     +   +   *     +	[+: take sample, *: take sample, end period]
+
+			if (ph % mp).is_zero() && ph / mp < samples_bn {
 				// end of segment
 				let one_euro = T::OneEuro::fetch_price();
 
 				<Prices<T>>::mutate(|prices| prices.push(one_euro));
 
-				if (n + off) % p == 0 {
+				if ph.is_zero() {
 					// end of period
 
 					let prices = <Prices<T>>::take();
-					let mean = prices.iter().fold(T::Balance::default(), |x, p| *x += p) / segments.as_();
+					let mean = prices.iter().fold(T::Balance::default(), |total, &item| total + item) / T::Balance::sa(samples);
 					if mean < Self::target() {
 						let pot = <Pot<T>>::take();
 						let total = Self::next_total();
 						<Target<T>>::put(mean);
-						<NextTotal<T>>::put(&total + &pot);
+						<NextTotal<T>>::put(total + pot);
 						// This is where the total should be expanded for contiguous betters.
-						<Payouts<T>>::insert(Self::index(), Some((total, pot)));
+						<Payouts<T>>::insert(Self::index(), (total, pot));
 					} else {
-						<Target<T>>::mutate(|p| p = p / 16u64.as_() * 15u64.as_());
+						<Target<T>>::mutate(|p| *p = *p / Self::target_attenuation() * (Self::target_attenuation() + One::one()));
 						<NextTotal<T>>::kill();
 					}
 
@@ -327,51 +349,54 @@ impl<T: Trait> Module<T> {
 
 	/// Consolidates the `betting` state of `who` into one of `Idle, BeganAt(Self::index()) and EndingAt(Self::index + 1)`
 	/// Calling this could delete the relevant entry in `Bets`.
-	fn consolidate(who: &T::AccountId, betting: &mut Betting) {
+	fn consolidate(who: &T::AccountId, betting: &mut Betting<T::BlockNumber, T::Balance>) -> ConsolidatedState {
 		let now = Self::index();
-		let r = match betting.state.clone() {
-			State::BeganAt(ref n) if n < &now {
+		let (new_balance, result) = match betting.state.clone() {
+			State::BeganAt(n) if n < now => {
 				// calculate and impose new balance implied by [n ... now)
 				betting.state = State::BeganAt(now);
-				Self::calculate_new_balance(&betting.balance, n, &now)
-				ConsolidatedState::JustBegan
+				(
+					Self::calculate_new_balance(betting.balance, n, now),
+					ConsolidatedState::JustBegan
+				)
 			}
-			State::EndingAt(ref n) if n <= &now {
+			State::EndingAt(n) if n <= now => {
 				// calculate new balance implied by n
 				betting.state = State::Idle;
-				Self::calculate_new_balance(&betting.balance, n, n + One::one());
-				ConsolidatedState::Idle
+				(
+					Self::calculate_new_balance(betting.balance, n, n + One::one()),
+					ConsolidatedState::Idle
+				)
 			}
 			State::BeganAt(_) => return ConsolidatedState::JustBegan,
 			State::EndingAt(_) => return ConsolidatedState::AboutToEnd,
-			State::Idle(_) => return ConsolidatedState::Idle,
+			State::Idle => return ConsolidatedState::Idle,
 		};
 
 		if betting.balance < new_balance {
-			<balances::Module<T>>::add_balance(&sender, new_balance - betting.balance);
+			<balances::Module<T>>::increase_free_balance_creating(who, new_balance - betting.balance);
 		} else {
 			// this action might delete our entry in Bets (if free_balance is reduced to zero).
 			// it's ok though, since mutate will write it back out with expected values.
-			<balances::Module<T>>::sub_balance(&sender, betting.balance - new_balance);
+			let _ = <balances::Module<T>>::decrease_free_balance(who, betting.balance - new_balance);
 		}
 
 		betting.balance = new_balance;
-		r
+		result
 	}
 
 	/// Returns the new balance (i.e. old plus the payout reward); will be zero if there was a wipeout.
-	fn calculate_new_balance(balance: &T::Balance, begin: &T::BlockNumber, end: &T::BlockNumber) -> T::Balance {
+	fn calculate_new_balance(balance: T::Balance, begin: T::BlockNumber, end: T::BlockNumber) -> <T as balances::Trait>::Balance {
 		if balance.is_zero() {
 			// nothing to be done here
-			return balance.clone()
+			return balance
 		}
 		// pay out (or wipeout) coming...
-		let mut payout = Zero::zero();
-		let mut b = begin.clone();
-		let mut new_balance = balance.clone();
-		while &b < end {
+		let mut b = begin;
+		let mut new_balance = balance;
+		while b < end {
 			// accumulate winnings
-			match Self::payouts(&b) {
+			match Self::payouts(b) {
 				Some((total_stake, pot)) => {
 					// A(nother) win! Accumulate.
 					// TODO: check for overflow (we're assuming 32-bits at the upper end here).
@@ -385,6 +410,7 @@ impl<T: Trait> Module<T> {
 					return Zero::zero()
 				}
 			}
+			b += One::one();
 		}
 		new_balance
 	}
@@ -409,8 +435,8 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	extern crate lazy_static;
 	
+	use ::std::cell::Cell;
 	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -419,10 +445,15 @@ mod tests {
 		BuildStorage, traits::{BlakeTwo256, OnFinalise}, testing::{Digest, DigestItem, Header}
 	};
 
-	static ONE_EURO: u64 = 100;
-	struct StaticOneEuro;
+	thread_local! { static ONE_EURO: Cell<u64> = Cell::new(100); }
+	pub struct StaticOneEuro;
 	impl FetchPrice<u64> for StaticOneEuro {
-		fn fetch_price() -> u64 { ONE_EURO }
+		fn fetch_price() -> u64 {
+			ONE_EURO.with(|o| o.get())
+		}
+	}
+	fn set_price(p: u64) {
+		ONE_EURO.with(|o| o.set(p));
 	}
 
 	impl_outer_origin! {
@@ -457,6 +488,8 @@ mod tests {
 		type Event = ();
 		type OneEuro = StaticOneEuro;
 	}
+	type System = system::Module<Test>;
+	type Balances = balances::Module<Test>;
 	type Bet = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
@@ -466,38 +499,55 @@ mod tests {
 		// We use default for brevity, but you can configure as desired if needed.
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
-			dummy: 42,
-			foo: 24,
+			period: 5,
+			samples: 2,
+			target_attenuation: 10,
+			target: 100,
 		}.build_storage().unwrap().0);
 		t.into()
 	}
 
 	#[test]
-	fn it_works_for_optional_value() {
+	fn config_works() {
 		with_externalities(&mut new_test_ext(), || {
-			// Check that GenesisBuilder works properly.
-			assert_eq!(Bet::dummy(), Some(42));
-
-			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Bet::accumulate_dummy(Origin::signed(1), 27));
-			assert_eq!(Bet::dummy(), Some(69));
-
-			// Check that finalising the block removes Dummy from storage.
-			<Bet as OnFinalise<u64>>::on_finalise(1);
-			assert_eq!(Bet::dummy(), None);
-
-			// Check that accumulate works when we Dummy has None in it.
-			assert_ok!(Bet::accumulate_dummy(Origin::signed(1), 42));
-			assert_eq!(Bet::dummy(), Some(42));
+			assert_eq!(Bet::period(), 5);
+			assert_eq!(Bet::samples(), 2);
+			assert_eq!(Bet::target_attenuation(), 10);
+			assert_eq!(Bet::target(), 100);
+			assert_eq!(Bet::index(), 0);
+			assert_eq!(Bet::bets(0), Betting::default());
+			assert_eq!(Bet::prices(), vec![]);
+			assert_eq!(Bet::pot(), 0);
+			assert_eq!(Bet::next_total(), 0);
+			assert_eq!(Bet::payouts(0), None);
 		});
 	}
 
 	#[test]
-	fn it_works_for_default_value() {
+	fn price_sampling_works() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Bet::foo(), 24);
-			assert_ok!(Bet::accumulate_foo(Origin::signed(1), 1));
-			assert_eq!(Bet::foo(), 25);
+			System::set_block_number(1);
+			set_price(120);
+			Bet::on_finalise(System::block_number());
+			assert_eq!(Bet::prices(), vec![]);
+
+			System::set_block_number(2);
+			set_price(80);
+			Bet::on_finalise(System::block_number());
+			assert_eq!(Bet::prices(), vec![80]);
+
+			System::set_block_number(3);
+			set_price(140);
+			Bet::on_finalise(System::block_number());
+			assert_eq!(Bet::prices(), vec![80]);
+
+			System::set_block_number(4);
+			set_price(100);
+			Bet::on_finalise(System::block_number());
+			assert_eq!(Bet::prices(), vec![]);
+			assert_eq!(Bet::payouts(0), Some((0, 0)));
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::target(), 90);
 		});
 	}
 }
