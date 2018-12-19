@@ -19,7 +19,7 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
+use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -577,7 +577,7 @@ fn store_functions_to_metadata (
 		let is_option = extracted_opt.is_some();
 		let typ = extracted_opt.unwrap_or(quote!( #gettype ));
 		let stype = if is_simple {
-			let styp = typ.to_string();
+			let styp = clean_type_string(&typ.to_string());
 			quote!{
 				#scrate::storage::generator::StorageFunctionType::Plain(
 					#scrate::storage::generator::DecodeDifferent::Encode(#styp),
@@ -585,8 +585,8 @@ fn store_functions_to_metadata (
 			}
 		} else {
 			let kty = stk.expect("is not simple; qed");
-			let kty = quote!(#kty).to_string();
-			let styp = typ.to_string();
+			let kty = clean_type_string(&quote!(#kty).to_string());
+			let styp = clean_type_string(&typ.to_string());
 			quote!{
 				#scrate::storage::generator::StorageFunctionType::Map {
 					key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
