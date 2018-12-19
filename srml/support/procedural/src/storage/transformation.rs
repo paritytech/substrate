@@ -19,7 +19,7 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
+use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -45,24 +45,6 @@ macro_rules! try_tok(( $expre : expr ) => {
 		}
 	}
 });
-
-// fn to remove white spaces arount string types
-// (basically whitespaces arount tokens)
-fn clean_type_string(input: &str) -> String {
-	input
-		.replace(" :: ", "::")
-		.replace(" ,", ",")
-		.replace(" ;", ";")
-		.replace(" [", "[")
-		.replace("[ ", "[")
-		.replace(" ]", "]")
-		.replace(" (", "(")
-		.replace("( ", "(")
-		.replace(" )", ")")
-		.replace(" <", "<")
-		.replace("< ", "<")
-		.replace(" >", ">")
-}
 
 pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	let def = parse_macro_input!(input as StorageDefinition);
