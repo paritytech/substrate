@@ -46,6 +46,22 @@ macro_rules! try_tok(( $expre : expr ) => {
 	}
 });
 
+// fn to remove white spaces arount string types
+// (basically whitespaces arount tokens)
+fn clean_type_string(input: &str) -> String {
+	input
+		.replace(" :: ", "::")
+		.replace(" ,", ",")
+		.replace(" ;", ";")
+		.replace("[ ", "[")
+		.replace(" ]", "]")
+		.replace("( ", "(")
+		.replace(" )", ")")
+		.replace(" <", "<")
+		.replace("< ", "<")
+		.replace(" >", ">")
+}
+
 pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	let def = parse_macro_input!(input as StorageDefinition);
 
@@ -577,7 +593,7 @@ fn store_functions_to_metadata (
 		let is_option = extracted_opt.is_some();
 		let typ = extracted_opt.unwrap_or(quote!( #gettype ));
 		let stype = if is_simple {
-			let styp = typ.to_string();
+			let styp = clean_type_string(&typ.to_string());
 			quote!{
 				#scrate::storage::generator::StorageFunctionType::Plain(
 					#scrate::storage::generator::DecodeDifferent::Encode(#styp),
@@ -585,8 +601,8 @@ fn store_functions_to_metadata (
 			}
 		} else {
 			let kty = stk.expect("is not simple; qed");
-			let kty = quote!(#kty).to_string();
-			let styp = typ.to_string();
+			let kty = clean_type_string(&quote!(#kty).to_string());
+			let styp = clean_type_string(&typ.to_string());
 			quote!{
 				#scrate::storage::generator::StorageFunctionType::Map {
 					key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
