@@ -467,6 +467,9 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	}
 }
 
+/// `AuthorityId` type of a block.
+pub type BlockAuthorityId<B> = <<<<B as Block>::Header as Header>::Digest as Digest>::Item as DigestItem>::AuthorityId;
+
 /// Something which fulfills the abstract idea of a Substrate block. It has types for an
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
