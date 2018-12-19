@@ -196,6 +196,11 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 	) -> error::Result<()> {
 		use runtime_primitives::transaction_validity::TransactionValidity;
 
+		// Avoid calling into runtime if there is nothing to prune from the pool anyway.
+		if transaction_pool.status().is_empty() {
+			return Ok(())
+		}
+
 		let block = client.block(id)?;
 		let tags = match block {
 			None => return Ok(()),
@@ -221,7 +226,6 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 		Ok(())
 	}
 }
-
 
 /// The super trait that combines all required traits a `Service` needs to implement.
 pub trait ServiceTrait<C: Components>:
