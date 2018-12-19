@@ -97,6 +97,6 @@ decl_runtime_apis! {
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
-		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+		fn grandpa_authorities() -> Vec<(Ed25519AuthorityId, u64)>;
 	}
 }

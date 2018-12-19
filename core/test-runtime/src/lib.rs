@@ -61,7 +61,6 @@ use runtime_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::AuthorityId;
 use primitives::OpaqueMetadata;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
@@ -197,7 +196,7 @@ impl_runtime_apis! {
 			version()
 		}
 
-		fn authorities() -> Vec<AuthorityId> {
+		fn authorities() -> Vec<u64> {
 			system::authorities()
 		}
 
