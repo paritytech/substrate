@@ -61,7 +61,7 @@ use runtime_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::OpaqueMetadata;
+use primitives::{Ed25519AuthorityId, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use consensus_aura::api as aura_api;
@@ -142,7 +142,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, u64>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256, Ed25519AuthorityId>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.
@@ -196,7 +196,7 @@ impl_runtime_apis! {
 			version()
 		}
 
-		fn authorities() -> Vec<u64> {
+		fn authorities() -> Vec<Ed25519AuthorityId> {
 			system::authorities()
 		}
 

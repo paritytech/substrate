@@ -176,8 +176,7 @@ impl<Hash: Member> RawLog<Hash> {
 impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestItem {
 	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
 		match log {
-			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot
-				::<substrate_primitives::H256, u64>(root),
+			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot(root),
 		}
 	}
 }

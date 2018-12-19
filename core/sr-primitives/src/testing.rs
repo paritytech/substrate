@@ -24,7 +24,7 @@ use generic::DigestItem as GenDigestItem;
 
 pub use substrate_primitives::{H256, Ed25519AuthorityId};
 
-pub type DigestItem = GenDigestItem<H256, u64>;
+pub type DigestItem = GenDigestItem<H256, Ed25519AuthorityId>;
 
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Digest {
