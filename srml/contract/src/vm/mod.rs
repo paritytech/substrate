@@ -185,7 +185,7 @@ mod tests {
 		let ::code::InstrumentedWasmModule { memory_def, code, .. } =
 			prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
 
-		let exec = ::exec::WasmExecutable {
+		let exec = WasmExecutable {
 			// Use a "call" convention.
 			entrypoint_name: b"call",
 			memory_def,

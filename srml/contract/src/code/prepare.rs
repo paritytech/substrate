@@ -216,6 +216,9 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 
 #[cfg(test)]
 mod tests {
+	// TODO: Remove
+	#![allow(unused)]
+
 	use super::*;
 	use std::fmt;
 	use wabt;

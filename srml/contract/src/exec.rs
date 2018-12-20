@@ -32,6 +32,7 @@ pub struct CreateReceipt<T: Trait> {
 }
 
 // TODO: Add logs.
+#[cfg_attr(test, derive(Debug))]
 pub struct CallReceipt;
 
 /// An interface that provides an access to the external environment in which the
@@ -430,8 +431,135 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use super::{CallContext, ExecutionContext, Ext, Loader, Vm};
+	use account_db::{DirectAccountDb, OverlayAccountDb};
+	use gas::GasMeter;
+	use runtime_io::with_externalities;
+	use std::cell::RefCell;
+	use std::collections::HashMap;
+	use std::marker::PhantomData;
+	use std::rc::Rc;
+	use substrate_primitives::H256;
+	use tests::{ExtBuilder, Test};
+	use {CodeHash, Config, Trait};
 
+	struct MockCtx<'a> {
+		ext: &'a dyn Ext<T = Test>,
+		input_data: &'a [u8],
+		output_data: &'a mut Vec<u8>,
+		gas_meter: &'a mut GasMeter<Test>,
+	}
 
+	#[derive(Clone)]
+	struct MockExecutable<'a>(Rc<RefCell<Box<FnMut(MockCtx) -> Result<(), &'static str> + 'a>>>);
 
+	impl<'a> MockExecutable<'a> {
+		fn new(f: impl FnMut(MockCtx) -> Result<(), &'static str> + 'a) -> Self {
+			MockExecutable(Rc::new(RefCell::new(Box::new(f))))
+		}
+	}
+
+	struct MockLoader<'a> {
+		map: HashMap<CodeHash<Test>, MockExecutable<'a>>,
+	}
+	struct MockVm<'a> {
+		_data: PhantomData<&'a ()>,
+	}
+
+	impl<'a> Loader<Test> for MockLoader<'a> {
+		type Executable = MockExecutable<'a>;
+
+		fn load_init(&self, code_hash: &CodeHash<Test>) -> Result<Self::Executable, &'static str> {
+			self.map
+				.get(code_hash)
+				.cloned()
+				.ok_or_else(|| "code not found")
+		}
+		fn load_main(&self, code_hash: &CodeHash<Test>) -> Result<Self::Executable, &'static str> {
+			self.map
+				.get(code_hash)
+				.cloned()
+				.ok_or_else(|| "code not found")
+		}
+	}
+
+	impl<'a> Vm<Test> for MockVm<'a> {
+		type Executable = MockExecutable<'a>;
+
+		fn execute<E: Ext<T = Test>>(
+			&self,
+			exec: &MockExecutable,
+			ext: &mut E,
+			input_data: &[u8],
+			output_data: &mut Vec<u8>,
+			gas_meter: &mut GasMeter<Test>,
+		) -> Result<(), &'static str> {
+			(&mut *exec.0.borrow_mut())(MockCtx {
+				ext,
+				input_data,
+				output_data,
+				gas_meter,
+			})
+		}
+	}
+
+	#[test]
+	fn it_works() {
+		let origin = 0;
+		let dest = 1;
+		let value = Default::default();
+		let mut gas_meter = GasMeter::<Test>::with_limit(10000, 1);
+		let data = vec![];
+		let mut output_data = Vec::new();
+
+		let vm = MockVm { _data: PhantomData };
+
+		let mut test_data = vec![0usize];
+
+		{
+			let loader = MockLoader {
+				map: {
+					let mut contracts = HashMap::new();
+					contracts.insert(
+						1.into(),
+						MockExecutable::new(|ctx| {
+							test_data.push(1);
+							Ok(())
+						}),
+					);
+					contracts
+				},
+			};
+
+			with_externalities(&mut ExtBuilder::default().build(), || {
+				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+				overlay.set_code(&1, Some(1.into()));
+
+				let mut cfg = Config::preload();
+
+				let mut ctx = ExecutionContext {
+					self_account: origin.clone(),
+					depth: 0,
+					overlay,
+					events: Vec::new(),
+					config: &cfg,
+					vm: &vm,
+					loader: &loader,
+				};
+
+				let result = ctx.call(
+					origin.clone(),
+					dest,
+					value,
+					&mut gas_meter,
+					&data,
+					&mut output_data,
+				);
+
+				assert_matches!(result, Ok(_));
+			});
+		}
+
+		assert_eq!(test_data, vec![0, 1]);
+	}
 }
