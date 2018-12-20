@@ -50,6 +50,9 @@ extern crate log;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+extern crate substrate_test_client;
+
 mod components;
 mod error;
 mod chain_spec;

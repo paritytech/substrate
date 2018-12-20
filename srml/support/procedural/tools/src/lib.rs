@@ -92,3 +92,22 @@ pub fn generate_hidden_includes(unique_id: &str, def_crate: &str, crate_id: &str
 		)
 	}.into()
 }
+
+// fn to remove white spaces arount string types
+// (basically whitespaces arount tokens)
+pub fn clean_type_string(input: &str) -> String {
+	input
+		.replace(" ::", "::")
+		.replace(":: ", "::")
+		.replace(" ,", ",")
+		.replace(" ;", ";")
+		.replace(" [", "[")
+		.replace("[ ", "[")
+		.replace(" ]", "]")
+		.replace(" (", "(")
+		.replace("( ", "(")
+		.replace(" )", ")")
+		.replace(" <", "<")
+		.replace("< ", "<")
+		.replace(" >", ">")
+}
