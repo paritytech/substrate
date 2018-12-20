@@ -274,11 +274,11 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
-	pub fn new<I: 'static + ImportQueue<B>>(
+	pub fn new(
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		import_queue: Arc<I>,
+		import_queue: Box<ImportQueue<B>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
@@ -893,8 +893,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn stop(&mut self) {
 		// stop processing import requests first (without holding a sync lock)
-		let import_queue = self.sync.import_queue();
-		import_queue.stop();
+		self.sync.stop();
 
 		// and then clear all the sync data
 		self.abort();
