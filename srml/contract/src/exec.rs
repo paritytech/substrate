@@ -443,6 +443,10 @@ mod tests {
 	use tests::{ExtBuilder, Test};
 	use {CodeHash, Config, Trait};
 
+	const ALICE: u64 = 1;
+	const BOB: u64 = 2;
+	const CHARLIE: u64 = 3;
+
 	struct MockCtx<'a> {
 		ext: &'a dyn Ext<T = Test>,
 		input_data: &'a [u8],
@@ -561,5 +565,56 @@ mod tests {
 		}
 
 		assert_eq!(test_data, vec![0, 1]);
+	}
+
+	#[test]
+	fn input_data() {
+		let origin = ALICE;
+		let dest = BOB;
+		let value = Default::default();
+
+		let vm = MockVm { _data: PhantomData };
+
+		let loader = MockLoader {
+			map: {
+				let mut contracts = HashMap::new();
+				contracts.insert(
+					1.into(),
+					MockExecutable::new(|ctx| {
+						assert_eq!(ctx.input_data, &[1, 2, 3, 4]);
+						Ok(())
+					}),
+				);
+				contracts
+			},
+		};
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+			overlay.set_code(&dest, Some(1.into()));
+
+			let mut cfg = Config::preload();
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay,
+				events: Vec::new(),
+				config: &cfg,
+				vm: &vm,
+				loader: &loader,
+			};
+
+			let result = ctx.call(
+				origin.clone(),
+				dest,
+				value,
+				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&[1, 2, 3, 4],
+				&mut vec![],
+			);
+
+			assert_matches!(result, Ok(_));
+		});
 	}
 }
