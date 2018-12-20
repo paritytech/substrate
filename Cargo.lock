@@ -3248,7 +3248,7 @@ dependencies = [
 
 [[package]]
 name = "substrate"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "ctrlc 3.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
