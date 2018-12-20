@@ -15,12 +15,12 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use codec::Compact;
-use runtime_support::StorageMap;
-use runtime_primitives::traits::{As, Hash, CheckedMul};
-use rstd::prelude::*;
 use gas::GasMeter;
+use rstd::prelude::*;
+use runtime_primitives::traits::{As, CheckedMul, Hash};
+use runtime_support::StorageMap;
 use vm::runtime::Env;
-use {Schedule, Trait, CodeHash, CodeStorage, PrestineCode};
+use {CodeHash, CodeStorage, PrestineCode, Schedule, Trait};
 
 pub mod prepare;
 
@@ -48,7 +48,8 @@ pub fn save<T: Trait>(
 	schedule: &Schedule<T::Gas>,
 ) -> Result<CodeHash<T>, &'static str> {
 	let code_len_in_gas = <T::Gas as As<u64>>::sa(original_code.len() as u64);
-	let cost = schedule.put_code_per_byte_cost
+	let cost = schedule
+		.put_code_per_byte_cost
 		.checked_mul(&code_len_in_gas)
 		.ok_or_else(|| "overflow occured when calculating put_code price")?;
 	if gas_meter.charge(cost).is_out_of_gas() {
@@ -59,10 +60,7 @@ pub fn save<T: Trait>(
 
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
 	// due to the schedule changes is on governance system.
-	let instrumented_module = prepare::prepare_contract::<T, Env>(
-		&original_code,
-		schedule,
-	)?;
+	let instrumented_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
 
 	// TODO: validate the code. If the code is not valid, then don't store it.
 
@@ -72,16 +70,18 @@ pub fn save<T: Trait>(
 	Ok(code_hash)
 }
 
-pub fn load<T: Trait>(code_hash: &CodeHash<T>, schedule: &Schedule<T::Gas>,) -> Result<InstrumentedWasmModule, &'static str> {
-	let instrumented_module = <CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
+pub fn load<T: Trait>(
+	code_hash: &CodeHash<T>,
+	schedule: &Schedule<T::Gas>,
+) -> Result<InstrumentedWasmModule, &'static str> {
+	let instrumented_module =
+		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
 	if instrumented_module.schedule_version < schedule.version {
-		let original_code = <PrestineCode<T>>::get(code_hash).ok_or_else(|| "prestine code is not found")?;
+		let original_code =
+			<PrestineCode<T>>::get(code_hash).ok_or_else(|| "prestine code is not found")?;
 
-		let instrumented_module = prepare::prepare_contract::<T, Env>(
-			&original_code,
-			schedule,
-		)?;
+		let instrumented_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
 
 		<CodeStorage<T>>::insert(code_hash, instrumented_module.clone());
 
