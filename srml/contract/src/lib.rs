@@ -334,7 +334,7 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
 		/// The code associated with an account.
-		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
+		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;
 
 		pub PrestineCode: map CodeHash<T> => Option<Vec<u8>>;
 		pub CodeStorage: map CodeHash<T> => Option<code::InstrumentedWasmModule>;
