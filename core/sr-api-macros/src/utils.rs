@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::{TokenStream, Span};
-use syn::{Result, Ident, FnDecl, parse_quote, Type};
+use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error};
 use quote::quote;
 use std::env;
 
@@ -81,4 +81,62 @@ pub fn fold_fn_decl_for_client_side(
 	};
 
 	input
+}
+
+/// Generate an unique pattern based on the given counter, if the given pattern is a `_`.
+pub fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
+	match pat {
+		Pat::Wild(_) => {
+			let generated_name = Ident::new(
+				&format!("runtime_api_generated_name_{}", counter),
+				pat.span()
+			);
+			*counter += 1;
+
+			parse_quote!( #generated_name )
+		},
+		_ => pat,
+	}
+}
+
+/// Extracts the name, the type and `&` or ``(if it is a reference or not)
+/// for each parameter in the given function declaration.
+pub fn extract_parameter_names_types_and_borrows(fn_decl: &FnDecl)
+	-> Result<Vec<(Pat, Type, TokenStream)>>
+{
+	let mut result = Vec::new();
+	let mut generated_pattern_counter = 0;
+	for input in fn_decl.inputs.iter() {
+		match input {
+			FnArg::Captured(arg) => {
+				let (ty, borrow) = match &arg.ty {
+					Type::Reference(t) => {
+						let ty = &t.elem;
+						(parse_quote!( #ty ), quote!( & ))
+					},
+					t => { (t.clone(), quote!()) },
+				};
+
+				let name =
+					generate_unique_pattern(arg.pat.clone(), &mut generated_pattern_counter);
+				result.push((name, ty, borrow));
+			},
+			_ => {
+				return Err(
+					Error::new(
+						input.span(),
+						"Only function arguments with the following \
+						pattern are accepted: `name: type`!"
+					)
+				)
+			}
+		}
+	}
+
+	Ok(result)
+}
+
+/// Generates the name for the native call generator function.
+pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
+	Ident::new(&format!("{}_native_call_generator", fn_name.to_string()), Span::call_site())
 }

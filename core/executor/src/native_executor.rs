@@ -235,18 +235,20 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 							.as_ref()
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
-
-					let result = (call)();
-					(Ok(NativeOrEncoded::Native(result)), true)
+					(
+						with_native_environment(
+							ext,
+							::std::panic::AssertUnwindSafe(move || (call)())
+						).map(NativeOrEncoded::Native),
+						true
+					)
 				}
 				_ => {
 					trace!(
 						target: "executor",
 						"Request for native execution succeeded (native: {}, chain: {})",
 						self.native_version.runtime_version,
-						onchain_version
-							.as_ref()
-							.map_or_else(||"<None>".into(), |v| format!("{}", v))
+						onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 					(D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded), true)
 				}

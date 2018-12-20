@@ -16,7 +16,8 @@
 
 use utils::{
 	unwrap_or_error, generate_crate_access, generate_hidden_includes,
-	generate_runtime_mod_name_for_trait, fold_fn_decl_for_client_side
+	generate_runtime_mod_name_for_trait, fold_fn_decl_for_client_side, generate_unique_pattern,
+	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name
 };
 
 use proc_macro;
@@ -25,9 +26,9 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, MethodSig, FnArg, Path,
+	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, MethodSig, Path,
 	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
-	fold::{self, Fold}, FnDecl, parse_quote, Pat
+	fold::{self, Fold}, FnDecl, parse_quote, FnArg
 };
 
 use std::{collections::HashSet, iter};
@@ -60,46 +61,17 @@ fn generate_impl_call(
 	input: &Ident,
 	impl_trait: &Path
 ) -> Result<TokenStream> {
-	let mut pnames = Vec::new();
-	let mut ptypes = Vec::new();
-	let mut pborrow = Vec::new();
-	let mut generated_pattern_counter = 0;
-	for input in signature.decl.inputs.iter() {
-		match input {
-			FnArg::Captured(arg) => {
-				let (ty, borrow) = match &arg.ty {
-					Type::Reference(t) => {
-						let ty = &t.elem;
-						(parse_quote!( #ty ), quote!( & ))
-					},
-					t => { (t.clone(), quote!()) },
-				};
-
-				pborrow.push(borrow);
-
-				pnames.push(
-					generate_unique_pattern(arg.pat.clone(), &mut generated_pattern_counter)
-				);
-				ptypes.push(ty);
-			},
-			_ => {
-				return Err(
-					Error::new(
-						input.span(),
-						"Only function arguments with the following \
-						pattern are accepted: `name: type`!"
-					)
-				)
-			}
-		}
-	}
+	let params = extract_parameter_names_types_and_borrows(&signature.decl)?;
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let c_iter = iter::repeat(&c);
 	let fn_name = &signature.ident;
 	let fn_name_str = iter::repeat(fn_name.to_string());
 	let input = iter::repeat(input);
-	let pnames2 = pnames.clone();
+	let pnames = params.iter().map(|v| &v.0);
+	let pnames2 = params.iter().map(|v| &v.0);
+	let ptypes = params.iter().map(|v| &v.1);
+	let pborrow = params.iter().map(|v| &v.2);
 
 	Ok(
 		quote!(
@@ -446,21 +418,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	Ok(quote!( #( #impls_prepared )* ))
 }
 
-/// Generate an unique pattern based on the given counter, if the given pattern is a `_`.
-fn generate_unique_pattern(pat: Pat, counter: &mut u32) -> Pat {
-	match pat {
-		Pat::Wild(_) => {
-			let generated_name = Ident::new(
-				&format!("impl_runtime_api_generated_name_{}", counter),
-				pat.span()
-			);
-			*counter += 1;
-
-			parse_quote!( #generated_name )
-		},
-		_ => pat,
-	}
-}
 
 /// Auxilariy data structure that is used to convert `impl Api for Runtime` to
 /// `impl Api for RuntimeApi`.
@@ -472,8 +429,9 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	runtime_block: &'a TypePath,
 	node_block_id: &'a TokenStream,
 	impl_trait_ident: &'a Ident,
-	runtime_trait: &'a Path,
+	runtime_mod_path: &'a Path,
 	runtime_type: &'a Type,
+	trait_generic_arguments: &'a [GenericArgument]
 }
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -499,9 +457,10 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	}
 
 	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
-		{
+		let block = {
 			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 			let mut generated_name_counter = 0;
+			// Replace `_` with unique patterns and collect the patterns.
 			let arg_names = input.sig.decl.inputs.iter_mut().filter_map(|i| match i {
 				FnArg::Captured(ref mut arg) => Some(&mut arg.pat),
 				_ => None,
@@ -509,30 +468,35 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				*p = generate_unique_pattern(p.clone(), &mut generated_name_counter);
 				p.clone()
 			}).collect::<Vec<_>>();
-			let runtime_trait_ = self.runtime_trait;
+
+			let runtime_mod_path = self.runtime_mod_path;
 			let runtime = self.runtime_type;
-			let fn_ident = &input.sig.ident;
 			let arg_names2 = arg_names.clone();
-			let fn_name = prefix_function_with_trait(self.impl_trait_ident, fn_ident);
+			let fn_name = prefix_function_with_trait(self.impl_trait_ident, &input.sig.ident);
+			let fn_ident = generate_native_call_generator_fn_name(&input.sig.ident);
+			let trait_generic_arguments = self.trait_generic_arguments;
+			let node_block = self.node_block;
 
 			// Generate the new method implementation that calls into the runime.
-			input.block = parse_quote!(
+			parse_quote!(
 				{
 					let args = #crate_::runtime_api::Encode::encode(&( #( &#arg_names ),* ));
 					self.call_api_at(
 						at,
 						#fn_name,
 						args,
-						move || {
-						//	<#runtime as #runtime_trait_> :: #fn_ident(#( #arg_names2 ),*)
-						unimplemented!()
-						}
+						#runtime_mod_path #fn_ident ::
+							<#runtime, #node_block #(, #trait_generic_arguments )*> (
+							#( #arg_names2 ),*
+						)
 					)
 				}
-			);
-		}
+			)
+		};
 
-		fold::fold_impl_item_method(self, input)
+		let mut input =	fold::fold_impl_item_method(self, input);
+		input.block = block;
+		input
 	}
 
 	fn fold_item_impl(&mut self, mut input: ItemImpl) -> ItemImpl {
@@ -558,25 +522,33 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 	let mut result = Vec::with_capacity(impls.len());
 
 	for impl_ in impls {
-		let impl_trait = extract_impl_trait(&impl_)?;
-		let impl_trait_ident = &impl_trait
+		let impl_trait_path = extract_impl_trait(&impl_)?;
+		let impl_trait = &impl_trait_path
 			.segments
 			.last()
-			.ok_or_else(|| Error::new(impl_trait.span(), "Empty trait path not possible!"))?
-			.value()
-			.ident;
-		let runtime_block = extract_runtime_block_ident(impl_trait)?;
+			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
+			.into_value();
+		let impl_trait_ident = &impl_trait.ident;
+		let runtime_block = extract_runtime_block_ident(impl_trait_path)?;
 		let (node_block, node_block_id) = generate_node_block_and_block_id_ty(&impl_.self_ty);
 		let runtime_type = &impl_.self_ty;
-		let runtime_trait = extend_with_runtime_decl_path(impl_trait.clone());
+		let mut runtime_mod_path = extend_with_runtime_decl_path(impl_trait_path.clone());
+		// remove the trait to get just the module path
+		runtime_mod_path.segments.pop();
+
+		let trait_generic_arguments = match impl_trait.arguments {
+			PathArguments::Parenthesized(_) | PathArguments::None => vec![],
+			PathArguments::AngleBracketed(ref b) => b.args.iter().cloned().collect(),
+		};
 
 		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
 			runtime_block,
 			node_block: &node_block,
 			node_block_id: &node_block_id,
 			impl_trait_ident: &impl_trait_ident,
-			runtime_trait: &runtime_trait,
+			runtime_mod_path: &runtime_mod_path,
 			runtime_type: &*runtime_type,
+			trait_generic_arguments: &trait_generic_arguments,
 		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
@@ -639,7 +611,7 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 
-	quote!(
+	let res = quote!(
 		#hidden_includes
 
 		#base_runtime_api
@@ -657,5 +629,8 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 
 			#wasm_interface
 		}
-	).into()
+	);
+
+	//println!("{}", res);
+	res.into()
 }
