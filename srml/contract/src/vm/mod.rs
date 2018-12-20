@@ -135,7 +135,7 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-		) -> Result<CreateReceipt<Test>, ()> {
+		) -> Result<CreateReceipt<Test>, &'static str> {
 			self.creates.push(CreateEntry {
 				// code_hash: code_hash.clone(),
 				endowment,
@@ -154,7 +154,7 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
 			_output_data: &mut Vec<u8>,
-		) -> Result<(), ()> {
+		) -> Result<(), &'static str> {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,

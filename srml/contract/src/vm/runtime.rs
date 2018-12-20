@@ -264,7 +264,7 @@ define_env!(Env, <E: Ext>,
 		let scratch_buf = &mut ctx.scratch_buf;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data, scratch_buf),
+				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data, scratch_buf).map_err(|_| ()),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
@@ -325,7 +325,7 @@ define_env!(Env, <E: Ext>,
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.create(&code_hash, value, nested_meter, &input_data),
+				Some(nested_meter) => ext.create(&code_hash, value, nested_meter, &input_data).map_err(|_| ()),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}

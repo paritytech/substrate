@@ -59,7 +59,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
-	) -> Result<CreateReceipt<Self::T>, ()>;
+	) -> Result<CreateReceipt<Self::T>, &'static str>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(
@@ -69,7 +69,7 @@ pub trait Ext {
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
 		output_data: &mut Vec<u8>,
-	) -> Result<(), ()>;
+	) -> Result<(), &'static str>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -402,11 +402,10 @@ where
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
-	) -> Result<CreateReceipt<T>, ()> {
+	) -> Result<CreateReceipt<T>, &'static str> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
 			.create(caller, endowment, gas_meter, code_hash, &data)
-			.map_err(|_| ())
 	}
 
 	fn call(
@@ -416,11 +415,10 @@ where
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
 		output_data: &mut Vec<u8>,
-	) -> Result<(), ()> {
+	) -> Result<(), &'static str> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
 			.call(caller, to.clone(), value, gas_meter, data, output_data)
-			.map_err(|_| ())
 			.map(|_| ())
 	}
 
@@ -448,18 +446,18 @@ mod tests {
 	const CHARLIE: u64 = 3;
 
 	struct MockCtx<'a> {
-		ext: &'a dyn Ext<T = Test>,
+		ext: &'a mut dyn Ext<T = Test>,
 		input_data: &'a [u8],
 		output_data: &'a mut Vec<u8>,
 		gas_meter: &'a mut GasMeter<Test>,
 	}
 
 	#[derive(Clone)]
-	struct MockExecutable<'a>(Rc<RefCell<Box<FnMut(MockCtx) -> Result<(), &'static str> + 'a>>>);
+	struct MockExecutable<'a>(Rc<Fn(MockCtx) -> Result<(), &'static str> + 'a>);
 
 	impl<'a> MockExecutable<'a> {
-		fn new(f: impl FnMut(MockCtx) -> Result<(), &'static str> + 'a) -> Self {
-			MockExecutable(Rc::new(RefCell::new(Box::new(f))))
+		fn new(f: impl Fn(MockCtx) -> Result<(), &'static str> + 'a) -> Self {
+			MockExecutable(Rc::new(f))
 		}
 	}
 
@@ -498,7 +496,7 @@ mod tests {
 			output_data: &mut Vec<u8>,
 			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), &'static str> {
-			(&mut *exec.0.borrow_mut())(MockCtx {
+			(exec.0)(MockCtx {
 				ext,
 				input_data,
 				output_data,
@@ -518,7 +516,7 @@ mod tests {
 
 		let vm = MockVm { _data: PhantomData };
 
-		let mut test_data = vec![0usize];
+		let mut test_data = Rc::new(RefCell::new(vec![0usize]));
 
 		{
 			let loader = MockLoader {
@@ -527,7 +525,7 @@ mod tests {
 					contracts.insert(
 						1.into(),
 						MockExecutable::new(|ctx| {
-							test_data.push(1);
+							test_data.borrow_mut().push(1);
 							Ok(())
 						}),
 					);
@@ -564,7 +562,7 @@ mod tests {
 			});
 		}
 
-		assert_eq!(test_data, vec![0, 1]);
+		assert_eq!(&*test_data.borrow(), &vec![0, 1]);
 	}
 
 	#[test]
@@ -611,6 +609,78 @@ mod tests {
 				value,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[1, 2, 3, 4],
+				&mut vec![],
+			);
+
+			assert_matches!(result, Ok(_));
+		});
+	}
+
+	#[test]
+	fn max_depth() {
+		let origin = ALICE;
+		let dest = BOB;
+		let value = Default::default();
+
+		let vm = MockVm { _data: PhantomData };
+
+		let reached_bottom = RefCell::new(false);
+
+		let loader = MockLoader {
+			map: {
+				let mut contracts = HashMap::new();
+				contracts.insert(
+					1.into(),
+					MockExecutable::new(|ctx| {
+						// Try to call into yourself.
+						let r = ctx.ext.call(
+							&BOB,
+							0,
+							ctx.gas_meter,
+							&[],
+							&mut vec![],
+						);
+
+						let mut reached_bottom = reached_bottom.borrow_mut();
+						if !*reached_bottom {
+							// We are first time here, it means we just reached bottom.
+							// Verify that we've got proper error and set `reached_bottom`.
+							assert_matches!(r, Err("reached maximum depth, cannot make a call"));
+							*reached_bottom = true;
+						} else {
+							// We just unwinding stack here.
+							assert_matches!(r, Ok(_));
+						}
+
+						Ok(())
+					}),
+				);
+				contracts
+			},
+		};
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+			overlay.set_code(&dest, Some(1.into()));
+
+			let mut cfg = Config::preload();
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay,
+				events: Vec::new(),
+				config: &cfg,
+				vm: &vm,
+				loader: &loader,
+			};
+
+			let result = ctx.call(
+				origin.clone(),
+				dest,
+				value,
+				&mut GasMeter::<Test>::with_limit(100000, 1),
+				&[],
 				&mut vec![],
 			);
 
