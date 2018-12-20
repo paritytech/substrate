@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, ContractAddressFor, Trait, Event, RawEvent, Config, Schedule};
+use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Schedule, Trait};
 use account_db::{AccountDb, OverlayAccountDb};
-use gas::GasMeter;
 use code;
+use gas::GasMeter;
 
-use rstd::prelude::*;
-use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
 use balances::{self, EnsureAccountLiquid};
+use rstd::prelude::*;
+use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -230,14 +230,17 @@ where
 			return Err("reached maximum depth, cannot create");
 		}
 
-		if gas_meter.charge(self.config.create_base_fee).is_out_of_gas() {
+		if gas_meter
+			.charge(self.config.create_base_fee)
+			.is_out_of_gas()
+		{
 			return Err("not enough gas to pay base create fee");
 		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(
 			code_hash,
 			input_data,
-			&self.self_account
+			&self.self_account,
 		);
 
 		if self.overlay.get_code(&dest).is_some() {
@@ -291,9 +294,7 @@ where
 		self.overlay.commit(change_set);
 		self.events.extend(events);
 
-		Ok(CreateReceipt {
-			address: dest,
-		})
+		Ok(CreateReceipt { address: dest })
 	}
 }
 
@@ -367,7 +368,8 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if transactor != dest {
 		ctx.overlay.set_balance(transactor, new_from_balance);
 		ctx.overlay.set_balance(dest, new_to_balance);
-		ctx.events.push(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
+		ctx.events
+			.push(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
 	}
 
 	Ok(())
@@ -429,7 +431,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{CallContext, ExecutionContext, Ext, Loader, Vm};
+	use super::{ExecutionContext, Ext, Loader, Vm};
 	use account_db::{DirectAccountDb, OverlayAccountDb};
 	use gas::GasMeter;
 	use runtime_io::with_externalities;
@@ -437,9 +439,8 @@ mod tests {
 	use std::collections::HashMap;
 	use std::marker::PhantomData;
 	use std::rc::Rc;
-	use substrate_primitives::H256;
 	use tests::{ExtBuilder, Test};
-	use {CodeHash, Config, Trait};
+	use {CodeHash, Config};
 
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;
@@ -516,7 +517,7 @@ mod tests {
 
 		let vm = MockVm { _data: PhantomData };
 
-		let mut test_data = Rc::new(RefCell::new(vec![0usize]));
+		let test_data = Rc::new(RefCell::new(vec![0usize]));
 
 		{
 			let loader = MockLoader {
@@ -524,7 +525,7 @@ mod tests {
 					let mut contracts = HashMap::new();
 					contracts.insert(
 						1.into(),
-						MockExecutable::new(|ctx| {
+						MockExecutable::new(|_ctx| {
 							test_data.borrow_mut().push(1);
 							Ok(())
 						}),
@@ -537,7 +538,7 @@ mod tests {
 				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
 				overlay.set_code(&1, Some(1.into()));
 
-				let mut cfg = Config::preload();
+				let cfg = Config::preload();
 
 				let mut ctx = ExecutionContext {
 					self_account: origin.clone(),
@@ -591,7 +592,7 @@ mod tests {
 			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
 			overlay.set_code(&dest, Some(1.into()));
 
-			let mut cfg = Config::preload();
+			let cfg = Config::preload();
 
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
@@ -633,13 +634,7 @@ mod tests {
 					1.into(),
 					MockExecutable::new(|ctx| {
 						// Try to call into yourself.
-						let r = ctx.ext.call(
-							&BOB,
-							0,
-							ctx.gas_meter,
-							&[],
-							&mut vec![],
-						);
+						let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, &[], &mut vec![]);
 
 						let mut reached_bottom = reached_bottom.borrow_mut();
 						if !*reached_bottom {
@@ -663,7 +658,7 @@ mod tests {
 			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
 			overlay.set_code(&dest, Some(1.into()));
 
-			let mut cfg = Config::preload();
+			let cfg = Config::preload();
 
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
@@ -686,5 +681,76 @@ mod tests {
 
 			assert_matches!(result, Ok(_));
 		});
+	}
+
+	#[test]
+	fn caller_returns_proper_values() {
+		let origin = ALICE;
+		let dest = BOB;
+		let value = Default::default();
+
+		let vm = MockVm { _data: PhantomData };
+
+		let witnessed_caller_bob = RefCell::new(None::<u64>);
+		let witnessed_caller_charlie = RefCell::new(None::<u64>);
+
+		let loader = MockLoader {
+			map: {
+				let mut contracts = HashMap::new();
+				contracts.insert(
+					1.into(),
+					MockExecutable::new(|ctx| {
+						// Witness caller for bob.
+						*witnessed_caller_bob.borrow_mut() = Some(*ctx.ext.caller());
+
+						// Call into CHARLIE contract.
+						let r = ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]);
+						assert_matches!(r, Ok(_));
+						Ok(())
+					}),
+				);
+				contracts.insert(
+					2.into(),
+					MockExecutable::new(|ctx| {
+						// Witness caller for charlie.
+						*witnessed_caller_charlie.borrow_mut() = Some(*ctx.ext.caller());
+						Ok(())
+					}),
+				);
+				contracts
+			},
+		};
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+			overlay.set_code(&dest, Some(1.into()));
+			overlay.set_code(&CHARLIE, Some(2.into()));
+
+			let cfg = Config::preload();
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay,
+				events: Vec::new(),
+				config: &cfg,
+				vm: &vm,
+				loader: &loader,
+			};
+
+			let result = ctx.call(
+				origin.clone(),
+				dest,
+				value,
+				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&[],
+				&mut vec![],
+			);
+
+			assert_matches!(result, Ok(_));
+		});
+
+		assert_eq!(&*witnessed_caller_bob.borrow(), &Some(origin));
+		assert_eq!(&*witnessed_caller_charlie.borrow(), &Some(dest));
 	}
 }

@@ -94,10 +94,9 @@ mod tests {
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;
-	use exec::{self, Ext};
+	use exec::Ext;
 	use {CodeHash};
 	use wabt;
-	use runtime_primitives::testing::H256;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
