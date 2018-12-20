@@ -154,6 +154,8 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	let trait_ = &decl.ident;
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
+	// Auxilariy function that is used to convert between types that use different block types.
+	// The function expects that both a convertable by encoding the one and decoding the other.
 	result.push(quote!(
 		fn convert_between_block_types
 			<I: #crate_::runtime_api::Encode, R: #crate_::runtime_api::Decode>(input: &I) -> R
@@ -164,24 +166,38 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		}
 	));
 
+	// Generate a native call generator for each function of the given trait.
 	for fn_ in fns {
 		let params = extract_parameter_names_types_and_borrows(&fn_.decl)?;
 		let trait_fn_name = &fn_.ident;
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
 		let output = return_type_replace_block_with_node_block(fn_.decl.output.clone());
+
+		// Every type that is using the `Block` generic parameter, we need to encode/decode,
+		// to make it compatible between the runtime/node.
+		let conversions = params.iter().filter(|v| type_is_using_block(&v.1)).map(|(n, t, _)| {
+			quote!(
+				let #n: #t = convert_between_block_types(&#n);
+			)
+		});
+		// Same as for the input types, we need to check if we also need to convert the output,
+		// before returning it.
 		let output_conversion = if return_type_is_using_block(&fn_.decl.output) {
 			quote!( convert_between_block_types(&res) )
 		} else {
 			quote!( res )
 		};
 
-		let conversions = params.iter().filter(|v| type_is_using_block(&v.1)).map(|(n, t, _)| {
-			quote!(
-				let #n: #t = convert_between_block_types(&#n);
-			)
-		});
 		let input_names = params.iter().map(|v| &v.0);
-		let input_borrows = params.iter().map(|v| if type_is_using_block(&v.1) { v.2.clone() } else { quote!() });
+		// If the type is using the block generic type, we will encode/decode it to make it
+		// compatible. To ensure that we forward it by ref/value, we use the value given by the
+		// the user. Otherwise if it is not using the block, we don't need to add anything.
+		let input_borrows = params
+			.iter()
+			.map(|v| if type_is_using_block(&v.1) { v.2.clone() } else { quote!() });
+
+		// Replace all `Block` with `NodeBlock`, add `'a` lifetime to references and collect
+		// all the function inputs.
 		let fn_inputs = fn_
 			.decl
 			.inputs
@@ -216,7 +232,9 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 			}
 		});
 
+		// Generate the generator function
 		result.push(quote!(
+			#[cfg(any(feature = "std", test))]
 			pub fn #fn_name<
 				'a, ApiImpl: #trait_ #ty_generics, NodeBlock: #crate_::runtime_api::BlockT
 				#(, #impl_generics_params)*

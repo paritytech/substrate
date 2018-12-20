@@ -460,7 +460,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		let block = {
 			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 			let mut generated_name_counter = 0;
-			// Replace `_` with unique patterns and collect the patterns.
+			// Replace `_` with unique patterns and collect all patterns.
 			let arg_names = input.sig.decl.inputs.iter_mut().filter_map(|i| match i {
 				FnArg::Captured(ref mut arg) => Some(&mut arg.pat),
 				_ => None,
@@ -473,7 +473,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			let runtime = self.runtime_type;
 			let arg_names2 = arg_names.clone();
 			let fn_name = prefix_function_with_trait(self.impl_trait_ident, &input.sig.ident);
-			let fn_ident = generate_native_call_generator_fn_name(&input.sig.ident);
+			let native_call_generator_ident =
+				generate_native_call_generator_fn_name(&input.sig.ident);
 			let trait_generic_arguments = self.trait_generic_arguments;
 			let node_block = self.node_block;
 
@@ -485,7 +486,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						at,
 						#fn_name,
 						args,
-						#runtime_mod_path #fn_ident ::
+						#runtime_mod_path #native_call_generator_ident ::
 							<#runtime, #node_block #(, #trait_generic_arguments )*> (
 							#( #arg_names2 ),*
 						)
@@ -495,6 +496,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		};
 
 		let mut input =	fold::fold_impl_item_method(self, input);
+		// We need to set the block, after we modified the rest of the ast, otherwise we would
+		// modify our generated block as well.
 		input.block = block;
 		input
 	}
