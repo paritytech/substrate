@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Ext, Runtime};
+use super::Runtime;
+use exec::Ext;
 use parity_wasm::elements::{FunctionType, ValueType};
 use sandbox::{self, TypedValue};
 

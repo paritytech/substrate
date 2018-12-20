@@ -16,7 +16,8 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use super::{BalanceOf, Schedule, CreateReceipt, Ext};
+use super::{Schedule, CreateReceipt};
+use exec::{Ext, BalanceOf};
 use rstd::prelude::*;
 use codec::{Decode, Encode};
 use gas::{GasMeter, GasMeterResult};

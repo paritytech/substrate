@@ -25,99 +25,68 @@ use rstd::prelude::*;
 use {Trait, Schedule, CodeHash};
 use {balances, sandbox, system};
 
-type BalanceOf<T> = <T as balances::Trait>::Balance;
-type AccountIdOf<T> = <T as system::Trait>::AccountId;
-
 #[macro_use]
 pub mod env_def;
 pub mod runtime;
 
 use self::runtime::{to_execution_result, Runtime};
 
-/// An interface that provides an access to the external environment in which the
-/// smart-contract is executed.
-///
-/// This interface is specialised to an account of the executing code, so all
-/// operations are implicitly performed on that account.
-pub trait Ext {
-	type T: Trait;
-
-	/// Returns the storage entry of the executing account by the given key.
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Sets the storage entry by the given key to the specified value.
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
-
-	/// Create a new account for a contract.
-	///
-	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
-	/// transfered from this to the newly created account.
-	fn create(
-		&mut self,
-		code: &CodeHash<Self::T>,
-		value: BalanceOf<Self::T>,
-		gas_meter: &mut GasMeter<Self::T>,
-		data: &[u8],
-	) -> Result<CreateReceipt<Self::T>, ()>;
-
-	/// Call (possibly transfering some amount of funds) into the specified account.
-	fn call(
-		&mut self,
-		to: &AccountIdOf<Self::T>,
-		value: BalanceOf<Self::T>,
-		gas_meter: &mut GasMeter<Self::T>,
-		data: &[u8],
-		output_data: &mut Vec<u8>,
-	) -> Result<(), ()>;
-
-	/// Returns a reference to the account id of the caller.
-	fn caller(&self) -> &AccountIdOf<Self::T>;
-}
-
 // TODO: Instead of taking the code explicitly can we take the code hash?
 // TODO: Extract code injection stuff and expect the code to be already prepared?
 
-/// Execute the given code as a contract.
-pub fn execute<'a, E: Ext>(
-	entrypoint_name: &[u8],
-	code: &[u8],
-	memory_def: &MemoryDefinition,
-	input_data: &[u8],
-	output_data: &mut Vec<u8>,
-	ext: &'a mut E,
-	schedule: &Schedule<<E::T as Trait>::Gas>,
-	gas_meter: &mut GasMeter<E::T>,
-) -> Result<(), &'static str> {
-	let memory =
-		sandbox::Memory::new(memory_def.initial, Some(memory_def.maximum)).unwrap_or_else(|_| {
-			panic!(
-				"memory_def.initial can't be greater than memory_def.maximum;
-				thus Memory::new must not fail;
-				qed"
-			)
+pub struct WasmVm<'a, T: Trait> {
+	// TODO: Change to schedule.
+	config: &'a ::Config<T>,
+}
+
+impl<'a, T: Trait> WasmVm<'a, T> {
+	pub fn new(config: &'a ::Config<T>) -> Self {
+		WasmVm { config }
+	}
+}
+
+impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
+	type Executable = ::exec::WasmExecutable;
+
+	fn execute<E: ::exec::Ext<T = T>>(
+		&self,
+		exec: &::exec::WasmExecutable,
+		ext: &mut E,
+		input_data: &[u8],
+		output_data: &mut Vec<u8>,
+		gas_meter: &mut GasMeter<E::T>,
+	) -> Result<(), &'static str> {
+		let memory =
+			sandbox::Memory::new(exec.memory_def.initial, Some(exec.memory_def.maximum)).unwrap_or_else(|_| {
+				panic!(
+					"memory_def.initial can't be greater than memory_def.maximum;
+					thus Memory::new must not fail;
+					qed"
+				)
+			});
+
+		let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
+		imports.add_memory("env", "memory", memory.clone());
+		runtime::Env::impls(&mut |name, func_ptr| {
+			imports.add_host_func("env", name, func_ptr);
 		});
 
-	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
-	imports.add_memory("env", "memory", memory.clone());
-	runtime::Env::impls(&mut |name, func_ptr| {
-		imports.add_host_func("env", name, func_ptr);
-	});
+		let mut runtime = Runtime::new(ext, input_data, output_data, &self.config.schedule, memory, gas_meter);
 
-	let mut runtime = Runtime::new(ext, input_data, output_data, &schedule, memory, gas_meter);
-
-	// Instantiate the instance from the instrumented module code.
-	match sandbox::Instance::new(code, &imports, &mut runtime) {
-		// No errors or traps were generated on instantiation! That
-		// means we can now invoke the contract entrypoint.
-		Ok(mut instance) => {
-			let err = instance.invoke(entrypoint_name, &[], &mut runtime).err();
-			to_execution_result(runtime, err)
+		// Instantiate the instance from the instrumented module code.
+		match sandbox::Instance::new(&exec.instrumented_code, &imports, &mut runtime) {
+			// No errors or traps were generated on instantiation! That
+			// means we can now invoke the contract entrypoint.
+			Ok(mut instance) => {
+				let err = instance.invoke(exec.entrypoint_name, &[], &mut runtime).err();
+				to_execution_result(runtime, err)
+			}
+			// `start` function trapped. Treat it in the same manner as an execution error.
+			Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
+			// Other instantiation errors.
+			// Return without executing anything.
+			Err(_) => return Err("failed to instantiate the contract"),
 		}
-		// `start` function trapped. Treat it in the same manner as an execution error.
-		Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
-		// Other instantiation errors.
-		// Return without executing anything.
-		Err(_) => return Err("failed to instantiate the contract"),
 	}
 }
 
@@ -127,6 +96,7 @@ mod tests {
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;
+	use exec;
 	use wabt;
 	use runtime_primitives::testing::H256;
 
@@ -151,7 +121,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		next_account_id: u64,
 	}
-	impl Ext for MockExt {
+	impl ::exec::Ext for MockExt {
 		type T = Test;
 
 		fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {

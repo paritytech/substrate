@@ -191,7 +191,8 @@ mod tests {
 	use runtime_primitives::traits::{As, Zero};
 	use sandbox::{self, ReturnValue, TypedValue};
 	use vm::tests::MockExt;
-	use vm::{Ext, Runtime};
+	use exec::Ext;
+	use vm::Runtime;
 	use Trait;
 
 	#[test]

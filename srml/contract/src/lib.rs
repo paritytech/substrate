@@ -205,12 +205,14 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
+			let vm = ::vm::WasmVm::new(&cfg);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
 				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 				events: Vec::new(),
 				config: &cfg,
+				vm: &vm,
 			};
 
 			let mut output_data = Vec::new();
@@ -260,12 +262,14 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
+			let vm = ::vm::WasmVm::new(&cfg);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
 				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 				events: Vec::new(),
 				config: &cfg,
+				vm: &vm,
 			};
 			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &code_hash, &data);
 
