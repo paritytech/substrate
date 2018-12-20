@@ -151,7 +151,7 @@ Now with this new chainspec file, you can build a "raw" chain definition for you
 
 [source, shell]
 ----
-cat ~/chainspec.json | substrate build-spec --raw > ~/mychain.json
+substrate --chain ~/chainspec.json build-spec --raw > ~/mychain.json
 ----
 
 This can be fed into Substrate:
