@@ -20,10 +20,9 @@
 use exec::CreateReceipt;
 use vm::env_def::FunctionImplProvider;
 use gas::GasMeter;
-use code::MemoryDefinition;
 use rstd::prelude::*;
-use {Trait, Schedule, CodeHash};
-use {balances, sandbox, system};
+use {Trait, Schedule};
+use sandbox;
 
 #[macro_use]
 pub mod env_def;

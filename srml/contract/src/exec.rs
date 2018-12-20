@@ -17,7 +17,6 @@
 use super::{CodeHash, ContractAddressFor, Trait, Event, RawEvent, Config};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
-use vm;
 use code;
 
 use rstd::prelude::*;
@@ -96,6 +95,7 @@ pub trait Vm<T: Trait> {
 }
 
 pub struct WasmExecutable {
+	// TODO: Remove these pubs
 	pub entrypoint_name: &'static [u8],
 	pub memory_def: ::code::MemoryDefinition,
 	pub instrumented_code: Vec<u8>,
@@ -103,6 +103,12 @@ pub struct WasmExecutable {
 
 pub struct WasmLoader<'a, T: Trait> {
 	config: &'a Config<T>,
+}
+
+impl<'a, T: Trait> WasmLoader<'a, T> {
+	pub fn new(config: &'a Config<T>) -> Self {
+		WasmLoader { config }
+	}
 }
 
 impl<'a, T: Trait> Loader<T> for WasmLoader<'a, T> {
@@ -126,7 +132,7 @@ impl<'a, T: Trait> Loader<T> for WasmLoader<'a, T> {
 	}
 }
 
-pub struct ExecutionContext<'a, T: Trait + 'a, V: Vm<T> + 'a> {
+pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	// typically should be dest
 	pub self_account: T::AccountId,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -134,9 +140,15 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V: Vm<T> + 'a> {
 	pub events: Vec<Event<T>>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
+	pub loader: &'a L,
 }
 
-impl<'a, T: Trait, V: Vm<T>> ExecutionContext<'a, T, V> {
+impl<'a, T, E, V, L> ExecutionContext<'a, T, V, L>
+where
+	T: Trait,
+	L: Loader<T, Executable = E>,
+	V: Vm<T, Executable = E>,
+{
 	/// Make a call to the specified address.
 	pub fn call(
 		&mut self,
@@ -167,6 +179,7 @@ impl<'a, T: Trait, V: Vm<T>> ExecutionContext<'a, T, V> {
 				events: Vec::new(),
 				config: self.config,
 				vm: self.vm,
+				loader: self.loader,
 			};
 
 			if value > T::Balance::zero() {
@@ -181,21 +194,17 @@ impl<'a, T: Trait, V: Vm<T>> ExecutionContext<'a, T, V> {
 			}
 
 			if let Some(dest_code_hash) = dest_code_hash {
-				// let dest_code = code::load::<T>(&dest_code_hash, &self.config.schedule)?;
-
-				// vm::execute(
-				// 	b"call",
-				// 	&dest_code.code,
-				// 	&dest_code.memory_def,
-				// 	input_data,
-				// 	output_data,
-				// 	&mut CallContext {
-				// 		ctx: &mut nested,
-				// 		caller: caller,
-				// 	},
-				// 	&self.config.schedule,
-				// 	gas_meter,
-				// )?;
+				let executable = self.loader.load_main(&dest_code_hash)?;
+				self.vm.execute(
+					&executable,
+					&mut CallContext {
+						ctx: &mut nested,
+						caller: caller,
+					},
+					input_data,
+					output_data,
+					gas_meter,
+				)?;
 			}
 
 			(nested.overlay.into_change_set(), nested.events)
@@ -246,6 +255,7 @@ impl<'a, T: Trait, V: Vm<T>> ExecutionContext<'a, T, V> {
 				events: Vec::new(),
 				config: self.config,
 				vm: self.vm,
+				loader: self.loader,
 			};
 
 			if endowment > T::Balance::zero() {
@@ -259,23 +269,20 @@ impl<'a, T: Trait, V: Vm<T>> ExecutionContext<'a, T, V> {
 				)?;
 			}
 
-			//  let dest_code = code::load::<T>(code_hash, &self.config.schedule)?;
-
 			// TODO: Do something with the output data.
 			let mut output_data = Vec::<u8>::new();
-			// vm::execute(
-			// 	b"deploy",
-			// 	&dest_code.code,
-			// 	&dest_code.memory_def,
-			// 	input_data,
-			// 	&mut output_data,
-			// 	&mut CallContext {
-			// 		ctx: &mut nested,
-			// 		caller: caller,
-			// 	},
-			// 	&self.config.schedule,
-			// 	gas_meter,
-			// )?;
+
+			let executable = self.loader.load_init(&code_hash)?;
+			self.vm.execute(
+				&executable,
+				&mut CallContext {
+					ctx: &mut nested,
+					caller: caller,
+				},
+				input_data,
+				&mut output_data,
+				gas_meter,
+			)?;
 
 			(nested.overlay.into_change_set(), nested.events)
 		};
@@ -305,13 +312,13 @@ impl<'a, T: Trait, V: Vm<T>> ExecutionContext<'a, T, V> {
 /// NOTE: that we allow for draining all funds of the contract so it
 /// can go below existential deposit, essentially giving a contract
 /// the chance to give up it's life.
-fn transfer<'a, T: Trait, V: Vm<T>>(
+fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	gas_meter: &mut GasMeter<T>,
 	contract_create: bool,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: T::Balance,
-	ctx: &mut ExecutionContext<'a, T, V>,
+	ctx: &mut ExecutionContext<'a, T, V, L>,
 ) -> Result<(), &'static str> {
 	let to_balance = ctx.overlay.get_balance(dest);
 
@@ -365,12 +372,17 @@ fn transfer<'a, T: Trait, V: Vm<T>>(
 	Ok(())
 }
 
-struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b> {
-	ctx: &'a mut ExecutionContext<'b, T, V>,
+struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
+	ctx: &'a mut ExecutionContext<'b, T, V, L>,
 	caller: T::AccountId,
 }
 
-impl<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b> Ext for CallContext<'a, 'b, T, V> {
+impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
+where
+	T: Trait + 'b,
+	V: Vm<T, Executable = E>,
+	L: Loader<T, Executable = E>,
+{
 	type T = T;
 
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {

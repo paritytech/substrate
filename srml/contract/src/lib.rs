@@ -206,6 +206,7 @@ decl_module! {
 
 			let cfg = Config::preload();
 			let vm = ::vm::WasmVm::new(&cfg);
+			let loader = ::exec::WasmLoader::new(&cfg);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
@@ -213,6 +214,7 @@ decl_module! {
 				events: Vec::new(),
 				config: &cfg,
 				vm: &vm,
+				loader: &loader,
 			};
 
 			let mut output_data = Vec::new();
@@ -263,6 +265,7 @@ decl_module! {
 
 			let cfg = Config::preload();
 			let vm = ::vm::WasmVm::new(&cfg);
+			let loader = ::exec::WasmLoader::new(&cfg);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
@@ -270,6 +273,7 @@ decl_module! {
 				events: Vec::new(),
 				config: &cfg,
 				vm: &vm,
+				loader: &loader,
 			};
 			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &code_hash, &data);
 
