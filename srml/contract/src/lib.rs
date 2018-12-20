@@ -206,7 +206,7 @@ decl_module! {
 
 			let cfg = Config::preload();
 			let vm = ::vm::WasmVm::new(&cfg.schedule);
-			let loader = ::exec::WasmLoader::new(&cfg);
+			let loader = ::exec::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
@@ -265,7 +265,7 @@ decl_module! {
 
 			let cfg = Config::preload();
 			let vm = ::vm::WasmVm::new(&cfg.schedule);
-			let loader = ::exec::WasmLoader::new(&cfg);
+			let loader = ::exec::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,

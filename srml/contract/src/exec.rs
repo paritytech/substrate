@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, ContractAddressFor, Trait, Event, RawEvent, Config};
+use super::{CodeHash, ContractAddressFor, Trait, Event, RawEvent, Config, Schedule};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use code;
@@ -102,12 +102,12 @@ pub struct WasmExecutable {
 }
 
 pub struct WasmLoader<'a, T: Trait> {
-	config: &'a Config<T>,
+	schedule: &'a Schedule<T::Gas>,
 }
 
 impl<'a, T: Trait> WasmLoader<'a, T> {
-	pub fn new(config: &'a Config<T>) -> Self {
-		WasmLoader { config }
+	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
+		WasmLoader { schedule }
 	}
 }
 
@@ -115,7 +115,7 @@ impl<'a, T: Trait> Loader<T> for WasmLoader<'a, T> {
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let dest_code = code::load::<T>(code_hash, &self.config.schedule)?;
+		let dest_code = code::load::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
 			entrypoint_name: b"deploy",
 			memory_def: dest_code.memory_def,
@@ -123,7 +123,7 @@ impl<'a, T: Trait> Loader<T> for WasmLoader<'a, T> {
 		})
 	}
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let dest_code = code::load::<T>(code_hash, &self.config.schedule)?;
+		let dest_code = code::load::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
 			entrypoint_name: b"call",
 			memory_def: dest_code.memory_def,
@@ -426,4 +426,12 @@ where
 	fn caller(&self) -> &T::AccountId {
 		&self.caller
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+
+
 }
