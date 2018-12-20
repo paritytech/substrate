@@ -35,7 +35,7 @@ extern crate substrate_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate substrate_trie as trie;
 
-use std::fmt;
+use std::{fmt, panic::UnwindSafe};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use codec::{Decode, Encode};
@@ -172,7 +172,7 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<'a, E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
+	fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
 		&self,
 		ext: &mut E,
 		method: &str,
@@ -302,7 +302,7 @@ where
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
 pub fn execute_using_consensus_failure_handler<
-	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> R
+	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> R + UnwindSafe
 >(
 	backend: &B,
 	changes_trie_storage: Option<&T>,

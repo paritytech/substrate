@@ -39,6 +39,8 @@ use crate::error;
 use rstd::vec::Vec;
 use sr_api_macros::decl_runtime_apis;
 use primitives::{OpaqueMetadata, NativeOrEncoded};
+#[cfg(feature = "std")]
+use std::panic::UnwindSafe;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -75,7 +77,7 @@ pub trait ApiExt<Block: BlockT> {
 pub trait CallRuntimeAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
-	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
+	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,

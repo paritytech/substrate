@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use std::cmp::Ord;
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe};
 use codec::Encode;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Ext,
-	CodeExecutor, ExecutionManager, native_when_possible};
+use state_machine::{
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, native_when_possible
+};
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
@@ -61,7 +61,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<B>,
@@ -89,7 +89,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(&self,
 		state: &S,
 		overlay: &mut OverlayedChanges,
@@ -190,7 +190,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -252,7 +252,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,

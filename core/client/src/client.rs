@@ -16,7 +16,7 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -1040,7 +1040,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>
 {
-	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
+	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
