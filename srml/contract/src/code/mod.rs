@@ -21,7 +21,7 @@ use gas::GasMeter;
 use vm::runtime::Env;
 use {Schedule, Trait, CodeHash, CodeStorage, PrestineCode};
 
-mod prepare;
+pub mod prepare;
 
 #[derive(Clone, Encode, Decode)]
 pub struct MemoryDefinition {

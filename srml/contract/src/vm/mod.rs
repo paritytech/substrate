@@ -204,8 +204,13 @@ mod tests {
 	}
 
 	fn prepare_code(wat: &str) -> (Vec<u8>, MemoryDefinition) {
-		let wasm = wabt::wat2wasm(CODE_TRANSFER).unwrap();
-		
+		use ::code::prepare::prepare_contract;
+
+		let wasm = wabt::wat2wasm(wat).unwrap();
+		let schedule = ::Schedule::<u64>::default();
+		let ::code::InstrumentedWasmModule { memory_def, code, .. } = prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
+
+		(code, memory_def)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -247,12 +252,13 @@ mod tests {
 
 	#[test]
 	fn contract_transfer() {
-		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		let (code_transfer, mem_def) = prepare_code(CODE_TRANSFER);
 
 		let mut mock_ext = MockExt::default();
 		execute(
-			"call",
+			b"call",
 			&code_transfer,
+			&mem_def,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
@@ -289,12 +295,12 @@ mod tests {
 	(func (export "call")
 		(drop
 			(call $ext_create
-				(i32.const 12)   ;; Pointer to `code`
-				(i32.const 8)    ;; Length of `code`
+				(i32.const 16)   ;; Pointer to `code_hash`
+				(i32.const 32)   ;; Length of `code_hash`
 				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 4)    ;; Pointer to the buffer with value to transfer
 				(i32.const 8)    ;; Length of the buffer with value to transfer
-				(i32.const 20)   ;; Pointer to input data buffer address
+				(i32.const 12)   ;; Pointer to input data buffer address
 				(i32.const 4)    ;; Length of input data buffer
 			)
 		)
@@ -302,21 +308,22 @@ mod tests {
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
-	;; Embedded wasm code.
-	(data (i32.const 12) "\00\61\73\6d\01\00\00\00")
 	;; Input data to pass to the contract being created.
-	(data (i32.const 20) "\01\02\03\04")
+	(data (i32.const 12) "\01\02\03\04")
+	;; Hash of code.
+	(data (i32.const 16) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
 )
 "#;
 
 	#[test]
 	fn contract_create() {
-		let code_create = wabt::wat2wasm(CODE_CREATE).unwrap();
+		let (code_create, mem_def) = prepare_code(CODE_CREATE);
 
 		let mut mock_ext = MockExt::default();
 		execute(
-			"call",
+			b"call",
 			&code_create,
+			&mem_def,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
@@ -332,41 +339,44 @@ mod tests {
 				data: vec![
 					1, 2, 3, 4,
 				],
-				gas_left: 49970,
+				gas_left: 49946,
 			}]
 		);
 	}
 
-	const CODE_MEM: &str = r#"
-(module
-	;; Internal memory is not allowed.
-	(memory 1 1)
+	// TODO: This shouldn't be possible. There is an invariant that
+	// code should be already prepared.
 
-	(func (export "call")
-		nop
-	)
-)
-"#;
+// 	const CODE_MEM: &str = r#"
+// (module
+// 	;; Internal memory is not allowed.
+// 	(memory 1 1)
 
-	#[test]
-	fn contract_internal_mem() {
-		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
+// 	(func (export "call")
+// 		nop
+// 	)
+// )
+// "#;
 
-		let mut mock_ext = MockExt::default();
+// 	#[test]
+// 	fn contract_internal_mem() {
+// 		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
 
-		assert_matches!(
-			execute(
-				"call",
-				&code_mem,
-				&[],
-				&mut Vec::new(),
-				&mut mock_ext,
-				&Schedule::default(),
-				&mut GasMeter::with_limit(100_000, 1)
-			),
-			Err(_)
-		);
-	}
+// 		let mut mock_ext = MockExt::default();
+
+// 		assert_matches!(
+// 			execute(
+// 				"call",
+// 				&code_mem,
+// 				&[],
+// 				&mut Vec::new(),
+// 				&mut mock_ext,
+// 				&Schedule::default(),
+// 				&mut GasMeter::with_limit(100_000, 1)
+// 			),
+// 			Err(_)
+// 		);
+// 	}
 
 	const CODE_TRANSFER_LIMITED_GAS: &str = r#"
 (module
@@ -407,12 +417,13 @@ mod tests {
 
 	#[test]
 	fn contract_call_limited_gas() {
-		let code_transfer = wabt::wat2wasm(CODE_TRANSFER_LIMITED_GAS).unwrap();
+		let (code_transfer, mem_def) = prepare_code(CODE_TRANSFER_LIMITED_GAS);
 
 		let mut mock_ext = MockExt::default();
 		execute(
-			"call",
+			b"call",
 			&code_transfer,
+			&mem_def,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
@@ -498,15 +509,16 @@ mod tests {
 
 	#[test]
 	fn get_storage_puts_data_into_scratch_buf() {
-		let code_get_storage = wabt::wat2wasm(CODE_GET_STORAGE).unwrap();
+		let (code_get_storage, mem_def) = prepare_code(CODE_GET_STORAGE);
 
 		let mut mock_ext = MockExt::default();
 		mock_ext.storage.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
 
 		let mut return_buf = Vec::new();
 		execute(
-			"call",
+			b"call",
 			&code_get_storage,
+			&mem_def,
 			&[],
 			&mut return_buf,
 			&mut mock_ext,
