@@ -611,7 +611,7 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 
-	let res = quote!(
+	quote!(
 		#hidden_includes
 
 		#base_runtime_api
@@ -629,8 +629,5 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 
 			#wasm_interface
 		}
-	);
-
-	//println!("{}", res);
-	res.into()
+	).into()
 }

@@ -520,13 +520,11 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let runtime_decls = generate_runtime_decls(&api_decls);
 	let client_side_decls = generate_client_side_decls(&api_decls);
 
-	let res = quote!(
+	quote!(
 		#hidden_includes
 
 		#runtime_decls
 
 		#client_side_decls
-	);
-	// println!("{}", res);
-	res.into()
+	).into()
 }
