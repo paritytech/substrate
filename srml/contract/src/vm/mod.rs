@@ -89,15 +89,13 @@ pub fn execute<'a, E: Ext>(
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<(), &'static str> {
 	let memory =
-		sandbox::Memory::new(
-			memory_def.initial,
-			Some(memory_def.maximum)
-		)
-		.expect(
-			"memory_def.initial can't be greater than memory_def.maximum;
-			thus Memory::new must not fail;
-			qed
-		");
+		sandbox::Memory::new(memory_def.initial, Some(memory_def.maximum)).unwrap_or_else(|_| {
+			panic!(
+				"memory_def.initial can't be greater than memory_def.maximum;
+				thus Memory::new must not fail;
+				qed"
+			)
+		});
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	imports.add_memory("env", "memory", memory.clone());

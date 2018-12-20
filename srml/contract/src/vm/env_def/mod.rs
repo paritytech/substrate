@@ -16,8 +16,6 @@
 
 use super::{Ext, Runtime};
 use parity_wasm::elements::{FunctionType, ValueType};
-use rstd::prelude::*;
-use rstd::collections::btree_map::BTreeMap;
 use sandbox::{self, TypedValue};
 
 #[macro_use]

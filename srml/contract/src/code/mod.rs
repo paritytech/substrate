@@ -17,6 +17,7 @@
 use codec::Compact;
 use runtime_support::StorageMap;
 use runtime_primitives::traits::{As, Hash, CheckedMul};
+use rstd::prelude::*;
 use gas::GasMeter;
 use vm::runtime::Env;
 use {Schedule, Trait, CodeHash, CodeStorage, PrestineCode};
