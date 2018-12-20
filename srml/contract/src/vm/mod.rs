@@ -586,11 +586,13 @@ r#"
 
 	#[test]
 	fn caller() {
-		let code_caller = wabt::wat2wasm(CODE_CALLER).unwrap();
+		let (code_caller, mem_def) = prepare_code(CODE_CALLER);
 
 		let mut mock_ext = MockExt::default();
 		execute(
+			b"call",
 			&code_caller,
+			&mem_def,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
