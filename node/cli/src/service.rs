@@ -19,19 +19,22 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-use node_runtime::{GenesisConfig, RuntimeApi};
+use std::time::Duration;
+
+use tokio::prelude::Future;
+
+use client;
+use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
+use grandpa;
+use node_executor;
+use primitives::ed25519::Pair;
 use node_primitives::{Block, InherentData};
+use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor
 };
-use node_executor;
-use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
-use primitives::ed25519::Pair;
-use client;
-use std::time::Duration;
-use grandpa;
+use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -82,14 +85,16 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
-					executor.spawn(start_aura(
+					let aura = start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client,
 						block_import.clone(),
 						proposer,
 						service.network(),
-					));
+					);
+
+					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
@@ -104,7 +109,7 @@ construct_service_factory! {
 					grandpa::NetworkBridge::new(service.network()),
 				)?;
 
-				executor.spawn(voter);
+				executor.spawn(voter.select(service.on_exit()).then(|_| Ok(())));
 
 				Ok(service)
 			}
