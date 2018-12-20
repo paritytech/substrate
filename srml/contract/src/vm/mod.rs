@@ -34,13 +34,12 @@ use self::runtime::{to_execution_result, Runtime};
 // TODO: Extract code injection stuff and expect the code to be already prepared?
 
 pub struct WasmVm<'a, T: Trait> {
-	// TODO: Change to schedule.
-	config: &'a ::Config<T>,
+	schedule: &'a Schedule<T::Gas>,
 }
 
 impl<'a, T: Trait> WasmVm<'a, T> {
-	pub fn new(config: &'a ::Config<T>) -> Self {
-		WasmVm { config }
+	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
+		WasmVm { schedule }
 	}
 }
 
@@ -70,7 +69,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 			imports.add_host_func("env", name, func_ptr);
 		});
 
-		let mut runtime = Runtime::new(ext, input_data, output_data, &self.config.schedule, memory, gas_meter);
+		let mut runtime = Runtime::new(ext, input_data, output_data, &self.schedule, memory, gas_meter);
 
 		// Instantiate the instance from the instrumented module code.
 		match sandbox::Instance::new(&exec.instrumented_code, &imports, &mut runtime) {
@@ -95,7 +94,8 @@ mod tests {
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;
-	use exec;
+	use exec::{self, Ext};
+	use {CodeHash};
 	use wabt;
 	use runtime_primitives::testing::H256;
 
@@ -120,7 +120,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		next_account_id: u64,
 	}
-	impl ::exec::Ext for MockExt {
+	impl Ext for MockExt {
 		type T = Test;
 
 		fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -170,14 +170,38 @@ mod tests {
 		}
 	}
 
-	fn prepare_code(wat: &str) -> (Vec<u8>, MemoryDefinition) {
+	fn execute<E: Ext>(
+		wat: &str,
+		input_data: &[u8],
+		output_data: &mut Vec<u8>,
+		ext: &mut E,
+		gas_meter: &mut GasMeter<E::T>,
+	) -> Result<(), &'static str> {
 		use ::code::prepare::prepare_contract;
+		use ::exec::{Vm, WasmExecutable};
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
 		let schedule = ::Schedule::<u64>::default();
-		let ::code::InstrumentedWasmModule { memory_def, code, .. } = prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
+		let ::code::InstrumentedWasmModule { memory_def, code, .. } =
+			prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
 
-		(code, memory_def)
+		let exec = ::exec::WasmExecutable {
+			// Use a "call" convention.
+			entrypoint_name: b"call",
+			memory_def,
+			instrumented_code: code,
+		};
+
+		let cfg = Default::default();
+		let vm = WasmVm::new(&cfg);
+
+		vm.execute(
+			&exec,
+			ext,
+			input_data,
+			output_data,
+			gas_meter,
+		)
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -219,17 +243,12 @@ mod tests {
 
 	#[test]
 	fn contract_transfer() {
-		let (code_transfer, mem_def) = prepare_code(CODE_TRANSFER);
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			b"call",
-			&code_transfer,
-			&mem_def,
+			CODE_TRANSFER,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::<u64>::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -284,17 +303,12 @@ mod tests {
 
 	#[test]
 	fn contract_create() {
-		let (code_create, mem_def) = prepare_code(CODE_CREATE);
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			b"call",
-			&code_create,
-			&mem_def,
+			CODE_CREATE,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -384,17 +398,12 @@ mod tests {
 
 	#[test]
 	fn contract_call_limited_gas() {
-		let (code_transfer, mem_def) = prepare_code(CODE_TRANSFER_LIMITED_GAS);
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			b"call",
-			&code_transfer,
-			&mem_def,
+			&CODE_TRANSFER_LIMITED_GAS,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -476,20 +485,15 @@ mod tests {
 
 	#[test]
 	fn get_storage_puts_data_into_scratch_buf() {
-		let (code_get_storage, mem_def) = prepare_code(CODE_GET_STORAGE);
-
 		let mut mock_ext = MockExt::default();
 		mock_ext.storage.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
 
 		let mut return_buf = Vec::new();
 		execute(
-			b"call",
-			&code_get_storage,
-			&mem_def,
+			CODE_GET_STORAGE,
 			&[],
 			&mut return_buf,
 			&mut mock_ext,
-			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -553,17 +557,12 @@ r#"
 
 	#[test]
 	fn caller() {
-		let (code_caller, mem_def) = prepare_code(CODE_CALLER);
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			b"call",
-			&code_caller,
-			&mem_def,
+			CODE_CALLER,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::<u64>::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 	}

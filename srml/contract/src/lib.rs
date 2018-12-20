@@ -205,7 +205,7 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
-			let vm = ::vm::WasmVm::new(&cfg);
+			let vm = ::vm::WasmVm::new(&cfg.schedule);
 			let loader = ::exec::WasmLoader::new(&cfg);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
@@ -264,7 +264,7 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
-			let vm = ::vm::WasmVm::new(&cfg);
+			let vm = ::vm::WasmVm::new(&cfg.schedule);
 			let loader = ::exec::WasmLoader::new(&cfg);
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
