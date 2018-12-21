@@ -20,7 +20,7 @@ use primitives::{AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-	UpgradeKeyConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
+	UpgradeKeyConfig, SudoConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 
@@ -130,6 +130,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			current_schedule: Default::default(),
 		}),
 		upgrade_key: Some(UpgradeKeyConfig {
+			key: endowed_accounts[0].clone(),
+		}),
+		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
 		}),
 		grandpa: Some(GrandpaConfig {
@@ -254,6 +257,9 @@ pub fn testnet_genesis(
 			current_schedule: Default::default(),
 		}),
 		upgrade_key: Some(UpgradeKeyConfig {
+			key: upgrade_key,
+		}),
+		sudo: Some(SudoConfig {
 			key: upgrade_key,
 		}),
 		grandpa: Some(GrandpaConfig {
