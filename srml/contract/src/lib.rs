@@ -207,15 +207,7 @@ decl_module! {
 			let cfg = Config::preload();
 			let vm = ::vm::WasmVm::new(&cfg.schedule);
 			let loader = ::exec::WasmLoader::new(&cfg.schedule);
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 
 			let mut output_data = Vec::new();
 			let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data, &mut output_data);
@@ -266,15 +258,7 @@ decl_module! {
 			let cfg = Config::preload();
 			let vm = ::vm::WasmVm::new(&cfg.schedule);
 			let loader = ::exec::WasmLoader::new(&cfg.schedule);
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(ref r) = result {

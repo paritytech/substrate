@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Schedule, Trait};
-use account_db::{AccountDb, OverlayAccountDb};
+use account_db::{AccountDb, OverlayAccountDb, DirectAccountDb};
 use code;
 use gas::GasMeter;
 
@@ -137,6 +137,7 @@ impl<'a, T: Trait> Loader<T> for WasmLoader<'a, T> {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
+	// TODO: Should be removed and replaced by the `caller`?
 	// typically should be dest
 	pub self_account: T::AccountId,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -153,6 +154,34 @@ where
 	L: Loader<T, Executable = E>,
 	V: Vm<T, Executable = E>,
 {
+	/// Create the top level execution context.
+	///
+	/// The specified `origin` address will be used as `sender` for
+	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
+		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb);
+		ExecutionContext {
+			self_account: origin,
+			depth: 0,
+			overlay,
+			events: Vec::new(),
+			config: &cfg,
+			vm: &vm,
+			loader: &loader,
+		}
+	}
+
+	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
+		ExecutionContext {
+			overlay: overlay,
+			self_account: dest,
+			depth: self.depth + 1,
+			events: Vec::new(),
+			config: self.config,
+			vm: self.vm,
+			loader: self.loader,
+		}
+	}
+
 	/// Make a call to the specified address.
 	pub fn call(
 		&mut self,
@@ -163,6 +192,8 @@ where
 		input_data: &[u8],
 		output_data: &mut Vec<u8>,
 	) -> Result<CallReceipt, &'static str> {
+		assert_eq!(caller, self.self_account);
+
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot make a call");
 		}
@@ -175,16 +206,7 @@ where
 
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
-
-			let mut nested = ExecutionContext {
-				overlay: overlay,
-				self_account: dest.clone(),
-				depth: self.depth + 1,
-				events: Vec::new(),
-				config: self.config,
-				vm: self.vm,
-				loader: self.loader,
-			};
+			let mut nested = self.nested(overlay, dest.clone());
 
 			if value > T::Balance::zero() {
 				transfer(
@@ -254,16 +276,7 @@ where
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 			overlay.set_code(&dest, Some(code_hash.clone()));
-
-			let mut nested = ExecutionContext {
-				overlay: overlay,
-				self_account: dest.clone(),
-				depth: self.depth + 1,
-				events: Vec::new(),
-				config: self.config,
-				vm: self.vm,
-				loader: self.loader,
-			};
+			let mut nested = self.nested(overlay, dest.clone());
 
 			if endowment > T::Balance::zero() {
 				transfer(
@@ -537,20 +550,9 @@ mod tests {
 		};
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_code(&1, Some(1.into()));
-
 			let cfg = Config::preload();
-
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay,
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&1, Some(1.into()));
 
 			let result = ctx.call(
 				origin.clone(),
@@ -573,6 +575,7 @@ mod tests {
 
 	// TODO: Won't create an account with value below exsistential deposit.
 	// TODO: Verify that instantiate properly creates a contract.
+	// TODO: Instantiate accounts in a proper way (i.e. via `instantiate`)
 
 	#[test]
 	fn transfer_works() {
@@ -587,21 +590,10 @@ mod tests {
 		};
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_balance(&origin, 100);
-			overlay.set_balance(&dest, 0);
-
 			let cfg = Config::preload();
-
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay,
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_balance(&origin, 100);
+			ctx.overlay.set_balance(&dest, 0);
 
 			let result = ctx.call(
 				origin.clone(),
@@ -630,20 +622,9 @@ mod tests {
 		};
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_balance(&origin, 0);
-
 			let cfg = Config::preload();
-
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay,
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_balance(&origin, 0);
 
 			let result = ctx.call(
 				origin.clone(),
@@ -684,21 +665,10 @@ mod tests {
 		};
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_code(&BOB, Some(1.into()));
-			overlay.set_code(&CHARLIE, Some(2.into()));
-
 			let cfg = Config::preload();
-
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay,
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&BOB, Some(1.into()));
+			ctx.overlay.set_code(&CHARLIE, Some(2.into()));
 
 			let mut output_data = vec![];
 			let result = ctx.call(
@@ -738,20 +708,9 @@ mod tests {
 		};
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_code(&dest, Some(1.into()));
-
 			let cfg = Config::preload();
-
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay,
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&dest, Some(1.into()));
 
 			let result = ctx.call(
 				origin.clone(),
@@ -804,20 +763,9 @@ mod tests {
 		};
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_code(&dest, Some(1.into()));
-
 			let cfg = Config::preload();
-
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay,
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&dest, Some(1.into()));
 
 			let result = ctx.call(
 				origin.clone(),
@@ -871,21 +819,11 @@ mod tests {
 		};
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
-			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-			overlay.set_code(&dest, Some(1.into()));
-			overlay.set_code(&CHARLIE, Some(2.into()));
-
 			let cfg = Config::preload();
 
-			let mut ctx = ExecutionContext {
-				self_account: origin.clone(),
-				depth: 0,
-				overlay,
-				events: Vec::new(),
-				config: &cfg,
-				vm: &vm,
-				loader: &loader,
-			};
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&dest, Some(1.into()));
+			ctx.overlay.set_code(&CHARLIE, Some(2.into()));
 
 			let result = ctx.call(
 				origin.clone(),
