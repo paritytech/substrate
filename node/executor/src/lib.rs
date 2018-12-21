@@ -260,6 +260,7 @@ mod tests {
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
 			upgrade_key: Some(Default::default()),
+			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
 					(Alice.to_raw_public().into(), 1),
