@@ -57,6 +57,7 @@ members = [
 	"core/sr-primitives",
 	"srml/session",
 	"srml/staking",
+	"srml/sudo",
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
