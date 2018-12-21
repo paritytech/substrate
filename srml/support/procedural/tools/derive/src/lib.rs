@@ -59,16 +59,30 @@ pub(crate) fn fields_access(
 	})
 }
 
-/// self defined parsing struct (use where clause on struct for it: not meant for good struct
-/// design but fast parse impl).
-#[proc_macro_derive(ParseStruct)]
-pub fn derive_parse_struct(input: TokenStream) -> TokenStream {
+/// self defined parsing struct or enum.
+/// not meant for any struct/enum, just for fast
+/// parse implementation.
+/// For enums:
+///   variant are tested in order of definition.
+///   Empty variant is always true.
+///   Please use carefully, this will fully parse successfull variant twice.
+#[proc_macro_derive(Parse)]
+pub fn derive_parse(input: TokenStream) -> TokenStream {
+	let item = parse_macro_input!(input as syn::Item);
+	match item {
+		syn::Item::Enum(input) => derive_parse_enum(input),
+		syn::Item::Struct(input) => derive_parse_struct(input),
+		_ => TokenStream::new(), // ignore
+	}
+}
+
+fn derive_parse_struct(input: syn::ItemStruct) -> TokenStream {
 	let syn::ItemStruct {
 		ident,
 		generics,
 		fields,
 		..
-	} = parse_macro_input!(input as syn::ItemStruct);
+	} = input;
 	let field_names = {
 		let name = fields_idents(fields.iter().map(Clone::clone));
 		quote!{
@@ -93,42 +107,13 @@ pub fn derive_parse_struct(input: TokenStream) -> TokenStream {
 	tokens.into()
 }
 
-#[proc_macro_derive(ToTokensStruct)]
-pub fn derive_totokens_struct(input: TokenStream) -> TokenStream {
-	let syn::ItemStruct {
-		ident,
-		generics,
-		fields,
-		..
-	} = parse_macro_input!(input as syn::ItemStruct);
-	let fields = fields_access(fields.iter().map(Clone::clone));
-	let tokens = quote! {
-
-		impl #generics quote::ToTokens for #ident #generics {
-			fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-				#(
-					self.#fields.to_tokens(tokens);
-				)*
-			}
-		}
-
-	};
-	tokens.into()
-}
-
-
-/// self defined parsing enum, variant are tested in order of definition.
-/// Empty variant allways true.
-/// Please use carefully, this will fully parse successfull variant twice.
-#[proc_macro_derive(ParseEnum)]
-pub fn derive_parse_enum(input: TokenStream) -> TokenStream {
-
+fn derive_parse_enum(input: syn::ItemEnum) -> TokenStream {
 	let syn::ItemEnum {
 		ident,
 		generics,
 		variants,
 		..
-	} = parse_macro_input!(input as syn::ItemEnum);
+	} = input;
 	let variants = variants.iter().map(|v| {
 		let variant_ident = v.ident.clone();
 		let fields_build = if v.fields.iter().count() > 0 {
@@ -187,15 +172,51 @@ pub fn derive_parse_enum(input: TokenStream) -> TokenStream {
 	tokens.into()
 }
 
-/// only output field (empty field act as a None)
-#[proc_macro_derive(ToTokensEnum)]
-pub fn derive_totokens_enum(input: TokenStream) -> TokenStream {
+/// self defined parsing struct or enum.
+/// not meant for any struct/enum, just for fast
+/// parse implementation.
+/// For enum:
+///   it only output fields (empty field act as a None).
+#[proc_macro_derive(ToTokens)]
+pub fn derive_totokens(input: TokenStream) -> TokenStream {
+	let item = parse_macro_input!(input as syn::Item);
+	match item {
+		syn::Item::Enum(input) => derive_totokens_enum(input),
+		syn::Item::Struct(input) => derive_totokens_struct(input),
+		_ => TokenStream::new(), // ignore
+	}
+}
+
+fn derive_totokens_struct(input: syn::ItemStruct) -> TokenStream {
+ let syn::ItemStruct {
+		ident,
+		generics,
+		fields,
+		..
+	} = input;
+
+	let fields = fields_access(fields.iter().map(Clone::clone));
+	let tokens = quote! {
+
+		impl #generics quote::ToTokens for #ident #generics {
+			fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+				#(
+					self.#fields.to_tokens(tokens);
+				)*
+			}
+		}
+
+	};
+	tokens.into()
+}
+
+fn derive_totokens_enum(input: syn::ItemEnum) -> TokenStream {
 	let syn::ItemEnum {
 		ident,
 		generics,
 		variants,
 		..
-	} = parse_macro_input!(input as syn::ItemEnum);
+	} = input;
 	let variants = variants.iter().map(|v| {
 		let v_ident = v.ident.clone();
 		let fields_build = if v.fields.iter().count() > 0 {

@@ -14,12 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use cli::CoreParams;
+//! The Substrate runtime reexported for WebAssembly compile.
 
-/// Extend params for Node
-#[derive(Debug, StructOpt)]
-pub struct Params {
-	#[structopt(flatten)]
-	core: CoreParams
-}
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate node_runtime;
+pub use node_runtime::*;
