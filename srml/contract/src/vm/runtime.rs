@@ -360,6 +360,16 @@ define_env!(init_env, <E: Ext>,
 		Err(sandbox::HostError)
 	},
 
+	// Stores the address of the caller into the scratch buffer.
+	//
+	// If this is a top-level call (i.e. initiated by an extrinsic) the origin address of the extrinsic
+	// will be returned. Otherwise, if this call is initiated by another contract then the address
+	// of the contract will be returned.
+	ext_caller(ctx) => {
+		ctx.scratch_buf = ctx.ext.caller().encode();
+		Ok(())
+	},
+
 	// Returns the size of the input buffer.
 	ext_input_size(ctx) -> u32 => {
 		Ok(ctx.input_data.len() as u32)

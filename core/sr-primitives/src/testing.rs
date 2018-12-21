@@ -114,7 +114,6 @@ impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	}
 }
 
-#[cfg(feature = "std")]
 impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt>
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {

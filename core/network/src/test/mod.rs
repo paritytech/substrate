@@ -189,6 +189,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		io.to_disconnect.clone()
 	}
 
+	#[cfg(test)]
 	fn with_io<'a, F, U>(&'a self, f: F) -> U where F: FnOnce(&mut TestIo<'a>) -> U {
 		let mut io = TestIo::new(&self.queue, None);
 		f(&mut io)
@@ -228,8 +229,8 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
-	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
-		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data);
+	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>, broadcast: bool) {
+		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -255,7 +256,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 					body: Some(block.extrinsics),
 					receipt: None,
 					message_queue: None,
-					justification: Some(Vec::new()),
+					justification: None,
 				},
 			}]);
 		}

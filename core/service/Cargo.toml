@@ -21,12 +21,15 @@ sr-io = { path = "../../core/sr-io" }
 sr-primitives = { path = "../../core/sr-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-consensus-common = { path = "../../core/consensus/common" }
+substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives" }
 substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
 substrate-client-db = { path = "../../core/client/db" }
 parity-codec = "2.1"
 substrate-executor = { path = "../../core/executor" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
-substrate-rpc = { path = "../../core/rpc" }
 substrate-rpc-servers = { path = "../../core/rpc-servers" }
 substrate-telemetry = { path = "../../core/telemetry" }
+
+[dev-dependencies]
+substrate-test-client = { path = "../test-client" }

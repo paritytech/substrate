@@ -37,6 +37,7 @@ extern crate parity_codec_derive;
 extern crate parity_codec as codec;
 
 extern crate sr_std as rstd;
+extern crate srml_aura as aura;
 extern crate srml_balances as balances;
 extern crate srml_consensus as consensus;
 extern crate srml_contract as contract;
@@ -46,6 +47,7 @@ extern crate srml_executive as executive;
 extern crate srml_grandpa as grandpa;
 extern crate srml_session as session;
 extern crate srml_staking as staking;
+extern crate srml_sudo as sudo;
 extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 extern crate srml_treasury as treasury;
@@ -53,15 +55,16 @@ extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
+extern crate substrate_consensus_aura_primitives as consensus_aura;
 
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
-use grandpa::fg_primitives::{self, ScheduledChange, id::*};
+use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
-	block_builder::api as block_builder_api, runtime_api::{self as client_api, id::*}
+	block_builder::api as block_builder_api, runtime_api as client_api
 };
 use runtime_primitives::{ApplyResult, CheckInherentError, BasicInherentData};
 use runtime_primitives::transaction_validity::TransactionValidity;
@@ -76,6 +79,7 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
+use consensus_aura::api as aura_api;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -83,7 +87,6 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
-pub use timestamp::BlockPeriod;
 pub use srml_support::{StorageValue, RuntimeMetadata};
 
 const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -91,17 +94,12 @@ const NOTE_OFFLINE_POSITION: u32 = 1;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: ver_str!("node"),
-	impl_name: ver_str!("substrate-node"),
-	authoring_version: 1,
-	spec_version: 1,
-	impl_version: 0,
-	apis: apis_vec!([
-		(BLOCK_BUILDER, 1),
-		(TAGGED_TRANSACTION_QUEUE, 1),
-		(METADATA, 1),
-		(GRANDPA_API, 1),
-	]),
+	spec_name: create_runtime_str!("node"),
+	impl_name: create_runtime_str!("substrate-node"),
+	authoring_version: 10,
+	spec_version: 11,
+	impl_version: 11,
+	apis: RUNTIME_API_VERSIONS,
 };
 
 /// Native version.
@@ -126,11 +124,15 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
+impl aura::Trait for Runtime {
+	type HandleReport = aura::StakingSlasher<Runtime>;
+}
+
 impl balances::Trait for Runtime {
 	type Balance = Balance;
 	type AccountIndex = AccountIndex;
-	type OnFreeBalanceZero = (Staking, Contract);
-	type EnsureAccountLiquid = Staking;
+	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
 }
 
@@ -138,12 +140,16 @@ impl consensus::Trait for Runtime {
 	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type Log = Log;
 	type SessionKey = SessionKey;
-	type OnOfflineValidator = Staking;
+
+	// the aura module handles offline-reports internally
+	// rather than using an explicit report system.
+	type InherentOfflineReport = ();
 }
 
 impl timestamp::Trait for Runtime {
 	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 	type Moment = u64;
+	type OnTimestampSet = Aura;
 }
 
 /// Session key conversion.
@@ -200,6 +206,11 @@ impl upgrade_key::Trait for Runtime {
 	type Event = Event;
 }
 
+impl sudo::Trait for Runtime {
+	type Event = Event;
+	type Proposal = Call;
+}
+
 impl grandpa::Trait for Runtime {
 	type SessionKey = SessionKey;
 	type Log = Log;
@@ -213,6 +224,7 @@ construct_runtime!(
 		InherentData = BasicInherentData
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
+		Aura: aura::{Module},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Balances: balances,
@@ -227,6 +239,7 @@ construct_runtime!(
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		UpgradeKey: upgrade_key,
+		Sudo: sudo,
 	}
 );
 
@@ -304,7 +317,26 @@ impl_runtime_apis! {
 		}
 
 		fn check_inherents(block: Block, data: BasicInherentData) -> Result<(), CheckInherentError> {
-			Runtime::check_inherents(block, data)
+			let expected_slot = data.aura_expected_slot;
+
+			// draw timestamp out from extrinsics.
+			let set_timestamp = block.extrinsics()
+				.get(TIMESTAMP_SET_POSITION as usize)
+				.and_then(|xt: &UncheckedExtrinsic| match xt.function {
+					Call::Timestamp(TimestampCall::set(ref t)) => Some(t.clone()),
+					_ => None,
+				})
+				.ok_or_else(|| CheckInherentError::Other("No valid timestamp in block.".into()))?;
+
+			// take the "worse" result of normal verification and the timestamp vs. seal
+			// check.
+			CheckInherentError::combine_results(
+				Runtime::check_inherents(block, data),
+				|| {
+					Aura::verify_inherent(set_timestamp.into(), expected_slot)
+						.map_err(|s| CheckInherentError::Other(s.into()))
+				},
+			)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
@@ -335,6 +367,12 @@ impl_runtime_apis! {
 
 		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
 			Grandpa::grandpa_authorities()
+		}
+	}
+
+	impl aura_api::AuraApi<Block> for Runtime {
+		fn slot_duration() -> u64 {
+			Aura::slot_duration()
 		}
 	}
 }

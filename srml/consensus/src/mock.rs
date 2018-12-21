@@ -34,7 +34,7 @@ impl Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
 	type SessionKey = u64;
-	type OnOfflineValidator = ();
+	type InherentOfflineReport = ::InstantFinalityReportVec<()>;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -54,7 +54,6 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	t.extend(GenesisConfig::<Test>{
 		code: vec![],
 		authorities,
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.into()
 }

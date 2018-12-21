@@ -110,8 +110,8 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 		O: serde::Serialize + 'static,
 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
+		where
+				S: serde::Serializer,
 	{
 		match self {
 			DecodeDifferent::Encode(b) => b.serialize(serializer),
@@ -187,8 +187,8 @@ impl<E: Encode + ::std::fmt::Debug> std::fmt::Debug for FnEncode<E> {
 #[cfg(feature = "std")]
 impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
+		where
+				S: serde::Serializer,
 	{
 		self.0().serialize(serializer)
 	}
@@ -229,7 +229,53 @@ pub struct StorageFunctionMetadata {
 	pub name: DecodeDifferentStr,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
+	pub default: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+}
+
+/// A technical trait to store lazy initiated vec value as static dyn pointer.
+pub trait DefaultByte {
+	fn default_byte(&self) -> Vec<u8>;
+}
+
+/// Wrapper over dyn pointer for accessing a cached once byet value.
+#[derive(Clone)]
+pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
+
+/// Decode different for static lazy initiated byte value.
+pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
+
+impl Encode for DefaultByteGetter {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.0.default_byte().encode_to(dest)
+	}
+}
+
+impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
+	fn eq(&self, other: &DefaultByteGetter) -> bool {
+		let left = self.0.default_byte();
+		let right = other.0.default_byte();
+		left.eq(&right)
+	}
+}
+
+impl Eq for DefaultByteGetter { }
+
+#[cfg(feature = "std")]
+impl serde::Serialize for DefaultByteGetter {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+				S: serde::Serializer,
+	{
+		self.0.default_byte().serialize(serializer)
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for DefaultByteGetter {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.0.default_byte().fmt(f)
+	}
 }
 
 /// A storage function type.

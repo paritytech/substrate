@@ -64,11 +64,23 @@ pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
 
-/// A String that is a `&'static str` on `no_std` and a `String` on `std`.
-#[cfg(not(feature = "std"))]
-pub type RuntimeString = &'static str;
+/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+#[cfg(not(feature = "std"))]
+pub type RuntimeString = &'static str;
+
+/// Create a const [RuntimeString].
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! create_runtime_str {
+	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
+}
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! create_runtime_str {
+	( $y:expr ) => {{ $y }}
+}
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
@@ -468,16 +480,19 @@ macro_rules! impl_outer_log {
 pub struct BasicInherentData {
 	/// Current timestamp.
 	pub timestamp: u64,
-	/// Indices of offline validators.
-	pub consensus: Vec<u32>,
+	/// Blank report.
+	pub consensus: (),
+	/// Aura expected slot. Can take any value during block construction.
+	pub aura_expected_slot: u64,
 }
 
 impl BasicInherentData {
 	/// Create a new `BasicInherentData` instance.
-	pub fn new(timestamp: u64, consensus: Vec<u32>) -> Self {
+	pub fn new(timestamp: u64, expected_slot: u64) -> Self {
 		Self {
 			timestamp,
-			consensus,
+			consensus: (),
+			aura_expected_slot: expected_slot,
 		}
 	}
 }
@@ -492,6 +507,22 @@ pub enum CheckInherentError {
 	ValidAtTimestamp(u64),
 	/// Some other error has occurred.
 	Other(RuntimeString),
+}
+
+impl CheckInherentError {
+	/// Combine two results, taking the "worse" of the two.
+	pub fn combine_results<F: FnOnce() -> Result<(), Self>>(this: Result<(), Self>, other: F) -> Result<(), Self> {
+		match this {
+			Ok(()) => other(),
+			Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
+			Err(CheckInherentError::ValidAtTimestamp(x)) => match other() {
+				Ok(()) => Err(CheckInherentError::ValidAtTimestamp(x)),
+				Err(CheckInherentError::ValidAtTimestamp(y))
+					=> Err(CheckInherentError::ValidAtTimestamp(rstd::cmp::max(x, y))),
+				Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
+			}
+		}
+	}
 }
 
 #[cfg(test)]

@@ -49,7 +49,6 @@ extern crate parity_codec as codec;
 
 use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
-use runtime_support::dispatch::Result;
 use runtime_primitives::CheckInherentError;
 use runtime_primitives::traits::{
 	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
@@ -57,12 +56,32 @@ use runtime_primitives::traits::{
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, vec::Vec};
 
+/// A trait which is called when the timestamp is set.
+pub trait OnTimestampSet<Moment> {
+	fn on_timestamp_set(moment: Moment);
+}
+
+impl<Moment> OnTimestampSet<Moment> for () {
+	fn on_timestamp_set(_moment: Moment) { }
+}
+
+impl<A, B, Moment: Clone> OnTimestampSet<Moment> for (A, B)
+	where A: OnTimestampSet<Moment>, B: OnTimestampSet<Moment>
+{
+	fn on_timestamp_set(moment: Moment) {
+		A::on_timestamp_set(moment.clone());
+		B::on_timestamp_set(moment);
+	}
+}
+
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
 
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic + Mul<Self::BlockNumber, Output = Self::Moment> + Div<Self::BlockNumber, Output = Self::Moment>;
+	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
+	type OnTimestampSet: OnTimestampSet<Self::Moment>;
 }
 
 decl_module! {
@@ -75,7 +94,7 @@ decl_module! {
 		/// if this call hasn't been invoked by that time.
 		///
 		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result {
+		fn set(origin, now: <T::Moment as HasCompact>::Type) {
 			ensure_inherent(origin)?;
 			let now = now.into();
 
@@ -89,9 +108,10 @@ decl_module! {
 				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
 				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
 			);
-			<Self as Store>::Now::put(now);
+			<Self as Store>::Now::put(now.clone());
 			<Self as Store>::DidUpdate::put(true);
-			Ok(())
+
+			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 		}
 
 		fn on_finalise() {
@@ -194,11 +214,12 @@ mod tests {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
 		type SessionKey = u64;
-		type OnOfflineValidator = ();
+		type InherentOfflineReport = ();
 	}
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
+		type OnTimestampSet = ();
 	}
 	type Timestamp = Module<Test>;
 
@@ -207,7 +228,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			period: 5,
-			_genesis_phantom_data: Default::default()
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
@@ -223,7 +243,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			period: 5,
-			_genesis_phantom_data: Default::default()
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
@@ -239,7 +258,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(GenesisConfig::<Test> {
 			period: 5,
-			_genesis_phantom_data: Default::default()
 		}.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {

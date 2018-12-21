@@ -432,7 +432,6 @@ mod tests {
 				origin: BlockOrigin::File,
 				header,
 				is_new_best: false,
-				tags: Vec::new(),
 			}).unwrap();
 		}
 	}

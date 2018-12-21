@@ -25,7 +25,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,NumberFor, Zero};
 
-use backend::NewBlockState;
+use backend::{AuxStore, NewBlockState};
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use cht;
@@ -33,7 +33,7 @@ use error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
+pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -203,6 +203,22 @@ pub mod tests {
 		}
 
 		fn hash(&self, _number: u64) -> ClientResult<Option<Hash>> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+	}
+
+	impl AuxStore for DummyStorage {
+		fn insert_aux<
+			'a,
+			'b: 'a,
+			'c: 'a,
+			I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+			D: IntoIterator<Item=&'a &'b [u8]>,
+		>(&self, _insert: I, _delete: D) -> ClientResult<()> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 	}

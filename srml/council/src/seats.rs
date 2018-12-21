@@ -91,7 +91,7 @@ decl_module! {
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 		/// are registered.
-		fn set_approvals(origin, votes: Vec<bool>, index: Compact<VoteIndex>) -> Result {
+		fn set_approvals(origin, votes: Vec<bool>, index: Compact<VoteIndex>) {
 			let who = ensure_signed(origin)?;
 			let index: VoteIndex = index.into();
 
@@ -110,7 +110,6 @@ decl_module! {
 			}
 			<LastActiveOf<T>>::insert(&who, index);
 			<ApprovalsOf<T>>::insert(&who, votes);
-			Ok(())
 		}
 
 		/// Remove a voter. For it not to be a bond-consuming no-op, all approved candidate indices
@@ -124,7 +123,7 @@ decl_module! {
 			who: Address<T::AccountId, T::AccountIndex>,
 			who_index: Compact<u32>,
 			assumed_vote_index: Compact<VoteIndex>
-		) -> Result {
+		) {
 			let reporter = ensure_signed(origin)?;
 			let assumed_vote_index: VoteIndex = assumed_vote_index.into();
 
@@ -166,11 +165,10 @@ decl_module! {
 				<balances::Module<T>>::slash_reserved(&reporter, Self::voting_bond());
 				Self::deposit_event(RawEvent::BadReaperSlashed(reporter));
 			}
-			Ok(())
 		}
 
 		/// Remove a voter. All votes are cancelled and the voter deposit is returned.
-		fn retract_voter(origin, index: Compact<u32>) -> Result {
+		fn retract_voter(origin, index: Compact<u32>) {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::presentation_active(), "cannot retract when presenting");
@@ -183,13 +181,12 @@ decl_module! {
 
 			Self::remove_voter(&who, index, voters);
 			<balances::Module<T>>::unreserve(&who, Self::voting_bond());
-			Ok(())
 		}
 
 		/// Submit oneself for candidacy.
 		///
 		/// Account must have enough transferrable funds in it to pay the bond.
-		fn submit_candidacy(origin, slot: Compact<u32>) -> Result {
+		fn submit_candidacy(origin, slot: Compact<u32>) {
 			let who = ensure_signed(origin)?;
 
 			ensure!(!Self::is_a_candidate(&who), "duplicate candidate submission");
@@ -215,7 +212,6 @@ decl_module! {
 			}
 			<Candidates<T>>::put(candidates);
 			<CandidateCount<T>>::put(count as u32 + 1);
-			Ok(())
 		}
 
 		/// Claim that `signed` is one of the top Self::carry_count() + current_vote().1 candidates.
@@ -276,37 +272,33 @@ decl_module! {
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not already
 		/// in progress.
-		fn set_desired_seats(count: Compact<u32>) -> Result {
+		fn set_desired_seats(count: Compact<u32>) {
 			let count: u32 = count.into();
 			<DesiredSeats<T>>::put(count);
-			Ok(())
 		}
 
 		/// Remove a particular member. A tally will happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
 		/// This is effective immediately.
-		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result {
+		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) {
 			let who = <balances::Module<T>>::lookup(who)?;
 			let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 				.into_iter()
 				.filter(|i| i.0 != who)
 				.collect();
 			<ActiveCouncil<T>>::put(new_council);
-			Ok(())
 		}
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalise_vote`.
-		fn set_presentation_duration(count: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_presentation_duration(count: <T::BlockNumber as HasCompact>::Type) {
 			<PresentationDuration<T>>::put(count.into());
-			Ok(())
 		}
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalise_vote`.
-		fn set_term_duration(count: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_term_duration(count: <T::BlockNumber as HasCompact>::Type) {
 			<TermDuration<T>>::put(count.into());
-			Ok(())
 		}
 
 		fn on_finalise(n: T::BlockNumber) {

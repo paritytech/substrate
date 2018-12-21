@@ -20,7 +20,7 @@ use primitives::{AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-	UpgradeKeyConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
+	UpgradeKeyConfig, SudoConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 
@@ -31,9 +31,9 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 /// Specialised `ChainSpec`.
 pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 
-/// BBQ birch testnet generator
-pub fn bbq_birch_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
+/// Charred Cherry testnet generator
+pub fn charred_cherry_config() -> Result<ChainSpec, String> {
+	ChainSpec::from_embedded(include_bytes!("../res/charred-cherry.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -50,7 +50,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	const CENTS: u128 = 1_000 * MILLICENTS;    // assume this is worth about a cent.
 	const DOLLARS: u128 = 100 * CENTS;
 
-	const SECS_PER_BLOCK: u64 = 4;
+	const SECS_PER_BLOCK: u64 = 6;
 	const MINUTES: u64 = 60 / SECS_PER_BLOCK;
 	const HOURS: u64 = MINUTES * 60;
 	const DAYS: u64 = HOURS * 24;
@@ -59,7 +59,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // TODO change
 			authorities: initial_authorities.clone(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
@@ -70,12 +69,10 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			transfer_fee: 1 * CENTS,
 			creation_fee: 1 * CENTS,
 			reclaim_rebate: 1 * CENTS,
-			_genesis_phantom_data: Default::default(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
 			session_length: 5 * MINUTES,
-			_genesis_phantom_data: Default::default(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -86,16 +83,16 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			current_session_reward: 0,
 			validator_count: 7,
 			sessions_per_era: 12,
-			bonding_duration: 1 * DAYS,
+			bonding_duration: 60 * MINUTES,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
-			_genesis_phantom_data: Default::default(),
 		}),
 		democracy: Some(DemocracyConfig {
-			launch_period: 5 * MINUTES,    // 1 day per public referendum
-			voting_period: 5 * MINUTES,    // 3 days to discuss & vote on an active referendum
+			launch_period: 10 * MINUTES,    // 1 day per public referendum
+			voting_period: 10 * MINUTES,    // 3 days to discuss & vote on an active referendum
 			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
-			_genesis_phantom_data: Default::default(),
+			public_delay: 10 * MINUTES,
+			max_lock_periods: 6,
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: vec![],
@@ -108,23 +105,20 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			term_duration: 28 * DAYS,
 			desired_seats: 0,
 			inactive_grace_period: 1,    // one additional vote should go by before an inactive voter can be reaped.
-			_genesis_phantom_data: Default::default(),
 		}),
 		council_voting: Some(CouncilVotingConfig {
 			cooloff_period: 4 * DAYS,
 			voting_period: 1 * DAYS,
-			_genesis_phantom_data: Default::default(),
+			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
-			period: SECS_PER_BLOCK,
-			_genesis_phantom_data: Default::default(),
+			period: SECS_PER_BLOCK / 2, // due to the nature of aura the slots are 2*period
 		}),
 		treasury: Some(TreasuryConfig {
 			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1 * DOLLARS,
 			spend_period: 1 * DAYS,
 			burn: Permill::from_percent(50),
-			_genesis_phantom_data: Default::default(),
 		}),
 		contract: Some(ContractConfig {
 			contract_fee: 1 * CENTS,
@@ -134,15 +128,15 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		upgrade_key: Some(UpgradeKeyConfig {
 			key: endowed_accounts[0].clone(),
-			_genesis_phantom_data: Default::default(),
+		}),
+		sudo: Some(SudoConfig {
+			key: endowed_accounts[0].clone(),
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		})
 	}
 }
@@ -190,7 +184,6 @@ pub fn testnet_genesis(
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
 			authorities: initial_authorities.clone(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
@@ -201,12 +194,10 @@ pub fn testnet_genesis(
 			creation_fee: 0,
 			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k| (k.into(), (1 << 60))).collect(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
 			session_length: 10,
-			_genesis_phantom_data: Default::default(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
@@ -220,13 +211,13 @@ pub fn testnet_genesis(
 			current_offline_slash: 0,
 			current_session_reward: 0,
 			offline_slash_grace: 0,
-			_genesis_phantom_data: Default::default(),
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,
 			voting_period: 18,
 			minimum_deposit: 10,
-			_genesis_phantom_data: Default::default(),
+			public_delay: 0,
+			max_lock_periods: 6,
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
@@ -241,23 +232,20 @@ pub fn testnet_genesis(
 			term_duration: 1000000,
 			desired_seats: (endowed_accounts.len() - initial_authorities.len()) as u32,
 			inactive_grace_period: 1,
-			_genesis_phantom_data: Default::default(),
 		}),
 		council_voting: Some(CouncilVotingConfig {
 			cooloff_period: 75,
 			voting_period: 20,
-			_genesis_phantom_data: Default::default(),
+			enact_delay_period: 0,
 		}),
 		timestamp: Some(TimestampConfig {
-			period: 5,                    // 5 second block time.
-			_genesis_phantom_data: Default::default(),
+			period: 2,                    // 2*2=4 second block time.
 		}),
 		treasury: Some(TreasuryConfig {
 			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1_000_000,
 			spend_period: 12 * 60 * 24,
 			burn: Permill::from_percent(50),
-			_genesis_phantom_data: Default::default(),
 		}),
 		contract: Some(ContractConfig {
 			contract_fee: 21,
@@ -267,15 +255,15 @@ pub fn testnet_genesis(
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
-			_genesis_phantom_data: Default::default(),
 		}),
 		upgrade_key: Some(UpgradeKeyConfig {
 			key: upgrade_key,
-			_genesis_phantom_data: Default::default(),
+		}),
+		sudo: Some(SudoConfig {
+			key: upgrade_key,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
-			_genesis_phantom_data: Default::default(),
 		})
 	}
 }
@@ -292,7 +280,7 @@ fn development_config_genesis() -> GenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec {
-	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![], None, None, None, None)
+	ChainSpec::from_genesis("Development", "dev", development_config_genesis, vec![], None, None, None, None)
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
@@ -319,7 +307,7 @@ mod tests {
 
 	fn local_testnet_genesis_instant() -> GenesisConfig {
 		let mut genesis = local_testnet_genesis();
-		genesis.timestamp = Some(TimestampConfig { period: 0, _genesis_phantom_data: Default::default() });
+		genesis.timestamp = Some(TimestampConfig { period: 0 });
 		genesis
 	}
 
@@ -329,7 +317,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_connectiviy() {
+	fn test_connectivity() {
 		service_test::connectivity::<Factory, node_primitives::InherentData>(integration_test_config());
 	}
 }

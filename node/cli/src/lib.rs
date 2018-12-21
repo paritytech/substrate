@@ -33,7 +33,6 @@ extern crate substrate_transaction_pool as transaction_pool;
 #[macro_use]
 extern crate substrate_network as network;
 extern crate substrate_consensus_aura as consensus;
-extern crate substrate_consensus_common as consensus_common;
 extern crate substrate_client as client;
 extern crate substrate_finality_grandpa as grandpa;
 extern crate node_primitives;
@@ -45,7 +44,6 @@ extern crate substrate_keystore;
 #[macro_use]
 extern crate log;
 extern crate structopt;
-extern crate parking_lot;
 
 pub use cli::error;
 pub mod chain_spec;
@@ -66,8 +64,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The BBQ Birch testnet.
-	BbqBirch,
+	/// The Charred Cherry testnet.
+	CharredCherry,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
 }
@@ -76,7 +74,7 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::BbqBirch => chain_spec::bbq_birch_config()?,
+			ChainSpec::CharredCherry => chain_spec::charred_cherry_config()?,
 			ChainSpec::Development => chain_spec::development_config(),
 			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
@@ -87,7 +85,7 @@ impl ChainSpec {
 		match s {
 			"dev" => Some(ChainSpec::Development),
 			"local" => Some(ChainSpec::LocalTestnet),
-			"" | "bbq-birch" => Some(ChainSpec::BbqBirch),
+			"" | "cherry" | "charred-cherry" => Some(ChainSpec::CharredCherry),
 			"staging" => Some(ChainSpec::StagingTestnet),
 			_ => None,
 		}
@@ -122,20 +120,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			Err(e) => e.exit(),
 		};
 
-	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(
+	let (spec, config) = cli::parse_matches::<service::Factory, _>(
 		load_spec, version, "substrate-node", &matches
 	)?;
-
-	if matches.is_present("grandpa_authority_only") {
-		config.custom.grandpa_authority = true;
-		config.custom.grandpa_authority_only = true;
-		// Authority Setup is only called if validator is set as true
-		config.roles = ServiceRoles::AUTHORITY;
-	} else if matches.is_present("grandpa_authority") {
-		config.custom.grandpa_authority = true;
-		// Authority Setup is only called if validator is set as true
-		config.roles = ServiceRoles::AUTHORITY;
-	}
 
 	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
 		cli::Action::ExecutedInternally => (),

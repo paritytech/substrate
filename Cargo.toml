@@ -4,7 +4,7 @@ path = "node/src/main.rs"
 
 [package]
 name = "substrate"
-version = "0.1.0"
+version = "0.9.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 
@@ -40,7 +40,11 @@ members = [
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
 	"srml/support",
+	"srml/support/procedural",
+	"srml/support/procedural/tools",
+	"srml/support/procedural/tools/derive",
 	"srml/assets",
+	"srml/aura",
 	"srml/balances",
 	"srml/consensus",
 	"srml/contract",
@@ -53,6 +57,7 @@ members = [
 	"core/sr-primitives",
 	"srml/session",
 	"srml/staking",
+	"srml/sudo",
 	"srml/system",
 	"srml/timestamp",
 	"srml/treasury",
@@ -75,7 +80,6 @@ members = [
 exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
-	"pwasm-alloc",
 	"core/test-runtime/wasm",
 	"test-utils/chain-spec-builder"
 ]

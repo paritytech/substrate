@@ -91,7 +91,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"initialise_block",
+			"Core_initialise_block",
 			&header.encode(),
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
@@ -102,7 +102,7 @@ mod tests {
 				Some(&InMemoryChangesTrieStorage::new()),
 				&mut overlay,
 				&executor(),
-				"apply_extrinsic",
+				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
 				ExecutionStrategy::NativeWhenPossible,
 			).unwrap();
@@ -113,7 +113,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"finalise_block",
+			"BlockBuilder_finalise_block",
 			&[],
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
@@ -157,7 +157,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"execute_block",
+			"Core_execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
@@ -182,7 +182,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"execute_block",
+			"Core_execute_block",
 			&b1data,
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -208,7 +208,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&Executor::new(),
-			"execute_block",
+			"Core_execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
