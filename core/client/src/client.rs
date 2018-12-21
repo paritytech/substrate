@@ -284,7 +284,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "Core_authorities",&[])
+			None => self.executor.call(id, "Core_authorities", &[])
 				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 					.ok_or(error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
