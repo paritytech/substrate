@@ -78,6 +78,9 @@ pub trait Ext {
 pub trait Loader<T: Trait> {
 	type Executable;
 
+	// TODO: We need to support the case with empty constructor.
+	// I think we don't want to require every binary to contain a `deploy` function.
+	// Anyway, we will have to have validation of this.
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
 }
