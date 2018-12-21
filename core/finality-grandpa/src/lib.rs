@@ -1186,6 +1186,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
+	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -1312,5 +1313,5 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		}))
 	}).map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
 
-	Ok(voter_work)
+	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }

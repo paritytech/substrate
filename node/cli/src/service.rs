@@ -21,8 +21,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::prelude::Future;
-
 use client;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use grandpa;
@@ -85,21 +83,20 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
-					let aura = start_aura(
+					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client,
 						block_import.clone(),
 						proposer,
 						service.network(),
-					);
-
-					executor.spawn(aura.select(service.on_exit()).then(|_| Ok(())));
+						service.on_exit(),
+					));
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
 
-				let voter = grandpa::run_grandpa(
+				executor.spawn(grandpa::run_grandpa(
 					grandpa::Config {
 						local_key,
 						gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
@@ -107,9 +104,8 @@ construct_service_factory! {
 					},
 					link_half,
 					grandpa::NetworkBridge::new(service.network()),
-				)?;
-
-				executor.spawn(voter.select(service.on_exit()).then(|_| Ok(())));
+					service.on_exit(),
+				)?);
 
 				Ok(service)
 			}
