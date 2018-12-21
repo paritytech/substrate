@@ -435,7 +435,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{ExecutionContext, Ext, Loader, Vm};
-	use account_db::{DirectAccountDb, OverlayAccountDb};
+	use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 	use gas::GasMeter;
 	use runtime_io::with_externalities;
 	use std::cell::RefCell;
@@ -565,6 +565,154 @@ mod tests {
 		});
 
 		assert_eq!(&*test_data.borrow(), &vec![0, 1]);
+	}
+
+	// These will probably require introducing gas meter breakdown.
+	// TODO: Verify that transfer charges creation or transfer fee.
+	// TODO: Verify that transfer charges correct fee for INSTANTIATE.
+
+	// TODO: Won't create an account with value below exsistential deposit.
+	// TODO: Verify that instantiate properly creates a contract.
+
+	#[test]
+	fn transfer_works() {
+		// This test verifies that a contract is able to transfer
+		// some funds to another account.
+		let origin = ALICE;
+		let dest = BOB;
+
+		let vm = MockVm { _data: PhantomData };
+		let loader = MockLoader {
+			map: HashMap::new(),
+		};
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+			overlay.set_balance(&origin, 100);
+			overlay.set_balance(&dest, 0);
+
+			let cfg = Config::preload();
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay,
+				events: Vec::new(),
+				config: &cfg,
+				vm: &vm,
+				loader: &loader,
+			};
+
+			let result = ctx.call(
+				origin.clone(),
+				dest,
+				55,
+				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&[],
+				&mut vec![],
+			);
+			assert_matches!(result, Ok(_));
+			assert_eq!(ctx.overlay.get_balance(&origin), 45);
+			assert_eq!(ctx.overlay.get_balance(&dest), 55);
+		});
+	}
+
+	#[test]
+	fn balance_too_low() {
+		// This test verifies that a contract can't send value if it's
+		// balance is too low.
+		let origin = ALICE;
+		let dest = BOB;
+
+		let vm = MockVm { _data: PhantomData };
+		let loader = MockLoader {
+			map: HashMap::new(),
+		};
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+			overlay.set_balance(&origin, 0);
+
+			let cfg = Config::preload();
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay,
+				events: Vec::new(),
+				config: &cfg,
+				vm: &vm,
+				loader: &loader,
+			};
+
+			let result = ctx.call(
+				origin.clone(),
+				dest,
+				100,
+				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&[],
+				&mut vec![],
+			);
+
+			assert_matches!(result, Err("balance too low to send value"));
+			assert_eq!(ctx.overlay.get_balance(&origin), 0);
+			assert_eq!(ctx.overlay.get_balance(&dest), 0);
+		});
+	}
+
+	#[test]
+	fn output_is_returned() {
+		// Verifies that if a contract returns data, this data
+		// is returned from the execution context.
+		let origin = ALICE;
+		let dest = BOB;
+
+		let vm = MockVm { _data: PhantomData };
+		let loader = MockLoader {
+			map: {
+				let mut contracts = HashMap::new();
+				contracts.insert(
+					1.into(),
+					MockExecutable::new(|ctx| {
+						// Return some data and terminate execution without an error.
+						*ctx.output_data = vec![1, 2, 3, 4];
+						Ok(())
+					}),
+				);
+				contracts
+			},
+		};
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+			overlay.set_code(&BOB, Some(1.into()));
+			overlay.set_code(&CHARLIE, Some(2.into()));
+
+			let cfg = Config::preload();
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay,
+				events: Vec::new(),
+				config: &cfg,
+				vm: &vm,
+				loader: &loader,
+			};
+
+			let mut output_data = vec![];
+			let result = ctx.call(
+				origin.clone(),
+				dest,
+				0,
+				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&[],
+				&mut output_data,
+			);
+
+			assert_matches!(result, Ok(_));
+			assert_eq!(&output_data, &[1, 2, 3, 4]);
+		});
 	}
 
 	#[test]
