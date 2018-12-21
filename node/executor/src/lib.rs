@@ -369,7 +369,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("a506a69fefa4dc1be6838b68dc6e5799bd5fec545ef890cadac20edc0254d37a").into(),
+			hex!("7b7d3b509a444cdf214825d3354507823a4c91eafa493f0956448881a81ab797").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
