@@ -40,12 +40,7 @@ construct_simple_protocol! {
 
 /// Node specific configuration
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
-	/// should run as a grandpa authority
-	pub grandpa_authority: bool,
-	/// should run as a grandpa authority only, don't validate as usual
-	pub grandpa_authority_only: bool,
 	/// grandpa connection to import block
-
 	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
 	// https://github.com/paritytech/substrate/issues/1134
 	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
@@ -54,8 +49,6 @@ pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 	fn default() -> NodeConfig<F> {
 		NodeConfig {
-			grandpa_authority: false,
-			grandpa_authority_only: false,
 			grandpa_import_setup: None,
 		}
 	}
@@ -77,38 +70,29 @@ construct_service_factory! {
 			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor|
 				FullComponents::<Factory>::new(config, executor) },
 		AuthoritySetup = {
-			|mut service: Self::FullService, executor: TaskExecutor, key: Option<Arc<Pair>>| {
+			|mut service: Self::FullService, executor: TaskExecutor, local_key: Option<Arc<Pair>>| {
 				let (block_import, link_half) = service.config.custom.grandpa_import_setup.take()
 					.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-				let local_key = if let Some(key) = key {
-					if !service.config.custom.grandpa_authority_only {
-						info!("Using authority key {}", key.public());
-						let proposer = Arc::new(substrate_service::ProposerFactory {
-							client: service.client(),
-							transaction_pool: service.transaction_pool(),
-						});
+				if let Some(ref key) = local_key {
+					info!("Using authority key {}", key.public());
+					let proposer = Arc::new(substrate_service::ProposerFactory {
+						client: service.client(),
+						transaction_pool: service.transaction_pool(),
+					});
 
-						let client = service.client();
-						executor.spawn(start_aura(
-							SlotDuration::get_or_compute(&*client)?,
-							key.clone(),
-							client,
-							block_import.clone(),
-							proposer,
-							service.network(),
-						));
-					}
+					let client = service.client();
+					executor.spawn(start_aura(
+						SlotDuration::get_or_compute(&*client)?,
+						key.clone(),
+						client,
+						block_import.clone(),
+						proposer,
+						service.network(),
+					));
 
-					if service.config.custom.grandpa_authority {
-						info!("Running Grandpa session as Authority {}", key.public());
-						Some(key)
-					} else {
-						None
-					}
-				} else {
-					None
-				};
+					info!("Running Grandpa session as Authority {}", key.public());
+				}
 
 				let voter = grandpa::run_grandpa(
 					grandpa::Config {
