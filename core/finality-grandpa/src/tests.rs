@@ -376,6 +376,7 @@ fn finalize_3_voters_no_observers() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			futures::empty(),
 		).expect("all in order with client and network");
 
 		assert_send(&voter);
@@ -436,6 +437,7 @@ fn finalize_3_voters_1_observer() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			futures::empty(),
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
@@ -592,6 +594,7 @@ fn transition_3_voters_twice_1_observer() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			futures::empty(),
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
