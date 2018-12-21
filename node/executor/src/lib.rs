@@ -340,7 +340,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("a208e27269f8a17e7f7cf9513396d3579066df10a853e030345847ec96593c2e").into(),
+			hex!("24f8ac99a6d98e9b53f4f6ef6ffdd12ba53ea3f247200a8126fa69c4b5047fbc").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
