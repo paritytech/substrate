@@ -312,9 +312,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("1a7758d96d7353732f3054a3dacb18f04f42fc48f6706378d6f7be744c6022f1").into()
+				hex!("bc4bdc45ba03402f9b4c7ec09834065c57205b1742bf2469ab9fc54544d8d002").into()
 			} else {
-				hex!("1cf270c8a484df4931af562f7afdc9f44d99ae1bd35fe30fbd2cf3c1be2e933b").into()
+				hex!("6bfbf71fa08d99f2488e295807059269cbc43ea21af3316a92406974593a1fc2").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
@@ -659,7 +659,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("3af4e1ba0769122b1e92b138fecf7ce8bb2fe4f2a65fba3b423f87942f1ba8c8").into(),
+			hex!("bfc8051f91071149cca8b8dca6290fdb82eda6868d48cfed25f8ca38ed3a1049").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
