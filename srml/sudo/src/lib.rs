@@ -53,8 +53,8 @@ decl_module! {
 
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let _sender = ensure_signed(origin)?;
-			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), "only the current sudo key can sudo");
 
 			let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
 			Self::deposit_event(RawEvent::Sudid(ok));
@@ -62,8 +62,8 @@ decl_module! {
 
 		fn set_key(origin, new: T::AccountId) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let _sender = ensure_signed(origin)?;
-			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
