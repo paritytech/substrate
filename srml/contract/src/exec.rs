@@ -519,49 +519,47 @@ mod tests {
 
 		let test_data = Rc::new(RefCell::new(vec![0usize]));
 
-		{
-			let loader = MockLoader {
-				map: {
-					let mut contracts = HashMap::new();
-					contracts.insert(
-						1.into(),
-						MockExecutable::new(|_ctx| {
-							test_data.borrow_mut().push(1);
-							Ok(())
-						}),
-					);
-					contracts
-				},
+		let loader = MockLoader {
+			map: {
+				let mut contracts = HashMap::new();
+				contracts.insert(
+					1.into(),
+					MockExecutable::new(|_ctx| {
+						test_data.borrow_mut().push(1);
+						Ok(())
+					}),
+				);
+				contracts
+			},
+		};
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
+			overlay.set_code(&1, Some(1.into()));
+
+			let cfg = Config::preload();
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay,
+				events: Vec::new(),
+				config: &cfg,
+				vm: &vm,
+				loader: &loader,
 			};
 
-			with_externalities(&mut ExtBuilder::default().build(), || {
-				let mut overlay = OverlayAccountDb::<Test>::new(&DirectAccountDb);
-				overlay.set_code(&1, Some(1.into()));
+			let result = ctx.call(
+				origin.clone(),
+				dest,
+				value,
+				&mut gas_meter,
+				&data,
+				&mut output_data,
+			);
 
-				let cfg = Config::preload();
-
-				let mut ctx = ExecutionContext {
-					self_account: origin.clone(),
-					depth: 0,
-					overlay,
-					events: Vec::new(),
-					config: &cfg,
-					vm: &vm,
-					loader: &loader,
-				};
-
-				let result = ctx.call(
-					origin.clone(),
-					dest,
-					value,
-					&mut gas_meter,
-					&data,
-					&mut output_data,
-				);
-
-				assert_matches!(result, Ok(_));
-			});
-		}
+			assert_matches!(result, Ok(_));
+		});
 
 		assert_eq!(&*test_data.borrow(), &vec![0, 1]);
 	}
