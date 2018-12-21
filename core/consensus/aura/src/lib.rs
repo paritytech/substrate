@@ -762,6 +762,7 @@ mod tests {
 				client,
 				environ.clone(),
 				DummyOracle,
+				futures::empty(),
 			);
 
 			runtime.spawn(aura);
