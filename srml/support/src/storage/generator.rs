@@ -962,7 +962,6 @@ mod test3 {
 			Foo get(foo) config(initial_foo): u32;
 		}
 	}
-
 	type PairOf<T> = (T, T);
 
 	struct TraitImpl {}

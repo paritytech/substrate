@@ -268,79 +268,71 @@ fn decl_store_extra_genesis(
 		}
 	}
 
-	let is_extra_genesis_needed = has_scall
-		|| !config_field.is_empty()
-		|| !genesis_extrafields.is_empty()
-		|| !builders.is_empty();
-	Ok(if is_extra_genesis_needed {
-		let (fparam, sparam, ph_field, ph_default) = if is_trait_needed {
-			if has_trait_field {
-				// no phantom data required
-				(
-					quote!(<#traitinstance: #traittype>),
-					quote!(<#traitinstance>),
-					quote!(),
-					quote!(),
-				)
-			} else {
-				// need phantom data
-				(
-					quote!(<#traitinstance: #traittype>),
-					quote!(<#traitinstance>),
-
-					quote!{
-						#[serde(skip)]
-						pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
-					},
-					quote!{
-						_genesis_phantom_data: Default::default(),
-					},
-				)
-			}
+	let (fparam, sparam, ph_field, ph_default) = if is_trait_needed {
+		if has_trait_field {
+			// no phantom data required
+			(
+				quote!(<#traitinstance: #traittype>),
+				quote!(<#traitinstance>),
+				quote!(),
+				quote!(),
+			)
 		} else {
-			// do not even need type parameter
-			(quote!(), quote!(), quote!(), quote!())
-		};
-		quote!{
+			// need phantom data
+			(
+				quote!(<#traitinstance: #traittype>),
+				quote!(<#traitinstance>),
 
-			#[derive(Serialize, Deserialize)]
-			#[cfg(feature = "std")]
-			#[serde(rename_all = "camelCase")]
-			#[serde(deny_unknown_fields)]
-			pub struct GenesisConfig#fparam {
-				#ph_field
-				#config_field
-				#genesis_extrafields
-			}
+				quote!{
+					#[serde(skip)]
+					pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
+				},
+				quote!{
+					_genesis_phantom_data: Default::default(),
+				},
+			)
+		}
+	} else {
+		// do not even need type parameter
+		(quote!(), quote!(), quote!(), quote!())
+	};
+	Ok(quote!{
 
-			#[cfg(feature = "std")]
-			impl#fparam Default for GenesisConfig#sparam {
-				fn default() -> Self {
-					GenesisConfig {
-						#ph_default
-						#config_field_default
-						#genesis_extrafields_default
-					}
-				}
-			}
+		#[derive(Serialize, Deserialize)]
+		#[cfg(feature = "std")]
+		#[serde(rename_all = "camelCase")]
+		#[serde(deny_unknown_fields)]
+		pub struct GenesisConfig#fparam {
+			#ph_field
+			#config_field
+			#genesis_extrafields
+		}
 
-			#[cfg(feature = "std")]
-			impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
-
-				fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageMap, #scrate::runtime_primitives::ChildrenStorageMap), String> {
-					let mut r: #scrate::runtime_primitives::StorageMap = Default::default();
-					let mut c: #scrate::runtime_primitives::ChildrenStorageMap = Default::default();
-
-					#builders
-
-					#scall(&mut r, &mut c, &self);
-
-					Ok((r, c))
+		#[cfg(feature = "std")]
+		impl#fparam Default for GenesisConfig#sparam {
+			fn default() -> Self {
+				GenesisConfig {
+					#ph_default
+					#config_field_default
+					#genesis_extrafields_default
 				}
 			}
 		}
-	} else {
-		quote!()
+
+		#[cfg(feature = "std")]
+		impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
+
+			fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageMap, #scrate::runtime_primitives::ChildrenStorageMap), String> {
+				let mut r: #scrate::runtime_primitives::StorageMap = Default::default();
+				let mut c: #scrate::runtime_primitives::ChildrenStorageMap = Default::default();
+
+				#builders
+
+				#scall(&mut r, &mut c, &self);
+
+				Ok((r, c))
+			}
+		}
 	})
 }
 
@@ -696,4 +688,3 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 		map_key,
 	}
 }
-
