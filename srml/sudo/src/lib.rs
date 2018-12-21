@@ -76,7 +76,7 @@ decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
 		/// A sudo just took place.
 		Sudid(bool),
-		/// An upgrade just happened; old key is supplied as an argument.
+		/// The sudoer just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
 	}
 );
