@@ -298,7 +298,7 @@ macro_rules! decl_module {
 		$system:ident;
 	) => {};
 
-	// None generic event
+	// Non-generic event
 	(@impl_deposit_event
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$system:ident;
