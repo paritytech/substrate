@@ -179,16 +179,15 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 			}
 		};
 
-		runtime.spawn(start_aura(
+		let _ = runtime.block_on(start_aura(
 			slot_duration,
 			local_key,
 			client,
 			block_import,
 			env,
 			sync_oracle,
+			on_exit,
 		));
-
-		runtime.block_on(on_exit).expect("Exit future should not fail");
 	});
 }
 
@@ -200,6 +199,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
+	on_exit: impl Future<Item=(),Error=()>,
 ) -> impl Future<Item=(),Error=()> where
 	B: Block,
 	C: Authorities<B> + ChainHead<B>,
@@ -352,7 +352,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 		})
 	};
 
-	future::loop_fn((), move |()| {
+	let work = future::loop_fn((), move |()| {
 		let authorship_task = ::std::panic::AssertUnwindSafe(make_authorship());
 		authorship_task.catch_unwind().then(|res| {
 			match res {
@@ -369,7 +369,9 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 
 			Ok(future::Loop::Continue(()))
 		})
-	})
+	});
+
+	work.select(on_exit).then(|_| Ok(()))
 }
 
 // a header which has been checked
@@ -760,6 +762,7 @@ mod tests {
 				client,
 				environ.clone(),
 				DummyOracle,
+				futures::empty(),
 			);
 
 			runtime.spawn(aura);
