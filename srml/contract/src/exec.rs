@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Schedule, Trait};
-use account_db::{AccountDb, OverlayAccountDb, DirectAccountDb};
+use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use code;
 use gas::GasMeter;
 
@@ -480,9 +480,38 @@ mod tests {
 
 	struct MockLoader<'a> {
 		map: HashMap<CodeHash<Test>, MockExecutable<'a>>,
+		counter: u64,
 	}
+
+	impl<'a> MockLoader<'a> {
+		fn empty() -> Self {
+			MockLoader {
+				map: HashMap::new(),
+				counter: 0,
+			}
+		}
+
+		fn insert(
+			&mut self,
+			f: impl Fn(MockCtx) -> Result<(), &'static str> + 'a,
+		) -> CodeHash<Test> {
+			// Generate code hashes as monotonically increasing values.
+			let code_hash = self.counter.into();
+
+			self.counter += 1;
+			self.map.insert(code_hash, MockExecutable::new(f));
+			code_hash
+		}
+	}
+
 	struct MockVm<'a> {
 		_data: PhantomData<&'a ()>,
+	}
+
+	impl<'a> MockVm<'a> {
+		fn new() -> Self {
+			MockVm { _data: PhantomData }
+		}
 	}
 
 	impl<'a> Loader<Test> for MockLoader<'a> {
@@ -531,28 +560,20 @@ mod tests {
 		let data = vec![];
 		let mut output_data = Vec::new();
 
-		let vm = MockVm { _data: PhantomData };
+		let vm = MockVm::new();
 
 		let test_data = Rc::new(RefCell::new(vec![0usize]));
 
-		let loader = MockLoader {
-			map: {
-				let mut contracts = HashMap::new();
-				contracts.insert(
-					1.into(),
-					MockExecutable::new(|_ctx| {
-						test_data.borrow_mut().push(1);
-						Ok(())
-					}),
-				);
-				contracts
-			},
-		};
+		let mut loader = MockLoader::empty();
+		let exec_ch = loader.insert(|_ctx| {
+			test_data.borrow_mut().push(1);
+			Ok(())
+		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&1, Some(1.into()));
+			ctx.overlay.set_code(&1, Some(exec_ch));
 
 			let result = ctx.call(
 				origin.clone(),
@@ -584,10 +605,8 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 
-		let vm = MockVm { _data: PhantomData };
-		let loader = MockLoader {
-			map: HashMap::new(),
-		};
+		let vm = MockVm::new();
+		let loader = MockLoader::empty();
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
@@ -616,10 +635,8 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 
-		let vm = MockVm { _data: PhantomData };
-		let loader = MockLoader {
-			map: HashMap::new(),
-		};
+		let vm = MockVm::new();
+		let loader = MockLoader::empty();
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
@@ -648,27 +665,18 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 
-		let vm = MockVm { _data: PhantomData };
-		let loader = MockLoader {
-			map: {
-				let mut contracts = HashMap::new();
-				contracts.insert(
-					1.into(),
-					MockExecutable::new(|ctx| {
-						// Return some data and terminate execution without an error.
-						*ctx.output_data = vec![1, 2, 3, 4];
-						Ok(())
-					}),
-				);
-				contracts
-			},
-		};
+		let vm = MockVm::new();
+		let mut loader = MockLoader::empty();
+		let return_ch = loader.insert(|ctx| {
+			// Return some data and terminate execution without an error.
+			*ctx.output_data = vec![1, 2, 3, 4];
+			Ok(())
+		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&BOB, Some(1.into()));
-			ctx.overlay.set_code(&CHARLIE, Some(2.into()));
+			ctx.overlay.set_code(&BOB, Some(return_ch));
 
 			let mut output_data = vec![];
 			let result = ctx.call(
@@ -691,26 +699,17 @@ mod tests {
 		let dest = BOB;
 		let value = Default::default();
 
-		let vm = MockVm { _data: PhantomData };
-
-		let loader = MockLoader {
-			map: {
-				let mut contracts = HashMap::new();
-				contracts.insert(
-					1.into(),
-					MockExecutable::new(|ctx| {
-						assert_eq!(ctx.input_data, &[1, 2, 3, 4]);
-						Ok(())
-					}),
-				);
-				contracts
-			},
-		};
+		let vm = MockVm::new();
+		let mut loader = MockLoader::empty();
+		let input_data_ch = loader.insert(|ctx| {
+			assert_eq!(ctx.input_data, &[1, 2, 3, 4]);
+			Ok(())
+		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&dest, Some(1.into()));
+			ctx.overlay.set_code(&dest, Some(input_data_ch));
 
 			let result = ctx.call(
 				origin.clone(),
@@ -731,41 +730,32 @@ mod tests {
 		let dest = BOB;
 		let value = Default::default();
 
-		let vm = MockVm { _data: PhantomData };
-
 		let reached_bottom = RefCell::new(false);
 
-		let loader = MockLoader {
-			map: {
-				let mut contracts = HashMap::new();
-				contracts.insert(
-					1.into(),
-					MockExecutable::new(|ctx| {
-						// Try to call into yourself.
-						let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, &[], &mut vec![]);
+		let vm = MockVm::new();
+		let mut loader = MockLoader::empty();
+		let recurse_ch = loader.insert(|ctx| {
+			// Try to call into yourself.
+			let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, &[], &mut vec![]);
 
-						let mut reached_bottom = reached_bottom.borrow_mut();
-						if !*reached_bottom {
-							// We are first time here, it means we just reached bottom.
-							// Verify that we've got proper error and set `reached_bottom`.
-							assert_matches!(r, Err("reached maximum depth, cannot make a call"));
-							*reached_bottom = true;
-						} else {
-							// We just unwinding stack here.
-							assert_matches!(r, Ok(_));
-						}
+			let mut reached_bottom = reached_bottom.borrow_mut();
+			if !*reached_bottom {
+				// We are first time here, it means we just reached bottom.
+				// Verify that we've got proper error and set `reached_bottom`.
+				assert_matches!(r, Err("reached maximum depth, cannot make a call"));
+				*reached_bottom = true;
+			} else {
+				// We just unwinding stack here.
+				assert_matches!(r, Ok(_));
+			}
 
-						Ok(())
-					}),
-				);
-				contracts
-			},
-		};
+			Ok(())
+		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&dest, Some(1.into()));
+			ctx.overlay.set_code(&dest, Some(recurse_ch));
 
 			let result = ctx.call(
 				origin.clone(),
@@ -786,44 +776,33 @@ mod tests {
 		let dest = BOB;
 		let value = Default::default();
 
-		let vm = MockVm { _data: PhantomData };
+		let vm = MockVm::new();
 
 		let witnessed_caller_bob = RefCell::new(None::<u64>);
 		let witnessed_caller_charlie = RefCell::new(None::<u64>);
 
-		let loader = MockLoader {
-			map: {
-				let mut contracts = HashMap::new();
-				contracts.insert(
-					1.into(),
-					MockExecutable::new(|ctx| {
-						// Witness caller for bob.
-						*witnessed_caller_bob.borrow_mut() = Some(*ctx.ext.caller());
+		let mut loader = MockLoader::empty();
+		let bob_ch = loader.insert(|ctx| {
+			// Witness caller for bob.
+			*witnessed_caller_bob.borrow_mut() = Some(*ctx.ext.caller());
 
-						// Call into CHARLIE contract.
-						let r = ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]);
-						assert_matches!(r, Ok(_));
-						Ok(())
-					}),
-				);
-				contracts.insert(
-					2.into(),
-					MockExecutable::new(|ctx| {
-						// Witness caller for charlie.
-						*witnessed_caller_charlie.borrow_mut() = Some(*ctx.ext.caller());
-						Ok(())
-					}),
-				);
-				contracts
-			},
-		};
+			// Call into CHARLIE contract.
+			let r = ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]);
+			assert_matches!(r, Ok(_));
+			Ok(())
+		});
+		let charlie_ch = loader.insert(|ctx| {
+			// Witness caller for charlie.
+			*witnessed_caller_charlie.borrow_mut() = Some(*ctx.ext.caller());
+			Ok(())
+		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
 
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&dest, Some(1.into()));
-			ctx.overlay.set_code(&CHARLIE, Some(2.into()));
+			ctx.overlay.set_code(&dest, Some(bob_ch));
+			ctx.overlay.set_code(&CHARLIE, Some(charlie_ch));
 
 			let result = ctx.call(
 				origin.clone(),
