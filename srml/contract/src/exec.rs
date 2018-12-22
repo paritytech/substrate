@@ -182,7 +182,7 @@ where
 		}
 	}
 
-	/// Make a call to the specified address.
+	/// Make a call to the specified address, optionally transfering some funds.
 	pub fn call(
 		&mut self,
 		caller: T::AccountId,

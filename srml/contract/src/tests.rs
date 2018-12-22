@@ -35,6 +35,9 @@ impl_outer_origin! {
 }
 
 mod contract {
+	// Re-export contents of the root. This basically
+	// needs to give a name for the current crate.
+	// This hack is required for `impl_outer_event!`.
 	pub use super::super::*;
 }
 impl_outer_event! {
@@ -77,6 +80,7 @@ type System = system::Module<Test>;
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 	fn contract_address_for(code_hash: &H256, data: &[u8], origin: &u64) -> u64 {
+		// TODO:
 		panic!()
 	}
 }
