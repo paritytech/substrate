@@ -374,6 +374,12 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Stores the address of the current contract into the scratch buffer.
+	ext_address(ctx) => {
+		ctx.scratch_buf = ctx.ext.address().encode();
+		Ok(())
+	},
+
 	// Returns the size of the input buffer.
 	ext_input_size(ctx) -> u32 => {
 		Ok(ctx.input_data.len() as u32)

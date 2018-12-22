@@ -73,6 +73,9 @@ pub trait Ext {
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
+
+	/// Returns a reference to the account id of the current contract.
+	fn address(&self) -> &AccountIdOf<Self::T>;
 }
 
 pub trait Loader<T: Trait> {
@@ -438,6 +441,10 @@ where
 		self.ctx
 			.call(caller, to.clone(), value, gas_meter, data, output_data)
 			.map(|_| ())
+	}
+
+	fn address(&self) -> &T::AccountId {
+		&self.ctx.self_account
 	}
 
 	fn caller(&self) -> &T::AccountId {

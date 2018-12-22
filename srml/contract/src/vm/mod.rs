@@ -167,6 +167,9 @@ mod tests {
 		fn caller(&self) -> &u64 {
 			&42
 		}
+		fn address(&self) -> &u64 {
+			&69
+		}
 	}
 
 	fn execute<E: Ext>(
