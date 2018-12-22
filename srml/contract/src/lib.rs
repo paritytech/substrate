@@ -147,7 +147,7 @@ where
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 		// TODO: Change AccountId to staking::Address
 		/// Make a call to a specified account, optionally transferring some balance.
 		/// Make a call to a specified account, optionally transferring some balance.
