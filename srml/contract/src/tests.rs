@@ -19,16 +19,15 @@
 
 use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
-use runtime_primitives::traits::{BlakeTwo256};
+use runtime_primitives::testing::{Digest, DigestItem, Header, H256};
+use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
-use substrate_primitives::{Blake2Hasher};
-use system::{Phase, EventRecord};
-use wabt;
+use substrate_primitives::Blake2Hasher;
+use system::{EventRecord, Phase};
 use {
-	runtime_io, balances, system, ContractAddressFor,
-	GenesisConfig, Module, StorageOf, Trait, RawEvent,
+	balances, runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
+	Trait,
 };
 
 impl_outer_origin! {
@@ -124,7 +123,8 @@ impl ExtBuilder {
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
-			.unwrap().0;
+			.unwrap()
+			.0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				balances: vec![],
@@ -134,8 +134,10 @@ impl ExtBuilder {
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
 				reclaim_rebate: 0,
-			}.build_storage()
-			.unwrap().0,
+			}
+			.build_storage()
+			.unwrap()
+			.0,
 		);
 		t.extend(
 			GenesisConfig::<Test> {
@@ -146,9 +148,75 @@ impl ExtBuilder {
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
 				current_schedule: Default::default(),
-			}.build_storage()
-			.unwrap().0,
+			}
+			.build_storage()
+			.unwrap()
+			.0,
 		);
 		runtime_io::TestExternalities::new(t)
 	}
 }
+
+#[test]
+fn refunds_unused_gas() {
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+
+		assert_ok!(Contract::call(
+			Origin::signed(0),
+			1,
+			0.into(),
+			100_000.into(),
+			Vec::new()
+		));
+
+		assert_eq!(Balances::free_balance(&0), 100_000_000 - (2 * 135));
+	});
+}
+
+#[test]
+fn account_removal_removes_storage() {
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(100).build(),
+		|| {
+			// Setup two accounts with free balance above than exsistential threshold.
+			{
+				Balances::set_free_balance(&1, 110);
+				Balances::increase_total_stake_by(110);
+				<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
+				<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
+
+				Balances::set_free_balance(&2, 110);
+				Balances::increase_total_stake_by(110);
+				<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
+				<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
+			}
+
+			// Transfer funds from account 1 of such amount that after this transfer
+			// the balance of account 1 is will be below than exsistential threshold.
+			//
+			// This should lead to the removal of all storage associated with this account.
+			assert_ok!(Balances::transfer(Origin::signed(1), 2.into(), 20.into()));
+
+			// Verify that all entries from account 1 is removed, while
+			// entries from account 2 is in place.
+			{
+				assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
+				assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
+
+				assert_eq!(
+					<StorageOf<Test>>::get(2, b"hello".to_vec()),
+					Some(b"3".to_vec())
+				);
+				assert_eq!(
+					<StorageOf<Test>>::get(2, b"world".to_vec()),
+					Some(b"4".to_vec())
+				);
+			}
+		},
+	);
+}
+
+// TODO: Block gas limit
+// TODO: top_level_call_refunds_even_if_fails
