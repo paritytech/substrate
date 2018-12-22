@@ -140,8 +140,6 @@ impl<'a, T: Trait> Loader<T> for WasmLoader<'a, T> {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
-	// TODO: Should be removed and replaced by the `caller`?
-	// typically should be dest
 	pub self_account: T::AccountId,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
@@ -188,15 +186,12 @@ where
 	/// Make a call to the specified address, optionally transfering some funds.
 	pub fn call(
 		&mut self,
-		caller: T::AccountId,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		input_data: &[u8],
 		output_data: &mut Vec<u8>,
 	) -> Result<CallReceipt, &'static str> {
-		assert_eq!(caller, self.self_account);
-
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot make a call");
 		}
@@ -228,7 +223,7 @@ where
 					&executable,
 					&mut CallContext {
 						ctx: &mut nested,
-						caller: caller,
+						caller: self.self_account.clone(),
 					},
 					input_data,
 					output_data,
@@ -437,9 +432,8 @@ where
 		data: &[u8],
 		output_data: &mut Vec<u8>,
 	) -> Result<(), &'static str> {
-		let caller = self.ctx.self_account.clone();
 		self.ctx
-			.call(caller, to.clone(), value, gas_meter, data, output_data)
+			.call(to.clone(), value, gas_meter, data, output_data)
 			.map(|_| ())
 	}
 
@@ -583,7 +577,6 @@ mod tests {
 			ctx.overlay.set_code(&1, Some(exec_ch));
 
 			let result = ctx.call(
-				origin.clone(),
 				dest,
 				value,
 				&mut gas_meter,
@@ -622,7 +615,6 @@ mod tests {
 			ctx.overlay.set_balance(&dest, 0);
 
 			let result = ctx.call(
-				origin.clone(),
 				dest,
 				55,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
@@ -651,7 +643,6 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 0);
 
 			let result = ctx.call(
-				origin.clone(),
 				dest,
 				100,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
@@ -687,7 +678,6 @@ mod tests {
 
 			let mut output_data = vec![];
 			let result = ctx.call(
-				origin.clone(),
 				dest,
 				0,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
@@ -719,7 +709,6 @@ mod tests {
 			ctx.overlay.set_code(&dest, Some(input_data_ch));
 
 			let result = ctx.call(
-				origin.clone(),
 				dest,
 				value,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
@@ -765,7 +754,6 @@ mod tests {
 			ctx.overlay.set_code(&dest, Some(recurse_ch));
 
 			let result = ctx.call(
-				origin.clone(),
 				dest,
 				value,
 				&mut GasMeter::<Test>::with_limit(100000, 1),
@@ -812,7 +800,6 @@ mod tests {
 			ctx.overlay.set_code(&CHARLIE, Some(charlie_ch));
 
 			let result = ctx.call(
-				origin.clone(),
 				dest,
 				value,
 				&mut GasMeter::<Test>::with_limit(10000, 1),

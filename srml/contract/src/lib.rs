@@ -210,7 +210,7 @@ decl_module! {
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 
 			let mut output_data = Vec::new();
-			let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data, &mut output_data);
+			let result = ctx.call(dest, value, &mut gas_meter, &data, &mut output_data);
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
