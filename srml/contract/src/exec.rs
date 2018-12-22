@@ -209,7 +209,7 @@ where
 			if value > T::Balance::zero() {
 				transfer(
 					gas_meter,
-					false,
+					TransferCause::Call,
 					&self.self_account,
 					&dest,
 					value,
@@ -279,7 +279,7 @@ where
 			if endowment > T::Balance::zero() {
 				transfer(
 					gas_meter,
-					true,
+					TransferCause::Instantiate,
 					&self.self_account,
 					&dest,
 					endowment,
@@ -312,14 +312,20 @@ where
 	}
 }
 
+/// Describes possible transfer causes.
+enum TransferCause {
+	Call,
+	Instantiate,
+}
+
 /// Transfer some funds from `transactor` to `dest`.
 ///
 /// All balance changes are performed in the `overlay`.
 ///
 /// This function also handles charging the fee. The fee depends
-/// on whether the transfer happening because of contract creation
-/// (transfering endowment), specified by `contract_create` flag,
-/// or because of a transfer via `call`.
+/// on whether the transfer happening because of contract instantiation,
+/// transfering endowment, or because of a transfer via `call`. This
+/// is specified using the `cause` parameter.
 ///
 /// NOTE: that the fee is denominated in `T::Balance` units, but
 /// charged in `T::Gas` from the provided `gas_meter`. This means
@@ -330,33 +336,32 @@ where
 /// the chance to give up it's life.
 fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	gas_meter: &mut GasMeter<T>,
-	contract_create: bool,
+	cause: TransferCause,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: T::Balance,
 	ctx: &mut ExecutionContext<'a, T, V, L>,
 ) -> Result<(), &'static str> {
+	use self::TransferCause::*;
+
 	let to_balance = ctx.overlay.get_balance(dest);
 
-	// This flag is totally distinct from `contract_create`, which shows if this function
-	// is called from `CREATE` procedure.
-	//
 	// `would_create` indicates whether the account will be created if this transfer gets executed.
-	// For example, we can create a contract at the address which already has some funds. In this
-	// case `contract_create` will be `true` but `would_create` will be `false`. Another example would
-	// be when this function is called from `CALL`, but `dest` doesn't exist yet. In this case
-	// `contract_create` will be `false` but `would_create` will be `true`.
+	// This flag is orthogonal to `cause.
+	// For example, we can instantiate a contract at the address which already has some funds. In this
+	// `would_create` will be `false`. Another example would be when this function is called from `call`,
+	// and account with the address `dest` doesn't exist yet `would_create` will be `true`.
 	let would_create = to_balance.is_zero();
 
-	let fee: T::Balance = match (contract_create, would_create) {
-		// If this function is called from `CREATE` routine, then we always
+	let fee: T::Balance = match (cause, would_create) {
+		// If this function is called from `Instantiate` routine, then we always
 		// charge contract account creation fee.
-		(true, _) => ctx.config.contract_account_create_fee,
+		(Instantiate, _) => ctx.config.contract_account_create_fee,
 
 		// Otherwise the fee depends on whether we create a new account or transfer
 		// to an existing one.
-		(false, true) => ctx.config.account_create_fee,
-		(false, false) => ctx.config.transfer_fee,
+		(Call, true) => ctx.config.account_create_fee,
+		(Call, false) => ctx.config.transfer_fee,
 	};
 
 	if gas_meter.charge_by_balance(fee).is_out_of_gas() {
