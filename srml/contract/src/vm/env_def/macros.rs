@@ -311,5 +311,6 @@ mod tests {
 		);
 
 		assert!(Env::can_satisfy(b"ext_gas", &FunctionType::new(vec![ValueType::I32], None)));
+		assert!(!Env::can_satisfy(b"not_exists", &FunctionType::new(vec![], None)));
 	}
 }
