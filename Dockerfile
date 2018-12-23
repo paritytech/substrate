@@ -6,7 +6,9 @@ RUN apk add build-base \
     cmake \
     linux-headers \
     openssl-dev \
-    cargo
+    cargo \
+    clang \
+    clang-libs
 
 ARG PROFILE=release
 WORKDIR /substrate
