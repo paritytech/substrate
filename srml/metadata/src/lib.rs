@@ -27,6 +27,7 @@ extern crate parity_codec_derive;
 extern crate parity_codec as codec;
 extern crate sr_std as rstd;
 extern crate substrate_primitives as primitives;
+extern crate substrate_metadata;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -159,6 +160,7 @@ pub struct FunctionMetadata {
 pub struct FunctionArgumentMetadata {
 	pub name: DecodeDifferentStr,
 	pub ty: DecodeDifferentStr,
+	pub type_metadata: substrate_metadata::Metadata,
 }
 
 /// Newtype wrapper for support encoding functions (actual the result of the function).
@@ -212,6 +214,7 @@ pub struct EventMetadata {
 	pub name: DecodeDifferentStr,
 	pub arguments: DecodeDifferentArray<&'static str, StringBuf>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+	pub type_metadata: substrate_metadata::Metadata,
 }
 
 /// All the metadata about a storage.
@@ -231,6 +234,7 @@ pub struct StorageFunctionMetadata {
 	pub ty: StorageFunctionType,
 	pub default: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+	pub type_metadata: substrate_metadata::Metadata,
 }
 
 /// A technical trait to store lazy initiated vec value as static dyn pointer.

@@ -114,7 +114,7 @@ macro_rules! decl_event {
 		}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum Event {
@@ -254,6 +254,7 @@ macro_rules! __events_to_metadata {
 				documentation: $crate::event::DecodeDifferent::Encode(&[
 					$( $doc_attr ),*
 				]),
+				type_metadata: <Self as $crate::substrate_metadata::EncodeMetadata>::metadata()
 			};
 			$( $rest )*
 		)

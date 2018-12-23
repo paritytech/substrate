@@ -50,6 +50,10 @@ pub extern crate parity_codec as codec;
 #[doc(hidden)]
 pub extern crate once_cell;
 
+pub extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 pub use self::storage::generator::Storage as GenericStorage;
 
 #[macro_use]

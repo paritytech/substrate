@@ -641,6 +641,7 @@ fn store_functions_to_metadata (
 					)
 				),
 				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
+				type_metadata: <#typ as #scrate::substrate_metadata::EncodeMetadata>::metadata()
 			},
 		};
 		items.extend(item);

@@ -1,0 +1,17 @@
+[package]
+name = "substrate-metadata-derive"
+version = "0.1.0"
+authors = ["Bryan Chen <xlchen1291@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "0.15"
+quote = "0.6"
+proc-macro2 = "0.4"
+
+[features]
+default = ["std"]
+std = []

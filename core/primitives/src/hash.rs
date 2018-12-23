@@ -50,6 +50,15 @@ macro_rules! impl_rest {
 			}
 		}
 
+		impl ::substrate_metadata::EncodeMetadata for $name {
+			fn metadata() -> ::substrate_metadata::Metadata {
+				::substrate_metadata::Metadata {
+					name: stringify!($name).into(),
+					kind: ::substrate_metadata::TypeMetadata::Primative
+				}
+			}
+		}
+
 		#[cfg(feature = "std")]
 		impl From<u64> for $name {
 			fn from(val: u64) -> Self {

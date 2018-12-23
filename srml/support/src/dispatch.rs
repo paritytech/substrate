@@ -43,16 +43,16 @@ pub trait Callable {
 pub type CallableCallFor<A> = <A as Callable>::Call;
 
 #[cfg(feature = "std")]
-pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + Clone + Eq + substrate_metadata::EncodeMetadata + fmt::Debug {}
 
 #[cfg(feature = "std")]
-impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + Clone + Eq + substrate_metadata::EncodeMetadata + fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
-pub trait Parameter: Codec + Clone + Eq {}
+pub trait Parameter: Codec + Clone + Eq + substrate_metadata::EncodeMetadata {}
 
 #[cfg(not(feature = "std"))]
-impl<T> Parameter for T where T: Codec + Clone + Eq {}
+impl<T> Parameter for T where T: Codec + Clone + Eq + substrate_metadata::EncodeMetadata {}
 
 /// Declare a struct for this module, then implement dispatch logic to create a pairing of several
 /// dispatch traits and enums.
@@ -902,6 +902,7 @@ macro_rules! __function_to_metadata {
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
 						ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($param)),
+						type_metadata: <$param as $crate::substrate_metadata::EncodeMetadata>::metadata(),
 					}
 				),*
 			]),

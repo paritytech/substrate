@@ -30,7 +30,11 @@ extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
 
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate parity_codec as codec;
+extern crate substrate_metadata;
 extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
 extern crate safe_mix;
@@ -96,7 +100,7 @@ decl_module! {
 }
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -106,7 +110,7 @@ pub enum Phase {
 }
 
 /// Record of an event happening.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
 pub struct EventRecord<E: Parameter + Member> {
 	/// The phase of the block it happened in.

@@ -76,6 +76,8 @@ members = [
 	"node/primitives",
 	"node/runtime",
 	"subkey",
+	"core/metadata",
+	"core/metadata-derive",
 ]
 exclude = [
 	"node/runtime/wasm",

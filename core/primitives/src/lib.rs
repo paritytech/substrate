@@ -34,6 +34,8 @@ extern crate rustc_hex;
 extern crate byteorder;
 extern crate parity_codec as codec;
 
+extern crate substrate_metadata;
+
 #[cfg(feature = "std")]
 extern crate serde;
 #[cfg(feature = "std")]
