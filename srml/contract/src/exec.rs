@@ -774,7 +774,6 @@ mod tests {
 	fn caller_returns_proper_values() {
 		let origin = ALICE;
 		let dest = BOB;
-		let value = Default::default();
 
 		let vm = MockVm::new();
 
@@ -783,16 +782,15 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 		let bob_ch = loader.insert(|ctx| {
-			// Witness caller for bob.
+			// Record the caller for bob.
 			*witnessed_caller_bob.borrow_mut() = Some(*ctx.ext.caller());
 
 			// Call into CHARLIE contract.
-			let r = ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]);
-			assert_matches!(r, Ok(_));
+			assert_matches!(ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]), Ok(_));
 			Ok(())
 		});
 		let charlie_ch = loader.insert(|ctx| {
-			// Witness caller for charlie.
+			// Record the caller for charlie.
 			*witnessed_caller_charlie.borrow_mut() = Some(*ctx.ext.caller());
 			Ok(())
 		});
@@ -806,7 +804,7 @@ mod tests {
 
 			let result = ctx.call(
 				dest,
-				value,
+				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[],
 				&mut vec![],
@@ -817,5 +815,41 @@ mod tests {
 
 		assert_eq!(&*witnessed_caller_bob.borrow(), &Some(origin));
 		assert_eq!(&*witnessed_caller_charlie.borrow(), &Some(dest));
+	}
+
+	#[test]
+	fn address_returns_proper_values() {
+		let vm = MockVm::new();
+
+		let mut loader = MockLoader::empty();
+		let bob_ch = loader.insert(|ctx| {
+			// Verify that address matches BOB.
+			assert_eq!(*ctx.ext.address(), BOB);
+
+			// Call into charlie contract.
+			assert_matches!(ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]), Ok(_));
+			Ok(())
+		});
+		let charlie_ch = loader.insert(|ctx| {
+			assert_eq!(*ctx.ext.address(), CHARLIE);
+			Ok(())
+		});
+
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let cfg = Config::preload();
+			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&BOB, Some(bob_ch));
+			ctx.overlay.set_code(&CHARLIE, Some(charlie_ch));
+
+			let result = ctx.call(
+				BOB,
+				0,
+				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&[],
+				&mut vec![],
+			);
+
+			assert_matches!(result, Ok(_));
+		});
 	}
 }
