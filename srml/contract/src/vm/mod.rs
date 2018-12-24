@@ -17,12 +17,12 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use exec::CreateReceipt;
-use vm::env_def::FunctionImplProvider;
+use exec::{Ext, OutputBuf, VmExecResult};
 use gas::GasMeter;
 use rstd::prelude::*;
-use {Trait, Schedule};
 use sandbox;
+use vm::env_def::FunctionImplProvider;
+use {Schedule, Trait};
 
 #[macro_use]
 pub mod env_def;
@@ -46,16 +46,16 @@ impl<'a, T: Trait> WasmVm<'a, T> {
 impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 	type Executable = ::exec::WasmExecutable;
 
-	fn execute<E: ::exec::Ext<T = T>>(
+	fn execute<E: Ext<T = T>>(
 		&self,
 		exec: &::exec::WasmExecutable,
 		ext: &mut E,
 		input_data: &[u8],
-		output_data: &mut Vec<u8>,
+		output_buf: OutputBuf,
 		gas_meter: &mut GasMeter<E::T>,
-	) -> Result<(), &'static str> {
-		let memory =
-			sandbox::Memory::new(exec.memory_def.initial, Some(exec.memory_def.maximum)).unwrap_or_else(|_| {
+	) -> VmExecResult {
+		let memory = sandbox::Memory::new(exec.memory_def.initial, Some(exec.memory_def.maximum))
+			.unwrap_or_else(|_| {
 				panic!(
 					"memory_def.initial can't be greater than memory_def.maximum;
 					thus Memory::new must not fail;
@@ -69,21 +69,39 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 			imports.add_host_func("env", name, func_ptr);
 		});
 
-		let mut runtime = Runtime::new(ext, input_data, output_data, &self.schedule, memory, gas_meter);
+		let mut runtime = Runtime::new(
+			ext,
+			input_data,
+			output_buf,
+			&self.schedule,
+			memory,
+			gas_meter,
+		);
 
 		// Instantiate the instance from the instrumented module code.
 		match sandbox::Instance::new(&exec.instrumented_code, &imports, &mut runtime) {
 			// No errors or traps were generated on instantiation! That
 			// means we can now invoke the contract entrypoint.
 			Ok(mut instance) => {
-				let err = instance.invoke(exec.entrypoint_name, &[], &mut runtime).err();
+				let err = instance
+					.invoke(exec.entrypoint_name, &[], &mut runtime)
+					.err();
 				to_execution_result(runtime, err)
 			}
 			// `start` function trapped. Treat it in the same manner as an execution error.
 			Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
+			Err(_err @ sandbox::Error::Module) => {
+				// `Error::Module` is returned only if instantiation or linking failed (i.e.
+				// wasm bianry tried to import a function that is not provided by the host).
+				// This shouldn't happen because validation proccess ought to reject such binaries.
+				//
+				// Because panics are really undesirable in the runtime code, we treat this as
+				// a trap for now. Eventually, we might want to revisit this.
+				return VmExecResult::Trap("validation error");
+			}
 			// Other instantiation errors.
 			// Return without executing anything.
-			Err(_) => return Err("failed to instantiate the contract"),
+			Err(_) => return VmExecResult::Trap("during start function"),
 		}
 	}
 }
@@ -91,12 +109,12 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use exec::{CallReceipt, CreateReceipt, Ext, OutputBuf};
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;
-	use exec::Ext;
-	use {CodeHash};
 	use wabt;
+	use CodeHash;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
@@ -152,8 +170,8 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-			_output_data: &mut Vec<u8>,
-		) -> Result<(), &'static str> {
+			_output_data: OutputBuf,
+		) -> Result<CallReceipt, &'static str> {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
@@ -162,7 +180,9 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(())
+			Ok(CallReceipt {
+				output_data: Vec::new(),
+			})
 		}
 		fn caller(&self) -> &u64 {
 			&42
@@ -179,13 +199,14 @@ mod tests {
 		ext: &mut E,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> Result<(), &'static str> {
-		use ::code::prepare::prepare_contract;
-		use ::exec::{Vm, WasmExecutable};
+		use code::prepare::prepare_contract;
+		use exec::{Vm, WasmExecutable};
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
 		let schedule = ::Schedule::<u64>::default();
-		let ::code::InstrumentedWasmModule { memory_def, code, .. } =
-			prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
+		let ::code::InstrumentedWasmModule {
+			memory_def, code, ..
+		} = prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
@@ -197,13 +218,11 @@ mod tests {
 		let cfg = Default::default();
 		let vm = WasmVm::new(&cfg);
 
-		vm.execute(
-			&exec,
-			ext,
-			input_data,
-			output_data,
-			gas_meter,
-		)
+		*output_data = vm
+			.execute(&exec, ext, input_data, OutputBuf::empty(), gas_meter)
+			.into_result()?;
+
+		Ok(())
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -252,16 +271,15 @@ mod tests {
 			&mut Vec::new(),
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(
 			&mock_ext.transfers,
 			&[TransferEntry {
 				to: 9,
 				value: 6,
-				data: vec![
-					1, 2, 3, 4,
-				],
+				data: vec![1, 2, 3, 4],
 				gas_left: 49970,
 			}]
 		);
@@ -312,16 +330,15 @@ mod tests {
 			&mut Vec::new(),
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(
 			&mock_ext.creates,
 			&[CreateEntry {
 				// code: vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00],
 				endowment: 3,
-				data: vec![
-					1, 2, 3, 4,
-				],
+				data: vec![1, 2, 3, 4],
 				gas_left: 49946,
 			}]
 		);
@@ -330,36 +347,36 @@ mod tests {
 	// TODO: This shouldn't be possible. There is an invariant that
 	// code should be already prepared.
 
-// 	const CODE_MEM: &str = r#"
-// (module
-// 	;; Internal memory is not allowed.
-// 	(memory 1 1)
+	// 	const CODE_MEM: &str = r#"
+	// (module
+	// 	;; Internal memory is not allowed.
+	// 	(memory 1 1)
 
-// 	(func (export "call")
-// 		nop
-// 	)
-// )
-// "#;
+	// 	(func (export "call")
+	// 		nop
+	// 	)
+	// )
+	// "#;
 
-// 	#[test]
-// 	fn contract_internal_mem() {
-// 		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
+	// 	#[test]
+	// 	fn contract_internal_mem() {
+	// 		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
 
-// 		let mut mock_ext = MockExt::default();
+	// 		let mut mock_ext = MockExt::default();
 
-// 		assert_matches!(
-// 			execute(
-// 				"call",
-// 				&code_mem,
-// 				&[],
-// 				&mut Vec::new(),
-// 				&mut mock_ext,
-// 				&Schedule::default(),
-// 				&mut GasMeter::with_limit(100_000, 1)
-// 			),
-// 			Err(_)
-// 		);
-// 	}
+	// 		assert_matches!(
+	// 			execute(
+	// 				"call",
+	// 				&code_mem,
+	// 				&[],
+	// 				&mut Vec::new(),
+	// 				&mut mock_ext,
+	// 				&Schedule::default(),
+	// 				&mut GasMeter::with_limit(100_000, 1)
+	// 			),
+	// 			Err(_)
+	// 		);
+	// 	}
 
 	const CODE_TRANSFER_LIMITED_GAS: &str = r#"
 (module
@@ -407,16 +424,15 @@ mod tests {
 			&mut Vec::new(),
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(
 			&mock_ext.transfers,
 			&[TransferEntry {
 				to: 9,
 				value: 6,
-				data: vec![
-					1, 2, 3, 4,
-				],
+				data: vec![1, 2, 3, 4],
 				gas_left: 228,
 			}]
 		);
@@ -488,7 +504,9 @@ mod tests {
 	#[test]
 	fn get_storage_puts_data_into_scratch_buf() {
 		let mut mock_ext = MockExt::default();
-		mock_ext.storage.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
+		mock_ext
+			.storage
+			.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
 
 		let mut return_buf = Vec::new();
 		execute(
@@ -497,19 +515,15 @@ mod tests {
 			&mut return_buf,
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			return_buf,
-			[0x22; 32].to_vec(),
-		);
+		assert_eq!(return_buf, [0x22; 32].to_vec());
 	}
-
 
 	/// calls `ext_caller`, loads the address from the scratch buffer and
 	/// compares it with the constant 42.
-	const CODE_CALLER: &'static str =
-r#"
+	const CODE_CALLER: &'static str = r#"
 (module
 	(import "env" "ext_caller" (func $ext_caller))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
@@ -566,6 +580,10 @@ r#"
 			&mut Vec::new(),
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 	}
+
+	// TODO: address
+	// TODO: return data from `start` function.
 }

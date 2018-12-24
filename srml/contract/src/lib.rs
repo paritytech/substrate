@@ -94,7 +94,7 @@ mod code;
 mod tests;
 
 use exec::ExecutionContext;
-use account_db::{AccountDb, OverlayAccountDb};
+use account_db::AccountDb;
 use double_map::StorageDoubleMap;
 
 use rstd::prelude::*;
@@ -209,8 +209,7 @@ decl_module! {
 			let loader = ::exec::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 
-			let mut output_data = Vec::new();
-			let result = ctx.call(dest, value, &mut gas_meter, &data, &mut output_data);
+			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::OutputBuf::empty());
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.

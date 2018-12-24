@@ -26,14 +26,15 @@ use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
-// TODO: Add logs
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
 }
 
-// TODO: Add logs.
 #[cfg_attr(test, derive(Debug))]
-pub struct CallReceipt;
+pub struct CallReceipt {
+	/// Output data received as a result of a call.
+	pub output_data: Vec<u8>,
+}
 
 /// An interface that provides an access to the external environment in which the
 /// smart-contract is executed.
@@ -68,8 +69,8 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
-		output_data: &mut Vec<u8>,
-	) -> Result<(), &'static str>;
+		output_buf: OutputBuf,
+	) -> Result<CallReceipt, &'static str>;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -88,6 +89,69 @@ pub trait Loader<T: Trait> {
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
 }
 
+#[must_use]
+pub struct OutputBuf(Vec<u8>);
+
+impl OutputBuf {
+	/// Create an output buffer from a spare vector which is not longer needed.
+	///
+	/// All contents are discarded, but capacity is preserved.
+	pub fn from_spare_vec(mut v: Vec<u8>) -> Self {
+		v.clear();
+		OutputBuf(v)
+	}
+
+	/// Create an output buffer ready for receiving a result.
+	///
+	/// Use this function to create output buffer if you don't have a spare
+	/// vector. Otherwise, use `from_spare_vec`.
+	pub fn empty() -> Self {
+		OutputBuf(Vec::new())
+	}
+
+	/// Attempt to write to the buffer result of the specified size.
+	///
+	/// Calls closure with the buffer of the requested size.
+	pub fn write<R, F: FnOnce(&mut [u8]) -> R>(&mut self, size: usize, f: F) -> R {
+		self.0.resize(size, 0);
+		f(&mut self.0)
+	}
+}
+
+#[must_use]
+pub enum VmExecResult {
+	Ok,
+	Returned(OutputBuf),
+	/// A program executed some forbidden operation.
+	///
+	/// This can include, e.g.: division by 0, OOB access or failure to satisfy some precondition
+	/// of a system call.
+	///
+	/// Contains some vm-specific description of an trap.
+	Trap(&'static str),
+}
+
+impl VmExecResult {
+	pub fn into_result(self) -> Result<Vec<u8>, &'static str> {
+		match self {
+			VmExecResult::Ok => Ok(Vec::new()),
+			VmExecResult::Returned(buf) => Ok(buf.0),
+			VmExecResult::Trap(description) => Err(description),
+		}
+	}
+}
+
+/// A trait that represent a virtual machine.
+///
+/// You can view a virtual machine as something that takes code, an input data buffer,
+/// queries it and/or performs actions on the given `Ext` and optionally
+/// returns an output data buffer. The type of code depends on the particular virtual machine.
+///
+/// Execution of code can end by either implicit termination (that is, reached the end of
+/// executable), explicit termination via returning a buffer or termination due to a trap.
+///
+/// You can optionally provide a vector for collecting output if a spare is available. If you don't have
+/// it will be created anyway.
 pub trait Vm<T: Trait> {
 	type Executable;
 
@@ -96,9 +160,9 @@ pub trait Vm<T: Trait> {
 		exec: &Self::Executable,
 		ext: &mut E,
 		input_data: &[u8],
-		output_data: &mut Vec<u8>,
+		output_buf: OutputBuf,
 		gas_meter: &mut GasMeter<T>,
-	) -> Result<(), &'static str>;
+	) -> VmExecResult;
 }
 
 pub struct WasmExecutable {
@@ -190,7 +254,7 @@ where
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		input_data: &[u8],
-		output_data: &mut Vec<u8>,
+		output_buf: OutputBuf,
 	) -> Result<CallReceipt, &'static str> {
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot make a call");
@@ -201,6 +265,7 @@ where
 		}
 
 		let dest_code_hash = self.overlay.get_code(&dest);
+		let mut output_data = Vec::new();
 
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
@@ -219,16 +284,19 @@ where
 
 			if let Some(dest_code_hash) = dest_code_hash {
 				let executable = self.loader.load_main(&dest_code_hash)?;
-				self.vm.execute(
-					&executable,
-					&mut CallContext {
-						ctx: &mut nested,
-						caller: self.self_account.clone(),
-					},
-					input_data,
-					output_data,
-					gas_meter,
-				)?;
+				output_data = self
+					.vm
+					.execute(
+						&executable,
+						&mut CallContext {
+							ctx: &mut nested,
+							caller: self.self_account.clone(),
+						},
+						input_data,
+						output_buf,
+						gas_meter,
+					)
+					.into_result()?;
 			}
 
 			(nested.overlay.into_change_set(), nested.events)
@@ -237,7 +305,9 @@ where
 		self.overlay.commit(change_set);
 		self.events.extend(events);
 
-		Ok(CallReceipt)
+		Ok(CallReceipt {
+			output_data,
+		})
 	}
 
 	// TODO: rename it to instantiate.
@@ -287,20 +357,19 @@ where
 				)?;
 			}
 
-			// TODO: Do something with the output data.
-			let mut output_data = Vec::<u8>::new();
-
 			let executable = self.loader.load_init(&code_hash)?;
-			self.vm.execute(
-				&executable,
-				&mut CallContext {
-					ctx: &mut nested,
-					caller: caller,
-				},
-				input_data,
-				&mut output_data,
-				gas_meter,
-			)?;
+			self.vm
+				.execute(
+					&executable,
+					&mut CallContext {
+						ctx: &mut nested,
+						caller: caller,
+					},
+					input_data,
+					OutputBuf::empty(),
+					gas_meter,
+				)
+				.into_result()?;
 
 			(nested.overlay.into_change_set(), nested.events)
 		};
@@ -435,11 +504,10 @@ where
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
-		output_data: &mut Vec<u8>,
-	) -> Result<(), &'static str> {
+		output_buf: OutputBuf,
+	) -> Result<CallReceipt, &'static str> {
 		self.ctx
-			.call(to.clone(), value, gas_meter, data, output_data)
-			.map(|_| ())
+			.call(to.clone(), value, gas_meter, data, output_buf)
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -453,8 +521,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{ExecutionContext, Ext, Loader, Vm};
-	use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
+	use super::{ExecutionContext, Ext, Loader, Vm, OutputBuf, VmExecResult};
+	use account_db::AccountDb;
 	use gas::GasMeter;
 	use runtime_io::with_externalities;
 	use std::cell::RefCell;
@@ -471,15 +539,15 @@ mod tests {
 	struct MockCtx<'a> {
 		ext: &'a mut dyn Ext<T = Test>,
 		input_data: &'a [u8],
-		output_data: &'a mut Vec<u8>,
+		output_data: OutputBuf,
 		gas_meter: &'a mut GasMeter<Test>,
 	}
 
 	#[derive(Clone)]
-	struct MockExecutable<'a>(Rc<Fn(MockCtx) -> Result<(), &'static str> + 'a>);
+	struct MockExecutable<'a>(Rc<Fn(MockCtx) -> VmExecResult + 'a>);
 
 	impl<'a> MockExecutable<'a> {
-		fn new(f: impl Fn(MockCtx) -> Result<(), &'static str> + 'a) -> Self {
+		fn new(f: impl Fn(MockCtx) -> VmExecResult + 'a) -> Self {
 			MockExecutable(Rc::new(f))
 		}
 	}
@@ -499,7 +567,7 @@ mod tests {
 
 		fn insert(
 			&mut self,
-			f: impl Fn(MockCtx) -> Result<(), &'static str> + 'a,
+			f: impl Fn(MockCtx) -> VmExecResult + 'a,
 		) -> CodeHash<Test> {
 			// Generate code hashes as monotonically increasing values.
 			let code_hash = self.counter.into();
@@ -545,9 +613,9 @@ mod tests {
 			exec: &MockExecutable,
 			ext: &mut E,
 			input_data: &[u8],
-			output_data: &mut Vec<u8>,
+			output_data: OutputBuf,
 			gas_meter: &mut GasMeter<Test>,
-		) -> Result<(), &'static str> {
+		) -> VmExecResult {
 			(exec.0)(MockCtx {
 				ext,
 				input_data,
@@ -564,7 +632,6 @@ mod tests {
 		let value = Default::default();
 		let mut gas_meter = GasMeter::<Test>::with_limit(10000, 1);
 		let data = vec![];
-		let mut output_data = Vec::new();
 
 		let vm = MockVm::new();
 
@@ -573,7 +640,7 @@ mod tests {
 		let mut loader = MockLoader::empty();
 		let exec_ch = loader.insert(|_ctx| {
 			test_data.borrow_mut().push(1);
-			Ok(())
+			VmExecResult::Ok
 		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
@@ -581,13 +648,7 @@ mod tests {
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.set_code(&1, Some(exec_ch));
 
-			let result = ctx.call(
-				dest,
-				value,
-				&mut gas_meter,
-				&data,
-				&mut output_data,
-			);
+			let result = ctx.call(dest, value, &mut gas_meter, &data, OutputBuf::empty());
 
 			assert_matches!(result, Ok(_));
 		});
@@ -624,7 +685,7 @@ mod tests {
 				55,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				&[],
-				&mut vec![],
+				OutputBuf::empty(),
 			);
 			assert_matches!(result, Ok(_));
 			assert_eq!(ctx.overlay.get_balance(&origin), 45);
@@ -652,7 +713,7 @@ mod tests {
 				100,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				&[],
-				&mut vec![],
+				OutputBuf::empty(),
 			);
 
 			assert_matches!(result, Err("balance too low to send value"));
@@ -670,10 +731,13 @@ mod tests {
 
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
-		let return_ch = loader.insert(|ctx| {
-			// Return some data and terminate execution without an error.
-			*ctx.output_data = vec![1, 2, 3, 4];
-			Ok(())
+		let return_ch = loader.insert(|_| {
+			let mut output_buf = OutputBuf::empty();
+			output_buf.write(4, |data| {
+				data.copy_from_slice(&[1, 2, 3, 4]);
+			});
+
+			VmExecResult::Returned(output_buf)
 		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
@@ -681,16 +745,15 @@ mod tests {
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.set_code(&BOB, Some(return_ch));
 
-			let mut output_data = vec![];
 			let result = ctx.call(
 				dest,
 				0,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				&[],
-				&mut output_data,
+				OutputBuf::empty(),
 			);
 
-			assert_matches!(result, Ok(_));
+			let output_data = result.unwrap().output_data;
 			assert_eq!(&output_data, &[1, 2, 3, 4]);
 		});
 	}
@@ -705,7 +768,7 @@ mod tests {
 		let mut loader = MockLoader::empty();
 		let input_data_ch = loader.insert(|ctx| {
 			assert_eq!(ctx.input_data, &[1, 2, 3, 4]);
-			Ok(())
+			VmExecResult::Ok
 		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
@@ -718,7 +781,7 @@ mod tests {
 				value,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[1, 2, 3, 4],
-				&mut vec![],
+				OutputBuf::empty(),
 			);
 
 			assert_matches!(result, Ok(_));
@@ -737,7 +800,7 @@ mod tests {
 		let mut loader = MockLoader::empty();
 		let recurse_ch = loader.insert(|ctx| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, &[], &mut vec![]);
+			let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, &[], OutputBuf::empty());
 
 			let mut reached_bottom = reached_bottom.borrow_mut();
 			if !*reached_bottom {
@@ -750,7 +813,7 @@ mod tests {
 				assert_matches!(r, Ok(_));
 			}
 
-			Ok(())
+			VmExecResult::Ok
 		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
@@ -763,7 +826,7 @@ mod tests {
 				value,
 				&mut GasMeter::<Test>::with_limit(100000, 1),
 				&[],
-				&mut vec![],
+				OutputBuf::empty(),
 			);
 
 			assert_matches!(result, Ok(_));
@@ -786,13 +849,16 @@ mod tests {
 			*witnessed_caller_bob.borrow_mut() = Some(*ctx.ext.caller());
 
 			// Call into CHARLIE contract.
-			assert_matches!(ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]), Ok(_));
-			Ok(())
+			assert_matches!(
+				ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
+				Ok(_)
+			);
+			VmExecResult::Ok
 		});
 		let charlie_ch = loader.insert(|ctx| {
 			// Record the caller for charlie.
 			*witnessed_caller_charlie.borrow_mut() = Some(*ctx.ext.caller());
-			Ok(())
+			VmExecResult::Ok
 		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
@@ -807,7 +873,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[],
-				&mut vec![],
+				OutputBuf::empty(),
 			);
 
 			assert_matches!(result, Ok(_));
@@ -827,12 +893,15 @@ mod tests {
 			assert_eq!(*ctx.ext.address(), BOB);
 
 			// Call into charlie contract.
-			assert_matches!(ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], &mut vec![]), Ok(_));
-			Ok(())
+			assert_matches!(
+				ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
+				Ok(_)
+			);
+			VmExecResult::Ok
 		});
 		let charlie_ch = loader.insert(|ctx| {
 			assert_eq!(*ctx.ext.address(), CHARLIE);
-			Ok(())
+			VmExecResult::Ok
 		});
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
@@ -846,7 +915,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[],
-				&mut vec![],
+				OutputBuf::empty(),
 			);
 
 			assert_matches!(result, Ok(_));

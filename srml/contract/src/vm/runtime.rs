@@ -16,9 +16,10 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use super::{Schedule, CreateReceipt};
-use exec::{Ext, BalanceOf};
+use super::{Schedule};
+use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, CallReceipt, CreateReceipt};
 use rstd::prelude::*;
+use rstd::mem;
 use codec::{Decode, Encode};
 use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
@@ -34,13 +35,16 @@ type GasOf<E> = <<E as Ext>::T as Trait>::Gas;
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
 	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return,
+	Return(OutputBuf),
 }
 
+/// Can only be used for one call.
 pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: &'data [u8],
-	output_data: &'data mut Vec<u8>,
+	// A VM can return a result only once and only by value. So
+	// we wrap output buffer to make it possible to take the buffer out.
+	output_buf: Option<OutputBuf>,
 	scratch_buf: Vec<u8>,
 	schedule: &'a Schedule<<E::T as Trait>::Gas>,
 	memory: sandbox::Memory,
@@ -51,7 +55,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 	pub(crate) fn new(
 		ext: &'a mut E,
 		input_data: &'data [u8],
-		output_data: &'data mut Vec<u8>,
+		output_buf: OutputBuf,
 		schedule: &'a Schedule<<E::T as Trait>::Gas>,
 		memory: sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
@@ -59,7 +63,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 		Runtime {
 			ext,
 			input_data,
-			output_data,
+			output_buf: Some(output_buf),
 			scratch_buf: Vec::new(),
 			schedule,
 			memory,
@@ -76,16 +80,16 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 pub(crate) fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	sandbox_err: Option<sandbox::Error>,
-) -> Result<(), &'static str> {
+) -> VmExecResult {
 	// Check the exact type of the error. It could be plain trap or
 	// special runtime trap the we must recognize.
 	match (sandbox_err, runtime.special_trap) {
 		// No traps were generated. Proceed normally.
-		(None, None) => Ok(()),
+		(None, None) => VmExecResult::Ok,
 		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return)) => Ok(()),
+		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(buf))) => VmExecResult::Returned(buf),
 		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => Err("execution has lead to a trap"),
+		(Some(_), _) => VmExecResult::Trap("during execution"),
 		// Any other case (such as special trap flag without actual trap) signifies
 		// a logic error.
 		_ => unreachable!(),
@@ -252,8 +256,10 @@ define_env!(Env, <E: Ext>,
 		};
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
-		// Clear the scratch buffer in any case.
-		ctx.scratch_buf.clear();
+		// Grab the scratch buffer and put in its' place an empty one.
+		// We will use it for creating `OutputBuf` container for the call.
+		let scratch_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
+		let output_buf = OutputBuf::from_spare_vec(scratch_buf);
 
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
@@ -261,17 +267,19 @@ define_env!(Env, <E: Ext>,
 			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
 		let ext = &mut ctx.ext;
-		let scratch_buf = &mut ctx.scratch_buf;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data, scratch_buf).map_err(|_| ()),
+				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data, output_buf).map_err(|_| ()),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
 		});
 
 		match call_outcome {
-			Ok(()) => Ok(0),
+			Ok(CallReceipt { output_data }) => {
+				ctx.scratch_buf = output_data;
+				Ok(0)
+			},
 			Err(_) => Ok(1),
 		}
 	},
@@ -353,10 +361,23 @@ define_env!(Env, <E: Ext>,
 			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
 		}
 
-		ctx.output_data.resize(data_len as usize, 0);
-		ctx.memory.get(data_ptr, &mut ctx.output_data)?;
-
-		ctx.special_trap = Some(SpecialTrap::Return);
+		let mut output_buf = ctx
+			.output_buf
+			.take()
+			.expect(
+				"`output_buf` is taken only here;
+				`ext_return` traps;
+				`Runtime` can only be used only for one execution;
+				qed"
+			);
+		output_buf.write(
+			data_len as usize,
+			|slice_mut| {
+				// Read the memory at the specified pointer to the provided slice.
+				ctx.memory.get(data_ptr, slice_mut)
+			}
+		)?;
+		ctx.special_trap = Some(SpecialTrap::Return(output_buf));
 
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
