@@ -21,7 +21,7 @@
 
 extern crate substrate_primitives;
 
-#[cfg_attr(any(feature = "std", test), macro_use)]
+#[macro_use]
 extern crate sr_std as rstd;
 
 #[macro_use]

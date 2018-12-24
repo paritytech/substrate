@@ -39,6 +39,7 @@ extern crate substrate_metadata_derive;
 
 extern crate num_traits;
 extern crate integer_sqrt;
+#[macro_use]
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]

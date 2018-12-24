@@ -19,6 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[macro_use]
 extern crate sr_std;
 #[cfg(test)]
 extern crate sr_io;
