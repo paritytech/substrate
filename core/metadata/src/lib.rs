@@ -8,7 +8,7 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[derive(Encode, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum FieldName {
 	Unnamed(u32),
@@ -22,7 +22,7 @@ pub struct FieldMetadata {
 	pub ty: Metadata
 }
 
-#[derive(Encode, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct EnumVariantMetadata {
 	pub name: String,
@@ -41,7 +41,7 @@ pub enum TypeMetadata {
 	Tuple(Vec<Metadata>),
 }
 
-#[derive(Encode, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct Metadata {
 	pub name: String,
@@ -226,5 +226,35 @@ impl EncodeMetadata for () {
 			name: "Unit".into(),
 			kind: TypeMetadata::Primative
 		}
+	}
+}
+
+impl parity_codec::Encode for FieldName {
+	fn encode_to<EncOut: parity_codec::Output>(&self, dest: &mut EncOut) {
+		match *self {
+			FieldName::Unnamed(ref aa) => {
+				dest.push_byte(0usize as u8);
+				dest.push(aa);
+			}
+			FieldName::Named(ref aa) => {
+				dest.push_byte(1usize as u8);
+				dest.push(aa.as_bytes());
+			}
+		}
+	}
+}
+
+impl parity_codec::Encode for EnumVariantMetadata {
+	fn encode_to<EncOut: parity_codec::Output>(&self, dest: &mut EncOut) {
+		dest.push(&self.name.as_bytes());
+		dest.push(&self.index);
+		dest.push(&self.fields);
+	}
+}
+
+impl parity_codec::Encode for Metadata {
+	fn encode_to<EncOut: parity_codec::Output>(&self, dest: &mut EncOut) {
+		dest.push(&self.name.as_bytes());
+		dest.push(&self.kind);
 	}
 }

@@ -65,6 +65,7 @@ extern crate wasmi;
 extern crate hash_db;
 extern crate hash256_std_hasher;
 
+#[macro_use]
 extern crate sr_std as rstd;
 
 #[cfg(test)]

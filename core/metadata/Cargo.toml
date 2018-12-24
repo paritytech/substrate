@@ -14,4 +14,8 @@ default = ["std"]
 std = [
 	"serde/std",
 	"serde_derive",
+	"parity-codec/std",
+	"parity-codec-derive/std",
 ]
+nightly = []
+strict = []
