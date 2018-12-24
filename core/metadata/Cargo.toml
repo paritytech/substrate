@@ -8,6 +8,7 @@ parity-codec = { version = "2.1", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
+sr-std = { path = "../sr-std", default-features = false }
 
 [features]
 default = ["std"]
@@ -16,6 +17,7 @@ std = [
 	"serde_derive",
 	"parity-codec/std",
 	"parity-codec-derive/std",
+	"sr-std/std",
 ]
 nightly = []
 strict = []

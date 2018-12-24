@@ -1,3 +1,8 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg_attr(not(feature = "std"), macro_use)]
+extern crate sr_std as rstd;
+
 extern crate parity_codec;
 #[macro_use]
 extern crate parity_codec_derive;
@@ -8,11 +13,19 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+use rstd::prelude::*;
+
+#[cfg(feature = "std")]
+type StringBuf = String;
+
+#[cfg(not(feature = "std"))]
+type StringBuf = &'static str;
+
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum FieldName {
 	Unnamed(u32),
-	Named(String),
+	Named(StringBuf),
 }
 
 #[derive(Encode, Clone, PartialEq, Eq)]
@@ -25,7 +38,7 @@ pub struct FieldMetadata {
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct EnumVariantMetadata {
-	pub name: String,
+	pub name: StringBuf,
 	pub index: u32,
 	pub fields: Vec<FieldMetadata>
 }
@@ -44,7 +57,7 @@ pub enum TypeMetadata {
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct Metadata {
-	pub name: String,
+	pub name: StringBuf,
 	pub kind: TypeMetadata
 }
 
@@ -71,7 +84,7 @@ macro_rules! impl_primatives {
 }
 
 impl_primatives!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
-impl_primatives!(String, bool);
+impl_primatives!(bool);
 
 macro_rules! impl_array {
 	( $( $n:expr )* ) => { $(
@@ -211,7 +224,7 @@ macro_rules! tuple_impl {
 
 tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 
-impl<T: EncodeMetadata> EncodeMetadata for ::std::marker::PhantomData<T> {
+impl<T: EncodeMetadata> EncodeMetadata for ::rstd::marker::PhantomData<T> {
 	fn type_metadata() -> Metadata {
 		Metadata {
 			name: "PhantomData".into(),
