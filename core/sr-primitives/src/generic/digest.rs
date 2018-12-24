@@ -19,11 +19,12 @@
 use rstd::prelude::*;
 
 use codec::{Decode, Encode, Codec, Input};
+use substrate_metadata::{EncodeMetadata};
 use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug};
 
 use substrate_primitives::hash::H512 as Signature;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct Digest<Item> {
 	pub logs: Vec<Item>,
@@ -94,7 +95,7 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a> {
 /// digest items using `DigestItemRef` type and we can't auto-derive `Decode`
 /// trait for `DigestItemRef`.
 #[repr(u32)]
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, EncodeMetadata)]
 enum DigestItemType {
 	Other = 0,
 	AuthoritiesChange,
@@ -205,5 +206,14 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 		}
 
 		v
+	}
+}
+
+impl<'a, Hash: EncodeMetadata, AuthorityId: EncodeMetadata> EncodeMetadata for DigestItemRef<'a, Hash, AuthorityId> {
+	fn type_metadata() -> substrate_metadata::Metadata {
+		substrate_metadata::Metadata {
+			name: "DigestItemRef".into(),
+			kind: substrate_metadata::TypeMetadata::Primative // TODO: implement this
+		}
 	}
 }

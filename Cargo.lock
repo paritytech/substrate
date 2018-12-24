@@ -1896,6 +1896,8 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2777,6 +2779,8 @@ dependencies = [
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",
  "sr-std 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2846,6 +2850,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2864,6 +2870,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2880,6 +2888,8 @@ dependencies = [
  "sr-std 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2900,6 +2910,8 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
  "wabt 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2920,6 +2932,8 @@ dependencies = [
  "srml-democracy 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2938,6 +2952,8 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2991,6 +3007,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-finality-grandpa-primitives 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3023,6 +3041,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3045,6 +3065,8 @@ dependencies = [
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3063,6 +3085,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-support-procedural 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3148,6 +3172,8 @@ dependencies = [
  "srml-consensus 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3165,6 +3191,8 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3183,6 +3211,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-support-procedural 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3660,6 +3690,7 @@ dependencies = [
  "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
  "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-serializer 0.1.0",
  "twox-hash 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",

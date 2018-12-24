@@ -17,6 +17,8 @@ srml-system = { path = "../system", default-features = false }
 srml-consensus = { path = "../consensus", default-features = false }
 srml-timestamp = { path = "../timestamp", default-features = false }
 srml-staking = { path = "../staking", default-features = false }
+substrate-metadata = { path = "../../core/metadata", default-features = false }
+substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [dev-dependencies]
 lazy_static = "1.0"
@@ -37,4 +39,6 @@ std = [
 	"srml-consensus/std",
 	"srml-timestamp/std",
 	"srml-staking/std",
+	"substrate-metadata/std",
+	"substrate-metadata-derive/std",
 ]

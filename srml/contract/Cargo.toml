@@ -17,6 +17,8 @@ sr-sandbox = { path = "../../core/sr-sandbox", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-system = { path = "../system", default-features = false }
 srml-balances = { path = "../balances", default-features = false }
+substrate-metadata = { path = "../../core/metadata", default-features = false }
+substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [dev-dependencies]
 wabt = "0.7"
@@ -38,4 +40,6 @@ std = [
 	"srml-system/std",
 	"parity-wasm/std",
 	"pwasm-utils/std",
+	"substrate-metadata/std",
+	"substrate-metadata-derive/std",
 ]

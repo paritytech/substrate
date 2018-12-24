@@ -85,6 +85,20 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 	}
 }
 
+impl<Number, Hash, DigestItem> substrate_metadata::EncodeMetadata for Header<Number, Hash, DigestItem> where
+	Number: HasCompact + Copy,
+	Hash: HashT,
+	Hash::Output: Encode,
+	DigestItem: DigestItemT + Encode,
+{
+	fn type_metadata() -> substrate_metadata::Metadata {
+		substrate_metadata::Metadata {
+			name: "Header".into(),
+			kind: substrate_metadata::TypeMetadata::Primative // TODO: implement this
+		}
+	}
+}
+
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
 	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,

@@ -33,6 +33,10 @@ extern crate log;
 #[macro_use]
 extern crate parity_codec_derive;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate num_traits;
 extern crate integer_sqrt;
 extern crate sr_std as rstd;
@@ -113,7 +117,7 @@ impl BuildStorage for StorageMap {
 
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, EncodeMetadata)]
 pub struct Permill(u32);
 
 // TODO: impl Mul<Permill> for N where N: As<usize>
@@ -148,7 +152,7 @@ impl From<f32> for Permill {
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, EncodeMetadata)]
 pub struct Perbill(u32);
 
 // TODO: impl Mul<Perbill> for N where N: As<usize>
@@ -365,7 +369,7 @@ macro_rules! impl_outer_log {
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq)]
+		#[derive(Clone, PartialEq, Eq, EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
@@ -373,7 +377,7 @@ macro_rules! impl_outer_log {
 
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]

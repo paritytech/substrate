@@ -35,6 +35,8 @@ rustc-hex = { version = "1.0", optional = true }
 hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", optional = true }
 substrate-keyring = { path = "../../core/keyring", optional = true }
+substrate-metadata = { path = "../../core/metadata", default-features = false }
+substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [features]
 default = ["std"]
@@ -68,4 +70,6 @@ std = [
 	"hex-literal",
 	"serde",
 	"substrate-keyring",
+	"substrate-metadata/std",
+	"substrate-metadata-derive/std",
 ]

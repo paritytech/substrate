@@ -35,6 +35,8 @@ extern crate byteorder;
 extern crate parity_codec as codec;
 
 extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
 
 #[cfg(feature = "std")]
 extern crate serde;

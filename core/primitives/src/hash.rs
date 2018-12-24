@@ -51,7 +51,7 @@ macro_rules! impl_rest {
 		}
 
 		impl ::substrate_metadata::EncodeMetadata for $name {
-			fn metadata() -> ::substrate_metadata::Metadata {
+			fn type_metadata() -> ::substrate_metadata::Metadata {
 				::substrate_metadata::Metadata {
 					name: stringify!($name).into(),
 					kind: ::substrate_metadata::TypeMetadata::Primative

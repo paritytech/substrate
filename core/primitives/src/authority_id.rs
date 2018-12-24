@@ -20,7 +20,7 @@ use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use H256;
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
-#[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode, EncodeMetadata)]
 pub struct AuthorityId(pub [u8; 32]);
 
 #[cfg(feature = "std")]

@@ -33,6 +33,11 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
+
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate sr_primitives as primitives;
 extern crate srml_system as system;
 
@@ -142,12 +147,11 @@ decl_module! {
 		pub fn transfer(
 			origin,
 			dest: RawAddress<T::AccountId, T::AccountIndex>,
-			value: <T::Balance as HasCompact>::Type
+			value: T::Balance
 		) {
 			let transactor = ensure_signed(origin)?;
 
 			let dest = Self::lookup(dest)?;
-			let value = value.into();
 			let from_balance = Self::free_balance(&transactor);
 			let to_balance = Self::free_balance(&dest);
 			let would_create = to_balance.is_zero();
@@ -184,12 +188,12 @@ decl_module! {
 		/// Set the balances of a given account.
 		fn set_balance(
 			who: RawAddress<T::AccountId, T::AccountIndex>,
-			free: <T::Balance as HasCompact>::Type,
-			reserved: <T::Balance as HasCompact>::Type
+			free: T::Balance,
+			reserved: T::Balance
 		) {
 			let who = Self::lookup(who)?;
-			Self::set_free_balance(&who, free.into());
-			Self::set_reserved_balance(&who, reserved.into());
+			Self::set_free_balance(&who, free);
+			Self::set_reserved_balance(&who, reserved);
 		}
 	}
 }
@@ -280,7 +284,7 @@ decl_storage! {
 
 /// Whatever happened about the hint given when creating the new account.
 #[cfg_attr(feature = "std", derive(Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone, Copy)]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, Copy, EncodeMetadata)]
 pub enum NewAccountOutcome {
 	NoHint,
 	GoodHint,

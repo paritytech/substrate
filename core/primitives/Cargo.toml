@@ -24,6 +24,7 @@ hex-literal = { version = "0.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }
 substrate-metadata = { path = "../metadata", default-features = false }
+substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
@@ -56,4 +57,5 @@ std = [
 	"serde_derive",
 	"byteorder/std",
 	"substrate-metadata/std",
+	"substrate-metadata-derive/std",
 ]

@@ -26,6 +26,10 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 extern crate parity_codec;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 #[macro_use]
 extern crate srml_support as runtime_support;
 

@@ -24,7 +24,7 @@ fn encode_fields(
 		quote_spanned! { f.span() =>
 			_substrate_metadata::FieldMetadata {
 				name: #name,
-				ty: #ty::metadata()
+				ty: <#ty>::type_metadata()
 			}
 		}
 	});
@@ -67,7 +67,7 @@ pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
 								quote_spanned! { f.span() =>
 									_substrate_metadata::FieldMetadata {
 										name: _substrate_metadata::FieldName::Named(stringify!(#name).into()),
-										ty: #ty::metadata()
+										ty: <#ty>::type_metadata()
 									}
 								}
 							});
@@ -92,7 +92,7 @@ pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
 								quote! {
 									_substrate_metadata::FieldMetadata {
 										name: _substrate_metadata::FieldName::Unnamed(#i as u32),
-										ty: #ty::metadata()
+										ty: <#ty>::type_metadata()
 									}
 								}
 							});

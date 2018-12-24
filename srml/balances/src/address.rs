@@ -21,7 +21,7 @@ use std::fmt;
 use super::{Member, Decode, Encode, As, Input, Output};
 
 /// A vetted and verified extrinsic from the external world.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub enum Address<AccountId, AccountIndex> where
 	AccountId: Member,

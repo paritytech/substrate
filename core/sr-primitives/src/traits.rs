@@ -24,6 +24,7 @@ use runtime_io;
 use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
 use codec::{Codec, Encode, HasCompact};
+use substrate_metadata::EncodeMetadata;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{
@@ -82,7 +83,7 @@ pub trait BlockNumberToHash {
 	type BlockNumber: Zero;
 
 	/// The type of the hash.
-	type Hash: Encode;
+	type Hash: Encode + EncodeMetadata;
 
 	/// Get the hash for a given block number, or `None` if unknown.
 	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
@@ -288,7 +289,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 }
 
 /// Blake2-256 Hash implementation.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct BlakeTwo256;
 

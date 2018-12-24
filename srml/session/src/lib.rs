@@ -27,6 +27,10 @@ extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 #[cfg(test)]
 extern crate substrate_primitives;
 #[cfg(test)]
@@ -100,8 +104,8 @@ decl_module! {
 		}
 
 		/// Set a new session length. Won't kick in until the next session change (at current length).
-		fn set_length(new: <T::BlockNumber as HasCompact>::Type) {
-			<NextSessionLength<T>>::put(new.into());
+		fn set_length(new: T::BlockNumber) {
+			<NextSessionLength<T>>::put(new);
 		}
 
 		/// Forces a new session.

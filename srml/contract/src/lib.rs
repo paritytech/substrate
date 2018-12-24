@@ -55,6 +55,10 @@
 #[macro_use]
 extern crate parity_codec_derive;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
@@ -154,13 +158,11 @@ decl_module! {
 		fn call(
 			origin,
 			dest: T::AccountId,
-			value: <T::Balance as HasCompact>::Type,
-			gas_limit: <T::Gas as HasCompact>::Type,
+			value: T::Balance,
+			gas_limit: T::Gas,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let value = value.into();
-			let gas_limit = gas_limit.into();
 
 			// Pay for the gas upfront.
 			//
@@ -208,14 +210,12 @@ decl_module! {
 		///   upon any message received by this account.
 		fn create(
 			origin,
-			endowment: <T::Balance as HasCompact>::Type,
-			gas_limit: <T::Gas as HasCompact>::Type,
+			endowment: T::Balance,
+			gas_limit: T::Gas,
 			ctor_code: Vec<u8>,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let endowment = endowment.into();
-			let gas_limit = gas_limit.into();
 
 			// Pay for the gas upfront.
 			//
@@ -348,7 +348,7 @@ impl<T: Trait> Config<T> {
 
 /// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, EncodeMetadata)]
 pub struct Schedule<Gas> {
 	/// Gas cost of a growing memory by single page.
 	pub grow_mem_cost: Gas,

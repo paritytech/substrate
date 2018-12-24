@@ -42,6 +42,10 @@ extern crate parity_codec;
 #[macro_use]
 extern crate parity_codec_derive;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate sr_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate srml_system as system;
@@ -88,7 +92,7 @@ pub trait GrandpaChangeSignal<N> {
 
 /// A logs in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, EncodeMetadata)]
 pub enum RawLog<N, SessionKey> {
 	/// Authorities set change has been signalled. Contains the new set of authorities
 	/// and the delay in blocks before applying.
@@ -130,7 +134,7 @@ pub trait Trait: system::Trait {
 }
 
 /// A stored pending change.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, EncodeMetadata)]
 pub struct StoredPendingChange<N, SessionKey> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,

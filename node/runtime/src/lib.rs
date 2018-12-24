@@ -36,6 +36,10 @@ extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate sr_std as rstd;
 extern crate srml_aura as aura;
 extern crate srml_balances as balances;

@@ -21,6 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Input};
+use substrate_metadata::EncodeMetadata;
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
 use super::{CheckedExtrinsic, Era};
@@ -72,7 +73,7 @@ where
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	AccountId: Member + MaybeDisplay,
 	BlockNumber: SimpleArithmetic,
-	Hash: Encode,
+	Hash: Encode + EncodeMetadata,
 	Context: Lookup<Source=Address, Target=AccountId>
 		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,

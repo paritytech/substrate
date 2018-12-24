@@ -31,6 +31,10 @@ extern crate parity_codec as codec;
 #[macro_use]
 extern crate srml_support as support;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 

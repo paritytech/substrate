@@ -215,7 +215,7 @@ macro_rules! __decl_generic_event {
 	) => {
 		pub type Event<$event_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),*> {
@@ -254,7 +254,7 @@ macro_rules! __events_to_metadata {
 				documentation: $crate::event::DecodeDifferent::Encode(&[
 					$( $doc_attr ),*
 				]),
-				type_metadata: <Self as $crate::substrate_metadata::EncodeMetadata>::metadata()
+				// type_metadata: <Self as $crate::substrate_metadata::EncodeMetadata>::metadata(),
 			};
 			$( $rest )*
 		)
@@ -364,7 +364,7 @@ macro_rules! impl_outer_event {
 		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]

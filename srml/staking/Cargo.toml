@@ -20,6 +20,8 @@ srml-consensus = { path = "../consensus", default-features = false }
 srml-system = { path = "../system", default-features = false }
 srml-session = { path = "../session", default-features = false }
 srml-timestamp = { path = "../timestamp", default-features = false }
+substrate-metadata = { path = "../../core/metadata", default-features = false }
+substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [features]
 default = ["std"]
@@ -37,5 +39,7 @@ std = [
 	"srml-balances/std",
 	"srml-session/std",
 	"srml-system/std",
-	"srml-timestamp/std"
+	"srml-timestamp/std",
+	"substrate-metadata/std",
+	"substrate-metadata-derive/std",
 ]

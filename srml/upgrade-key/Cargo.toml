@@ -16,6 +16,8 @@ srml-support = { path = "../support", default-features = false }
 srml-support-procedural = { path = "../support/procedural" }
 srml-system = { path = "../system", default-features = false }
 srml-consensus = { path = "../consensus", default-features = false }
+substrate-metadata = { path = "../../core/metadata", default-features = false }
+substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [features]
 default = ["std"]
@@ -30,4 +32,6 @@ std = [
 	"srml-support/std",
 	"srml-system/std",
 	"srml-consensus/std",
+	"substrate-metadata/std",
+	"substrate-metadata-derive/std",
 ]

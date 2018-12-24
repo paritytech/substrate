@@ -29,6 +29,10 @@ extern crate parity_codec;
 #[macro_use]
 extern crate parity_codec_derive;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate sr_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate srml_system as system;
@@ -126,7 +130,7 @@ pub type Log<T> = RawLog<
 
 /// A logs in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, EncodeMetadata)]
 pub enum RawLog<SessionKey> {
 	/// Authorities set has been changed. Contains the new set of authorities.
 	AuthoritiesChange(Vec<SessionKey>),

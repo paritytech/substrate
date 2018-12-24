@@ -28,6 +28,10 @@ extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
@@ -53,7 +57,7 @@ pub type ReferendumIndex = u32;
 pub type LockPeriods = i8;
 
 /// A number of lock periods, plus a vote, one way or the other.
-#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Default)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Default, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Vote(i8);
 
@@ -93,7 +97,7 @@ decl_module! {
 		fn propose(
 			origin,
 			proposal: Box<T::Proposal>,
-			value: <T::Balance as HasCompact>::Type
+			value: T::Balance
 		) {
 			let who = ensure_signed(origin)?;
 			let value = value.into();
@@ -169,7 +173,7 @@ decl_module! {
 }
 
 /// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ReferendumInfo<BlockNumber: Parameter, Proposal: Parameter> {
 	/// When voting on this referendum will end.

@@ -25,6 +25,10 @@ extern crate serde;
 #[macro_use]
 extern crate hex_literal;
 
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate parity_codec as codec;
 #[macro_use] extern crate parity_codec_derive;
 extern crate substrate_primitives;

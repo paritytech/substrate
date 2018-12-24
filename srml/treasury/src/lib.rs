@@ -32,6 +32,11 @@ extern crate serde;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
+
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 #[cfg(test)]
 extern crate substrate_primitives;
 extern crate sr_primitives as runtime_primitives;
@@ -74,12 +79,11 @@ decl_module! {
 		/// proposal is awarded.
 		fn propose_spend(
 			origin,
-			value: <T::Balance as HasCompact>::Type,
+			value: T::Balance,
 			beneficiary: Address<T::AccountId, T::AccountIndex>
 		) {
 			let proposer = ensure_signed(origin)?;
 			let beneficiary = <balances::Module<T>>::lookup(beneficiary)?;
-			let value = value.into();
 
 			let bond = Self::calculate_bond(value);
 			<balances::Module<T>>::reserve(&proposer, bond)
@@ -93,21 +97,21 @@ decl_module! {
 		}
 
 		/// Set the balance of funds available to spend.
-		fn set_pot(new_pot: <T::Balance as HasCompact>::Type) {
+		fn set_pot(new_pot: T::Balance) {
 			// Put the new value into storage.
-			<Pot<T>>::put(new_pot.into());
+			<Pot<T>>::put(new_pot);
 		}
 
 		/// (Re-)configure this module.
 		fn configure(
 			proposal_bond: Permill,
-			proposal_bond_minimum: <T::Balance as HasCompact>::Type,
-			spend_period: <T::BlockNumber as HasCompact>::Type,
+			proposal_bond_minimum: T::Balance,
+			spend_period: T::BlockNumber,
 			burn: Permill
 		) {
 			<ProposalBond<T>>::put(proposal_bond);
-			<ProposalBondMinimum<T>>::put(proposal_bond_minimum.into());
-			<SpendPeriod<T>>::put(spend_period.into());
+			<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
+			<SpendPeriod<T>>::put(spend_period);
 			<Burn<T>>::put(burn);
 		}
 
@@ -144,7 +148,7 @@ decl_module! {
 
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, EncodeMetadata)]
 pub struct Proposal<AccountId, Balance> {
 	proposer: AccountId,
 	value: Balance,

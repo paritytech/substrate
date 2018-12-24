@@ -32,6 +32,11 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
+
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate sr_primitives as primitives;
 extern crate srml_balances as balances;
 extern crate srml_consensus as consensus;
@@ -70,7 +75,7 @@ pub enum LockStatus<BlockNumber: Parameter> {
 }
 
 /// Preference of what happens on a slash event.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
@@ -198,13 +203,13 @@ decl_module! {
 		}
 
 		/// Set the number of sessions in an era.
-		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) {
-			<NextSessionsPerEra<T>>::put(new.into());
+		fn set_sessions_per_era(new: T::BlockNumber) {
+			<NextSessionsPerEra<T>>::put(new);
 		}
 
 		/// The length of the bonding duration in eras.
-		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) {
-			<BondingDuration<T>>::put(new.into());
+		fn set_bonding_duration(new: T::BlockNumber) {
+			<BondingDuration<T>>::put(new);
 		}
 
 		/// The ideal number of validators.

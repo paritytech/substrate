@@ -27,7 +27,7 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 
 	let impl_block = quote! {
 		impl #impl_generics _substrate_metadata::EncodeMetadata for #name #ty_generics #where_clause {
-			fn metadata() -> _substrate_metadata::Metadata {
+			fn type_metadata() -> _substrate_metadata::Metadata {
 				#metadata
 			}
 		}
