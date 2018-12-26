@@ -24,9 +24,7 @@ use state_machine::{self, OverlayedChanges, Ext,
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use codec::Decode;
 use primitives::{H256, Blake2Hasher};
-use primitives::storage::well_known_keys;
 
 use backend;
 use error;
@@ -202,18 +200,8 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		use state_machine::Backend;
-		let code = state.storage(well_known_keys::CODE)
-			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
-			.ok_or(error::ErrorKind::VersionInvalid)?
-			.to_vec();
-		let heap_pages = state.storage(well_known_keys::HEAP_PAGES)
-			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
-			.and_then(|v| u64::decode(&mut &v[..]))
-			.unwrap_or(1024) as usize;
-
 		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage());
-		self.executor.runtime_version(&mut ext, heap_pages, &code)
+		self.executor.runtime_version(&mut ext)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 

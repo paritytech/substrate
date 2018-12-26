@@ -513,7 +513,7 @@ pub struct Backend<Block: BlockT> {
 	changes_tries_storage: DbChangesTrieStorage<Block>,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
-	shared_cache: SharedCache<Block>,
+	shared_cache: SharedCache<Block, Blake2Hasher>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -836,6 +836,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			);
 
 			// sync canonical state cache
+			operation.old_state.mark_commit(As::as_(number), &hash);
 			operation.old_state.sync_cache(&enacted, &retracted, operation.storage_updates, pending_block.leaf_state.is_best());
 		}
 		Ok(())
@@ -923,7 +924,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			Ok(Some(ref hdr)) if !self.storage.state_db.is_pruned(hdr.number().as_()) => {
 				let root = H256::from_slice(hdr.state_root().as_ref());
 				let state = DbState::new(self.storage.clone(), root);
-				Ok(CachingState::new(state, self.shared_cache.clone(), Some(*hdr.parent_hash())))
+				Ok(CachingState::new(state, self.shared_cache.clone(), Some(hdr.hash())))
 			},
 			Err(e) => Err(e),
 			_ => Err(client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()),

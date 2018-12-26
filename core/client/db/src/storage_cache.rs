@@ -18,7 +18,6 @@
 
 use std::collections::{VecDeque, HashSet, HashMap};
 use std::sync::Arc;
-use std::marker::PhantomData;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use lru_cache::LruCache;
 use hash_db::Hasher;
@@ -32,20 +31,23 @@ type StorageValue = Vec<u8>;
 type BlockNumber = u64;
 
 /// Shared canonical state cache.
-pub struct Cache<B: Block> {
+pub struct Cache<B: Block, H: Hasher> {
 	/// Storage cache. `None` indicates that key is known to be missing.
 	storage: LruCache<StorageKey, Option<StorageValue>>,
+	/// Storage hashes cache. `None` indicates that key is known to be missing.
+	hashes: LruCache<StorageKey, Option<H::Out>>,
 	/// Information on the modifications in recently committed blocks; specifically which keys
 	/// changed in which block. Ordered by block number.
 	modifications: VecDeque<BlockChanges<B::Header>>,
 }
 
-pub type SharedCache<B> = Arc<Mutex<Cache<B>>>;
+pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
-pub fn new_shared_cache<B: Block>(shared_cache_size: usize) -> SharedCache<B> {
+pub fn new_shared_cache<B: Block, H: Hasher>(shared_cache_size: usize) -> SharedCache<B, H> {
 	let cache_items = shared_cache_size / 100; // Estimated average item size
 	Arc::new(Mutex::new(Cache {
 		storage: LruCache::new(cache_items),
+		hashes: LruCache::new(cache_items),
 		modifications: VecDeque::new(),
 	}))
 }
@@ -65,6 +67,13 @@ struct BlockChanges<B: Header> {
 	is_canon: bool,
 }
 
+/// Cached values specific to a state.
+struct LocalCache<H: Hasher> {
+	/// Storage cache. `None` indicates that key is known to be missing.
+	storage: HashMap<StorageKey, Option<StorageValue>>,
+	/// Storage hashes cache. `None` indicates that key is known to be missing.
+	hashes: HashMap<StorageKey, Option<H::Out>>,
+}
 /// State abstraction.
 /// Manages shared global state cache which reflects the canonical
 /// state as it is on the disk. All the entries in the cache are clean.
@@ -83,9 +92,9 @@ pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
 	/// Backing state.
 	state: S,
 	/// Shared canonical state cache.
-	shared_cache: SharedCache<B>,
+	shared_cache: SharedCache<B, H>,
 	/// Local cache of values for this state.
-	local_cache: RwLock<HashMap<StorageKey, Option<StorageValue>>>,
+	local_cache: RwLock<LocalCache<H>>,
 	/// Hash of the block on top of which this instance was created or
 	/// `None` if cache is disabled
 	parent_hash: Option<B::Hash>,
@@ -93,20 +102,21 @@ pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
 	commit_hash: Option<B::Hash>,
 	/// Number of the committing block or `None` if not committed yet.
 	commit_number: Option<<B::Header as Header>::Number>,
-	_h: PhantomData<H>,
 }
 
 impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 	/// Create a new instance wrapping generic State and shared cache.
-	pub fn new(state: S, shared_cache: SharedCache<B>, parent_hash: Option<B::Hash>) -> CachingState<H, S, B> {
+	pub fn new(state: S, shared_cache: SharedCache<B, H>, parent_hash: Option<B::Hash>) -> CachingState<H, S, B> {
 		CachingState {
 			state,
 			shared_cache,
-			local_cache: Default::default(),
+			local_cache: RwLock::new(LocalCache {
+				storage: Default::default(),
+				hashes: Default::default(),
+			}),
 			parent_hash: parent_hash,
 			commit_hash: None,
 			commit_number: None,
-			_h: Default::default(),
 		}
 	}
 
@@ -183,15 +193,19 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			}
 			let mut modifications = HashSet::new();
 			let mut local_cache = self.local_cache.write();
-			trace!("committing {} + {} cache entries", local_cache.len(), changes.len());
+			trace!("committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
 			if is_best {
-				for (k, v) in local_cache.drain() {
+				for (k, v) in local_cache.storage.drain() {
 					cache.storage.insert(k, v);
+				}
+				for (k, v) in local_cache.hashes.drain() {
+					cache.hashes.insert(k, v);
 				}
 			}
 			for (k, v) in changes.into_iter() {
 				modifications.insert(k.clone());
 				if is_best {
+					cache.hashes.remove(&k);
 					cache.storage.insert(k, v);
 				}
 			}
@@ -225,6 +239,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			Some(ref parent) => parent,
 		};
 		if modifications.is_empty() {
+			trace!("Cache lookup allowed for {:?}", key);
 			return true;
 		}
 		// Ignore all storage modified in later blocks
@@ -256,18 +271,38 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		let local_cache = self.local_cache.upgradable_read();
-		if let Some(entry) = local_cache.get(key).cloned() {
+		if let Some(entry) = local_cache.storage.get(key).cloned() {
+			trace!("Found in local cache: {:?}", key);
 			return Ok(entry)
 		}
 		let mut cache = self.shared_cache.lock();
 		if Self::is_allowed(key, &self.parent_hash, &cache.modifications) {
 			if let Some(entry) = cache.storage.get_mut(key).map(|a| a.clone()) {
+				trace!("Found in shared cache: {:?}", key);
 				return Ok(entry)
 			}
 		}
 		let value = self.state.storage(key)?;
-		RwLockUpgradableReadGuard::upgrade(local_cache).insert(key.to_vec(), value.clone());
+		RwLockUpgradableReadGuard::upgrade(local_cache).storage.insert(key.to_vec(), value.clone());
 		Ok(value)
+	}
+
+	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		let local_cache = self.local_cache.upgradable_read();
+		if let Some(entry) = local_cache.hashes.get(key).cloned() {
+			trace!("Found hash in local cache: {:?}", key);
+			return Ok(entry)
+		}
+		let mut cache = self.shared_cache.lock();
+		if Self::is_allowed(key, &self.parent_hash, &cache.modifications) {
+			if let Some(entry) = cache.hashes.get_mut(key).map(|a| a.clone()) {
+				trace!("Found hash in shared cache: {:?}", key);
+				return Ok(entry)
+			}
+		}
+		let hash = self.state.storage_hash(key)?;
+		RwLockUpgradableReadGuard::upgrade(local_cache).hashes.insert(key.to_vec(), hash.clone());
+		Ok(hash)
 	}
 
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {

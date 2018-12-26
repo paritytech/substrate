@@ -40,10 +40,15 @@ pub trait Backend<H: Hasher> {
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
 
-	/// Get keyed storage associated with specific address, or None if there is nothing associated.
+	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
-	/// Get keyed child storage associated with specific address, or None if there is nothing associated.
+	/// Get keyed storage value hash or None if there is nothing associated.
+	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		self.storage(key).map(|v| v.map(|v| H::hash(&v)))
+	}
+
+	/// Get keyed child storage or None if there is nothing associated.
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
 	/// true if a key exists in storage.
