@@ -381,14 +381,14 @@ where
 	}
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TransferFeeKind {
 	ContractAccountCreate,
 	AccountCreate,
 	Transfer,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct TransferFeeToken<Balance> {
 	kind: TransferFeeKind,
 	gas_price: Balance,

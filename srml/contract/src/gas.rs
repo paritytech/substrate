@@ -19,6 +19,9 @@ use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
 use runtime_support::StorageValue;
 use balances;
 
+#[cfg(test)]
+use std::any::Any;
+
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
 pub enum GasMeterResult {
@@ -46,6 +49,9 @@ pub struct GasMeter<T: Trait> {
 	/// Amount of gas left from initial gas limit. Can reach zero.
 	gas_left: T::Gas,
 	gas_price: T::Balance,
+
+	#[cfg(test)]
+	tokens: Vec<Box<dyn Any>>,
 }
 impl<T: Trait> GasMeter<T> {
 	#[cfg(test)]
@@ -54,6 +60,8 @@ impl<T: Trait> GasMeter<T> {
 			limit: gas_limit,
 			gas_left: gas_limit,
 			gas_price,
+			#[cfg(test)]
+			tokens: Vec::new(),
 		}
 	}
 
@@ -82,21 +90,13 @@ impl<T: Trait> GasMeter<T> {
 		}
 	}
 
-	/// Account for used gas expressed in balance units.
-	///
-	/// Same as [`charge`], but amount to be charged is converted from units of balance to
-	/// units of gas.
-	///
-	/// [`charge`]: #method.charge
-	pub fn charge_by_balance(&mut self, amount: T::Balance) -> GasMeterResult {
-		let amount_in_gas: T::Balance = amount / self.gas_price;
-		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
-		self.charge(amount_in_gas)
-	}
-
 	/// Account for gas.
 	pub fn charge_with_token<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
 		let amount_in_gas = token.calculate_amount(metadata);
+
+		#[cfg(test)]
+		self.tokens.push(Box::new(token));
+
 		self.charge(amount_in_gas)
 	}
 
@@ -122,6 +122,8 @@ impl<T: Trait> GasMeter<T> {
 				limit: amount,
 				gas_left: amount,
 				gas_price: self.gas_price,
+				#[cfg(test)]
+				tokens: Vec::new(),
 			};
 
 			let r = f(Some(&mut nested));
@@ -144,6 +146,11 @@ impl<T: Trait> GasMeter<T> {
 	/// Returns how much gas was spent.
 	fn spent(&self) -> T::Gas {
 		self.limit - self.gas_left
+	}
+
+	#[cfg(test)]
+	fn tokens(&self) -> &[Box<dyn Any>] {
+		&self.tokens
 	}
 }
 
@@ -180,6 +187,8 @@ pub fn buy_gas<T: Trait>(
 		limit: gas_limit,
 		gas_left: gas_limit,
 		gas_price,
+		#[cfg(test)]
+		tokens: Vec::new()
 	})
 }
 
@@ -199,21 +208,47 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 }
 
 #[cfg(test)]
+macro_rules! match_tokens {
+	($tokens_iter:ident,) => {
+	};
+	($tokens_iter:ident, $x:expr, $($rest:tt)*) => {
+		{
+			let next = ($tokens_iter).next().unwrap();
+			let pattern = $x;
+			let mut _pattern_typed_next_ref = &pattern;
+			_pattern_typed_next_ref = next.downcast_ref().unwrap();
+			assert_eq!(_pattern_typed_next_ref, &pattern);
+		}
+
+		match_tokens!($tokens_iter, $($rest)*);
+	};
+}
+
+#[cfg(test)]
 mod tests {
 	use super::{GasMeter, Token};
 	use tests::Test;
 
+	/// A trivial token that charges 1 unit of gas.
+	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+	struct UnitToken;
+	impl Token<Test> for UnitToken {
+		type Metadata = ();
+		fn calculate_amount(&self, _metadata: &()) -> u64 {
+			1
+		}
+	}
+
 	struct DoubleTokenMetadata {
 		multiplier: u64,
 	}
-	/// Simple token that charges for the given amount multipled to
+	/// A simple token that charges for the given amount multipled to
 	/// a multiplier taken from a given metadata.
-	#[derive(Copy, Clone)]
+	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 	struct DoubleToken(u64);
 
 	impl Token<Test> for DoubleToken {
 		type Metadata = DoubleTokenMetadata;
-
 		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
 			self.0 * metadata.multiplier
 		}
@@ -221,8 +256,13 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		let gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 		assert_eq!(gas_meter.gas_left(), 50000);
+	}
+
+	#[test]
+	fn simple() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 
 		let result = gas_meter.charge_with_token(
 			&DoubleTokenMetadata { multiplier: 3 },
@@ -233,5 +273,21 @@ mod tests {
 		assert_eq!(gas_meter.gas_left(), 49_970);
 		assert_eq!(gas_meter.spent(), 30);
 		assert_eq!(gas_meter.gas_price(), 10);
+	}
+
+	#[test]
+	fn tracing() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		assert!(!gas_meter.charge_with_token(&(), UnitToken).is_out_of_gas());
+		assert!(!gas_meter.charge_with_token(
+			&DoubleTokenMetadata { multiplier: 3 },
+			DoubleToken(10),
+		).is_out_of_gas());
+
+		let mut tokens = gas_meter.tokens()[0..2].iter();
+		match_tokens!(tokens,
+			UnitToken,
+			DoubleToken(10),
+		);
 	}
 }
