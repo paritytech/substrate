@@ -231,7 +231,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
-
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			op.set_block_data(
@@ -602,7 +601,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
-				(Some(storage_update), Some(changes_update), Some(overlay.into_committed()))
+				(Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect()))
 			},
 			None => (None, None, None)
 		};
@@ -630,7 +629,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			transaction.update_authorities(authorities);
 		}
 		if let Some(storage_update) = storage_update {
-			transaction.update_storage(storage_update)?;
+			transaction.update_db_storage(storage_update)?;
+		}
+		if let Some(storage_changes) = storage_changes.clone() {
+			transaction.update_storage(storage_changes)?;
 		}
 		if let Some(Some(changes_update)) = changes_update {
 			transaction.update_changes_trie(changes_update)?;
@@ -643,7 +645,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			if let Some(storage_changes) = storage_changes {
 				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 				self.storage_notifications.lock()
-					.trigger(&hash, storage_changes);
+					.trigger(&hash, storage_changes.into_iter());
 			}
 
 			if finalized {

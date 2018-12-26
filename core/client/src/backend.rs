@@ -69,9 +69,11 @@ pub trait BlockImportOperation<Block, H> where
 	/// has been used to check justification of this block).
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
-	fn update_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
+	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out>;
+	/// Set top level storage changes.
+	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
 	/// Update auxiliary keys. Values are `None` if should be deleted.

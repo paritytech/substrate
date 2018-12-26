@@ -1,0 +1,398 @@
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Global cache state.
+
+use std::collections::{VecDeque, HashSet, HashMap};
+use std::sync::Arc;
+use std::marker::PhantomData;
+use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use lru_cache::LruCache;
+use hash_db::Hasher;
+use runtime_primitives::traits::{Block, Header, As};
+use state_machine::{backend::Backend as StateBackend, TrieBackend};
+
+const STATE_CACHE_BLOCKS: usize = 12;
+
+type StorageKey = Vec<u8>;
+type StorageValue = Vec<u8>;
+type BlockNumber = u64;
+
+/// Shared canonical state cache.
+pub struct Cache<B: Block> {
+	/// Storage cache. `None` indicates that key is known to be missing.
+	storage: LruCache<StorageKey, Option<StorageValue>>,
+	/// Information on the modifications in recently committed blocks; specifically which keys
+	/// changed in which block. Ordered by block number.
+	modifications: VecDeque<BlockChanges<B::Header>>,
+}
+
+pub type SharedCache<B> = Arc<Mutex<Cache<B>>>;
+
+pub fn new_shared_cache<B: Block>(shared_cache_size: usize) -> SharedCache<B> {
+	let cache_items = shared_cache_size / 100; // Estimated average item size
+	Arc::new(Mutex::new(Cache {
+		storage: LruCache::new(cache_items),
+		modifications: VecDeque::new(),
+	}))
+}
+
+#[derive(Debug)]
+/// Accumulates a list of storage changed in a block.
+struct BlockChanges<B: Header> {
+	/// Block number.
+	number: B::Number,
+	/// Block hash.
+	hash: B::Hash,
+	/// Parent block hash.
+	parent: B::Hash,
+	/// A set of modified storage keys.
+	storage: HashSet<StorageKey>,
+	/// Block is part of the canonical chain.
+	is_canon: bool,
+}
+
+/// State abstraction.
+/// Manages shared global state cache which reflects the canonical
+/// state as it is on the disk. All the entries in the cache are clean.
+/// A clone of `State` may be created as canonical or not.
+/// For canonical clones local cache is accumulated and applied
+/// in `sync_cache`
+/// For non-canonical clones local cache is dropped.
+///
+/// Global cache propagation.
+/// After a `State` object has been committed to the trie it
+/// propagates its local cache into the `local_cache`.
+/// using `add_to_local_cache` function.
+/// Then, after the block has been added to the chain the local cache in the
+/// `State` is propagated into the global cache.
+pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
+	/// Backing state.
+	state: S,
+	/// Shared canonical state cache.
+	shared_cache: SharedCache<B>,
+	/// Local cache of values for this state.
+	local_cache: RwLock<HashMap<StorageKey, Option<StorageValue>>>,
+	/// Hash of the block on top of which this instance was created or
+	/// `None` if cache is disabled
+	parent_hash: Option<B::Hash>,
+	/// Hash of the committing block or `None` if not committed yet.
+	commit_hash: Option<B::Hash>,
+	/// Number of the committing block or `None` if not committed yet.
+	commit_number: Option<<B::Header as Header>::Number>,
+	_h: PhantomData<H>,
+}
+
+impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
+	/// Create a new instance wrapping generic State and shared cache.
+	pub fn new(state: S, shared_cache: SharedCache<B>, parent_hash: Option<B::Hash>) -> CachingState<H, S, B> {
+		CachingState {
+			state,
+			shared_cache,
+			local_cache: Default::default(),
+			parent_hash: parent_hash,
+			commit_hash: None,
+			commit_number: None,
+			_h: Default::default(),
+		}
+	}
+
+	/// Journal all recent operations under the given era and ID.
+	pub fn mark_commit(&mut self, number: BlockNumber, block_hash: &B::Hash) {
+		self.commit_hash = Some(block_hash.clone());
+		self.commit_number = Some(As::sa(number));
+	}
+
+	/// Propagate local cache into the global cache and synchonize
+	/// the global cache with the best block state.
+	/// This function updates the global cache by removing entries
+	/// that are invalidated by chain reorganization. `sync_cache`
+	/// should be called after the block has been committed and the
+	/// blockchain route has ben calculated.
+	pub fn sync_cache(
+		&mut self,
+		enacted: &[B::Hash],
+		retracted: &[B::Hash],
+		changes: Vec<(StorageKey, Option<StorageValue>)>,
+		is_best: bool
+	) {
+		trace!("sync_cache id = (#{:?}, {:?}), parent={:?}, best={}", self.commit_number, self.commit_hash, self.parent_hash, is_best);
+		let mut cache = self.shared_cache.lock();
+		let cache = &mut *cache;
+
+		// Purge changes from re-enacted and retracted blocks.
+		// Filter out commiting block if any.
+		let mut clear = false;
+		for block in enacted.iter().filter(|h| self.commit_hash.as_ref().map_or(true, |p| *h != p)) {
+			clear = clear || {
+				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
+					trace!("Reverting enacted block {:?}", block);
+					m.is_canon = true;
+					for a in &m.storage {
+						trace!("Reverting enacted key {:?}", a);
+						cache.storage.remove(a);
+					}
+					false
+				} else {
+					true
+				}
+			};
+		}
+
+		for block in retracted {
+			clear = clear || {
+				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
+					trace!("Retracting block {:?}", block);
+					m.is_canon = false;
+					for a in &m.storage {
+						trace!("Retracted key {:?}", a);
+						cache.storage.remove(a);
+					}
+					false
+				} else {
+					true
+				}
+			};
+		}
+		if clear {
+			// We don't know anything about the block; clear everything
+			trace!("Wiping cache");
+			cache.storage.clear();
+			cache.modifications.clear();
+		}
+
+		// Propagate cache only if committing on top of the latest canonical state
+		// blocks are ordered by number and only one block with a given number is marked as canonical
+		// (contributed to canonical state cache)
+		if let (Some(ref number), Some(ref hash), Some(ref parent)) = (self.commit_number, self.commit_hash, self.parent_hash) {
+			if cache.modifications.len() == STATE_CACHE_BLOCKS {
+				cache.modifications.pop_back();
+			}
+			let mut modifications = HashSet::new();
+			let mut local_cache = self.local_cache.write();
+			trace!("committing {} + {} cache entries", local_cache.len(), changes.len());
+			if is_best {
+				for (k, v) in local_cache.drain() {
+					cache.storage.insert(k, v);
+				}
+			}
+			for (k, v) in changes.into_iter() {
+				modifications.insert(k.clone());
+				if is_best {
+					cache.storage.insert(k, v);
+				}
+			}
+
+			// Save modified storage. These are ordered by the block number.
+			let block_changes = BlockChanges {
+				storage: modifications,
+				number: *number,
+				hash: hash.clone(),
+				is_canon: is_best,
+				parent: parent.clone(),
+			};
+			let insert_at = cache.modifications.iter().enumerate().find(|&(_, m)| m.number < *number).map(|(i, _)| i);
+			trace!("inserting modifications at {:?}", insert_at);
+			if let Some(insert_at) = insert_at {
+				cache.modifications.insert(insert_at, block_changes);
+			} else {
+				cache.modifications.push_back(block_changes);
+			}
+		}
+	}
+
+	/// Check if the key can be returned from cache by matching current block parent hash against canonical
+	/// state and filtering out entry modified in later blocks.
+	fn is_allowed(key: &[u8], parent_hash: &Option<B::Hash>, modifications: &VecDeque<BlockChanges<B::Header>>) -> bool {
+		let mut parent = match *parent_hash {
+			None => {
+				trace!("Cache lookup skipped for {:?}: no parent hash", key);
+				return false;
+			}
+			Some(ref parent) => parent,
+		};
+		if modifications.is_empty() {
+			return true;
+		}
+		// Ignore all storage modified in later blocks
+		// Modifications contains block ordered by the number
+		// We search for our parent in that list first and then for
+		// all its parent until we hit the canonical block,
+		// checking against all the intermediate modifications.
+		for m in modifications {
+			if &m.hash == parent {
+				if m.is_canon {
+					return true;
+				}
+				parent = &m.parent;
+			}
+			if m.storage.contains(key) {
+				trace!("Cache lookup skipped for {:?}: modified in a later block", key);
+				return false;
+			}
+		}
+		trace!("Cache lookup skipped for {:?}: parent hash is unknown", key);
+		false
+	}
+}
+
+impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H, S, B> {
+	type Error =  S::Error;
+	type Transaction = S::Transaction;
+	type TrieBackendStorage = S::TrieBackendStorage;
+
+	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		let local_cache = self.local_cache.upgradable_read();
+		if let Some(entry) = local_cache.get(key).cloned() {
+			return Ok(entry)
+		}
+		let mut cache = self.shared_cache.lock();
+		if Self::is_allowed(key, &self.parent_hash, &cache.modifications) {
+			if let Some(entry) = cache.storage.get_mut(key).map(|a| a.clone()) {
+				return Ok(entry)
+			}
+		}
+		let value = self.state.storage(key)?;
+		RwLockUpgradableReadGuard::upgrade(local_cache).insert(key.to_vec(), value.clone());
+		Ok(value)
+	}
+
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.child_storage(storage_key, key)
+	}
+
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		Ok(self.storage(key)?.is_some())
+	}
+
+	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<bool, Self::Error> {
+		self.state.exists_child_storage(storage_key, key)
+	}
+
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		self.state.for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		self.state.for_keys_in_child_storage(storage_key, f)
+	}
+
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+			H::Out: Ord
+	{
+		self.state.storage_root(delta)
+	}
+
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+		where
+			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+			H::Out: Ord
+	{
+		self.state.child_storage_root(storage_key, delta)
+	}
+
+	/// Get all key/value pairs into a Vec.
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		self.state.pairs()
+	}
+
+	/// Try convert into trie backend.
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+		self.state.try_into_trie_backend()
+	}
+}
+
+/*
+#[cfg(test)]
+mod tests {
+	use ethereum_types::{H256, U256, Address};
+	use kvdb::DBTransaction;
+	use test_helpers::get_temp_state_db;
+	use state::{Account, Backend};
+	use ethcore_logger::init_log;
+
+	#[test]
+	fn state_db_smoke() {
+		init_log();
+
+		let state_db = get_temp_state_db();
+		let root_parent = H256::random();
+		let key = Address::random();
+		let h0 = H256::random();
+		let h1a = H256::random();
+		let h1b = H256::random();
+		let h2a = H256::random();
+		let h2b = H256::random();
+		let h3a = H256::random();
+		let h3b = H256::random();
+		let mut batch = DBTransaction::new();
+
+		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
+		// balance [ 5     5     4  3  2     2 ]
+		let mut s = state_db.boxed_clone_canon(&root_parent);
+		s.add_to_local_cache(key, Some(Account::new_basic(2.into(), 0.into())), false);
+		s.journal_under(&mut batch, 0, &h0).unwrap();
+		s.sync_cache(&[], &[], true);
+
+		let mut s = state_db.boxed_clone_canon(&h0);
+		s.journal_under(&mut batch, 1, &h1a).unwrap();
+		s.sync_cache(&[], &[], true);
+
+		let mut s = state_db.boxed_clone_canon(&h0);
+		s.add_to_local_cache(key, Some(Account::new_basic(3.into(), 0.into())), true);
+		s.journal_under(&mut batch, 1, &h1b).unwrap();
+		s.sync_cache(&[], &[], false);
+
+		let mut s = state_db.boxed_clone_canon(&h1b);
+		s.add_to_local_cache(key, Some(Account::new_basic(4.into(), 0.into())), true);
+		s.journal_under(&mut batch, 2, &h2b).unwrap();
+		s.sync_cache(&[], &[], false);
+
+		let mut s = state_db.boxed_clone_canon(&h1a);
+		s.add_to_local_cache(key, Some(Account::new_basic(5.into(), 0.into())), true);
+		s.journal_under(&mut batch, 2, &h2a).unwrap();
+		s.sync_cache(&[], &[], true);
+
+		let mut s = state_db.boxed_clone_canon(&h2a);
+		s.journal_under(&mut batch, 3, &h3a).unwrap();
+		s.sync_cache(&[], &[], true);
+
+		let s = state_db.boxed_clone_canon(&h3a);
+		assert_eq!(s.get_cached(&key).unwrap().unwrap().balance(), &U256::from(5));
+
+		let s = state_db.boxed_clone_canon(&h1a);
+		assert!(s.get_cached(&key).is_none());
+
+		let s = state_db.boxed_clone_canon(&h2b);
+		assert!(s.get_cached(&key).is_none());
+
+		let s = state_db.boxed_clone_canon(&h1b);
+		assert!(s.get_cached(&key).is_none());
+
+		// reorg to 3b
+		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
+		let mut s = state_db.boxed_clone_canon(&h2b);
+		s.journal_under(&mut batch, 3, &h3b).unwrap();
+		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], true);
+		let s = state_db.boxed_clone_canon(&h3a);
+		assert!(s.get_cached(&key).is_none());
+	}
+}
+*/
+
+
