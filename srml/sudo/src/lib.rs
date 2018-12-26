@@ -35,31 +35,35 @@ extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 
 use sr_std::prelude::*;
-use support::StorageValue;
+use support::{StorageValue, Parameter, Dispatchable};
 use system::ensure_signed;
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	/// A sudo-able call.
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
 }
 
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
-		fn upgrade(origin, new: Vec<u8>) {
-			// This is a public call, so we ensure that the origin is some signed account.
-			let _sender = ensure_signed(origin)?;
-			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
 
-			<consensus::Module<T>>::set_code(new)?;
-			Self::deposit_event(RawEvent::Upgraded);
+		fn sudo(origin, proposal: Box<T::Proposal>) {
+			// This is a public call, so we ensure that the origin is some signed account.
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), "only the current sudo key can sudo");
+
+			let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
+			Self::deposit_event(RawEvent::Sudid(ok));
 		}
 
 		fn set_key(origin, new: T::AccountId) {
 			// This is a public call, so we ensure that the origin is some signed account.
-			let _sender = ensure_signed(origin)?;
-			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
@@ -70,15 +74,15 @@ decl_module! {
 /// An event in this module.
 decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		/// An upgrade just happened.
-		Upgraded,
-		/// An upgrade just happened; old key is supplied as an argument.
+		/// A sudo just took place.
+		Sudid(bool),
+		/// The sudoer just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
 	}
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as UpgradeKey {
+	trait Store for Module<T: Trait> as Sudo {
 		Key get(key) config(): T::AccountId;
 	}
 }

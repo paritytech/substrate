@@ -98,7 +98,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
-		fn deposit_event() = default;
+		/// For non-generic events, the generic parameter just needs to be dropped, so that it
+		/// looks like: `fn deposit_event() = default;`.
+		fn deposit_event<T>() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.

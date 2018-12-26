@@ -67,7 +67,7 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			let threshold = threshold.into();
