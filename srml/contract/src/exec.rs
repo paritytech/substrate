@@ -17,11 +17,11 @@
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Schedule, Trait};
 use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use code;
-use gas::GasMeter;
+use gas::{GasMeter, Token};
 
 use balances::{self, EnsureAccountLiquid};
 use rstd::prelude::*;
-use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
+use runtime_primitives::traits::{As, CheckedAdd, CheckedSub, Zero};
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -381,6 +381,37 @@ where
 	}
 }
 
+#[derive(Copy, Clone)]
+pub enum TransferFeeKind {
+	ContractAccountCreate,
+	AccountCreate,
+	Transfer,
+}
+
+#[derive(Copy, Clone)]
+pub struct TransferFeeToken<Balance> {
+	kind: TransferFeeKind,
+	gas_price: Balance,
+}
+
+impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
+	type Metadata = Config<T>;
+
+	#[inline]
+	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+		let balance_fee = match self.kind {
+			TransferFeeKind::ContractAccountCreate => metadata.contract_account_create_fee,
+			TransferFeeKind::AccountCreate => metadata.account_create_fee,
+			TransferFeeKind::Transfer => metadata.transfer_fee,
+		};
+
+		let amount_in_gas: T::Balance = balance_fee / self.gas_price;
+		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
+
+		amount_in_gas
+	}
+}
+
 /// Describes possible transfer causes.
 enum TransferCause {
 	Call,
@@ -422,18 +453,24 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	// and account with the address `dest` doesn't exist yet `would_create` will be `true`.
 	let would_create = to_balance.is_zero();
 
-	let fee: T::Balance = match (cause, would_create) {
-		// If this function is called from `Instantiate` routine, then we always
-		// charge contract account creation fee.
-		(Instantiate, _) => ctx.config.contract_account_create_fee,
+	let token = {
+		let kind: TransferFeeKind = match (cause, would_create) {
+			// If this function is called from `Instantiate` routine, then we always
+			// charge contract account creation fee.
+			(Instantiate, _) => TransferFeeKind::ContractAccountCreate,
 
-		// Otherwise the fee depends on whether we create a new account or transfer
-		// to an existing one.
-		(Call, true) => ctx.config.account_create_fee,
-		(Call, false) => ctx.config.transfer_fee,
+			// Otherwise the fee depends on whether we create a new account or transfer
+			// to an existing one.
+			(Call, true) => TransferFeeKind::AccountCreate,
+			(Call, false) => TransferFeeKind::Transfer,
+		};
+		TransferFeeToken {
+			kind,
+			gas_price: gas_meter.gas_price(),
+		}
 	};
 
-	if gas_meter.charge_by_balance(fee).is_out_of_gas() {
+	if gas_meter.charge_with_token(ctx.config, token).is_out_of_gas() {
 		return Err("not enough gas to pay transfer fee");
 	}
 

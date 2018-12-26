@@ -35,6 +35,12 @@ impl GasMeterResult {
 	}
 }
 
+pub trait Token<T: Trait>: Copy + Clone + ::std::any::Any {
+	type Metadata;
+
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> T::Gas;
+}
+
 pub struct GasMeter<T: Trait> {
 	limit: T::Gas,
 	/// Amount of gas left from initial gas limit. Can reach zero.
@@ -59,6 +65,8 @@ impl<T: Trait> GasMeter<T> {
 	/// NOTE that `amount` is always consumed, i.e. if there is not enough gas
 	/// then the counter will be set to zero.
 	pub fn charge(&mut self, amount: T::Gas) -> GasMeterResult {
+		// pub fn charge<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
+		// let amount = token.calculate_amount(metadata);
 		let new_value = match self.gas_left.checked_sub(&amount) {
 			None => None,
 			Some(val) if val.is_zero() => None,
@@ -83,6 +91,12 @@ impl<T: Trait> GasMeter<T> {
 	pub fn charge_by_balance(&mut self, amount: T::Balance) -> GasMeterResult {
 		let amount_in_gas: T::Balance = amount / self.gas_price;
 		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
+		self.charge(amount_in_gas)
+	}
+
+	/// Account for gas.
+	pub fn charge_with_token<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
+		let amount_in_gas = token.calculate_amount(metadata);
 		self.charge(amount_in_gas)
 	}
 
@@ -116,6 +130,10 @@ impl<T: Trait> GasMeter<T> {
 
 			r
 		}
+	}
+
+	pub fn gas_price(&self) -> T::Balance {
+		self.gas_price
 	}
 
 	/// Returns how much gas left from the initial budget.
@@ -178,4 +196,42 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
 	<balances::Module<T>>::set_free_balance(transactor, b + refund);
 	<balances::Module<T>>::increase_total_stake_by(refund);
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{GasMeter, Token};
+	use tests::Test;
+
+	struct DoubleTokenMetadata {
+		multiplier: u64,
+	}
+	/// Simple token that charges for the given amount multipled to
+	/// a multiplier taken from a given metadata.
+	#[derive(Copy, Clone)]
+	struct DoubleToken(u64);
+
+	impl Token<Test> for DoubleToken {
+		type Metadata = DoubleTokenMetadata;
+
+		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
+			self.0 * metadata.multiplier
+		}
+	}
+
+	#[test]
+	fn it_works() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		assert_eq!(gas_meter.gas_left(), 50000);
+
+		let result = gas_meter.charge_with_token(
+			&DoubleTokenMetadata { multiplier: 3 },
+			DoubleToken(10),
+		);
+		assert!(!result.is_out_of_gas());
+
+		assert_eq!(gas_meter.gas_left(), 49_970);
+		assert_eq!(gas_meter.spent(), 30);
+		assert_eq!(gas_meter.gas_price(), 10);
+	}
 }
