@@ -584,6 +584,42 @@ mod tests {
 		.unwrap();
 	}
 
+	const CODE_RETURN_FROM_START_FN: &str = r#"
+(module
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(start $start)
+	(func $start
+		(call $ext_return
+			(i32.const 8)
+			(i32.const 4)
+		)
+		(unreachable)
+	)
+
+	(func (export "call")
+	)
+
+	(data (i32.const 8) "\01\02\03\04")
+)
+"#;
+
+	#[test]
+	fn return_from_start_fn() {
+		let mut mock_ext = MockExt::default();
+		let mut output_data = Vec::new();
+		execute(
+			CODE_RETURN_FROM_START_FN,
+			&[],
+			&mut output_data,
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+		.unwrap();
+
+		assert_eq!(output_data, vec![1, 2, 3, 4]);
+	}
+
 	// TODO: address
-	// TODO: return data from `start` function.
 }

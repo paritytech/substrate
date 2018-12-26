@@ -5,7 +5,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 serde = { version = "1.0", default-features = false }
-pwasm-utils = { version = "0.3", default-features = false }
+# TODO:
+# pwasm-utils = { version = "0.3", default-features = false }
+pwasm-utils = { path = "/Users/pepyakin/dev/parity/wasm-utils", default-features = false }
 parity-codec = { version = "2.1", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 parity-wasm = { version = "0.31", default-features = false }
