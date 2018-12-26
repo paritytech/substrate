@@ -211,9 +211,9 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 
 impl<'a, Hash: EncodeMetadata, AuthorityId: EncodeMetadata> EncodeMetadata for DigestItemRef<'a, Hash, AuthorityId> {
 	fn type_metadata() -> substrate_metadata::Metadata {
+		// TODO: implement this
 		substrate_metadata::Metadata {
-			name: "DigestItemRef".into(),
-			kind: substrate_metadata::TypeMetadata::Primative // TODO: implement this
+			kind: substrate_metadata::TypeMetadata::Primative(substrate_metadata::PrimativeMetadata::Unknown)
 		}
 	}
 }

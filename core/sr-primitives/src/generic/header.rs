@@ -92,9 +92,9 @@ impl<Number, Hash, DigestItem> substrate_metadata::EncodeMetadata for Header<Num
 	DigestItem: DigestItemT + Encode,
 {
 	fn type_metadata() -> substrate_metadata::Metadata {
+		// TODO: implement this
 		substrate_metadata::Metadata {
-			name: "Header".into(),
-			kind: substrate_metadata::TypeMetadata::Primative // TODO: implement this
+			kind: substrate_metadata::TypeMetadata::Primative(substrate_metadata::PrimativeMetadata::Unknown)
 		}
 	}
 }

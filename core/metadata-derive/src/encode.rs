@@ -125,7 +125,6 @@ pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
 	};
 	quote! {
 		_substrate_metadata::Metadata {
-			name: stringify!(#type_name).into(),
 			kind: #res
 		}
 	}

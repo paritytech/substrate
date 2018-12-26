@@ -45,8 +45,46 @@ pub struct EnumVariantMetadata {
 
 #[derive(Encode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub enum PrimativeMetadata {
+	Unknown,
+	Unit,
+	PhantomData, // do we need this or it can just be Unit?
+	Bool,
+	Usize, Isize,
+	U8, I8,
+	U16, I16,
+	U32, I32,
+	U64, I64,
+	U128, I128,
+}
+
+impl From<&str> for PrimativeMetadata {
+	fn from(x: &str) -> PrimativeMetadata {
+		match x {
+			"Unit" => PrimativeMetadata::Unit,
+			"PhantomData" => PrimativeMetadata::PhantomData,
+			"bool" => PrimativeMetadata::Bool,
+			"usize" => PrimativeMetadata::Usize,
+			"isize" => PrimativeMetadata::Isize,
+			"u8" => PrimativeMetadata::U8,
+			"i8" => PrimativeMetadata::I8,
+			"u16" => PrimativeMetadata::U16,
+			"i16" => PrimativeMetadata::I16,
+			"u32" => PrimativeMetadata::U32,
+			"i32" => PrimativeMetadata::I32,
+			"u64" => PrimativeMetadata::U64,
+			"i64" => PrimativeMetadata::I64,
+			"u128" => PrimativeMetadata::U128,
+			"i128" => PrimativeMetadata::I128,
+			_ => PrimativeMetadata::Unknown, // panic! can make it runtime error but how to make this compile-time error?
+		}
+	}
+}
+
+#[derive(Encode, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum TypeMetadata {
-	Primative,
+	Primative(PrimativeMetadata),
 	Array(u32, Box<Metadata>),
 	Vector(Box<Metadata>),
 	Struct(Vec<FieldMetadata>),
@@ -57,15 +95,13 @@ pub enum TypeMetadata {
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct Metadata {
-	pub name: StringBuf,
 	pub kind: TypeMetadata
 }
 
 pub trait EncodeMetadata {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			name: "<Unknown>".into(),
-			kind: TypeMetadata::Primative
+			kind: TypeMetadata::Primative(PrimativeMetadata::Unknown)
 		}
 	}
 }
@@ -75,8 +111,7 @@ macro_rules! impl_primatives {
 		impl EncodeMetadata for $t {
 			fn type_metadata() -> Metadata {
 				Metadata {
-					name: stringify!($t).into(),
-					kind: TypeMetadata::Primative
+					kind: TypeMetadata::Primative(stringify!($t).into())
 				}
 			}
 		}
@@ -91,7 +126,6 @@ macro_rules! impl_array {
 		impl<T: EncodeMetadata> EncodeMetadata for [T; $n] {
 			fn type_metadata() -> Metadata {
 				Metadata {
-					name: "Array".into(),
 					kind: TypeMetadata::Array($n, Box::new(T::type_metadata()))
 				}
 			}
@@ -105,7 +139,6 @@ impl_array!(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26
 impl<T: EncodeMetadata> EncodeMetadata for Vec<T> {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			name: "Vec".into(),
 			kind: TypeMetadata::Vector(Box::new(T::type_metadata()))
 		}
 	}
@@ -114,7 +147,6 @@ impl<T: EncodeMetadata> EncodeMetadata for Vec<T> {
 impl<T: EncodeMetadata> EncodeMetadata for Option<T> {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			name: "Option".into(),
 			kind: TypeMetadata::Enum(vec![
 				EnumVariantMetadata {
 					name: "None".into(),
@@ -139,7 +171,6 @@ impl<T: EncodeMetadata> EncodeMetadata for Option<T> {
 impl<T: EncodeMetadata, E: EncodeMetadata> EncodeMetadata for Result<T, E> {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			name: "Result".into(),
 			kind: TypeMetadata::Enum(vec![
 				EnumVariantMetadata {
 					name: "Ok".into(),
@@ -195,7 +226,6 @@ macro_rules! tuple_impl {
 		impl<$one: EncodeMetadata> EncodeMetadata for ($one,) {
 			fn type_metadata() -> Metadata {
 				Metadata {
-					name: "Tuple".into(),
 					kind: TypeMetadata::Tuple(vec![
 						<$one>::type_metadata(),
 					]),
@@ -209,7 +239,6 @@ macro_rules! tuple_impl {
 		($first, $($rest),+) {
 			fn type_metadata() -> Metadata {
 				Metadata {
-					name: "Tuple".into(),
 					kind: TypeMetadata::Tuple(vec![
 						<$first>::type_metadata(),
 						$( <$rest>::type_metadata(), )+
@@ -227,8 +256,7 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 impl<T: EncodeMetadata> EncodeMetadata for ::rstd::marker::PhantomData<T> {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			name: "PhantomData".into(),
-			kind: TypeMetadata::Primative
+			kind: TypeMetadata::Primative(PrimativeMetadata::PhantomData)
 		}
 	}
 }
@@ -236,8 +264,7 @@ impl<T: EncodeMetadata> EncodeMetadata for ::rstd::marker::PhantomData<T> {
 impl EncodeMetadata for () {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			name: "Unit".into(),
-			kind: TypeMetadata::Primative
+			kind: TypeMetadata::Primative(PrimativeMetadata::Unit)
 		}
 	}
 }
@@ -267,7 +294,6 @@ impl parity_codec::Encode for EnumVariantMetadata {
 
 impl parity_codec::Encode for Metadata {
 	fn encode_to<EncOut: parity_codec::Output>(&self, dest: &mut EncOut) {
-		dest.push(&self.name.as_bytes());
 		dest.push(&self.kind);
 	}
 }
