@@ -97,7 +97,7 @@ pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
 	local_cache: RwLock<LocalCache<H>>,
 	/// Hash of the block on top of which this instance was created or
 	/// `None` if cache is disabled
-	parent_hash: Option<B::Hash>,
+	pub parent_hash: Option<B::Hash>,
 	/// Hash of the committing block or `None` if not committed yet.
 	commit_hash: Option<B::Hash>,
 	/// Number of the committing block or `None` if not committed yet.
@@ -132,15 +132,16 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 	/// that are invalidated by chain reorganization. `sync_cache`
 	/// should be called after the block has been committed and the
 	/// blockchain route has ben calculated.
-	pub fn sync_cache(
+	pub fn sync_cache<F: FnOnce() -> bool> (
 		&mut self,
 		enacted: &[B::Hash],
 		retracted: &[B::Hash],
 		changes: Vec<(StorageKey, Option<StorageValue>)>,
-		is_best: bool
+		is_best: F,
 	) {
-		trace!("sync_cache id = (#{:?}, {:?}), parent={:?}, best={}", self.commit_number, self.commit_hash, self.parent_hash, is_best);
 		let mut cache = self.shared_cache.lock();
+		let is_best = is_best();
+		trace!("sync_cache id = (#{:?}, {:?}), parent={:?}, best={}", self.commit_number, self.commit_hash, self.parent_hash, is_best);
 		let cache = &mut *cache;
 
 		// Purge changes from re-enacted and retracted blocks.
@@ -187,14 +188,10 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
-		if let (Some(ref number), Some(ref hash), Some(ref parent)) = (self.commit_number, self.commit_hash, self.parent_hash) {
-			if cache.modifications.len() == STATE_CACHE_BLOCKS {
-				cache.modifications.pop_back();
-			}
-			let mut modifications = HashSet::new();
+		if let Some(_) = self.parent_hash {
 			let mut local_cache = self.local_cache.write();
-			trace!("committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
 			if is_best {
+				trace!("committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
 				for (k, v) in local_cache.storage.drain() {
 					cache.storage.insert(k, v);
 				}
@@ -202,6 +199,13 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					cache.hashes.insert(k, v);
 				}
 			}
+		}
+
+		if let (Some(ref number), Some(ref hash), Some(ref parent)) = (self.commit_number, self.commit_hash, self.parent_hash) {
+			if cache.modifications.len() == STATE_CACHE_BLOCKS {
+				cache.modifications.pop_back();
+			}
+			let mut modifications = HashSet::new();
 			for (k, v) in changes.into_iter() {
 				modifications.insert(k.clone());
 				if is_best {
@@ -209,7 +213,6 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 					cache.storage.insert(k, v);
 				}
 			}
-
 			// Save modified storage. These are ordered by the block number.
 			let block_changes = BlockChanges {
 				storage: modifications,

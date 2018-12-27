@@ -809,8 +809,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				self.force_delayed_canonicalize(&mut transaction, hash, *pending_block.header.number())?
 			}
 
-			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number,
-				pending_block.leaf_state.is_best());
+			let is_best = pending_block.leaf_state.is_best();
+			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, is_best);
 
 			{
 				let mut leaves = self.blockchain.leaves.write();
@@ -837,7 +837,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 			// sync canonical state cache
 			operation.old_state.mark_commit(As::as_(number), &hash);
-			operation.old_state.sync_cache(&enacted, &retracted, operation.storage_updates, pending_block.leaf_state.is_best());
+			operation.old_state.sync_cache(&enacted, &retracted, operation.storage_updates, || is_best);
 		}
 		Ok(())
 	}
@@ -929,6 +929,14 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			Err(e) => Err(e),
 			_ => Err(client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()),
 		}
+	}
+
+	fn accrue_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
+		if let Some(hash) = state.parent_hash.clone() {
+			let is_best = || self.blockchain.meta.read().best_hash == hash;
+			state.sync_cache(&[], &[], vec![], is_best);
+		}
+		Ok(())
 	}
 }
 
