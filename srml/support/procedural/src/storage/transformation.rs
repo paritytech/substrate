@@ -633,10 +633,10 @@ fn store_functions_to_metadata (
 		let def_get = quote! {
 			pub struct #struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
-			static #cache_name: #scrate::once_cell::sync::OnceCell<Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
-				fn default_byte(&self) -> Vec<u8> {
+				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					#cache_name.get_or_init(|| {
 						let def_val: #gettype = #default;
@@ -646,7 +646,7 @@ fn store_functions_to_metadata (
 			}
 			#[cfg(not(feature = "std"))]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
-				fn default_byte(&self) -> Vec<u8> {
+				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					let def_val: #gettype = #default;
 					<#gettype as Encode>::encode(&def_val)
