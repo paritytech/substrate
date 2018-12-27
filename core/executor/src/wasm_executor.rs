@@ -666,7 +666,7 @@ impl WasmExecutor {
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
 
-		let low = memory.low();
+		let low = memory.lowest_used();
 		let used_mem = memory.used_size();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 		let size = data.len() as u32;
@@ -696,10 +696,10 @@ impl WasmExecutor {
 		};
 
 		// cleanup module instance for next use
-		let new_low = memory.low();
+		let new_low = memory.lowest_used();
 		if new_low < low {
 			memory.zero(new_low as usize, (low - new_low) as usize)?;
-			memory.reset_low(low);
+			memory.reset_lowest_used(low);
 		}
 		memory.zero(used_mem.0, memory.used_size().0 - used_mem.0)?;
 		result
