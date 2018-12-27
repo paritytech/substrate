@@ -104,14 +104,14 @@ macro_rules! decl_module {
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn deposit_event() = default;
+		$vis:vis fn deposit_event $(<$dpeg:ident>)* () = default;
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
-			{ $vis fn deposit_event() = default; }
+			{ $vis fn deposit_event $(<$dpeg>)* () = default; }
 			{ $( $on_finalise )* }
 			[ $($t)* ]
 			$($rest)*
@@ -125,14 +125,16 @@ macro_rules! decl_module {
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		$vis:vis fn deposit_event($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		$vis:vis fn deposit_event $(<$dpeg:ident>)* (
+			$($param_name:ident : $param:ty),*
+		) { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
-			{ $vis fn deposit_event($( $param_name: $param ),* ) { $( $impl )* } }
+			{ $vis fn deposit_event $(<$dpeg>)* ($( $param_name: $param ),* ) { $( $impl )* } }
 			{ $( $on_finalise )* }
 			[ $($t)* ]
 			$($rest)*
@@ -296,10 +298,26 @@ macro_rules! decl_module {
 		$system:ident;
 	) => {};
 
+	// Non-generic event
 	(@impl_deposit_event
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$system:ident;
 		$vis:vis fn deposit_event() = default;
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn deposit_event(event: Event) {
+				<$system::Module<$trait_instance>>::deposit_event(
+					<$trait_instance as $trait_name>::Event::from(event).into()
+				);
+			}
+		}
+	};
+
+	// Generic event
+	(@impl_deposit_event
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$system:ident;
+		$vis:vis fn deposit_event<$ignore:ident>() = default;
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
 			$vis fn deposit_event(event: Event<$trait_instance>) {

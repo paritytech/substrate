@@ -89,7 +89,7 @@ pub trait Trait: timestamp::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 		/// session.

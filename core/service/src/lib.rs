@@ -107,7 +107,7 @@ pub struct Service<Components: components::Components> {
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<tel::Telemetry>,
+	_telemetry: Option<Arc<tel::Telemetry>>,
 }
 
 /// Creates bare client without any networking.
@@ -263,7 +263,7 @@ impl<Components: components::Components> Service<Components> {
 				let impl_name = config.impl_name.to_owned();
 				let version = version.clone();
 				let chain_name = config.chain_spec.name().to_owned();
-				Some(tel::init_telemetry(tel::TelemetryConfig {
+				Some(Arc::new(tel::init_telemetry(tel::TelemetryConfig {
 					url: url,
 					on_connect: Box::new(move || {
 						telemetry!("system.connected";
@@ -276,7 +276,7 @@ impl<Components: components::Components> Service<Components> {
 							"authority" => is_authority
 						);
 					}),
-				}))
+				})))
 			},
 			None => None,
 		};
@@ -305,6 +305,10 @@ impl<Components: components::Components> Service<Components> {
 		} else {
 			None
 		}
+	}
+
+	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
 

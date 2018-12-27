@@ -100,7 +100,7 @@ pub trait Trait: balances::Trait + session::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Declare the desire to stake for the transactor.
 		///
