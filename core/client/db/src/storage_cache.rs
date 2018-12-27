@@ -282,6 +282,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 				return Ok(entry)
 			}
 		}
+		trace!("Cache miss: {:?}", key);
 		let value = self.state.storage(key)?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).storage.insert(key.to_vec(), value.clone());
 		Ok(value)
@@ -300,6 +301,7 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 				return Ok(entry)
 			}
 		}
+		trace!("Cache hash miss: {:?}", key);
 		let hash = self.state.storage_hash(key)?;
 		RwLockUpgradableReadGuard::upgrade(local_cache).hashes.insert(key.to_vec(), hash.clone());
 		Ok(hash)

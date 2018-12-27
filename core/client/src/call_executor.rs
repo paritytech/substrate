@@ -190,11 +190,31 @@ where
 		//TODO: Find a better way to prevent double block initialization
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
-			self.call_at_state(&state, changes, "Core_initialise_block", &header.encode(), manager.clone())?;
+			state_machine::execute_using_consensus_failure_handler(
+				&state,
+				self.backend.changes_trie_storage(),
+				changes,
+				&self.executor,
+				"Core_initialise_block",
+				&header.encode(),
+				manager.clone(),
+				false,
+			)?;
 			*initialised_block = Some(*at);
 		}
 
-		self.call_at_state(&state, changes, method, call_data, manager).map(|cr| cr.0)
+		state_machine::execute_using_consensus_failure_handler(
+			&state,
+			self.backend.changes_trie_storage(),
+			changes,
+			&self.executor,
+			method,
+			call_data,
+			manager,
+			false,
+		)
+		.map(|(result, _, _)| result)
+		.map_err(Into::into)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
