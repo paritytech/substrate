@@ -733,6 +733,9 @@ mod tests {
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
 
+		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[]);
+		assert_eq!(output.unwrap(), vec![0u8; 0]);
+
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
 		assert!(output.is_err());
 	}
