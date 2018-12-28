@@ -105,7 +105,7 @@ use tokio::timer::Delay;
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps, VoterSet};
 
-use network::{Service as NetworkService, ExHashT};
+use network::Service as NetworkService;
 use network::consensus_gossip::{ConsensusMessage};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -248,18 +248,18 @@ pub trait Network<Block: BlockT>: Clone {
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
-pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> {
-	service: Arc<NetworkService<B, S, H>>
+pub struct NetworkBridge<B: BlockT> {
+	service: Arc<NetworkService<B>>
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> NetworkBridge<B, S, H> {
+impl<B: BlockT> NetworkBridge<B> {
 	/// Create a new NetworkBridge to the given NetworkService
-	pub fn new(service: Arc<NetworkService<B, S, H>>) -> Self {
+	pub fn new(service: Arc<NetworkService<B>>) -> Self {
 		NetworkBridge { service }
 	}
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Clone for NetworkBridge<B, S, H> {
+impl<B: BlockT> Clone for NetworkBridge<B> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: Arc::clone(&self.service)
@@ -275,10 +275,10 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network<B> for NetworkBridge<B, S, H> {
+impl<B: BlockT> Network<B> for NetworkBridge<B> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.service.consensus_gossip().write().messages_for(message_topic::<B>(round, set_id))
+		self.service.consensus_gossip_messages_for(message_topic::<B>(round, set_id))
 	}
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
@@ -288,16 +288,16 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.consensus_gossip().write().collect_garbage_for_topic(topic);
+		self.service.consensus_gossip_collect_garbage_for(topic);
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.consensus_gossip().write().collect_garbage_for_topic(topic);
+		self.service.consensus_gossip_collect_garbage_for(topic);
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.service.consensus_gossip().write().messages_for(commit_topic::<B>(set_id))
+		self.service.consensus_gossip_messages_for(commit_topic::<B>(set_id))
 	}
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {

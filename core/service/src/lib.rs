@@ -197,7 +197,7 @@ impl<Components: components::Components> Service<Components> {
 			protocol_id,
 			import_queue
 		)?;
-		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
+		on_demand.map(|on_demand| on_demand.set_network_sender(network.network_sender()));
 
 		{
 			// block notifications
