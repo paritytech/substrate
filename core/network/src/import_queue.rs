@@ -41,7 +41,7 @@ use protocol::Context;
 use service::ExecuteInContext;
 use sync::ChainSync;
 
-pub use consensus::{ImportBlock, BlockImport, ImportResult, BlockOrigin};
+pub use consensus::{ImportBlock, BlockImport, ImportResult, BlockOrigin, ForkChoiceStrategy};
 
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B,Error=ClientError> + Send + Sync>;
@@ -553,6 +553,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			justification,
 			post_digests: vec![],
 			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
 		}, None))
 	}
 }
