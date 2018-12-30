@@ -49,7 +49,7 @@ pub trait Trait: consensus::Trait + system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		fn sudo(origin, proposal: Box<T::Proposal>) {
 			// This is a public call, so we ensure that the origin is some signed account.

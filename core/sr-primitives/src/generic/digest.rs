@@ -133,7 +133,7 @@ impl<
 		self.dref().as_authorities_change()
 	}
 
-	fn as_changes_trie_root(&self) -> Option<&Hash> {
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		self.dref().as_changes_trie_root()
 	}
 }
