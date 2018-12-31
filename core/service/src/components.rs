@@ -23,7 +23,8 @@ use chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
 use {error, Service, maybe_start_server};
-use network::{self, OnDemand, import_queue::ImportQueue};
+use consensus_common::import_queue::ImportQueue;
+use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::{BlockId, SignedBlock}};
@@ -279,9 +280,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Extended light service type.
 	type LightService: ServiceTrait<LightComponents<Self>>;
 	/// ImportQueue for full client
-	type FullImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	type FullImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 	/// ImportQueue for light clients
-	type LightImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	type LightImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.

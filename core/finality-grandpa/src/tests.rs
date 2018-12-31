@@ -18,7 +18,7 @@
 
 use super::*;
 use network::test::{Block, Hash, TestNetFactory, Peer, PeersClient};
-use network::import_queue::{PassThroughVerifier};
+use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
@@ -29,7 +29,7 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
-use consensus_common::BlockOrigin;
+use consensus_common::{BlockOrigin, Error as ConsensusError};
 use std::{collections::HashSet, result};
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
 use runtime_primitives::generic::BlockId;
@@ -99,7 +99,7 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ClientError> + Send + Sync>, PeerData)
+		-> (Arc<BlockImport<Block,Error=ConsensusError> + Send + Sync>, PeerData)
 	{
 		let (import, link) = block_import(
 			client,
