@@ -1804,6 +1804,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "structopt 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-basic-authorship 0.1.0",
  "substrate-cli 0.3.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura 0.1.0",
@@ -3295,6 +3296,20 @@ dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-cli 0.1.0",
  "vergen 2.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-basic-authorship"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-consensus-aura-primitives 0.1.0",
+ "substrate-consensus-common 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-transaction-pool 0.1.0",
 ]
 
 [[package]]
