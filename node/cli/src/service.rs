@@ -77,7 +77,7 @@ construct_service_factory! {
 
 				if let Some(ref key) = local_key {
 					info!("Using authority key {}", key.public());
-					let proposer = Arc::new(substrate_service::ProposerFactory {
+					let proposer = Arc::new(substrate_basic_authorship::ProposerFactory {
 						client: service.client(),
 						transaction_pool: service.transaction_pool(),
 					});

@@ -1,0 +1,14 @@
+[package]
+name = "substrate-basic-authorship"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+log = "0.4"
+parity-codec = "2.1"
+sr-primitives = { path = "../../core/sr-primitives" }
+substrate-client = { path = "../../core/client" }
+substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives" }
+substrate-consensus-common = { path = "../../core/consensus/common" }
+substrate-primitives = { path = "../../core/primitives" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
