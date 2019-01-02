@@ -164,6 +164,25 @@ pub trait Vm<T: Trait> {
 	) -> VmExecResult;
 }
 
+#[derive(Copy, Clone)]
+pub enum ExecFeeToken {
+	/// Base fee charged for a call.
+	Call,
+	/// Base fee charged for a instantiate.
+	Instantiate,
+}
+
+impl<T: Trait> Token<T> for ExecFeeToken {
+	type Metadata = Config<T>;
+	#[inline]
+	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+		match *self {
+			ExecFeeToken::Call => metadata.call_base_fee,
+			ExecFeeToken::Instantiate => metadata.create_base_fee,
+		}
+	}
+}
+
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub self_account: T::AccountId,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -221,7 +240,10 @@ where
 			return Err("reached maximum depth, cannot make a call");
 		}
 
-		if gas_meter.charge(self.config.call_base_fee).is_out_of_gas() {
+		if gas_meter
+			.charge_with_token(self.config, ExecFeeToken::Call)
+			.is_out_of_gas()
+		{
 			return Err("not enough gas to pay base call fee");
 		}
 
@@ -285,7 +307,7 @@ where
 		}
 
 		if gas_meter
-			.charge(self.config.create_base_fee)
+			.charge_with_token(self.config, ExecFeeToken::Instantiate)
 			.is_out_of_gas()
 		{
 			return Err("not enough gas to pay base create fee");
