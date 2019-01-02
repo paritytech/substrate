@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use codec::Compact;
-use gas::GasMeter;
+use gas::{GasMeter, Token};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash};
 use runtime_support::StorageMap;
@@ -42,18 +42,38 @@ pub struct InstrumentedWasmModule {
 	pub code: Vec<u8>,
 }
 
+#[derive(Copy, Clone)]
+pub struct PutCodeToken {
+	/// Code length in bytes.
+	pub code_len: u64,
+}
+
+impl<T: Trait> Token<T> for PutCodeToken {
+	type Metadata = Schedule<T::Gas>;
+
+	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> Option<T::Gas> {
+		let code_len_in_gas = <T::Gas as As<u64>>::sa(self.code_len);
+		let cost = metadata
+			.put_code_per_byte_cost
+			.checked_mul(&code_len_in_gas)?;
+
+		Some(cost)
+	}
+}
+
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
 	gas_meter: &mut GasMeter<T>,
 	schedule: &Schedule<T::Gas>,
 ) -> Result<CodeHash<T>, &'static str> {
-	let code_len_in_gas = <T::Gas as As<u64>>::sa(original_code.len() as u64);
-	let cost = schedule
-		.put_code_per_byte_cost
-		.checked_mul(&code_len_in_gas)
-		.ok_or_else(|| "overflow occured when calculating put_code price")?;
-	if gas_meter.charge(cost).is_out_of_gas() {
-		return Err("there is not enough gas");
+	if gas_meter
+		.charge(
+			schedule,
+			PutCodeToken { code_len: original_code.len() as u64 }
+		)
+		.is_out_of_gas()
+	{
+		return Err("there is not enough gas for storing the code");
 	}
 
 	let code_hash = T::Hashing::hash(&original_code);

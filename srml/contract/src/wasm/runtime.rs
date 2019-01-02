@@ -21,13 +21,11 @@ use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, CallReceipt, CreateReceipt};
 use rstd::prelude::*;
 use rstd::mem;
 use codec::{Decode, Encode};
-use gas::{GasMeter, GasMeterResult};
+use gas::{GasMeter, Token, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
 use sandbox;
 use system;
 use {Trait, CodeHash};
-
-type GasOf<E> = <<E as Ext>::T as Trait>::Gas;
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -96,14 +94,51 @@ pub(crate) fn to_execution_result<E: Ext>(
 	}
 }
 
-/// Charge the specified amount of gas.
+#[derive(Copy, Clone)]
+pub enum RuntimeToken {
+	/// Explicit call to the `gas` function. Charge the gas meter
+	/// with the value provided.
+	Explicit(u32),
+	/// The given number of bytes is read from the sandbox memory.
+	ReadMemory(u32),
+	/// The given number of bytes is written to the sandbox memory.
+	WriteMemory(u32),
+	/// The given number of bytes is read from the sandbox memory and
+	/// is returned as the return data buffer of the call.
+	ReturnData(u32),
+}
+
+impl<T: Trait> Token<T> for RuntimeToken {
+	type Metadata = Schedule<T::Gas>;
+
+	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> Option<T::Gas> {
+		use self::RuntimeToken::*;
+		let value = match *self {
+			Explicit(amount) => <T::Gas as As<u32>>::sa(amount),
+			ReadMemory(byte_count) => metadata
+				.sandbox_data_read_cost
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))?,
+			WriteMemory(byte_count) => metadata
+				.sandbox_data_write_cost
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))?,
+			ReturnData(byte_count) => metadata
+				.return_data_per_byte_cost
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))?,
+		};
+
+		Some(value)
+	}
+}
+
+/// Charge the gas meter with the specified token.
 ///
-/// Returns `Err` if there is not enough gas.
-fn charge_gas<T: Trait>(
+/// Returns `Err(HostError)` if there is not enough gas.
+fn charge_gas<T: Trait, Tok: Token<T>>(
 	gas_meter: &mut GasMeter<T>,
-	amount: T::Gas,
+	metadata: &Tok::Metadata,
+	token: Tok,
 ) -> Result<(), sandbox::HostError> {
-	match gas_meter.charge(amount) {
+	match gas_meter.charge(metadata, token) {
 		GasMeterResult::Proceed => Ok(()),
 		GasMeterResult::OutOfGas => Err(sandbox::HostError),
 	}
@@ -122,10 +157,7 @@ fn read_sandbox_memory<E: Ext>(
 	ptr: u32,
 	len: u32,
 ) -> Result<Vec<u8>, sandbox::HostError> {
-	let price = (ctx.schedule.sandbox_data_read_cost)
-		.checked_mul(&<GasOf<E> as As<u32>>::sa(len))
-		.ok_or(sandbox::HostError)?;
-	charge_gas(ctx.gas_meter, price)?;
+	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	let mut buf = Vec::new();
 	buf.resize(len as usize, 0);
@@ -144,16 +176,13 @@ fn read_sandbox_memory<E: Ext>(
 /// - out of gas
 /// - designated area is not within the bounds of the sandbox memory.
 fn write_sandbox_memory<T: Trait>(
-	per_byte_cost: T::Gas,
+	schedule: &Schedule<T::Gas>,
 	gas_meter: &mut GasMeter<T>,
 	memory: &sandbox::Memory,
 	ptr: u32,
 	buf: &[u8],
 ) -> Result<(), sandbox::HostError> {
-	let price = per_byte_cost
-		.checked_mul(&<T::Gas as As<u32>>::sa(buf.len() as u32))
-		.ok_or(sandbox::HostError)?;
-	charge_gas(gas_meter, price)?;
+	charge_gas(gas_meter, schedule, RuntimeToken::WriteMemory(buf.len() as u32))?;
 
 	memory.set(ptr, buf)?;
 
@@ -174,9 +203,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
-		let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
-		charge_gas(&mut ctx.gas_meter, amount)?;
-
+		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::Explicit(amount))?;
 		Ok(())
 	},
 
@@ -351,12 +378,13 @@ define_env!(Env, <E: Ext>,
 	// Save a data buffer as a result of the execution, terminate the execution and return a
 	// successful result to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
-		let data_len_in_gas = <<E::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
-		let price = (ctx.schedule.return_data_per_byte_cost)
-			.checked_mul(&data_len_in_gas)
-			.ok_or(sandbox::HostError)?;
-
-		match ctx.gas_meter.charge(price) {
+		match ctx
+			.gas_meter
+			.charge(
+				ctx.schedule,
+				RuntimeToken::ReturnData(data_len)
+			)
+		{
 			GasMeterResult::Proceed => (),
 			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
 		}
@@ -423,7 +451,7 @@ define_env!(Env, <E: Ext>,
 
 		// Finally, perform the write.
 		write_sandbox_memory(
-			ctx.schedule.sandbox_data_write_cost,
+			ctx.schedule,
 			ctx.gas_meter,
 			&ctx.memory,
 			dest_ptr,
@@ -455,7 +483,7 @@ define_env!(Env, <E: Ext>,
 
 		// Finally, perform the write.
 		write_sandbox_memory(
-			ctx.schedule.sandbox_data_write_cost,
+			ctx.schedule,
 			ctx.gas_meter,
 			&ctx.memory,
 			dest_ptr,

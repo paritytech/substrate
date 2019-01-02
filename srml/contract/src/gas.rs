@@ -38,10 +38,23 @@ impl GasMeterResult {
 	}
 }
 
+/// This trait represents a token that can be used for charging `GasMeter`.
+/// There is no other way of charging it.
+///
+/// Implementing type is expected to be super lightweight hence `Copy` (`Clone` is added
+/// for consistency). If inlined there should be no observable difference compared
+/// to a hand-written code.
 pub trait Token<T: Trait>: Copy + Clone + ::std::any::Any {
+	/// Metadata type, which the token can require for calculating the amount
+	/// of gas to charge. Can be a some configuration type or
+	/// just the `()`.
 	type Metadata;
 
-	fn calculate_amount(&self, metadata: &Self::Metadata) -> T::Gas;
+	/// Calculate amount of gas that should be taken by this token.
+	///
+	/// Returns `None` if the amount can't be calculated e.g. because of overflow.
+	/// This situation is treated as if out of gas happened.
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> Option<T::Gas>;
 }
 
 pub struct GasMeter<T: Trait> {
@@ -67,14 +80,25 @@ impl<T: Trait> GasMeter<T> {
 
 	/// Account for used gas.
 	///
+	/// Amount is calculated by the given `token`. If `token::calculate_amount` returns
+	/// `None` then all available gas is consumed and `OutOfGas` is returned.
+	///
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
 	///
-	/// NOTE that `amount` is always consumed, i.e. if there is not enough gas
+	/// NOTE that amount is always consumed, i.e. if there is not enough gas
 	/// then the counter will be set to zero.
-	pub fn charge(&mut self, amount: T::Gas) -> GasMeterResult {
-		// pub fn charge<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
-		// let amount = token.calculate_amount(metadata);
+	#[inline]
+	pub fn charge<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
+		// Unconditionally add the token.
+		#[cfg(test)]
+		self.tokens.push(Box::new(token));
+
+		let amount = match token.calculate_amount(metadata) {
+			Some(amount_in_gas) => amount_in_gas,
+			None => self.gas_left, // Consume everything
+		};
+
 		let new_value = match self.gas_left.checked_sub(&amount) {
 			None => None,
 			Some(val) if val.is_zero() => None,
@@ -88,16 +112,6 @@ impl<T: Trait> GasMeter<T> {
 			Some(_) => GasMeterResult::Proceed,
 			None => GasMeterResult::OutOfGas,
 		}
-	}
-
-	/// Account for gas.
-	pub fn charge_with_token<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
-		let amount_in_gas = token.calculate_amount(metadata);
-
-		#[cfg(test)]
-		self.tokens.push(Box::new(token));
-
-		self.charge(amount_in_gas)
 	}
 
 	/// Allocate some amount of gas and perform some work with
@@ -234,8 +248,8 @@ mod tests {
 	struct UnitToken;
 	impl Token<Test> for UnitToken {
 		type Metadata = ();
-		fn calculate_amount(&self, _metadata: &()) -> u64 {
-			1
+		fn calculate_amount(&self, _metadata: &()) -> Option<u64> {
+			Some(1)
 		}
 	}
 
@@ -249,8 +263,8 @@ mod tests {
 
 	impl Token<Test> for DoubleToken {
 		type Metadata = DoubleTokenMetadata;
-		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
-			self.0 * metadata.multiplier
+		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> Option<u64> {
+			Some(self.0 * metadata.multiplier)
 		}
 	}
 
@@ -264,7 +278,7 @@ mod tests {
 	fn simple() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 
-		let result = gas_meter.charge_with_token(
+		let result = gas_meter.charge(
 			&DoubleTokenMetadata { multiplier: 3 },
 			DoubleToken(10),
 		);
@@ -278,8 +292,8 @@ mod tests {
 	#[test]
 	fn tracing() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
-		assert!(!gas_meter.charge_with_token(&(), UnitToken).is_out_of_gas());
-		assert!(!gas_meter.charge_with_token(
+		assert!(!gas_meter.charge(&(), UnitToken).is_out_of_gas());
+		assert!(!gas_meter.charge(
 			&DoubleTokenMetadata { multiplier: 3 },
 			DoubleToken(10),
 		).is_out_of_gas());

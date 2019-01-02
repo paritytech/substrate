@@ -175,11 +175,11 @@ pub enum ExecFeeToken {
 impl<T: Trait> Token<T> for ExecFeeToken {
 	type Metadata = Config<T>;
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
-		match *self {
+	fn calculate_amount(&self, metadata: &Config<T>) -> Option<T::Gas> {
+		Some(match *self {
 			ExecFeeToken::Call => metadata.call_base_fee,
 			ExecFeeToken::Instantiate => metadata.create_base_fee,
-		}
+		})
 	}
 }
 
@@ -241,7 +241,7 @@ where
 		}
 
 		if gas_meter
-			.charge_with_token(self.config, ExecFeeToken::Call)
+			.charge(self.config, ExecFeeToken::Call)
 			.is_out_of_gas()
 		{
 			return Err("not enough gas to pay base call fee");
@@ -307,7 +307,7 @@ where
 		}
 
 		if gas_meter
-			.charge_with_token(self.config, ExecFeeToken::Instantiate)
+			.charge(self.config, ExecFeeToken::Instantiate)
 			.is_out_of_gas()
 		{
 			return Err("not enough gas to pay base create fee");
@@ -381,7 +381,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
 	type Metadata = Config<T>;
 
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+	fn calculate_amount(&self, metadata: &Config<T>) -> Option<T::Gas> {
 		let balance_fee = match self.kind {
 			TransferFeeKind::ContractAccountCreate => metadata.contract_account_create_fee,
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
@@ -391,7 +391,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
 		let amount_in_gas: T::Balance = balance_fee / self.gas_price;
 		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
 
-		amount_in_gas
+		Some(amount_in_gas)
 	}
 }
 
@@ -453,7 +453,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		}
 	};
 
-	if gas_meter.charge_with_token(ctx.config, token).is_out_of_gas() {
+	if gas_meter.charge(ctx.config, token).is_out_of_gas() {
 		return Err("not enough gas to pay transfer fee");
 	}
 
