@@ -70,6 +70,12 @@ pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
 	fn calculate_amount(&self, metadata: &Self::Metadata) -> Option<T::Gas>;
 }
 
+#[cfg(test)]
+pub struct ErasedToken {
+	pub description: String,
+	pub token: Box<dyn Any>,
+}
+
 pub struct GasMeter<T: Trait> {
 	limit: T::Gas,
 	/// Amount of gas left from initial gas limit. Can reach zero.
@@ -77,7 +83,7 @@ pub struct GasMeter<T: Trait> {
 	gas_price: T::Balance,
 
 	#[cfg(test)]
-	tokens: Vec<Box<dyn Any>>,
+	tokens: Vec<ErasedToken>,
 }
 impl<T: Trait> GasMeter<T> {
 	#[cfg(test)]
@@ -105,7 +111,13 @@ impl<T: Trait> GasMeter<T> {
 	pub fn charge<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
 		// Unconditionally add the token.
 		#[cfg(test)]
-		self.tokens.push(Box::new(token));
+		{
+			let erased_tok = ErasedToken {
+				description: format!("{:?}", token),
+				token: Box::new(token),
+			};
+			self.tokens.push(erased_tok);
+		}
 
 		let amount = match token.calculate_amount(metadata) {
 			Some(amount_in_gas) => amount_in_gas,
@@ -176,7 +188,7 @@ impl<T: Trait> GasMeter<T> {
 	}
 
 	#[cfg(test)]
-	fn tokens(&self) -> &[Box<dyn Any>] {
+	pub fn tokens(&self) -> &[ErasedToken] {
 		&self.tokens
 	}
 }
@@ -234,7 +246,7 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	<balances::Module<T>>::increase_total_stake_by(refund);
 }
 
-#[cfg(test)]
+#[macro_export]
 macro_rules! match_tokens {
 	($tokens_iter:ident,) => {
 	};
@@ -243,8 +255,15 @@ macro_rules! match_tokens {
 			let next = ($tokens_iter).next().unwrap();
 			let pattern = $x;
 			let mut _pattern_typed_next_ref = &pattern;
-			_pattern_typed_next_ref = next.downcast_ref().unwrap();
-			assert_eq!(_pattern_typed_next_ref, &pattern);
+			_pattern_typed_next_ref = match next.token.downcast_ref() {
+				Some(p) => {
+					assert_eq!(p, &pattern);
+					p
+				}
+				None => {
+					panic!("expected type {} got {}", stringify!($x), next.description);
+				}
+			};
 		}
 
 		match_tokens!($tokens_iter, $($rest)*);

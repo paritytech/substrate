@@ -25,8 +25,9 @@ use runtime_primitives::traits::{As, CheckedAdd, CheckedSub, Zero};
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
-pub struct CreateReceipt<T: Trait> {
-	pub address: T::AccountId,
+#[cfg_attr(test, derive(Debug))]
+pub struct CreateReceipt<AccountId> {
+	pub address: AccountId,
 }
 
 #[cfg_attr(test, derive(Debug))]
@@ -59,7 +60,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
-	) -> Result<CreateReceipt<Self::T>, &'static str>;
+	) -> Result<CreateReceipt<AccountIdOf<Self::T>>, &'static str>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(
@@ -297,12 +298,11 @@ where
 	// TODO: rename it to instantiate.
 	pub fn create(
 		&mut self,
-		caller: T::AccountId,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
 		input_data: &[u8],
-	) -> Result<CreateReceipt<T>, &'static str> {
+	) -> Result<CreateReceipt<T::AccountId>, &'static str> {
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot create");
 		}
@@ -347,7 +347,7 @@ where
 					&executable,
 					&mut CallContext {
 						ctx: &mut nested,
-						caller: caller,
+						caller: self.self_account.clone(),
 					},
 					input_data,
 					OutputBuf::empty(),
@@ -515,10 +515,9 @@ where
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
-	) -> Result<CreateReceipt<T>, &'static str> {
-		let caller = self.ctx.self_account.clone();
+	) -> Result<CreateReceipt<AccountIdOf<T>>, &'static str> {
 		self.ctx
-			.create(caller, endowment, gas_meter, code_hash, &data)
+			.create(endowment, gas_meter, code_hash, &data)
 	}
 
 	fn call(
@@ -544,7 +543,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{ExecutionContext, Ext, Loader, Vm, OutputBuf, VmExecResult};
+	use super::{ExecutionContext, Ext, Loader, Vm, OutputBuf, VmExecResult, TransferFeeToken, TransferFeeKind, ExecFeeToken};
 	use account_db::AccountDb;
 	use gas::GasMeter;
 	use runtime_io::with_externalities;
@@ -717,6 +716,119 @@ mod tests {
 	}
 
 	#[test]
+	fn transfer_fees() {
+		let origin = ALICE;
+		let dest = BOB;
+
+		// This test sends 50 units of currency to a non-existent account.
+		// This should create lead to creation of a new account thus
+		// a fee should be charged.
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let vm = MockVm::new();
+				let loader = MockLoader::empty();
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&origin, 100);
+				ctx.overlay.set_balance(&dest, 0);
+
+				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+
+				let result = ctx.call(
+					dest,
+					50,
+					&mut gas_meter,
+					&[],
+					OutputBuf::empty(),
+				);
+				assert_matches!(result, Ok(_));
+
+				let mut toks = gas_meter.tokens().iter();
+				match_tokens!(toks,
+					ExecFeeToken::Call,
+					TransferFeeToken {
+						kind: TransferFeeKind::AccountCreate,
+						gas_price: 1u64
+					},
+				);
+			}
+		);
+
+		// This one is similar to the previous one but transfer to an existing account.
+		// In this test we expect that a regular transfer fee is charged.
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let vm = MockVm::new();
+				let loader = MockLoader::empty();
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&origin, 100);
+				ctx.overlay.set_balance(&dest, 15);
+
+				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+
+				let result = ctx.call(
+					dest,
+					50,
+					&mut gas_meter,
+					&[],
+					OutputBuf::empty(),
+				);
+				assert_matches!(result, Ok(_));
+
+				let mut toks = gas_meter.tokens().iter();
+				match_tokens!(toks,
+					ExecFeeToken::Call,
+					TransferFeeToken {
+						kind: TransferFeeKind::Transfer,
+						gas_price: 1u64
+					},
+				);
+			}
+		);
+
+		// This test sends 50 units of currency as an endownment to a newly
+		// created contract.
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let mut loader = MockLoader::empty();
+				let code = loader.insert(|_| {
+					VmExecResult::Ok
+				});
+
+				let vm = MockVm::new();
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+
+				ctx.overlay.set_balance(&origin, 100);
+				ctx.overlay.set_balance(&dest, 15);
+
+				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+
+				let result = ctx.create(
+					50,
+					&mut gas_meter,
+					&code,
+					&[],
+				);
+				assert_matches!(result, Ok(_));
+
+				let mut toks = gas_meter.tokens().iter();
+				match_tokens!(toks,
+					ExecFeeToken::Instantiate,
+					TransferFeeToken {
+						kind: TransferFeeKind::ContractAccountCreate,
+						gas_price: 1u64
+					},
+				);
+			}
+		);
+	}
+
+	#[test]
 	fn balance_too_low() {
 		// This test verifies that a contract can't send value if it's
 		// balance is too low.
@@ -783,10 +895,6 @@ mod tests {
 
 	#[test]
 	fn input_data() {
-		let origin = ALICE;
-		let dest = BOB;
-		let value = Default::default();
-
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let input_data_ch = loader.insert(|ctx| {
@@ -794,19 +902,33 @@ mod tests {
 			VmExecResult::Ok
 		});
 
+		// This one tests passing the input data into a contract via call.
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&dest, Some(input_data_ch));
+			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&BOB, Some(input_data_ch));
 
 			let result = ctx.call(
-				dest,
-				value,
+				BOB,
+				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[1, 2, 3, 4],
 				OutputBuf::empty(),
 			);
+			assert_matches!(result, Ok(_));
+		});
 
+		// This one tests passing the input data into a contract via call.
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let cfg = Config::preload();
+			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+
+			let result = ctx.create(
+				0,
+				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&input_data_ch,
+				&[1, 2, 3, 4],
+			);
 			assert_matches!(result, Ok(_));
 		});
 	}

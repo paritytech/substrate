@@ -80,8 +80,7 @@ type System = system::Module<Test>;
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 	fn contract_address_for(code_hash: &H256, data: &[u8], origin: &u64) -> u64 {
-		// TODO:
-		panic!()
+		*origin + 1
 	}
 }
 

@@ -83,11 +83,13 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate wabt;
 
+#[macro_use]
+mod gas;
+
 mod account_db;
 mod double_map;
 mod exec;
 mod wasm;
-mod gas;
 
 #[cfg(test)]
 mod tests;
@@ -257,7 +259,7 @@ decl_module! {
 			let vm = ::wasm::WasmVm::new(&cfg.schedule);
 			let loader = ::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
-			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &code_hash, &data);
+			let result = ctx.create(endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(ref r) = result {
 				// Commit all changes that made it thus far into the persistant storage.

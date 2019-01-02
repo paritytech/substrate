@@ -188,7 +188,7 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-		) -> Result<CreateReceipt<Test>, &'static str> {
+		) -> Result<CreateReceipt<u64>, &'static str> {
 			self.creates.push(CreateEntry {
 				// code_hash: code_hash.clone(),
 				endowment,
