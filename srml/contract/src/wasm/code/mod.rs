@@ -42,6 +42,7 @@ pub struct InstrumentedWasmModule {
 	pub code: Vec<u8>,
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
 pub struct PutCodeToken {
 	/// Code length in bytes.

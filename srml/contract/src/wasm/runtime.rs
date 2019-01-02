@@ -94,6 +94,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 	}
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
 pub enum RuntimeToken {
 	/// Explicit call to the `gas` function. Charge the gas meter

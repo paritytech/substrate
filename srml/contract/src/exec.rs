@@ -164,6 +164,7 @@ pub trait Vm<T: Trait> {
 	) -> VmExecResult;
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
 pub enum ExecFeeToken {
 	/// Base fee charged for a call.
@@ -364,14 +365,16 @@ where
 	}
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[derive(Copy, Clone)]
 pub enum TransferFeeKind {
 	ContractAccountCreate,
 	AccountCreate,
 	Transfer,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+#[derive(Copy, Clone)]
 pub struct TransferFeeToken<Balance> {
 	kind: TransferFeeKind,
 	gas_price: Balance,

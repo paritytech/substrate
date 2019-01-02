@@ -20,7 +20,10 @@ use runtime_support::StorageValue;
 use balances;
 
 #[cfg(test)]
-use std::any::Any;
+use std::{
+	any::Any,
+	fmt::Debug,
+};
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -39,14 +42,14 @@ impl GasMeterResult {
 }
 
 #[cfg(not(test))]
-pub trait MaybeAny {}
+pub trait TestAuxiliaries {}
 #[cfg(not(test))]
-impl<T> MaybeAny for T {}
+impl<T> TestAuxiliaries for T {}
 
 #[cfg(test)]
-pub trait MaybeAny: Any {}
+pub trait TestAuxiliaries: Any + Debug + PartialEq + Eq {}
 #[cfg(test)]
-impl<T: Any> MaybeAny for T {}
+impl<T: Any + Debug + PartialEq + Eq> TestAuxiliaries for T {}
 
 /// This trait represents a token that can be used for charging `GasMeter`.
 /// There is no other way of charging it.
@@ -54,7 +57,7 @@ impl<T: Any> MaybeAny for T {}
 /// Implementing type is expected to be super lightweight hence `Copy` (`Clone` is added
 /// for consistency). If inlined there should be no observable difference compared
 /// to a hand-written code.
-pub trait Token<T: Trait>: Copy + Clone + MaybeAny {
+pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
 	/// Metadata type, which the token can require for calculating the amount
 	/// of gas to charge. Can be a some configuration type or
 	/// just the `()`.
