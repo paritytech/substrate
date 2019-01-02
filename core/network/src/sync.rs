@@ -23,7 +23,7 @@ use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
 use config::Roles;
@@ -32,6 +32,8 @@ use config::Roles;
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
 // Maximum blocks to store in the import queue.
 const MAX_IMPORTING_BLOCKS: usize = 2048;
+// Number of blocks in the queue that prevents ancestry search.
+const MAJOR_SYNC_BLOCKS: usize = 5;
 
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
@@ -140,10 +142,10 @@ impl<B: BlockT> ChainSync<B> {
 				(Ok(BlockStatus::KnownBad), _) => {
 					protocol.report_peer(who, Severity::Bad(&format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number)));
 				},
-				(Ok(BlockStatus::Unknown), b) if b == As::sa(0) => {
+				(Ok(BlockStatus::Unknown), b) if b.is_zero() => {
 					protocol.report_peer(who, Severity::Bad(&format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number)));
 				},
-				(Ok(BlockStatus::Unknown), _) if self.import_queue.status().importing_count > 5 => {
+				(Ok(BlockStatus::Unknown), _) if self.import_queue.status().importing_count > MAJOR_SYNC_BLOCKS => {
 					// when actively syncing the common point moves too fast.
 					debug!(target:"sync", "New peer with unknown best hash {} ({}), assuming common block.", self.best_queued_hash, self.best_queued_number);
 					self.peers.insert(who, PeerSync {
