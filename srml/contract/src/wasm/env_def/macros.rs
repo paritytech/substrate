@@ -22,7 +22,7 @@
 #[macro_export]
 macro_rules! convert_args {
 	() => (vec![]);
-	( $( $t:ty ),* ) => ( vec![ $( { use $crate::vm::env_def::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
+	( $( $t:ty ),* ) => ( vec![ $( { use $crate::wasm::env_def::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
 }
 
 #[macro_export]
@@ -36,7 +36,7 @@ macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) -> $returns: ty ) => (
 		{
 			$crate::parity_wasm::elements::FunctionType::new(convert_args!($($params),*), Some({
-				use $crate::vm::env_def::ConvertibleToWasm; <$returns>::VALUE_TYPE
+				use $crate::wasm::env_def::ConvertibleToWasm; <$returns>::VALUE_TYPE
 			}))
 		}
 	);
@@ -62,9 +62,9 @@ macro_rules! gen_signature_dispatch {
 macro_rules! unmarshall_then_body {
 	( $body:tt, $ctx:ident, $args_iter:ident, $( $names:ident : $params:ty ),* ) => ({
 		$(
-			let $names : <$params as $crate::vm::env_def::ConvertibleToWasm>::NativeType =
+			let $names : <$params as $crate::wasm::env_def::ConvertibleToWasm>::NativeType =
 				$args_iter.next()
-					.and_then(|v| <$params as $crate::vm::env_def::ConvertibleToWasm>
+					.and_then(|v| <$params as $crate::wasm::env_def::ConvertibleToWasm>
 						::from_typed_value(v.clone()))
 					.expect(
 						"precondition: all imports should be checked against the signatures of corresponding
@@ -100,16 +100,16 @@ where
 #[macro_export]
 macro_rules! unmarshall_then_body_then_marshall {
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) -> $returns:ty => $body:tt ) => ({
-		let body = $crate::vm::env_def::macros::constrain_closure::<
-			<$returns as $crate::vm::env_def::ConvertibleToWasm>::NativeType, _
+		let body = $crate::wasm::env_def::macros::constrain_closure::<
+			<$returns as $crate::wasm::env_def::ConvertibleToWasm>::NativeType, _
 		>(|| {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		let r = body()?;
-		return Ok($crate::sandbox::ReturnValue::Value({ use $crate::vm::env_def::ConvertibleToWasm; r.to_typed_value() }))
+		return Ok($crate::sandbox::ReturnValue::Value({ use $crate::wasm::env_def::ConvertibleToWasm; r.to_typed_value() }))
 	});
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
-		let body = $crate::vm::env_def::macros::constrain_closure::<(), _>(|| {
+		let body = $crate::wasm::env_def::macros::constrain_closure::<(), _>(|| {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		body()?;
@@ -121,7 +121,7 @@ macro_rules! unmarshall_then_body_then_marshall {
 macro_rules! define_func {
 	( < E: $ext_ty:tt > $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
 		fn $name< E: $ext_ty >(
-			$ctx: &mut $crate::vm::Runtime<E>,
+			$ctx: &mut $crate::wasm::Runtime<E>,
 			args: &[$crate::sandbox::TypedValue],
 		) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 			#[allow(unused)]
@@ -168,7 +168,7 @@ macro_rules! define_env {
 	) => {
 		pub struct $init_name;
 
-		impl $crate::vm::env_def::ImportSatisfyCheck for $init_name {
+		impl $crate::wasm::env_def::ImportSatisfyCheck for $init_name {
 			fn can_satisfy(name: &[u8], func_type: &$crate::parity_wasm::elements::FunctionType) -> bool {
 				gen_signature_dispatch!( name, func_type ; $( $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )* );
 
@@ -176,8 +176,8 @@ macro_rules! define_env {
 			}
 		}
 
-		impl<E: Ext> $crate::vm::env_def::FunctionImplProvider<E> for $init_name {
-			fn impls<F: FnMut(&[u8], $crate::vm::env_def::HostFunc<E>)>(f: &mut F) {
+		impl<E: Ext> $crate::wasm::env_def::FunctionImplProvider<E> for $init_name {
+			fn impls<F: FnMut(&[u8], $crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
 				register_func!(f, < E: $ext_ty > ; $( $name ( $ctx $( , $names : $params )* ) $( -> $returns)* => $body )* );
 			}
 		}
@@ -190,9 +190,9 @@ mod tests {
 	use parity_wasm::elements::ValueType;
 	use runtime_primitives::traits::{As, Zero};
 	use sandbox::{self, ReturnValue, TypedValue};
-	use vm::tests::MockExt;
+	use wasm::tests::MockExt;
+	use wasm::Runtime;
 	use exec::Ext;
-	use vm::Runtime;
 	use Trait;
 
 	#[test]
@@ -297,7 +297,7 @@ mod tests {
 
 	#[test]
 	fn macro_define_env() {
-		use vm::env_def::ImportSatisfyCheck;
+		use wasm::env_def::ImportSatisfyCheck;
 
 		define_env!(Env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {

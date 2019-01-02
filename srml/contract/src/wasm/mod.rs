@@ -21,17 +21,56 @@ use exec::{Ext, OutputBuf, VmExecResult};
 use gas::GasMeter;
 use rstd::prelude::*;
 use sandbox;
-use vm::env_def::FunctionImplProvider;
-use {Schedule, Trait};
+use wasm::env_def::FunctionImplProvider;
+use {Schedule, Trait, CodeHash};
 
 #[macro_use]
 pub mod env_def;
 pub mod runtime;
+pub mod code;
 
 use self::runtime::{to_execution_result, Runtime};
 
 // TODO: Instead of taking the code explicitly can we take the code hash?
 // TODO: Extract code injection stuff and expect the code to be already prepared?
+
+pub struct WasmExecutable {
+	// TODO: Remove these pubs
+	pub entrypoint_name: &'static [u8],
+	pub memory_def: code::MemoryDefinition,
+	pub instrumented_code: Vec<u8>,
+}
+
+pub struct WasmLoader<'a, T: Trait> {
+	schedule: &'a Schedule<T::Gas>,
+}
+
+impl<'a, T: Trait> WasmLoader<'a, T> {
+	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
+		WasmLoader { schedule }
+	}
+}
+
+impl<'a, T: Trait> ::exec::Loader<T> for WasmLoader<'a, T> {
+	type Executable = WasmExecutable;
+
+	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
+		let dest_code = code::load::<T>(code_hash, self.schedule)?;
+		Ok(WasmExecutable {
+			entrypoint_name: b"deploy",
+			memory_def: dest_code.memory_def,
+			instrumented_code: dest_code.code,
+		})
+	}
+	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
+		let dest_code = code::load::<T>(code_hash, self.schedule)?;
+		Ok(WasmExecutable {
+			entrypoint_name: b"call",
+			memory_def: dest_code.memory_def,
+			instrumented_code: dest_code.code,
+		})
+	}
+}
 
 pub struct WasmVm<'a, T: Trait> {
 	schedule: &'a Schedule<T::Gas>,
@@ -44,11 +83,11 @@ impl<'a, T: Trait> WasmVm<'a, T> {
 }
 
 impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
-	type Executable = ::exec::WasmExecutable;
+	type Executable = WasmExecutable;
 
 	fn execute<E: Ext<T = T>>(
 		&self,
-		exec: &::exec::WasmExecutable,
+		exec: &WasmExecutable,
 		ext: &mut E,
 		input_data: &[u8],
 		output_buf: OutputBuf,
@@ -110,6 +149,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 mod tests {
 	use super::*;
 	use exec::{CallReceipt, CreateReceipt, Ext, OutputBuf};
+	use wasm::code::prepare::prepare_contract;
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;
@@ -199,12 +239,11 @@ mod tests {
 		ext: &mut E,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> Result<(), &'static str> {
-		use code::prepare::prepare_contract;
-		use exec::{Vm, WasmExecutable};
+		use exec::Vm;
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
 		let schedule = ::Schedule::<u64>::default();
-		let ::code::InstrumentedWasmModule {
+		let ::wasm::code::InstrumentedWasmModule {
 			memory_def, code, ..
 		} = prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
 

@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Schedule, Trait};
+use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
 use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use code;
 use gas::{GasMeter, Token};
 
 use balances::{self, EnsureAccountLiquid};
@@ -163,44 +162,6 @@ pub trait Vm<T: Trait> {
 		output_buf: OutputBuf,
 		gas_meter: &mut GasMeter<T>,
 	) -> VmExecResult;
-}
-
-pub struct WasmExecutable {
-	// TODO: Remove these pubs
-	pub entrypoint_name: &'static [u8],
-	pub memory_def: ::code::MemoryDefinition,
-	pub instrumented_code: Vec<u8>,
-}
-
-pub struct WasmLoader<'a, T: Trait> {
-	schedule: &'a Schedule<T::Gas>,
-}
-
-impl<'a, T: Trait> WasmLoader<'a, T> {
-	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
-		WasmLoader { schedule }
-	}
-}
-
-impl<'a, T: Trait> Loader<T> for WasmLoader<'a, T> {
-	type Executable = WasmExecutable;
-
-	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let dest_code = code::load::<T>(code_hash, self.schedule)?;
-		Ok(WasmExecutable {
-			entrypoint_name: b"deploy",
-			memory_def: dest_code.memory_def,
-			instrumented_code: dest_code.code,
-		})
-	}
-	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let dest_code = code::load::<T>(code_hash, self.schedule)?;
-		Ok(WasmExecutable {
-			entrypoint_name: b"call",
-			memory_def: dest_code.memory_def,
-			instrumented_code: dest_code.code,
-		})
-	}
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {

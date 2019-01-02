@@ -19,7 +19,7 @@ use gas::GasMeter;
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash};
 use runtime_support::StorageMap;
-use vm::runtime::Env;
+use wasm::runtime::Env;
 use {CodeHash, CodeStorage, PrestineCode, Schedule, Trait};
 
 pub mod prepare;

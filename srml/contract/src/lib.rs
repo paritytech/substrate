@@ -86,9 +86,8 @@ extern crate wabt;
 mod account_db;
 mod double_map;
 mod exec;
-mod vm;
+mod wasm;
 mod gas;
-mod code;
 
 #[cfg(test)]
 mod tests;
@@ -176,7 +175,7 @@ decl_module! {
 
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
-			let result = code::save::<T>(code, &mut gas_meter, &schedule);
+			let result = wasm::code::save::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
@@ -205,8 +204,8 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
-			let vm = ::vm::WasmVm::new(&cfg.schedule);
-			let loader = ::exec::WasmLoader::new(&cfg.schedule);
+			let vm = ::wasm::WasmVm::new(&cfg.schedule);
+			let loader = ::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::OutputBuf::empty());
@@ -255,8 +254,8 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
-			let vm = ::vm::WasmVm::new(&cfg.schedule);
-			let loader = ::exec::WasmLoader::new(&cfg.schedule);
+			let vm = ::wasm::WasmVm::new(&cfg.schedule);
+			let loader = ::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &code_hash, &data);
 
@@ -328,7 +327,7 @@ decl_storage! {
 		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;
 
 		pub PrestineCode: map CodeHash<T> => Option<Vec<u8>>;
-		pub CodeStorage: map CodeHash<T> => Option<code::InstrumentedWasmModule>;
+		pub CodeStorage: map CodeHash<T> => Option<wasm::code::InstrumentedWasmModule>;
 	}
 }
 

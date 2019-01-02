@@ -24,7 +24,7 @@ use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use runtime_primitives::traits::As;
-use vm::env_def::ImportSatisfyCheck;
+use wasm::env_def::ImportSatisfyCheck;
 use {Schedule, Trait};
 
 struct ContractModule<'a, Gas: 'a> {
@@ -230,7 +230,7 @@ mod tests {
 	fn parse_and_prepare_wat(wat: &str) -> Result<InstrumentedWasmModule, &'static str> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		let schedule = Schedule::<u64>::default();
-		prepare_contract::<Test, ::vm::runtime::Env>(wasm.as_ref(), &schedule)
+		prepare_contract::<Test, ::wasm::runtime::Env>(wasm.as_ref(), &schedule)
 	}
 
 	#[test]
