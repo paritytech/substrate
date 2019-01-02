@@ -80,11 +80,12 @@ decl_module! {
 		/// proposal is awarded.
 		fn propose_spend(
 			origin,
-			value: T::Balance,
+			value: <T::Balance as HasCompact>::Type,
 			beneficiary: Address<T::AccountId, T::AccountIndex>
 		) {
 			let proposer = ensure_signed(origin)?;
 			let beneficiary = <balances::Module<T>>::lookup(beneficiary)?;
+			let value = value.into();
 
 			let bond = Self::calculate_bond(value);
 			<balances::Module<T>>::reserve(&proposer, bond)
@@ -98,21 +99,21 @@ decl_module! {
 		}
 
 		/// Set the balance of funds available to spend.
-		fn set_pot(new_pot: T::Balance) {
+		fn set_pot(new_pot: <T::Balance as HasCompact>::Type) {
 			// Put the new value into storage.
-			<Pot<T>>::put(new_pot);
+			<Pot<T>>::put(new_pot.into());
 		}
 
 		/// (Re-)configure this module.
 		fn configure(
 			proposal_bond: Permill,
-			proposal_bond_minimum: T::Balance,
-			spend_period: T::BlockNumber,
+			proposal_bond_minimum: <T::Balance as HasCompact>::Type,
+			spend_period: <T::BlockNumber as HasCompact>::Type,
 			burn: Permill
 		) {
 			<ProposalBond<T>>::put(proposal_bond);
-			<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
-			<SpendPeriod<T>>::put(spend_period);
+			<ProposalBondMinimum<T>>::put(proposal_bond_minimum.into());
+			<SpendPeriod<T>>::put(spend_period.into());
 			<Burn<T>>::put(burn);
 		}
 

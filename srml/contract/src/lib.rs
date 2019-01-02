@@ -158,11 +158,13 @@ decl_module! {
 		fn call(
 			origin,
 			dest: T::AccountId,
-			value: T::Balance,
-			gas_limit: T::Gas,
+			value: <T::Balance as HasCompact>::Type,
+			gas_limit: <T::Gas as HasCompact>::Type,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
+			let value = value.into();
+			let gas_limit = gas_limit.into();
 
 			// Pay for the gas upfront.
 			//
@@ -210,12 +212,14 @@ decl_module! {
 		///   upon any message received by this account.
 		fn create(
 			origin,
-			endowment: T::Balance,
-			gas_limit: T::Gas,
+			endowment: <T::Balance as HasCompact>::Type,
+			gas_limit: <T::Gas as HasCompact>::Type,
 			ctor_code: Vec<u8>,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
+			let endowment = endowment.into();
+			let gas_limit = gas_limit.into();
 
 			// Pay for the gas upfront.
 			//

@@ -220,10 +220,11 @@ decl_module! {
 		fn present_winner(
 			origin,
 			candidate: Address<T::AccountId, T::AccountIndex>,
-			total: T::Balance,
+			total: <T::Balance as HasCompact>::Type,
 			index: Compact<VoteIndex>
 		) -> Result {
 			let who = ensure_signed(origin)?;
+			let total = total.into();
 			let index: VoteIndex = index.into();
 
 			let candidate = <balances::Module<T>>::lookup(candidate)?;
@@ -290,14 +291,14 @@ decl_module! {
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalise_vote`.
-		fn set_presentation_duration(count: T::BlockNumber) {
-			<PresentationDuration<T>>::put(count);
+		fn set_presentation_duration(count: <T::BlockNumber as HasCompact>::Type) {
+			<PresentationDuration<T>>::put(count.into());
 		}
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalise_vote`.
-		fn set_term_duration(count: T::BlockNumber) {
-			<TermDuration<T>>::put(count);
+		fn set_term_duration(count: <T::BlockNumber as HasCompact>::Type) {
+			<TermDuration<T>>::put(count.into());
 		}
 
 		fn on_finalise(n: T::BlockNumber) {

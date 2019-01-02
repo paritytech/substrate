@@ -105,8 +105,8 @@ decl_module! {
 		}
 
 		/// Set a new session length. Won't kick in until the next session change (at current length).
-		fn set_length(new: T::BlockNumber) {
-			<NextSessionLength<T>>::put(new);
+		fn set_length(new: <T::BlockNumber as HasCompact>::Type) {
+			<NextSessionLength<T>>::put(new.into());
 		}
 
 		/// Forces a new session.

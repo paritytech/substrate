@@ -98,8 +98,9 @@ decl_module! {
 		/// if this call hasn't been invoked by that time.
 		///
 		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-		fn set(origin, now: T::Moment) {
+		fn set(origin, now: <T::Moment as HasCompact>::Type) {
 			ensure_inherent(origin)?;
+			let now = now.into();
 
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
@@ -172,7 +173,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		let t = match (xt.is_signed(), extract_function(&xt)) {
 			(Some(false), Some(Call::set(ref t))) => t.clone(),
 			_ => return Err(CheckInherentError::Other("No valid timestamp inherent in block".into())),
-		}.as_();
+		}.into().as_();
 
 		let minimum = (Self::now() + Self::block_period()).as_();
 		if t > data.as_() + MAX_TIMESTAMP_DRIFT {

@@ -95,12 +95,12 @@ decl_module! {
 			}
 		}
 
-		fn set_cooloff_period(blocks: T::BlockNumber) {
-			<CooloffPeriod<T>>::put(blocks);
+		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) {
+			<CooloffPeriod<T>>::put(blocks.into());
 		}
 
-		fn set_voting_period(blocks: T::BlockNumber) {
-			<VotingPeriod<T>>::put(blocks);
+		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) {
+			<VotingPeriod<T>>::put(blocks.into());
 		}
 
 		fn on_finalise(n: T::BlockNumber) {

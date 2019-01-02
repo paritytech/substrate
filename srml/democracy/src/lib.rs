@@ -97,7 +97,7 @@ decl_module! {
 		fn propose(
 			origin,
 			proposal: Box<T::Proposal>,
-			value: T::Balance
+			value: <T::Balance as HasCompact>::Type
 		) {
 			let who = ensure_signed(origin)?;
 			let value = value.into();

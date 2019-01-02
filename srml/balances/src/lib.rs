@@ -148,11 +148,12 @@ decl_module! {
 		pub fn transfer(
 			origin,
 			dest: RawAddress<T::AccountId, T::AccountIndex>,
-			value: T::Balance
+			value: <T::Balance as HasCompact>::Type
 		) {
 			let transactor = ensure_signed(origin)?;
 
 			let dest = Self::lookup(dest)?;
+			let value = value.into();
 			let from_balance = Self::free_balance(&transactor);
 			let to_balance = Self::free_balance(&dest);
 			let would_create = to_balance.is_zero();
@@ -189,12 +190,12 @@ decl_module! {
 		/// Set the balances of a given account.
 		fn set_balance(
 			who: RawAddress<T::AccountId, T::AccountIndex>,
-			free: T::Balance,
-			reserved: T::Balance
+			free: <T::Balance as HasCompact>::Type,
+			reserved: <T::Balance as HasCompact>::Type
 		) {
 			let who = Self::lookup(who)?;
-			Self::set_free_balance(&who, free);
-			Self::set_reserved_balance(&who, reserved);
+			Self::set_free_balance(&who, free.into());
+			Self::set_reserved_balance(&who, reserved.into());
 		}
 	}
 }

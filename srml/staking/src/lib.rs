@@ -204,13 +204,13 @@ decl_module! {
 		}
 
 		/// Set the number of sessions in an era.
-		fn set_sessions_per_era(new: T::BlockNumber) {
-			<NextSessionsPerEra<T>>::put(new);
+		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) {
+			<NextSessionsPerEra<T>>::put(new.into());
 		}
 
 		/// The length of the bonding duration in eras.
-		fn set_bonding_duration(new: T::BlockNumber) {
-			<BondingDuration<T>>::put(new);
+		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) {
+			<BondingDuration<T>>::put(new.into());
 		}
 
 		/// The ideal number of validators.
