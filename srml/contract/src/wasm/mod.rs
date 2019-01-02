@@ -31,14 +31,10 @@ pub mod code;
 
 use self::runtime::{to_execution_result, Runtime};
 
-// TODO: Instead of taking the code explicitly can we take the code hash?
-// TODO: Extract code injection stuff and expect the code to be already prepared?
-
 pub struct WasmExecutable {
-	// TODO: Remove these pubs
-	pub entrypoint_name: &'static [u8],
-	pub memory_def: code::MemoryDefinition,
-	pub instrumented_code: Vec<u8>,
+	entrypoint_name: &'static [u8],
+	memory_def: code::MemoryDefinition,
+	instrumented_code: Vec<u8>,
 }
 
 pub struct WasmLoader<'a, T: Trait> {
@@ -382,40 +378,6 @@ mod tests {
 			}]
 		);
 	}
-
-	// TODO: This shouldn't be possible. There is an invariant that
-	// code should be already prepared.
-
-	// 	const CODE_MEM: &str = r#"
-	// (module
-	// 	;; Internal memory is not allowed.
-	// 	(memory 1 1)
-
-	// 	(func (export "call")
-	// 		nop
-	// 	)
-	// )
-	// "#;
-
-	// 	#[test]
-	// 	fn contract_internal_mem() {
-	// 		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
-
-	// 		let mut mock_ext = MockExt::default();
-
-	// 		assert_matches!(
-	// 			execute(
-	// 				"call",
-	// 				&code_mem,
-	// 				&[],
-	// 				&mut Vec::new(),
-	// 				&mut mock_ext,
-	// 				&Schedule::default(),
-	// 				&mut GasMeter::with_limit(100_000, 1)
-	// 			),
-	// 			Err(_)
-	// 		);
-	// 	}
 
 	const CODE_TRANSFER_LIMITED_GAS: &str = r#"
 (module
