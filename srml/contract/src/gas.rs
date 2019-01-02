@@ -38,13 +38,23 @@ impl GasMeterResult {
 	}
 }
 
+#[cfg(not(test))]
+pub trait MaybeAny {}
+#[cfg(not(test))]
+impl<T> MaybeAny for T {}
+
+#[cfg(test)]
+pub trait MaybeAny: Any {}
+#[cfg(test)]
+impl<T: Any> MaybeAny for T {}
+
 /// This trait represents a token that can be used for charging `GasMeter`.
 /// There is no other way of charging it.
 ///
 /// Implementing type is expected to be super lightweight hence `Copy` (`Clone` is added
 /// for consistency). If inlined there should be no observable difference compared
 /// to a hand-written code.
-pub trait Token<T: Trait>: Copy + Clone + ::std::any::Any {
+pub trait Token<T: Trait>: Copy + Clone + MaybeAny {
 	/// Metadata type, which the token can require for calculating the amount
 	/// of gas to charge. Can be a some configuration type or
 	/// just the `()`.
