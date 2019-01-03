@@ -542,9 +542,14 @@ where
 
 /// These tests exercise the executive layer.
 ///
-/// These tests mock a vm and use a simple callbacks instead of actual VM and loaders.
+/// In these tests the VM/loader are mocked. Instead of dealing with wasm bytecode they use simple closures.
 /// This allows you to tackle executive logic more thoroughly without writing a
 /// wasm VM code.
+///
+/// Because it's the executive layer:
+///
+/// - no gas meter setup and teardown logic. All balances are *AFTER* gas purchase.
+/// - executive layer doesn't alter any storage!
 #[cfg(test)]
 mod tests {
 	use super::{ExecutionContext, Ext, Loader, Vm, OutputBuf, VmExecResult, TransferFeeToken, TransferFeeKind, ExecFeeToken};
@@ -685,6 +690,74 @@ mod tests {
 	// TODO: Won't create an account with value below exsistential deposit.
 	// TODO: Verify that instantiate properly creates a contract.
 	// TODO: Instantiate accounts in a proper way (i.e. via `instantiate`)
+	// TODO: Verify sanity of initial setup. I.e. no active account should have a zero balance.
+
+	#[test]
+	fn base_fees() {
+		let origin = ALICE;
+		let dest = BOB;
+
+		// This test verifies that base fee for call is taken.
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				let vm = MockVm::new();
+				let loader = MockLoader::empty();
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&origin, 100);
+				ctx.overlay.set_balance(&dest, 0);
+
+				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+
+				let result = ctx.call(
+					dest,
+					0,
+					&mut gas_meter,
+					&[],
+					OutputBuf::empty(),
+				);
+				assert_matches!(result, Ok(_));
+
+				let mut toks = gas_meter.tokens().iter();
+				match_tokens!(toks,
+					ExecFeeToken::Call,
+				);
+			}
+		);
+
+		// This test verifies that base fee for instantiation is taken.
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				let mut loader = MockLoader::empty();
+				let code = loader.insert(|_| {
+					VmExecResult::Ok
+				});
+
+				let vm = MockVm::new();
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+
+				ctx.overlay.set_balance(&origin, 100);
+
+				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+
+				let result = ctx.instantiate(
+					0,
+					&mut gas_meter,
+					&code,
+					&[],
+				);
+				assert_matches!(result, Ok(_));
+
+				let mut toks = gas_meter.tokens().iter();
+				match_tokens!(toks,
+					ExecFeeToken::Instantiate,
+				);
+			}
+		);
+	}
 
 	#[test]
 	fn transfer_works() {
@@ -935,10 +1008,9 @@ mod tests {
 
 	#[test]
 	fn max_depth() {
-		let origin = ALICE;
-		let dest = BOB;
+		// This test verifies that when we reach the maximal depth creation of an
+		// yet another context fails.
 		let value = Default::default();
-
 		let reached_bottom = RefCell::new(false);
 
 		let vm = MockVm::new();
@@ -963,11 +1035,11 @@ mod tests {
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&dest, Some(recurse_ch));
+			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&BOB, Some(recurse_ch));
 
 			let result = ctx.call(
-				dest,
+				BOB,
 				value,
 				&mut GasMeter::<Test>::with_limit(100000, 1),
 				&[],
