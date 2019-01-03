@@ -273,7 +273,7 @@ mod tests {
 				retry_count: None,
 			}, remote_execution_proof).unwrap();
 
-			(remote_result, local_result.return_data)
+			(remote_result, local_result)
 		}
 
 		// prepare remote client

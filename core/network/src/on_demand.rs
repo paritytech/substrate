@@ -515,7 +515,7 @@ pub mod tests {
 	use futures::Future;
 	use parking_lot::RwLock;
 	use runtime_primitives::traits::NumberFor;
-	use client::{self, error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
+	use client::{error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 	use config::Roles;
@@ -779,7 +779,7 @@ pub mod tests {
 		});
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
-			assert_eq!(result.return_data, vec![42]);
+			assert_eq!(result, vec![42]);
 		});
 
 		receive_call_response(&*on_demand, &mut network, 0, 0);

@@ -21,14 +21,13 @@ use std::sync::Arc;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use lru_cache::LruCache;
 use hash_db::Hasher;
-use runtime_primitives::traits::{Block, Header, As};
+use runtime_primitives::traits::{Block, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
 type StorageKey = Vec<u8>;
 type StorageValue = Vec<u8>;
-type BlockNumber = u64;
 
 /// Shared canonical state cache.
 pub struct Cache<B: Block, H: Hasher> {
@@ -98,10 +97,6 @@ pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
 	/// Hash of the block on top of which this instance was created or
 	/// `None` if cache is disabled
 	pub parent_hash: Option<B::Hash>,
-	/// Hash of the committing block or `None` if not committed yet.
-	commit_hash: Option<B::Hash>,
-	/// Number of the committing block or `None` if not committed yet.
-	commit_number: Option<<B::Header as Header>::Number>,
 }
 
 impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
@@ -115,15 +110,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 				hashes: Default::default(),
 			}),
 			parent_hash: parent_hash,
-			commit_hash: None,
-			commit_number: None,
 		}
-	}
-
-	/// Journal all recent operations under the given era and ID.
-	pub fn mark_commit(&mut self, number: BlockNumber, block_hash: &B::Hash) {
-		self.commit_hash = Some(block_hash.clone());
-		self.commit_number = Some(As::sa(number));
 	}
 
 	/// Propagate local cache into the global cache and synchonize
@@ -137,17 +124,19 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		enacted: &[B::Hash],
 		retracted: &[B::Hash],
 		changes: Vec<(StorageKey, Option<StorageValue>)>,
+		commit_hash: Option<B::Hash>,
+		commit_number: Option<<B::Header as Header>::Number>,
 		is_best: F,
 	) {
 		let mut cache = self.shared_cache.lock();
 		let is_best = is_best();
-		trace!("sync_cache id = (#{:?}, {:?}), parent={:?}, best={}", self.commit_number, self.commit_hash, self.parent_hash, is_best);
+		trace!("Syncing cache, id = (#{:?}, {:?}), parent={:?}, best={}", commit_number, commit_hash, self.parent_hash, is_best);
 		let cache = &mut *cache;
 
 		// Purge changes from re-enacted and retracted blocks.
 		// Filter out commiting block if any.
 		let mut clear = false;
-		for block in enacted.iter().filter(|h| self.commit_hash.as_ref().map_or(true, |p| *h != p)) {
+		for block in enacted.iter().filter(|h| commit_hash.as_ref().map_or(true, |p| *h != p)) {
 			clear = clear || {
 				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
 					trace!("Reverting enacted block {:?}", block);
@@ -191,7 +180,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		if let Some(_) = self.parent_hash {
 			let mut local_cache = self.local_cache.write();
 			if is_best {
-				trace!("committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
+				trace!("Committing {} local, {} hashes, {} modified entries", local_cache.storage.len(), local_cache.hashes.len(), changes.len());
 				for (k, v) in local_cache.storage.drain() {
 					cache.storage.insert(k, v);
 				}
@@ -201,7 +190,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			}
 		}
 
-		if let (Some(ref number), Some(ref hash), Some(ref parent)) = (self.commit_number, self.commit_hash, self.parent_hash) {
+		if let (Some(ref number), Some(ref hash), Some(ref parent)) = (commit_number, commit_hash, self.parent_hash) {
 			if cache.modifications.len() == STATE_CACHE_BLOCKS {
 				cache.modifications.pop_back();
 			}
@@ -222,7 +211,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 				parent: parent.clone(),
 			};
 			let insert_at = cache.modifications.iter().enumerate().find(|&(_, m)| m.number < *number).map(|(i, _)| i);
-			trace!("inserting modifications at {:?}", insert_at);
+			trace!("Inserting modifications at {:?}", insert_at);
 			if let Some(insert_at) = insert_at {
 				cache.modifications.insert(insert_at, block_changes);
 			} else {
@@ -357,22 +346,19 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 	}
 }
 
-/*
 #[cfg(test)]
 mod tests {
-	use ethereum_types::{H256, U256, Address};
-	use kvdb::DBTransaction;
-	use test_helpers::get_temp_state_db;
-	use state::{Account, Backend};
-	use ethcore_logger::init_log;
+	use super::*;
+	use runtime_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use state_machine::backend::InMemory;
+	use primitives::Blake2Hasher;
 
+	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 	#[test]
-	fn state_db_smoke() {
-		init_log();
-
-		let state_db = get_temp_state_db();
+	fn smoke() {
+		//init_log();
 		let root_parent = H256::random();
-		let key = Address::random();
+		let key = H256::random()[..].to_vec();
 		let h0 = H256::random();
 		let h1a = H256::random();
 		let h1b = H256::random();
@@ -380,59 +366,55 @@ mod tests {
 		let h2b = H256::random();
 		let h3a = H256::random();
 		let h3b = H256::random();
-		let mut batch = DBTransaction::new();
+
+		let shared = new_shared_cache::<Block, Blake2Hasher>(256*1024);
 
 		// blocks  [ 3a(c) 2a(c) 2b 1b 1a(c) 0 ]
-		// balance [ 5     5     4  3  2     2 ]
-		let mut s = state_db.boxed_clone_canon(&root_parent);
-		s.add_to_local_cache(key, Some(Account::new_basic(2.into(), 0.into())), false);
-		s.journal_under(&mut batch, 0, &h0).unwrap();
-		s.sync_cache(&[], &[], true);
+		// state   [ 5     5     4  3  2     2 ]
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(root_parent.clone()));
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![2]))], Some(h0.clone()), Some(0), || true);
 
-		let mut s = state_db.boxed_clone_canon(&h0);
-		s.journal_under(&mut batch, 1, &h1a).unwrap();
-		s.sync_cache(&[], &[], true);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0.clone()));
+		s.sync_cache(&[], &[], vec![], Some(h1a.clone()), Some(1), || true);
 
-		let mut s = state_db.boxed_clone_canon(&h0);
-		s.add_to_local_cache(key, Some(Account::new_basic(3.into(), 0.into())), true);
-		s.journal_under(&mut batch, 1, &h1b).unwrap();
-		s.sync_cache(&[], &[], false);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h0.clone()));
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![3]))], Some(h1b.clone()), Some(1), || false);
 
-		let mut s = state_db.boxed_clone_canon(&h1b);
-		s.add_to_local_cache(key, Some(Account::new_basic(4.into(), 0.into())), true);
-		s.journal_under(&mut batch, 2, &h2b).unwrap();
-		s.sync_cache(&[], &[], false);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1b.clone()));
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![4]))], Some(h2b.clone()), Some(2), || false);
 
-		let mut s = state_db.boxed_clone_canon(&h1a);
-		s.add_to_local_cache(key, Some(Account::new_basic(5.into(), 0.into())), true);
-		s.journal_under(&mut batch, 2, &h2a).unwrap();
-		s.sync_cache(&[], &[], true);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1a.clone()));
+		s.sync_cache(&[], &[], vec![(key.clone(), Some(vec![5]))], Some(h2a.clone()), Some(2), || true);
 
-		let mut s = state_db.boxed_clone_canon(&h2a);
-		s.journal_under(&mut batch, 3, &h3a).unwrap();
-		s.sync_cache(&[], &[], true);
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2a.clone()));
+		s.sync_cache(&[], &[], vec![], Some(h3a.clone()), Some(3), || true);
 
-		let s = state_db.boxed_clone_canon(&h3a);
-		assert_eq!(s.get_cached(&key).unwrap().unwrap().balance(), &U256::from(5));
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
+		assert_eq!(s.storage(&key).unwrap().unwrap(), vec![5]);
 
-		let s = state_db.boxed_clone_canon(&h1a);
-		assert!(s.get_cached(&key).is_none());
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1a.clone()));
+		assert!(s.storage(&key).unwrap().is_none());
 
-		let s = state_db.boxed_clone_canon(&h2b);
-		assert!(s.get_cached(&key).is_none());
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b.clone()));
+		assert!(s.storage(&key).unwrap().is_none());
 
-		let s = state_db.boxed_clone_canon(&h1b);
-		assert!(s.get_cached(&key).is_none());
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h1b.clone()));
+		assert!(s.storage(&key).unwrap().is_none());
 
 		// reorg to 3b
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
+		let mut s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h2b.clone()));
+		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], vec![], Some(h3b.clone()), Some(3), || true);
+		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
+		assert!(s.storage(&key).unwrap().is_none());
+		/*
 		let mut s = state_db.boxed_clone_canon(&h2b);
 		s.journal_under(&mut batch, 3, &h3b).unwrap();
 		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], true);
 		let s = state_db.boxed_clone_canon(&h3a);
 		assert!(s.get_cached(&key).is_none());
+		*/
 	}
 }
-*/
 
 

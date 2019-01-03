@@ -727,6 +727,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					// uncanonicalize: check safety violations and ensure the numbers no longer
 					// point to these block hashes in the key mapping.
 					for r in tree_route.retracted() {
+						retracted.push(r.hash.clone());
 						if r.hash == meta.finalized_hash {
 							warn!("Potential safety failure: reverting finalized block {:?}",
 								(&r.number, &r.hash));
@@ -836,8 +837,14 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			);
 
 			// sync canonical state cache
-			operation.old_state.mark_commit(As::as_(number), &hash);
-			operation.old_state.sync_cache(&enacted, &retracted, operation.storage_updates, || is_best);
+			operation.old_state.sync_cache(
+				&enacted,
+				&retracted,
+				operation.storage_updates,
+				Some(hash),
+				Some(number),
+				|| is_best
+			);
 		}
 		Ok(())
 	}
@@ -934,7 +941,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	fn accrue_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
 		if let Some(hash) = state.parent_hash.clone() {
 			let is_best = || self.blockchain.meta.read().best_hash == hash;
-			state.sync_cache(&[], &[], vec![], is_best);
+			state.sync_cache(&[], &[], vec![], None, None, is_best);
 		}
 		Ok(())
 	}

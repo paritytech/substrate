@@ -628,7 +628,6 @@ impl WasmExecutor {
 
 	/// Call a given method in the given code.
 	/// This should be used for tests only.
-	#[cfg(test)]
 	pub fn call<E: Externalities<Blake2Hasher>>(
 		&self,
 		ext: &mut E,
@@ -701,7 +700,7 @@ impl WasmExecutor {
 			memory.zero(new_low as usize, (low - new_low) as usize)?;
 			memory.reset_lowest_used(low);
 		}
-		memory.zero(used_mem.0, memory.used_size().0 - used_mem.0)?;
+		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
 		result
 	}
 
