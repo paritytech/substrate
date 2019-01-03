@@ -14,16 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use {Trait, Module, GasSpent};
+use balances;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
 use runtime_support::StorageValue;
-use balances;
+use {GasSpent, Module, Trait};
 
 #[cfg(test)]
-use std::{
-	any::Any,
-	fmt::Debug,
-};
+use std::{any::Any, fmt::Debug};
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -108,7 +105,11 @@ impl<T: Trait> GasMeter<T> {
 	/// NOTE that amount is always consumed, i.e. if there is not enough gas
 	/// then the counter will be set to zero.
 	#[inline]
-	pub fn charge<Tok: Token<T>>(&mut self, metadata: &Tok::Metadata, token: Tok) -> GasMeterResult {
+	pub fn charge<Tok: Token<T>>(
+		&mut self,
+		metadata: &Tok::Metadata,
+		token: Tok,
+	) -> GasMeterResult {
 		// Unconditionally add the token.
 		#[cfg(test)]
 		{
@@ -227,7 +228,7 @@ pub fn buy_gas<T: Trait>(
 		gas_left: gas_limit,
 		gas_price,
 		#[cfg(test)]
-		tokens: Vec::new()
+		tokens: Vec::new(),
 	})
 }
 
@@ -310,10 +311,7 @@ mod tests {
 	fn simple() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 
-		let result = gas_meter.charge(
-			&DoubleTokenMetadata { multiplier: 3 },
-			DoubleToken(10),
-		);
+		let result = gas_meter.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10));
 		assert!(!result.is_out_of_gas());
 
 		assert_eq!(gas_meter.gas_left(), 49_970);
@@ -325,15 +323,11 @@ mod tests {
 	fn tracing() {
 		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
 		assert!(!gas_meter.charge(&(), UnitToken).is_out_of_gas());
-		assert!(!gas_meter.charge(
-			&DoubleTokenMetadata { multiplier: 3 },
-			DoubleToken(10),
-		).is_out_of_gas());
+		assert!(!gas_meter
+			.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10))
+			.is_out_of_gas());
 
 		let mut tokens = gas_meter.tokens()[0..2].iter();
-		match_tokens!(tokens,
-			UnitToken,
-			DoubleToken(10),
-		);
+		match_tokens!(tokens, UnitToken, DoubleToken(10),);
 	}
 }

@@ -19,11 +19,7 @@ use gas::{GasMeter, Token};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash};
 use runtime_support::StorageMap;
-use wasm::{
-	PrefabWasmModule,
-	prepare,
-	runtime::Env,
-};
+use wasm::{prepare, runtime::Env, PrefabWasmModule};
 use {CodeHash, CodeStorage, PrestineCode, Schedule, Trait};
 
 /// Gas metering token that used for charging storing code into the code storage.
@@ -54,10 +50,7 @@ pub fn save<T: Trait>(
 	// The first time instrumentation is on the user. However, consequent reinstrumentation
 	// due to the schedule changes is on governance system.
 	if gas_meter
-		.charge(
-			schedule,
-			PutCodeToken(original_code.len() as u64)
-		)
+		.charge(schedule, PutCodeToken(original_code.len() as u64))
 		.is_out_of_gas()
 	{
 		return Err("there is not enough gas for storing the code");

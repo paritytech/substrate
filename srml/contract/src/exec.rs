@@ -290,9 +290,7 @@ where
 		self.overlay.commit(change_set);
 		self.events.extend(events);
 
-		Ok(CallReceipt {
-			output_data,
-		})
+		Ok(CallReceipt { output_data })
 	}
 
 	pub fn instantiate(
@@ -515,8 +513,7 @@ where
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<T>>, &'static str> {
-		self.ctx
-			.instantiate(endowment, gas_meter, code_hash, &data)
+		self.ctx.instantiate(endowment, gas_meter, code_hash, &data)
 	}
 
 	fn call(
@@ -552,7 +549,10 @@ where
 /// - executive layer doesn't alter any storage!
 #[cfg(test)]
 mod tests {
-	use super::{ExecutionContext, Ext, Loader, Vm, OutputBuf, VmExecResult, TransferFeeToken, TransferFeeKind, ExecFeeToken};
+	use super::{
+		ExecFeeToken, ExecutionContext, Ext, Loader, OutputBuf, TransferFeeKind, TransferFeeToken,
+		Vm, VmExecResult,
+	};
 	use account_db::AccountDb;
 	use gas::GasMeter;
 	use runtime_io::with_externalities;
@@ -596,10 +596,7 @@ mod tests {
 			}
 		}
 
-		fn insert(
-			&mut self,
-			f: impl Fn(MockCtx) -> VmExecResult + 'a,
-		) -> CodeHash<Test> {
+		fn insert(&mut self, f: impl Fn(MockCtx) -> VmExecResult + 'a) -> CodeHash<Test> {
 			// Generate code hashes as monotonically increasing values.
 			let code_hash = self.counter.into();
 
@@ -698,65 +695,42 @@ mod tests {
 		let dest = BOB;
 
 		// This test verifies that base fee for call is taken.
-		with_externalities(
-			&mut ExtBuilder::default().build(),
-			|| {
-				let vm = MockVm::new();
-				let loader = MockLoader::empty();
-				let cfg = Config::preload();
-				let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-				ctx.overlay.set_balance(&origin, 100);
-				ctx.overlay.set_balance(&dest, 0);
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let vm = MockVm::new();
+			let loader = MockLoader::empty();
+			let cfg = Config::preload();
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			ctx.overlay.set_balance(&origin, 100);
+			ctx.overlay.set_balance(&dest, 0);
 
-				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.call(
-					dest,
-					0,
-					&mut gas_meter,
-					&[],
-					OutputBuf::empty(),
-				);
-				assert_matches!(result, Ok(_));
+			let result = ctx.call(dest, 0, &mut gas_meter, &[], OutputBuf::empty());
+			assert_matches!(result, Ok(_));
 
-				let mut toks = gas_meter.tokens().iter();
-				match_tokens!(toks,
-					ExecFeeToken::Call,
-				);
-			}
-		);
+			let mut toks = gas_meter.tokens().iter();
+			match_tokens!(toks, ExecFeeToken::Call,);
+		});
 
 		// This test verifies that base fee for instantiation is taken.
-		with_externalities(
-			&mut ExtBuilder::default().build(),
-			|| {
-				let mut loader = MockLoader::empty();
-				let code = loader.insert(|_| {
-					VmExecResult::Ok
-				});
+		with_externalities(&mut ExtBuilder::default().build(), || {
+			let mut loader = MockLoader::empty();
+			let code = loader.insert(|_| VmExecResult::Ok);
 
-				let vm = MockVm::new();
-				let cfg = Config::preload();
-				let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
+			let vm = MockVm::new();
+			let cfg = Config::preload();
+			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 
-				ctx.overlay.set_balance(&origin, 100);
+			ctx.overlay.set_balance(&origin, 100);
 
-				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.instantiate(
-					0,
-					&mut gas_meter,
-					&code,
-					&[],
-				);
-				assert_matches!(result, Ok(_));
+			let result = ctx.instantiate(0, &mut gas_meter, &code, &[]);
+			assert_matches!(result, Ok(_));
 
-				let mut toks = gas_meter.tokens().iter();
-				match_tokens!(toks,
-					ExecFeeToken::Instantiate,
-				);
-			}
-		);
+			let mut toks = gas_meter.tokens().iter();
+			match_tokens!(toks, ExecFeeToken::Instantiate,);
+		});
 	}
 
 	#[test]
@@ -808,24 +782,19 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.call(
-					dest,
-					50,
-					&mut gas_meter,
-					&[],
-					OutputBuf::empty(),
-				);
+				let result = ctx.call(dest, 50, &mut gas_meter, &[], OutputBuf::empty());
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
-				match_tokens!(toks,
+				match_tokens!(
+					toks,
 					ExecFeeToken::Call,
 					TransferFeeToken {
 						kind: TransferFeeKind::AccountCreate,
 						gas_price: 1u64
 					},
 				);
-			}
+			},
 		);
 
 		// This one is similar to the previous one but transfer to an existing account.
@@ -842,24 +811,19 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.call(
-					dest,
-					50,
-					&mut gas_meter,
-					&[],
-					OutputBuf::empty(),
-				);
+				let result = ctx.call(dest, 50, &mut gas_meter, &[], OutputBuf::empty());
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
-				match_tokens!(toks,
+				match_tokens!(
+					toks,
 					ExecFeeToken::Call,
 					TransferFeeToken {
 						kind: TransferFeeKind::Transfer,
 						gas_price: 1u64
 					},
 				);
-			}
+			},
 		);
 
 		// This test sends 50 units of currency as an endownment to a newly
@@ -868,9 +832,7 @@ mod tests {
 			&mut ExtBuilder::default().existential_deposit(15).build(),
 			|| {
 				let mut loader = MockLoader::empty();
-				let code = loader.insert(|_| {
-					VmExecResult::Ok
-				});
+				let code = loader.insert(|_| VmExecResult::Ok);
 
 				let vm = MockVm::new();
 				let cfg = Config::preload();
@@ -881,23 +843,19 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.instantiate(
-					50,
-					&mut gas_meter,
-					&code,
-					&[],
-				);
+				let result = ctx.instantiate(50, &mut gas_meter, &code, &[]);
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
-				match_tokens!(toks,
+				match_tokens!(
+					toks,
 					ExecFeeToken::Instantiate,
 					TransferFeeToken {
 						kind: TransferFeeKind::ContractInstantiate,
 						gas_price: 1u64
 					},
 				);
-			}
+			},
 		);
 	}
 
@@ -1017,7 +975,9 @@ mod tests {
 		let mut loader = MockLoader::empty();
 		let recurse_ch = loader.insert(|ctx| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(&BOB, 0, ctx.gas_meter, &[], OutputBuf::empty());
+			let r = ctx
+				.ext
+				.call(&BOB, 0, ctx.gas_meter, &[], OutputBuf::empty());
 
 			let mut reached_bottom = reached_bottom.borrow_mut();
 			if !*reached_bottom {
@@ -1067,7 +1027,8 @@ mod tests {
 
 			// Call into CHARLIE contract.
 			assert_matches!(
-				ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
+				ctx.ext
+					.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
 				Ok(_)
 			);
 			VmExecResult::Ok
@@ -1111,7 +1072,8 @@ mod tests {
 
 			// Call into charlie contract.
 			assert_matches!(
-				ctx.ext.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
+				ctx.ext
+					.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
 				Ok(_)
 			);
 			VmExecResult::Ok

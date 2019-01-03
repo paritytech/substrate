@@ -23,8 +23,8 @@ use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use runtime_primitives::traits::As;
-use wasm::PrefabWasmModule;
 use wasm::env_def::ImportSatisfyCheck;
+use wasm::PrefabWasmModule;
 use {Schedule, Trait};
 
 struct ContractModule<'a, Gas: 'a> {
@@ -225,8 +225,8 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 mod tests {
 	use super::*;
 	use std::fmt;
-	use wabt;
 	use tests::Test;
+	use wabt;
 
 	impl fmt::Debug for PrefabWasmModule {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -260,7 +260,10 @@ mod tests {
 
 		// initial exceed maximum
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
-		assert_matches!(r, Err("Requested initial number of pages should not exceed the requested maximum"));
+		assert_matches!(
+			r,
+			Err("Requested initial number of pages should not exceed the requested maximum")
+		);
 
 		// no maximum
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1)))"#);
@@ -268,13 +271,17 @@ mod tests {
 
 		// requested maximum exceed configured maximum
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 17)))"#);
-		assert_matches!(r, Err("Maximum number of pages should not exceed the configured maximum."));
+		assert_matches!(
+			r,
+			Err("Maximum number of pages should not exceed the configured maximum.")
+		);
 	}
 
 	#[test]
 	fn imports() {
 		// nothing can be imported from non-"env" module for now.
-		let r = parse_and_prepare_wat(r#"(module (import "another_module" "memory" (memory 1 1)))"#);
+		let r =
+			parse_and_prepare_wat(r#"(module (import "another_module" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Err("module has imports from a non-'env' namespace"));
 
 		let r = parse_and_prepare_wat(r#"(module (import "env" "gas" (func (param i32))))"#);

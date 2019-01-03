@@ -23,19 +23,17 @@ use gas::GasMeter;
 use rstd::prelude::*;
 use sandbox;
 use wasm::env_def::FunctionImplProvider;
-use {Schedule, Trait, CodeHash};
+use {CodeHash, Schedule, Trait};
 
 #[macro_use]
 mod env_def;
-mod runtime;
 mod code;
 mod prepare;
+mod runtime;
 
 use self::runtime::{to_execution_result, Runtime};
 
-pub use self::code::{
-	save as save_code,
-};
+pub use self::code::save as save_code;
 
 /// A prepared wasm module ready for execution.
 #[derive(Clone, Encode, Decode)]
@@ -111,14 +109,15 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 		output_buf: OutputBuf,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> VmExecResult {
-		let memory = sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
-			.unwrap_or_else(|_| {
-				panic!(
+		let memory =
+			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
+				.unwrap_or_else(|_| {
+					panic!(
 					"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
 					thus Memory::new must not fail;
 					qed"
 				)
-			});
+				});
 
 		let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 		imports.add_memory("env", "memory", memory.clone());
@@ -166,12 +165,12 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use exec::{CallReceipt, InstantiateReceipt, Ext, OutputBuf};
-	use wasm::prepare::prepare_contract;
+	use exec::{CallReceipt, Ext, InstantiateReceipt, OutputBuf};
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;
 	use wabt;
+	use wasm::prepare::prepare_contract;
 	use CodeHash;
 
 	#[derive(Debug, PartialEq, Eq)]
@@ -261,7 +260,8 @@ mod tests {
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
 		let schedule = ::Schedule::<u64>::default();
-		let prefab_module = prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
+		let prefab_module =
+			prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
