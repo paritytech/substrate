@@ -586,6 +586,69 @@ mod tests {
 		.unwrap();
 	}
 
+	/// calls `ext_address`, loads the address from the scratch buffer and
+	/// compares it with the constant 69.
+	const CODE_ADDRESS: &'static str = r#"
+(module
+	(import "env" "ext_address" (func $ext_address))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; fill the scratch buffer with the self address.
+		(call $ext_address)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 69.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 69)
+			)
+		)
+	)
+)
+"#;
+
+	#[test]
+	fn address() {
+		let mut mock_ext = MockExt::default();
+		execute(
+			CODE_ADDRESS,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+		.unwrap();
+	}
+
 	const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
 	(import "env" "ext_return" (func $ext_return (param i32 i32)))
@@ -622,6 +685,4 @@ mod tests {
 
 		assert_eq!(output_data, vec![1, 2, 3, 4]);
 	}
-
-	// TODO: address
 }
