@@ -678,10 +678,6 @@ mod tests {
 		assert_eq!(&*test_data.borrow(), &vec![0, 1]);
 	}
 
-	// These will probably require introducing gas meter breakdown.
-	// TODO: Verify that transfer charges creation or transfer fee.
-	// TODO: Verify that transfer charges correct fee for INSTANTIATE.
-
 	// TODO: Won't create an account with value below exsistential deposit.
 	// TODO: Verify that instantiate properly creates a contract.
 	// TODO: Instantiate accounts in a proper way (i.e. via `instantiate`)
