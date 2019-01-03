@@ -90,6 +90,7 @@ pub enum TypeMetadata {
 	Struct(Vec<FieldMetadata>),
 	Enum(Vec<EnumVariantMetadata>),
 	Tuple(Vec<Metadata>),
+	Compact(Box<Metadata>),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -217,7 +218,9 @@ impl<T: EncodeMetadata> EncodeMetadata for [T] {
 
 impl<T: EncodeMetadata> EncodeMetadata for parity_codec::Compact<T> {
 	fn type_metadata() -> Metadata {
-		T::type_metadata()
+		Metadata {
+			kind: TypeMetadata::Compact(Box::new(T::type_metadata())),
+		}
 	}
 }
 
