@@ -28,6 +28,7 @@ use {Schedule, Trait, CodeHash};
 pub mod env_def;
 pub mod runtime;
 pub mod code;
+pub mod prepare;
 
 use self::runtime::{to_execution_result, Runtime};
 
@@ -145,7 +146,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 mod tests {
 	use super::*;
 	use exec::{CallReceipt, CreateReceipt, Ext, OutputBuf};
-	use wasm::code::prepare::prepare_contract;
+	use wasm::prepare::prepare_contract;
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;

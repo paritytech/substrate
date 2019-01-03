@@ -325,10 +325,11 @@ decl_storage! {
 		GasSpent get(gas_spent): T::Gas;
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
-		/// The code associated with an account.
+		/// The code associated with a given account.
 		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;
-
+		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PrestineCode: map CodeHash<T> => Option<Vec<u8>>;
+		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::code::InstrumentedWasmModule>;
 	}
 }
@@ -404,10 +405,10 @@ pub struct Schedule<Gas> {
 	pub return_data_per_byte_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
-	sandbox_data_read_cost: Gas,
+	pub sandbox_data_read_cost: Gas,
 
 	/// Gas cost per one byte written to the sandbox memory.
-	sandbox_data_write_cost: Gas,
+	pub sandbox_data_write_cost: Gas,
 
 	/// How tall the stack is allowed to grow?
 	///
@@ -415,7 +416,7 @@ pub struct Schedule<Gas> {
 	/// how the stack frame cost is calculated.
 	pub max_stack_height: u32,
 
-	//// What is the maximal memory pages amount is allowed to have for
+	/// What is the maximal memory pages amount is allowed to have for
 	/// a contract.
 	pub max_memory_pages: u32,
 }

@@ -17,13 +17,13 @@
 //! Module that takes care of loading, checking and preprocessing of a
 //! wasm module before execution.
 
-use super::{InstrumentedWasmModule, MemoryDefinition};
 
 use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use runtime_primitives::traits::As;
+use wasm::code::{InstrumentedWasmModule, MemoryDefinition};
 use wasm::env_def::ImportSatisfyCheck;
 use {Schedule, Trait};
 
