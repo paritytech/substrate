@@ -20,13 +20,13 @@ use protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
+use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
-use blocks::{self, BlockCollection};
+use blocks::BlockCollection;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
 use config::Roles;
-use import_queue::ImportQueue;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -190,21 +190,37 @@ impl<B: BlockT> ChainSync<B> {
 		who: NodeIndex,
 		_request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>
-	) -> Option<(BlockOrigin, Vec<blocks::BlockData<B>>)> {
-		let new_blocks = if let Some(ref mut peer) = self.peers.get_mut(&who) {
+	) -> Option<(BlockOrigin, Vec<IncomingBlock<B>>)> {
+		let new_blocks: Vec<IncomingBlock<B>> = if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			match peer.state {
 				PeerSyncState::DownloadingNew(start_block) => {
 					self.blocks.clear_peer_download(who);
 					peer.state = PeerSyncState::Available;
 
 					self.blocks.insert(start_block, response.blocks, who);
-					self.blocks.drain(self.best_queued_number + As::sa(1))
+					self.blocks
+						.drain(self.best_queued_number + As::sa(1))
+						.into_iter()
+						.map(|block_data| {
+							IncomingBlock {
+								hash: block_data.block.hash,
+								header: block_data.block.header,
+								body: block_data.block.body,
+								justification: block_data.block.justification,
+								origin: block_data.origin,
+							}
+						}).collect()
 				},
 				PeerSyncState::DownloadingStale(_) => {
 					peer.state = PeerSyncState::Available;
-					response.blocks.into_iter().map(|b| blocks::BlockData {
-						origin: Some(who),
-						block: b
+					response.blocks.into_iter().map(|b| {
+						IncomingBlock {
+							hash: b.hash,
+							header: b.header,
+							body: b.body,
+							justification: b.justification,
+							origin: Some(who),
+						}
 					}).collect()
 				},
 				PeerSyncState::AncestorSearch(n) => {
@@ -253,11 +269,11 @@ impl<B: BlockT> ChainSync<B> {
 		};
 
 		let best_seen = self.best_seen_block();
-		let is_best = new_blocks.first().and_then(|b| b.block.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
+		let is_best = new_blocks.first().and_then(|b| b.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
 		let origin = if is_best.unwrap_or_default() { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
 
 		if let Some((hash, number)) = new_blocks.last()
-			.and_then(|b| b.block.header.as_ref().map(|h| (b.block.hash.clone(), *h.number())))
+			.and_then(|b| b.header.as_ref().map(|h| (b.hash.clone(), *h.number())))
 		{
 			self.block_queued(&hash, number);
 		}

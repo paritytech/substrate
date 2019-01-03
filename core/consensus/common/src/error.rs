@@ -84,5 +84,11 @@ error_chain! {
 			description("Other error")
 			display("Other error: {}", e.description())
 		}
+
+		/// Error from the client while importing
+		ClientImport(reason: String) {
+			description("Import failed"),
+			display("Import failed: {}", reason),
+		}
 	}
 }
