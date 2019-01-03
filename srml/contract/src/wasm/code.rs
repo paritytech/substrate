@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use codec::Compact;
 use gas::{GasMeter, Token};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash};
@@ -42,6 +41,10 @@ impl<T: Trait> Token<T> for PutCodeToken {
 	}
 }
 
+/// Put code in the storage. The hash of code is used as a key and is returned
+/// as a result of this function.
+///
+/// This function instruments the given code and caches it in the storage.
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
 	gas_meter: &mut GasMeter<T>,
@@ -56,34 +59,38 @@ pub fn save<T: Trait>(
 		return Err("there is not enough gas for storing the code");
 	}
 
-	let instrumented_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
+	let prefab_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
 	let code_hash = T::Hashing::hash(&original_code);
 
 	// TODO: validate the code. If the code is not valid, then don't store it.
 
-	<CodeStorage<T>>::insert(code_hash, instrumented_module);
+	<CodeStorage<T>>::insert(code_hash, prefab_module);
 	<PrestineCode<T>>::insert(code_hash, original_code);
 
 	Ok(code_hash)
 }
 
+/// Load code with the given code hash.
+///
+/// If the module was instrumented with a lower version of schedule than
+/// the current one given as an argument, then this function will perform
+/// re-instrumentation and update the cache in the storage.
 pub fn load<T: Trait>(
 	code_hash: &CodeHash<T>,
 	schedule: &Schedule<T::Gas>,
 ) -> Result<PrefabWasmModule, &'static str> {
-	let instrumented_module =
+	let mut prefab_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
-	if instrumented_module.schedule_version < schedule.version {
+	if prefab_module.schedule_version < schedule.version {
+		// The current schedule version is greater than the version of the one cached
+		// in the storage.
+		//
+		// We need to re-instrument the code with the latest schedule here.
 		let original_code =
 			<PrestineCode<T>>::get(code_hash).ok_or_else(|| "prestine code is not found")?;
-
-		let instrumented_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
-
-		<CodeStorage<T>>::insert(code_hash, instrumented_module.clone());
-
-		Ok(instrumented_module)
-	} else {
-		Ok(instrumented_module)
+		prefab_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
+		<CodeStorage<T>>::insert(code_hash, prefab_module.clone());
 	}
+	Ok(prefab_module)
 }
