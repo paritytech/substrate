@@ -93,6 +93,3 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[replace]
-"wasmi:0.4.2" = { path = "../wasmi" }

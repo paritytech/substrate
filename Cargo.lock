@@ -2803,7 +2803,7 @@ dependencies = [
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
  "wabt 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3515,7 +3515,7 @@ dependencies = [
  "substrate-state-machine 0.1.0",
  "substrate-trie 0.4.0",
  "wabt 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3653,7 +3653,7 @@ dependencies = [
  "twox-hash 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4554,18 +4554,13 @@ dependencies = [
 
 [[package]]
 name = "wasmi"
-version = "0.4.2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory_units 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-wasm 0.31.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
-
-[[package]]
-name = "wasmi"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-replace = "wasmi 0.4.2"
 
 [[package]]
 name = "websocket"
@@ -5080,7 +5075,7 @@ dependencies = [
 "checksum wabt 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)" = "8ff1f0f87e467255240c1faf5cf13a04410723407840d7733e75967224e191a5"
 "checksum wabt-sys 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0cc8982bfe0a923f152e96d991e50a6f97fe73ca4af6d9d84d76634f03051fa2"
 "checksum want 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "797464475f30ddb8830cc529aaaae648d581f99e2036a928877dfde027ddf6b3"
-"checksum wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "8a60b9508cff2b7c27ed41200dd668806280740fadc8c88440e9c88625e84f1a"
+"checksum wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "21ef487a11df1ed468cf613c78798c26282da5c30e9d49f824872d4c77b47d1d"
 "checksum websocket 0.21.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8c9faed2bff8af2ea6b9f8b917d3d00b467583f6781fe3def174a9e33c879703"
 "checksum winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 "checksum winapi 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "92c1eb33641e276cfa214a0522acad57be5c56b10cb348b3c5117db75f3ac4b0"

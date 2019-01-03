@@ -166,7 +166,7 @@ where
 			false,
 		)
 		.map(|(result, _, _)| result)?;
-		self.backend.accrue_state(state)?;
+		self.backend.destroy_state(state)?;
 		Ok(return_data)
 	}
 
@@ -212,7 +212,7 @@ where
 		)
 		.map(|(result, _, _)| result)?;
 
-		self.backend.accrue_state(state)?;
+		self.backend.destroy_state(state)?;
 		Ok(result)
 	}
 
