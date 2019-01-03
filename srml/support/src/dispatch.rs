@@ -488,7 +488,7 @@ macro_rules! decl_module {
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
-		// #[derive(EncodeMetadata)]
+		#[derive(EncodeMetadata)]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::std::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::std::marker::PhantomData<$trait_instance>),
@@ -500,7 +500,7 @@ macro_rules! decl_module {
 
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
-		// #[derive(EncodeMetadata)]
+		#[derive(EncodeMetadata)]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::core::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::core::marker::PhantomData<$trait_instance>),
@@ -509,11 +509,6 @@ macro_rules! decl_module {
 				$fn_name ( $( $param ),* ),
 			)*
 		}
-
-		impl<$trait_instance: $trait_name> $crate::substrate_metadata::EncodeMetadata
-			for $call_type<$trait_instance> {
-
-			}
 
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
 		// clone/eq/partialeq from T.
