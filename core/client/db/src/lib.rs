@@ -938,7 +938,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		}
 	}
 
-	fn accrue_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
+	fn destroy_state(&self, mut state: Self::State) -> Result<(), client::error::Error> {
 		if let Some(hash) = state.parent_hash.clone() {
 			let is_best = || self.blockchain.meta.read().best_hash == hash;
 			state.sync_cache(&[], &[], vec![], None, None, is_best);

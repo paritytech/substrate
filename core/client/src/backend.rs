@@ -130,8 +130,8 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
-	/// Destroy the state and save any usefule data, such as cache.
-	fn accrue_state(&self, _state: Self::State) -> error::Result<()> {
+	/// Destroy state and save any usefule data, such as cache.
+	fn destroy_state(&self, _state: Self::State) -> error::Result<()> {
 		Ok(())
 	}
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were

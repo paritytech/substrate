@@ -42,8 +42,9 @@ pub struct Cache<B: Block, H: Hasher> {
 
 pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
+/// Create new shared cache instance with given max memory usage.
 pub fn new_shared_cache<B: Block, H: Hasher>(shared_cache_size: usize) -> SharedCache<B, H> {
-	let cache_items = shared_cache_size / 100; // Estimated average item size
+	let cache_items = shared_cache_size / 100; // Estimated average item size. TODO: more accurate tracking
 	Arc::new(Mutex::new(Cache {
 		storage: LruCache::new(cache_items),
 		hashes: LruCache::new(cache_items),
@@ -73,20 +74,14 @@ struct LocalCache<H: Hasher> {
 	/// Storage hashes cache. `None` indicates that key is known to be missing.
 	hashes: HashMap<StorageKey, Option<H::Out>>,
 }
+
 /// State abstraction.
 /// Manages shared global state cache which reflects the canonical
-/// state as it is on the disk. All the entries in the cache are clean.
-/// A clone of `State` may be created as canonical or not.
-/// For canonical clones local cache is accumulated and applied
-/// in `sync_cache`
-/// For non-canonical clones local cache is dropped.
-///
-/// Global cache propagation.
-/// After a `State` object has been committed to the trie it
-/// propagates its local cache into the `local_cache`.
-/// using `add_to_local_cache` function.
-/// Then, after the block has been added to the chain the local cache in the
-/// `State` is propagated into the global cache.
+/// state as it is on the disk.
+/// A instance of `CachingState` may be created as canonical or not.
+/// For canonical instances local cache is accumulated and applied
+/// in `sync_cache`along with the change overlay.
+/// For non-canonical clones local cache and changes are dropped.
 pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
 	/// Backing state.
 	state: S,
@@ -113,9 +108,9 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 		}
 	}
 
-	/// Propagate local cache into the global cache and synchonize
-	/// the global cache with the best block state.
-	/// This function updates the global cache by removing entries
+	/// Propagate local cache into the shared cache and synchonize
+	/// the shared cache with the best block state.
+	/// This function updates the shared cache by removing entries
 	/// that are invalidated by chain reorganization. `sync_cache`
 	/// should be called after the block has been committed and the
 	/// blockchain route has ben calculated.
@@ -221,7 +216,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 	}
 
 	/// Check if the key can be returned from cache by matching current block parent hash against canonical
-	/// state and filtering out entry modified in later blocks.
+	/// state and filtering out entries modified in later blocks.
 	fn is_allowed(key: &[u8], parent_hash: &Option<B::Hash>, modifications: &VecDeque<BlockChanges<B::Header>>) -> bool {
 		let mut parent = match *parent_hash {
 			None => {
@@ -335,12 +330,10 @@ impl<H: Hasher, S: StateBackend<H>, B:Block> StateBackend<H> for CachingState<H,
 		self.state.child_storage_root(storage_key, delta)
 	}
 
-	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.state.pairs()
 	}
 
-	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		self.state.try_into_trie_backend()
 	}
@@ -407,14 +400,5 @@ mod tests {
 		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], vec![], Some(h3b.clone()), Some(3), || true);
 		let s = CachingState::new(InMemory::<Blake2Hasher>::default(), shared.clone(), Some(h3a.clone()));
 		assert!(s.storage(&key).unwrap().is_none());
-		/*
-		let mut s = state_db.boxed_clone_canon(&h2b);
-		s.journal_under(&mut batch, 3, &h3b).unwrap();
-		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], true);
-		let s = state_db.boxed_clone_canon(&h3a);
-		assert!(s.get_cached(&key).is_none());
-		*/
 	}
 }
-
-
