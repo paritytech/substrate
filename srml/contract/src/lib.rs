@@ -177,7 +177,7 @@ decl_module! {
 
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
-			let result = wasm::code::save::<T>(code, &mut gas_meter, &schedule);
+			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
@@ -330,7 +330,7 @@ decl_storage! {
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
 		pub PrestineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
-		pub CodeStorage: map CodeHash<T> => Option<wasm::code::InstrumentedWasmModule>;
+		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
 	}
 }
 

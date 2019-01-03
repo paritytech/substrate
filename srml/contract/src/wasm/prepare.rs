@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-//! Module that takes care of loading, checking and preprocessing of a
-//! wasm module before execution.
-
+//! This module takes care of loading, checking and preprocessing of a
+//! wasm module before execution. It also extracts some essential information
+//! from a module.
 
 use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use runtime_primitives::traits::As;
-use wasm::code::{InstrumentedWasmModule, MemoryDefinition};
+use wasm::PrefabWasmModule;
 use wasm::env_def::ImportSatisfyCheck;
 use {Schedule, Trait};
 
@@ -172,11 +172,16 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 	original_code: &[u8],
 	schedule: &Schedule<T::Gas>,
-) -> Result<InstrumentedWasmModule, &'static str> {
+) -> Result<PrefabWasmModule, &'static str> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
 	contract_module.inject_stack_height_metering()?;
+
+	struct MemoryDefinition {
+		initial: u32,
+		maximum: u32,
+	}
 
 	let memory_def = if let Some(memory_type) = contract_module.scan_imports::<C>()? {
 		// Inspect the module to extract the initial and maximum page count.
@@ -207,10 +212,12 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 		}
 	};
 
-	Ok(InstrumentedWasmModule {
+	Ok(PrefabWasmModule {
 		schedule_version: schedule.version,
+		initial: memory_def.initial,
+		maximum: memory_def.maximum,
+		_reserved: None,
 		code: contract_module.into_wasm_code()?,
-		memory_def,
 	})
 }
 
@@ -221,13 +228,13 @@ mod tests {
 	use wabt;
 	use tests::Test;
 
-	impl fmt::Debug for InstrumentedWasmModule {
+	impl fmt::Debug for PrefabWasmModule {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 			write!(f, "PreparedContract {{ .. }}")
 		}
 	}
 
-	fn parse_and_prepare_wat(wat: &str) -> Result<InstrumentedWasmModule, &'static str> {
+	fn parse_and_prepare_wat(wat: &str) -> Result<PrefabWasmModule, &'static str> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		let schedule = Schedule::<u64>::default();
 		prepare_contract::<Test, ::wasm::runtime::Env>(wasm.as_ref(), &schedule)

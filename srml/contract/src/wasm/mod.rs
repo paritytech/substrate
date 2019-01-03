@@ -17,6 +17,7 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
+use codec::Compact;
 use exec::{Ext, OutputBuf, VmExecResult};
 use gas::GasMeter;
 use rstd::prelude::*;
@@ -25,17 +26,39 @@ use wasm::env_def::FunctionImplProvider;
 use {Schedule, Trait, CodeHash};
 
 #[macro_use]
-pub mod env_def;
-pub mod runtime;
-pub mod code;
-pub mod prepare;
+mod env_def;
+mod runtime;
+mod code;
+mod prepare;
 
 use self::runtime::{to_execution_result, Runtime};
 
+pub use self::code::{
+	save as save_code,
+};
+
+/// A prepared wasm module ready for execution.
+#[derive(Clone, Encode, Decode)]
+pub struct PrefabWasmModule {
+	/// Version of the schedule with which the code was instrumented.
+	#[codec(compact)]
+	schedule_version: u32,
+	#[codec(compact)]
+	initial: u32,
+	#[codec(compact)]
+	maximum: u32,
+	/// This field is reserved for future evolution of format.
+	///
+	/// Basically, for now this field will be serialized as `None`. In the future
+	/// we would be able to extend this structure with.
+	_reserved: Option<()>,
+	/// Code instrumented with the latest schedule.
+	code: Vec<u8>,
+}
+
 pub struct WasmExecutable {
 	entrypoint_name: &'static [u8],
-	memory_def: code::MemoryDefinition,
-	instrumented_code: Vec<u8>,
+	prefab_module: PrefabWasmModule,
 }
 
 pub struct WasmLoader<'a, T: Trait> {
@@ -52,19 +75,17 @@ impl<'a, T: Trait> ::exec::Loader<T> for WasmLoader<'a, T> {
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let dest_code = code::load::<T>(code_hash, self.schedule)?;
+		let prefab_module = code::load::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
 			entrypoint_name: b"deploy",
-			memory_def: dest_code.memory_def,
-			instrumented_code: dest_code.code,
+			prefab_module,
 		})
 	}
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let dest_code = code::load::<T>(code_hash, self.schedule)?;
+		let prefab_module = code::load::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
 			entrypoint_name: b"call",
-			memory_def: dest_code.memory_def,
-			instrumented_code: dest_code.code,
+			prefab_module,
 		})
 	}
 }
@@ -90,10 +111,10 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 		output_buf: OutputBuf,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> VmExecResult {
-		let memory = sandbox::Memory::new(exec.memory_def.initial, Some(exec.memory_def.maximum))
+		let memory = sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
 			.unwrap_or_else(|_| {
 				panic!(
-					"memory_def.initial can't be greater than memory_def.maximum;
+					"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
 					thus Memory::new must not fail;
 					qed"
 				)
@@ -115,7 +136,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 		);
 
 		// Instantiate the instance from the instrumented module code.
-		match sandbox::Instance::new(&exec.instrumented_code, &imports, &mut runtime) {
+		match sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime) {
 			// No errors or traps were generated on instantiation! That
 			// means we can now invoke the contract entrypoint.
 			Ok(mut instance) => {
@@ -240,15 +261,12 @@ mod tests {
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
 		let schedule = ::Schedule::<u64>::default();
-		let ::wasm::code::InstrumentedWasmModule {
-			memory_def, code, ..
-		} = prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
+		let prefab_module = prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
 
 		let exec = WasmExecutable {
 			// Use a "call" convention.
 			entrypoint_name: b"call",
-			memory_def,
-			instrumented_code: code,
+			prefab_module,
 		};
 
 		let cfg = Default::default();

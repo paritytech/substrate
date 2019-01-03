@@ -19,27 +19,12 @@ use gas::{GasMeter, Token};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash};
 use runtime_support::StorageMap;
-use wasm::runtime::Env;
-use wasm::prepare;
+use wasm::{
+	PrefabWasmModule,
+	prepare,
+	runtime::Env,
+};
 use {CodeHash, CodeStorage, PrestineCode, Schedule, Trait};
-
-#[derive(Clone, Encode, Decode)]
-pub struct MemoryDefinition {
-	#[codec(compact)]
-	pub initial: u32,
-	#[codec(compact)]
-	pub maximum: u32,
-}
-
-#[derive(Clone, Encode, Decode)]
-pub struct InstrumentedWasmModule {
-	/// Version of the schedule with which the code was instrumented.
-	#[codec(compact)]
-	pub schedule_version: u32,
-	pub memory_def: MemoryDefinition,
-	/// Code instrumented with the latest schedule.
-	pub code: Vec<u8>,
-}
 
 /// Gas metering token that used for charging storing code into the code storage.
 ///
@@ -79,7 +64,6 @@ pub fn save<T: Trait>(
 	}
 
 	let instrumented_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
-
 	let code_hash = T::Hashing::hash(&original_code);
 
 	// TODO: validate the code. If the code is not valid, then don't store it.
@@ -93,7 +77,7 @@ pub fn save<T: Trait>(
 pub fn load<T: Trait>(
 	code_hash: &CodeHash<T>,
 	schedule: &Schedule<T::Gas>,
-) -> Result<InstrumentedWasmModule, &'static str> {
+) -> Result<PrefabWasmModule, &'static str> {
 	let instrumented_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
 
