@@ -145,7 +145,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use exec::{CallReceipt, CreateReceipt, Ext, OutputBuf};
+	use exec::{CallReceipt, InstantiateReceipt, Ext, OutputBuf};
 	use wasm::prepare::prepare_contract;
 	use gas::GasMeter;
 	use std::collections::HashMap;
@@ -183,13 +183,13 @@ mod tests {
 		fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
 			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 		}
-		fn create(
+		fn instantiate(
 			&mut self,
 			_code_hash: &CodeHash<Test>,
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-		) -> Result<CreateReceipt<u64>, &'static str> {
+		) -> Result<InstantiateReceipt<u64>, &'static str> {
 			self.creates.push(CreateEntry {
 				// code_hash: code_hash.clone(),
 				endowment,
@@ -199,7 +199,7 @@ mod tests {
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
-			Ok(CreateReceipt { address })
+			Ok(InstantiateReceipt { address })
 		}
 		fn call(
 			&mut self,

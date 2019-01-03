@@ -17,7 +17,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use super::{Schedule};
-use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, CallReceipt, CreateReceipt};
+use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, CallReceipt, InstantiateReceipt};
 use rstd::prelude::*;
 use rstd::mem;
 use codec::{Decode, Encode};
@@ -312,7 +312,7 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
-	// Create a contract with code returned by the specified initializer code.
+	// Instantiate a contract with code returned by the specified initializer code.
 	//
 	// This function creates an account and executes initializer code. After the execution,
 	// the returned buffer is saved as the code of the created account.
@@ -359,15 +359,15 @@ define_env!(Env, <E: Ext>,
 			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
 		let ext = &mut ctx.ext;
-		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
+		let instantiate_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.create(&code_hash, value, nested_meter, &input_data).map_err(|_| ()),
+				Some(nested_meter) => ext.instantiate(&code_hash, value, nested_meter, &input_data).map_err(|_| ()),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
 		});
-		match create_outcome {
-			Ok(CreateReceipt { address }) => {
+		match instantiate_outcome {
+			Ok(InstantiateReceipt { address }) => {
 				// Write the address to the scratch buffer.
 				address.encode_to(&mut ctx.scratch_buf);
 				Ok(0)

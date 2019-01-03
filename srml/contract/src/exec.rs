@@ -26,7 +26,7 @@ pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
 #[cfg_attr(test, derive(Debug))]
-pub struct CreateReceipt<AccountId> {
+pub struct InstantiateReceipt<AccountId> {
 	pub address: AccountId,
 }
 
@@ -50,17 +50,17 @@ pub trait Ext {
 	/// Sets the storage entry by the given key to the specified value.
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
 
-	/// Create a new account for a contract.
+	/// Instantiate a contract from the given code.
 	///
 	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
 	/// transfered from this to the newly created account.
-	fn create(
+	fn instantiate(
 		&mut self,
 		code: &CodeHash<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
-	) -> Result<CreateReceipt<AccountIdOf<Self::T>>, &'static str>;
+	) -> Result<InstantiateReceipt<AccountIdOf<Self::T>>, &'static str>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(
@@ -180,7 +180,7 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 	fn calculate_amount(&self, metadata: &Config<T>) -> Option<T::Gas> {
 		Some(match *self {
 			ExecFeeToken::Call => metadata.call_base_fee,
-			ExecFeeToken::Instantiate => metadata.create_base_fee,
+			ExecFeeToken::Instantiate => metadata.instantiate_base_fee,
 		})
 	}
 }
@@ -295,14 +295,13 @@ where
 		})
 	}
 
-	// TODO: rename it to instantiate.
-	pub fn create(
+	pub fn instantiate(
 		&mut self,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		code_hash: &CodeHash<T>,
 		input_data: &[u8],
-	) -> Result<CreateReceipt<T::AccountId>, &'static str> {
+	) -> Result<InstantiateReceipt<T::AccountId>, &'static str> {
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot create");
 		}
@@ -311,7 +310,7 @@ where
 			.charge(self.config, ExecFeeToken::Instantiate)
 			.is_out_of_gas()
 		{
-			return Err("not enough gas to pay base create fee");
+			return Err("not enough gas to pay base instantiate fee");
 		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(
@@ -361,14 +360,14 @@ where
 		self.overlay.commit(change_set);
 		self.events.extend(events);
 
-		Ok(CreateReceipt { address: dest })
+		Ok(InstantiateReceipt { address: dest })
 	}
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
 pub enum TransferFeeKind {
-	ContractAccountCreate,
+	ContractInstantiate,
 	AccountCreate,
 	Transfer,
 }
@@ -386,7 +385,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
 	#[inline]
 	fn calculate_amount(&self, metadata: &Config<T>) -> Option<T::Gas> {
 		let balance_fee = match self.kind {
-			TransferFeeKind::ContractAccountCreate => metadata.contract_account_create_fee,
+			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
 			TransferFeeKind::Transfer => metadata.transfer_fee,
 		};
@@ -443,7 +442,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		let kind: TransferFeeKind = match (cause, would_create) {
 			// If this function is called from `Instantiate` routine, then we always
 			// charge contract account creation fee.
-			(Instantiate, _) => TransferFeeKind::ContractAccountCreate,
+			(Instantiate, _) => TransferFeeKind::ContractInstantiate,
 
 			// Otherwise the fee depends on whether we create a new account or transfer
 			// to an existing one.
@@ -509,15 +508,15 @@ where
 			.set_storage(&self.ctx.self_account, key.to_vec(), value)
 	}
 
-	fn create(
+	fn instantiate(
 		&mut self,
 		code_hash: &CodeHash<T>,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
-	) -> Result<CreateReceipt<AccountIdOf<T>>, &'static str> {
+	) -> Result<InstantiateReceipt<AccountIdOf<T>>, &'static str> {
 		self.ctx
-			.create(endowment, gas_meter, code_hash, &data)
+			.instantiate(endowment, gas_meter, code_hash, &data)
 	}
 
 	fn call(
@@ -809,7 +808,7 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.create(
+				let result = ctx.instantiate(
 					50,
 					&mut gas_meter,
 					&code,
@@ -821,7 +820,7 @@ mod tests {
 				match_tokens!(toks,
 					ExecFeeToken::Instantiate,
 					TransferFeeToken {
-						kind: TransferFeeKind::ContractAccountCreate,
+						kind: TransferFeeKind::ContractInstantiate,
 						gas_price: 1u64
 					},
 				);
@@ -924,7 +923,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			let result = ctx.create(
+			let result = ctx.instantiate(
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&input_data_ch,

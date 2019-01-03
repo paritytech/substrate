@@ -259,7 +259,7 @@ decl_module! {
 			let vm = ::wasm::WasmVm::new(&cfg.schedule);
 			let loader = ::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
-			let result = ctx.create(endowment, &mut gas_meter, &code_hash, &data);
+			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, &data);
 
 			if let Ok(ref r) = result {
 				// Commit all changes that made it thus far into the persistant storage.
@@ -363,11 +363,11 @@ pub struct Config<T: Trait> {
 	pub schedule: Schedule<T::Gas>,
 	pub existential_deposit: T::Balance,
 	pub max_depth: u32,
-	pub contract_account_create_fee: T::Balance,
+	pub contract_account_instantiate_fee: T::Balance,
 	pub account_create_fee: T::Balance,
 	pub transfer_fee: T::Balance,
 	pub call_base_fee: T::Gas,
-	pub create_base_fee: T::Gas,
+	pub instantiate_base_fee: T::Gas,
 }
 
 impl<T: Trait> Config<T> {
@@ -376,11 +376,11 @@ impl<T: Trait> Config<T> {
 			schedule: <Module<T>>::current_schedule(),
 			existential_deposit: <balances::Module<T>>::existential_deposit(),
 			max_depth: <Module<T>>::max_depth(),
-			contract_account_create_fee: <Module<T>>::contract_fee(),
+			contract_account_instantiate_fee: <Module<T>>::contract_fee(),
 			account_create_fee: <balances::Module<T>>::creation_fee(),
 			transfer_fee: <balances::Module<T>>::transfer_fee(),
 			call_base_fee: <Module<T>>::call_base_fee(),
-			create_base_fee: <Module<T>>::create_base_fee(),
+			instantiate_base_fee: <Module<T>>::create_base_fee(),
 		}
 	}
 }
