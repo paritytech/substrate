@@ -541,6 +541,11 @@ where
 	}
 }
 
+/// These tests exercise the executive layer.
+///
+/// These tests mock a vm and use a simple callbacks instead of actual VM and loaders.
+/// This allows you to tackle executive logic more thoroughly without writing a
+/// wasm VM code.
 #[cfg(test)]
 mod tests {
 	use super::{ExecutionContext, Ext, Loader, Vm, OutputBuf, VmExecResult, TransferFeeToken, TransferFeeKind, ExecFeeToken};

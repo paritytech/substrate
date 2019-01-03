@@ -67,6 +67,8 @@ pub fn save<T: Trait>(
 	gas_meter: &mut GasMeter<T>,
 	schedule: &Schedule<T::Gas>,
 ) -> Result<CodeHash<T>, &'static str> {
+	// The first time instrumentation is on the user. However, consequent reinstrumentation
+	// due to the schedule changes is on governance system.
 	if gas_meter
 		.charge(
 			schedule,
@@ -77,11 +79,9 @@ pub fn save<T: Trait>(
 		return Err("there is not enough gas for storing the code");
 	}
 
-	let code_hash = T::Hashing::hash(&original_code);
-
-	// The first time instrumentation is on the user. However, consequent reinstrumentation
-	// due to the schedule changes is on governance system.
 	let instrumented_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
+
+	let code_hash = T::Hashing::hash(&original_code);
 
 	// TODO: validate the code. If the code is not valid, then don't store it.
 
