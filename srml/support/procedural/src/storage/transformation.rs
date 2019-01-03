@@ -110,8 +110,10 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&traitinstance,
 		&storage_lines,
 	);
-	let store_functions_to_metadata = store_functions_to_metadata(
+	let (store_default_struct, store_functions_to_metadata) = store_functions_to_metadata(
 		&scrate,
+		&traitinstance,
+		&traittype,
 		&storage_lines,
 	);
 	let cratename_string = cratename.to_string();
@@ -119,12 +121,13 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		#scrate_decl
 		#decl_storage_items
 		#visibility trait #storetype {
-		#decl_store_items
+			#decl_store_items
 		}
+		#store_default_struct
 		impl<#traitinstance: #traittype> #storetype for #module_ident<#traitinstance> {
 			#impl_store_items
 		}
-		impl<#traitinstance: #traittype> #module_ident<#traitinstance> {
+		impl<#traitinstance: 'static + #traittype> #module_ident<#traitinstance> {
 			#impl_store_fns
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
@@ -557,15 +560,19 @@ fn impl_store_fns(
 
 fn store_functions_to_metadata (
 	scrate: &TokenStream2,
+	traitinstance: &Ident,
+	traittype: &syn::TypeParamBound,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> TokenStream2 {
+) -> (TokenStream2, TokenStream2) {
 
 	let mut items = TokenStream2::new();
+	let mut default_getter_struct_def = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
 			attrs,
 			name,
 			storage_type,
+			default_value,
 			..
 		} = sline;
 
@@ -603,6 +610,11 @@ fn store_functions_to_metadata (
 				#scrate::storage::generator::StorageFunctionModifier::Optional
 			}
 		};
+		let default = default_value.inner.get(0).as_ref().map(|d| &d.expr)
+			.map(|d| {
+				quote!( #d )
+			})
+			.unwrap_or_else(|| quote!( Default::default() ));
 		let mut docs = TokenStream2::new();
 		for attr in attrs.inner.iter().filter_map(|v| v.interpret_meta()) {
 			if let syn::Meta::NameValue(syn::MetaNameValue{
@@ -616,20 +628,52 @@ fn store_functions_to_metadata (
 			}
 		}
 		let str_name = name.to_string();
+		let struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
+		let cache_name = proc_macro2::Ident::new(&("__CacheGetByteStruct".to_string() + &str_name), name.span());
 		let item = quote! {
 			#scrate::storage::generator::StorageFunctionMetadata {
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
+				default: #scrate::storage::generator::DecodeDifferent::Encode(
+					#scrate::storage::generator::DefaultByteGetter(
+						&#struct_name::<#traitinstance>(#scrate::rstd::marker::PhantomData)
+					)
+				),
 				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
 			},
 		};
 		items.extend(item);
+		let def_get = quote! {
+			pub struct #struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
+			#[cfg(feature = "std")]
+			static #cache_name: #scrate::once_cell::sync::OnceCell<Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			#[cfg(feature = "std")]
+			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
+				fn default_byte(&self) -> Vec<u8> {
+					use #scrate::codec::Encode;
+					#cache_name.get_or_init(|| {
+						let def_val: #gettype = #default;
+						<#gettype as Encode>::encode(&def_val)
+					}).clone()
+				}
+			}
+			#[cfg(not(feature = "std"))]
+			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
+				fn default_byte(&self) -> Vec<u8> {
+					use #scrate::codec::Encode;
+					let def_val: #gettype = #default;
+					<#gettype as Encode>::encode(&def_val)
+				}
+			}
+		};
+		default_getter_struct_def.extend(def_get);
 	}
-
-	quote!{
-	 	#scrate::storage::generator::DecodeDifferent::Encode(&[
-			#items
-		])
-	}
+	(default_getter_struct_def, quote!{
+		{
+			#scrate::storage::generator::DecodeDifferent::Encode(&[
+				#items
+			])
+		}
+	})
 }

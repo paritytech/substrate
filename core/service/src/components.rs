@@ -23,7 +23,8 @@ use chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
 use {error, Service, maybe_start_server};
-use network::{self, OnDemand, import_queue::ImportQueue};
+use consensus_common::import_queue::ImportQueue;
+use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::{BlockId, SignedBlock}};
@@ -184,6 +185,51 @@ pub trait MaintainTransactionPool<C: Components> {
 	) -> error::Result<()>;
 }
 
+fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
+	id: &BlockId<Block>,
+	client: &Client<Backend, Executor, Block, Api>,
+	transaction_pool: &TransactionPool<PoolApi>,
+) -> error::Result<()> where
+	Api: TaggedTransactionQueue<Block>,
+	Block: BlockT<Hash = <Blake2Hasher as ::primitives::Hasher>::Out>,
+	Backend: client::backend::Backend<Block, Blake2Hasher>,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi<Api = Api>,
+	Executor: client::CallExecutor<Block, Blake2Hasher>,
+	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
+{
+	use runtime_primitives::transaction_validity::TransactionValidity;
+
+	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
+	if transaction_pool.status().is_empty() {
+		return Ok(())
+	}
+
+	let block = client.block(id)?;
+	let tags = match block {
+		None => return Ok(()),
+		Some(block) => {
+			let parent_id = BlockId::hash(*block.block.header().parent_hash());
+			let mut tags = vec![];
+			for tx in block.block.extrinsics() {
+				let tx = client.runtime_api().validate_transaction(&parent_id, &tx)?;
+				match tx {
+					TransactionValidity::Valid { mut provides, .. } => {
+						tags.append(&mut provides);
+					},
+					// silently ignore invalid extrinsics,
+					// cause they might just be inherent
+					_ => {}
+				}
+
+			}
+			tags
+		}
+	};
+
+	transaction_pool.prune_tags(id, tags).map_err(|e| format!("{:?}", e))?;
+	Ok(())
+}
+
 impl<C: Components> MaintainTransactionPool<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi<Api = C::RuntimeApi>,
 	C::RuntimeApi: TaggedTransactionQueue<ComponentBlock<C>>,
@@ -194,36 +240,7 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 		client: &ComponentClient<C>,
 		transaction_pool: &TransactionPool<C::TransactionPoolApi>,
 	) -> error::Result<()> {
-		use runtime_primitives::transaction_validity::TransactionValidity;
-
-		// Avoid calling into runtime if there is nothing to prune from the pool anyway.
-		if transaction_pool.status().is_empty() {
-			return Ok(())
-		}
-
-		let block = client.block(id)?;
-		let tags = match block {
-			None => return Ok(()),
-			Some(block) => {
-				let mut tags = vec![];
-				for tx in block.block.extrinsics() {
-					let tx = client.runtime_api().validate_transaction(id, &tx)?;
-					match tx {
-						TransactionValidity::Valid { mut provides, .. } => {
-							tags.append(&mut provides);
-						},
-						// silently ignore invalid extrinsics,
-						// cause they might just be inherent
-						_ => {}
-					}
-
-				}
-				tags
-			}
-		};
-
-		transaction_pool.prune_tags(id, tags).map_err(|e| format!("{:?}", e))?;
-		Ok(())
+		on_block_imported(id, client, transaction_pool)
 	}
 }
 
@@ -263,9 +280,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Extended light service type.
 	type LightService: ServiceTrait<LightComponents<Self>>;
 	/// ImportQueue for full client
-	type FullImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	type FullImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 	/// ImportQueue for light clients
-	type LightImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	type LightImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
@@ -518,5 +535,55 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use codec::Encode;
+	use consensus_common::BlockOrigin;
+	use substrate_test_client::{
+		self,
+		TestClient,
+		keyring::Keyring,
+		runtime::{Extrinsic, Transfer},
+	};
+
+	#[test]
+	fn should_remove_transactions_from_the_pool() {
+		let client = Arc::new(substrate_test_client::new());
+		let pool = TransactionPool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone()));
+		let transaction = {
+			let transfer = Transfer {
+				amount: 5,
+				nonce: 0,
+				from: Keyring::Alice.to_raw_public().into(),
+				to: Default::default(),
+			};
+			let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
+			Extrinsic { transfer, signature }
+		};
+		// store the transaction in the pool
+		pool.submit_one(&BlockId::hash(client.best_block_header().unwrap().hash()), transaction.clone()).unwrap();
+
+		// import the block
+		let mut builder = client.new_block().unwrap();
+		builder.push(transaction.clone()).unwrap();
+		let block = builder.bake().unwrap();
+		let id = BlockId::hash(block.header().hash());
+		client.import(BlockOrigin::Own, block).unwrap();
+
+		// fire notification - this should clean up the queue
+		assert_eq!(pool.status().ready, 1);
+		on_block_imported(
+			&id,
+			&client,
+			&pool,
+		).unwrap();
+
+		// then
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
 	}
 }

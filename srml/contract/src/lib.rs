@@ -150,7 +150,7 @@ where
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Updates the schedule for metering contracts.
 		///

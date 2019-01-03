@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,12 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use cli::CoreParams;
+//! Basic implementation of block-authoring logic.
 
-/// Extend params for Node
-#[derive(Debug, StructOpt)]
-pub struct Params {
-	#[structopt(flatten)]
-	core: CoreParams
-}
+#![warn(unused_extern_crates)]
+
+extern crate substrate_consensus_aura_primitives as aura_primitives;
+extern crate substrate_primitives as primitives;
+extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_common as consensus_common;
+extern crate substrate_client as client;
+extern crate parity_codec as codec;
+extern crate substrate_transaction_pool as transaction_pool;
+
+#[macro_use]
+extern crate log;
+
+mod basic_authorship;
+
+pub use basic_authorship::ProposerFactory;

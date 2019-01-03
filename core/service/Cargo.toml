@@ -30,3 +30,6 @@ substrate-executor = { path = "../../core/executor" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-rpc-servers = { path = "../../core/rpc-servers" }
 substrate-telemetry = { path = "../../core/telemetry" }
+
+[dev-dependencies]
+substrate-test-client = { path = "../test-client" }

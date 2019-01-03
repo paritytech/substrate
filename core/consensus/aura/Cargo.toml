@@ -21,14 +21,11 @@ parking_lot = "0.4"
 error-chain = "0.12"
 log = "0.3"
 substrate-consensus-common = { path = "../common" }
-substrate-network = { path = "../../network" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
+substrate-network = { path = "../../network", features = ["test-helpers"]}
 substrate-service = { path = "../../service" }
 substrate-test-client = { path = "../../test-client" }
 env_logger = "0.4"
-
-[target.'cfg(test)'.dependencies]
-substrate-network = { path = "../../network", features = ["test-helpers"], optional = true }

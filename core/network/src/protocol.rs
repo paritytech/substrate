@@ -24,14 +24,13 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, 
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
-
+use consensus::import_queue::ImportQueue;
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
 use consensus_gossip::ConsensusGossip;
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use service::{TransactionPool, ExHashT};
-use import_queue::ImportQueue;
 use config::{ProtocolConfig, Roles};
 use chain::Client;
 use client::light::fetcher::ChangesProof;
@@ -196,7 +195,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<Self> {
+	) -> error::Result<Self>
+		where I: ImportQueue<B>
+	{
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let protocol = Protocol {

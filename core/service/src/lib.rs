@@ -50,12 +50,14 @@ extern crate log;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+extern crate substrate_test_client;
+
 mod components;
 mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
-pub mod consensus;
 
 use std::io;
 use std::net::SocketAddr;
@@ -79,7 +81,6 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
-pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
@@ -104,7 +105,7 @@ pub struct Service<Components: components::Components> {
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<tel::Telemetry>,
+	_telemetry: Option<Arc<tel::Telemetry>>,
 }
 
 /// Creates bare client without any networking.
@@ -260,7 +261,7 @@ impl<Components: components::Components> Service<Components> {
 				let impl_name = config.impl_name.to_owned();
 				let version = version.clone();
 				let chain_name = config.chain_spec.name().to_owned();
-				Some(tel::init_telemetry(tel::TelemetryConfig {
+				Some(Arc::new(tel::init_telemetry(tel::TelemetryConfig {
 					url: url,
 					on_connect: Box::new(move || {
 						telemetry!("system.connected";
@@ -273,7 +274,7 @@ impl<Components: components::Components> Service<Components> {
 							"authority" => is_authority
 						);
 					}),
-				}))
+				})))
 			},
 			None => None,
 		};
@@ -302,6 +303,10 @@ impl<Components: components::Components> Service<Components> {
 		} else {
 			None
 		}
+	}
+
+	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
 
