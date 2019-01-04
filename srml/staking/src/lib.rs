@@ -411,10 +411,11 @@ impl<T: Trait> Module<T> {
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
 	/// move to a new era.
 	fn new_session(actual_elapsed: T::Moment, should_reward: bool) {
+		let validators = <session::Module<T>>::validators();
 		if should_reward {
 			// apply good session reward
 			let reward = Self::this_session_reward(actual_elapsed);
-			let validators = <session::Module<T>>::validators();
+
 			for v in validators.iter() {
 				Self::reward_validator(v, reward);
 			}
@@ -425,9 +426,10 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = <session::Module<T>>::current_index();
-		if <ForcingNewEra<T>>::take().is_some()
-			|| ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
-		{
+		let is_forced = <ForcingNewEra<T>>::take().is_some();
+		let natural_end = ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero();
+
+		if is_forced || natural_end {
 			Self::new_era();
 		}
 	}
@@ -494,6 +496,15 @@ impl<T: Trait> Module<T> {
 		// Update the balances for slashing/rewarding according to the stakes.
 		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
 		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
+	}
+
+	/// Call when a validator is determined to be online by the consensus
+	/// layer.
+	pub fn on_online_validator(v: T::AccountId) {
+		let slash_count = Self::slash_count(&v);
+		if slash_count > 0 {
+			<SlashCount<T>>::insert(v, slash_count - 1);
+		}
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the
@@ -569,10 +580,33 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
-	fn handle_report(reported_indices: Vec<u32>) {
-		for validator_index in reported_indices {
-			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+	fn handle_report(reported_indices: Vec<u32>) -> rstd::result::Result<(), &'static str> {
+		let mut last_idx = None;
+		let validators = <session::Module<T>>::validators();
+		for offline_idx in reported_indices {
+			if let Some(last_idx) = last_idx {
+				// if the report is not all ascending indices, it is invalid.
+				if offline_idx <= last_idx {
+					return Err("reported validator indices non-ascending");
+				}
+
+				// all the not reported bad validator indices are assumed online.
+				//
+				// although this may not be true, as long as >1/2 of validators believe
+				// a given validator is offline (which is already a precondition for including
+				// the index in the report), the validator's slash count will tend to grow.
+				for online_idx in last_idx + 1 .. offline_idx {
+					let v = validators[online_idx as usize].clone();
+					Self::on_online_validator(v);
+				}
+			}
+
+			last_idx = Some(offline_idx);
+
+			let v = validators[offline_idx as usize].clone();
 			Self::on_offline_validator(v, 1);
 		}
+
+		Ok(())
 	}
 }

@@ -541,3 +541,44 @@ fn slash_value_calculation_does_not_overflow() {
 		Staking::on_offline_validator(10, 100);
 	});
 }
+
+#[test]
+fn note_online_works() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		assert_eq!(Staking::era_length(), 9);
+		assert_eq!(Staking::sessions_per_era(), 3);
+		assert_eq!(Staking::last_era_length_change(), 0);
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+		assert_eq!(Balances::total_balance(&10), 1);
+		assert_eq!(Staking::intentions(), vec![10, 20]);
+
+		Staking::set_offline_slash_grace(3.into()).unwrap();
+		assert_eq!(Staking::offline_slash_grace(), 3);
+
+		System::set_block_number(3);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 1);
+
+		// balance should not change because slash grace = 3.
+
+		assert_eq!(Balances::total_balance(&10), 11);
+
+		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(10, 1);
+
+		assert_eq!(Balances::total_balance(&10), 11);
+
+		Staking::on_online_validator(10);
+		Staking::on_online_validator(10);
+
+		assert_eq!(Balances::total_balance(&10), 11);
+
+		Staking::on_offline_validator(10, 1);
+		Staking::on_offline_validator(10, 1);
+
+		assert_eq!(Balances::total_balance(&10), 11);
+	});
+}

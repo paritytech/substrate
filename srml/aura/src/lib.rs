@@ -86,6 +86,8 @@ decl_module! {
 #[derive(Clone, Encode, Decode, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct AuraReport {
+	// The current slot.
+	cur_slot: usize,
 	// The first skipped slot.
 	start_slot: usize,
 	// The number of times authorities were skipped.
@@ -165,10 +167,10 @@ impl<T: Trait> Module<T> {
 		if cur_slot == first_skipped { return }
 
 		let slot_to_usize = |slot: T::Moment| { slot.as_() as usize };
-
-		let skipped_slots = cur_slot - last_slot - T::Moment::sa(1);
+		let skipped_slots = cur_slot.clone() - last_slot - T::Moment::sa(1);
 
 		H::handle_report(AuraReport {
+			cur_slot: slot_to_usize(cur_slot),
 			start_slot: slot_to_usize(first_skipped),
 			skipped: slot_to_usize(skipped_slots),
 		})
@@ -187,6 +189,10 @@ pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
 		let validators = staking::Module::<T>::validators();
+
+		// note that the validator who just authored is online.
+		let just_authored = validators[report.cur_slot % validators.len()].clone();
+		staking::Module::<T>::on_online_validator(just_authored);
 
 		report.punish(
 			validators.len(),

@@ -63,11 +63,11 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// Handling offline validator reports in a generic way.
 pub trait OnOfflineReport<Offline> {
-	fn handle_report(offline: Offline);
+	fn handle_report(offline: Offline) -> Result<(), &'static str>;
 }
 
 impl<T> OnOfflineReport<T> for () {
-	fn handle_report(_: T) {}
+	fn handle_report(_: T) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// Describes the offline-reporting extrinsic.
@@ -78,8 +78,8 @@ pub trait InherentOfflineReport {
 	/// Whether an inherent is empty and doesn't need to be included.
 	fn is_empty(inherent: &Self::Inherent) -> bool;
 
-	/// Handle the report.
-	fn handle_report(report: Self::Inherent);
+	/// Handle the report. Returns an error if the report is somehow malformed.
+	fn handle_report(report: Self::Inherent) -> Result<(), &'static str>;
 
 	/// Whether two reports are compatible.
 	fn check_inherent(contained: &Self::Inherent, expected: &Self::Inherent) -> Result<(), &'static str>;
@@ -89,7 +89,7 @@ impl InherentOfflineReport for () {
 	type Inherent = ();
 
 	fn is_empty(_inherent: &()) -> bool { true }
-	fn handle_report(_: ()) { }
+	fn handle_report(_: ()) -> Result<(), &'static str> { Ok(()) }
 	fn check_inherent(_: &(), _: &()) -> Result<(), &'static str> {
 		Err("Explicit reporting not allowed")
 	}
@@ -105,7 +105,7 @@ impl<T: OnOfflineReport<Vec<u32>>> InherentOfflineReport for InstantFinalityRepo
 
 	fn is_empty(inherent: &Self::Inherent) -> bool { inherent.is_empty() }
 
-	fn handle_report(report: Vec<u32>) {
+	fn handle_report(report: Vec<u32>) -> Result<(), &'static str> {
 		T::handle_report(report)
 	}
 
@@ -200,7 +200,9 @@ decl_module! {
 		}
 
 		/// Note the previous block's validator missed their opportunity to propose a block.
-		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) {
+		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent)
+			-> runtime_support::dispatch::Result
+		{
 			ensure_inherent(origin)?;
 
 			assert!(
@@ -209,7 +211,7 @@ decl_module! {
 				T::NOTE_OFFLINE_POSITION
 			);
 
-			T::InherentOfflineReport::handle_report(offline);
+			T::InherentOfflineReport::handle_report(offline).map_err(Into::into)
 		}
 
 		/// Make some on-chain remark.
