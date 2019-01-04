@@ -261,14 +261,12 @@ decl_module! {
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, &data);
 
-			if let Ok(ref r) = result {
+			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.
 				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
-
-				Self::deposit_event(RawEvent::Created(origin.clone(), r.address.clone()));
 			}
 
 			// Refund cost of the unused gas.
@@ -297,7 +295,7 @@ decl_event! {
 		Transfer(AccountId, AccountId, Balance),
 
 		/// Contract deployed by address at the specified address.
-		Created(AccountId, AccountId),
+		Instantiated(AccountId, AccountId),
 
 		/// Code with the specified hash has been stored.
 		CodeStored(Hash),

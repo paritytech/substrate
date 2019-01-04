@@ -352,6 +352,9 @@ where
 				)
 				.into_result()?;
 
+			// Deposit an instantiation event.
+			nested.events.push(RawEvent::Instantiated(self.self_account.clone(), dest.clone()));
+
 			(nested.overlay.into_change_set(), nested.events)
 		};
 
@@ -688,6 +691,8 @@ mod tests {
 	// TODO: Verify that instantiate properly creates a contract.
 	// TODO: Instantiate accounts in a proper way (i.e. via `instantiate`)
 	// TODO: Verify sanity of initial setup. I.e. no active account should have a zero balance.
+	// TODO: test events acruing in success and failure cases.
+	// TODO: test instantiation yields an instantiation event.
 
 	#[test]
 	fn base_fees() {

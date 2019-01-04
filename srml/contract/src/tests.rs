@@ -223,3 +223,4 @@ fn account_removal_removes_storage() {
 
 // TODO: Block gas limit
 // TODO: top_level_call_refunds_even_if_fails
+// TODO: test finalization of a tx.
