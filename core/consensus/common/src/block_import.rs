@@ -53,6 +53,15 @@ pub enum BlockOrigin {
 	File,
 }
 
+/// Fork choice strategy.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ForkChoiceStrategy {
+	/// Longest chain fork choice.
+	LongestChain,
+	/// Custom fork choice rule, where true indicates the new block should be the best block.
+	Custom(bool),
+}
+
 /// Data required to import a Block
 pub struct ImportBlock<Block: BlockT> {
 	/// Origin of the Block
@@ -83,6 +92,8 @@ pub struct ImportBlock<Block: BlockT> {
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.
 	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	/// Fork choice strategy of this import.
+	pub fork_choice: ForkChoiceStrategy,
 }
 
 impl<Block: BlockT> ImportBlock<Block> {

@@ -61,7 +61,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codec::Encode;
-use consensus_common::{Authorities, BlockImport, Environment, Error as ConsensusError, Proposer};
+use consensus_common::{Authorities, BlockImport, Environment, Error as ConsensusError, Proposer, ForkChoiceStrategy};
 use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
@@ -324,6 +324,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							body: Some(body),
 							finalized: false,
 							auxiliary: Vec::new(),
+							fork_choice: ForkChoiceStrategy::LongestChain,
 						};
 
 						if let Err(e) = block_import.import_block(import_block, None) {
@@ -524,6 +525,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
+					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
 				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
