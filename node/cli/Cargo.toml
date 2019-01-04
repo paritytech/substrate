@@ -19,6 +19,7 @@ substrate-primitives = { path = "../../core/primitives" }
 node-runtime = { path = "../runtime" }
 node-primitives = { path = "../primitives" }
 hex-literal = "0.1"
+substrate-basic-authorship = { path = "../../core/basic-authorship" }
 substrate-service = { path = "../../core/service" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-network = { path = "../../core/network" }

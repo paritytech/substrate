@@ -19,7 +19,7 @@
 use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor};
 use client::error::Error;
 use client::light::fetcher::ChangesProof;
-use consensus::BlockImport;
+use consensus::{BlockImport, Error as ConsensusError};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::{BlockId};
 use consensus::{ImportBlock, ImportResult};
@@ -30,7 +30,7 @@ use primitives::{H256, Blake2Hasher, AuthorityId};
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
 	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
-		-> Result<ImportResult, Error>;
+		-> Result<ImportResult, ConsensusError>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo<Block>, Error>;
@@ -73,12 +73,12 @@ pub trait Client<Block: BlockT>: Send + Sync {
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	Self: BlockImport<Block, Error=Error>,
+	Self: BlockImport<Block, Error=ConsensusError>,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
 	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
-		-> Result<ImportResult, Error>
+		-> Result<ImportResult, ConsensusError>
 	{
 		(self as &SubstrateClient<B, E, Block, RA>).import_block(block, new_authorities)
 	}
