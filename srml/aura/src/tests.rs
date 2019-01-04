@@ -27,6 +27,7 @@ use {AuraReport, HandleReport};
 #[test]
 fn aura_report_gets_skipped_correctly() {
 	let mut report = AuraReport {
+		cur_slot: 31,
 		start_slot: 0,
 		skipped: 30,
 	};
