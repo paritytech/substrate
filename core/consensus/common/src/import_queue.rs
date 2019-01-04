@@ -36,8 +36,6 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, 
 
 use error::Error as ConsensusError;
 
-pub use consensus::ForkChoiceStrategy;
-
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error=ConsensusError> + Send + Sync>;
 
