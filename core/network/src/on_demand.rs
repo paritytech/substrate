@@ -413,7 +413,7 @@ impl<B, E> OnDemandCore<B, E> where
 			None => return,
 		};
 
-		let last_peer = self.idle_peers.back().cloned();
+		let mut last_peer = self.idle_peers.back().cloned();
 		while !self.pending_requests.is_empty() {
 			let peer = match self.idle_peers.pop_front() {
 				Some(peer) => peer,
@@ -441,6 +441,8 @@ impl<B, E> OnDemandCore<B, E> where
 
 				continue;
 			}
+
+			last_peer = self.idle_peers.back().cloned();
 
 			let mut request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 			request.timestamp = Instant::now();
@@ -927,5 +929,33 @@ pub mod tests {
 
 		assert!(!on_demand.core.lock().idle_peers.iter().any(|_| true));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 0);
+	}
+
+	#[test]
+	fn does_not_loop_forever_after_dispatching_request_to_last_peer() {
+		// this test is a regression for a bug where the dispatch function would
+		// loop forever after dispatching a request to the last peer, since the
+		// last peer was not updated
+		let (_x, on_demand) = dummy(true);
+		let queue = RwLock::new(VecDeque::new());
+		let mut network = TestIo::new(&queue, None);
+
+		on_demand.remote_header(RemoteHeaderRequest {
+			cht_root: Default::default(),
+			block: 250,
+			retry_count: None,
+		});
+		on_demand.remote_header(RemoteHeaderRequest {
+			cht_root: Default::default(),
+			block: 250,
+			retry_count: None,
+		});
+
+		on_demand.on_connect(1, Roles::FULL, 200);
+		on_demand.on_connect(2, Roles::FULL, 200);
+		on_demand.on_connect(3, Roles::FULL, 250);
+
+		assert_eq!(vec![1, 2], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
 }
