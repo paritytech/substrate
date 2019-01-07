@@ -67,6 +67,7 @@ pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
 	fn calculate_amount(&self, metadata: &Self::Metadata) -> Option<T::Gas>;
 }
 
+/// A wrapper around a type-erased trait object of what used to be a `Token`.
 #[cfg(test)]
 pub struct ErasedToken {
 	pub description: String,
@@ -110,9 +111,9 @@ impl<T: Trait> GasMeter<T> {
 		metadata: &Tok::Metadata,
 		token: Tok,
 	) -> GasMeterResult {
-		// Unconditionally add the token.
 		#[cfg(test)]
 		{
+			// Unconditionally add the token to the storage.
 			let erased_tok = ErasedToken {
 				description: format!("{:?}", token),
 				token: Box::new(token),
@@ -247,6 +248,8 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	<balances::Module<T>>::increase_total_stake_by(refund);
 }
 
+/// A simple utility macro that helps to match against a
+/// list of tokens.
 #[macro_export]
 macro_rules! match_tokens {
 	($tokens_iter:ident,) => {
@@ -255,6 +258,18 @@ macro_rules! match_tokens {
 		{
 			let next = ($tokens_iter).next().unwrap();
 			let pattern = $x;
+
+			// Note that we don't specify the type name directly in this macro,
+			// we only have some expression $x of some type. At the same time, we
+			// have an iterator of Box<dyn Any> and to downcast we need to specify
+			// the type which we want downcast to.
+			//
+			// So what we do is we assign `_pattern_typed_next_ref` to the a variable which has
+			// the required type.
+			//
+			// Then we make `_pattern_typed_next_ref = token.downcast_ref()`. This makes
+			// rustc infer the type `T` (in `downcast_ref<T: Any>`) to be the same as in $x.
+
 			let mut _pattern_typed_next_ref = &pattern;
 			_pattern_typed_next_ref = match next.token.downcast_ref() {
 				Some(p) => {
