@@ -656,6 +656,14 @@ mod tests {
 		}
 	}
 
+	// TODO: Tests to add:
+	// - Won't create an account with value below exsistential deposit.
+	// - Verify that instantiate properly creates a contract.
+	// - Instantiate accounts in a proper way (i.e. via `instantiate`)
+	// - Verify sanity of initial setup. I.e. no active account should have a zero balance.
+	// - test events acruing in success and failure cases.
+	// - test instantiation yields an instantiation event.
+
 	#[test]
 	fn it_works() {
 		let origin = 0;
@@ -686,13 +694,6 @@ mod tests {
 
 		assert_eq!(&*test_data.borrow(), &vec![0, 1]);
 	}
-
-	// TODO: Won't create an account with value below exsistential deposit.
-	// TODO: Verify that instantiate properly creates a contract.
-	// TODO: Instantiate accounts in a proper way (i.e. via `instantiate`)
-	// TODO: Verify sanity of initial setup. I.e. no active account should have a zero balance.
-	// TODO: test events acruing in success and failure cases.
-	// TODO: test instantiation yields an instantiation event.
 
 	#[test]
 	fn base_fees() {
