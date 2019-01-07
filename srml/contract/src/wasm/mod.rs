@@ -165,9 +165,10 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::collections::HashMap;
+	use substrate_primitives::H256;
 	use exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
 	use gas::GasMeter;
-	use std::collections::HashMap;
 	use tests::Test;
 	use wabt;
 	use wasm::prepare::prepare_contract;
@@ -175,7 +176,7 @@ mod tests {
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
-		// TODO: code_hash: H256,
+		code_hash: H256,
 		endowment: u64,
 		data: Vec<u8>,
 		gas_left: u64,
@@ -205,13 +206,13 @@ mod tests {
 		}
 		fn instantiate(
 			&mut self,
-			_code_hash: &CodeHash<Test>,
+			code_hash: &CodeHash<Test>,
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
 		) -> Result<InstantiateReceipt<u64>, &'static str> {
 			self.creates.push(CreateEntry {
-				// code_hash: code_hash.clone(),
+				code_hash: code_hash.clone(),
 				endowment,
 				data: data.to_vec(),
 				gas_left: gas_meter.gas_left(),
@@ -390,7 +391,7 @@ mod tests {
 		assert_eq!(
 			&mock_ext.creates,
 			&[CreateEntry {
-				// code: vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00],
+				code_hash: [0x11; 32].into(),
 				endowment: 3,
 				data: vec![1, 2, 3, 4],
 				gas_left: 49946,
