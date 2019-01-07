@@ -24,7 +24,7 @@ use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
-use consensus::{ImportBlock, ImportResult, BlockOrigin};
+use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
@@ -543,6 +543,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		fork_choice: ForkChoiceStrategy,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
@@ -607,7 +608,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		// TODO: non longest-chain rule.
-		let is_new_best = finalized || import_headers.post().number() > &last_best_number;
+		let is_new_best = finalized || match fork_choice {
+			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
+			ForkChoiceStrategy::Custom(v) => v,
+		};
 		let leaf_state = if finalized {
 			::backend::NewBlockState::Final
 		} else if is_new_best {
@@ -1018,7 +1022,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
 {
-	type Error = Error;
+	type Error = ConsensusError;
 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `ImportBlock` then `finalized` *must* be true.
@@ -1037,15 +1041,17 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			body,
 			finalized,
 			auxiliary,
+			fork_choice,
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
 
 		let parent_hash = header.parent_hash().clone();
 
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash)) {
+			Ok(blockchain::BlockStatus::InChain) => {},
+			Ok(blockchain::BlockStatus::Unknown) => return Ok(ImportResult::UnknownParent),
+            Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
 		}
 
 		let import_headers = if post_digests.is_empty() {
@@ -1072,6 +1078,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			new_authorities,
 			finalized,
 			auxiliary,
+			fork_choice,
 		);
 
 		*self.importing_block.write() = None;
@@ -1080,7 +1087,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			"best" => ?hash,
 			"origin" => ?origin
 		);
-		result.map_err(|e| e.into())
+		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
 }
 

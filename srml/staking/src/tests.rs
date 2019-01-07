@@ -36,6 +36,22 @@ fn note_null_offline_should_work() {
 }
 
 #[test]
+fn invulnerability_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		Staking::set_invulnerables(vec![10]);
+		Balances::set_free_balance(&10, 70);
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Balances::free_balance(&10), 70);
+		System::set_extrinsic_index(1);
+		Staking::on_offline_validator(10, 1);
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Balances::free_balance(&10), 70);
+		assert!(Staking::forcing_new_era().is_none());
+	});
+}
+
+#[test]
 fn note_offline_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 70);

@@ -24,7 +24,9 @@ use tokio::runtime::TaskExecutor;
 use tokio::timer::Interval;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
-use client::BlockchainEvents;
+use client::{backend::Backend, BlockchainEvents};
+
+use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 
 const TIMER_INTERVAL_MS: u64 = 5000;
@@ -92,7 +94,36 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	});
 
 	let client = service.client();
-	let display_block_import = client.import_notification_stream().for_each(|n| {
+	let mut last = match client.info() {
+		Ok(info) => Some((info.chain.best_number, info.chain.best_hash)),
+		Err(e) => { warn!("Error getting best block information: {:?}", e); None }
+	};
+
+	let display_block_import = client.import_notification_stream().for_each(move |n| {
+		// detect and log reorganizations.
+		if let Some((ref last_num, ref last_hash)) = last {
+			if n.header.parent_hash() != last_hash {
+				let tree_route = ::client::blockchain::tree_route(
+					client.backend().blockchain(),
+					BlockId::Hash(last_hash.clone()),
+					BlockId::Hash(n.hash),
+				);
+
+				match tree_route {
+					Ok(ref t) if !t.retracted().is_empty() => info!(
+						"Reorg from #{},{} to #{},{}, common ancestor #{},{}",
+						last_num, last_hash,
+						n.header.number(), n.hash,
+						t.common_block().number, t.common_block().hash,
+					),
+					Ok(_) => {},
+					Err(e) => warn!("Error computing tree route: {}", e),
+				}
+			}
+		}
+
+		last = Some((n.header.number().clone(), n.hash.clone()));
+
 		info!(target: "substrate", "Imported #{} ({})", n.header.number(), n.hash);
 		Ok(())
 	});

@@ -34,7 +34,6 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate parity_codec as codec;
 extern crate substrate_transaction_pool as transaction_pool;
-extern crate substrate_consensus_aura_primitives as aura_primitives;
 extern crate substrate_rpc_servers as rpc;
 extern crate target_info;
 extern crate tokio;
@@ -58,7 +57,6 @@ mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
-pub mod consensus;
 
 use std::io;
 use std::net::SocketAddr;
@@ -82,7 +80,6 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
-pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,

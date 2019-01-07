@@ -24,8 +24,11 @@
 
 extern crate substrate_primitives as primitives;
 extern crate futures;
+extern crate parking_lot;
 extern crate sr_version as runtime_version;
 extern crate sr_primitives as runtime_primitives;
+#[cfg(any(test, feature = "test-helpers"))]
+extern crate substrate_test_client as test_client;
 extern crate tokio;
 
 extern crate parity_codec as codec;
@@ -33,6 +36,7 @@ extern crate parity_codec_derive;
 
 #[macro_use]
 extern crate error_chain;
+#[macro_use] extern crate log;
 
 use std::sync::Arc;
 
@@ -43,13 +47,14 @@ use futures::prelude::*;
 pub mod offline_tracker;
 pub mod error;
 mod block_import;
+pub mod import_queue;
 pub mod evaluation;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 pub use self::error::{Error, ErrorKind};
-pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult};
+pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult, ForkChoiceStrategy};
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {

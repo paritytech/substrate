@@ -37,7 +37,6 @@ extern crate substrate_consensus_aura_primitives as aura_primitives;
 extern crate substrate_consensus_common as consensus_common;
 extern crate tokio;
 extern crate sr_version as runtime_version;
-extern crate substrate_network as network;
 extern crate parking_lot;
 
 #[macro_use]
@@ -47,6 +46,8 @@ extern crate futures;
 
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
+#[cfg(test)]
+extern crate substrate_network as network;
 #[cfg(test)]
 extern crate substrate_service as service;
 #[cfg(test)]
@@ -60,13 +61,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codec::Encode;
-use consensus_common::{Authorities, BlockImport, Environment, Proposer};
+use consensus_common::{Authorities, BlockImport, Environment, Error as ConsensusError, Proposer, ForkChoiceStrategy};
+use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::{generic, generic::BlockId, Justification, BasicInherentData};
 use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi};
-use network::import_queue::{Verifier, BasicQueue};
 use primitives::{Ed25519AuthorityId, ed25519};
 
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
@@ -214,7 +215,6 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
 	let make_authorship = move || {
-		use futures::future;
 
 		let client = client.clone();
 		let pair = local_key.clone();
@@ -324,6 +324,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							body: Some(body),
 							finalized: false,
 							auxiliary: Vec::new(),
+							fork_choice: ForkChoiceStrategy::LongestChain,
 						};
 
 						if let Err(e) = block_import.import_block(import_block, None) {
@@ -524,6 +525,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
+					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
 				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
@@ -596,7 +598,7 @@ pub fn import_queue<B, C, E, MakeInherent, Inherent>(
 	make_inherent: MakeInherent,
 ) -> AuraImportQueue<B, C, E, MakeInherent> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B,Error=::client::error::Error> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + BlockImport<B,Error=ConsensusError> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
