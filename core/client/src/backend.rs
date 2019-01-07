@@ -130,7 +130,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
-	/// Destroy state and save any usefule data, such as cache.
+	/// Destroy state and save any useful data, such as cache.
 	fn destroy_state(&self, _state: Self::State) -> error::Result<()> {
 		Ok(())
 	}

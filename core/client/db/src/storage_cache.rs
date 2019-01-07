@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -113,7 +113,7 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 	/// This function updates the shared cache by removing entries
 	/// that are invalidated by chain reorganization. `sync_cache`
 	/// should be called after the block has been committed and the
-	/// blockchain route has ben calculated.
+	/// blockchain route has been calculated.
 	pub fn sync_cache<F: FnOnce() -> bool> (
 		&mut self,
 		enacted: &[B::Hash],
@@ -185,7 +185,10 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 			}
 		}
 
-		if let (Some(ref number), Some(ref hash), Some(ref parent)) = (commit_number, commit_hash, self.parent_hash) {
+		if let (
+			Some(ref number), Some(ref hash), Some(ref parent))
+				= (commit_number, commit_hash, self.parent_hash)
+		{
 			if cache.modifications.len() == STATE_CACHE_BLOCKS {
 				cache.modifications.pop_back();
 			}
@@ -205,7 +208,10 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 				is_canon: is_best,
 				parent: parent.clone(),
 			};
-			let insert_at = cache.modifications.iter().enumerate().find(|&(_, m)| m.number < *number).map(|(i, _)| i);
+			let insert_at = cache.modifications.iter()
+				.enumerate()
+				.find(|&(_, m)| m.number < *number)
+				.map(|(i, _)| i);
 			trace!("Inserting modifications at {:?}", insert_at);
 			if let Some(insert_at) = insert_at {
 				cache.modifications.insert(insert_at, block_changes);
@@ -217,7 +223,13 @@ impl<H: Hasher, S: StateBackend<H>, B: Block> CachingState<H, S, B> {
 
 	/// Check if the key can be returned from cache by matching current block parent hash against canonical
 	/// state and filtering out entries modified in later blocks.
-	fn is_allowed(key: &[u8], parent_hash: &Option<B::Hash>, modifications: &VecDeque<BlockChanges<B::Header>>) -> bool {
+	fn is_allowed(
+		key: &[u8],
+		parent_hash: &Option<B::Hash>,
+		modifications:
+		&VecDeque<BlockChanges<B::Header>>
+	) -> bool
+	{
 		let mut parent = match *parent_hash {
 			None => {
 				trace!("Cache lookup skipped for {:?}: no parent hash", key);
