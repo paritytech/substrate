@@ -511,7 +511,7 @@ impl<T: Trait> Module<T> {
 		use primitives::traits::CheckedShl;
 
 		// Early exit if validator is invulnerable.
-		if Self::invulnerables().iter().any(|x| x == &v) {
+		if Self::invulnerables().contains(&v) {
 			return
 		}
 
