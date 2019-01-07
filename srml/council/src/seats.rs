@@ -360,7 +360,8 @@ decl_storage! {
 		pub VoteCount get(vote_index): VoteIndex;
 
 		// persistent state (always relevant, changes constantly)
-		/// A voters list of votes for the last cleared vote index that this voter was last active at.
+		/// A list of votes for each voter, respecting the last cleared vote index that this voter was
+		/// last active at.
 		pub ApprovalsOf get(approvals_of): map T::AccountId => Vec<bool>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 		/// currently registered.
