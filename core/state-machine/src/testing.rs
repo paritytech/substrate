@@ -48,7 +48,7 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 			&mut overlay,
 			inner.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned(),
 			false,
-			).expect("changes trie configuration is correct in test env; qed");
+		).expect("changes trie configuration is correct in test env; qed");
 
 		TestExternalities {
 			inner,

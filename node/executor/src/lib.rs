@@ -513,7 +513,7 @@ mod tests {
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE,"Core_execute_block", &block2().0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 30);

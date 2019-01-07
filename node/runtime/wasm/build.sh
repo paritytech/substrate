@@ -6,7 +6,7 @@ if cargo --version | grep -q "nightly"; then
 else
 	CARGO_CMD="cargo +nightly"
 fi
-$CARGO_CMD rustc --target=wasm32-unknown-unknown --release -- -Z print-link-args -C link-arg='-z stack-size=65536'
+$CARGO_CMD build --target=wasm32-unknown-unknown --release
 for i in node_runtime
 do
 	wasm-gc target/wasm32-unknown-unknown/release/$i.wasm target/wasm32-unknown-unknown/release/$i.compact.wasm
