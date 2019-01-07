@@ -16,55 +16,7 @@
 
 //! An unsigned fixed-size integer.
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
-
-#[cfg(feature = "std")]
-use bytes;
-
-macro_rules! impl_serde {
-	($name: ident, $len: expr) => {
-		#[cfg(feature = "std")]
-		impl Serialize for $name {
-			fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-				let mut bytes = [0u8; $len * 8];
-				self.to_big_endian(&mut bytes);
-				bytes::serialize_uint(&bytes, serializer)
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl<'de> Deserialize<'de> for $name {
-			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Between(0, $len * 8))
-					.map(|x| (&*x).into())
-			}
-		}
-	}
-}
-
-macro_rules! impl_codec {
-	($name: ident, $len: expr) => {
-		impl ::codec::Encode for $name {
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				let mut bytes = [0u8; $len * 8];
-				self.to_little_endian(&mut bytes);
-				bytes.using_encoded(f)
-			}
-		}
-
-		impl ::codec::Decode for $name {
-			fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-				<[u8; $len * 8] as ::codec::Decode>::decode(input)
-					.map(|b| $name::from_little_endian(&b))
-			}
-		}
-	}
-}
-
-construct_uint!(U256, 4);
-impl_serde!(U256, 4);
-impl_codec!(U256, 4);
+pub use primitive_types::U256;
 
 #[cfg(test)]
 mod tests {
