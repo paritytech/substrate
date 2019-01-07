@@ -11,7 +11,7 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "997d0163bc8a7e11559524ad8466bc3b1850c8ec", default-features = false, features = ["secio-rsa", "secio-secp256k1"] }
+libp2p = { version = "0.2", default-features = false, features = ["secio-rsa", "secio-secp256k1"] }
 parking_lot = "0.7.1"
 libc = "0.2"
 log = "0.4"
@@ -19,10 +19,12 @@ rand = "0.5.0"
 serde = "1.0.70"
 serde_derive = "1.0.70"
 serde_json = "1.0.24"
+smallvec = "0.6"
 tokio = "0.1"
 tokio-io = "0.1"
 tokio-timer = "0.2"
 unsigned-varint = { version = "0.2.1", features = ["codec"] }
+void = "1.0"
 
 [dev-dependencies]
 assert_matches = "1.2"
