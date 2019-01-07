@@ -113,10 +113,10 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
 				.unwrap_or_else(|_| {
 					panic!(
-					"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
-					thus Memory::new must not fail;
-					qed"
-				)
+						"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
+						thus Memory::new must not fail;
+						qed"
+					)
 				});
 
 		let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
