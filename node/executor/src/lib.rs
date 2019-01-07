@@ -60,7 +60,7 @@ mod tests {
 	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration,
 		ed25519::{Public, Pair}};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
+	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use {balances, staking, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
@@ -312,9 +312,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("bc4bdc45ba03402f9b4c7ec09834065c57205b1742bf2469ab9fc54544d8d002").into()
+				hex!("3c1b1b3c423664699cb09081223d0d926a7a8886a0c74c73dceb73a5b32aa1d9").into()
 			} else {
-				hex!("6bfbf71fa08d99f2488e295807059269cbc43ea21af3316a92406974593a1fc2").into()
+				hex!("efb6980af36d13061d84d3b6c9aee1bed776d8c5ab97d71e68dad6485a84dce7").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
@@ -340,7 +340,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("24f8ac99a6d98e9b53f4f6ef6ffdd12ba53ea3f247200a8126fa69c4b5047fbc").into(),
+			hex!("5f5101b39cd509c11f8e57d1c390c3a2076e58ce9d228df6b0e30d1f0f32b720").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -369,7 +369,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("7b7d3b509a444cdf214825d3354507823a4c91eafa493f0956448881a81ab797").into(),
+			hex!("bf8ae6d6f8a082fbc91e41fd863665f84be60b32e43fe8c870aa00a8fea6f1dc").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -536,6 +536,8 @@ mod tests {
 	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
 	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
+	(func (export "deploy")
+	)
 	(func (export "call")
 		(block $fail
 			;; fail if ext_input_size != 4
@@ -603,55 +605,15 @@ mod tests {
 )
 "#;
 
-	/// Convert a byte slice to a string with hex values.
-	/// Convert a byte slice to a string with hex values.
-	///
-	/// Each value is preceeded with a `\` character.
-	fn escaped_bytestring(bytes: &[u8]) -> String {
-		use std::fmt::Write;
-		let mut result = String::new();
-		for b in bytes {
-			write!(result, "\\{:02x}", b).unwrap();
-		}
-		result
-	}
-
-	/// Create a constructor for the specified code.
-	///
-	/// When constructor is executed, it will call `ext_return` with code that
-	/// specified in `child_bytecode`.
-	fn code_ctor(child_bytecode: &[u8]) -> String {
-		format!(
-			r#"
-	(module
-		;; ext_return(data_ptr: u32, data_len: u32) -> !
-		(import "env" "ext_return" (func $ext_return (param i32 i32)))
-		(import "env" "memory" (memory 1 1))
-		(func (export "call")
-			(call $ext_return
-				(i32.const 4)
-				(i32.const {code_len})
-			)
-			;; ext_return is diverging, i.e. doesn't return.
-			unreachable
-		)
-		(data (i32.const 4) "{escaped_bytecode}")
-	)
-	"#,
-			escaped_bytecode = escaped_bytestring(child_bytecode),
-			code_len = child_bytecode.len(),
-		)
-	}
-
 	#[test]
 	fn deploying_wasm_contract_should_work() {
 		let mut t = new_test_ext(false);
 
-		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
-		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
+		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
 
 		let addr = <Runtime as contract::Trait>::DetermineContractAddress::contract_address_for(
-			&code_ctor_transfer,
+			&transfer_ch,
 			&[],
 			&charlie(),
 		);
@@ -659,7 +621,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("bfc8051f91071149cca8b8dca6290fdb82eda6868d48cfed25f8ca38ed3a1049").into(),
+			hex!("a586a9c29074c5265586332b966820ff42d647cc0192994f9ac8e4e9030bdda1").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -669,11 +631,17 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
 					function: Call::Contract(
-						contract::Call::create::<Runtime>(10.into(), 10_000.into(), code_ctor_transfer, Vec::new())
+						contract::Call::put_code::<Runtime>(10_000.into(), transfer_code)
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
+					function: Call::Contract(
+						contract::Call::create::<Runtime>(10.into(), 10_000.into(), transfer_ch, Vec::new())
+					),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 2)),
 					function: Call::Contract(
 						contract::Call::call::<Runtime>(addr, 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
 					),
@@ -685,7 +653,7 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
-			assert_eq!(&contract::CodeHashOf::<Runtime>::get(addr), &code_transfer);
+			assert_eq!(&contract::CodeHashOf::<Runtime>::get(addr).unwrap(), &transfer_ch);
 		});
 	}
 
