@@ -224,6 +224,11 @@ decl_module! {
 			let new: u32 = new.into();
 			<OfflineSlashGrace<T>>::put(new);
 		}
+
+		/// Set the validators who cannot be slashed (if any).
+		fn set_invulnerables(validators: Vec<T::AccountId>) {
+			<Invulerables<T>>::put(validators);
+		}
 	}
 }
 
@@ -259,6 +264,10 @@ decl_storage! {
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 		/// The length of the bonding duration in blocks.
 		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+
+		/// Any validators that may never be slashed or forcible kicked. It's a Vec since they're easy to initialise
+		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
+		pub Invulerables get(invulnerables) config(): Vec<T::AccountId>;
 
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
@@ -500,6 +509,11 @@ impl<T: Trait> Module<T> {
 	/// number of offences the validator has committed.
 	pub fn on_offline_validator(v: T::AccountId, count: usize) {
 		use primitives::traits::CheckedShl;
+
+		// Early exit if validator is invulnerable.
+		if Self::invulnerables().contains(&v) {
+			return
+		}
 
 		for _ in 0..count {
 			let slash_count = Self::slash_count(&v);

@@ -123,6 +123,7 @@ pub fn new_test_ext(
 		current_session_reward: reward,
 		current_offline_slash: 20,
 		offline_slash_grace: 0,
+		invulnerables: vec![],
 	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5,
