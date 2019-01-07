@@ -210,7 +210,7 @@ decl_module! {
 			let loader = ::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 
-			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::OutputBuf::empty());
+			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
 
 			if let Ok(_) = result {
 				// Commit all changes that made it thus far into the persistant storage.

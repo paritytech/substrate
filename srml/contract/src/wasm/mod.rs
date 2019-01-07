@@ -18,7 +18,7 @@
 //! represented in wasm.
 
 use codec::Compact;
-use exec::{Ext, OutputBuf, VmExecResult};
+use exec::{Ext, EmptyOutputBuf, VmExecResult};
 use gas::GasMeter;
 use rstd::prelude::*;
 use sandbox;
@@ -106,7 +106,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 		exec: &WasmExecutable,
 		ext: &mut E,
 		input_data: &[u8],
-		output_buf: OutputBuf,
+		empty_output_buf: EmptyOutputBuf,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> VmExecResult {
 		let memory =
@@ -128,7 +128,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 		let mut runtime = Runtime::new(
 			ext,
 			input_data,
-			output_buf,
+			empty_output_buf,
 			&self.schedule,
 			memory,
 			gas_meter,
@@ -165,7 +165,7 @@ impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use exec::{CallReceipt, Ext, InstantiateReceipt, OutputBuf};
+	use exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
 	use gas::GasMeter;
 	use std::collections::HashMap;
 	use tests::Test;
@@ -227,7 +227,7 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-			_output_data: OutputBuf,
+			_output_data: EmptyOutputBuf,
 		) -> Result<CallReceipt, &'static str> {
 			self.transfers.push(TransferEntry {
 				to: *to,
@@ -273,7 +273,7 @@ mod tests {
 		let vm = WasmVm::new(&cfg);
 
 		*output_data = vm
-			.execute(&exec, ext, input_data, OutputBuf::empty(), gas_meter)
+			.execute(&exec, ext, input_data, EmptyOutputBuf::new(), gas_meter)
 			.into_result()?;
 
 		Ok(())

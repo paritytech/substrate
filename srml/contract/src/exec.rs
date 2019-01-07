@@ -69,7 +69,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
-		output_buf: OutputBuf,
+		empty_output_buf: EmptyOutputBuf,
 	) -> Result<CallReceipt, &'static str>;
 
 	/// Returns a reference to the account id of the caller.
@@ -89,34 +89,42 @@ pub trait Loader<T: Trait> {
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
 }
 
-#[must_use]
-pub struct OutputBuf(Vec<u8>);
+/// An `EmptyOutputBuf` is used as an optimization for reusing empty vectors when
+/// available.
+///
+/// You can create this structure from a spare vector if you have any and then
+/// you can fill it (only once), converting it to `OutputBuf`.
+pub struct EmptyOutputBuf(Vec<u8>);
 
-impl OutputBuf {
+impl EmptyOutputBuf {
 	/// Create an output buffer from a spare vector which is not longer needed.
 	///
 	/// All contents are discarded, but capacity is preserved.
 	pub fn from_spare_vec(mut v: Vec<u8>) -> Self {
 		v.clear();
-		OutputBuf(v)
+		EmptyOutputBuf(v)
 	}
 
 	/// Create an output buffer ready for receiving a result.
 	///
 	/// Use this function to create output buffer if you don't have a spare
 	/// vector. Otherwise, use `from_spare_vec`.
-	pub fn empty() -> Self {
-		OutputBuf(Vec::new())
+	pub fn new() -> Self {
+		EmptyOutputBuf(Vec::new())
 	}
 
-	/// Attempt to write to the buffer result of the specified size.
+	/// Write to the buffer result of the specified size.
 	///
 	/// Calls closure with the buffer of the requested size.
-	pub fn write<R, F: FnOnce(&mut [u8]) -> R>(&mut self, size: usize, f: F) -> R {
+	pub fn fill<E, F: FnOnce(&mut [u8]) -> Result<(), E>>(mut self, size: usize, f: F) -> Result<OutputBuf, E> {
+		assert!(self.0.len() == 0, "the vector is always cleared; it's written only once");
 		self.0.resize(size, 0);
-		f(&mut self.0)
+		f(&mut self.0).map(|()| OutputBuf(self.0))
 	}
 }
+
+/// `OutputBuf` is the end result of filling an `EmptyOutputBuf`.
+pub struct OutputBuf(Vec<u8>);
 
 #[must_use]
 pub enum VmExecResult {
@@ -160,7 +168,7 @@ pub trait Vm<T: Trait> {
 		exec: &Self::Executable,
 		ext: &mut E,
 		input_data: &[u8],
-		output_buf: OutputBuf,
+		empty_output_buf: EmptyOutputBuf,
 		gas_meter: &mut GasMeter<T>,
 	) -> VmExecResult;
 }
@@ -236,7 +244,7 @@ where
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		input_data: &[u8],
-		output_buf: OutputBuf,
+		empty_output_buf: EmptyOutputBuf,
 	) -> Result<CallReceipt, &'static str> {
 		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot make a call");
@@ -278,7 +286,7 @@ where
 							caller: self.self_account.clone(),
 						},
 						input_data,
-						output_buf,
+						empty_output_buf,
 						gas_meter,
 					)
 					.into_result()?;
@@ -347,7 +355,7 @@ where
 						caller: self.self_account.clone(),
 					},
 					input_data,
-					OutputBuf::empty(),
+					EmptyOutputBuf::new(),
 					gas_meter,
 				)
 				.into_result()?;
@@ -525,10 +533,10 @@ where
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
-		output_buf: OutputBuf,
+		empty_output_buf: EmptyOutputBuf,
 	) -> Result<CallReceipt, &'static str> {
 		self.ctx
-			.call(to.clone(), value, gas_meter, data, output_buf)
+			.call(to.clone(), value, gas_meter, data, empty_output_buf)
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -553,7 +561,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{
-		ExecFeeToken, ExecutionContext, Ext, Loader, OutputBuf, TransferFeeKind, TransferFeeToken,
+		ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
 		Vm, VmExecResult,
 	};
 	use account_db::AccountDb;
@@ -573,7 +581,7 @@ mod tests {
 	struct MockCtx<'a> {
 		ext: &'a mut dyn Ext<T = Test>,
 		input_data: &'a [u8],
-		output_data: OutputBuf,
+		empty_output_buf: Option<EmptyOutputBuf>,
 		gas_meter: &'a mut GasMeter<Test>,
 	}
 
@@ -644,13 +652,13 @@ mod tests {
 			exec: &MockExecutable,
 			ext: &mut E,
 			input_data: &[u8],
-			output_data: OutputBuf,
+			empty_output_buf: EmptyOutputBuf,
 			gas_meter: &mut GasMeter<Test>,
 		) -> VmExecResult {
 			(exec.0)(MockCtx {
 				ext,
 				input_data,
-				output_data,
+				empty_output_buf: Some(empty_output_buf),
 				gas_meter,
 			})
 		}
@@ -687,7 +695,7 @@ mod tests {
 			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
 			ctx.overlay.set_code(&1, Some(exec_ch));
 
-			let result = ctx.call(dest, value, &mut gas_meter, &data, OutputBuf::empty());
+			let result = ctx.call(dest, value, &mut gas_meter, &data, EmptyOutputBuf::new());
 
 			assert_matches!(result, Ok(_));
 		});
@@ -711,7 +719,7 @@ mod tests {
 
 			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-			let result = ctx.call(dest, 0, &mut gas_meter, &[], OutputBuf::empty());
+			let result = ctx.call(dest, 0, &mut gas_meter, &[], EmptyOutputBuf::new());
 			assert_matches!(result, Ok(_));
 
 			let mut toks = gas_meter.tokens().iter();
@@ -760,7 +768,7 @@ mod tests {
 				55,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				&[],
-				OutputBuf::empty(),
+				EmptyOutputBuf::new(),
 			);
 			assert_matches!(result, Ok(_));
 			assert_eq!(ctx.overlay.get_balance(&origin), 45);
@@ -788,7 +796,7 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.call(dest, 50, &mut gas_meter, &[], OutputBuf::empty());
+				let result = ctx.call(dest, 50, &mut gas_meter, &[], EmptyOutputBuf::new());
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
@@ -817,7 +825,7 @@ mod tests {
 
 				let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
 
-				let result = ctx.call(dest, 50, &mut gas_meter, &[], OutputBuf::empty());
+				let result = ctx.call(dest, 50, &mut gas_meter, &[], EmptyOutputBuf::new());
 				assert_matches!(result, Ok(_));
 
 				let mut toks = gas_meter.tokens().iter();
@@ -885,7 +893,7 @@ mod tests {
 				100,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				&[],
-				OutputBuf::empty(),
+				EmptyOutputBuf::new(),
 			);
 
 			assert_matches!(result, Err("balance too low to send value"));
@@ -903,12 +911,16 @@ mod tests {
 
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
-		let return_ch = loader.insert(|_| {
-			let mut output_buf = OutputBuf::empty();
-			output_buf.write(4, |data| {
-				data.copy_from_slice(&[1, 2, 3, 4]);
-			});
-
+		let return_ch = loader.insert(|mut ctx| {
+			#[derive(Debug)]
+			enum Void {}
+			let empty_output_buf = ctx.empty_output_buf.take().unwrap();
+			let output_buf =
+				empty_output_buf.fill::<Void, _>(4, |data| {
+					data.copy_from_slice(&[1, 2, 3, 4]);
+					Ok(())
+				})
+				.expect("Ok is always returned");
 			VmExecResult::Returned(output_buf)
 		});
 
@@ -922,7 +934,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(1000, 1),
 				&[],
-				OutputBuf::empty(),
+				EmptyOutputBuf::new(),
 			);
 
 			let output_data = result.unwrap().output_data;
@@ -950,7 +962,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[1, 2, 3, 4],
-				OutputBuf::empty(),
+				EmptyOutputBuf::new(),
 			);
 			assert_matches!(result, Ok(_));
 		});
@@ -983,7 +995,7 @@ mod tests {
 			// Try to call into yourself.
 			let r = ctx
 				.ext
-				.call(&BOB, 0, ctx.gas_meter, &[], OutputBuf::empty());
+				.call(&BOB, 0, ctx.gas_meter, &[], EmptyOutputBuf::new());
 
 			let mut reached_bottom = reached_bottom.borrow_mut();
 			if !*reached_bottom {
@@ -1009,7 +1021,7 @@ mod tests {
 				value,
 				&mut GasMeter::<Test>::with_limit(100000, 1),
 				&[],
-				OutputBuf::empty(),
+				EmptyOutputBuf::new(),
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1034,7 +1046,7 @@ mod tests {
 			// Call into CHARLIE contract.
 			assert_matches!(
 				ctx.ext
-					.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
+					.call(&CHARLIE, 0, ctx.gas_meter, &[], EmptyOutputBuf::new()),
 				Ok(_)
 			);
 			VmExecResult::Ok
@@ -1057,7 +1069,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[],
-				OutputBuf::empty(),
+				EmptyOutputBuf::new(),
 			);
 
 			assert_matches!(result, Ok(_));
@@ -1079,7 +1091,7 @@ mod tests {
 			// Call into charlie contract.
 			assert_matches!(
 				ctx.ext
-					.call(&CHARLIE, 0, ctx.gas_meter, &[], OutputBuf::empty()),
+					.call(&CHARLIE, 0, ctx.gas_meter, &[], EmptyOutputBuf::new()),
 				Ok(_)
 			);
 			VmExecResult::Ok
@@ -1100,7 +1112,7 @@ mod tests {
 				0,
 				&mut GasMeter::<Test>::with_limit(10000, 1),
 				&[],
-				OutputBuf::empty(),
+				EmptyOutputBuf::new(),
 			);
 
 			assert_matches!(result, Ok(_));

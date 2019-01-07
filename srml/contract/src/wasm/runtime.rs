@@ -17,7 +17,7 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use super::{Schedule};
-use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, CallReceipt, InstantiateReceipt};
+use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
 use rstd::prelude::*;
 use rstd::mem;
 use codec::{Decode, Encode};
@@ -42,7 +42,7 @@ pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	input_data: &'data [u8],
 	// A VM can return a result only once and only by value. So
 	// we wrap output buffer to make it possible to take the buffer out.
-	output_buf: Option<OutputBuf>,
+	empty_output_buf: Option<EmptyOutputBuf>,
 	scratch_buf: Vec<u8>,
 	schedule: &'a Schedule<<E::T as Trait>::Gas>,
 	memory: sandbox::Memory,
@@ -53,7 +53,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 	pub(crate) fn new(
 		ext: &'a mut E,
 		input_data: &'data [u8],
-		output_buf: OutputBuf,
+		empty_output_buf: EmptyOutputBuf,
 		schedule: &'a Schedule<<E::T as Trait>::Gas>,
 		memory: sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
@@ -61,7 +61,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 		Runtime {
 			ext,
 			input_data,
-			output_buf: Some(output_buf),
+			empty_output_buf: Some(empty_output_buf),
 			scratch_buf: Vec::new(),
 			schedule,
 			memory,
@@ -285,9 +285,9 @@ define_env!(Env, <E: Ext>,
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		// Grab the scratch buffer and put in its' place an empty one.
-		// We will use it for creating `OutputBuf` container for the call.
+		// We will use it for creating `EmptyOutputBuf` container for the call.
 		let scratch_buf = mem::replace(&mut ctx.scratch_buf, Vec::new());
-		let output_buf = OutputBuf::from_spare_vec(scratch_buf);
+		let empty_output_buf = EmptyOutputBuf::from_spare_vec(scratch_buf);
 
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
@@ -297,7 +297,7 @@ define_env!(Env, <E: Ext>,
 		let ext = &mut ctx.ext;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data, output_buf).map_err(|_| ()),
+				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data, empty_output_buf).map_err(|_| ()),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
@@ -390,16 +390,16 @@ define_env!(Env, <E: Ext>,
 			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
 		}
 
-		let mut output_buf = ctx
-			.output_buf
+		let empty_output_buf = ctx
+			.empty_output_buf
 			.take()
 			.expect(
-				"`output_buf` is taken only here;
+				"`empty_output_buf` is taken only here;
 				`ext_return` traps;
 				`Runtime` can only be used only for one execution;
 				qed"
 			);
-		output_buf.write(
+		let output_buf = empty_output_buf.fill(
 			data_len as usize,
 			|slice_mut| {
 				// Read the memory at the specified pointer to the provided slice.
