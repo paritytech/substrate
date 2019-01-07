@@ -252,6 +252,7 @@ mod tests {
 				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
+				invulnerables: vec![alice(), bob(), Charlie.to_raw_public().into()],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -312,9 +313,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("bc4bdc45ba03402f9b4c7ec09834065c57205b1742bf2469ab9fc54544d8d002").into()
+				hex!("0bc6c118c326c65da9d0f93199f471aab4f636cfe87ab9a56c823024ca83995a").into()
 			} else {
-				hex!("6bfbf71fa08d99f2488e295807059269cbc43ea21af3316a92406974593a1fc2").into()
+				hex!("58e1f1493e311d9b1fef3660426ee289736c38eb6f7d98911551c51765163056").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
@@ -340,7 +341,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("24f8ac99a6d98e9b53f4f6ef6ffdd12ba53ea3f247200a8126fa69c4b5047fbc").into(),
+			hex!("ced5607b16774cdbf750f8f7f0a99cd4afd7eb14db376a44bb8656f2ce02b18e").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -369,7 +370,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("7b7d3b509a444cdf214825d3354507823a4c91eafa493f0956448881a81ab797").into(),
+			hex!("8a506a6f72c7efb75fd069a8c4f57c8e0b6b5adbea9646522bda64d4c78f5412").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -659,7 +660,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("bfc8051f91071149cca8b8dca6290fdb82eda6868d48cfed25f8ca38ed3a1049").into(),
+			hex!("ce21753c3f806443c2758c982850861708054b65097fed82689e7b16cd5d6e24").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {

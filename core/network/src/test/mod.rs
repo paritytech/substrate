@@ -38,7 +38,7 @@ use service::{NetworkLink, TransactionPool};
 use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::Encode;
-use consensus::{BlockImport, BlockOrigin, ImportBlock};
+use consensus::{BlockImport, BlockOrigin, ImportBlock, ForkChoiceStrategy};
 use consensus::Error as ConsensusError;
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, Verifier};
@@ -101,6 +101,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			justification,
 			post_digests: vec![],
 			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
 		}, None))
 	}
 }

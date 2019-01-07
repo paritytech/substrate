@@ -25,7 +25,7 @@ use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin};
+use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
@@ -543,6 +543,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		fork_choice: ForkChoiceStrategy,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
@@ -607,7 +608,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		// TODO: non longest-chain rule.
-		let is_new_best = finalized || import_headers.post().number() > &last_best_number;
+		let is_new_best = finalized || match fork_choice {
+			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
+			ForkChoiceStrategy::Custom(v) => v,
+		};
 		let leaf_state = if finalized {
 			::backend::NewBlockState::Final
 		} else if is_new_best {
@@ -1040,6 +1044,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			body,
 			finalized,
 			auxiliary,
+			fork_choice,
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
@@ -1076,6 +1081,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			new_authorities,
 			finalized,
 			auxiliary,
+			fork_choice,
 		);
 
 		*self.importing_block.write() = None;
