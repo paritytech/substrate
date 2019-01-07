@@ -80,7 +80,7 @@ struct LocalCache<H: Hasher> {
 /// state as it is on the disk.
 /// A instance of `CachingState` may be created as canonical or not.
 /// For canonical instances local cache is accumulated and applied
-/// in `sync_cache`along with the change overlay.
+/// in `sync_cache` along with the change overlay.
 /// For non-canonical clones local cache and changes are dropped.
 pub struct CachingState<H: Hasher, S: StateBackend<H>, B: Block> {
 	/// Backing state.
