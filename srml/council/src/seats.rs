@@ -354,7 +354,7 @@ decl_storage! {
 		/// The current council. When there's a vote going on, this should still be used for executive
 		/// matters. The block number (second element in the tuple) is the block that their position is
 		/// active until (calculated by the sum of the block number when the council member was elected
-		/// and their term duration.
+		/// and their term duration).
 		pub ActiveCouncil get(active_council) config(): Vec<(T::AccountId, T::BlockNumber)>;
 		/// The total number of votes that have happened or are in progress.
 		pub VoteCount get(vote_index): VoteIndex;
