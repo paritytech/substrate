@@ -854,6 +854,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
 		use client::blockchain::HeaderBackend;
 		let mut best = self.blockchain.info()?.best_number;
+		// if the best is lower to n(less then 256), just use best number in case overflow
+		let n = if best < n { best } else { n };
+
 		for c in 0 .. n.as_() {
 			if best == As::sa(0) {
 				return Ok(As::sa(c))
@@ -862,18 +865,20 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
 					apply_state_commit(&mut transaction, commit);
-					let _removed = best.clone();
-					best -= As::sa(1);
-					let header = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
+					let removed = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::ErrorKind::UnknownBlock(
-							format!("Error reverting to {}. Block header not found.", best)))?;
+							format!("Error reverting to {}. Block hash not found.", best)))?;
 
-					let lookup_key = ::utils::number_and_hash_to_lookup_key(header.number().clone(), header.hash().clone());
-					transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
-					transaction.delete(columns::KEY_LOOKUP, header.hash().as_ref());
+					best -= As::sa(1);  // prev block
+					let hash = self.blockchain.hash(best)?.ok_or_else(
+						|| client::error::ErrorKind::UnknownBlock(
+							format!("Error reverting to {}. Block hash not found.", best)))?;
+					let key = ::utils::number_and_hash_to_lookup_key(best.clone(), hash.clone());
+					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
+					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					self.storage.db.write(transaction).map_err(db_err)?;
-					self.blockchain.update_meta(header.hash().clone(), best.clone(), true, false);
-					self.blockchain.leaves.write().revert(header.hash().clone(), header.number().clone(), header.parent_hash().clone());
+					self.blockchain.update_meta(hash, best, true, false);
+					self.blockchain.leaves.write().revert(removed.hash().clone(), removed.number().clone(), removed.parent_hash().clone());
 				}
 				None => return Ok(As::sa(c))
 			}
