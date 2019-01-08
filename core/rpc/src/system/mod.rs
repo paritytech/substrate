@@ -56,7 +56,7 @@ build_rpc_trait! {
 		#[rpc(name = "system_health")]
 		fn system_health(&self) -> Result<Health>;
 
-		/// get peers
+		/// Returns currently connected peers
 		#[rpc(name = "system_peers")]
 		fn system_peers(&self) -> Result<Vec<PeerInfo>>;
 	}
