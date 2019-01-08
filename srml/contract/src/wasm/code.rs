@@ -19,7 +19,7 @@ use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash};
 use runtime_support::StorageMap;
 use wasm::{prepare, runtime::Env, PrefabWasmModule};
-use {CodeHash, CodeStorage, PrestineCode, Schedule, Trait};
+use {CodeHash, CodeStorage, PristineCode, Schedule, Trait};
 
 /// Gas metering token that used for charging storing code into the code storage.
 ///
@@ -65,7 +65,7 @@ pub fn save<T: Trait>(
 	// TODO: validate the code. If the code is not valid, then don't store it.
 
 	<CodeStorage<T>>::insert(code_hash, prefab_module);
-	<PrestineCode<T>>::insert(code_hash, original_code);
+	<PristineCode<T>>::insert(code_hash, original_code);
 
 	Ok(code_hash)
 }
@@ -88,7 +88,7 @@ pub fn load<T: Trait>(
 		//
 		// We need to re-instrument the code with the latest schedule here.
 		let original_code =
-			<PrestineCode<T>>::get(code_hash).ok_or_else(|| "prestine code is not found")?;
+			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
 		prefab_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
 		<CodeStorage<T>>::insert(code_hash, prefab_module.clone());
 	}

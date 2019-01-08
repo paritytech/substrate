@@ -326,7 +326,7 @@ decl_storage! {
 		/// The code associated with a given account.
 		pub CodeHashOf: map T::AccountId => Option<CodeHash<T>>;
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
-		pub PrestineCode: map CodeHash<T> => Option<Vec<u8>>;
+		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
 	}
