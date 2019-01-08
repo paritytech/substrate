@@ -16,9 +16,6 @@
 
 //! Generic implementation of a block header.
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Deserializer};
-
 use codec::{Decode, Encode, Codec, Input, Output, HasCompact};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
@@ -40,17 +37,6 @@ pub struct Header<Number, Hash: HashT, DigestItem> {
 	pub extrinsics_root: <Hash as HashT>::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
 	pub digest: Digest<DigestItem>,
-}
-
-// TODO: Remove Deserialize for Header once RPC no longer needs it #1098
-#[cfg(feature = "std")]
-impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Header<Number, Hash, DigestItem> where
-	Header<Number, Hash, DigestItem>: Decode,
-{
-	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		let r = <Vec<u8>>::deserialize(de)?;
-		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
-	}
 }
 
 impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
