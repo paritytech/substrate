@@ -27,7 +27,7 @@ use network;
 use runtime_primitives::traits;
 
 use self::error::Result;
-pub use self::helpers::{Properties, SystemInfo, Health};
+pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 
 build_rpc_trait! {
 	/// Substrate system RPC API
@@ -55,6 +55,10 @@ build_rpc_trait! {
 		/// - not performing a major sync
 		#[rpc(name = "system_health")]
 		fn system_health(&self) -> Result<Health>;
+
+		/// get peers
+		#[rpc(name = "system_peers")]
+		fn system_peers(&self) -> Result<Vec<PeerInfo>>;
 	}
 }
 
@@ -114,5 +118,16 @@ impl<B: traits::Block> SystemApi for System<B> {
 		} else {
 			Ok(health)
 		}
+	}
+
+	fn system_peers(&self) -> Result<Vec<PeerInfo>> {
+		Ok(self.sync.peers().into_iter().map(|(idx, peer_id, p)| PeerInfo {
+			index: idx as usize,
+			peer_id: peer_id.map_or("".into(), |p| p.to_base58()),
+			roles: format!("{:?}", p.roles),
+			protocol_version: p.protocol_version,
+			best_hash: format!("{:?}", p.best_hash),
+			best_number: format!("{}", p.best_number),
+		}).collect())
 	}
 }

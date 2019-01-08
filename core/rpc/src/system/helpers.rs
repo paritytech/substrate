@@ -45,6 +45,23 @@ pub struct Health {
 	pub is_syncing: bool,
 }
 
+/// Network Peer information
+#[derive(Debug, PartialEq, Serialize)]
+pub struct PeerInfo {
+	/// Peer Node Index
+	pub index: usize,
+	/// Peer ID
+	pub peer_id: String,
+	/// Roles
+	pub roles: String,
+	/// Protocol version
+	pub protocol_version: u32,
+	/// Peer best block hash
+	pub best_hash: String,
+	/// Peer best block number
+	pub best_number: String,
+}
+
 impl fmt::Display for Health {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		write!(fmt, "{} peers ({})", self.peers, if self.is_syncing {
