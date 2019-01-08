@@ -122,7 +122,7 @@ impl<B: traits::Block> SystemApi for System<B> {
 
 	fn system_peers(&self) -> Result<Vec<PeerInfo>> {
 		Ok(self.sync.peers().into_iter().map(|(idx, peer_id, p)| PeerInfo {
-			index: idx as usize,
+			index: idx,
 			peer_id: peer_id.map_or("".into(), |p| p.to_base58()),
 			roles: format!("{:?}", p.roles),
 			protocol_version: p.protocol_version,
