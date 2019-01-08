@@ -28,7 +28,6 @@ use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberF
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
 
-use call_executor::CallResult;
 use cht;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -118,7 +117,7 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote storage read future.
 	type RemoteReadResult: IntoFuture<Item=Option<Vec<u8>>, Error=ClientError>;
 	/// Remote call result future.
-	type RemoteCallResult: IntoFuture<Item=CallResult, Error=ClientError>;
+	type RemoteCallResult: IntoFuture<Item=Vec<u8>, Error=ClientError>;
 	/// Remote changes result future.
 	type RemoteChangesResult: IntoFuture<Item=Vec<(NumberFor<Block>, u32)>, Error=ClientError>;
 
@@ -156,7 +155,7 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		&self,
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<CallResult>;
+	) -> ClientResult<Vec<u8>>;
 	/// Check remote changes query proof.
 	fn check_changes_proof(
 		&self,
@@ -344,7 +343,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		&self,
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<CallResult> {
+	) -> ClientResult<Vec<u8>> {
 		check_execution_proof::<_, _, H>(&self.executor, request, remote_proof)
 	}
 
@@ -392,7 +391,6 @@ pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
 	use keyring::Keyring;
-	use call_executor::CallResult;
 	use client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
 	use error::Error as ClientError;
@@ -410,12 +408,12 @@ pub mod tests {
 	use state_machine::Backend;
 	use super::*;
 
-	pub type OkCallFetcher = Mutex<CallResult>;
+	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
 	impl Fetcher<Block> for OkCallFetcher {
 		type RemoteHeaderResult = FutureResult<Header, ClientError>;
 		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
-		type RemoteCallResult = FutureResult<CallResult, ClientError>;
+		type RemoteCallResult = FutureResult<Vec<u8>, ClientError>;
 		type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, ClientError>;
 
 		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {

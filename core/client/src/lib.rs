@@ -102,7 +102,7 @@ mod notifications;
 #[cfg(feature = "std")]
 pub use blockchain::Info as ChainInfo;
 #[cfg(feature = "std")]
-pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
+pub use call_executor::{CallExecutor, LocalCallExecutor};
 #[cfg(feature = "std")]
 pub use client::{
 	new_with_backend,
