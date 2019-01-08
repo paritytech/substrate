@@ -3852,6 +3852,7 @@ name = "substrate-test-runtime"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3864,6 +3865,7 @@ dependencies = [
  "srml-support 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
+ "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]

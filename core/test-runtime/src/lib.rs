@@ -45,6 +45,10 @@ extern crate substrate_keyring as keyring;
 #[cfg_attr(any(feature = "std", test), macro_use)]
 extern crate substrate_primitives as primitives;
 
+#[cfg(test)] extern crate substrate_executor;
+
+#[cfg(test)] #[macro_use] extern crate lazy_static;
+
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
