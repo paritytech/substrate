@@ -65,7 +65,7 @@ build_rpc_trait! {
 
 			/// Unsubscribe from new head subscription.
 			#[rpc(name = "chain_unsubscribeNewHead", alias = ["unsubscribe_newHead", ])]
-			fn unsubscribe_new_head(&self, Self::Metadata, SubscriptionId) -> RpcResult<bool>;
+			fn unsubscribe_new_head(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
 		}
 
 		#[pubsub(name = "chain_finalisedHead")] {
@@ -75,7 +75,7 @@ build_rpc_trait! {
 
 			/// Unsubscribe from new head subscription.
 			#[rpc(name = "chain_unsubscribeFinalisedHeads")]
-			fn unsubscribe_finalised_heads(&self, Self::Metadata, SubscriptionId) -> RpcResult<bool>;
+			fn unsubscribe_finalised_heads(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
 		}
 	}
 }
@@ -189,7 +189,7 @@ impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Sig
 		)
 	}
 
-	fn unsubscribe_new_head(&self, _metadata: Self::Metadata, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_new_head(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 
@@ -202,7 +202,7 @@ impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Sig
 		)
 	}
 
-	fn unsubscribe_finalised_heads(&self, _metadata: Self::Metadata, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_finalised_heads(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 }
