@@ -17,9 +17,8 @@
 //! Substrate Client data backend
 
 use error;
-use primitives::AuthorityId;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use hash_db::Hasher;
@@ -67,7 +66,7 @@ pub trait BlockImportOperation<Block, H> where
 
 	/// Append authorities set to the transaction. This is a set of parent block (set which
 	/// has been used to check justification of this block).
-	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
+	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>);
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.

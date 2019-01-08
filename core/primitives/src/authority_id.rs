@@ -20,17 +20,17 @@ use H256;
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode)]
-pub struct AuthorityId(pub [u8; 32]);
+pub struct Ed25519AuthorityId(pub [u8; 32]);
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Display for AuthorityId {
+impl ::std::fmt::Display for Ed25519AuthorityId {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{}", ::ed25519::Public(self.0).to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
-impl ::std::fmt::Debug for AuthorityId {
+impl ::std::fmt::Debug for Ed25519AuthorityId {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		let h = format!("{}", ::hexdisplay::HexDisplay::from(&self.0));
 		write!(f, "{} ({}…{})", ::ed25519::Public(self.0).to_ss58check(), &h[0..8], &h[60..])
@@ -38,57 +38,57 @@ impl ::std::fmt::Debug for AuthorityId {
 }
 
 #[cfg(feature = "std")]
-impl ::std::hash::Hash for AuthorityId {
+impl ::std::hash::Hash for Ed25519AuthorityId {
 	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
 		self.0.hash(state);
 	}
 }
 
-impl AsRef<[u8; 32]> for AuthorityId {
+impl AsRef<[u8; 32]> for Ed25519AuthorityId {
 	fn as_ref(&self) -> &[u8; 32] {
 		&self.0
 	}
 }
 
-impl AsRef<[u8]> for AuthorityId {
+impl AsRef<[u8]> for Ed25519AuthorityId {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
 	}
 }
 
-impl Into<[u8; 32]> for AuthorityId {
+impl Into<[u8; 32]> for Ed25519AuthorityId {
 	fn into(self) -> [u8; 32] {
 		self.0
 	}
 }
 
-impl From<[u8; 32]> for AuthorityId {
+impl From<[u8; 32]> for Ed25519AuthorityId {
 	fn from(a: [u8; 32]) -> Self {
-		AuthorityId(a)
+		Ed25519AuthorityId(a)
 	}
 }
 
-impl AsRef<AuthorityId> for AuthorityId {
-	fn as_ref(&self) -> &AuthorityId {
+impl AsRef<Ed25519AuthorityId> for Ed25519AuthorityId {
+	fn as_ref(&self) -> &Ed25519AuthorityId {
 		&self
 	}
 }
 
-impl Into<H256> for AuthorityId {
+impl Into<H256> for Ed25519AuthorityId {
 	fn into(self) -> H256 {
 		self.0.into()
 	}
 }
 
 #[cfg(feature = "std")]
-impl Serialize for AuthorityId {
+impl Serialize for Ed25519AuthorityId {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
 		::ed25519::serialize(&self, serializer)
 	}
 }
 
 #[cfg(feature = "std")]
-impl<'de> Deserialize<'de> for AuthorityId {
+impl<'de> Deserialize<'de> for Ed25519AuthorityId {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 		::ed25519::deserialize(deserializer)
 	}
