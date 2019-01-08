@@ -26,7 +26,7 @@ use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::{block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::Core};
 use codec::{Decode, Encode};
 use consensus_common::{self, evaluation};
-use primitives::{H256, Ed25519AuthorityId, ed25519, Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::BasicInherentData;
