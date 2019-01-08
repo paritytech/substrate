@@ -45,6 +45,7 @@ const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
+	/// Get currently connected peers
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
 }
 
