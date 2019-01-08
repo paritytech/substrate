@@ -48,7 +48,6 @@ pub type BlockRequest<B> = generic::BlockRequest<
 	<<B as BlockT>::Header as HeaderT>::Number,
 >;
 
-
 /// Type alias for using the BlockData type using block type parameters.
 pub type BlockData<B> = generic::BlockData<
 	<B as BlockT>::Header,
@@ -62,6 +61,14 @@ pub type BlockResponse<B> = generic::BlockResponse<
 	<B as BlockT>::Hash,
 	<B as BlockT>::Extrinsic,
 >;
+
+/// Type alias for using the block justification request type using block type parameters.
+pub type BlockJustificationRequest<B> = generic::BlockJustificationRequest<
+	<B as BlockT>::Hash,
+>;
+
+/// Type alias for the block justification response type.
+pub type BlockJustificationResponse = generic::BlockJustificationResponse;
 
 /// A set of transactions.
 pub type Transactions<E> = Vec<E>;
@@ -170,6 +177,10 @@ pub mod generic {
 		BlockResponse(BlockResponse<Header, Hash, Extrinsic>),
 		/// Block announce.
 		BlockAnnounce(BlockAnnounce<Header>),
+		/// Block justification request.
+		BlockJustificationRequest(BlockJustificationRequest<Hash>),
+		/// Block justification response.
+		BlockJustificationResponse(BlockJustificationResponse),
 		/// Transactions.
 		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
@@ -236,6 +247,24 @@ pub mod generic {
 		pub id: RequestId,
 		/// Block data for the requested sequence.
 		pub blocks: Vec<BlockData<Header, Hash, Extrinsic>>,
+	}
+
+	/// Request block justification from a peer.
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	pub struct BlockJustificationRequest<Hash> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block hash for which we want to get a justification.
+		pub block: Hash,
+	}
+
+	/// Response to `BlockJustificationRequest`
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	pub struct BlockJustificationResponse {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
+		/// Justification for the requested block (if any).
+		pub justification: Option<Justification>,
 	}
 
 	/// Announce a new complete relay chain block on the network.

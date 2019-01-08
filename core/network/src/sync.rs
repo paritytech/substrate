@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
@@ -23,6 +23,7 @@ use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
+use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
@@ -50,6 +51,113 @@ enum PeerSyncState<B: BlockT> {
 	DownloadingStale(B::Hash),
 }
 
+struct PendingJustifications<B: BlockT> {
+	justifications: HashSet<(B::Hash, NumberFor<B>)>,
+	pending_requests: VecDeque<(B::Hash, NumberFor<B>)>,
+	peer_requests: HashMap<NodeIndex, (B::Hash, NumberFor<B>)>,
+}
+
+impl<B: BlockT> PendingJustifications<B> {
+	fn new() -> PendingJustifications<B> {
+		PendingJustifications {
+			// TODO: persist this set somehow
+			justifications: HashSet::new(),
+			pending_requests: VecDeque::new(),
+			peer_requests: HashMap::new(),
+		}
+	}
+
+	fn dispatch(&mut self, peers: &HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
+		let mut peers = peers.iter().filter_map(|(peer, status)| {
+			// don't request to any peers that already have pending requests
+			if self.peer_requests.contains_key(peer) {
+				None
+			} else {
+				Some((*peer, status.best_number))
+			}
+		}).collect::<VecDeque<_>>();
+
+		let mut last_peer = peers.back().map(|p| p.0);
+		let mut unhandled_requests = VecDeque::new();
+
+		loop {
+			let (peer, peer_best_number) = match peers.pop_front() {
+				Some(p) => p,
+				_ => break,
+			};
+
+			// only ask peers that have synced past the block number that
+			// we're asking the justification for
+			let peer_eligible = {
+				let request = match self.pending_requests.front() {
+					Some(r) => r.clone(),
+					_ => break,
+				};
+
+				peer_best_number >= request.1
+			};
+
+			if !peer_eligible {
+				peers.push_back((peer, peer_best_number));
+
+				// we tried all peers and none can answer this request
+				if Some(peer) == last_peer {
+					last_peer = peers.back().map(|p| p.0);
+
+					let request = self.pending_requests.pop_front()
+						.expect("verified to be Some in the beginning of the loop; qed");
+
+					unhandled_requests.push_back(request);
+				}
+
+				continue;
+			}
+
+			last_peer = peers.back().map(|p| p.0);
+
+			let request = self.pending_requests.pop_front()
+				.expect("verified to be Some in the beginning of the loop; qed");
+
+			self.peer_requests.insert(peer, request);
+			let request = message::generic::BlockJustificationRequest {
+				id: 0,
+				block: request.0,
+			};
+
+			protocol.send_message(peer, GenericMessage::BlockJustificationRequest(request));
+		}
+
+		self.pending_requests.append(&mut unhandled_requests);
+	}
+
+	fn queue_request(&mut self, justification: &(B::Hash, NumberFor<B>)) {
+		if !self.justifications.insert(*justification) {
+			return;
+		}
+		self.pending_requests.push_back(*justification);
+	}
+
+	fn peer_disconnected(&mut self, who: NodeIndex) {
+		if let Some(request) = self.peer_requests.remove(&who) {
+			self.pending_requests.push_front(request);
+		}
+	}
+
+	fn on_response(&mut self, who: NodeIndex, justification: Option<Justification>) {
+		println!("received justification from: {:?} {:?}", who, justification);
+		// we assume that the request maps to the given response, this is
+		// currently enforced by the outer network protocol before passing on
+		// messages to chain sync.
+		if let Some(request) = self.peer_requests.remove(&who) {
+			if justification.is_none() {
+				self.pending_requests.push_front(request);
+			} else {
+				self.justifications.remove(&request);
+			}
+		}
+	}
+}
+
 /// Relay chain sync strategy.
 pub struct ChainSync<B: BlockT> {
 	genesis_hash: B::Hash,
@@ -59,6 +167,7 @@ pub struct ChainSync<B: BlockT> {
 	best_queued_hash: B::Hash,
 	required_block_attributes: message::BlockAttributes,
 	import_queue: Arc<ImportQueue<B>>,
+	justifications: PendingJustifications<B>,
 }
 
 /// Reported sync state.
@@ -104,6 +213,7 @@ impl<B: BlockT> ChainSync<B> {
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.best_queued_hash.unwrap_or(info.chain.best_hash),
 			best_queued_number: info.best_queued_number.unwrap_or(info.chain.best_number),
+			justifications: PendingJustifications::new(),
 			required_block_attributes,
 			import_queue,
 		}
@@ -288,11 +398,37 @@ impl<B: BlockT> ChainSync<B> {
 		Some((origin, new_blocks))
 	}
 
+	pub(crate) fn on_block_justification_data(
+		&mut self,
+		protocol: &mut Context<B>,
+		who: NodeIndex,
+		request: message::BlockJustificationRequest<B>,
+		response: message::BlockJustificationResponse,
+	) {
+		if let Some(justification) = response.justification {
+			if self.import_queue.import_justification(request.block, justification.clone()) {
+				self.justifications.on_response(who, Some(justification));
+			} else {
+				self.justifications.on_response(who, None);
+			}
+		} else {
+			self.justifications.on_response(who, response.justification);
+		}
+
+		self.maintain_sync(protocol);
+	}
+
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
 		let peers: Vec<NodeIndex> = self.peers.keys().map(|p| *p).collect();
 		for peer in peers {
 			self.download_new(protocol, peer);
 		}
+		self.justifications.dispatch(&self.peers, protocol);
+	}
+
+	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
+		self.justifications.queue_request(&(*hash, number));
+		self.justifications.dispatch(&self.peers, protocol);
 	}
 
 	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
@@ -379,6 +515,7 @@ impl<B: BlockT> ChainSync<B> {
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
 		self.blocks.clear_peer_download(who);
 		self.peers.remove(&who);
+		self.justifications.peer_disconnected(who);
 		self.maintain_sync(protocol);
 	}
 

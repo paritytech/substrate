@@ -92,6 +92,8 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	fn is_importing(&self, hash: &B::Hash) -> bool;
 	/// Import bunch of blocks.
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
+	/// Import a block justification.
+	fn import_justification(&self, hash: B::Hash, justification: Justification) -> bool;
 }
 
 /// Import queue status. It isn't completely accurate.
@@ -218,6 +220,10 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 		queue.push_back((origin, blocks));
 		self.data.signal.notify_one();
 	}
+
+	fn import_justification(&self, hash: B::Hash, justification: Justification) -> bool {
+		self.block_import.import_justification(hash, justification).is_ok()
+	}
 }
 
 impl<B: BlockT, V: 'static + Verifier<B>> Drop for BasicQueue<B, V> {
@@ -279,6 +285,8 @@ fn import_thread<B: BlockT, L: Link<B>, V: Verifier<B>>(
 pub trait Link<B: BlockT>: Send {
 	/// Block imported.
 	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
+	/// Request a justification for the given block.
+	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
 	/// Maintain sync.
 	fn maintain_sync(&self) { }
 	/// Disconnect from peer.
@@ -296,6 +304,8 @@ pub enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debu
 	ImportedKnown(H, N),
 	/// Imported unknown block.
 	ImportedUnknown(H, N),
+	/// Imported unknown block.
+	ImportedUnjustified(H, N),
 }
 
 /// Block import error.
@@ -409,6 +419,10 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			trace!(target: "sync", "Block queued {}: {:?}", number, hash);
 			Ok(BlockImportResult::ImportedUnknown(hash, number))
 		},
+		Ok(ImportResult::NeedsJustification) => {
+			trace!(target: "sync", "Block queued but requires justification {}: {:?}", number, hash);
+			Ok(BlockImportResult::ImportedUnjustified(hash, number))
+		},
 		Ok(ImportResult::UnknownParent) => {
 			debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 			Err(BlockImportError::UnknownParent)
@@ -416,7 +430,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		Ok(ImportResult::KnownBad) => {
 			debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
 			Err(BlockImportError::BadBlock(peer)) //TODO: use persistent ID
-		}
+		},
 		Err(e) => {
 			debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
 			Err(BlockImportError::Error)
@@ -437,6 +451,11 @@ pub fn process_import_result<B: BlockT>(
 		},
 		Ok(BlockImportResult::ImportedUnknown(hash, number)) => {
 			link.block_imported(&hash, number);
+			1
+		},
+		Ok(BlockImportResult::ImportedUnjustified(hash, number)) => {
+			link.block_imported(&hash, number);
+			link.request_justification(&hash, number);
 			1
 		},
 		Err(BlockImportError::IncompleteHeader(who)) => {

@@ -1097,6 +1097,15 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		);
 		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
+
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
+	}
 }
 
 impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> where

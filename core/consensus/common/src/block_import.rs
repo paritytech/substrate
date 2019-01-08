@@ -33,6 +33,9 @@ pub enum ImportResult {
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
+	/// Added to the import queue but must be justified
+	/// (usually required to safely enact consensus changes).
+	NeedsJustification,
 }
 
 /// Block data origin.
@@ -142,9 +145,17 @@ impl<Block: BlockT> ImportBlock<Block> {
 /// Block import trait.
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
-	/// Import a Block alongside the new authorities valid form this block forward
-	fn import_block(&self,
+	/// Import a Block alongside the new authorities valid from this block forward
+	fn import_block(
+		&self,
 		block: ImportBlock<B>,
-		new_authorities: Option<Vec<AuthorityIdFor<B>>>
+		new_authorities: Option<Vec<AuthorityIdFor<B>>>,
 	) -> Result<ImportResult, Self::Error>;
+
+	/// Import a Block justification and finalize the given block.
+	fn import_justification(
+		&self,
+		hash: B::Hash,
+		justification: Justification,
+	) -> Result<(), Self::Error>;
 }

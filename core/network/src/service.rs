@@ -94,6 +94,10 @@ impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
 
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		self.with_sync(|sync, protocol| sync.request_justification(hash, number, protocol))
+	}
+
 	fn maintain_sync(&self) {
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}
