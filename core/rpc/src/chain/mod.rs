@@ -26,6 +26,7 @@ use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
+use serde::Serialize;
 
 use subscriptions::Subscriptions;
 
@@ -37,7 +38,10 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate blockchain API
-	pub trait ChainApi<Hash, Header, Number, SignedBlock> {
+	pub trait ChainApi<Number, Hash> where
+		Header: Serialize,
+		SignedBlock: Serialize,
+	{
 		type Metadata;
 
 		/// Get header of a relay chain block.
@@ -148,7 +152,7 @@ impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>> for Chain<B, E, Block, RA> where
+impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for Chain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
