@@ -56,7 +56,7 @@ pub type Balance = u128;
 
 /// The Ed25519 pub key of an session that belongs to an authority of the chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
-pub type SessionKey = primitives::AuthorityId;
+pub type SessionKey = primitives::Ed25519AuthorityId;
 
 /// Index of a transaction in the chain.
 pub type Index = u64;

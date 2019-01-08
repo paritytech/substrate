@@ -21,12 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate uint as uint_crate;
+extern crate primitive_types;
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -50,6 +45,10 @@ extern crate untrusted;
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate impl_serde;
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -84,7 +83,8 @@ use rstd::prelude::*;
 use rstd::ops::Deref;
 
 #[cfg(feature = "std")]
-pub mod bytes;
+pub use impl_serde::serialize as bytes;
+
 #[cfg(feature = "std")]
 pub mod hashing;
 #[cfg(feature = "std")]
@@ -109,7 +109,7 @@ mod tests;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
-pub use authority_id::AuthorityId;
+pub use authority_id::Ed25519AuthorityId;
 pub use changes_trie::ChangesTrieConfiguration;
 
 pub use hash_db::Hasher;

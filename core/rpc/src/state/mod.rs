@@ -144,8 +144,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 			.call(
 				&BlockId::Hash(block),
 				&method, &data.0
-			)?
-			.return_data;
+			)?;
 		Ok(Bytes(return_data))
 	}
 

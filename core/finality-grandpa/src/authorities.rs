@@ -17,7 +17,7 @@
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
 use parking_lot::RwLock;
-use substrate_primitives::AuthorityId;
+use substrate_primitives::Ed25519AuthorityId;
 
 use std::cmp::Ord;
 use std::collections::HashMap;
@@ -38,7 +38,7 @@ impl<H, N> Clone for SharedAuthoritySet<H, N> {
 
 impl<H, N> SharedAuthoritySet<H, N> {
 	/// The genesis authority set.
-	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
+	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
 		SharedAuthoritySet {
 			inner: Arc::new(RwLock::new(AuthoritySet::genesis(initial)))
 		}
@@ -66,7 +66,7 @@ where
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub(crate) fn current_authorities(&self) -> HashMap<AuthorityId, u64> {
+	pub(crate) fn current_authorities(&self) -> HashMap<Ed25519AuthorityId, u64> {
 		self.inner.read().current_authorities.iter().cloned().collect()
 	}
 }
@@ -89,14 +89,14 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode)]
 pub(crate) struct AuthoritySet<H, N> {
-	current_authorities: Vec<(AuthorityId, u64)>,
+	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	set_id: u64,
 	pending_changes: Vec<PendingChange<H, N>>,
 }
 
 impl<H, N> AuthoritySet<H, N> {
 	/// Get a genesis set with given authorities.
-	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
+	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
@@ -105,7 +105,7 @@ impl<H, N> AuthoritySet<H, N> {
 	}
 
 	/// Get the current set id and a reference to the current authority set.
-	pub(crate) fn current(&self) -> (u64, &[(AuthorityId, u64)]) {
+	pub(crate) fn current(&self) -> (u64, &[(Ed25519AuthorityId, u64)]) {
 		(self.set_id, &self.current_authorities[..])
 	}
 }
@@ -249,7 +249,7 @@ where
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
-	pub(crate) next_authorities: Vec<(AuthorityId, u64)>,
+	pub(crate) next_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	/// How deep in the finalized chain the announcing block must be
 	/// before the change is applied.
 	pub(crate) finalization_depth: N,

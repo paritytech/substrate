@@ -21,7 +21,7 @@
 pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
+	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
 	generic::BlockId, transaction_validity::TransactionValidity
 };
 #[doc(hidden)]
@@ -34,7 +34,7 @@ pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use error;
 use rstd::vec::Vec;
-use primitives::{AuthorityId, OpaqueMetadata};
+use primitives::OpaqueMetadata;
 
 
 /// Something that can be constructed to a runtime api.
@@ -91,7 +91,7 @@ decl_runtime_apis! {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Returns the authorities.
-		fn authorities() -> Vec<AuthorityId>;
+		fn authorities() -> Vec<AuthorityIdFor<Block>>;
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialise a block with the given header.
