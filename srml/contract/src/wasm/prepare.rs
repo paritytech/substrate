@@ -68,12 +68,13 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 	}
 
 	fn inject_gas_metering(&mut self) -> Result<(), &'static str> {
-		let gas_rules = rules::Set::new(
-			self.schedule.regular_op_cost.clone().as_(),
-			Default::default(),
-		)
-		.with_grow_cost(self.schedule.grow_mem_cost.clone().as_())
-		.with_forbidden_floats();
+		let gas_rules =
+			rules::Set::new(
+				self.schedule.regular_op_cost.clone().as_(),
+				Default::default(),
+			)
+			.with_grow_cost(self.schedule.grow_mem_cost.clone().as_())
+			.with_forbidden_floats();
 
 		let module = self
 			.module
