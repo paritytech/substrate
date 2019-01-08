@@ -63,22 +63,24 @@ use service::{
 	FactoryGenesis, PruningMode, ChainSpec,
 };
 use network::{
-	Protocol, config::{NetworkConfiguration, NonReservedPeerMode},
+	Protocol, config::{NetworkConfiguration, NonReservedPeerMode, Secret},
 	multiaddr,
 };
 use primitives::H256;
 
-use std::io::{Write, Read, stdin, stdout};
-use std::iter;
-use std::fs;
-use std::fs::File;
-use std::net::{Ipv4Addr, SocketAddr};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+	io::{Write, Read, stdin, stdout}, iter, fs::{self, File}, net::{Ipv4Addr, SocketAddr},
+	path::{Path, PathBuf}, str::FromStr,
+};
+
 use names::{Generator, Name};
 use regex::Regex;
 use structopt::StructOpt;
-pub use params::{CoreParams, CoreCommands, ExecutionStrategy};
+pub use params::{
+	CoreParams, CoreCommands, RunCmd, PurgeChainCmd, RevertCmd,
+	ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd, NetworkConfigurationParams,
+	SharedParams,
+};
 
 use futures::Future;
 
@@ -96,14 +98,6 @@ pub struct VersionInfo {
 	pub author: &'static str,
 }
 
-/// CLI Action
-pub enum Action<E> {
-	/// Substrate handled the command. No need to do anything.
-	ExecutedInternally,
-	/// Service mode requested. Caller should start the service.
-	RunService(E),
-}
-
 /// Something that can be converted into an exit signal.
 pub trait IntoExit {
 	/// Exit signal type.
@@ -112,16 +106,17 @@ pub trait IntoExit {
 	fn into_exit(self) -> Self::Exit;
 }
 
-fn get_chain_key(matches: &clap::ArgMatches) -> String {
-	matches.value_of("chain").unwrap_or_else(
-		|| if matches.is_present("dev") { "dev" } else { "" }
-	).into()
+fn get_chain_key(cli: &SharedParams) -> String {
+	match cli.chain {
+		Some(ref chain) => chain.clone(),
+		None => if cli.dev { "dev".into() } else { "".into() }
+	}
 }
 
-fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G>, String>
+fn load_spec<F, G>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G>>
 	where G: RuntimeGenesis, F: FnOnce(&str) -> Result<Option<ChainSpec<G>>, String>,
 {
-	let chain_key = get_chain_key(matches);
+	let chain_key = get_chain_key(cli);
 	let spec = match factory(&chain_key)? {
 		Some(spec) => spec,
 		None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
@@ -129,10 +124,8 @@ fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G
 	Ok(spec)
 }
 
-fn base_path(matches: &clap::ArgMatches) -> PathBuf {
-	matches.value_of("base_path")
-		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(default_base_path)
+fn base_path(cli: &SharedParams) -> PathBuf {
+	cli.base_path.clone().unwrap_or_else(default_base_path)
 }
 
 fn create_input_err<T: Into<String>>(msg: T) -> error::Error {
@@ -184,28 +177,120 @@ where
 	}
 }
 
-/// Parse clap::Matches into config and chain specification
-pub fn parse_matches<'a, F, S>(
+/// Something that can return the `CoreParams`.
+pub trait GetCoreParams {
+	/// Return the `CoreParams`.
+	fn core_params(&self) -> CoreParams;
+}
+
+/// Parse command line interface arguments and executes the desired command.
+pub fn parse_and_execute<'a, F, C, S, RS, E>(
 	spec_factory: S,
 	version: VersionInfo,
 	impl_name: &'static str,
-	matches: &clap::ArgMatches<'a>
-) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>
+	matches: clap::ArgMatches<'a>,
+	exit: E,
+	run_service: RS,
+) -> error::Result<()>
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-
+	C: StructOpt + GetCoreParams,
+	E: IntoExit,
+	RS: FnOnce(E, C, FactoryFullConfiguration<F>) -> Result<(), String>,
 {
-	let spec = load_spec(&matches, spec_factory)?;
+	panic_hook::set();
+
+	let cli_args = C::from_clap(&matches);
+	let core_params = cli_args.core_params();
+
+	init_logger(core_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	fdlimit::raise_fd_limit();
+
+	match core_params.cmds {
+		CoreCommands::Run(params) => run_node::<F, _, _, _, _>(
+			params, cli_args, spec_factory, exit, run_service, impl_name, version
+		),
+		CoreCommands::BuildSpec(params) => build_spec::<F, _>(params, spec_factory),
+		CoreCommands::ExportBlocks(params) => export_blocks::<F, _, _>(params, spec_factory, exit),
+		CoreCommands::ImportBlocks(params) => import_blocks::<F, _, _>(params, spec_factory, exit),
+		CoreCommands::PurgeChain(params) => purge_chain::<F, _>(params, spec_factory),
+		CoreCommands::Revert(params) => revert_chain::<F, _>(params, spec_factory),
+	}
+}
+
+fn parse_node_key(key: Option<String>) -> error::Result<Option<Secret>> {
+	match key.map(|k| H256::from_str(&k)) {
+		Some(Ok(secret)) => Ok(Some(secret.into())),
+		Some(Err(err)) => Err(create_input_err(format!("Error parsing node key: {}", err))),
+		None => Ok(None),
+	}
+}
+
+/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
+fn fill_network_configuration(
+	cli: NetworkConfigurationParams,
+	base_path: &Path,
+	chain_spec_id: &str,
+	config: &mut NetworkConfiguration,
+	client_id: String,
+) -> error::Result<()> {
+	config.boot_nodes.extend(cli.bootnodes.into_iter());
+	config.config_path = Some(
+		network_path(&base_path, chain_spec_id).to_string_lossy().into()
+	);
+	config.net_config_path = config.config_path.clone();
+	config.reserved_nodes.extend(cli.reserved_nodes.into_iter());
+	if !config.reserved_nodes.is_empty() {
+		config.non_reserved_mode = NonReservedPeerMode::Deny;
+	}
+
+	for addr in cli.listen_addr.iter() {
+		let addr = addr.parse().map_err(|_| "Invalid listen multiaddress")?;
+		config.listen_addresses.push(addr);
+	}
+
+	if config.listen_addresses.is_empty() {
+		let port = match cli.port {
+			Some(port) => port,
+			None => 30333,
+		};
+
+		config.listen_addresses = vec![
+			iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+				.chain(iter::once(Protocol::Tcp(port)))
+				.collect()
+		];
+	}
+
+	config.public_addresses = Vec::new();
+
+	config.client_version = client_id;
+	config.use_secret = parse_node_key(cli.node_key)?;
+
+	config.in_peers = cli.in_peers;
+	config.out_peers = cli.out_peers;
+
+	Ok(())
+}
+
+fn create_run_node_config<F, S>(
+	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: VersionInfo
+) -> error::Result<FactoryFullConfiguration<F>>
+where
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+{
+	let spec = load_spec(&cli.shared_params, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
 	config.impl_version = version.version;
 
-	config.name = match matches.value_of("name") {
+	config.name = match cli.name {
 		None => Generator::with_naming(Name::Numbered).next().unwrap(),
-		Some(name) => name.into(),
+		Some(name) => name,
 	};
 	match is_node_name_valid(&config.name) {
 		Ok(_) => (),
@@ -219,31 +304,29 @@ where
 		)
 	}
 
-	let base_path = base_path(&matches);
+	let base_path = base_path(&cli.shared_params);
 
-	config.keystore_path = matches.value_of("keystore")
-		.map(|x| Path::new(x).to_owned())
+	config.keystore_path = cli.keystore_path
 		.unwrap_or_else(|| keystore_path(&base_path, config.chain_spec.id()))
 		.to_string_lossy()
 		.into();
 
-	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
-	config.database_cache_size = match matches.value_of("database_cache_size") {
-		Some(s) => Some(s.parse().map_err(|_| "Invalid Database Cache size specified")?),
-		_=> None
-	};
-	config.pruning = match matches.value_of("pruning") {
-		Some("archive") => PruningMode::ArchiveAll,
+	config.database_path =
+		db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+	config.database_cache_size = config.database_cache_size;
+	config.pruning = match cli.pruning {
+		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
-		Some(s) => PruningMode::keep_blocks(s.parse()
-			.map_err(|_| create_input_err("Invalid pruning mode specified"))?),
+		Some(s) => PruningMode::keep_blocks(
+			s.parse().map_err(|_| create_input_err("Invalid pruning mode specified"))?
+		),
 	};
 
 	let role =
-		if matches.is_present("light") {
+		if cli.light {
 			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
-		} else if matches.is_present("validator") || matches.is_present("dev") {
+		} else if cli.validator || cli.shared_params.dev {
 			config.block_execution_strategy = service::ExecutionStrategy::Both;
 			service::Roles::AUTHORITY
 		} else {
@@ -251,128 +334,65 @@ where
 			service::Roles::FULL
 		};
 
-	if let Some(s) = matches.value_of("execution") {
-		config.block_execution_strategy = match s {
-			"both" => service::ExecutionStrategy::Both,
-			"native" => service::ExecutionStrategy::NativeWhenPossible,
-			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			_ => bail!(create_input_err("Invalid execution mode specified")),
-		};
-	}
+	config.block_execution_strategy = cli.execution.into();
 
 	config.roles = role;
-	{
-		config.network.boot_nodes.extend(matches
-			.values_of("bootnodes")
-			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
-		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
-		config.network.net_config_path = config.network.config_path.clone();
-		config.network.reserved_nodes.extend(matches
-			 .values_of("reserved_nodes")
-			 .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
-		if !config.network.reserved_nodes.is_empty() {
-			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
-		}
+	let client_id = config.client_id();
+	fill_network_configuration(
+		cli.network_config,
+		&base_path,
+		spec.id(),
+		&mut config.network,
+		client_id,
+	)?;
 
-		config.network.listen_addresses = Vec::new();
-		for addr in matches.values_of("listen_addr").unwrap_or_default() {
-			let addr = addr.parse().map_err(|_| "Invalid listen multiaddress")?;
-			config.network.listen_addresses.push(addr);
-		}
-		if config.network.listen_addresses.is_empty() {
-			let port = match matches.value_of("port") {
-				Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
-				None => 30333,
-			};
-			config.network.listen_addresses = vec![
-				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(Protocol::Tcp(port)))
-					.collect()
-			];
-		}
-
-		config.network.public_addresses = Vec::new();
-
-		config.network.client_version = config.client_id();
-		config.network.use_secret = match matches.value_of("node_key").map(H256::from_str) {
-			Some(Ok(secret)) => Some(secret.into()),
-			Some(Err(err)) => bail!(create_input_err(format!("Error parsing node key: {}", err))),
-			None => None,
-		};
-
-		let in_peers = match matches.value_of("in_peers") {
-			Some(in_peers) => in_peers.parse().map_err(|_| "Invalid in-peers value specified.")?,
-			None => 25,
-		};
-		let out_peers = match matches.value_of("out_peers") {
-			Some(out_peers) => out_peers.parse().map_err(|_| "Invalid out-peers value specified.")?,
-			None => 25,
-		};
-
-		config.network.in_peers = in_peers;
-		config.network.out_peers = out_peers;
+	if let Some(key) = cli.key {
+		config.keys.push(key);
 	}
 
-	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
-	if matches.is_present("dev") {
+	if cli.shared_params.dev {
 		config.keys.push("Alice".into());
 	}
 
-	let rpc_interface: &str = if matches.is_present("rpc_external") { "0.0.0.0" } else { "127.0.0.1" };
-	let ws_interface: &str = if matches.is_present("ws_external") { "0.0.0.0" } else { "127.0.0.1" };
+	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };
+	let ws_interface: &str = if cli.ws_external { "0.0.0.0" } else { "127.0.0.1" };
 
-	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), "rpc_port", &matches)?);
-	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), "ws_port", &matches)?);
+	config.rpc_http = Some(
+		parse_address(&format!("{}:{}", rpc_interface, 9933), cli.rpc_port)?
+	);
+	config.rpc_ws = Some(
+		parse_address(&format!("{}:{}", ws_interface, 9944), cli.ws_port)?
+	);
 
 	// Override telemetry
-	if matches.is_present("no_telemetry") {
+	if cli.no_telemetry {
 		config.telemetry_url = None;
-	} else if let Some(url) = matches.value_of("telemetry_url") {
-		config.telemetry_url = Some(url.to_owned());
+	} else if let Some(url) = cli.telemetry_url {
+		config.telemetry_url = Some(url);
 	}
 
-	Ok((spec, config))
+	Ok(config)
 }
 
-fn get_db_path_for_subcommand(
-	main_cmd: &clap::ArgMatches,
-	sub_cmd: &clap::ArgMatches
-) -> error::Result<PathBuf> {
-	if main_cmd.is_present("chain") && sub_cmd.is_present("chain") {
-		bail!(create_input_err("`--chain` option is present two times"));
-	}
+fn run_node<F, S, RS, C, E>(
+	cli: RunCmd,
+	main_cli: C,
+	spec_factory: S,
+	exit: E,
+	run_service: RS,
+	impl_name: &'static str,
+	version: VersionInfo,
+) -> error::Result<()>
+where
+	C: StructOpt,
+	F: ServiceFactory,
+	E: IntoExit,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	RS: FnOnce(E, C, FactoryFullConfiguration<F>) -> Result<(), String>,
+ {
+	let config = create_run_node_config::<F, _>(cli, spec_factory, impl_name, version)?;
 
-	fn check_contradicting_chain_dev_flags(
-		m0: &clap::ArgMatches,
-		m1: &clap::ArgMatches
-	) -> error::Result<()> {
-		if m0.is_present("dev") && m1.is_present("chain") {
-			bail!(create_input_err("`--dev` and `--chain` given on different levels"));
-		}
-
-		Ok(())
-	}
-
-	check_contradicting_chain_dev_flags(main_cmd, sub_cmd)?;
-	check_contradicting_chain_dev_flags(sub_cmd, main_cmd)?;
-
-	let spec_id = if sub_cmd.is_present("chain") || sub_cmd.is_present("dev") {
-		get_chain_key(sub_cmd)
-	} else {
-		get_chain_key(main_cmd)
-	};
-
-	if main_cmd.is_present("base_path") && sub_cmd.is_present("base_path") {
-		bail!(create_input_err("`--base_path` option is present two times"));
-	}
-
-	let base_path = if sub_cmd.is_present("base_path") {
-		base_path(sub_cmd)
-	} else {
-		base_path(main_cmd)
-	};
-
-	Ok(db_path(&base_path, &spec_id))
+	run_service(exit, main_cli, config).map_err(Into::into)
 }
 
 //
@@ -383,69 +403,22 @@ fn get_db_path_for_subcommand(
 // 9803-9874		Unassigned
 // 9926-9949		Unassigned
 
-/// execute default commands or return service configuration
-pub fn execute_default<'a, F, E>(
-	spec: ChainSpec<FactoryGenesis<F>>,
-	exit: E,
-	matches: &clap::ArgMatches<'a>,
-	config: &FactoryFullConfiguration<F>
-) -> error::Result<Action<E>>
-where
-	E: IntoExit,
-	F: ServiceFactory,
-{
-	panic_hook::set();
-
-	let log_pattern = matches.value_of("log").unwrap_or("");
-	init_logger(log_pattern);
-	fdlimit::raise_fd_limit();
-
-	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		build_spec::<F>(matches, spec, config)?;
-		return Ok(Action::ExecutedInternally);
-	} else if let Some(sub_matches) = matches.subcommand_matches("export-blocks") {
-		export_blocks::<F, _>(
-			get_db_path_for_subcommand(matches, sub_matches)?,
-			matches,
-			spec,
-			exit.into_exit()
-		)?;
-		return Ok(Action::ExecutedInternally);
-	} else if let Some(sub_matches) = matches.subcommand_matches("import-blocks") {
-		import_blocks::<F, _>(
-			get_db_path_for_subcommand(matches, sub_matches)?,
-			matches,
-			spec,
-			exit.into_exit()
-		)?;
-		return Ok(Action::ExecutedInternally);
-	} else if let Some(sub_matches) = matches.subcommand_matches("revert") {
-		revert_chain::<F>(
-			get_db_path_for_subcommand(matches, sub_matches)?,
-			sub_matches,
-			spec
-		)?;
-		return Ok(Action::ExecutedInternally);
-	} else if let Some(sub_matches) = matches.subcommand_matches("purge-chain") {
-		purge_chain::<F>(get_db_path_for_subcommand(matches, sub_matches)?)?;
-		return Ok(Action::ExecutedInternally);
-	}
-
-	Ok(Action::RunService(exit))
-}
-
 fn with_default_boot_node<F>(
-	spec: &ChainSpec<FactoryGenesis<F>>,
-	config: &NetworkConfiguration
+	mut spec: ChainSpec<FactoryGenesis<F>>,
+	cli: &BuildSpecCmd,
 ) -> error::Result<ChainSpec<FactoryGenesis<F>>>
 where
 	F: ServiceFactory
 {
-	let mut spec = spec.clone();
 	if spec.boot_nodes().is_empty() {
+		let network_path =
+			Some(network_path(&base_path(&cli.shared_params), spec.id()).to_string_lossy().into());
+		let network_key = parse_node_key(cli.node_key.clone())?;
+
 		let network_keys =
-			network::obtain_private_key(config)
+			network::obtain_private_key(&network_key, &network_path)
 				.map_err(|err| format!("Error obtaining network key: {}", err))?;
+
 		let peer_id = network_keys.to_peer_id();
 		let addr = multiaddr![
 			Ip4([127, 0, 0, 1]),
@@ -457,112 +430,114 @@ where
 	Ok(spec)
 }
 
-fn build_spec<F>(
-	matches: &clap::ArgMatches,
-	spec: ChainSpec<FactoryGenesis<F>>,
-	config: &FactoryFullConfiguration<F>
+fn build_spec<F, S>(
+	cli: BuildSpecCmd,
+	spec_factory: S,
 ) -> error::Result<()>
 where
-	F: ServiceFactory
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
 	info!("Building chain spec");
-	let raw = matches.is_present("raw");
-	let spec = with_default_boot_node::<F>(&spec, &config.network)?;
-	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, raw)?;
+	let spec = load_spec(&cli.shared_params, spec_factory)?;
+	let spec = with_default_boot_node::<F>(spec, &cli)?;
+	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, cli.raw)?;
+
 	print!("{}", json);
+
 	Ok(())
 }
 
-fn export_blocks<F, E>(
-	db_path: PathBuf,
-	matches: &clap::ArgMatches,
-	spec: ChainSpec<FactoryGenesis<F>>,
+fn create_config_with_db_path<F, S>(
+	spec_factory: S, cli: &SharedParams
+) -> error::Result<FactoryFullConfiguration<F>>
+where
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+{
+	let spec = load_spec(cli, spec_factory)?;
+	let base_path = base_path(cli);
+
+	let mut config = service::Configuration::default_with_spec(spec.clone());
+	config.database_path = db_path(&base_path, spec.id()).to_string_lossy().into();
+
+	Ok(config)
+}
+
+fn export_blocks<F, E, S>(
+	cli: ExportBlocksCmd,
+	spec_factory: S,
 	exit: E
 ) -> error::Result<()>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static,
+where
+	F: ServiceFactory,
+	E: IntoExit,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string_lossy().into();
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
+
 	info!("DB path: {}", config.database_path);
-	let from: u64 = match matches.value_of("from") {
-		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
-		None => 1,
-	};
+	let from = cli.from.unwrap_or(1);
+	let to = cli.to;
+	let json = cli.json;
 
-	let to: Option<u64> = match matches.value_of("to") {
-		Some(v) => Some(v.parse().map_err(|_| "Invalid --to argument")?),
-		None => None,
-	};
-	let json = matches.is_present("json");
-
-	let file: Box<Write> = match matches.value_of("output") {
+	let file: Box<Write> = match cli.output {
 		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
 
-	Ok(service::chain_ops::export_blocks::<F, _, _>(config, exit, file, As::sa(from), to.map(As::sa), json)?)
+	service::chain_ops::export_blocks::<F, _, _>(
+		config, exit.into_exit(), file, As::sa(from), to.map(As::sa), json
+	).map_err(Into::into)
 }
 
-fn import_blocks<F, E>(
-	db_path: PathBuf,
-	matches: &clap::ArgMatches,
-	spec: ChainSpec<FactoryGenesis<F>>,
+fn import_blocks<F, E, S>(
+	cli: ImportBlocksCmd,
+	spec_factory: S,
 	exit: E
 ) -> error::Result<()>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static,
+where
+	F: ServiceFactory,
+	E: IntoExit,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string_lossy().into();
+	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
 
-	if let Some(s) = matches.value_of("execution") {
-		config.block_execution_strategy = match s {
-			"both" => service::ExecutionStrategy::Both,
-			"native" => service::ExecutionStrategy::NativeWhenPossible,
-			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			_ => return Err(error::ErrorKind::Input("Invalid block execution mode specified".to_owned()).into()),
-		};
-	}
+	config.block_execution_strategy = cli.execution.into();
+	config.api_execution_strategy = cli.api_execution.into();
 
-	if let Some(s) = matches.value_of("api-execution") {
-		config.api_execution_strategy = match s {
-			"both" => service::ExecutionStrategy::Both,
-			"native" => service::ExecutionStrategy::NativeWhenPossible,
-			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			_ => return Err(error::ErrorKind::Input("Invalid API execution mode specified".to_owned()).into()),
-		};
-	}
-
-	let file: Box<Read> = match matches.value_of("input") {
+	let file: Box<Read> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
 		None => Box::new(stdin()),
 	};
 
-	Ok(service::chain_ops::import_blocks::<F, _, _>(config, exit, file)?)
+	service::chain_ops::import_blocks::<F, _, _>(config, exit.into_exit(), file).map_err(Into::into)
 }
 
-fn revert_chain<F>(
-	db_path: PathBuf,
-	matches: &clap::ArgMatches,
-	spec: ChainSpec<FactoryGenesis<F>>
+fn revert_chain<F, S>(
+	cli: RevertCmd,
+	spec_factory: S,
 ) -> error::Result<()>
-	where F: ServiceFactory,
+where
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string_lossy().into();
-
-	let blocks = match matches.value_of("num") {
-		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
-		None => 256,
-	};
-
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
+	let blocks = cli.num.unwrap_or(256);
 	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
 }
 
-fn purge_chain<F>(
-	db_path: PathBuf,
+fn purge_chain<F, S>(
+	cli: PurgeChainCmd,
+	spec_factory: S,
 ) -> error::Result<()>
-	where F: ServiceFactory,
+where
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
+
+	let db_path = config.database_path;
 	print!("Are you sure to remove {:?}? (y/n)", &db_path);
 	stdout().flush().expect("failed to flush stdout");
 
@@ -582,17 +557,13 @@ fn purge_chain<F>(
 }
 
 fn parse_address(
-	default: &str,
-	port_param: &str,
-	matches: &clap::ArgMatches
+	address: &str,
+	port: Option<u16>,
 ) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = default.parse().ok().ok_or_else(
-		|| format!("Invalid address specified for --{}.", port_param)
+	let mut address: SocketAddr = address.parse().map_err(
+		|_| format!("Invalid address: {}", address)
 	)?;
-	if let Some(port) = matches.value_of(port_param) {
-		let port: u16 = port.parse().ok().ok_or_else(
-			|| format!("Invalid port for --{} specified.", port_param)
-		)?;
+	if let Some(port) = port {
 		address.set_port(port);
 	}
 
@@ -656,13 +627,24 @@ fn init_logger(pattern: &str) {
 	let enable_color = isatty;
 
 	builder.format(move |buf, record| {
-		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now()).expect("Error formatting log timestamp");
+		let timestamp =
+			time::strftime("%Y-%m-%d %H:%M:%S", &time::now())
+				.expect("Error formatting log timestamp");
 
 		let mut output = if log::max_level() <= log::LevelFilter::Info {
 			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
 		} else {
-			let name = ::std::thread::current().name().map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
-			format!("{} {} {} {}  {}", Colour::Black.bold().paint(timestamp), name, record.level(), record.target(), record.args())
+			let name = ::std::thread::current()
+				.name()
+				.map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
+			format!(
+				"{} {} {} {}  {}",
+				Colour::Black.bold().paint(timestamp),
+				name,
+				record.level(),
+				record.target(),
+				record.args()
+			)
 		};
 
 		if !enable_color {

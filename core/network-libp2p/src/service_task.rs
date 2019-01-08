@@ -26,7 +26,7 @@ use libp2p::kad::{KadSystem, KadSystemConfig, KadConnecController, KadPeer};
 use libp2p::kad::{KadConnectionType, KadQueryEvent};
 use parking_lot::Mutex;
 use rand;
-use secret::obtain_private_key;
+use secret::obtain_private_key_from_config;
 use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::iter;
@@ -59,7 +59,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	}
 
 	// Private and public keys configuration.
-	let local_private_key = obtain_private_key(&config)?;
+	let local_private_key = obtain_private_key_from_config(&config)?;
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
 
@@ -115,7 +115,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 			Err(_) => {
 				// If the format of the bootstrap node is not a multiaddr, try to parse it as
 				// a `SocketAddr`. This corresponds to the format `IP:PORT`.
-				let addr = match bootnode.parse::<SocketAddr>() { 
+				let addr = match bootnode.parse::<SocketAddr>() {
 					Ok(SocketAddr::V4(socket)) => multiaddr![Ip4(*socket.ip()), Tcp(socket.port())],
 					Ok(SocketAddr::V6(socket)) => multiaddr![Ip6(*socket.ip()), Tcp(socket.port())],
 					_ => {

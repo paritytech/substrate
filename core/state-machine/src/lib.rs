@@ -34,7 +34,7 @@ extern crate heapsize;
 extern crate parity_codec as codec;
 extern crate substrate_trie as trie;
 
-use std::fmt;
+use std::{fmt, str};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use codec::Decode;

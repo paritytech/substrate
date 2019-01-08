@@ -15,11 +15,17 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use structopt::StructOpt;
-use cli::CoreParams;
+use cli::{CoreParams, GetCoreParams};
 
 /// Extend params for Node
 #[derive(Debug, StructOpt)]
 pub struct Params {
 	#[structopt(flatten)]
 	core: CoreParams
+}
+
+impl GetCoreParams for Params {
+	fn core_params(&self) -> CoreParams {
+		self.core.clone()
+	}
 }
