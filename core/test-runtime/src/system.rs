@@ -25,7 +25,7 @@ use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
-use primitives::{Blake2Hasher};
+use primitives::{Ed25519AuthorityId, Blake2Hasher};
 use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -51,7 +51,7 @@ pub fn nonce_of(who: AccountId) -> u64 {
 }
 
 /// Get authorities ar given block.
-pub fn authorities() -> Vec<::primitives::AuthorityId> {
+pub fn authorities() -> Vec<Ed25519AuthorityId> {
 	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
 		.expect("There are always authorities in test-runtime");
 	(0..len)
@@ -94,7 +94,7 @@ pub fn execute_block(block: Block) {
 	// check digest
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
-		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root.into()));
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
@@ -164,7 +164,7 @@ pub fn finalise_block() -> Header {
 
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root {
-		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root));
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
 
 	Header {

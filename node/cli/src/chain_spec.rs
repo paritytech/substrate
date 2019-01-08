@@ -16,7 +16,7 @@
 
 //! Substrate chain configurations.
 
-use primitives::{AuthorityId, ed25519};
+use primitives::{Ed25519AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
@@ -158,7 +158,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 }
 
 /// Helper function to generate AuthorityID from seed
-pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
+pub fn get_authority_id_from_seed(seed: &str) -> Ed25519AuthorityId {
 	let padded_seed = pad_seed(seed);
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
@@ -167,9 +167,9 @@ pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<AuthorityId>,
+	initial_authorities: Vec<Ed25519AuthorityId>,
 	upgrade_key: AccountId,
-	endowed_accounts: Option<Vec<AuthorityId>>,
+	endowed_accounts: Option<Vec<Ed25519AuthorityId>>,
 ) -> GenesisConfig {
 	let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
 		vec![

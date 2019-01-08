@@ -21,7 +21,7 @@
 use untrusted;
 use blake2_rfc;
 use ring::{rand, signature};
-use {hash::H512, AuthorityId};
+use {hash::H512, Ed25519AuthorityId};
 use base58::{ToBase58, FromBase58};
 
 #[cfg(feature = "std")]
@@ -169,14 +169,14 @@ impl AsRef<Pair> for Pair {
 	}
 }
 
-impl Into<AuthorityId> for Public {
-	fn into(self) -> AuthorityId {
-		AuthorityId(self.0)
+impl Into<Ed25519AuthorityId> for Public {
+	fn into(self) -> Ed25519AuthorityId {
+		Ed25519AuthorityId(self.0)
 	}
 }
 
-impl From<AuthorityId> for Public {
-	fn from(id: AuthorityId) -> Self {
+impl From<Ed25519AuthorityId> for Public {
+	fn from(id: Ed25519AuthorityId) -> Self {
 		Public(id.0)
 	}
 }

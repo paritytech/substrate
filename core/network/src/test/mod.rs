@@ -29,9 +29,8 @@ use client;
 use client::block_builder::BlockBuilder;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Zero};
+use runtime_primitives::traits::{Block as BlockT, Zero, AuthorityIdFor};
 use io::SyncIo;
-use primitives::AuthorityId;
 use protocol::{Context, Protocol, ProtocolContext};
 use config::ProtocolConfig;
 use service::{NetworkLink, TransactionPool};
@@ -92,7 +91,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
 		Ok((ImportBlock {
 			origin,
 			header,

@@ -64,10 +64,10 @@ use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
+use primitives::{H256, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem, AuthorityIdFor};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -315,7 +315,7 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, _authorities: Vec<AuthorityId>) {
+	fn update_authorities(&mut self, _authorities: Vec<AuthorityIdFor<Block>>) {
 		// currently authorities are not cached on full nodes
 	}
 

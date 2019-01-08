@@ -20,7 +20,6 @@ use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
 use error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
-use primitives::AuthorityId;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
@@ -28,7 +27,7 @@ use runtime_primitives::{
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
-	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
+	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
 use runtime_primitives::BuildStorage;
 use runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
@@ -281,11 +280,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Get the set of authorities at a given block.
-	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
+	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityIdFor<Block>>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
 			None => self.executor.call(id, "Core_authorities", &[])
-				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
+				.and_then(|r| Vec::<AuthorityIdFor<Block>>::decode(&mut &r.return_data[..])
 					.ok_or(error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
 	}
@@ -541,7 +540,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
@@ -1030,7 +1029,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	fn import_block(
 		&self,
 		import_block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityId>>,
+		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	) -> Result<ImportResult, Self::Error> {
 		use runtime_primitives::traits::Digest;
 
@@ -1098,7 +1097,7 @@ impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> 
 	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityIdFor<Block>>, Self::Error> {
 		self.authorities_at(at).map_err(|e| e.into())
 	}
 }
