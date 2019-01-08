@@ -67,8 +67,8 @@ use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::{generic, generic::BlockId, Justification, BasicInherentData};
-use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, ProvideRuntimeApi};
-use primitives::{AuthorityId, ed25519};
+use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi};
+use primitives::{Ed25519AuthorityId, ed25519};
 
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
@@ -91,7 +91,7 @@ pub trait Network: Clone {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author(slot_num: u64, authorities: &[AuthorityId]) -> Option<AuthorityId> {
+fn slot_author(slot_num: u64, authorities: &[Ed25519AuthorityId]) -> Option<Ed25519AuthorityId> {
 	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
@@ -168,7 +168,7 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + 'static,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	use tokio::runtime::current_thread::Runtime;
@@ -211,7 +211,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 	I: BlockImport<B>,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
 	let make_authorship = move || {
@@ -266,7 +266,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							slot_num, timestamp);
 
 						// we are the slot author. make a block and sign it.
-						let proposer = match env.init(&chain_head, &authorities, pair.clone()) {
+						let proposer = match env.init(&chain_head, &authorities) {
 							Ok(p) => p,
 							Err(e) => {
 								warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
@@ -373,7 +373,7 @@ enum CheckedHeader<H> {
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
 // FIXME: needs misbehavior types - https://github.com/paritytech/substrate/issues/1018
-fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId])
+fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[Ed25519AuthorityId])
 	-> Result<CheckedHeader<B::Header>, String>
 	where DigestItemFor<B>: CompatibleDigestItem
 {
@@ -446,7 +446,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, MakeInherent> where
 	C: Authorities<B> + BlockImport<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
@@ -456,7 +456,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<Ed25519AuthorityId>>), String> {
 		use runtime_primitives::CheckInherentError;
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -600,7 +600,7 @@ pub fn import_queue<B, C, E, MakeInherent, Inherent>(
 	B: Block,
 	C: Authorities<B> + BlockImport<B,Error=ConsensusError> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
@@ -633,7 +633,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Ed25519AuthorityId])
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
