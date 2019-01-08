@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-lazy_static = "1.2"
 log = { version = "0.4", optional = true }
 hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", optional = true }

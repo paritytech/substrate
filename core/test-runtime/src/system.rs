@@ -250,10 +250,8 @@ mod tests {
 	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;
 
-	lazy_static! {
-    	static ref WASM_CODE: &'static [u8] = 
+	const WASM_CODE: &'static [u8] =
 			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
-	}
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
