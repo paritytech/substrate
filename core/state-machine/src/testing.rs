@@ -23,7 +23,8 @@ use heapsize::HeapSizeOf;
 use trie::trie_root;
 use backend::InMemory;
 use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
-use primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG;
+use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
+use codec::Encode;
 use super::{Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
@@ -31,11 +32,17 @@ pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
 	changes: OverlayedChanges,
+	code: Vec<u8>,
 }
 
 impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		Self::new_with_code(&[], inner)
+	}
+
+	/// Create a new instance of `TestExternalities`
+	pub fn new_with_code(code: &[u8], inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut overlay = OverlayedChanges::default();
 		super::set_changes_trie_config(
 			&mut overlay,
@@ -47,6 +54,7 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 			inner,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: overlay,
+			code: code.to_vec(),
 		}
 	}
 
@@ -94,13 +102,18 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 			inner: hashmap,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: Default::default(),
+			code: Default::default(),
 		}
 	}
 }
 
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.inner.get(key).map(|x| x.to_vec())
+		match key {
+			CODE => Some(self.code.clone()),
+			HEAP_PAGES => Some(8u64.encode()),
+			_ => self.inner.get(key).map(|x| x.to_vec()),
+		}
 	}
 
 	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> Option<Vec<u8>> {

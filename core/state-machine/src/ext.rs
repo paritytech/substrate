@@ -184,6 +184,11 @@ where
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
+		self.overlay.storage(key).map(|x| x.map(|x| H::hash(x))).unwrap_or_else(||
+			self.backend.storage_hash(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.child_storage(storage_key, key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.child_storage(storage_key, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
