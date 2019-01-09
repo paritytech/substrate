@@ -51,7 +51,6 @@ extern crate srml_sudo as sudo;
 extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 extern crate srml_treasury as treasury;
-extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
@@ -97,8 +96,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 11,
-	impl_version: 11,
+	spec_version: 12,
+	impl_version: 12,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -202,10 +201,6 @@ impl contract::Trait for Runtime {
 	type Event = Event;
 }
 
-impl upgrade_key::Trait for Runtime {
-	type Event = Event;
-}
-
 impl sudo::Trait for Runtime {
 	type Event = Event;
 	type Proposal = Call;
@@ -238,7 +233,6 @@ construct_runtime!(
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
-		UpgradeKey: upgrade_key,
 		Sudo: sudo,
 	}
 );
@@ -257,7 +251,7 @@ pub type SignedBlock = generic::SignedBlock<Block>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedMortalExtrinsic<Address, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
