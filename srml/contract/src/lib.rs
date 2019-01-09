@@ -39,7 +39,7 @@
 //! This module requires performing some finalization steps at the end of the block. If not performed
 //! the module will have incorrect behavior.
 //!
-//! Thus [`Module::on_finalise`] should be called at the end of the block. The order in relation to
+//! Thus [`Module::on_finalise`] must be called at the end of the block. The order in relation to
 //! the other module doesn't matter.
 //!
 //! ## Account killing
