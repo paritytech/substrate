@@ -44,7 +44,11 @@ macro_rules! gen_signature {
 
 #[macro_export]
 macro_rules! gen_signature_dispatch {
-	( $needle_name:ident, $needle_sig:ident ; $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* , $($rest:tt)* ) => {
+	(
+		$needle_name:ident,
+		$needle_sig:ident ;
+		$name:ident
+		( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* , $($rest:tt)* ) => {
 		if stringify!($name).as_bytes() == $needle_name {
 			let signature = gen_signature!( ( $( $params ),* ) $( -> $returns )* );
 			if $needle_sig == &signature {
@@ -140,7 +144,10 @@ macro_rules! define_func {
 macro_rules! register_func {
 	( $reg_cb:ident, < E: $ext_ty:tt > ; ) => {};
 
-	( $reg_cb:ident, < E: $ext_ty:tt > ; $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* ) $( -> $returns:ty )* => $body:tt $($rest:tt)* ) => {
+	( $reg_cb:ident, < E: $ext_ty:tt > ;
+		$name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
+		$( -> $returns:ty )* => $body:tt $($rest:tt)*
+	) => {
 		$reg_cb(
 			stringify!($name).as_bytes(),
 			{
