@@ -42,6 +42,7 @@ use primitives::traits::{As, Zero, One, Convert};
 use codec::HasCompact;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
+use runtime_support::for_each_tuple;
 use system::ensure_signed;
 use rstd::ops::Mul;
 
