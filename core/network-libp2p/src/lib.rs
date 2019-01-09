@@ -53,7 +53,7 @@ mod transport;
 
 pub use custom_proto::RegisteredProtocol;
 pub use error::{Error, ErrorKind, DisconnectReason};
-pub use libp2p::{Multiaddr, multiaddr::{Protocol}, multiaddr, PeerId};
+pub use libp2p::{Multiaddr, multiaddr::{Protocol}, multiaddr, PeerId, core::PublicKey};
 pub use secret::obtain_private_key;
 pub use service_task::{start_service, Service, ServiceEvent};
 pub use traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeerMode};
