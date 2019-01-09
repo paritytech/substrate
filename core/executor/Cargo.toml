@@ -26,5 +26,5 @@ wabt = "0.7"
 hex-literal = "0.1.0"
 
 [features]
-default = []
+default = ["wasm-extern-trace"]
 wasm-extern-trace = []

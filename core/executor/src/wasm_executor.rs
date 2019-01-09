@@ -36,6 +36,7 @@ use sandbox;
 
 struct Heap {
 	end: u32,
+	last_end: u32,
 }
 
 impl Heap {
@@ -51,12 +52,17 @@ impl Heap {
 		memory.grow(Pages(pages)).map_err(|_| Error::from(ErrorKind::Runtime))?;
 		Ok(Heap {
 			end: Bytes::from(prev_page_count).0 as u32,
+			last_end: 0,
 		})
 	}
 
 	fn allocate(&mut self, size: u32) -> u32 {
 		let r = self.end;
 		self.end += size;
+		if self.end / 1024 / 1024 > self.last_end / 1024 / 1024 {
+			self.last_end = self.end;
+			trace!(target: "heap", "Heap grown to {} MB", self.end / 1024 / 1024);
+		}
 		r
 	}
 
@@ -272,9 +278,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				&format!("{}", HexDisplay::from(b))
+				format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>"
+				"<empty>".into()
 			},
 			HexDisplay::from(&key)
 		);
@@ -311,9 +317,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				&format!("{}", HexDisplay::from(b))
+				format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>"
+				"<empty>".into()
 			},
 			HexDisplay::from(&key)
 		);
@@ -341,9 +347,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				&format!("{}", HexDisplay::from(b))
+				format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>"
+				"<empty>".into()
 			},
 			HexDisplay::from(&key)
 		);
@@ -376,9 +382,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				&format!("{}", HexDisplay::from(b))
+				format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>"
+				"<empty>".into()
 			},
 			HexDisplay::from(&key)
 		);
@@ -455,9 +461,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let hashed_key = twox_128(&key);
 			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
 				if let Ok(_skey) = ::std::str::from_utf8(&key) {
-					_skey
+					_skey.into()
 				} else {
-					&format!("{}", HexDisplay::from(&key))
+					format!("{}", HexDisplay::from(&key))
 				},
 				HexDisplay::from(&hashed_key)
 			);

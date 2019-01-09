@@ -66,7 +66,7 @@ pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES :u64 = 1024;
+const DEFAULT_HEAP_PAGES :u64 = 16384;
 
 /// State Machine Error bound.
 ///

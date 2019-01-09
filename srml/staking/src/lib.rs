@@ -40,7 +40,7 @@ extern crate srml_system as system;
 
 #[cfg(test)]
 extern crate substrate_primitives;
-#[cfg(test)]
+//#[cfg(test)]
 extern crate sr_io as runtime_io;
 #[cfg(test)]
 extern crate srml_timestamp as timestamp;
@@ -499,7 +499,11 @@ impl<T: Trait> Module<T> {
 	/// Call when a validator is determined to be offline. `count` is the
 	/// number of offences the validator has committed.
 	pub fn on_offline_validator(v: T::AccountId, count: usize) {
+		::runtime_io::print("on_offline_validator");
+		::runtime_io::print(count as u64);
 		use primitives::traits::CheckedShl;
+
+		if false {
 
 		for _ in 0..count {
 			let slash_count = Self::slash_count(&v);
@@ -543,6 +547,8 @@ impl<T: Trait> Module<T> {
 			};
 			Self::deposit_event(event);
 		}
+		}
+		::runtime_io::print("on_offline_validator done");
 	}
 }
 
