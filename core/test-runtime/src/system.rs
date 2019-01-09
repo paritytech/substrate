@@ -248,6 +248,10 @@ mod tests {
 	use ::{Header, Digest, Extrinsic, Transfer};
 	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys;
+	use substrate_executor::WasmExecutor;
+
+	const WASM_CODE: &'static [u8] =
+			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
@@ -265,8 +269,7 @@ mod tests {
 		Extrinsic { transfer: tx, signature }
 	}
 
-	#[test]
-	fn block_import_works() {
+	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
 		let mut t = new_test_ext();
 
 		let h = Header {
@@ -282,13 +285,27 @@ mod tests {
 			extrinsics: vec![],
 		};
 
-		with_externalities(&mut t, || {
-			execute_block(b);
+		block_executor(b, &mut t);
+
+	}
+
+	#[test]
+	fn block_import_works_native() {
+		block_import_works(|b, ext| {
+			with_externalities(ext, || {
+				execute_block(b);
+			});
 		});
 	}
 
 	#[test]
-	fn block_import_with_transaction_works() {
+	fn block_import_works_wasm() {
+		block_import_works(|b, ext| {
+			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+		})
+	}
+
+	fn block_import_with_transaction_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
@@ -345,12 +362,29 @@ mod tests {
 			],
 		};
 
+		block_executor(b, &mut t);
+
 		with_externalities(&mut t, || {
-			execute_block(b);
 
 			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 0);
 			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 42);
 			assert_eq!(balance_of(Keyring::Charlie.to_raw_public().into()), 69);
 		});
+	}
+
+	#[test]
+	fn block_import_with_transaction_works_native() {
+		block_import_with_transaction_works(|b, ext| {
+			with_externalities(ext, || {
+				execute_block(b);
+			});
+		});
+	}
+	
+	#[test]
+	fn block_import_with_transaction_works_wasm() {
+		block_import_with_transaction_works(|b, ext| {
+			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+		})
 	}
 }
