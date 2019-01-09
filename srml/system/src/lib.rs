@@ -50,7 +50,7 @@ use codec::Encode;
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::{AuthorityId, ChangesTrieConfiguration};
+use substrate_primitives::ChangesTrieConfiguration;
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -63,7 +63,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::enumerated_trie_root(&xts)
 }
 
-pub trait Trait: Eq + Clone {
+pub trait Trait: 'static + Eq + Clone {
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
@@ -176,8 +176,7 @@ impl<Hash: Member> RawLog<Hash> {
 impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestItem {
 	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
 		match log {
-			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot
-				::<substrate_primitives::H256, AuthorityId>(root),
+			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot(root),
 		}
 	}
 }

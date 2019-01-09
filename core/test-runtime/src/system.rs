@@ -25,7 +25,7 @@ use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
-use primitives::{AuthorityId, Blake2Hasher};
+use primitives::{Ed25519AuthorityId, Blake2Hasher};
 use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -36,7 +36,7 @@ storage_items! {
 	// The current block number being processed. Set by `execute_block`.
 	Number: b"sys:num" => required BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
-	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
+	NewAuthorities: b"sys:new_auth" => Vec<Ed25519AuthorityId>;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -52,7 +52,7 @@ pub fn nonce_of(who: AccountId) -> u64 {
 }
 
 /// Get authorities ar given block.
-pub fn authorities() -> Vec<::primitives::AuthorityId> {
+pub fn authorities() -> Vec<Ed25519AuthorityId> {
 	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
 		.expect("There are always authorities in test-runtime");
 	(0..len)
@@ -95,10 +95,10 @@ pub fn execute_block(block: Block) {
 	// check digest
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
-		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, AuthorityId>(storage_changes_root.into()));
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange::<Hash, AuthorityId>(new_authorities));
+		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
@@ -168,10 +168,10 @@ pub fn finalise_block() -> Header {
 
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root {
-		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, AuthorityId>(storage_changes_root));
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange::<Hash, AuthorityId>(new_authorities));
+		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
 
 	Header {
@@ -224,8 +224,8 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	Ok(ApplyOutcome::Success)
 }
 
-fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
-	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
+fn execute_new_authorities_backend(new_authorities: &[Ed25519AuthorityId]) -> ApplyResult {
+	let new_authorities: Vec<Ed25519AuthorityId> = new_authorities.iter().cloned().collect();
 	<NewAuthorities>::put(new_authorities);
 	Ok(ApplyOutcome::Success)
 }

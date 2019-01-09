@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 
 [dependencies]
-parking_lot = "0.4"
+parking_lot = "0.7.1"
 lazy_static = "1.0"
 log = "0.4"
 slog = "^2"

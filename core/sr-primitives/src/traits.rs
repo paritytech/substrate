@@ -414,6 +414,16 @@ pub trait MaybeDisplay {}
 impl<T> MaybeDisplay for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeHash: ::rstd::hash::Hash {}
+#[cfg(feature = "std")]
+impl<T: ::rstd::hash::Hash> MaybeHash for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeHash {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeHash for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeDecode: ::codec::Decode {}
 #[cfg(feature = "std")]
 impl<T: ::codec::Decode> MaybeDecode for T {}
@@ -431,7 +441,7 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
@@ -471,7 +481,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
@@ -500,6 +510,8 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
 /// Extract the digest item type for a block.
 pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
+/// Extract the authority ID type for a block.
+pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -575,7 +587,7 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
-	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize;
+	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize + MaybeHash + codec::Encode + codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;

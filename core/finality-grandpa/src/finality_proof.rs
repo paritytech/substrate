@@ -42,7 +42,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, One,
 };
-use substrate_primitives::{AuthorityId, H256};
+use substrate_primitives::{Ed25519AuthorityId, H256};
 
 use GrandpaJustification;
 
@@ -189,7 +189,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 		call_data: vec![],
 		retry_count: None,
 	})?;
-	let grandpa_authorities: Vec<(AuthorityId, u64)> = Decode::decode(&mut &grandpa_authorities[..])
+	let grandpa_authorities: Vec<(Ed25519AuthorityId, u64)> = Decode::decode(&mut &grandpa_authorities[..])
 		.ok_or_else(|| ClientErrorKind::BadJustification("failed to decode GRANDPA authorities set proof".into()))?;
 
 	// and now check justification
@@ -222,7 +222,7 @@ trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	fn target_block(&self) -> (Header::Number, Header::Hash);
 
 	/// Verify justification with respect to authorities set and authorities set id.
-	fn verify(&self, set_id: u64, authorities: &HashMap<AuthorityId, u64>) -> ClientResult<()>;
+	fn verify(&self, set_id: u64, authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()>;
 }
 
 impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJustification<Block>
@@ -233,7 +233,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 		(self.commit.target_number, self.commit.target_hash)
 	}
 
-	fn verify(&self, set_id: u64, authorities: &HashMap<AuthorityId, u64>) -> ClientResult<()> {
+	fn verify(&self, set_id: u64, authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()> {
 		GrandpaJustification::verify(self, set_id, authorities)
 	}
 }
@@ -253,12 +253,12 @@ mod tests {
 	impl ProvableJustification<Header> for ValidFinalityProof {
 		fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
-		fn verify(&self, set_id: u64, authorities: &HashMap<AuthorityId, u64>) -> ClientResult<()> {
+		fn verify(&self, set_id: u64, authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()> {
 			assert_eq!(set_id, 1);
 			assert_eq!(authorities, &vec![
-				(AuthorityId([1u8; 32]), 1),
-				(AuthorityId([2u8; 32]), 2),
-				(AuthorityId([3u8; 32]), 3),
+				(Ed25519AuthorityId([1u8; 32]), 1),
+				(Ed25519AuthorityId([2u8; 32]), 2),
+				(Ed25519AuthorityId([3u8; 32]), 3),
 			].into_iter().collect());
 			Ok(())
 		}
@@ -387,7 +387,7 @@ mod tests {
 		impl ProvableJustification<Header> for InvalidFinalityProof {
 			fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
-			fn verify(&self, _set_id: u64, _authorities: &HashMap<AuthorityId, u64>) -> ClientResult<()> {
+			fn verify(&self, _set_id: u64, _authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()> {
 				Err(ClientErrorKind::Backend("test error".into()).into())
 			}
 		}
@@ -415,9 +415,9 @@ mod tests {
 			.unwrap().unwrap();
 		assert_eq!(do_check_finality_proof::<Block, _, ValidFinalityProof>(
 			|_| Ok(vec![
-				(AuthorityId([1u8; 32]), 1u64),
-				(AuthorityId([2u8; 32]), 2u64),
-				(AuthorityId([3u8; 32]), 3u64),
+				(Ed25519AuthorityId([1u8; 32]), 1u64),
+				(Ed25519AuthorityId([2u8; 32]), 2u64),
+				(Ed25519AuthorityId([3u8; 32]), 3u64),
 			].encode()),
 			header(1),
 			(2, header(2).hash()),

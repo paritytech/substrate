@@ -16,8 +16,7 @@
 
 //! Substrate blockchain trait
 
-use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
 
@@ -90,7 +89,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 /// Blockchain optional data cache.
 pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>>;
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>>;
 }
 
 /// Block import outcome

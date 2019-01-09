@@ -16,8 +16,6 @@
 
 //! Tracks offline validators.
 
-use primitives::AuthorityId;
-
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 
@@ -55,11 +53,11 @@ impl Observed {
 }
 
 /// Tracks offline validators and can issue a report for those offline.
-pub struct OfflineTracker {
+pub struct OfflineTracker<AuthorityId> {
 	observed: HashMap<AuthorityId, Observed>,
 }
 
-impl OfflineTracker {
+impl<AuthorityId: Eq + Clone + std::hash::Hash> OfflineTracker<AuthorityId> {
 	/// Create a new tracker.
 	pub fn new() -> Self {
 		OfflineTracker { observed: HashMap::new() }
@@ -114,10 +112,11 @@ impl OfflineTracker {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use primitives::Ed25519AuthorityId;
 
 	#[test]
 	fn validator_offline() {
-		let mut tracker = OfflineTracker::new();
+		let mut tracker = OfflineTracker::<Ed25519AuthorityId>::new();
 		let v = [0; 32].into();
 		let v2 = [1; 32].into();
 		let v3 = [2; 32].into();

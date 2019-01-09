@@ -46,7 +46,7 @@ pub trait Trait: consensus::Trait + system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 		fn upgrade(origin, new: Vec<u8>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;

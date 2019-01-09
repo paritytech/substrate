@@ -37,15 +37,17 @@ extern crate substrate_consensus_aura_primitives as aura_primitives;
 extern crate substrate_consensus_common as consensus_common;
 extern crate tokio;
 extern crate sr_version as runtime_version;
-extern crate substrate_network as network;
-extern crate futures;
 extern crate parking_lot;
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate futures;
 
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
+#[cfg(test)]
+extern crate substrate_network as network;
 #[cfg(test)]
 extern crate substrate_service as service;
 #[cfg(test)]
@@ -53,26 +55,27 @@ extern crate substrate_test_client as test_client;
 #[cfg(test)]
 extern crate env_logger;
 
-pub use aura_primitives::*;
+mod slots;
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use codec::Encode;
-use consensus_common::{Authorities, BlockImport, Environment, Proposer};
+use consensus_common::{Authorities, BlockImport, Environment, Error as ConsensusError, Proposer, ForkChoiceStrategy};
+use consensus_common::import_queue::{Verifier, BasicQueue};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::{generic, generic::BlockId, Justification, BasicInherentData};
-use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, ProvideRuntimeApi};
-use network::import_queue::{Verifier, BasicQueue};
-use primitives::{AuthorityId, ed25519};
+use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi};
+use primitives::{Ed25519AuthorityId, ed25519};
 
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
-use tokio::timer::{Delay, Timeout};
+use tokio::timer::Timeout;
 use api::AuraApi;
+use slots::Slots;
 
-pub use aura_primitives::AuraConsensusData;
+pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
 
 /// A handle to the network. This is generally implemented by providing some
@@ -88,7 +91,7 @@ pub trait Network: Clone {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author(slot_num: u64, authorities: &[AuthorityId]) -> Option<AuthorityId> {
+fn slot_author(slot_num: u64, authorities: &[Ed25519AuthorityId]) -> Option<Ed25519AuthorityId> {
 	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
@@ -165,7 +168,7 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
-	DigestItemFor<B>: CompatibleDigestItem + 'static,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	use tokio::runtime::current_thread::Runtime;
@@ -179,16 +182,15 @@ pub fn start_aura_thread<B, C, E, I, SO, Error>(
 			}
 		};
 
-		runtime.spawn(start_aura(
+		let _ = runtime.block_on(start_aura(
 			slot_duration,
 			local_key,
 			client,
 			block_import,
 			env,
 			sync_oracle,
+			on_exit,
 		));
-
-		runtime.block_on(on_exit).expect("Exit future should not fail");
 	});
 }
 
@@ -200,6 +202,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 	block_import: Arc<I>,
 	env: Arc<E>,
 	sync_oracle: SO,
+	on_exit: impl Future<Item=(),Error=()>,
 ) -> impl Future<Item=(),Error=()> where
 	B: Block,
 	C: Authorities<B> + ChainHead<B>,
@@ -208,11 +211,10 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 	I: BlockImport<B>,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
 	let make_authorship = move || {
-		use futures::future;
 
 		let client = client.clone();
 		let pair = local_key.clone();
@@ -221,138 +223,121 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 		let sync_oracle = sync_oracle.clone();
 		let SlotDuration(slot_duration) = slot_duration;
 
-		fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
-			let remaining_full_secs = slot_duration - (now.as_secs() % slot_duration) - 1;
-			let remaining_nanos = 1_000_000_000 - now.subsec_nanos();
-			Duration::new(remaining_full_secs, remaining_nanos)
-		};
+		// rather than use a timer interval, we schedule our waits ourselves
+		Slots::new(slot_duration)
+			.map_err(|e| debug!(target: "aura", "Faulty timer: {:?}", e))
+			.for_each(move |slot_info| {
+				let client = client.clone();
+				let pair = pair.clone();
+				let block_import = block_import.clone();
+				let env = env.clone();
+				let sync_oracle = sync_oracle.clone();
+				let public_key = pair.public();
 
-		// rather than use an interval, we schedule our waits ourselves
-		future::loop_fn((), move |()| {
-			let next_slot_start = duration_now()
-				.map(|now| Instant::now() + time_until_next(now, slot_duration))
-				.unwrap_or_else(|| Instant::now());
+				// only propose when we are not syncing.
+				if sync_oracle.is_major_syncing() {
+					debug!(target: "aura", "Skipping proposal slot due to sync.");
+					return Either::B(future::ok(()));
+				}
 
-			let client = client.clone();
-			let pair = pair.clone();
-			let block_import = block_import.clone();
-			let env = env.clone();
-			let sync_oracle = sync_oracle.clone();
-			let public_key = pair.public();
+				let (timestamp, slot_num) = (slot_info.timestamp, slot_info.number);
+				let chain_head = match client.best_block_header() {
+					Ok(x) => x,
+					Err(e) => {
+						warn!(target:"aura", "Unable to author block in slot {}. \
+							no best block header: {:?}", slot_num, e);
+						return Either::B(future::ok(()))
+					}
+				};
 
-			Delay::new(next_slot_start)
-				.map_err(|e| debug!(target: "aura", "Faulty timer: {:?}", e))
-				.and_then(move |_| {
-					// only propose when we are not syncing.
-					if sync_oracle.is_major_syncing() {
-						debug!(target: "aura", "Skipping proposal slot due to sync.");
+				let authorities = match client.authorities(&BlockId::Hash(chain_head.hash())) {
+					Ok(authorities) => authorities,
+					Err(e) => {
+						warn!("Unable to fetch authorities at\
+							block {:?}: {:?}", chain_head.hash(), e);
 						return Either::B(future::ok(()));
 					}
+				};
 
-					let pair = pair.clone();
-					let (timestamp, slot_num) = match timestamp_and_slot_now(slot_duration) {
-						Some(n) => n,
-						None => return Either::B(future::err(())),
-					};
+				let proposal_work = match slot_author(slot_num, &authorities) {
+					None => return Either::B(future::ok(())),
+					Some(author) => if author.0 == public_key.0 {
+						debug!(target: "aura", "Starting authorship at slot {}; timestamp = {}",
+							slot_num, timestamp);
 
-					let chain_head = match client.best_block_header() {
-						Ok(x) => x,
-						Err(e) => {
-							warn!(target:"aura", "Unable to author block in slot {}. \
-								no best block header: {:?}", slot_num, e);
-							return Either::B(future::ok(()))
-						}
-					};
-
-					let authorities = match client.authorities(&BlockId::Hash(chain_head.hash())) {
-						Ok(authorities) => authorities,
-						Err(e) => {
-							warn!("Unable to fetch authorities at\
-								block {:?}: {:?}", chain_head.hash(), e);
-							return Either::B(future::ok(()));
-						}
-					};
-
-					let proposal_work = match slot_author(slot_num, &authorities) {
-						None => return Either::B(future::ok(())),
-						Some(author) => if author.0 == public_key.0 {
-							debug!(target: "aura", "Starting authorship at slot {}; timestamp = {}",
-								slot_num, timestamp);
-
-							// we are the slot author. make a block and sign it.
-							let proposer = match env.init(&chain_head, &authorities, pair.clone()) {
-								Ok(p) => p,
-								Err(e) => {
-									warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
-									return Either::B(future::ok(()))
-								}
-							};
-
-							let consensus_data = AuraConsensusData {
-								timestamp,
-								slot: slot_num,
-								slot_duration,
-							};
-
-							// deadline our production to approx. the end of the
-							// slot
-							Timeout::new(
-								proposer.propose(consensus_data).into_future(),
-								time_until_next(Duration::from_secs(timestamp), slot_duration),
-							)
-						} else {
-							return Either::B(future::ok(()));
-						}
-					};
-
-					let block_import = block_import.clone();
-					Either::A(proposal_work
-						.map(move |b| {
-							// minor hack since we don't have access to the timestamp
-							// that is actually set by the proposer.
-							let slot_after_building = slot_now(slot_duration);
-							if slot_after_building != Some(slot_num) {
-								info!("Discarding proposal for slot {}; block production took too long",
-									slot_num);
-								return
+						// we are the slot author. make a block and sign it.
+						let proposer = match env.init(&chain_head, &authorities) {
+							Ok(p) => p,
+							Err(e) => {
+								warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
+								return Either::B(future::ok(()))
 							}
+						};
 
-							let (header, body) = b.deconstruct();
-							let pre_hash = header.hash();
-							let parent_hash = header.parent_hash().clone();
+						let consensus_data = AuraConsensusData {
+							timestamp,
+							slot: slot_num,
+							slot_duration,
+						};
 
-							// sign the pre-sealed hash of the block and then
-							// add it to a digest item.
-							let to_sign = (slot_num, pre_hash).encode();
-							let signature = pair.sign(&to_sign[..]);
-							let item = <DigestItemFor<B> as CompatibleDigestItem>::aura_seal(
-								slot_num,
-								signature,
-							);
+						// deadline our production to approx. the end of the
+						// slot
+						Timeout::new(
+							proposer.propose(consensus_data).into_future(),
+							slot_info.remaining_duration(),
+						)
+					} else {
+						return Either::B(future::ok(()));
+					}
+				};
 
-							let import_block = ImportBlock {
-								origin: BlockOrigin::Own,
-								header,
-								justification: None,
-								post_digests: vec![item],
-								body: Some(body),
-								finalized: false,
-								auxiliary: Vec::new(),
-							};
+				let block_import = block_import.clone();
+				Either::A(proposal_work
+					.map(move |b| {
+						// minor hack since we don't have access to the timestamp
+						// that is actually set by the proposer.
+						let slot_after_building = slot_now(slot_duration);
+						if slot_after_building != Some(slot_num) {
+							info!("Discarding proposal for slot {}; block production took too long",
+								slot_num);
+							return
+						}
 
-							if let Err(e) = block_import.import_block(import_block, None) {
-								warn!(target: "aura", "Error with block built on {:?}: {:?}",
-									parent_hash, e);
-							}
-						})
-						.map_err(|e| warn!("Failed to construct block: {:?}", e))
-					)
-				})
-				.map(|_| future::Loop::Continue(()))
-		})
+						let (header, body) = b.deconstruct();
+						let pre_hash = header.hash();
+						let parent_hash = header.parent_hash().clone();
+
+						// sign the pre-sealed hash of the block and then
+						// add it to a digest item.
+						let to_sign = (slot_num, pre_hash).encode();
+						let signature = pair.sign(&to_sign[..]);
+						let item = <DigestItemFor<B> as CompatibleDigestItem>::aura_seal(
+							slot_num,
+							signature,
+						);
+
+						let import_block = ImportBlock {
+							origin: BlockOrigin::Own,
+							header,
+							justification: None,
+							post_digests: vec![item],
+							body: Some(body),
+							finalized: false,
+							auxiliary: Vec::new(),
+							fork_choice: ForkChoiceStrategy::LongestChain,
+						};
+
+						if let Err(e) = block_import.import_block(import_block, None) {
+							warn!(target: "aura", "Error with block built on {:?}: {:?}",
+								parent_hash, e);
+						}
+					})
+					.map_err(|e| warn!("Failed to construct block: {:?}", e))
+				)
+			})
 	};
 
-	future::loop_fn((), move |()| {
+	let work = future::loop_fn((), move |()| {
 		let authorship_task = ::std::panic::AssertUnwindSafe(make_authorship());
 		authorship_task.catch_unwind().then(|res| {
 			match res {
@@ -369,7 +354,9 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 
 			Ok(future::Loop::Continue(()))
 		})
-	})
+	});
+
+	work.select(on_exit).then(|_| Ok(()))
 }
 
 // a header which has been checked
@@ -386,7 +373,7 @@ enum CheckedHeader<H> {
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
 // FIXME: needs misbehavior types - https://github.com/paritytech/substrate/issues/1018
-fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId])
+fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[Ed25519AuthorityId])
 	-> Result<CheckedHeader<B::Header>, String>
 	where DigestItemFor<B>: CompatibleDigestItem
 {
@@ -459,7 +446,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, MakeInherent> where
 	C: Authorities<B> + BlockImport<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
@@ -469,7 +456,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 		header: B::Header,
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<Ed25519AuthorityId>>), String> {
 		use runtime_primitives::CheckInherentError;
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
@@ -538,6 +525,7 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 					finalized: false,
 					justification,
 					auxiliary: Vec::new(),
+					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
 				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
@@ -610,9 +598,9 @@ pub fn import_queue<B, C, E, MakeInherent, Inherent>(
 	make_inherent: MakeInherent,
 ) -> AuraImportQueue<B, C, E, MakeInherent> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B,Error=::client::error::Error> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + BlockImport<B,Error=ConsensusError> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
-	DigestItemFor<B>: CompatibleDigestItem,
+	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
@@ -645,7 +633,7 @@ mod tests {
 		type Proposer = DummyProposer;
 		type Error = Error;
 
-		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[Ed25519AuthorityId])
 			-> Result<DummyProposer, Error>
 		{
 			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
@@ -760,6 +748,7 @@ mod tests {
 				client,
 				environ.clone(),
 				DummyOracle,
+				futures::empty(),
 			);
 
 			runtime.spawn(aura);

@@ -21,9 +21,8 @@ use std::sync::Weak;
 use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
-use primitives::AuthorityId;
 use runtime_primitives::{Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
 use backend::{AuxStore, NewBlockState};
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
@@ -41,7 +40,7 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
@@ -227,7 +226,7 @@ pub mod tests {
 		fn import_header(
 			&self,
 			_header: Header,
-			_authorities: Option<Vec<AuthorityId>>,
+			_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {

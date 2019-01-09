@@ -24,21 +24,10 @@ use state_machine::{self, OverlayedChanges, Ext,
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use codec::Decode;
 use primitives::{H256, Blake2Hasher};
-use primitives::storage::well_known_keys;
 
 use backend;
 use error;
-
-/// Information regarding the result of a call.
-#[derive(Debug, Clone)]
-pub struct CallResult {
-	/// The data that was returned from the call.
-	pub return_data: Vec<u8>,
-	/// The changes made to the state by the call.
-	pub changes: OverlayedChanges,
-}
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -58,7 +47,7 @@ where
 		id: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
-	) -> Result<CallResult, error::Error>;
+	) -> Result<Vec<u8>, error::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
 	///
@@ -163,16 +152,22 @@ where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-	) -> error::Result<CallResult> {
+	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let (return_data, _, _) = self.call_at_state(
-			&self.backend.state_at(*id)?,
+		let state = self.backend.state_at(*id)?;
+		let return_data = state_machine::execute_using_consensus_failure_handler(
+			&state,
+			self.backend.changes_trie_storage(),
 			&mut changes,
+			&self.executor,
 			method,
 			call_data,
 			native_when_possible(),
-		)?;
-		Ok(CallResult { return_data, changes })
+			false,
+		)
+		.map(|(result, _, _)| result)?;
+		self.backend.destroy_state(state)?;
+		Ok(return_data)
 	}
 
 	fn contextual_call<
@@ -192,28 +187,40 @@ where
 		//TODO: Find a better way to prevent double block initialization
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
-			self.call_at_state(&state, changes, "Core_initialise_block", &header.encode(), manager.clone())?;
+			state_machine::execute_using_consensus_failure_handler(
+				&state,
+				self.backend.changes_trie_storage(),
+				changes,
+				&self.executor,
+				"Core_initialise_block",
+				&header.encode(),
+				manager.clone(),
+				false,
+			)?;
 			*initialised_block = Some(*at);
 		}
 
-		self.call_at_state(&state, changes, method, call_data, manager).map(|cr| cr.0)
+		let result = state_machine::execute_using_consensus_failure_handler(
+			&state,
+			self.backend.changes_trie_storage(),
+			changes,
+			&self.executor,
+			method,
+			call_data,
+			manager,
+			false,
+		)
+		.map(|(result, _, _)| result)?;
+
+		self.backend.destroy_state(state)?;
+		Ok(result)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		use state_machine::Backend;
-		let code = state.storage(well_known_keys::CODE)
-			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
-			.ok_or(error::ErrorKind::VersionInvalid)?
-			.to_vec();
-		let heap_pages = state.storage(well_known_keys::HEAP_PAGES)
-			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
-			.and_then(|v| u64::decode(&mut &v[..]))
-			.unwrap_or(1024) as usize;
-
 		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage());
-		self.executor.runtime_version(&mut ext, heap_pages, &code)
+		self.executor.runtime_version(&mut ext)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
