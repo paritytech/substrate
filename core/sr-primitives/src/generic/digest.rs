@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 
 use codec::{Decode, Encode, Codec, Input};
-use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug};
+use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
 
@@ -124,7 +124,7 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 
 impl<
 	Hash: Codec + Member + MaybeSerializeDebug,
-	AuthorityId: Codec + Member + MaybeSerializeDebug
+	AuthorityId: Codec + Member + MaybeSerializeDebug + MaybeHash
 > traits::DigestItem for DigestItem<Hash, AuthorityId> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;

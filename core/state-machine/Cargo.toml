@@ -7,7 +7,7 @@ description = "Substrate State Machine"
 [dependencies]
 hex-literal = "0.1.0"
 log = "0.4"
-parking_lot = "0.4"
+parking_lot = "0.7.1"
 heapsize = "0.4"
 hash-db = { git = "https://github.com/paritytech/trie" }
 trie-db = { git = "https://github.com/paritytech/trie" }

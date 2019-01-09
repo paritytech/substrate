@@ -31,4 +31,4 @@ extern crate log;
 
 mod basic_authorship;
 
-pub use basic_authorship::ProposerFactory;
+pub use basic_authorship::{ProposerFactory, BlockBuilder, AuthoringApi, Proposer};

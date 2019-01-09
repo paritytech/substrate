@@ -29,10 +29,9 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
-use primitives::AuthorityId;
 
 use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
 use error::Error as ConsensusError;
 
@@ -68,7 +67,7 @@ pub trait Verifier<B: BlockT>: Send + Sync + Sized {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String>;
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String>;
 }
 
 /// Blocks import queue API.

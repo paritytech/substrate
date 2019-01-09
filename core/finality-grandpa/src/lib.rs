@@ -92,10 +92,11 @@ use codec::{Encode, Decode};
 use consensus_common::{BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
+	DigestItemFor, DigestItem,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
+use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
@@ -138,7 +139,7 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	ed25519::Signature,
-	AuthorityId,
+	Ed25519AuthorityId,
 >;
 /// A prevote message for this chain's block type.
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
@@ -149,14 +150,14 @@ pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	ed25519::Signature,
-	AuthorityId
+	Ed25519AuthorityId
 >;
 /// A compact commit message for this chain's block type.
 pub type CompactCommit<Block> = grandpa::CompactCommit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	ed25519::Signature,
-	AuthorityId
+	Ed25519AuthorityId
 >;
 
 /// Configuration for the GRANDPA service.
@@ -306,7 +307,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 /// The environment we run GRANDPA in.
 struct Environment<B, E, Block: BlockT, N: Network, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
-	voters: Arc<HashMap<AuthorityId, u64>>,
+	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
 	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	network: N,
@@ -381,7 +382,7 @@ struct NewAuthoritySet<H, N> {
 	canon_number: N,
 	canon_hash: H,
 	set_id: u64,
-	authorities: Vec<(AuthorityId, u64)>,
+	authorities: Vec<(Ed25519AuthorityId, u64)>,
 }
 
 /// Signals either an early exit of a voter or an error.
@@ -432,7 +433,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	NumberFor<Block>: BlockNumberOps,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
-	type Id = AuthorityId;
+	type Id = Ed25519AuthorityId;
 	type Signature = ed25519::Signature;
 
 	// regular round message streams
@@ -611,7 +612,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
-		voters: &HashMap<AuthorityId, u64>,
+		voters: &HashMap<Ed25519AuthorityId, u64>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -830,13 +831,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
+		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		use authorities::PendingChange;
@@ -1030,10 +1032,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBloc
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 {
 
 	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<Ed25519AuthorityId>, Self::Error> {
 		self.inner.authorities_at(at)
 	}
 }
@@ -1158,16 +1161,16 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	set_id: u64,
-	voters: &Arc<HashMap<AuthorityId, u64>>,
+	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &N,
 ) -> (
 	impl Stream<
-		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, ed25519::Signature, AuthorityId>),
+		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, ed25519::Signature, Ed25519AuthorityId>),
 		Error = ExitOrError<H256, NumberFor<Block>>,
 	>,
 	impl Sink<
-		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, ed25519::Signature, AuthorityId>),
+		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, ed25519::Signature, Ed25519AuthorityId>),
 		SinkError = ExitOrError<H256, NumberFor<Block>>,
 	>,
 ) where
@@ -1176,6 +1179,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	N: Network,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
+	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 {
 	// verification stream
 	let commit_in = ::communication::checked_commit_stream::<Block, _>(
@@ -1217,6 +1221,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
+	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 	RA: Send + Sync + 'static,
 {
 	use futures::future::{self, Loop as FutureLoop};

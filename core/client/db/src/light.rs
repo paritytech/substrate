@@ -28,10 +28,10 @@ use client::{cht, LeafSet};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use primitives::{AuthorityId, Blake2Hasher};
+use primitives::Blake2Hasher;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
-	Zero, One, As, NumberFor, Digest, DigestItem};
+	Zero, One, As, NumberFor, Digest, DigestItem, AuthorityIdFor};
 use cache::{DbCacheSync, DbCache, ComplexBlockId};
 use utils::{meta_keys, Meta, db_err, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
@@ -306,7 +306,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
@@ -510,7 +510,7 @@ pub(crate) mod tests {
 
 	pub fn insert_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -521,7 +521,7 @@ pub(crate) mod tests {
 
 	fn insert_final_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -532,7 +532,7 @@ pub(crate) mod tests {
 
 	fn insert_non_best_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -762,7 +762,7 @@ pub(crate) mod tests {
 	fn authorites_are_cached() {
 		let db = LightStorage::new_test();
 
-		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityId>>)]) {
+		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityIdFor<Block>>>)]) {
 			for (at, expected) in checks.iter().take_while(|(at, _)| *at <= max) {
 				let actual = db.cache().authorities_at(BlockId::Number(*at));
 				assert_eq!(*expected, actual);

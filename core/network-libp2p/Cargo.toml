@@ -12,7 +12,7 @@ error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
 libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "d961e656a74d1bab5366d371a06f9e10d5f4a6c5", default-features = false, features = ["secio-rsa", "secio-secp256k1"] }
-parking_lot = "0.5"
+parking_lot = "0.7.1"
 libc = "0.2"
 log = "0.4"
 rand = "0.5.0"
@@ -26,4 +26,4 @@ unsigned-varint = { version = "0.2.1", features = ["codec"] }
 
 [dev-dependencies]
 assert_matches = "1.2"
-parity-bytes = "0.1"
+parity-bytes = { git = "https://github.com/paritytech/parity-common", rev = "616b40150ded71f57f650067fcbc5c99d7c343e6" }

@@ -14,7 +14,7 @@ substrate-client = { path = "../client" }
 substrate-network = { path = "../network" }
 substrate-service = { path = "../service", optional = true }
 log = "0.4"
-parking_lot = "0.4"
+parking_lot = "0.7.1"
 tokio = "0.1.7"
 substrate-finality-grandpa-primitives = { path = "primitives" }
 rand = "0.6"

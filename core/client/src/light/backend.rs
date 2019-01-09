@@ -21,10 +21,9 @@ use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
-use primitives::AuthorityId;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor};
 
 use in_mem;
 use backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
@@ -44,7 +43,7 @@ pub struct Backend<S, F> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F> {
 	header: Option<Block::Header>,
-	authorities: Option<Vec<AuthorityId>>,
+	authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
@@ -185,11 +184,11 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
+	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -209,6 +208,11 @@ where
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.aux_ops = ops.into_iter().collect();
+		Ok(())
+	}
+
+	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
+		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 }

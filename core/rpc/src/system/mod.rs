@@ -24,14 +24,14 @@ mod tests;
 
 use std::sync::Arc;
 use network;
-use runtime_primitives::traits;
+use runtime_primitives::traits::{self, Header as HeaderT};
 
 use self::error::Result;
-pub use self::helpers::{Properties, SystemInfo, Health};
+pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 
 build_rpc_trait! {
 	/// Substrate system RPC API
-	pub trait SystemApi {
+	pub trait SystemApi<Hash, Number> {
 		/// Get the node's implementation name. Plain old string.
 		#[rpc(name = "system_name")]
 		fn system_name(&self) -> Result<String>;
@@ -55,6 +55,10 @@ build_rpc_trait! {
 		/// - not performing a major sync
 		#[rpc(name = "system_health")]
 		fn system_health(&self) -> Result<Health>;
+
+		/// Returns currently connected peers
+		#[rpc(name = "system_peers")]
+		fn system_peers(&self) -> Result<Vec<PeerInfo<Hash, Number>>>;
 	}
 }
 
@@ -80,7 +84,7 @@ impl<B: traits::Block> System<B> {
 	}
 }
 
-impl<B: traits::Block> SystemApi for System<B> {
+impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for System<B> {
 	fn system_name(&self) -> Result<String> {
 		Ok(self.info.impl_name.clone())
 	}
@@ -114,5 +118,16 @@ impl<B: traits::Block> SystemApi for System<B> {
 		} else {
 			Ok(health)
 		}
+	}
+
+	fn system_peers(&self) -> Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
+		Ok(self.sync.peers().into_iter().map(|(idx, peer_id, p)| PeerInfo {
+			index: idx,
+			peer_id: peer_id.map_or_else(Default::default, |p| p.to_base58()),
+			roles: format!("{:?}", p.roles),
+			protocol_version: p.protocol_version,
+			best_hash: p.best_hash,
+			best_number: p.best_number,
+		}).collect())
 	}
 }

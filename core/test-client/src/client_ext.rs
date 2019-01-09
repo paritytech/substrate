@@ -17,7 +17,7 @@
 //! Client extension for tests.
 
 use client::{self, Client};
-use consensus::{ImportBlock, BlockImport, BlockOrigin, Error as ConsensusError};
+use consensus::{ImportBlock, BlockImport, BlockOrigin, Error as ConsensusError, ForkChoiceStrategy};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
@@ -57,6 +57,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 			body: Some(block.extrinsics),
 			finalized: false,
 			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
 		self.import_block(import, None).map(|_| ())
@@ -73,6 +74,7 @@ impl<B, E, RA> TestClient for Client<B, E, runtime::Block, RA>
 			body: Some(block.extrinsics),
 			finalized: true,
 			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
 		};
 
 		self.import_block(import, None).map(|_| ())

@@ -27,7 +27,7 @@ use consensus_common::import_queue::ImportQueue;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::{BlockId, SignedBlock}};
+use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId};
 use config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
@@ -136,7 +136,6 @@ pub trait StartRPC<C: Components> {
 
 impl<C: Components> StartRPC<Self> for C where
 	C::RuntimeApi: Metadata<ComponentBlock<C>>,
-	for<'de> SignedBlock<ComponentBlock<C>>: ::serde::Deserialize<'de>,
 {
 	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
 

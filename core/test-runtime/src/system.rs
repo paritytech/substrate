@@ -25,7 +25,7 @@ use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
-use primitives::{Blake2Hasher};
+use primitives::{Ed25519AuthorityId, Blake2Hasher};
 use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -51,7 +51,7 @@ pub fn nonce_of(who: AccountId) -> u64 {
 }
 
 /// Get authorities ar given block.
-pub fn authorities() -> Vec<::primitives::AuthorityId> {
+pub fn authorities() -> Vec<Ed25519AuthorityId> {
 	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
 		.expect("There are always authorities in test-runtime");
 	(0..len)
@@ -94,7 +94,7 @@ pub fn execute_block(block: Block) {
 	// check digest
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
-		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root.into()));
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
@@ -164,7 +164,7 @@ pub fn finalise_block() -> Header {
 
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root {
-		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root));
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
 
 	Header {
@@ -248,6 +248,10 @@ mod tests {
 	use ::{Header, Digest, Extrinsic, Transfer};
 	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys;
+	use substrate_executor::WasmExecutor;
+
+	const WASM_CODE: &'static [u8] =
+			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
@@ -265,8 +269,7 @@ mod tests {
 		Extrinsic { transfer: tx, signature }
 	}
 
-	#[test]
-	fn block_import_works() {
+	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
 		let mut t = new_test_ext();
 
 		let h = Header {
@@ -282,13 +285,27 @@ mod tests {
 			extrinsics: vec![],
 		};
 
-		with_externalities(&mut t, || {
-			execute_block(b);
+		block_executor(b, &mut t);
+
+	}
+
+	#[test]
+	fn block_import_works_native() {
+		block_import_works(|b, ext| {
+			with_externalities(ext, || {
+				execute_block(b);
+			});
 		});
 	}
 
 	#[test]
-	fn block_import_with_transaction_works() {
+	fn block_import_works_wasm() {
+		block_import_works(|b, ext| {
+			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+		})
+	}
+
+	fn block_import_with_transaction_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
@@ -345,12 +362,29 @@ mod tests {
 			],
 		};
 
+		block_executor(b, &mut t);
+
 		with_externalities(&mut t, || {
-			execute_block(b);
 
 			assert_eq!(balance_of(Keyring::Alice.to_raw_public().into()), 0);
 			assert_eq!(balance_of(Keyring::Bob.to_raw_public().into()), 42);
 			assert_eq!(balance_of(Keyring::Charlie.to_raw_public().into()), 69);
 		});
+	}
+
+	#[test]
+	fn block_import_with_transaction_works_native() {
+		block_import_with_transaction_works(|b, ext| {
+			with_externalities(ext, || {
+				execute_block(b);
+			});
+		});
+	}
+	
+	#[test]
+	fn block_import_with_transaction_works_wasm() {
+		block_import_with_transaction_works(|b, ext| {
+			WasmExecutor::new().call(ext, 8, &WASM_CODE, "Core_execute_block", &b.encode()).unwrap();
+		})
 	}
 }
