@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use GetCoreParams;
-
 use std::path::PathBuf;
-use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs}};
+use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand}};
 use client;
 
 arg_enum! {
@@ -40,24 +38,35 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 	}
 }
 
-/// CLI Parameters provided by default
+/// Something that can augment a clapp app with further parameters.
+/// `derive(StructOpt)` is implementing this function by default, so a macro `impl_augment_clap!`
+/// is provided to simplify the implementation of this trait.
+trait AugmentClap {
+	/// Augment the given clap `App` with further parameters.
+	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b>;
+}
+
+/// Macro for implementing the `AugmentClap` trait.
+/// This requires that the given type uses `derive(StructOpt)`!
+macro_rules! impl_augment_clap {
+	( $type:ident ) => {
+		impl AugmentClap for $type {
+			fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+				$type::augment_clap(app)
+			}
+		}
+	}
+}
+
+/// The core parameters accepted in front of all subcommands.
 #[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "Substrate")]
 pub struct CoreParams {
 	///Sets a custom logging filter
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
-
-	#[allow(missing_docs)]
-	#[structopt(subcommand)]
-	pub cmds: CoreCommands,
 }
 
-impl GetCoreParams for CoreParams {
-	fn core_params(&self) -> CoreParams {
-		self.clone()
-	}
-}
+impl_augment_clap!(CoreParams);
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
@@ -187,6 +196,8 @@ pub struct RunCmd {
 	pub network_config: NetworkConfigurationParams,
 }
 
+impl_augment_clap!(RunCmd);
+
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
 pub struct BuildSpecCmd {
@@ -287,29 +298,114 @@ pub struct PurgeChainCmd {
 }
 
 /// Subcommands provided by Default
-#[derive(Debug, StructOpt, Clone)]
-pub enum CoreCommands {
+#[derive(Debug, Clone)]
+pub enum CoreCommands<CC, RP> {
 	/// Run a node.
-	#[structopt(name = "run")]
-	Run(RunCmd),
+	Run(MergeParameters<RunCmd, RP>),
 
-	/// Build a spec.json file, outputing to stdout
-	#[structopt(name = "build-spec")]
+	/// Build a spec.json file, outputing to stdout.
 	BuildSpec(BuildSpecCmd),
 
-	/// Export blocks to a file
-	#[structopt(name = "export-blocks")]
+	/// Export blocks to a file.
 	ExportBlocks(ExportBlocksCmd),
 
 	/// Import blocks from file.
-	#[structopt(name = "import-blocks")]
 	ImportBlocks(ImportBlocksCmd),
 
-	///Revert chain to the previous state
-	#[structopt(name = "revert")]
+	/// Revert chain to the previous state.
 	Revert(RevertCmd),
 
 	/// Remove the whole chain data.
-	#[structopt(name = "purge-chain")]
 	PurgeChain(PurgeChainCmd),
+
+	/// Further custom subcommands.
+	Custom(CC),
+}
+
+impl<CC, RP> StructOpt for CoreCommands<CC, RP> where CC: StructOpt, RP: StructOpt {
+	fn clap<'a, 'b>() -> App<'a, 'b> {
+		CC::clap()
+			.subcommand(MergeParameters::<RunCmd, RP>::clap().name("run").about("Run a node."))
+			.subcommand(
+				BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
+					.about("Build a spec.json file, outputing to stdout.")
+			)
+			.subcommand(
+				ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
+					.about("Export blocks to a file.")
+			)
+			.subcommand(
+				ImportBlocksCmd::augment_clap(SubCommand::with_name("import-blocks"))
+					.about("Import blocks from file.")
+			)
+			.subcommand(
+				RevertCmd::augment_clap(SubCommand::with_name("revert"))
+					.about("Revert chain to the previous state.")
+			)
+			.subcommand(
+				PurgeChainCmd::augment_clap(SubCommand::with_name("purge-chain"))
+					.about("Remove the whole chain data.")
+			)
+			.setting(AppSettings::SubcommandRequiredElseHelp)
+	}
+
+	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
+		match matches.subcommand() {
+			("run", Some(matches)) =>
+				CoreCommands::Run(MergeParameters::from_clap(matches)),
+			("build-spec", Some(matches)) =>
+				CoreCommands::BuildSpec(BuildSpecCmd::from_clap(matches)),
+			("export-blocks", Some(matches)) =>
+				CoreCommands::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
+			("import-blocks", Some(matches)) =>
+				CoreCommands::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
+			("revert", Some(matches)) => CoreCommands::Revert(RevertCmd::from_clap(matches)),
+			("purge-chain", Some(matches)) =>
+				CoreCommands::PurgeChain(PurgeChainCmd::from_clap(matches)),
+			_ => CoreCommands::Custom(CC::from_clap(matches)),
+		}
+	}
+}
+
+/// A special commandline parameter that expands to nothing.
+/// Should be used as custom subcommand/run arguments if no custom values are required.
+#[derive(Clone, Debug)]
+pub struct NoCustom {}
+
+impl StructOpt for NoCustom {
+	fn clap<'a, 'b>() -> App<'a, 'b> {
+		App::new("NoCustom")
+	}
+
+	fn from_clap(_: &::structopt::clap::ArgMatches) -> Self {
+		NoCustom {}
+	}
+}
+
+impl AugmentClap for NoCustom {
+	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+		app
+	}
+}
+
+/// Merge all CLI parameters of `L` and `R` into the same level.
+#[derive(Clone, Debug)]
+pub struct MergeParameters<L, R> {
+	/// The left side parameters.
+	pub left: L,
+	/// The right side parameters.
+	pub right: R,
+}
+
+impl<L, R> StructOpt for MergeParameters<L, R> where L: StructOpt + AugmentClap, R: StructOpt {
+	fn clap<'a, 'b>() -> App<'a, 'b> {
+		L::augment_clap(R::clap())
+	}
+
+	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
+		MergeParameters {
+			left: L::from_clap(matches),
+			right: R::from_clap(matches),
+		}
+	}
 }

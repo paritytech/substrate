@@ -43,19 +43,15 @@ extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;
-extern crate structopt;
 
 pub use cli::error;
 pub mod chain_spec;
 mod service;
-mod params;
 
 use tokio::prelude::Future;
 use tokio::runtime::Runtime;
-pub use cli::{VersionInfo, IntoExit};
+pub use cli::{VersionInfo, IntoExit, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
-use params::{Params as NodeParams};
-use structopt::StructOpt;
 use std::ops::Deref;
 
 /// The chain specification option.
@@ -106,21 +102,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	let full_version = substrate_service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
-
-	let matches = NodeParams::clap()
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(&(full_version + "\n")[..])
-		.get_matches_from(args);
-
-	cli::parse_and_execute::<service::Factory, _, _, _, _>(
-		load_spec, version, "substrate-node", matches, exit,
-		|exit, _cli_args: NodeParams, config| {
+	cli::parse_and_execute::<service::Factory, NoCustom, NoCustom, _, _, _, _, _>(
+		load_spec, version, "substrate-node", args, exit,
+		|exit, _custom_args, config| {
 			info!("Substrate Node");
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017, 2018");
@@ -142,7 +126,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				),
 			}.map_err(|e| format!("{:?}", e))
 		}
-	).map_err(Into::into)
+	).map_err(Into::into).map(|_| ())
 }
 
 fn run_until_exit<T, C, E>(

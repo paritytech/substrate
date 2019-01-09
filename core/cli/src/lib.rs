@@ -75,12 +75,15 @@ use std::{
 
 use names::{Generator, Name};
 use regex::Regex;
-use structopt::StructOpt;
-pub use params::{
-	CoreParams, CoreCommands, RunCmd, PurgeChainCmd, RevertCmd,
-	ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd, NetworkConfigurationParams,
-	SharedParams,
+use structopt::{StructOpt, clap::AppSettings};
+use params::{
+	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
+	NetworkConfigurationParams, SharedParams, MergeParameters
 };
+
+/// The core cli parameters.
+pub type CoreParams<CC, RP> = MergeParameters<params::CoreParams, params::CoreCommands<CC, RP>>;
+pub use params::NoCustom;
 
 use futures::Future;
 
@@ -155,67 +158,73 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-/// Parse command line arguments
-pub fn parse_args_default<'a, I, T>(args: I, version: VersionInfo) -> clap::ArgMatches<'a>
+/// Parse command line interface arguments and executes the desired command.
+///
+/// # Return value
+///
+/// A result that indicates if any error occurred.
+/// If no error occurred and a custom subcommand was found, the subcommand is returned.
+/// The user needs to handle this subcommand on its own.
+///
+/// # Remarks
+///
+/// `CC` is a custom subcommand. This needs to be an `enum`! If no custom subcommand is required,
+/// `NoCustom` can be used as type here.
+/// `RP` is are custom parameters for the run command. This needs to be a `struct`! The custom
+/// parameters are visible to the user as if they were normal run command parameters. If no custom
+/// parameters are required, `NoCustom` can be used as type here.
+pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
+	spec_factory: S,
+	version: VersionInfo,
+	impl_name: &'static str,
+	args: I,
+	exit: E,
+	run_service: RS,
+) -> error::Result<Option<CC>>
 where
+	F: ServiceFactory,
+	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
+	CC: StructOpt + Clone,
+	RP: StructOpt + Clone,
+	E: IntoExit,
+	RS: FnOnce(E, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
+	panic_hook::set();
+
 	let full_version = service::config::full_version_from_strs(
 		version.version,
 		version.commit
 	);
 
-	match CoreParams::clap()
+	let matches = CoreParams::<CC, RP>::clap()
 		.name(version.executable_name)
 		.author(version.author)
 		.about(version.description)
 		.version(&(full_version + "\n")[..])
-		.get_matches_from_safe(args) {
-			Ok(m) => m,
-			Err(e) => e.exit(),
-	}
-}
+		.setting(AppSettings::GlobalVersion)
+		.get_matches_from(args);
+	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
 
-/// Something that can return the `CoreParams`.
-pub trait GetCoreParams {
-	/// Return the `CoreParams`.
-	fn core_params(&self) -> CoreParams;
-}
-
-/// Parse command line interface arguments and executes the desired command.
-pub fn parse_and_execute<'a, F, C, S, RS, E>(
-	spec_factory: S,
-	version: VersionInfo,
-	impl_name: &'static str,
-	matches: clap::ArgMatches<'a>,
-	exit: E,
-	run_service: RS,
-) -> error::Result<()>
-where
-	F: ServiceFactory,
-	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	C: StructOpt + GetCoreParams,
-	E: IntoExit,
-	RS: FnOnce(E, C, FactoryFullConfiguration<F>) -> Result<(), String>,
-{
-	panic_hook::set();
-
-	let cli_args = C::from_clap(&matches);
-	let core_params = cli_args.core_params();
-
-	init_logger(core_params.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	init_logger(cli_args.left.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
 	fdlimit::raise_fd_limit();
 
-	match core_params.cmds {
-		CoreCommands::Run(params) => run_node::<F, _, _, _, _>(
-			params, cli_args, spec_factory, exit, run_service, impl_name, version
-		),
-		CoreCommands::BuildSpec(params) => build_spec::<F, _>(params, spec_factory),
-		CoreCommands::ExportBlocks(params) => export_blocks::<F, _, _>(params, spec_factory, exit),
-		CoreCommands::ImportBlocks(params) => import_blocks::<F, _, _>(params, spec_factory, exit),
-		CoreCommands::PurgeChain(params) => purge_chain::<F, _>(params, spec_factory),
-		CoreCommands::Revert(params) => revert_chain::<F, _>(params, spec_factory),
+	match cli_args.right {
+		params::CoreCommands::Run(params) => run_node::<F, _, _, _, _>(
+			params, spec_factory, exit, run_service, impl_name, version
+		).map(|_| None),
+		params::CoreCommands::BuildSpec(params) =>
+			build_spec::<F, _>(params, spec_factory).map(|_| None),
+		params::CoreCommands::ExportBlocks(params) =>
+			export_blocks::<F, _, _>(params, spec_factory, exit).map(|_| None),
+		params::CoreCommands::ImportBlocks(params) =>
+			import_blocks::<F, _, _>(params, spec_factory, exit).map(|_| None),
+		params::CoreCommands::PurgeChain(params) =>
+			purge_chain::<F, _>(params, spec_factory).map(|_| None),
+		params::CoreCommands::Revert(params) =>
+			revert_chain::<F, _>(params, spec_factory).map(|_| None),
+		params::CoreCommands::Custom(params) => Ok(Some(params)),
 	}
 }
 
@@ -374,9 +383,8 @@ where
 	Ok(config)
 }
 
-fn run_node<F, S, RS, C, E>(
-	cli: RunCmd,
-	main_cli: C,
+fn run_node<F, S, RS, E, RP>(
+	cli: MergeParameters<RunCmd, RP>,
 	spec_factory: S,
 	exit: E,
 	run_service: RS,
@@ -384,15 +392,15 @@ fn run_node<F, S, RS, C, E>(
 	version: VersionInfo,
 ) -> error::Result<()>
 where
-	C: StructOpt,
+	RP: StructOpt + Clone,
 	F: ServiceFactory,
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	RS: FnOnce(E, C, FactoryFullConfiguration<F>) -> Result<(), String>,
+	RS: FnOnce(E, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
  {
-	let config = create_run_node_config::<F, _>(cli, spec_factory, impl_name, version)?;
+	let config = create_run_node_config::<F, _>(cli.left, spec_factory, impl_name, version)?;
 
-	run_service(exit, main_cli, config).map_err(Into::into)
+	run_service(exit, cli.right, config).map_err(Into::into)
 }
 
 //

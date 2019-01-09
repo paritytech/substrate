@@ -29,4 +29,4 @@ substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
 names = "0.11.0"
-structopt = "0.2.13"
+structopt = "0.2"
