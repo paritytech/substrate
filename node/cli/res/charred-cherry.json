@@ -2,7 +2,6 @@
 	"name": "Charred Cherry",
 	"id": "charred-cherry",
 	"properties": {
-		"networkId": 68,
 		"tokenDecimals": 15,
 		"tokenSymbol": "CHR"
 	},

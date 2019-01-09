@@ -20,7 +20,7 @@ use primitives::{Ed25519AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-	UpgradeKeyConfig, SudoConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
+	SudoConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 
@@ -130,9 +130,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
 		}),
-		upgrade_key: Some(UpgradeKeyConfig {
-			key: endowed_accounts[0].clone(),
-		}),
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
 		}),
@@ -168,7 +165,7 @@ pub fn get_authority_id_from_seed(seed: &str) -> Ed25519AuthorityId {
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
 	initial_authorities: Vec<Ed25519AuthorityId>,
-	upgrade_key: AccountId,
+	root_key: AccountId,
 	endowed_accounts: Option<Vec<Ed25519AuthorityId>>,
 ) -> GenesisConfig {
 	let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
@@ -258,11 +255,8 @@ pub fn testnet_genesis(
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
 		}),
-		upgrade_key: Some(UpgradeKeyConfig {
-			key: upgrade_key,
-		}),
 		sudo: Some(SudoConfig {
-			key: upgrade_key,
+			key: root_key,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),

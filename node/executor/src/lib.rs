@@ -90,7 +90,7 @@ mod tests {
 		match xt.signed {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
-				let payload = (index, xt.function, era, GENESIS_HASH);
+				let payload = (index.into(), xt.function, era, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
@@ -260,7 +260,6 @@ mod tests {
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
-			upgrade_key: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
@@ -313,9 +312,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("0bc6c118c326c65da9d0f93199f471aab4f636cfe87ab9a56c823024ca83995a").into()
+				hex!("22e7fc466d555b9dce285425081d89751b2063243684979df3840b3ac7e8ecdc").into()
 			} else {
-				hex!("58e1f1493e311d9b1fef3660426ee289736c38eb6f7d98911551c51765163056").into()
+				hex!("7395363e53e682984f817fb1d5a862c5ce8b817375c06270d7a39be7097ad953").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
@@ -341,7 +340,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("ced5607b16774cdbf750f8f7f0a99cd4afd7eb14db376a44bb8656f2ce02b18e").into(),
+			hex!("66b9625c9c824de867815215528fe43014d50af7fb95c8da120910c220a46f6b").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -370,7 +369,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("8a506a6f72c7efb75fd069a8c4f57c8e0b6b5adbea9646522bda64d4c78f5412").into(),
+			hex!("66dfdf3a0ef93ec49ec36c0a65fe328d085a865c2382397b2cd6468e391f2f51").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -660,7 +659,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("ce21753c3f806443c2758c982850861708054b65097fed82689e7b16cd5d6e24").into(),
+			hex!("8197608e90fff1f7d92b35381169242d081779b1718c910689f2589a8ac09b44").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
