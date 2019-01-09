@@ -59,7 +59,7 @@ pub trait Ext {
 		code: &CodeHash<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
-		data: &[u8],
+		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<Self::T>>, &'static str>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
@@ -68,7 +68,7 @@ pub trait Ext {
 		to: &AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
-		data: &[u8],
+		input_data: &[u8],
 		empty_output_buf: EmptyOutputBuf,
 	) -> Result<CallReceipt, &'static str>;
 
@@ -522,9 +522,9 @@ where
 		code_hash: &CodeHash<T>,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		data: &[u8],
+		input_data: &[u8],
 	) -> Result<InstantiateReceipt<AccountIdOf<T>>, &'static str> {
-		self.ctx.instantiate(endowment, gas_meter, code_hash, &data)
+		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
 	}
 
 	fn call(
@@ -532,11 +532,11 @@ where
 		to: &T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		data: &[u8],
+		input_data: &[u8],
 		empty_output_buf: EmptyOutputBuf,
 	) -> Result<CallReceipt, &'static str> {
 		self.ctx
-			.call(to.clone(), value, gas_meter, data, empty_output_buf)
+			.call(to.clone(), value, gas_meter, input_data, empty_output_buf)
 	}
 
 	fn address(&self) -> &T::AccountId {
@@ -618,12 +618,12 @@ mod tests {
 	}
 
 	struct MockVm<'a> {
-		_data: PhantomData<&'a ()>,
+		_marker: PhantomData<&'a ()>,
 	}
 
 	impl<'a> MockVm<'a> {
 		fn new() -> Self {
-			MockVm { _data: PhantomData }
+			MockVm { _marker: PhantomData }
 		}
 	}
 
