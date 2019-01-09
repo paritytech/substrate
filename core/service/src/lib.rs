@@ -34,7 +34,6 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate parity_codec as codec;
 extern crate substrate_transaction_pool as transaction_pool;
-extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate target_info;
 extern crate tokio;
@@ -50,12 +49,14 @@ extern crate log;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+extern crate substrate_test_client;
+
 mod components;
 mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
-pub mod consensus;
 
 use std::io;
 use std::net::SocketAddr;
@@ -79,7 +80,6 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
-pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
@@ -104,7 +104,7 @@ pub struct Service<Components: components::Components> {
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<tel::Telemetry>,
+	_telemetry: Option<Arc<tel::Telemetry>>,
 }
 
 /// Creates bare client without any networking.
@@ -189,6 +189,7 @@ impl<Components: components::Components> Service<Components> {
 			protocol_id
 		};
 
+		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network = network::Service::new(
 			network_params,
 			protocol_id,
@@ -240,10 +241,14 @@ impl<Components: components::Components> Service<Components> {
 
 
 		// RPC
+		let system_info = rpc::apis::system::SystemInfo {
+			chain_name: config.chain_spec.name().into(),
+			impl_name: config.impl_name.into(),
+			impl_version: config.impl_version.into(),
+			properties: config.chain_spec.properties(),
+		};
 		let rpc = Components::RPC::start_rpc(
-			client.clone(), config.chain_spec.name().to_string(), config.impl_name,
-			config.impl_version, config.rpc_http, config.rpc_ws, config.chain_spec.properties(),
-			task_executor.clone(), transaction_pool.clone()
+			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http, config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
 		)?;
 
 		// Telemetry
@@ -255,7 +260,7 @@ impl<Components: components::Components> Service<Components> {
 				let impl_name = config.impl_name.to_owned();
 				let version = version.clone();
 				let chain_name = config.chain_spec.name().to_owned();
-				Some(tel::init_telemetry(tel::TelemetryConfig {
+				Some(Arc::new(tel::init_telemetry(tel::TelemetryConfig {
 					url: url,
 					on_connect: Box::new(move || {
 						telemetry!("system.connected";
@@ -268,7 +273,7 @@ impl<Components: components::Components> Service<Components> {
 							"authority" => is_authority
 						);
 					}),
-				}))
+				})))
 			},
 			None => None,
 		};
@@ -297,6 +302,10 @@ impl<Components: components::Components> Service<Components> {
 		} else {
 			None
 		}
+	}
+
+	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
 
@@ -356,32 +365,6 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 			})?),
 		None => None,
 	})
-}
-
-#[derive(Clone)]
-struct RpcConfig {
-	chain_name: String,
-	properties: Properties,
-	impl_name: &'static str,
-	impl_version: &'static str,
-}
-
-impl substrate_rpc::system::SystemApi for RpcConfig {
-	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.impl_name.into())
-	}
-
-	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.impl_version.into())
-	}
-
-	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.chain_name.clone())
-	}
-
-	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
-		Ok(self.properties.clone())
-	}
 }
 
 /// Transaction pool adapter.

@@ -91,7 +91,7 @@ pub struct CoreParams {
 
 	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pruning: Option<u32>,
+	pruning: Option<String>,
 
 	/// The human-readable name for this node, as reported to the telemetry server, if enabled
 	#[structopt(long = "name", value_name = "NAME")]

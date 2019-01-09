@@ -31,7 +31,7 @@ use syn::Ident;
 
 /// stop parsing here getting remaining token as content
 /// Warn duplicate stream (part of)
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 pub struct StopParse {
 	pub inner: T2,
 }

@@ -16,11 +16,11 @@
 
 //! Substrate chain configurations.
 
-use primitives::{AuthorityId, ed25519};
+use primitives::{Ed25519AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-	UpgradeKeyConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
+	SudoConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 
@@ -31,9 +31,9 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 /// Specialised `ChainSpec`.
 pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 
-/// BBQ birch testnet generator
-pub fn bbq_birch_config() -> Result<ChainSpec, String> {
-	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
+/// Charred Cherry testnet generator
+pub fn charred_cherry_config() -> Result<ChainSpec, String> {
+	ChainSpec::from_embedded(include_bytes!("../res/charred-cherry.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -83,15 +83,16 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			current_session_reward: 0,
 			validator_count: 7,
 			sessions_per_era: 12,
-			bonding_duration: 1 * DAYS,
+			bonding_duration: 60 * MINUTES,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
+			invulnerables: initial_authorities.iter().cloned().map(Into::into).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
-			launch_period: 5 * MINUTES,    // 1 day per public referendum
-			voting_period: 5 * MINUTES,    // 3 days to discuss & vote on an active referendum
+			launch_period: 10 * MINUTES,    // 1 day per public referendum
+			voting_period: 10 * MINUTES,    // 3 days to discuss & vote on an active referendum
 			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
-			public_delay: 0,
+			public_delay: 10 * MINUTES,
 			max_lock_periods: 6,
 		}),
 		council_seats: Some(CouncilSeatsConfig {
@@ -129,7 +130,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
 		}),
-		upgrade_key: Some(UpgradeKeyConfig {
+		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
 		}),
 		grandpa: Some(GrandpaConfig {
@@ -154,7 +155,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 }
 
 /// Helper function to generate AuthorityID from seed
-pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
+pub fn get_authority_id_from_seed(seed: &str) -> Ed25519AuthorityId {
 	let padded_seed = pad_seed(seed);
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
@@ -163,9 +164,9 @@ pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<AuthorityId>,
-	upgrade_key: AccountId,
-	endowed_accounts: Option<Vec<AuthorityId>>,
+	initial_authorities: Vec<Ed25519AuthorityId>,
+	root_key: AccountId,
+	endowed_accounts: Option<Vec<Ed25519AuthorityId>>,
 ) -> GenesisConfig {
 	let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
 		vec![
@@ -208,6 +209,7 @@ pub fn testnet_genesis(
 			current_offline_slash: 0,
 			current_session_reward: 0,
 			offline_slash_grace: 0,
+			invulnerables: initial_authorities.iter().cloned().map(Into::into).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,
@@ -253,8 +255,8 @@ pub fn testnet_genesis(
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
 		}),
-		upgrade_key: Some(UpgradeKeyConfig {
-			key: upgrade_key,
+		sudo: Some(SudoConfig {
+			key: root_key,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),

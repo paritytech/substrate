@@ -26,7 +26,7 @@ use syn::token::CustomKeyword;
 pub mod transformation;
 
 /// Parsing usage only
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct StorageDefinition {
 	pub hidden_crate: Option<SpecificHiddenCrate>,
 	pub visibility: syn::Visibility,
@@ -44,30 +44,30 @@ struct StorageDefinition {
 }
 
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct SpecificHiddenCrate {
 	pub keyword: ext::CustomToken<SpecificHiddenCrate>,
 	pub ident: ext::Parens<Ident>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesis {
 	pub extragenesis_keyword: ext::CustomToken<AddExtraGenesis>,
 	pub content: ext::Braces<AddExtraGenesisContent>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesisContent {
 	pub lines: ext::Punctuated<AddExtraGenesisLineEnum, Token![;]>,
 }
 
-#[derive(ParseEnum, ToTokensEnum, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 enum AddExtraGenesisLineEnum {
 	AddExtraGenesisLine(AddExtraGenesisLine),
 	AddExtraGenesisBuild(DeclStorageBuild),
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct AddExtraGenesisLine {
 	pub attrs: ext::OuterAttributes,
 	pub config_keyword: ext::CustomToken<ConfigKeyword>,
@@ -78,7 +78,7 @@ struct AddExtraGenesisLine {
 	pub default_value: ext::Seq<DeclStorageDefault>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageLine {
 	// attrs (main use case is doc)
 	pub attrs: ext::OuterAttributes,
@@ -96,31 +96,31 @@ struct DeclStorageLine {
 }
 
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageGetter {
 	pub getter_keyword: ext::CustomToken<DeclStorageGetter>,
 	pub getfn: ext::Parens<Ident>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageConfig {
 	pub config_keyword: ext::CustomToken<DeclStorageConfig>,
 	pub expr: ext::Parens<Option<syn::Ident>>,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageBuild {
 	pub build_keyword: ext::CustomToken<DeclStorageBuild>,
 	pub expr: ext::Parens<syn::Expr>,
 }
 
-#[derive(ParseEnum, ToTokensEnum, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
 	Simple(syn::Type),
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: ext::CustomToken<MapKeyword>,
 	pub key: syn::Type,
@@ -128,7 +128,7 @@ struct DeclStorageMap {
 	pub value: syn::Type,
 }
 
-#[derive(ParseStruct, ToTokensStruct, Debug)]
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,

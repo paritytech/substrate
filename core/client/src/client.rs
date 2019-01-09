@@ -20,15 +20,14 @@ use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
 use error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
-use primitives::AuthorityId;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
-use consensus::{ImportBlock, ImportResult, BlockOrigin};
+use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
-	ApiRef, ProvideRuntimeApi, Digest, DigestItem,
+	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
 use runtime_primitives::BuildStorage;
 use runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
@@ -231,7 +230,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
-
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			op.set_block_data(
@@ -281,12 +279,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Get the set of authorities at a given block.
-	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
+	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityIdFor<Block>>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "Core_authorities",&[])
-				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
-					.ok_or(error::ErrorKind::InvalidAuthoritiesSet.into()))
+			None => self.executor.call(id, "Core_authorities", &[])
+				.and_then(|r| Vec::<AuthorityIdFor<Block>>::decode(&mut &r[..])
+					.ok_or_else(|| error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
 	}
 
@@ -541,9 +539,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		import_headers: PrePostHeader<Block::Header>,
 		justification: Option<Justification>,
 		body: Option<Vec<Block::Extrinsic>>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		fork_choice: ForkChoiceStrategy,
 	) -> error::Result<ImportResult> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
@@ -602,13 +601,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
-				(Some(storage_update), Some(changes_update), Some(overlay.into_committed()))
+				(Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect()))
 			},
 			None => (None, None, None)
 		};
 
 		// TODO: non longest-chain rule.
-		let is_new_best = finalized || import_headers.post().number() > &last_best_number;
+		let is_new_best = finalized || match fork_choice {
+			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
+			ForkChoiceStrategy::Custom(v) => v,
+		};
 		let leaf_state = if finalized {
 			::backend::NewBlockState::Final
 		} else if is_new_best {
@@ -630,7 +632,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			transaction.update_authorities(authorities);
 		}
 		if let Some(storage_update) = storage_update {
-			transaction.update_storage(storage_update)?;
+			transaction.update_db_storage(storage_update)?;
+		}
+		if let Some(storage_changes) = storage_changes.clone() {
+			transaction.update_storage(storage_changes)?;
 		}
 		if let Some(Some(changes_update)) = changes_update {
 			transaction.update_changes_trie(changes_update)?;
@@ -643,7 +648,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			if let Some(storage_changes) = storage_changes {
 				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 				self.storage_notifications.lock()
-					.trigger(&hash, storage_changes);
+					.trigger(&hash, storage_changes.into_iter());
 			}
 
 			if finalized {
@@ -1019,14 +1024,14 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
 {
-	type Error = Error;
+	type Error = ConsensusError;
 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `ImportBlock` then `finalized` *must* be true.
 	fn import_block(
 		&self,
 		import_block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityId>>,
+		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	) -> Result<ImportResult, Self::Error> {
 		use runtime_primitives::traits::Digest;
 
@@ -1038,15 +1043,17 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			body,
 			finalized,
 			auxiliary,
+			fork_choice,
 		} = import_block;
 
 		assert!(justification.is_some() && finalized || justification.is_none());
 
 		let parent_hash = header.parent_hash().clone();
 
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash)) {
+			Ok(blockchain::BlockStatus::InChain) => {},
+			Ok(blockchain::BlockStatus::Unknown) => return Ok(ImportResult::UnknownParent),
+            Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
 		}
 
 		let import_headers = if post_digests.is_empty() {
@@ -1073,6 +1080,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			new_authorities,
 			finalized,
 			auxiliary,
+			fork_choice,
 		);
 
 		*self.importing_block.write() = None;
@@ -1081,7 +1089,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			"best" => ?hash,
 			"origin" => ?origin
 		);
-		result.map_err(|e| e.into())
+		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
 }
 
@@ -1091,7 +1099,7 @@ impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> 
 	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityIdFor<Block>>, Self::Error> {
 		self.authorities_at(at).map_err(|e| e.into())
 	}
 }

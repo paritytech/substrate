@@ -15,27 +15,57 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use super::error::*;
 
-impl SystemApi for () {
-	fn system_name(&self) -> Result<String> {
-		Ok("testclient".into())
+use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
+use network::config::Roles;
+use test_client::runtime::Block;
+use primitives::H256;
+
+#[derive(Default)]
+struct Status {
+	pub peers: usize,
+	pub is_syncing: bool,
+	pub is_dev: bool,
+}
+
+impl network::SyncProvider<Block> for Status {
+	fn status(&self) -> ProtocolStatus<Block> {
+		ProtocolStatus {
+			sync: SyncStatus {
+				state: if self.is_syncing { SyncState::Downloading } else { SyncState::Idle },
+				best_seen_block: None,
+			},
+			num_peers: self.peers,
+			num_active_peers: 0,
+		}
 	}
-	fn system_version(&self) -> Result<String> {
-		Ok("0.2.0".into())
+
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, NetworkPeerInfo<Block>)> {
+		vec![(1, Some(PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into()), NetworkPeerInfo {
+			roles: Roles::FULL,
+			protocol_version: 1,
+			best_hash: Default::default(),
+			best_number: 1
+		})]
 	}
-	fn system_chain(&self) -> Result<String> {
-		Ok("testchain".into())
-	}
-	fn system_properties(&self) -> Result<serde_json::map::Map<String, serde_json::Value>> {
-		Ok(serde_json::map::Map::new())
-	}
+}
+
+
+fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
+	let status = sync.into().unwrap_or_default();
+	let should_have_peers = !status.is_dev;
+	System::new(SystemInfo {
+		impl_name: "testclient".into(),
+		impl_version: "0.2.0".into(),
+		chain_name: "testchain".into(),
+		properties: Default::default(),
+	}, Arc::new(status), should_have_peers)
 }
 
 #[test]
 fn system_name_works() {
 	assert_eq!(
-		SystemApi::system_name(&()).unwrap(),
+		api(None).system_name().unwrap(),
 		"testclient".to_owned()
 	);
 }
@@ -43,7 +73,7 @@ fn system_name_works() {
 #[test]
 fn system_version_works() {
 	assert_eq!(
-		SystemApi::system_version(&()).unwrap(),
+		api(None).system_version().unwrap(),
 		"0.2.0".to_owned()
 	);
 }
@@ -51,7 +81,7 @@ fn system_version_works() {
 #[test]
 fn system_chain_works() {
 	assert_eq!(
-		SystemApi::system_chain(&()).unwrap(),
+		api(None).system_chain().unwrap(),
 		"testchain".to_owned()
 	);
 }
@@ -59,7 +89,69 @@ fn system_chain_works() {
 #[test]
 fn system_properties_works() {
 	assert_eq!(
-		SystemApi::system_properties(&()).unwrap(),
+		api(None).system_properties().unwrap(),
 		serde_json::map::Map::new()
+	);
+}
+
+#[test]
+fn system_health() {
+	assert_matches!(
+		api(None).system_health().unwrap_err().kind(),
+		error::ErrorKind::NotHealthy(Health {
+			peers: 0,
+			is_syncing: false,
+		})
+	);
+
+	assert_matches!(
+		api(Status {
+			peers: 5,
+			is_syncing: true,
+			is_dev: true,
+		}).system_health().unwrap_err().kind(),
+		error::ErrorKind::NotHealthy(Health {
+			peers: 5,
+			is_syncing: true,
+		})
+	);
+
+	assert_eq!(
+		api(Status {
+			peers: 5,
+			is_syncing: false,
+			is_dev: false,
+		}).system_health().unwrap(),
+		Health {
+			peers: 5,
+			is_syncing: false,
+		}
+	);
+
+	assert_eq!(
+		api(Status {
+			peers: 0,
+			is_syncing: false,
+			is_dev: true,
+		}).system_health().unwrap(),
+		Health {
+			peers: 0,
+			is_syncing: false,
+		}
+	);
+}
+
+#[test]
+fn system_peers() {
+	assert_eq!(
+		api(None).system_peers().unwrap(),
+		vec![PeerInfo {
+			index: 1,
+			peer_id: "QmS5oyTmdjwBowwAH1D9YQnoe2HyWpVemH8qHiU5RqWPh4".into(),
+			roles: "FULL".into(),
+			protocol_version: 1,
+			best_hash: Default::default(),
+			best_number: 1u64,
+		}]
 	);
 }

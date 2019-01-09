@@ -1,40 +1,20 @@
 [package]
-name = "substrate-test-runtime"
+name = "substrate-test-runtime-wasm"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
+[lib]
+name = "substrate_test_runtime"
+crate-type = ["cdylib"]
+
 [dependencies]
-log = { version = "0.4", optional = true }
-hex-literal = { version = "0.1.0", optional = true }
-parity-codec = { version = "2.1", default-features = false }
-parity-codec-derive = { version = "2.1", default-features = false }
-substrate-primitives = { path = "../../primitives", default-features = false }
-substrate-consensus-aura-primitives = { path = "../../consensus/aura/primitives", default-features = false }
-substrate-client = { path = "../../client", default-features = false }
-sr-std = { path = "../../sr-std", default-features = false }
-sr-io = { path = "../../sr-io", default-features = false }
-sr-version = { path = "../../sr-version", default-features = false }
-sr-primitives = { path = "../../sr-primitives", default-features = false }
-srml-support = { path = "../../../srml/support", default-features = false }
+substrate-test-runtime = { path = "..", default-features = false }
 
 [features]
 default = []
 std = [
-	"log",
-	"hex-literal",
-	"parity-codec/std",
-	"sr-std/std",
-	"sr-io/std",
-	"srml-support/std",
-	"sr-version/std",
-	"substrate-primitives/std",
-	"substrate-client/std",
-	"sr-primitives/std",
-	"substrate-consensus-aura-primitives/std",
+	"substrate-test-runtime/std",
 ]
-
-[lib]
-crate-type = ["cdylib"]
 
 [profile.release]
 panic = "abort"

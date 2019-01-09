@@ -50,6 +50,7 @@ pub mod chain_spec;
 mod service;
 mod params;
 
+use tokio::prelude::Future;
 use tokio::runtime::Runtime;
 pub use cli::{VersionInfo, IntoExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
@@ -64,8 +65,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The BBQ Birch testnet.
-	BbqBirch,
+	/// The Charred Cherry testnet.
+	CharredCherry,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
 }
@@ -74,7 +75,7 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::BbqBirch => chain_spec::bbq_birch_config()?,
+			ChainSpec::CharredCherry => chain_spec::charred_cherry_config()?,
 			ChainSpec::Development => chain_spec::development_config(),
 			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
@@ -85,7 +86,7 @@ impl ChainSpec {
 		match s {
 			"dev" => Some(ChainSpec::Development),
 			"local" => Some(ChainSpec::LocalTestnet),
-			"" | "bbq-birch" => Some(ChainSpec::BbqBirch),
+			"" | "cherry" | "charred-cherry" => Some(ChainSpec::CharredCherry),
 			"staging" => Some(ChainSpec::StagingTestnet),
 			_ => None,
 		}
@@ -120,20 +121,9 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			Err(e) => e.exit(),
 		};
 
-	let (spec, mut config) = cli::parse_matches::<service::Factory, _>(
+	let (spec, config) = cli::parse_matches::<service::Factory, _>(
 		load_spec, version, "substrate-node", &matches
 	)?;
-
-	if matches.is_present("grandpa_authority_only") {
-		config.custom.grandpa_authority = true;
-		config.custom.grandpa_authority_only = true;
-		// Authority Setup is only called if validator is set as true
-		config.roles = ServiceRoles::AUTHORITY;
-	} else if matches.is_present("grandpa_authority") {
-		config.custom.grandpa_authority = true;
-		// Authority Setup is only called if validator is set as true
-		config.roles = ServiceRoles::AUTHORITY;
-	}
 
 	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
 		cli::Action::ExecutedInternally => (),
@@ -147,8 +137,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			let mut runtime = Runtime::new()?;
 			let executor = runtime.executor();
 			match config.roles == ServiceRoles::LIGHT {
-				true => run_until_exit(&mut runtime, service::Factory::new_light(config, executor)?, exit)?,
-				false => run_until_exit(&mut runtime, service::Factory::new_full(config, executor)?, exit)?,
+				true => run_until_exit(runtime, service::Factory::new_light(config, executor)?, exit)?,
+				false => run_until_exit(runtime, service::Factory::new_full(config, executor)?, exit)?,
 			}
 		}
 	}
@@ -156,7 +146,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 }
 
 fn run_until_exit<T, C, E>(
-	runtime: &mut Runtime,
+	mut runtime: Runtime,
 	service: T,
 	e: E,
 ) -> error::Result<()>
@@ -172,5 +162,14 @@ fn run_until_exit<T, C, E>(
 
 	let _ = runtime.block_on(e.into_exit());
 	exit_send.fire();
+
+	// we eagerly drop the service so that the internal exit future is fired,
+	// but we need to keep holding a reference to the global telemetry guard
+	let _telemetry = service.telemetry();
+	drop(service);
+
+	// TODO [andre]: timeout this future #1318
+	let _ = runtime.shutdown_on_idle().wait();
+
 	Ok(())
 }

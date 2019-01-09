@@ -34,7 +34,7 @@ extern crate substrate_client as client;
 
 extern crate sr_std as rstd;
 
-use substrate_primitives::AuthorityId;
+use substrate_primitives::Ed25519AuthorityId;
 use sr_primitives::traits::{DigestFor, NumberFor};
 use rstd::vec::Vec;
 
@@ -43,7 +43,7 @@ use rstd::vec::Vec;
 #[derive(Clone, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
-	pub next_authorities: Vec<(AuthorityId, u64)>,
+	pub next_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	/// The number of blocks to delay.
 	pub delay: N,
 }
@@ -97,6 +97,6 @@ decl_runtime_apis! {
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
-		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+		fn grandpa_authorities() -> Vec<(Ed25519AuthorityId, u64)>;
 	}
 }

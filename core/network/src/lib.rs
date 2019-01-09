@@ -55,7 +55,6 @@ mod chain;
 mod blocks;
 mod on_demand;
 pub mod config;
-pub mod import_queue;
 pub mod consensus_gossip;
 pub mod error;
 pub mod message;
@@ -70,7 +69,7 @@ pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
     NodeIndex, ProtocolId, Severity, Protocol, Multiaddr,
-    obtain_private_key, multiaddr,
+    obtain_private_key, multiaddr, PeerId, PublicKey
 };
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
