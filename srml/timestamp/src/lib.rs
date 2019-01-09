@@ -55,24 +55,30 @@ use runtime_primitives::traits::{
 };
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, vec::Vec};
+use runtime_support::for_each_tuple;
 
 /// A trait which is called when the timestamp is set.
 pub trait OnTimestampSet<Moment> {
 	fn on_timestamp_set(moment: Moment);
 }
 
-impl<Moment> OnTimestampSet<Moment> for () {
-	fn on_timestamp_set(_moment: Moment) { }
-}
+macro_rules! impl_timestamp_set {
+	() => (
+		impl<Moment> OnTimestampSet<Moment> for () {
+			fn on_timestamp_set(_: Moment) {}
+		}
+	);
 
-impl<A, B, Moment: Clone> OnTimestampSet<Moment> for (A, B)
-	where A: OnTimestampSet<Moment>, B: OnTimestampSet<Moment>
-{
-	fn on_timestamp_set(moment: Moment) {
-		A::on_timestamp_set(moment.clone());
-		B::on_timestamp_set(moment);
+	( $($t:ident)* ) => {
+		impl<Moment: Clone, $($t: OnTimestampSet<Moment>),*> OnTimestampSet<Moment> for ($($t,)*) {
+			fn on_timestamp_set(moment: Moment) {
+				$($t::on_timestamp_set(moment.clone());)*
+			}
+		}
 	}
 }
+
+for_each_tuple!(impl_timestamp_set);
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
