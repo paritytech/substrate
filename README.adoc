@@ -269,7 +269,7 @@ cargo test --all
 Start your node:
 
 [source, shell]
-cargo run --release
+cargo run --release -- run
 
 To see a list of command line options, enter:
 
@@ -279,7 +279,7 @@ cargo run --release -- --help
 For example, you can choose a custom node name:
 
 [source, shell]
-cargo run --release -- --name my_custom_name
+cargo run --release -- run --name my_custom_name
 
 If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Charred%20Cherry
 
