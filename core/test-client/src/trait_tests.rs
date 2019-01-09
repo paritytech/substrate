@@ -51,35 +51,35 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a1.hash()]);
 
 	// A1 -> A2
 	let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 	assert_eq!(
 		client.backend().blockchain().leaves().unwrap(),
 		vec![a2.hash()]);
 
 	// A2 -> A3
 	let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a3.clone()).unwrap();
+	client.import(BlockOrigin::Own, a3.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a3.hash()]);
 
 	// A3 -> A4
 	let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a4.clone()).unwrap();
+	client.import(BlockOrigin::Own, a4.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a4.hash()]);
 
 	// A4 -> A5
 	let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a5.clone()).unwrap();
+	client.import(BlockOrigin::Own, a5.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a5.hash()]);
@@ -94,21 +94,21 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 		nonce: 0,
 	}).unwrap();
 	let b2 = builder.bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, b2.clone()).unwrap();
+	client.import(BlockOrigin::Own, b2.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a5.hash(), b2.hash()]);
 
 	// B2 -> B3
 	let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, b3.clone()).unwrap();
+	client.import(BlockOrigin::Own, b3.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a5.hash(), b3.hash()]);
 
 	// B3 -> B4
 	let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, b4.clone()).unwrap();
+	client.import(BlockOrigin::Own, b4.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a5.hash(), b4.hash()]);
@@ -123,7 +123,7 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 		nonce: 1,
 	}).unwrap();
 	let c3 = builder.bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+	client.import(BlockOrigin::Own, c3.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a5.hash(), b4.hash(), c3.hash()]);
@@ -138,7 +138,7 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 		nonce: 0,
 	}).unwrap();
 	let d2 = builder.bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, d2.clone()).unwrap();
+	client.import(BlockOrigin::Own, d2.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
 		vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()]);
@@ -157,23 +157,23 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+	client.import(BlockOrigin::Own, a1.clone()).unwrap();
 
 	// A1 -> A2
 	let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+	client.import(BlockOrigin::Own, a2.clone()).unwrap();
 
 	// A2 -> A3
 	let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a3.clone()).unwrap();
+	client.import(BlockOrigin::Own, a3.clone()).unwrap();
 
 	// A3 -> A4
 	let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a4.clone()).unwrap();
+	client.import(BlockOrigin::Own, a4.clone()).unwrap();
 
 	// A4 -> A5
 	let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, a5.clone()).unwrap();
+	client.import(BlockOrigin::Own, a5.clone()).unwrap();
 
 	// A1 -> B2
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
@@ -185,15 +185,15 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 		nonce: 0,
 	}).unwrap();
 	let b2 = builder.bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, b2.clone()).unwrap();
+	client.import(BlockOrigin::Own, b2.clone()).unwrap();
 
 	// B2 -> B3
 	let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, b3.clone()).unwrap();
+	client.import(BlockOrigin::Own, b3.clone()).unwrap();
 
 	// B3 -> B4
 	let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, b4.clone()).unwrap();
+	client.import(BlockOrigin::Own, b4.clone()).unwrap();
 
 	// // B2 -> C3
 	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
@@ -205,7 +205,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 		nonce: 1,
 	}).unwrap();
 	let c3 = builder.bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+	client.import(BlockOrigin::Own, c3.clone()).unwrap();
 
 	// A1 -> D2
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
@@ -217,7 +217,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 		nonce: 0,
 	}).unwrap();
 	let d2 = builder.bake().unwrap();
-	client.justify_and_import(BlockOrigin::Own, d2.clone()).unwrap();
+	client.import(BlockOrigin::Own, d2.clone()).unwrap();
 
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
 

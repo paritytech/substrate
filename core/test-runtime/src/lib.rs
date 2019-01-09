@@ -18,9 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+extern crate serde;
+
 extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_aura_primitives as consensus_aura;
 
 #[macro_use]
 extern crate substrate_client as client;
@@ -47,31 +51,29 @@ pub mod system;
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use client::{runtime_api::runtime::*, block_builder::api::runtime::*};
-#[cfg(feature = "std")]
-use client::runtime_api::ApiExt;
-use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT};
-#[cfg(feature = "std")]
-use runtime_primitives::traits::ApiRef;
-use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
-#[cfg(feature = "std")]
-use runtime_primitives::generic::BlockId;
+use client::{runtime_api as client_api, block_builder::api as block_builder_api};
+use runtime_primitives::{
+	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
+	traits::{
+		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
+		GetNodeBlockType, GetRuntimeBlockType
+	}, CheckInherentError
+};
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::AuthorityId;
-#[cfg(feature = "std")]
-use primitives::OpaqueMetadata;
+use primitives::{Ed25519AuthorityId, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
+use consensus_aura::api as aura_api;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: ver_str!("test"),
-	impl_name: ver_str!("parity-test"),
+	spec_name: create_runtime_str!("test"),
+	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 1,
-	apis: apis_vec!([]),
+	apis: RUNTIME_API_VERSIONS,
 };
 
 fn version() -> RuntimeVersion {
@@ -89,7 +91,7 @@ pub fn native_version() -> NativeVersion {
 
 /// Calls in transactions.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -99,10 +101,18 @@ pub struct Transfer {
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Extrinsic {
 	pub transfer: Transfer,
 	pub signature: Ed25519Signature,
+}
+
+#[cfg(feature = "std")]
+impl serde::Serialize for Extrinsic
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+	}
 }
 
 impl BlindCheckable for Extrinsic {
@@ -132,7 +142,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, u64>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256, Ed25519AuthorityId>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.
@@ -161,175 +171,32 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 }
 
 pub mod test_api {
+	use super::AccountId;
+
 	decl_runtime_apis! {
 		pub trait TestAPI {
-			fn balance_of<AccountId>(id: AccountId) -> u64;
+			fn balance_of(id: AccountId) -> u64;
 		}
 	}
 }
 
-use test_api::runtime::TestAPI;
+pub struct Runtime;
 
-#[cfg(feature = "std")]
-pub struct ClientWithApi {
-	call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<Block>>,
-	commit_on_success: ::std::cell::RefCell<bool>,
-	initialised_block: ::std::cell::RefCell<Option<BlockId<Block>>>,
-	changes: ::std::cell::RefCell<client::runtime_api::OverlayedChanges>,
+impl GetNodeBlockType for Runtime {
+	type NodeBlock = Block;
 }
 
-#[cfg(feature = "std")]
-unsafe impl Send for ClientWithApi {}
-#[cfg(feature = "std")]
-unsafe impl Sync for ClientWithApi {}
-
-#[cfg(feature = "std")]
-impl ApiExt for ClientWithApi {
-	fn map_api_result<F: FnOnce(&Self) -> Result<R, E>, R, E>(&self, map_call: F) -> Result<R, E> {
-		*self.commit_on_success.borrow_mut() = false;
-		let res = map_call(self);
-		*self.commit_on_success.borrow_mut() = true;
-
-		self.commit_on_ok(&res);
-
-		res
-	}
+impl GetRuntimeBlockType for Runtime {
+	type RuntimeBlock = Block;
 }
-
-#[cfg(feature = "std")]
-impl client::runtime_api::ConstructRuntimeApi<Block> for ClientWithApi {
-	fn construct_runtime_api<'a, T: client::runtime_api::CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self> {
-		ClientWithApi {
-			call: unsafe {
-				::std::ptr::NonNull::new_unchecked(
-					::std::mem::transmute(
-						call as &client::runtime_api::CallApiAt<Block>
-					)
-				)
-			},
-			commit_on_success: true.into(),
-			initialised_block: None.into(),
-			changes: Default::default(),
-		}.into()
-	}
-}
-
-#[cfg(feature = "std")]
-impl ClientWithApi {
-	fn call_api_at<A: Encode, R: Decode>(
-		&self,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: &A
-	) -> client::error::Result<R> {
-		let res = unsafe {
-			self.call.as_ref().call_api_at(
-				at,
-				function,
-				args.encode(),
-				&mut *self.changes.borrow_mut(),
-				&mut *self.initialised_block.borrow_mut()
-			).and_then(|r|
-				R::decode(&mut &r[..])
-					.ok_or_else(||
-						client::error::ErrorKind::CallResultDecode(function).into()
-					)
-			)
-		};
-
-		self.commit_on_ok(&res);
-		res
-	}
-
-	fn commit_on_ok<R, E>(&self, res: &Result<R, E>) {
-		if *self.commit_on_success.borrow() {
-			if res.is_err() {
-				self.changes.borrow_mut().discard_prospective();
-			} else {
-				self.changes.borrow_mut().commit_prospective();
-			}
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::runtime_api::Core<Block> for ClientWithApi {
-	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, client::error::Error> {
-		self.call_api_at(at, "version", &())
-	}
-
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, client::error::Error> {
-		self.call_api_at(at, "authorities", &())
-	}
-
-	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), client::error::Error> {
-		self.call_api_at(at, "execute_block", block)
-	}
-
-	fn initialise_block(&self, at: &BlockId<Block>, header: &<Block as BlockT>::Header) -> Result<(), client::error::Error> {
-		self.call_api_at(at, "initialise_block", header)
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::block_builder::api::BlockBuilder<Block> for ClientWithApi {
-	fn apply_extrinsic(&self, at: &BlockId<Block>, extrinsic: &<Block as BlockT>::Extrinsic) -> Result<ApplyResult, client::error::Error> {
-		self.call_api_at(at, "apply_extrinsic", extrinsic)
-	}
-
-	fn finalise_block(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Header, client::error::Error> {
-		self.call_api_at(at, "finalise_block", &())
-	}
-
-	fn inherent_extrinsics<Inherent: Decode + Encode, Unchecked: Decode + Encode>(
-		&self, at: &BlockId<Block>, inherent: &Inherent
-	) -> Result<Vec<Unchecked>, client::error::Error> {
-		self.call_api_at(at, "inherent_extrinsics", inherent)
-	}
-
-	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &BlockId<Block>, block: &Block, inherent: &Inherent) -> Result<Result<(), Error>, client::error::Error> {
-		self.call_api_at(at, "check_inherents", &(block, inherent))
-	}
-
-	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, client::error::Error> {
-		self.call_api_at(at, "random_seed", &())
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::runtime_api::TaggedTransactionQueue<Block> for ClientWithApi {
-	fn validate_transaction(
-		&self,
-		at: &BlockId<Block>,
-		utx: &<Block as BlockT>::Extrinsic
-	) -> Result<TransactionValidity, client::error::Error> {
-		self.call_api_at(at, "validate_transaction", utx)
-	}
-}
-
-#[cfg(feature = "std")]
-impl client::runtime_api::Metadata<Block> for ClientWithApi {
-	fn metadata(&self, at: &BlockId<Block>) -> Result<OpaqueMetadata, client::error::Error> {
-		self.call_api_at(at, "metadata", &())
-	}
-}
-
-#[cfg(feature = "std")]
-impl test_api::TestAPI<Block> for ClientWithApi {
-	fn balance_of<AccountId: Encode + Decode>(&self, at: &BlockId<Block>, id: &AccountId) -> Result<u64, client::error::Error> {
-		self.call_api_at(at, "balance_of", id)
-	}
-}
-
-struct Runtime;
 
 impl_runtime_apis! {
-	impl Core<Block> for Runtime {
+	impl client_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			version()
 		}
 
-		fn authorities() -> Vec<AuthorityId> {
+		fn authorities() -> Vec<Ed25519AuthorityId> {
 			system::authorities()
 		}
 
@@ -342,13 +209,19 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl TaggedTransactionQueue<Block> for Runtime {
+	impl client_api::Metadata<Block> for Runtime {
+		fn metadata() -> OpaqueMetadata {
+			unimplemented!()
+		}
+	}
+
+	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}
 	}
 
-	impl BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
+	impl block_builder_api::BlockBuilder<Block, ()> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
@@ -357,12 +230,12 @@ impl_runtime_apis! {
 			system::finalise_block()
 		}
 
-		fn inherent_extrinsics(_data: u32) -> Vec<u32> {
+		fn inherent_extrinsics(_data: ()) -> Vec<<Block as BlockT>::Extrinsic> {
 			unimplemented!()
 		}
 
-		fn check_inherents(_block: Block, _data: u32) -> Result<(), u32> {
-			unimplemented!()
+		fn check_inherents(_block: Block, _data: ()) -> Result<(), CheckInherentError> {
+			Ok(())
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
@@ -370,9 +243,13 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl TestAPI<AccountId> for Runtime {
+	impl self::test_api::TestAPI<Block> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
 		}
+	}
+
+	impl aura_api::AuraApi<Block> for Runtime {
+		fn slot_duration() -> u64 { 1 }
 	}
 }

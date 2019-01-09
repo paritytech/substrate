@@ -135,7 +135,7 @@ First let's get a template chainspec that you can edit. We'll use the "staging" 
 
 [source, shell]
 ----
-substrate build-spec --chain=staging > ~/chainspec.json
+substrate --chain=staging build-spec > ~/chainspec.json
 ----
 
 Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the Webassembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
@@ -151,7 +151,7 @@ Now with this new chainspec file, you can build a "raw" chain definition for you
 
 [source, shell]
 ----
-substrate build-spec --chain ~/chainspec.json --raw > ~/mychain.json
+substrate --chain ~/chainspec.json build-spec --raw > ~/mychain.json
 ----
 
 This can be fed into Substrate:
@@ -191,11 +191,11 @@ You will also need to install the following packages:
 
  - Linux:
 [source, shell]
-sudo apt install cmake pkg-config libssl-dev git
+sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
 
  - Mac:
 [source, shell]
-brew install cmake pkg-config openssl git
+brew install cmake pkg-config openssl git llvm
 
 Then, grab the Substrate source code:
 
@@ -223,9 +223,6 @@ You can start a development chain with:
 [source, shell]
 cargo run -- --dev
 
-Or you can join the BBQ Birch Testnet with:
-[source, shell]
-cargo run
 
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
 

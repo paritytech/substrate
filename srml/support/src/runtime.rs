@@ -20,7 +20,10 @@
 ///
 /// ```nocompile
 /// construct_runtime!(
-///     pub enum Runtime with Log(interalIdent: DigestItem<SessionKey>) {
+///     pub enum Runtime with Log(interalIdent: DigestItem<SessionKey>) where
+///         Block = Block,
+///         NodeBlock = runtime::Block
+///     {
 ///         System: system,
 ///         Test: test::{default, Log(Test)},
 ///         Test2: test_with_long_module::{Module},
@@ -28,11 +31,11 @@
 /// )
 /// ```
 ///
-/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config}`.
+/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config<T>}`.
 /// The identifier `System` is the name of the module and the lower case identifier `system` is the
 /// name of the rust module for this module.
 /// The module `Test: test::{default, Log(Test)}` will expand to
-/// `Test: test::{Module, Call, Storage, Event<T>, Config, Log(Test)}`.
+/// `Test: test::{Module, Call, Storage, Event<T>, Config<T>, Log(Test)}`.
 /// The module `Test2: test_with_long_module::{Module}` will expand to
 /// `Test2: test_with_long_module::{Module}`.
 ///
@@ -48,7 +51,10 @@
 macro_rules! construct_runtime {
 	(
 		pub enum $runtime:ident with Log ($log_internal:ident: DigestItem<$( $log_genarg:ty ),+>)
-			where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident
+			where
+				Block = $block:ident,
+				NodeBlock = $node_block:ty,
+				InherentData = $inherent:ty
 		{
 			$( $rest:tt )*
 		}
@@ -56,7 +62,8 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
-			$unchecked;
+			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			;
 			$( $rest )*
@@ -65,7 +72,8 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -92,7 +100,8 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
-			$unchecked;
+			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -119,7 +128,8 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -153,7 +163,8 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
-			$unchecked;
+			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -186,7 +197,8 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -219,7 +231,8 @@ macro_rules! construct_runtime {
 		construct_runtime!(
 			$runtime;
 			$block;
-			$unchecked;
+			$node_block;
+			$inherent;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -251,7 +264,8 @@ macro_rules! construct_runtime {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$node_block:ty;
+		$inherent:ty;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$name:ident: $module:ident::{
@@ -266,13 +280,18 @@ macro_rules! construct_runtime {
 		mashup! {
 			$(
 				substrate_generate_ident_name["config-ident" $name] = $name Config;
-				substrate_generate_ident_name["inherent-error-ident" $name] = $name InherentError;
 			)*
 		}
 
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		pub struct $runtime;
+		impl $crate::runtime_primitives::traits::GetNodeBlockType for $runtime {
+			type NodeBlock = $node_block;
+		}
+		impl $crate::runtime_primitives::traits::GetRuntimeBlockType for $runtime {
+			type RuntimeBlock = $block;
+		}
 		__decl_outer_event!(
 			$runtime;
 			$(
@@ -326,7 +345,7 @@ macro_rules! construct_runtime {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
-			$unchecked;
+			$inherent;
 			;
 			$(
 				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
@@ -1052,7 +1071,7 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
 			Inherent $(, $modules:ident $( <$modules_generic:ident> )* )*
@@ -1064,7 +1083,7 @@ macro_rules! __decl_outer_inherent {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
-			$unchecked;
+			$inherent;
 			$( $parsed_modules :: $parsed_name, )* $module::$name;
 			$(
 				$rest_name: $rest_module::{
@@ -1076,7 +1095,7 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
 			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
@@ -1088,7 +1107,7 @@ macro_rules! __decl_outer_inherent {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
-			$unchecked;
+			$inherent;
 			$( $parsed_modules :: $parsed_name ),*;
 			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
 			$(
@@ -1101,7 +1120,7 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{}
 		$(, $rest_name:ident : $rest_module:ident::{
@@ -1111,7 +1130,7 @@ macro_rules! __decl_outer_inherent {
 		__decl_outer_inherent!(
 			$runtime;
 			$block;
-			$unchecked;
+			$inherent;
 			$( $parsed_modules :: $parsed_name ),*;
 			$(
 				$rest_name: $rest_module::{
@@ -1123,18 +1142,16 @@ macro_rules! __decl_outer_inherent {
 	(
 		$runtime:ident;
 		$block:ident;
-		$unchecked:ident;
+		$inherent:ty;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		;
 	) => {
-		substrate_generate_ident_name! {
-			impl_outer_inherent!(
-				pub struct InherentData where Block = $block, UncheckedExtrinsic = $unchecked {
-					$(
-						$parsed_modules: $parsed_name export Error as "inherent-error-ident" $parsed_name,
-					)*
-				}
-			);
-		}
+		impl_outer_inherent!(
+			for $runtime,
+			Block = $block,
+			InherentData = $inherent {
+				$($parsed_modules : $parsed_name,)*
+			}
+		);
 	};
 }

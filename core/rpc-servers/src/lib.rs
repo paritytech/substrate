@@ -32,6 +32,9 @@ extern crate log;
 use std::io;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 
+/// Maximal payload accepted by RPC servers
+const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
+
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
 pub type HttpServer = http::Server;
@@ -46,9 +49,8 @@ pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 ) -> RpcHandler where
 	Block: BlockT + 'static,
 	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
-	SignedBlock<Block>: serde::Serialize + sr_primitives::DeserializeOwned,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>, Metadata=Metadata>,
+	C: apis::chain::ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>, Metadata=Metadata>,
 	A: apis::author::AuthorApi<ExHash, Block::Hash, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {
@@ -67,8 +69,10 @@ pub fn start_http(
 ) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
+		.health_api(("/health", "system_health"))
 		.rest_api(http::RestApi::Unsecure)
 		.cors(http::DomainsValidation::Disabled)
+		.max_request_body_size(MAX_PAYLOAD)
 		.start_http(addr)
 }
 
@@ -78,6 +82,7 @@ pub fn start_ws(
 	io: RpcHandler,
 ) -> io::Result<ws::Server> {
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
+		.max_payload(MAX_PAYLOAD)
 		.start(addr)
 		.map_err(|err| match err {
 			ws::Error(ws::ErrorKind::Io(io), _) => io,

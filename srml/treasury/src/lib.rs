@@ -40,7 +40,6 @@ extern crate srml_balances as balances;
 
 use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin}};
 use codec::{HasCompact, Compact};
 use balances::{OnDilution, address::Address};
@@ -69,7 +68,7 @@ type ProposalIndex = u32;
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 		/// Put forward a suggestion for spending. A deposit proportional to the value
 		/// is reserved and slashed if the proposal is rejected. It is returned once the
 		/// proposal is awarded.
@@ -77,7 +76,7 @@ decl_module! {
 			origin,
 			value: <T::Balance as HasCompact>::Type,
 			beneficiary: Address<T::AccountId, T::AccountIndex>
-		) -> Result {
+		) {
 			let proposer = ensure_signed(origin)?;
 			let beneficiary = <balances::Module<T>>::lookup(beneficiary)?;
 			let value = value.into();
@@ -91,17 +90,12 @@ decl_module! {
 			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
 			Self::deposit_event(RawEvent::Proposed(c));
-
-			Ok(())
 		}
 
 		/// Set the balance of funds available to spend.
-		fn set_pot(new_pot: <T::Balance as HasCompact>::Type) -> Result {
+		fn set_pot(new_pot: <T::Balance as HasCompact>::Type) {
 			// Put the new value into storage.
 			<Pot<T>>::put(new_pot.into());
-
-			// All good.
-			Ok(())
 		}
 
 		/// (Re-)configure this module.
@@ -110,16 +104,15 @@ decl_module! {
 			proposal_bond_minimum: <T::Balance as HasCompact>::Type,
 			spend_period: <T::BlockNumber as HasCompact>::Type,
 			burn: Permill
-		) -> Result {
+		) {
 			<ProposalBond<T>>::put(proposal_bond);
 			<ProposalBondMinimum<T>>::put(proposal_bond_minimum.into());
 			<SpendPeriod<T>>::put(spend_period.into());
 			<Burn<T>>::put(burn);
-			Ok(())
 		}
 
 		/// Reject a proposed spend. The original deposit will be slashed.
-		fn reject_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result {
+		fn reject_proposal(origin, proposal_id: Compact<ProposalIndex>) {
 			T::RejectOrigin::ensure_origin(origin)?;
 			let proposal_id: ProposalIndex = proposal_id.into();
 
@@ -127,21 +120,17 @@ decl_module! {
 
 			let value = proposal.bond;
 			let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
-
-			Ok(())
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		/// and the original deposit will be returned.
-		fn approve_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result {
+		fn approve_proposal(origin, proposal_id: Compact<ProposalIndex>) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 			let proposal_id = proposal_id.into();
 
 			ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
 
 			<Approvals<T>>::mutate(|v| v.push(proposal_id));
-
-			Ok(())
 		}
 
 		fn on_finalise(n: T::BlockNumber) {
@@ -330,14 +319,12 @@ mod tests {
 			creation_fee: 0,
 			existential_deposit: 0,
 			reclaim_rebate: 0,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1,
 			spend_period: 2,
 			burn: Permill::from_percent(50),
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.into()
 	}

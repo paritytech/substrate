@@ -21,17 +21,17 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client::backend::NewBlockState;
+use client::backend::{AuxStore, NewBlockState};
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use client::{cht, LeafSet};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
-use primitives::{AuthorityId, Blake2Hasher};
+use primitives::Blake2Hasher;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
-	Zero, One, As, NumberFor, Digest, DigestItem};
+	Zero, One, As, NumberFor, Digest, DigestItem, AuthorityIdFor};
 use cache::{DbCacheSync, DbCache, ComplexBlockId};
 use utils::{meta_keys, Meta, db_err, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
@@ -58,14 +58,6 @@ pub struct LightStorage<Block: BlockT> {
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	cache: DbCacheSync<Block>,
-}
-
-#[derive(Clone, PartialEq, Debug)]
-struct BestAuthorities<N> {
-	/// first block, when this set became actual
-	valid_from: N,
-	/// None means that we do not know the set starting from `valid_from` block
-	authorities: Option<Vec<AuthorityId>>,
 }
 
 impl<Block> LightStorage<Block>
@@ -283,13 +275,38 @@ impl<Block: BlockT> LightStorage<Block> {
 	}
 }
 
+impl<Block> AuxStore for LightStorage<Block>
+	where Block: BlockT,
+{
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> ClientResult<()> {
+		let mut transaction = DBTransaction::new();
+		for (k, v) in insert {
+			transaction.put(columns::AUX, k, v);
+		}
+		for k in delete {
+			transaction.delete(columns::AUX, k);
+		}
+		self.db.write(transaction).map_err(db_err)
+	}
+
+	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		self.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)
+	}
+}
+
 impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	where Block: BlockT,
 {
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
@@ -493,7 +510,7 @@ pub(crate) mod tests {
 
 	pub fn insert_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -504,7 +521,7 @@ pub(crate) mod tests {
 
 	fn insert_final_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -515,7 +532,7 @@ pub(crate) mod tests {
 
 	fn insert_non_best_block<F: Fn() -> Header>(
 		db: &LightStorage<Block>,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		header: F,
 	) -> Hash {
 		let header = header();
@@ -745,7 +762,7 @@ pub(crate) mod tests {
 	fn authorites_are_cached() {
 		let db = LightStorage::new_test();
 
-		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityId>>)]) {
+		fn run_checks(db: &LightStorage<Block>, max: u64, checks: &[(u64, Option<Vec<AuthorityIdFor<Block>>>)]) {
 			for (at, expected) in checks.iter().take_while(|(at, _)| *at <= max) {
 				let actual = db.cache().authorities_at(BlockId::Number(*at));
 				assert_eq!(*expected, actual);
@@ -871,5 +888,29 @@ pub(crate) mod tests {
 		let db = LightStorage::from_kvdb(db).unwrap();
 		assert_eq!(db.info().unwrap().best_hash, hash0);
 		assert_eq!(db.header(BlockId::Hash::<Block>(hash0)).unwrap().unwrap().hash(), hash0);
+	}
+
+	#[test]
+	fn aux_store_works() {
+		let db = LightStorage::<Block>::new_test();
+
+		// insert aux1 + aux2 using direct store access
+		db.insert_aux(&[(&[1][..], &[101][..]), (&[2][..], &[102][..])], ::std::iter::empty()).unwrap();
+
+		// check aux values
+		assert_eq!(db.get_aux(&[1]).unwrap(), Some(vec![101]));
+		assert_eq!(db.get_aux(&[2]).unwrap(), Some(vec![102]));
+		assert_eq!(db.get_aux(&[3]).unwrap(), None);
+
+		// delete aux1 + insert aux3 using import operation
+		db.import_header(default_header(&Default::default(), 0), None, NewBlockState::Best, vec![
+			(vec![3], Some(vec![103])),
+			(vec![1], None),
+		]).unwrap();
+
+		// check aux values
+		assert_eq!(db.get_aux(&[1]).unwrap(), None);
+		assert_eq!(db.get_aux(&[2]).unwrap(), Some(vec![102]));
+		assert_eq!(db.get_aux(&[3]).unwrap(), Some(vec![103]));
 	}
 }

@@ -98,7 +98,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
-		fn deposit_event() = default;
+		/// For non-generic events, the generic parameter just needs to be dropped, so that it
+		/// looks like: `fn deposit_event() = default;`.
+		fn deposit_event<T>() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
@@ -173,12 +175,11 @@ decl_module! {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		fn set_dummy(new_value: T::Balance) -> Result {
+		// If you not specify `Result` explicitly as return value, it will be added automatically
+		// for you and `Ok(())` will be returned.
+		fn set_dummy(new_value: T::Balance) {
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
-
-			// All good.
-			Ok(())
 		}
 
 		// The signature could also look like: `fn on_finalise()`
@@ -313,7 +314,6 @@ mod tests {
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
 			foo: 24,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.into()
 	}

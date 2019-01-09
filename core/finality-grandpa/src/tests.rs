@@ -18,20 +18,20 @@
 
 use super::*;
 use network::test::{Block, Hash, TestNetFactory, Peer, PeersClient};
-use network::import_queue::{PassThroughVerifier};
+use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
 use tokio::runtime::current_thread;
 use keyring::Keyring;
 use client::{
-	BlockchainEvents, runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallApiAt},
-	error::Result
+	BlockchainEvents, error::Result,
+	runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallRuntimeAt},
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
-use consensus_common::BlockOrigin;
+use consensus_common::{BlockOrigin, Error as ConsensusError};
 use std::{collections::HashSet, result};
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
 use runtime_primitives::generic::BlockId;
 
 use authorities::AuthoritySet;
@@ -43,7 +43,7 @@ type PeerData =
 				test_client::Backend,
 				test_client::Executor,
 				Block,
-				test_client::runtime::ClientWithApi,
+				test_client::runtime::RuntimeApi,
 			>
 		>
 	>;
@@ -99,7 +99,7 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ClientError> + Send + Sync>, PeerData)
+		-> (Arc<BlockImport<Block,Error=ConsensusError> + Send + Sync>, PeerData)
 	{
 		let (import, link) = block_import(
 			client,
@@ -157,12 +157,31 @@ fn make_topic(round: u64, set_id: u64) -> Hash {
 	hash
 }
 
+fn make_commit_topic(set_id: u64) -> Hash {
+	let mut hash = Hash::default();
+
+	{
+		let raw = hash.as_mut();
+		raw[16..22].copy_from_slice(b"commit");
+	}
+	set_id.using_encoded(|s| {
+		let raw = hash.as_mut();
+		raw[24..].copy_from_slice(s);
+	});
+
+	hash
+}
+
 impl Network for MessageRouting {
-	type In = Box<Stream<Item=Vec<u8>,Error=()>>;
+	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		let messages = self.inner.lock().peer(self.peer_id)
-			.with_spec(|spec, _| spec.gossip.messages_for(make_topic(round, set_id)));
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		let messages = peer.with_spec(move |_, _| {
+			gossip.messages_for(make_topic(round, set_id))
+		});
 
 		let messages = messages.map_err(
 			move |_| panic!("Messages for round {} dropped too early", round)
@@ -173,25 +192,50 @@ impl Network for MessageRouting {
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message);
+		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message, false);
 		inner.route_until_complete();
 	}
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
 		let topic = make_topic(round, set_id);
-		self.inner.lock().peer(self.peer_id)
-			.with_spec(|spec, _| spec.gossip.collect_garbage(|t| t == &topic));
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		peer.with_spec(move |_, _| {
+			gossip.collect_garbage(|t| t == &topic)
+		});
+	}
+
+	fn commit_messages(&self, set_id: u64) -> Self::In {
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		let messages = peer.with_spec(move |_, _| {
+			gossip.messages_for(make_commit_topic(set_id))
+		});
+
+		let messages = messages.map_err(
+			move |_| panic!("Commit messages for set {} dropped too early", set_id)
+		);
+
+		Box::new(messages)
+	}
+
+	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+		let mut inner = self.inner.lock();
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
+		inner.route_until_complete();
 	}
 }
 
 #[derive(Default, Clone)]
 struct TestApi {
-	genesis_authorities: Vec<(AuthorityId, u64)>,
+	genesis_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
 }
 
 impl TestApi {
-	fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
+	fn new(genesis_authorities: Vec<(Ed25519AuthorityId, u64)>) -> Self {
 		TestApi {
 			genesis_authorities,
 			scheduled_changes: Arc::new(Mutex::new(HashMap::new())),
@@ -216,7 +260,7 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn authorities(&self, _: &BlockId<Block>) -> Result<Vec<AuthorityId>> {
+	fn authorities(&self, _: &BlockId<Block>) -> Result<Vec<Ed25519AuthorityId>> {
 		unimplemented!("Not required for testing!")
 	}
 
@@ -233,17 +277,21 @@ impl Core<Block> for RuntimeApi {
 	}
 }
 
-impl ApiExt for RuntimeApi {
+impl ApiExt<Block> for RuntimeApi {
 	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
 		&self,
 		_: F
 	) -> result::Result<R, E> {
 		unimplemented!("Not required for testing!")
 	}
+
+	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, _: &BlockId<Block>) -> Result<bool> {
+		unimplemented!("Not required for testing!")
+	}
 }
 
 impl ConstructRuntimeApi<Block> for RuntimeApi {
-	fn construct_runtime_api<'a, T: CallApiAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
+	fn construct_runtime_api<'a, T: CallRuntimeAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -252,7 +300,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 	fn grandpa_authorities(
 		&self,
 		at: &BlockId<Block>
-	) -> Result<Vec<(AuthorityId, u64)>> {
+	) -> Result<Vec<(Ed25519AuthorityId, u64)>> {
 		if at == &BlockId::Number(0) {
 			Ok(self.inner.genesis_authorities.clone())
 		} else {
@@ -277,9 +325,9 @@ impl GrandpaApi<Block> for RuntimeApi {
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
-fn make_ids(keys: &[Keyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Keyring]) -> Vec<(Ed25519AuthorityId, u64)> {
 	keys.iter()
-		.map(|key| AuthorityId(key.to_raw_public()))
+		.map(|key| Ed25519AuthorityId(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
 }
@@ -318,6 +366,8 @@ fn finalize_3_voters_no_observers() {
 				.take_while(|n| Ok(n.header.number() < &20))
 				.for_each(|_| Ok(()))
 		);
+		fn assert_send<T: Send>(_: &T) { }
+
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
@@ -326,7 +376,10 @@ fn finalize_3_voters_no_observers() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			futures::empty(),
 		).expect("all in order with client and network");
+
+		assert_send(&voter);
 
 		runtime.spawn(voter);
 	}
@@ -384,6 +437,7 @@ fn finalize_3_voters_1_observer() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			futures::empty(),
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
@@ -428,59 +482,79 @@ fn transition_3_voters_twice_1_observer() {
 
 	let api = TestApi::new(genesis_voters);
 	let transitions = api.scheduled_changes.clone();
-	let add_transition = move |parent_hash, change| {
-		transitions.lock().insert(parent_hash, change);
-	};
+	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
-	let mut net = GrandpaTestNet::new(api, 9);
+	let mut runtime = tokio::runtime::Runtime::new().unwrap();
 
-	// first 20 blocks: transition at 15, applied at 20.
-	{
-		net.peer(0).push_blocks(14, false);
-		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-			let block = builder.bake().unwrap();
-			add_transition(*block.header.parent_hash(), ScheduledChange {
-				next_authorities: make_ids(peers_b),
-				delay: 4,
-			});
+	net.lock().peer(0).push_blocks(1, false);
+	net.lock().sync();
 
-			block
-		});
-		net.peer(0).push_blocks(5, false);
-	}
-
-	// at block 21 we do another transition, but this time instant.
-	// add more until we have 30.
-	{
-		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-			let block = builder.bake().unwrap();
-			add_transition(*block.header.parent_hash(), ScheduledChange {
-				next_authorities: make_ids(peers_c),
-				delay: 0,
-			});
-
-			block
-		});
-
-		net.peer(0).push_blocks(9, false);
-	}
-	net.sync();
-
-	for (i, peer) in net.peers().iter().enumerate() {
-		assert_eq!(peer.client().info().unwrap().chain.best_number, 30,
-			"Peer #{} failed to sync", i);
+	for (i, peer) in net.lock().peers().iter().enumerate() {
+		assert_eq!(peer.client().info().unwrap().chain.best_number, 1,
+				   "Peer #{} failed to sync", i);
 
 		let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
 		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
-		assert_eq!(set.pending_changes().len(), 2);
+		assert_eq!(set.pending_changes().len(), 0);
 	}
 
-	let net = Arc::new(Mutex::new(net));
-	let mut finality_notifications = Vec::new();
+	{
+		let net = net.clone();
+		let client = net.lock().peers[0].client().clone();
+		let transitions = transitions.clone();
+		let add_transition = move |parent_hash, change| {
+			transitions.lock().insert(parent_hash, change);
+		};
+		let peers_c = peers_c.clone();
 
-	let mut runtime = current_thread::Runtime::new().unwrap();
+		// wait for blocks to be finalized before generating new ones
+		let block_production = client.finality_notification_stream()
+			.take_while(|n| Ok(n.header.number() < &30))
+			.for_each(move |n| {
+				match n.header.number() {
+					1 => {
+						// first 14 blocks.
+						net.lock().peer(0).push_blocks(13, false);
+					},
+					14 => {
+						// generate transition at block 15, applied at 20.
+						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+							let block = builder.bake().unwrap();
+							add_transition(*block.header.parent_hash(), ScheduledChange {
+								next_authorities: make_ids(peers_b),
+								delay: 4,
+							});
+
+							block
+						});
+						net.lock().peer(0).push_blocks(5, false);
+					},
+					20 => {
+						// at block 21 we do another transition, but this time instant.
+						// add more until we have 30.
+						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+							let block = builder.bake().unwrap();
+							add_transition(*block.header.parent_hash(), ScheduledChange {
+								next_authorities: make_ids(&peers_c),
+								delay: 0,
+							});
+
+							block
+						});
+						net.lock().peer(0).push_blocks(9, false);
+					},
+					_ => {},
+				}
+
+				Ok(())
+			});
+
+		runtime.spawn(block_production);
+	}
+
+	let mut finality_notifications = Vec::new();
 	let all_peers = peers_a.iter()
 		.chain(peers_b)
 		.chain(peers_c)
@@ -520,6 +594,7 @@ fn transition_3_voters_twice_1_observer() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			futures::empty(),
 		).expect("all in order with client and network");
 
 		runtime.spawn(voter);
@@ -531,7 +606,11 @@ fn transition_3_voters_twice_1_observer() {
 		.map_err(|_| ());
 
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| { net.lock().route_until_complete(); Ok(()) })
+		.for_each(move |_| {
+			net.lock().send_import_notifications();
+			net.lock().sync();
+			Ok(())
+		})
 		.map(|_| ())
 		.map_err(|_| ());
 

@@ -19,12 +19,12 @@
 use rstd::prelude::*;
 
 use codec::{Decode, Encode, Codec, Input};
-use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug};
+use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct Digest<Item> {
 	pub logs: Vec<Item>,
 }
@@ -57,7 +57,7 @@ impl<Item> traits::Digest for Digest<Item> where
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub enum DigestItem<Hash, AuthorityId> {
 	/// System digest item announcing that authorities set has been changed
 	/// in the block. Contains the new set of authorities.
@@ -124,7 +124,7 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 
 impl<
 	Hash: Codec + Member + MaybeSerializeDebug,
-	AuthorityId: Codec + Member + MaybeSerializeDebug
+	AuthorityId: Codec + Member + MaybeSerializeDebug + MaybeHash
 > traits::DigestItem for DigestItem<Hash, AuthorityId> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;
@@ -133,7 +133,7 @@ impl<
 		self.dref().as_authorities_change()
 	}
 
-	fn as_changes_trie_root(&self) -> Option<&Hash> {
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		self.dref().as_changes_trie_root()
 	}
 }

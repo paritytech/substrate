@@ -26,7 +26,9 @@ use substrate_primitives::Blake2Hasher;
 use codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
+pub use num_traits::ops::checked::{
+	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+};
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
@@ -158,6 +160,8 @@ pub trait SimpleArithmetic:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl +
+	CheckedShr +
 	CheckedAdd +
 	CheckedSub +
 	CheckedMul +
@@ -173,6 +177,8 @@ impl<T:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl +
+	CheckedShr +
 	CheckedAdd +
 	CheckedSub +
 	CheckedMul +
@@ -408,6 +414,16 @@ pub trait MaybeDisplay {}
 impl<T> MaybeDisplay for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeHash: ::rstd::hash::Hash {}
+#[cfg(feature = "std")]
+impl<T: ::rstd::hash::Hash> MaybeHash for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeHash {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeHash for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeDecode: ::codec::Decode {}
 #[cfg(feature = "std")]
 impl<T: ::codec::Decode> MaybeDecode for T {}
@@ -425,7 +441,7 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
@@ -465,7 +481,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
@@ -494,6 +510,8 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
 /// Extract the digest item type for a block.
 pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
+/// Extract the authority ID type for a block.
+pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -544,8 +562,8 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
-pub trait Digest: Member + MaybeSerializeDebug + Default {
-	type Hash: Member + MaybeSerializeDebug;
+pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
+	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
@@ -567,9 +585,9 @@ pub trait Digest: Member + MaybeSerializeDebug + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
-	type Hash: Member + MaybeSerializeDebug;
-	type AuthorityId: Member + MaybeSerializeDebug;
+pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
+	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
+	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize + MaybeHash + codec::Encode + codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
@@ -582,8 +600,6 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
 pub trait ProvideInherent {
 	/// The inherent that is provided.
 	type Inherent: Encode + MaybeDecode;
-	/// The error used by this trait.
-	type Error: Encode + MaybeDecode;
 	/// The call for setting the inherent.
 	type Call: Encode + MaybeDecode;
 
@@ -597,7 +613,7 @@ pub trait ProvideInherent {
 	/// Check that the given inherent is valid.
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
-	) -> Result<(), Self::Error>;
+	) -> Result<(), super::CheckInherentError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -628,4 +644,24 @@ pub trait ProvideRuntimeApi {
 	/// the modifications will be `discarded`. The modifications will not be applied to the
 	/// storage, even on a `commit`.
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+}
+
+/// A marker trait for something that knows the type of the runtime block.
+pub trait GetRuntimeBlockType {
+	/// The `RuntimeBlock` type.
+	type RuntimeBlock: self::Block;
+}
+
+/// A marker trait for something that knows the type of the node block.
+pub trait GetNodeBlockType {
+	/// The `NodeBlock` type.
+	type NodeBlock: self::Block;
+}
+
+/// Something that provides information about a runtime api.
+pub trait RuntimeApiInfo {
+	/// The identifier of the runtime api.
+	const ID: [u8; 8];
+	/// The version of the runtime api.
+	const VERSION: u32;
 }

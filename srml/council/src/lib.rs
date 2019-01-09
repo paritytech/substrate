@@ -75,7 +75,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
 	impl system::Trait for Test {
 		type Origin = Origin;
@@ -122,13 +122,13 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 3,
 			minimum_deposit: 1,
-			_genesis_phantom_data: Default::default(),
+			public_delay: 0,
+			max_lock_periods: 6,
 		}.build_storage().unwrap().0);
 		t.extend(seats::GenesisConfig::<Test> {
 			candidacy_bond: 9,
@@ -145,12 +145,11 @@ mod tests {
 			presentation_duration: 2,
 			desired_seats: 2,
 			term_duration: 5,
-			_genesis_phantom_data: Default::default(),
 		}.build_storage().unwrap().0);
 		t.extend(voting::GenesisConfig::<Test> {
 			cooloff_period: 2,
 			voting_period: 1,
-			_genesis_phantom_data: Default::default(),
+			enact_delay_period: 0,
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}

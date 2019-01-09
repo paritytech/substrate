@@ -19,8 +19,8 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::{Perbill, traits::Identity};
-use primitives::testing::{Digest, DigestItem, Header};
+use primitives::Perbill;
+use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
@@ -30,13 +30,13 @@ impl_outer_origin!{
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
-	type SessionKey = u64;
-	type OnOfflineValidator = ();
+	type SessionKey = UintAuthorityId;
+	type InherentOfflineReport = ();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -58,13 +58,14 @@ impl balances::Trait for Test {
 	type Event = ();
 }
 impl session::Trait for Test {
-	type ConvertAccountIdToSessionKey = Identity;
+	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 	type OnSessionChange = Staking;
 	type Event = ();
 }
 impl timestamp::Trait for Test {
 	const TIMESTAMP_SET_POSITION: u32 = 0;
 	type Moment = u64;
+	type OnTimestampSet = ();
 }
 impl Trait for Test {
 	type OnRewardMinted = ();
@@ -88,12 +89,10 @@ pub fn new_test_ext(
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
 		authorities: vec![],
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(balances::GenesisConfig::<Test>{
 		balances: if monied {
@@ -111,7 +110,6 @@ pub fn new_test_ext(
 		transfer_fee: 0,
 		creation_fee: 0,
 		reclaim_rebate: 0,
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
@@ -125,11 +123,10 @@ pub fn new_test_ext(
 		current_session_reward: reward,
 		current_offline_slash: 20,
 		offline_slash_grace: 0,
-		_genesis_phantom_data: Default::default(),
+		invulnerables: vec![],
 	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5,
-		_genesis_phantom_data: Default::default(),
 	}.build_storage().unwrap().0);
 	runtime_io::TestExternalities::new(t)
 }

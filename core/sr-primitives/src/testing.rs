@@ -19,14 +19,32 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use codec::{Codec, Encode, Decode};
-use traits::{self, Checkable, Applyable, BlakeTwo256};
+use traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use generic::DigestItem as GenDigestItem;
 
-pub use substrate_primitives::{H256, AuthorityId};
+pub use substrate_primitives::{H256, Ed25519AuthorityId};
+use substrate_primitives::U256;
 
-pub type DigestItem = GenDigestItem<H256, u64>;
+#[derive(Default, PartialEq, Eq, Clone, Decode, Encode, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct UintAuthorityId(pub u64);
+impl Into<Ed25519AuthorityId> for UintAuthorityId {
+	fn into(self) -> Ed25519AuthorityId {
+		let bytes: [u8; 32] = U256::from(self.0).into();
+		Ed25519AuthorityId(bytes)
+	}
+}
 
-#[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+pub struct ConvertUintAuthorityId;
+impl Convert<u64, UintAuthorityId> for ConvertUintAuthorityId {
+	fn convert(a: u64) -> UintAuthorityId {
+		UintAuthorityId(a)
+	}
+}
+
+pub type DigestItem = GenDigestItem<H256, Ed25519AuthorityId>;
+
+#[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Digest {
 	pub logs: Vec<DigestItem>,
 }
@@ -48,7 +66,7 @@ impl traits::Digest for Digest {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -98,12 +116,26 @@ impl traits::Header for Header {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+impl<'a> Deserialize<'a> for Header {
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(DeError::custom("Invalid value passed into decode"))
+	}
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
-impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> where Xt: Serialize {
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	fn is_signed(&self) -> Option<bool> {
 		None
+	}
+}
+
+impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt>
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
 

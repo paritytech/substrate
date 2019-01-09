@@ -64,11 +64,23 @@ pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
 
-/// A String that is a `&'static str` on `no_std` and a `String` on `std`.
-#[cfg(not(feature = "std"))]
-pub type RuntimeString = &'static str;
+/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+#[cfg(not(feature = "std"))]
+pub type RuntimeString = &'static str;
+
+/// Create a const [RuntimeString].
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! create_runtime_str {
+	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
+}
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! create_runtime_str {
+	( $y:expr ) => {{ $y }}
+}
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
@@ -354,7 +366,7 @@ macro_rules! impl_outer_log {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
@@ -362,7 +374,7 @@ macro_rules! impl_outer_log {
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -462,6 +474,57 @@ macro_rules! impl_outer_log {
 	};
 }
 
+//TODO: https://github.com/paritytech/substrate/issues/1022
+/// Basic Inherent data to include in a block; used by simple runtimes.
+#[derive(Encode, Decode)]
+pub struct BasicInherentData {
+	/// Current timestamp.
+	pub timestamp: u64,
+	/// Blank report.
+	pub consensus: (),
+	/// Aura expected slot. Can take any value during block construction.
+	pub aura_expected_slot: u64,
+}
+
+impl BasicInherentData {
+	/// Create a new `BasicInherentData` instance.
+	pub fn new(timestamp: u64, expected_slot: u64) -> Self {
+		Self {
+			timestamp,
+			consensus: (),
+			aura_expected_slot: expected_slot,
+		}
+	}
+}
+
+//TODO: https://github.com/paritytech/substrate/issues/1022
+/// Error type used while checking inherents.
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Decode))]
+pub enum CheckInherentError {
+	/// The inherents are generally valid but a delay until the given timestamp
+	/// is required.
+	ValidAtTimestamp(u64),
+	/// Some other error has occurred.
+	Other(RuntimeString),
+}
+
+impl CheckInherentError {
+	/// Combine two results, taking the "worse" of the two.
+	pub fn combine_results<F: FnOnce() -> Result<(), Self>>(this: Result<(), Self>, other: F) -> Result<(), Self> {
+		match this {
+			Ok(()) => other(),
+			Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
+			Err(CheckInherentError::ValidAtTimestamp(x)) => match other() {
+				Ok(()) => Err(CheckInherentError::ValidAtTimestamp(x)),
+				Err(CheckInherentError::ValidAtTimestamp(y))
+					=> Err(CheckInherentError::ValidAtTimestamp(rstd::cmp::max(x, y))),
+				Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
+			}
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;
@@ -482,7 +545,7 @@ mod tests {
 		use super::RuntimeT;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
 		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
 	}
 
@@ -490,7 +553,7 @@ mod tests {
 		use super::RuntimeT;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 

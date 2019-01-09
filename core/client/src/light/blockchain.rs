@@ -21,11 +21,10 @@ use std::sync::Weak;
 use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
-use primitives::AuthorityId;
 use runtime_primitives::{Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
-use backend::NewBlockState;
+use backend::{AuxStore, NewBlockState};
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use cht;
@@ -33,7 +32,7 @@ use error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
-pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
+pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	///
 	/// Takes new authorities, the leaf state of the new block, and
@@ -41,7 +40,7 @@ pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>,
+		authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
@@ -207,11 +206,27 @@ pub mod tests {
 		}
 	}
 
+	impl AuxStore for DummyStorage {
+		fn insert_aux<
+			'a,
+			'b: 'a,
+			'c: 'a,
+			I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+			D: IntoIterator<Item=&'a &'b [u8]>,
+		>(&self, _insert: I, _delete: D) -> ClientResult<()> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+	}
+
 	impl Storage<Block> for DummyStorage {
 		fn import_header(
 			&self,
 			_header: Header,
-			_authorities: Option<Vec<AuthorityId>>,
+			_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {

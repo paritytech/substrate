@@ -45,9 +45,6 @@ extern crate parking_lot;
 extern crate log;
 
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate error_chain;
 
 #[cfg(test)]
@@ -84,7 +81,5 @@ pub trait RuntimeInfo {
 	fn runtime_version<E: Externalities<Blake2Hasher>> (
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8]
 	) -> Option<RuntimeVersion>;
 }

@@ -21,7 +21,7 @@ use rstd::result;
 use codec::Compact;
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
-use srml_support::dispatch::{Result, Dispatchable, Parameter};
+use srml_support::dispatch::{Dispatchable, Parameter};
 use srml_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::{self, ensure_signed};
@@ -67,8 +67,8 @@ decl_event!(
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
-		fn deposit_event() = default;
-		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) -> Result {
+		fn deposit_event<T>() = default;
+		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			let threshold = threshold.into();
 
@@ -90,10 +90,9 @@ decl_module! {
 
 				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
 			}
-			Ok(())
 		}
 
-		fn vote(origin, proposal: T::Hash, index: Compact<ProposalIndex>, approve: bool) -> Result {
+		fn vote(origin, proposal: T::Hash, index: Compact<ProposalIndex>, approve: bool) {
 			let who = ensure_signed(origin)?;
 			let index = index.into();
 
@@ -154,8 +153,6 @@ decl_module! {
 				// update voting
 				<Voting<T>>::insert(&proposal, voting);
 			}
-
-			Ok(())
 		}
 	}
 }
@@ -172,7 +169,6 @@ decl_storage! {
 		pub ProposalCount get(proposal_count): u32;
 	}
 	add_extra_genesis {
-		config(_marker): ::std::marker::PhantomData<T>;
 		build(|_, _, _| {});
 	}
 }

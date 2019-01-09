@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles setting and retrieval of free balance, 
-//! retrieving total balance, reserve and unreserve balance, 
+//! Balances: Handles setting and retrieval of free balance,
+//! retrieving total balance, reserve and unreserve balance,
 //! repatriating a reserved balance to a beneficiary account that exists,
 //! transfering a balance between accounts (when not reserved),
 //! slashing an account balance, account removal, rewards,
@@ -101,7 +101,16 @@ pub trait EnsureAccountLiquid<AccountId> {
 	/// with the reason why not otherwise.
 	fn ensure_account_liquid(who: &AccountId) -> Result;
 }
-
+impl<
+	AccountId,
+	X: EnsureAccountLiquid<AccountId>,
+	Y: EnsureAccountLiquid<AccountId>,
+> EnsureAccountLiquid<AccountId> for (X, Y) {
+	fn ensure_account_liquid(who: &AccountId) -> Result {
+		X::ensure_account_liquid(who)?;
+		Y::ensure_account_liquid(who)
+	}
+}
 impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 	fn ensure_account_liquid(_who: &AccountId) -> Result { Ok(()) }
 }
@@ -127,14 +136,14 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Transfer some liquid free balance to another staker.
 		pub fn transfer(
 			origin,
 			dest: RawAddress<T::AccountId, T::AccountIndex>,
 			value: <T::Balance as HasCompact>::Type
-		) -> Result {
+		) {
 			let transactor = ensure_signed(origin)?;
 
 			let dest = Self::lookup(dest)?;
@@ -170,8 +179,6 @@ decl_module! {
 				Self::set_free_balance_creating(&dest, new_to_balance);
 				Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
 			}
-
-			Ok(())
 		}
 
 		/// Set the balances of a given account.
@@ -179,11 +186,10 @@ decl_module! {
 			who: RawAddress<T::AccountId, T::AccountIndex>,
 			free: <T::Balance as HasCompact>::Type,
 			reserved: <T::Balance as HasCompact>::Type
-		) -> Result {
+		) {
 			let who = Self::lookup(who)?;
 			Self::set_free_balance(&who, free.into());
 			Self::set_reserved_balance(&who, reserved.into());
-			Ok(())
 		}
 	}
 }
@@ -273,7 +279,7 @@ decl_storage! {
 }
 
 /// Whatever happened about the hint given when creating the new account.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone, Copy)]
 pub enum NewAccountOutcome {
 	NoHint,

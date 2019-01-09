@@ -217,6 +217,7 @@ impl<'a,
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
+	/// Get the value stored at key.
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
 }
 

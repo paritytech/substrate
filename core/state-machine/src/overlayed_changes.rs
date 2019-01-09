@@ -44,7 +44,7 @@ pub struct OverlayedValue {
 	/// Current value. None if value has been deleted.
 	pub value: Option<Vec<u8>>,
 	/// The set of extinsic indices where the values has been changed.
-	/// Is filled only if runtime ahs announced changes trie support.
+	/// Is filled only if runtime has announced changes trie support.
 	pub extrinsics: Option<HashSet<u32>>,
 }
 
@@ -82,6 +82,11 @@ impl OverlayedChangeSet {
 }
 
 impl OverlayedChanges {
+	/// Whether the overlayed changes are empty.
+	pub fn is_empty(&self) -> bool {
+		self.prospective.is_empty() && self.committed.is_empty()
+	}
+
 	/// Sets the changes trie configuration.
 	///
 	/// Returns false if configuration has been set already and we now trying

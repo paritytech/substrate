@@ -38,6 +38,8 @@ use runtime_primitives::generic;
 use primitives::bytes;
 use runtime_primitives::traits::{BlakeTwo256, self};
 
+pub use runtime_primitives::BasicInherentData as InherentData;
+
 /// An index to a block.
 pub type BlockNumber = u64;
 
@@ -54,7 +56,7 @@ pub type Balance = u128;
 
 /// The Ed25519 pub key of an session that belongs to an authority of the chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
-pub type SessionKey = primitives::AuthorityId;
+pub type SessionKey = primitives::Ed25519AuthorityId;
 
 /// Index of a transaction in the chain.
 pub type Index = u64;
@@ -77,7 +79,7 @@ pub type BlockId = generic::BlockId<Block>;
 
 /// Opaque, encoded, unchecked extrinsic.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Serialize, Debug))]
 pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 impl traits::Extrinsic for UncheckedExtrinsic {

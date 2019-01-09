@@ -100,12 +100,12 @@ pub trait Trait: balances::Trait + session::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Declare the desire to stake for the transactor.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn stake(origin) -> Result {
+		fn stake(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::nominating(&who).is_none(), "Cannot stake if already nominating.");
 			let mut intentions = <Intentions<T>>::get();
@@ -115,7 +115,6 @@ decl_module! {
 			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
 			intentions.push(who);
 			<Intentions<T>>::put(intentions);
-			Ok(())
 		}
 
 		/// Retract the desire to stake for the transactor.
@@ -131,7 +130,7 @@ decl_module! {
 			Self::apply_unstake(&who, intentions_index as usize)
 		}
 
-		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
+		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) {
 			let who = ensure_signed(origin)?;
 			let target = <balances::Module<T>>::lookup(target)?;
 
@@ -148,13 +147,11 @@ decl_module! {
 
 			// Update bondage
 			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
-
-			Ok(())
 		}
 
 		/// Will panic if called when source isn't currently nominating target.
 		/// Updates Nominating, NominatorsFor and NominationBalance.
-		fn unnominate(origin, target_index: Compact<u32>) -> Result {
+		fn unnominate(origin, target_index: Compact<u32>) {
 			let source = ensure_signed(origin)?;
 			let target_index: u32 = target_index.into();
 			let target_index = target_index as usize;
@@ -180,7 +177,6 @@ decl_module! {
 				source,
 				<system::Module<T>>::block_number() + Self::bonding_duration()
 			);
-			Ok(())
 		}
 
 		/// Set the given account's preference for slashing behaviour should they be a validator.
@@ -190,7 +186,7 @@ decl_module! {
 			origin,
 			intentions_index: Compact<u32>,
 			prefs: ValidatorPrefs<T::Balance>
-		) -> Result {
+		) {
 			let who = ensure_signed(origin)?;
 			let intentions_index: u32 = intentions_index.into();
 
@@ -199,27 +195,22 @@ decl_module! {
 			}
 
 			<ValidatorPreferences<T>>::insert(who, prefs);
-
-			Ok(())
 		}
 
 		/// Set the number of sessions in an era.
-		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) {
 			<NextSessionsPerEra<T>>::put(new.into());
-			Ok(())
 		}
 
 		/// The length of the bonding duration in eras.
-		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) {
 			<BondingDuration<T>>::put(new.into());
-			Ok(())
 		}
 
 		/// The ideal number of validators.
-		fn set_validator_count(new: Compact<u32>) -> Result {
+		fn set_validator_count(new: Compact<u32>) {
 			let new: u32 = new.into();
 			<ValidatorCount<T>>::put(new);
-			Ok(())
 		}
 
 		/// Force there to be a new era. This also forces a new session immediately after.
@@ -229,10 +220,14 @@ decl_module! {
 		}
 
 		/// Set the offline slash grace period.
-		fn set_offline_slash_grace(new: Compact<u32>) -> Result {
+		fn set_offline_slash_grace(new: Compact<u32>) {
 			let new: u32 = new.into();
 			<OfflineSlashGrace<T>>::put(new);
-			Ok(())
+		}
+
+		/// Set the validators who cannot be slashed (if any).
+		fn set_invulnerables(validators: Vec<T::AccountId>) {
+			<Invulerables<T>>::put(validators);
 		}
 	}
 }
@@ -269,6 +264,10 @@ decl_storage! {
 		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 		/// The length of the bonding duration in blocks.
 		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+
+		/// Any validators that may never be slashed or forcible kicked. It's a Vec since they're easy to initialise
+		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
+		pub Invulerables get(invulnerables) config(): Vec<T::AccountId>;
 
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
@@ -341,6 +340,11 @@ impl<T: Trait> Module<T> {
 			i if i <= <system::Module<T>>::block_number() => LockStatus::Liquid,
 			i => LockStatus::LockedUntil(i),
 		}
+	}
+
+	/// Get the current validators.
+	pub fn validators() -> Vec<T::AccountId> {
+		session::Module::<T>::validators()
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -500,6 +504,60 @@ impl<T: Trait> Module<T> {
 		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
 		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
 	}
+
+	/// Call when a validator is determined to be offline. `count` is the
+	/// number of offences the validator has committed.
+	pub fn on_offline_validator(v: T::AccountId, count: usize) {
+		use primitives::traits::CheckedShl;
+
+		// Early exit if validator is invulnerable.
+		if Self::invulnerables().contains(&v) {
+			return
+		}
+
+		for _ in 0..count {
+			let slash_count = Self::slash_count(&v);
+			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
+			let grace = Self::offline_slash_grace();
+
+			let event = if slash_count >= grace {
+				let instances = slash_count - grace;
+
+				let base_slash = Self::current_offline_slash();
+				let slash = match base_slash.checked_shl(instances) {
+					Some(slash) => slash,
+					None => {
+						// freeze at last maximum valid slash if this starts
+						// to overflow.
+						<SlashCount<T>>::insert(v.clone(), slash_count);
+						base_slash.checked_shl(instances - 1)
+							.expect("slash count no longer incremented after overflow; \
+								prior check only fails with instances >= 1; \
+								thus instances - 1 always works and is a valid amount of bits; qed")
+					}
+				};
+
+				let next_slash = slash << 1;
+
+				let _ = Self::slash_validator(&v, slash);
+				if instances >= Self::validator_preferences(&v).unstake_threshold
+					|| Self::slashable_balance(&v) < next_slash
+				{
+					if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
+						Self::apply_unstake(&v, pos)
+							.expect("pos derived correctly from Self::intentions(); \
+								apply_unstake can only fail if pos wrong; \
+								Self::intentions() doesn't change; qed");
+					}
+					let _ = Self::apply_force_new_era(false);
+				}
+				RawEvent::OfflineSlash(v.clone(), slash)
+			} else {
+				RawEvent::OfflineWarning(v.clone(), slash_count)
+			};
+			Self::deposit_event(event);
+		}
+	}
 }
 
 impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
@@ -524,33 +582,11 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
-	fn on_offline_validator(validator_index: usize) {
-		let v = <session::Module<T>>::validators()[validator_index].clone();
-		let slash_count = Self::slash_count(&v);
-		<SlashCount<T>>::insert(v.clone(), slash_count + 1);
-		let grace = Self::offline_slash_grace();
-
-		let event = if slash_count >= grace {
-			let instances = slash_count - grace;
-			let slash = Self::current_offline_slash() << instances;
-			let next_slash = slash << 1u32;
-			let _ = Self::slash_validator(&v, slash);
-			if instances >= Self::validator_preferences(&v).unstake_threshold
-				|| Self::slashable_balance(&v) < next_slash
-			{
-				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
-					Self::apply_unstake(&v, pos)
-						.expect("pos derived correctly from Self::intentions(); \
-							apply_unstake can only fail if pos wrong; \
-							Self::intentions() doesn't change; qed");
-				}
-				let _ = Self::apply_force_new_era(false);
-			}
-			RawEvent::OfflineSlash(v, slash)
-		} else {
-			RawEvent::OfflineWarning(v, slash_count)
-		};
-		Self::deposit_event(event);
+impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
+	fn handle_report(reported_indices: Vec<u32>) {
+		for validator_index in reported_indices {
+			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+			Self::on_offline_validator(v, 1);
+		}
 	}
 }
