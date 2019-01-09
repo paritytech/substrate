@@ -240,6 +240,20 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
+	pub fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)> {
+		self.context_data.peers.read().iter().map(|(idx, p)| {
+			(
+				*idx,
+				PeerInfo {
+					roles: p.roles,
+					protocol_version: p.protocol_version,
+					best_hash: p.best_hash,
+					best_number: p.best_number,
+				}
+			)
+		}).collect()
+	}
+
 	pub fn handle_packet(&self, io: &mut SyncIo, who: NodeIndex, mut data: &[u8]) {
 		let message: Message<B> = match Decode::decode(&mut data) {
 			Some(m) => m,
