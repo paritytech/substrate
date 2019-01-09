@@ -59,7 +59,7 @@ use runtime_support::for_each_tuple;
 
 /// A trait which is called when the timestamp is set.
 pub trait OnTimestampSet<Moment> {
-    fn on_timestamp_set(moment: Moment);
+	fn on_timestamp_set(moment: Moment);
 }
 
 macro_rules! impl_timestamp_set {
