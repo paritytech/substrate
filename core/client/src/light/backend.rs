@@ -188,7 +188,7 @@ where
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
+	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -208,6 +208,11 @@ where
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.aux_ops = ops.into_iter().collect();
+		Ok(())
+	}
+
+	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
+		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 }

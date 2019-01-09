@@ -24,7 +24,7 @@ use futures::sync::oneshot::{channel, Receiver, Sender};
 use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
-use client::{self, error::{Error as ClientError, ErrorKind as ClientErrorKind}};
+use client::{error::{Error as ClientError, ErrorKind as ClientErrorKind}};
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 use io::SyncIo;
@@ -107,7 +107,7 @@ struct Request<Block: BlockT> {
 enum RequestData<Block: BlockT> {
 	RemoteHeader(RemoteHeaderRequest<Block::Header>, Sender<Result<Block::Header, ClientError>>),
 	RemoteRead(RemoteReadRequest<Block::Header>, Sender<Result<Option<Vec<u8>>, ClientError>>),
-	RemoteCall(RemoteCallRequest<Block::Header>, Sender<Result<client::CallResult, ClientError>>),
+	RemoteCall(RemoteCallRequest<Block::Header>, Sender<Result<Vec<u8>, ClientError>>),
 	RemoteChanges(RemoteChangesRequest<Block::Header>, Sender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>),
 }
 
@@ -312,7 +312,7 @@ impl<B, E> Fetcher<B> for OnDemand<B, E> where
 {
 	type RemoteHeaderResult = RemoteResponse<B::Header>;
 	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
-	type RemoteCallResult = RemoteResponse<client::CallResult>;
+	type RemoteCallResult = RemoteResponse<Vec<u8>>;
 	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
@@ -529,7 +529,7 @@ pub mod tests {
 	use futures::Future;
 	use parking_lot::RwLock;
 	use runtime_primitives::traits::NumberFor;
-	use client::{self, error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
+	use client::{error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 	use config::Roles;
@@ -567,12 +567,9 @@ pub mod tests {
 			}
 		}
 
-		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<client::CallResult> {
+		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Vec<u8>> {
 			match self.ok {
-				true => Ok(client::CallResult {
-					return_data: vec![42],
-					changes: Default::default(),
-				}),
+				true => Ok(vec![42]),
 				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
 			}
 		}
@@ -796,7 +793,7 @@ pub mod tests {
 		});
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
-			assert_eq!(result.return_data, vec![42]);
+			assert_eq!(result, vec![42]);
 		});
 
 		receive_call_response(&*on_demand, &mut network, 0, 0);
