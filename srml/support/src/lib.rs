@@ -134,3 +134,16 @@ pub use mashup::*;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde_derive::*;
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! for_each_tuple {
+	($m:ident) => {
+		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
+	};
+	(@IMPL $m:ident !!) => { $m! { } };
+	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
+		$m! { $h $($t)* }
+		for_each_tuple! { @IMPL $m !! $($t,)* }
+	}
+}
