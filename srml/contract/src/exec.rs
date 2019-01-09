@@ -44,16 +44,21 @@ pub struct CallReceipt {
 pub trait Ext {
 	type T: Trait;
 
-	/// Returns the storage entry of the executing account by the given key.
+	/// Returns the storage entry of the executing account by the given `key`.
+	///
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Sets the storage entry by the given key to the specified value.
+	///
+	/// If `value` is `None` then the storage entry is deleted.
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
 
 	/// Instantiate a contract from the given code.
 	///
 	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
-	/// transfered from this to the newly created account.
+	/// transfered from this to the newly created account (also known as endowment).
 	fn instantiate(
 		&mut self,
 		code: &CodeHash<Self::T>,
@@ -79,13 +84,16 @@ pub trait Ext {
 	fn address(&self) -> &AccountIdOf<Self::T>;
 }
 
+/// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
+/// executable to be executed by an accompanying `Vm` implementation.
 pub trait Loader<T: Trait> {
 	type Executable;
 
-	// TODO: We need to support the case with empty constructor.
-	// I think we don't want to require every binary to contain a `deploy` function.
-	// Anyway, we will have to have validation of this.
+	/// Load the initializer portion of the code specified by the `code_hash`. This
+	/// executable is called upon instantiation.
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
+	/// Load the main portion of the code specified by the `code_hash`. This executable
+	/// is called for each call to a contract.
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<Self::Executable, &'static str>;
 }
 
