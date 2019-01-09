@@ -232,7 +232,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> SyncProvider<
 	}
 
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
-		let mut peers = self.handler.peers();
+		let peers = self.handler.peers();
 		let network = self.network.lock();
 		peers.into_iter().map(|(idx, info)| {
 			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)

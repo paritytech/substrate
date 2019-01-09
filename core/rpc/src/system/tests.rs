@@ -16,7 +16,6 @@
 
 use super::*;
 
-use std::str::FromStr;
 use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
 use network::config::Roles;
 use test_client::runtime::Block;
@@ -144,7 +143,6 @@ fn system_health() {
 
 #[test]
 fn system_peers() {
-
 	assert_eq!(
 		api(None).system_peers().unwrap(),
 		vec![PeerInfo {
