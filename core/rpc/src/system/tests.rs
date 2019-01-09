@@ -16,9 +16,11 @@
 
 use super::*;
 
+use std::str::FromStr;
 use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
 use network::config::Roles;
 use test_client::runtime::Block;
+use primitives::H256;
 
 #[derive(Default)]
 struct Status {
@@ -150,8 +152,8 @@ fn system_peers() {
 			peer_id: "QmS5oyTmdjwBowwAH1D9YQnoe2HyWpVemH8qHiU5RqWPh4".into(),
 			roles: "FULL".into(),
 			protocol_version: 1,
-			best_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".into(),
-			best_number: "1".into(),
+			best_hash: Default::default(),
+			best_number: 1u64,
 		}]
 	);
 }

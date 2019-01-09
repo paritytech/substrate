@@ -53,7 +53,7 @@ pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
 	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>, Metadata=Metadata>,
 	A: apis::author::AuthorApi<ExHash, Block::Hash, Metadata=Metadata>,
-	Y: apis::system::SystemApi,
+	Y: apis::system::SystemApi<Block::Hash, NumberFor<Block>>,
 {
 	let mut io = pubsub::PubSubHandler::default();
 	io.extend_with(state.to_delegate());

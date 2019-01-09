@@ -47,7 +47,7 @@ pub struct Health {
 
 /// Network Peer information
 #[derive(Debug, PartialEq, Serialize)]
-pub struct PeerInfo {
+pub struct PeerInfo<Hash, Number> {
 	/// Peer Node Index
 	pub index: usize,
 	/// Peer ID
@@ -57,9 +57,9 @@ pub struct PeerInfo {
 	/// Protocol version
 	pub protocol_version: u32,
 	/// Peer best block hash
-	pub best_hash: String,
+	pub best_hash: Hash,
 	/// Peer best block number
-	pub best_number: String,
+	pub best_number: Number,
 }
 
 impl fmt::Display for Health {
