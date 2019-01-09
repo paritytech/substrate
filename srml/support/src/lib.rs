@@ -135,8 +135,10 @@ pub use mashup::*;
 #[doc(hidden)]
 pub use serde_derive::*;
 
+/// Programatically create derivations for tuples of up to 19 elements. You provide a second macro
+/// which is called once per tuple size, along with a number of identifiers, one for each element
+/// of the tuple.
 #[macro_export]
-#[doc(hidden)]
 macro_rules! for_each_tuple {
 	($m:ident) => {
 		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
