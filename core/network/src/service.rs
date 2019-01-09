@@ -26,7 +26,7 @@ use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProto
 use io::NetSyncIo;
 use consensus::import_queue::{ImportQueue, Link};
 use consensus_gossip::ConsensusGossip;
-use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
+use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo};
 use config::Params;
 use error::Error;
 use specialization::NetworkSpecialization;
@@ -45,6 +45,8 @@ const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
+	/// Get currently connected peers
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
 }
 
 /// Minimum Requirements for a Hash within Networking
@@ -227,6 +229,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> SyncProvider<
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.status()
+	}
+
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
+		let peers = self.handler.peers();
+		let network = self.network.lock();
+		peers.into_iter().map(|(idx, info)| {
+			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)
+		}).collect::<Vec<_>>()
 	}
 }
 
