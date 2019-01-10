@@ -685,7 +685,6 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		let dest = 1;
 		let value = Default::default();
 		let mut gas_meter = GasMeter::<Test>::with_limit(10000, 1);
 		let data = vec![];
