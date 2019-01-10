@@ -531,6 +531,7 @@ impl CheckInherentError {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 
+#[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
 		::codec::Encode::using_encoded(&self.0, |bytes| seq.serialize_bytes(bytes))
