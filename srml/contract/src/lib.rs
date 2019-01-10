@@ -101,7 +101,7 @@ use double_map::StorageDoubleMap;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::{Codec, HasCompact};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic, Bounded};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 use system::ensure_signed;
@@ -113,7 +113,7 @@ pub trait Trait: balances::Trait {
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Balance> + As<u64> + As<u32>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;

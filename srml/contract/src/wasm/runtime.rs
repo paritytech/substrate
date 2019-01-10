@@ -22,7 +22,7 @@ use rstd::prelude::*;
 use rstd::mem;
 use codec::{Decode, Encode};
 use gas::{GasMeter, Token, GasMeterResult};
-use runtime_primitives::traits::{As, CheckedMul};
+use runtime_primitives::traits::{As, CheckedMul, Bounded};
 use sandbox;
 use system;
 use {Trait, CodeHash};
@@ -112,22 +112,22 @@ pub enum RuntimeToken {
 impl<T: Trait> Token<T> for RuntimeToken {
 	type Metadata = Schedule<T::Gas>;
 
-	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> Option<T::Gas> {
+	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
 		use self::RuntimeToken::*;
 		let value = match *self {
-			Explicit(amount) => <T::Gas as As<u32>>::sa(amount),
+			Explicit(amount) => Some(<T::Gas as As<u32>>::sa(amount)),
 			ReadMemory(byte_count) => metadata
 				.sandbox_data_read_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))?,
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
 			WriteMemory(byte_count) => metadata
 				.sandbox_data_write_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))?,
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
-				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count))?,
+				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
 		};
 
-		Some(value)
+		value.unwrap_or_else(|| Bounded::max_value())
 	}
 }
 

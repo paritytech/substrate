@@ -193,11 +193,11 @@ pub enum ExecFeeToken {
 impl<T: Trait> Token<T> for ExecFeeToken {
 	type Metadata = Config<T>;
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> Option<T::Gas> {
-		Some(match *self {
+	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
+		match *self {
 			ExecFeeToken::Call => metadata.call_base_fee,
 			ExecFeeToken::Instantiate => metadata.instantiate_base_fee,
-		})
+		}
 	}
 }
 
@@ -400,7 +400,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
 	type Metadata = Config<T>;
 
 	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> Option<T::Gas> {
+	fn calculate_amount(&self, metadata: &Config<T>) -> T::Gas {
 		let balance_fee = match self.kind {
 			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
@@ -410,7 +410,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
 		let amount_in_gas: T::Balance = balance_fee / self.gas_price;
 		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
 
-		Some(amount_in_gas)
+		amount_in_gas
 	}
 }
 

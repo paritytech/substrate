@@ -16,7 +16,7 @@
 
 use gas::{GasMeter, Token};
 use rstd::prelude::*;
-use runtime_primitives::traits::{As, CheckedMul, Hash};
+use runtime_primitives::traits::{As, CheckedMul, Hash, Bounded};
 use runtime_support::StorageMap;
 use wasm::{prepare, runtime::Env, PrefabWasmModule};
 use {CodeHash, CodeStorage, PristineCode, Schedule, Trait};
@@ -31,13 +31,12 @@ pub struct PutCodeToken(u64);
 impl<T: Trait> Token<T> for PutCodeToken {
 	type Metadata = Schedule<T::Gas>;
 
-	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> Option<T::Gas> {
+	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
 		let code_len_in_gas = <T::Gas as As<u64>>::sa(self.0);
-		let cost = metadata
+		metadata
 			.put_code_per_byte_cost
-			.checked_mul(&code_len_in_gas)?;
-
-		Some(cost)
+			.checked_mul(&code_len_in_gas)
+			.unwrap_or_else(|| Bounded::max_value())
 	}
 }
 

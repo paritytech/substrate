@@ -62,9 +62,13 @@ pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
 
 	/// Calculate amount of gas that should be taken by this token.
 	///
-	/// Returns `None` if the amount can't be calculated e.g. because of overflow.
-	/// This situation is treated as if out of gas happened.
-	fn calculate_amount(&self, metadata: &Self::Metadata) -> Option<T::Gas>;
+	/// This function should be really lightweight and must not fail. It is not
+	/// expected that implementors will query the storage or do any kinds of heavy operations.
+	///
+	/// That said, implementors of this function still can run into overflows
+	/// while calculating the amount. In this case it is ok to use saturating operations
+	/// since on overflow they will return `max_value` which should consume all gas.
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> T::Gas;
 }
 
 /// A wrapper around a type-erased trait object of what used to be a `Token`.
@@ -97,8 +101,7 @@ impl<T: Trait> GasMeter<T> {
 
 	/// Account for used gas.
 	///
-	/// Amount is calculated by the given `token`. If `token::calculate_amount` returns
-	/// `None` then all available gas is consumed and `OutOfGas` is returned.
+	/// Amount is calculated by the given `token`.
 	///
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
@@ -121,11 +124,7 @@ impl<T: Trait> GasMeter<T> {
 			self.tokens.push(erased_tok);
 		}
 
-		let amount = match token.calculate_amount(metadata) {
-			Some(amount_in_gas) => amount_in_gas,
-			None => self.gas_left, // Consume everything
-		};
-
+		let amount = token.calculate_amount(metadata);
 		let new_value = match self.gas_left.checked_sub(&amount) {
 			None => None,
 			Some(val) if val.is_zero() => None,
@@ -296,9 +295,7 @@ mod tests {
 	struct UnitToken;
 	impl Token<Test> for UnitToken {
 		type Metadata = ();
-		fn calculate_amount(&self, _metadata: &()) -> Option<u64> {
-			Some(1)
-		}
+		fn calculate_amount(&self, _metadata: &()) -> u64 { 1 }
 	}
 
 	struct DoubleTokenMetadata {
@@ -311,8 +308,9 @@ mod tests {
 
 	impl Token<Test> for DoubleToken {
 		type Metadata = DoubleTokenMetadata;
-		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> Option<u64> {
-			Some(self.0 * metadata.multiplier)
+		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
+			// Probably you want to use saturating mul in producation code.
+			self.0 * metadata.multiplier
 		}
 	}
 
