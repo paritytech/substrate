@@ -425,8 +425,8 @@ enum TransferCause {
 /// All balance changes are performed in the `overlay`.
 ///
 /// This function also handles charging the fee. The fee depends
-/// on whether the transfer happening because of contract instantiation,
-/// transfering endowment, or because of a transfer via `call`. This
+/// on whether the transfer happening because of contract instantiation
+/// (transfering endowment) or because of a transfer via `call`. This
 /// is specified using the `cause` parameter.
 ///
 /// NOTE: that the fee is denominated in `T::Balance` units, but
@@ -445,6 +445,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	ctx: &mut ExecutionContext<'a, T, V, L>,
 ) -> Result<(), &'static str> {
 	use self::TransferCause::*;
+	use self::TransferFeeKind::*;
 
 	let to_balance = ctx.overlay.get_balance(dest);
 
@@ -456,15 +457,18 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	let would_create = to_balance.is_zero();
 
 	let token = {
-		let kind: TransferFeeKind = match (cause, would_create) {
+		let kind: TransferFeeKind = match cause {
 			// If this function is called from `Instantiate` routine, then we always
 			// charge contract account creation fee.
-			(Instantiate, _) => TransferFeeKind::ContractInstantiate,
+			Instantiate => ContractInstantiate,
 
 			// Otherwise the fee depends on whether we create a new account or transfer
 			// to an existing one.
-			(Call, true) => TransferFeeKind::AccountCreate,
-			(Call, false) => TransferFeeKind::Transfer,
+			Call => if would_create {
+				TransferFeeKind::AccountCreate
+			} else {
+				TransferFeeKind::Transfer
+			},
 		};
 		TransferFeeToken {
 			kind,
