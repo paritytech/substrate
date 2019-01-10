@@ -43,6 +43,8 @@ pub struct Health {
 	pub peers: usize,
 	/// Is the node syncing
 	pub is_syncing: bool,
+	/// Should this node have any peers
+	pub should_have_peers: bool,
 }
 
 /// Network Peer information
