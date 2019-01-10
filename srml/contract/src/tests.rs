@@ -29,6 +29,7 @@ use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
 use substrate_primitives::Blake2Hasher;
 use system::{EventRecord, Phase};
+use wabt;
 use {
 	balances, runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
 	Trait,
@@ -87,6 +88,10 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 		*origin + 1
 	}
 }
+
+const ALICE: u64 = 1;
+const BOB: u64 = 2;
+const CHARLIE: u64 = 3;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -221,6 +226,78 @@ fn account_removal_removes_storage() {
 					Some(b"4".to_vec())
 				);
 			}
+		},
+	);
+}
+
+const CODE_RETURN_FROM_START_FN: &str = r#"
+(module
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(start $start)
+	(func $start
+		(call $ext_return
+			(i32.const 8)
+			(i32.const 4)
+		)
+		(unreachable)
+	)
+
+	(func (export "call")
+		(unreachable)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\01\02\03\04")
+)
+"#;
+const HASH_RETURN_FROM_START_FN: [u8; 32] = hex!("e6411d12daa2a19e4e9c7d8306c31c7d53a352cb8ed84385c8a1d48fc232e708");
+
+#[test]
+fn instantiate_and_call() {
+	let wasm = wabt::wat2wasm(CODE_RETURN_FROM_START_FN).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(100).build(),
+		|| {
+			Balances::set_free_balance(&ALICE, 1_000_000);
+			Balances::increase_total_stake_by(1_000_000);
+
+			assert_ok!(Contract::put_code(
+				Origin::signed(ALICE),
+				100_000.into(),
+				wasm,
+			));
+
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100.into(),
+				100_000.into(),
+				HASH_RETURN_FROM_START_FN.into(),
+				vec![],
+			));
+
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_RETURN_FROM_START_FN.into())),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(
+						balances::RawEvent::NewAccount(BOB, 0, balances::NewAccountOutcome::NoHint)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+				}
+			]);
 		},
 	);
 }

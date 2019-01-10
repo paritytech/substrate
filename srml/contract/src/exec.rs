@@ -677,7 +677,6 @@ mod tests {
 	}
 
 	// TODO: Tests to add:
-	// - Verify that instantiate properly creates a contract.
 	// - Instantiate accounts in a proper way (i.e. via `instantiate`)
 	// - Verify sanity of initial setup. I.e. no active account should have a zero balance.
 	// - test events acruing in success and failure cases.

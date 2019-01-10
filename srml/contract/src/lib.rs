@@ -83,6 +83,10 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate wabt;
 
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+
 #[macro_use]
 mod gas;
 
