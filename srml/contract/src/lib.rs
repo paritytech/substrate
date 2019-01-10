@@ -157,7 +157,7 @@ decl_module! {
 		/// The schedule should have a greater version than the stored schedule.
 		fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
 			if <Module<T>>::current_schedule().version >= schedule.version {
-				return Err("Schedule should have a greater version");
+				return Err("new schedule must have a greater version than current");
 			}
 
 			Self::deposit_event(RawEvent::ScheduleUpdated(schedule.version));
