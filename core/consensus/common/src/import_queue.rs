@@ -93,7 +93,7 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	/// Import bunch of blocks.
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
 	/// Import a block justification.
-	fn import_justification(&self, hash: B::Hash, justification: Justification) -> bool;
+	fn import_justification(&self, hash: B::Hash, number: NumberFor<B>, justification: Justification) -> bool;
 }
 
 /// Import queue status. It isn't completely accurate.
@@ -221,8 +221,8 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 		self.data.signal.notify_one();
 	}
 
-	fn import_justification(&self, hash: B::Hash, justification: Justification) -> bool {
-		self.block_import.import_justification(hash, justification).is_ok()
+	fn import_justification(&self, hash: B::Hash, number: NumberFor<B>, justification: Justification) -> bool {
+		self.block_import.import_justification(hash, number, justification).is_ok()
 	}
 }
 

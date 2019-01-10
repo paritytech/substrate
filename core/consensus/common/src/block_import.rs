@@ -16,7 +16,7 @@
 
 //! Block import helpers.
 
-use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, DigestItemFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
 use runtime_primitives::Justification;
 use std::borrow::Cow;
 
@@ -156,6 +156,7 @@ pub trait BlockImport<B: BlockT> {
 	fn import_justification(
 		&self,
 		hash: B::Hash,
+		number: NumberFor<B>,
 		justification: Justification,
 	) -> Result<(), Self::Error>;
 }

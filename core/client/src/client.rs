@@ -1101,6 +1101,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	fn import_justification(
 		&self,
 		hash: Block::Hash,
+		_number: NumberFor<Block>,
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.finalize_block(BlockId::Hash(hash), Some(justification), true)

@@ -143,17 +143,24 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 	}
 
-	fn on_response(&mut self, who: NodeIndex, justification: Option<Justification>) {
-		println!("received justification from: {:?} {:?}", who, justification);
+	fn on_response(
+		&mut self,
+		who: NodeIndex,
+		justification: Option<Justification>,
+		import_queue: &ImportQueue<B>,
+	) {
 		// we assume that the request maps to the given response, this is
 		// currently enforced by the outer network protocol before passing on
 		// messages to chain sync.
 		if let Some(request) = self.peer_requests.remove(&who) {
-			if justification.is_none() {
-				self.pending_requests.push_front(request);
-			} else {
-				self.justifications.remove(&request);
+			if let Some(justification) = justification {
+				if import_queue.import_justification(request.0, request.1, justification) {
+					self.justifications.remove(&request);
+					return;
+				}
 			}
+
+			self.pending_requests.push_front(request);
 		}
 	}
 }
@@ -402,19 +409,10 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		protocol: &mut Context<B>,
 		who: NodeIndex,
-		request: message::BlockJustificationRequest<B>,
+		_request: message::BlockJustificationRequest<B>,
 		response: message::BlockJustificationResponse,
 	) {
-		if let Some(justification) = response.justification {
-			if self.import_queue.import_justification(request.block, justification.clone()) {
-				self.justifications.on_response(who, Some(justification));
-			} else {
-				self.justifications.on_response(who, None);
-			}
-		} else {
-			self.justifications.on_response(who, response.justification);
-		}
-
+		self.justifications.on_response(who, response.justification, &*self.import_queue);
 		self.maintain_sync(protocol);
 	}
 

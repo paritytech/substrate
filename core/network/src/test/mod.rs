@@ -194,9 +194,10 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 	fn import_justification(
 		&self,
 		hash: B::Hash,
+		number: NumberFor<B>,
 		justification: Justification,
 	) -> bool {
-		self.block_import.import_justification(hash, justification).is_ok()
+		self.block_import.import_justification(hash, number, justification).is_ok()
 	}
 }
 
@@ -388,8 +389,9 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
 	}
 
+	#[cfg(test)]
 	/// Request a justification for the given block.
-	fn request_justification(&self, hash: &H256, number: NumberFor<Block>) {
+	fn request_justification(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
 		self.executor.execute_in_context(|context| {
 			self.sync.sync().write().request_justification(hash, number, context);
 		})
