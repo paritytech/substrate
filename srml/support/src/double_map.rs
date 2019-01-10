@@ -88,12 +88,8 @@ pub trait StorageDoubleMap {
 	fn full_key(k1: Self::Key1, k2: Self::Key2) -> Vec<u8> {
 		let key1_data = Self::encode_key1(k1);
 		let key2_data = Self::encode_key2(k2);
-		let key1 = Self::derive_key1(key1_data);
-		let key2 = Self::derive_key2(key2_data);
-
-		let mut k = Vec::new();
-		k.extend(&key1);
-		k.extend(&key2);
-		k
+		let mut key = Self::derive_key1(key1_data);
+		key.extend(Self::derive_key2(key2_data));
+		key
 	}
 }
