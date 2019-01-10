@@ -4,7 +4,7 @@ path = "node/src/main.rs"
 
 [package]
 name = "substrate"
-version = "0.9.1"
+version = "0.9.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 
