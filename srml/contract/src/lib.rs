@@ -166,6 +166,7 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Stores code in the storage. You can instantiate contracts only with stored code.
 		fn put_code(
 			origin,
 			gas_limit: <T::Gas as HasCompact>::Type,
