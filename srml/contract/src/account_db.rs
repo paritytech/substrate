@@ -26,7 +26,7 @@ use {balances, system};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
-	/// In the case the outer option is None, the code_hash will be untouched.
+	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
 	code: Option<Option<CodeHash<T>>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
