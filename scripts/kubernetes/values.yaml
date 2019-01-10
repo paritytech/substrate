@@ -1,0 +1,58 @@
+# set tag manually --set image.tag=latest
+image:
+  repository: parity/substrate
+  tag: latest
+  pullPolicy: Always
+  basepath: /substrate
+
+
+# if set to true a service account for substrate will be created
+rbac:
+  enable: true
+  name: substrate
+
+
+nodes:
+  replicas: 2
+  args:
+    # name and data directory are set by the chart itself
+    # key and node-key may be provided on commandline invocation
+    #
+    # - --chain
+    # - krummelanke
+    # serve rpc within the local network
+    # - fenced off the world via firewall
+    # - used for health checks
+    - --rpc-external
+    - --ws-external
+    # - --log
+    # - sub-libp2p=trace
+  
+
+validator:
+  enable: True
+  # adds --validator commandline option
+  # key may be hooked in for --key argument
+  # same as for node-key in a structure like
+  # secrets:
+  #   keys:
+  #    substrate-0: <base64 enc key>
+  #    substrate-1: <base64 enc key>
+  #   node-keys:
+  #    substrate-0: <base64 enc key>
+  #    substrate-1: <base64 enc key>
+  # pod names are canonical. changing these or providing different amount of 
+  # keys than the replicas count will lead to behaviour noone ever has 
+  # experienced before
+  secrets:
+    keys.substrate-0: dGVzdGtleTA=
+    keys.substrate-1: dGVzdGtleTE=
+    node-keys.substrate-0: dGVzdG5vZGVrZXkw
+    node-keys.substrate-1: dGVzdG5vZGVrZXkx
+
+
+# maybe adopt resource limits here to the nodes of the pool
+# resources:
+#   memory: "5Gi"
+#   cpu: "1.5"
+
