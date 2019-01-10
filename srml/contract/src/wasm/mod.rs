@@ -55,11 +55,13 @@ pub struct PrefabWasmModule {
 	code: Vec<u8>,
 }
 
+/// Wasm executable loaded by `WasmLoader` and executed by `WasmVm`.
 pub struct WasmExecutable {
 	entrypoint_name: &'static [u8],
 	prefab_module: PrefabWasmModule,
 }
 
+/// Loader which fetches `WasmExecutable` from the code cache.
 pub struct WasmLoader<'a, T: Trait> {
 	schedule: &'a Schedule<T::Gas>,
 }
@@ -89,6 +91,7 @@ impl<'a, T: Trait> ::exec::Loader<T> for WasmLoader<'a, T> {
 	}
 }
 
+/// Implementation of `Vm` that takes `WasmExecutable` and executes it.
 pub struct WasmVm<'a, T: Trait> {
 	schedule: &'a Schedule<T::Gas>,
 }
