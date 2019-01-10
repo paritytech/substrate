@@ -685,7 +685,6 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		let origin = 0;
 		let dest = 1;
 		let value = Default::default();
 		let mut gas_meter = GasMeter::<Test>::with_limit(10000, 1);
@@ -703,12 +702,13 @@ mod tests {
 
 		with_externalities(&mut ExtBuilder::default().build(), || {
 			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			ctx.overlay.set_code(&1, Some(exec_ch));
+			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+			ctx.overlay.set_code(&BOB, Some(exec_ch));
 
-			let result = ctx.call(dest, value, &mut gas_meter, &data, EmptyOutputBuf::new());
-
-			assert_matches!(result, Ok(_));
+			assert_matches!(
+				ctx.call(BOB, value, &mut gas_meter, &data, EmptyOutputBuf::new()),
+				Ok(_)
+			);
 		});
 
 		assert_eq!(&*test_data.borrow(), &vec![0, 1]);
