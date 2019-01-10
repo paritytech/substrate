@@ -308,6 +308,8 @@ mod tests {
 			)
 		)
 	)
+	(func (export "deploy"))
+
 	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
@@ -368,6 +370,8 @@ mod tests {
 			)
 		)
 	)
+	(func (export "deploy"))
+
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
@@ -427,6 +431,8 @@ mod tests {
 			)
 		)
 	)
+	(func (export "deploy"))
+
 	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
@@ -520,6 +526,8 @@ mod tests {
 		(unreachable)
 	)
 
+	(func (export "deploy"))
+
 	(data (i32.const 4) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
 )
 "#;
@@ -591,6 +599,8 @@ mod tests {
 			)
 		)
 	)
+
+	(func (export "deploy"))
 )
 "#;
 
@@ -654,6 +664,8 @@ mod tests {
 			)
 		)
 	)
+
+	(func (export "deploy"))
 )
 "#;
 
@@ -684,8 +696,8 @@ mod tests {
 		(unreachable)
 	)
 
-	(func (export "call")
-	)
+	(func (export "call"))
+	(func (export "deploy"))
 
 	(data (i32.const 8) "\01\02\03\04")
 )

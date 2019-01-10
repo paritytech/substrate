@@ -18,7 +18,7 @@
 //! wasm module before execution. It also extracts some essential information
 //! from a module.
 
-use parity_wasm::elements::{self, External, MemoryType, Type};
+use parity_wasm::elements::{self, Internal, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
@@ -102,6 +102,91 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 		Ok(())
 	}
 
+	/// Check that the module has required exported functions. For now
+	/// these are just entrypoints:
+	///
+	/// - 'call'
+	/// - 'deploy'
+	fn scan_exports(&self) -> Result<(), &'static str> {
+		let mut deploy_found = false;
+		let mut call_found = false;
+
+		let module = self
+			.module
+			.as_ref()
+			.expect("On entry to the function `module` can't be `None`; qed");
+
+		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
+		let export_entries = module
+			.export_section()
+			.map(|is| is.entries())
+			.unwrap_or(&[]);
+		let func_entries = module
+			.function_section()
+			.map(|fs| fs.entries())
+			.unwrap_or(&[]);
+
+		// Function index space consists of imported function following by
+		// declared functions.
+		let fn_space_offset = module
+			.import_section()
+			.map(|is| is.entries())
+			.unwrap_or(&[])
+			.iter()
+			.filter(|entry| {
+				match *entry.external() {
+					External::Function(_) => true,
+					_ => false,
+				}
+			})
+			.count();
+
+		for export in export_entries {
+			match export.field() {
+				"call" => call_found = true,
+				"deploy" => deploy_found = true,
+				_ => continue,
+			}
+
+			// Then check the export kind. "call" and "deploy" are
+			// functions.
+			let fn_idx = match export.internal() {
+				Internal::Function(ref fn_idx) => *fn_idx,
+				_ => return Err("expected a function"),
+			};
+
+			// convert index from function index space to declared index space.
+			let fn_idx = match fn_idx.checked_sub(fn_space_offset as u32) {
+				Some(fn_idx) => fn_idx,
+				None => {
+					// Underflow here means fn_idx points to imported function which we don't allow!
+					return Err("entry point points to an imported function");
+				}
+			};
+
+			// Then check the signature.
+			// Both "call" and "deploy" has a () -> () function type.
+			let func_ty_idx = func_entries.get(fn_idx as usize)
+				.ok_or_else(|| "export refers to non-existent function")?
+				.type_ref();
+			let Type::Function(ref func_ty) = types
+				.get(func_ty_idx as usize)
+				.ok_or_else(|| "function has a non-existent type")?;
+			if !(func_ty.params().is_empty() && func_ty.return_type().is_none()) {
+				return Err("entry point has wrong signature");
+			}
+		}
+
+		if !deploy_found {
+			return Err("deploy function isn't exported");
+		}
+		if !call_found {
+			return Err("call function isn't exported");
+		}
+
+		Ok(())
+	}
+
 	/// Scan an import section if any.
 	///
 	/// This accomplishes two tasks:
@@ -175,6 +260,7 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 	schedule: &Schedule<T::Gas>,
 ) -> Result<PrefabWasmModule, &'static str> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
+	contract_module.scan_exports()?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
 	contract_module.inject_stack_height_metering()?;
@@ -235,12 +321,6 @@ mod tests {
 		}
 	}
 
-	fn parse_and_prepare_wat(wat: &str) -> Result<PrefabWasmModule, &'static str> {
-		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
-		let schedule = Schedule::<u64>::default();
-		prepare_contract::<Test, ::wasm::runtime::Env>(wasm.as_ref(), &schedule)
-	}
-
 	macro_rules! prepare_test {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
@@ -253,11 +333,6 @@ mod tests {
 		};
 	}
 
-	prepare_test!(internal_memory_declaration,
-		r#"(module (memory 1 1))"#,
-		Err("module declares internal memory")
-	);
-
 	mod memories {
 		use super::*;
 
@@ -267,28 +342,74 @@ mod tests {
 			assert_eq!(Schedule::<u64>::default().max_memory_pages, 16);
 		}
 
-		prepare_test!(it_works,
-			r#"(module (import "env" "memory" (memory 1 1)))"#,
+		prepare_test!(memory_with_one_page,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Ok(_)
 		);
 
+		prepare_test!(internal_memory_declaration,
+			r#"
+			(module
+				(memory 1 1)
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("module declares internal memory")
+		);
+
 		prepare_test!(no_memory_import,
-			r#"(module)"#,
+			r#"
+			(module
+				;; no memory imported
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)"#,
 			Ok(_)
 		);
 
 		prepare_test!(initial_exceeds_maximum,
-			r#"(module (import "env" "memory" (memory 16 1)))"#,
+			r#"
+			(module
+				(import "env" "memory" (memory 16 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Err("Requested initial number of pages should not exceed the requested maximum")
 		);
 
 		prepare_test!(no_maximum,
-			r#"(module (import "env" "memory" (memory 1)))"#,
+			r#"
+			(module
+				(import "env" "memory" (memory 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Err("Maximum number of pages should be always declared.")
 		);
 
 		prepare_test!(requested_maximum_exceeds_configured_maximum,
-			r#"(module (import "env" "memory" (memory 1 17)))"#,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 17))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Err("Maximum number of pages should not exceed the configured maximum.")
 		);
 	}
@@ -297,27 +418,67 @@ mod tests {
 		use super::*;
 
 		prepare_test!(can_import_legit_function,
-			r#"(module (import "env" "gas" (func (param i32))))"#,
+			r#"
+			(module
+				(import "env" "gas" (func (param i32)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Ok(_)
 		);
 
 		// nothing can be imported from non-"env" module for now.
 		prepare_test!(non_env_import,
-			r#"(module (import "another_module" "memory" (memory 1 1)))"#,
+			r#"
+			(module
+				(import "another_module" "memory" (memory 1 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Err("module has imports from a non-'env' namespace")
 		);
 
 		// wrong signature
 		prepare_test!(wrong_signature,
-			r#"(module (import "env" "gas" (func (param i64))))"#,
+			r#"
+			(module
+				(import "env" "gas" (func (param i64)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Err("module imports a non-existent function")
 		);
 
 		prepare_test!(unknown_func_name,
-			r#"(module (import "env" "unknown_func" (func)))"#,
+			r#"
+			(module
+				(import "env" "unknown_func" (func))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Err("module imports a non-existent function")
 		);
 	}
 
-	// TODO: call & deploy
+	mod entrypoints {
+		use super::*;
+
+		prepare_test!(it_works,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+	}
 }
