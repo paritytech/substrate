@@ -343,16 +343,16 @@ where
 			overlay.set_code(&dest, Some(code_hash.clone()));
 			let mut nested = self.nested(overlay, dest.clone());
 
-			if endowment > T::Balance::zero() {
-				transfer(
-					gas_meter,
-					TransferCause::Instantiate,
-					&self.self_account,
-					&dest,
-					endowment,
-					&mut nested,
-				)?;
-			}
+			// Send funds unconditionally here. If the `endowment` is below existential_deposit
+			// then error will be returned here.
+			transfer(
+				gas_meter,
+				TransferCause::Instantiate,
+				&self.self_account,
+				&dest,
+				endowment,
+				&mut nested,
+			)?;
 
 			let executable = self.loader.load_init(&code_hash)?;
 			self.vm
@@ -677,7 +677,6 @@ mod tests {
 	}
 
 	// TODO: Tests to add:
-	// - Won't create an account with value below exsistential deposit.
 	// - Verify that instantiate properly creates a contract.
 	// - Instantiate accounts in a proper way (i.e. via `instantiate`)
 	// - Verify sanity of initial setup. I.e. no active account should have a zero balance.
@@ -1129,5 +1128,31 @@ mod tests {
 
 			assert_matches!(result, Ok(_));
 		});
+	}
+
+	#[test]
+	fn refuse_instantiate_with_value_below_existential_deposit() {
+		let vm = MockVm::new();
+
+		let mut loader = MockLoader::empty();
+		let dummy_ch = loader.insert(|_| VmExecResult::Ok);
+
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+
+				assert_matches!(
+					ctx.instantiate(
+						0, // <- zero endowment
+						&mut GasMeter::<Test>::with_limit(10000, 1),
+						&dummy_ch,
+						&[],
+					),
+					Err(_)
+				);
+			}
+		);
 	}
 }
