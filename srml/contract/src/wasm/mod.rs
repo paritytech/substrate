@@ -700,7 +700,9 @@ mod tests {
 		(unreachable)
 	)
 
-	(func (export "call"))
+	(func (export "call")
+		(unreachable)
+	)
 	(func (export "deploy"))
 
 	(data (i32.const 8) "\01\02\03\04")
