@@ -220,7 +220,7 @@ You can start a development chain with:
 [source, shell]
 cargo run -- --dev
 
-Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
+Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run \-- --dev`.
 
 If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on [Telemetry](https://telemetry.polkadot.io/#/Local%20Testnet). You'll need two terminals windows open.
 
@@ -249,7 +249,7 @@ cargo run -- \
   --telemetry-url ws://telemetry.polkadot.io:1024 \
   --validator
 
-Additional Substate CLI usage options are available and may be shown by running `cargo run -- --help`.
+Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
 === Joining the Charred Cherry Testnet
 
