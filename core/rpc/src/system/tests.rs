@@ -97,11 +97,12 @@ fn system_properties_works() {
 #[test]
 fn system_health() {
 	assert_matches!(
-		api(None).system_health().unwrap_err().kind(),
-		error::ErrorKind::NotHealthy(Health {
+		api(None).system_health().unwrap(),
+		Health {
 			peers: 0,
 			is_syncing: false,
-		})
+			should_have_peers: true,
+		}
 	);
 
 	assert_matches!(
@@ -109,11 +110,12 @@ fn system_health() {
 			peers: 5,
 			is_syncing: true,
 			is_dev: true,
-		}).system_health().unwrap_err().kind(),
-		error::ErrorKind::NotHealthy(Health {
+		}).system_health().unwrap(),
+		Health {
 			peers: 5,
 			is_syncing: true,
-		})
+			should_have_peers: false,
+		}
 	);
 
 	assert_eq!(
@@ -125,6 +127,7 @@ fn system_health() {
 		Health {
 			peers: 5,
 			is_syncing: false,
+			should_have_peers: true,
 		}
 	);
 
@@ -137,6 +140,7 @@ fn system_health() {
 		Health {
 			peers: 0,
 			is_syncing: false,
+			should_have_peers: false,
 		}
 	);
 }
