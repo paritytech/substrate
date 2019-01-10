@@ -1059,7 +1059,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash)) {
 			Ok(blockchain::BlockStatus::InChain) => {},
 			Ok(blockchain::BlockStatus::Unknown) => return Ok(ImportResult::UnknownParent),
-            Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
+			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
 		}
 
 		let import_headers = if post_digests.is_empty() {
