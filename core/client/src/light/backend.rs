@@ -279,6 +279,11 @@ where
 		Vec::new()
 	}
 
+	fn keys(&self, _prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		// whole state is not available on light node
+		Vec::new()
+	}
+
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
