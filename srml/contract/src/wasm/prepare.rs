@@ -127,7 +127,8 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 			.unwrap_or(&[]);
 
 		// Function index space consists of imported function following by
-		// declared functions.
+		// declared functions. Calculate the total number of imported functions so
+		// we can use it to convert indexes from function space to declared function space.
 		let fn_space_offset = module
 			.import_section()
 			.map(|is| is.entries())
