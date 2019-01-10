@@ -19,12 +19,30 @@
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
 use std::{fmt::Debug, ops::Deref, fmt};
 use codec::{Codec, Encode, Decode};
-use traits::{self, Checkable, Applyable, BlakeTwo256};
+use traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use generic::DigestItem as GenDigestItem;
 
-pub use substrate_primitives::{H256, AuthorityId};
+pub use substrate_primitives::{H256, Ed25519AuthorityId};
+use substrate_primitives::U256;
 
-pub type DigestItem = GenDigestItem<H256, u64>;
+#[derive(Default, PartialEq, Eq, Clone, Decode, Encode, Debug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct UintAuthorityId(pub u64);
+impl Into<Ed25519AuthorityId> for UintAuthorityId {
+	fn into(self) -> Ed25519AuthorityId {
+		let bytes: [u8; 32] = U256::from(self.0).into();
+		Ed25519AuthorityId(bytes)
+	}
+}
+
+pub struct ConvertUintAuthorityId;
+impl Convert<u64, UintAuthorityId> for ConvertUintAuthorityId {
+	fn convert(a: u64) -> UintAuthorityId {
+		UintAuthorityId(a)
+	}
+}
+
+pub type DigestItem = GenDigestItem<H256, Ed25519AuthorityId>;
 
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Digest {

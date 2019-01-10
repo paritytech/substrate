@@ -57,7 +57,7 @@ impl AsBytesRef for [u8] {
 	fn as_bytes_ref(&self) -> &[u8] { &self }
 }
 
-impl AsBytesRef for ::bytes::Vec<u8> {
+impl AsBytesRef for Vec<u8> {
 	fn as_bytes_ref(&self) -> &[u8] { &self }
 }
 
@@ -91,4 +91,3 @@ pub fn ascii_format(asciish: &[u8]) -> String {
 	}
 	r
 }
-

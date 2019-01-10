@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = { version = "0.12", optional = true }
 fnv = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
-parking_lot = { version = "0.4", optional = true }
+parking_lot = { version = "0.7.1", optional = true }
 hex-literal = { version = "0.1", optional = true }
 futures = { version = "0.1.17", optional = true }
 slog = { version = "^2", optional = true }

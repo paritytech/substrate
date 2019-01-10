@@ -946,3 +946,29 @@ mod test2 {
 		type BlockNumber = u32;
 	}
 }
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod test3 {
+	pub trait Trait {
+		type Origin;
+		type BlockNumber;
+	}
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	}
+	decl_storage! {
+		trait Store for Module<T: Trait> as Test {
+			Foo get(foo) config(initial_foo): u32;
+		}
+	}
+
+	type PairOf<T> = (T, T);
+
+	struct TraitImpl {}
+
+	impl Trait for TraitImpl {
+		type Origin = u32;
+		type BlockNumber = u32;
+	}
+}

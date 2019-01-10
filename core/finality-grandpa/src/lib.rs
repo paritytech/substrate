@@ -89,13 +89,14 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, ImportBlock, ImportResult, Authorities};
+use consensus_common::{BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
+	DigestItemFor, DigestItem,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
+use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
@@ -138,7 +139,7 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	ed25519::Signature,
-	AuthorityId,
+	Ed25519AuthorityId,
 >;
 /// A prevote message for this chain's block type.
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
@@ -149,14 +150,14 @@ pub type Commit<Block> = grandpa::Commit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	ed25519::Signature,
-	AuthorityId
+	Ed25519AuthorityId
 >;
 /// A compact commit message for this chain's block type.
 pub type CompactCommit<Block> = grandpa::CompactCommit<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	ed25519::Signature,
-	AuthorityId
+	Ed25519AuthorityId
 >;
 
 /// Configuration for the GRANDPA service.
@@ -306,7 +307,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 /// The environment we run GRANDPA in.
 struct Environment<B, E, Block: BlockT, N: Network, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
-	voters: Arc<HashMap<AuthorityId, u64>>,
+	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
 	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	network: N,
@@ -381,7 +382,7 @@ struct NewAuthoritySet<H, N> {
 	canon_number: N,
 	canon_hash: H,
 	set_id: u64,
-	authorities: Vec<(AuthorityId, u64)>,
+	authorities: Vec<(Ed25519AuthorityId, u64)>,
 }
 
 /// Signals either an early exit of a voter or an error.
@@ -432,7 +433,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	NumberFor<Block>: BlockNumberOps,
 {
 	type Timer = Box<dyn Future<Item = (), Error = Self::Error> + Send>;
-	type Id = AuthorityId;
+	type Id = Ed25519AuthorityId;
 	type Signature = ed25519::Signature;
 
 	// regular round message streams
@@ -611,7 +612,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
-		voters: &HashMap<AuthorityId, u64>,
+		voters: &HashMap<Ed25519AuthorityId, u64>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -830,13 +831,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		B: Backend<Block, Blake2Hasher> + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		DigestFor<Block>: Encode,
+		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 {
-	type Error = ClientError;
+	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		use authorities::PendingChange;
@@ -847,7 +849,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let maybe_change = self.api.runtime_api().grandpa_pending_change(
 			&BlockId::hash(*block.header.parent_hash()),
 			&block.header.digest().clone(),
-		)?;
+		);
+
+		let maybe_change = match maybe_change {
+			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+			Ok(maybe) => maybe,
+		};
 
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
@@ -858,11 +865,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			let mut authorities = self.authority_set.inner().write();
 			let old_set = authorities.clone();
 
-			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ClientError> {
+			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
 				let error = || {
-					Err(ClientErrorKind::Backend(
-						"invalid authority set change: multiple pending changes on the same chain".to_string()
-					).into())
+					Err(ConsensusErrorKind::ClientImport("Incorrect base hash".to_string()).into())
 				};
 
 				if *base == hash { return error(); }
@@ -872,7 +877,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					self.inner.backend().blockchain(),
 					BlockId::Hash(parent_hash),
 					BlockId::Hash(*base),
-				)?;
+				);
+
+				let tree_route = match tree_route {
+					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+					Ok(route) => route,
+				};
 
 				if tree_route.common_block().hash == *base {
 					return error();
@@ -905,18 +915,25 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				*authorities = old_set;
 			}
 			e
-		})?;
+		});
 
-		if import_result != ImportResult::Queued {
-			return Ok(import_result);
-		}
+		let import_result = match import_result {
+		    Ok(ImportResult::Queued) => ImportResult::Queued,
+		    Ok(r) => return Ok(r),
+		    Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+		};
 
 		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
 			canonical_at_height(&self.inner, (hash, number), canon_number)
-		})?;
+		});
 
-		if !enacts_change {
-			return Ok(import_result);
+		match enacts_change {
+			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+			Ok(enacted) => {
+				if !enacted {
+					return Ok(import_result);
+				}
+			}
 		}
 
 		match justification {
@@ -925,7 +942,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					justification,
 					self.authority_set.set_id(),
 					&self.authority_set.current_authorities(),
-				)?;
+				);
+
+				let justification = match justification {
+					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+					Ok(justification) => justification,
+				};
 
 				let result = finalize_block(
 					&*self.inner,
@@ -943,16 +965,18 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					},
 					Err(ExitOrError::AuthoritiesChanged(new)) => {
 						debug!(target: "finality", "Imported justified block #{} that enacts authority set change, signalling voter.", number);
-						if let Err(_) = self.authority_set_change.unbounded_send(new) {
-							return Err(ClientErrorKind::Backend(
-								"imported and finalized change block but grandpa voter is no longer running".to_string()
-							).into());
+						if let Err(e) = self.authority_set_change.unbounded_send(new) {
+							return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
 						}
 					},
-					Err(ExitOrError::Error(_)) => {
-						return Err(ClientErrorKind::Backend(
-							"imported change block but failed to finalize it, node may be in an inconsistent state".to_string()
-						).into());
+					Err(ExitOrError::Error(e)) => {
+						match e {
+							Error::Grandpa(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
+							Error::Network(error) => return Err(ConsensusErrorKind::ClientImport(error).into()),
+							Error::Blockchain(error) => return Err(ConsensusErrorKind::ClientImport(error).into()),
+							Error::Client(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
+							Error::Timer(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
+						}
 					},
 				}
 			},
@@ -1008,10 +1032,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBloc
 where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 {
 
 	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<Ed25519AuthorityId>, Self::Error> {
 		self.inner.authorities_at(at)
 	}
 }
@@ -1136,16 +1161,16 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	set_id: u64,
-	voters: &Arc<HashMap<AuthorityId, u64>>,
+	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &N,
 ) -> (
 	impl Stream<
-		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, ed25519::Signature, AuthorityId>),
+		Item = (u64, ::grandpa::CompactCommit<H256, NumberFor<Block>, ed25519::Signature, Ed25519AuthorityId>),
 		Error = ExitOrError<H256, NumberFor<Block>>,
 	>,
 	impl Sink<
-		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, ed25519::Signature, AuthorityId>),
+		SinkItem = (u64, ::grandpa::Commit<H256, NumberFor<Block>, ed25519::Signature, Ed25519AuthorityId>),
 		SinkError = ExitOrError<H256, NumberFor<Block>>,
 	>,
 ) where
@@ -1154,6 +1179,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	N: Network,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
+	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 {
 	// verification stream
 	let commit_in = ::communication::checked_commit_stream::<Block, _>(
@@ -1186,6 +1212,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
+	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -1194,6 +1221,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
+	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 	RA: Send + Sync + 'static,
 {
 	use futures::future::{self, Loop as FutureLoop};
@@ -1312,5 +1340,5 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		}))
 	}).map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
 
-	Ok(voter_work)
+	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }

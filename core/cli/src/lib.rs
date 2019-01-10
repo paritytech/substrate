@@ -422,7 +422,7 @@ where
 	} else if let Some(sub_matches) = matches.subcommand_matches("revert") {
 		revert_chain::<F>(
 			get_db_path_for_subcommand(matches, sub_matches)?,
-			matches,
+			sub_matches,
 			spec
 		)?;
 		return Ok(Action::ExecutedInternally);

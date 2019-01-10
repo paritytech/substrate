@@ -4,9 +4,8 @@ extern crate sr_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
 extern crate substrate_test_client as test_client;
 
-use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT};
+use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT, AuthorityIdFor};
 use runtime_primitives::generic::BlockId;
-use primitives::AuthorityId;
 use substrate_client::runtime_api::{self, RuntimeApiInfo};
 use substrate_client::error::Result;
 use test_client::runtime::Block;
@@ -57,7 +56,7 @@ impl_runtime_apis! {
 		fn version() -> runtime_api::RuntimeVersion {
 			unimplemented!()
 		}
-		fn authorities() -> Vec<AuthorityId> {
+		fn authorities() -> Vec<AuthorityIdFor<Block>> {
 			unimplemented!()
 		}
 		fn execute_block(_: Block) {

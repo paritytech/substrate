@@ -20,6 +20,9 @@ sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-version = { path = "../sr-version", default-features = false }
 srml-support = { path = "../../srml/support", default-features = false }
 
+[dev-dependencies]
+substrate-executor = { path = "../executor" }
+
 [features]
 default = ["std"]
 std = [

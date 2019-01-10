@@ -20,7 +20,7 @@
 use futures::prelude::*;
 use futures::sync::mpsc;
 use codec::{Encode, Decode};
-use substrate_primitives::{ed25519, AuthorityId};
+use substrate_primitives::{ed25519, Ed25519AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
 use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
 
@@ -34,7 +34,7 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 // check a message.
 pub(crate) fn check_message_sig<Block: BlockT>(
 	message: &Message<Block>,
-	id: &AuthorityId,
+	id: &Ed25519AuthorityId,
 	signature: &ed25519::Signature,
 	round: u64,
 	set_id: u64,
@@ -55,7 +55,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 	round: u64,
 	set_id: u64,
 	inner: S,
-	voters: Arc<HashMap<AuthorityId, u64>>,
+	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
 )
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
@@ -92,7 +92,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 struct OutgoingMessages<Block: BlockT, N: Network> {
 	round: u64,
 	set_id: u64,
-	locals: Option<(Arc<ed25519::Pair>, AuthorityId)>,
+	locals: Option<(Arc<ed25519::Pair>, Ed25519AuthorityId)>,
 	sender: mpsc::UnboundedSender<SignedMessage<Block>>,
 	network: N,
 }
@@ -143,7 +143,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
 	round: u64,
 	set_id: u64,
 	local_key: Option<Arc<ed25519::Pair>>,
-	voters: Arc<HashMap<AuthorityId, u64>>,
+	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
 	network: N,
 ) -> (
 	impl Stream<Item=SignedMessage<Block>,Error=Error>,
@@ -151,7 +151,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
 ) {
 	let locals = local_key.and_then(|pair| {
 		let public = pair.public();
-		let id = AuthorityId(public.0);
+		let id = Ed25519AuthorityId(public.0);
 		if voters.contains_key(&id) {
 			Some((pair, id))
 		} else {
@@ -177,7 +177,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
 
 fn check_compact_commit<Block: BlockT>(
 	msg: CompactCommit<Block>,
-	voters: &HashMap<AuthorityId, u64>,
+	voters: &HashMap<Ed25519AuthorityId, u64>,
 	round: u64,
 	set_id: u64,
 ) -> Option<CompactCommit<Block>> {
@@ -216,7 +216,7 @@ fn check_compact_commit<Block: BlockT>(
 pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	set_id: u64,
 	inner: S,
-	voters: Arc<HashMap<AuthorityId, u64>>,
+	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
 )
 	-> impl Stream<Item=(u64, CompactCommit<Block>),Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>

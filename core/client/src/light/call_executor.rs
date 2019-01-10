@@ -31,7 +31,7 @@ use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChange
 use hash_db::Hasher;
 
 use blockchain::Backend as ChainBackend;
-use call_executor::{CallExecutor, CallResult};
+use call_executor::CallExecutor;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::{RuntimeVersion, NativeVersion};
@@ -74,7 +74,7 @@ where
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<CallResult> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<Vec<u8>> {
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
 
@@ -105,12 +105,12 @@ where
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
-		self.call(at, method, call_data).map(|cr| cr.return_data)
+		self.call(at, method, call_data)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
 		let call_result = self.call(id, "version", &[])?;
-		RuntimeVersion::decode(&mut call_result.return_data.as_slice())
+		RuntimeVersion::decode(&mut call_result.as_slice())
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
 
@@ -189,7 +189,7 @@ pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: Vec<Vec<u8>>
-) -> ClientResult<CallResult>
+) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
 		E: CodeExecutor<H>,
@@ -226,7 +226,7 @@ pub fn check_execution_proof<Header, E, H>(
 		&request.call_data,
 	)?;
 
-	Ok(CallResult { return_data: local_result, changes })
+	Ok(local_result)
 }
 
 #[cfg(test)]
@@ -273,7 +273,7 @@ mod tests {
 				retry_count: None,
 			}, remote_execution_proof).unwrap();
 
-			(remote_result, local_result.return_data)
+			(remote_result, local_result)
 		}
 
 		// prepare remote client

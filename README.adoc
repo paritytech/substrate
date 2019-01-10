@@ -48,38 +48,35 @@ Other examples include the parachain-heads extrinsic in Polkadot and the "note-m
 
 === Runtime and API
 
-Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implementation of the Substrate client to be able to author blocks. In short these two sets are:
+Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implementation of the Substrate client to be able to author blocks. 
 
-The runtime is API entry points are expected to be in the runtime's `api` module. There is a specific ABI based upon the Substrate Simple Codec (`codec`), which is used to encode and decode the arguments for these functions and specify where and how they should be passed. A special macro is provided called `impl_stubs`, which prepares all functionality for marshalling arguments and basically just allows you to write the functions as you would normally (except for the fact that there must be example one argument - tuples are allowed to workaround).
+If you want to develop a chain with Substrate, you will need to implement the `Core` trait. This `Core` trait generates an API with the minimum necessary functionality to interact with your runtime. A special macro is provided called `impl_runtime_apis!` that help you implement runtime API traits. All runtime API trait implementations need to be done in one call of the `impl_runtime_apis!` macro. All parameters and return values need to implement https://crates.io/crates/parity-codec[`parity-codec`] to be encodable and decodable.
 
-Here's the Polkadot API implementation as of PoC-2:
+Here's a snippet of the Polkadot API implementation as of PoC-3:
 
 ```rust
-pub mod api {
-	impl_stubs!(
+impl_runtime_apis! {
+	impl client_api::Core<Block> for Runtime {
+		fn version() -> RuntimeVersion {
+			VERSION
+		}
 
-		// Standard: Required.
-		version => |()| super::Version::version(),
-		authorities => |()| super::Consensus::authorities(),
-		execute_block => |block| super::Executive::execute_block(block),
+		fn authorities() -> Vec<SessionKey> {
+			Consensus::authorities()
+		}
 
-		// Conventional: Needed for Substrate client's reference block authoring logic to work.
-		initialise_block => |header| super::Executive::initialise_block(&header),
-		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
-		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
+		fn execute_block(block: Block) {
+			Executive::execute_block(block)
+		}
 
-		// Non-standard (Polkadot-specific). This just exposes some stuff that Polkadot client
-		// finds useful.
-		validator_count => |()| super::Session::validator_count(),
-		validators => |()| super::Session::validators()
-	);
+		fn initialise_block(header: <Block as BlockT>::Header) {
+			Executive::initialise_block(&header)
+		}
+	}
+	// ---snip---
 }
 ```
 
-As you can see, at the minimum there are only three API calls to implement. If you want to reuse as much of Substrate's reference block authoring client code, then you'll want to provide the next four entrypoints (though three of them you probably already implemented as part of `execute_block`).
-
-Of the first three, there is `execute_block`, which contains the actions to be taken to execute a block and pretty much defines the blockchain. Then there is `authorities` which tells the AfG consensus algorithm sitting in the Substrate client who the given authorities (known as "validators" in some contexts) are that can finalise the next block. Finally, there is `version`, which is a fairly sophisticated version identifier. This includes a key distinction between *specification version* and *authoring version*, with the former essentially versioning the logic of `execute_block` and the latter versioning only the logic of `inherent_extrinsics` and core aspects of extrinsic validity.
 
 === Inherent Extrinsics
 
@@ -175,7 +172,7 @@ You can distribute `mychain.json` so that everyone can synchronise and (dependin
 
 === Hacking on Substrate
 
-If you'd actually like hack on Substrate, you can just grab the source code and
+If you'd actually like to hack on Substrate, you can just grab the source code and
 build it. Ensure you have Rust and the support software installed:
 
 [source, shell]
@@ -223,7 +220,6 @@ You can start a development chain with:
 [source, shell]
 cargo run -- --dev
 
-
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run -- --dev`.
 
 If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on [Telemetry](https://telemetry.polkadot.io/#/Local%20Testnet). You'll need two terminals windows open.
@@ -254,6 +250,39 @@ cargo run -- \
   --validator
 
 Additional Substate CLI usage options are available and may be shown by running `cargo run -- --help`.
+
+=== Joining the Charred Cherry Testnet
+
+Charred Cherry is the new testnet for Substrate 1.0 beta. Please note that 1.0 beta is not compatible with the BBQ-Birch testnet. Ensure you have the dependencies listed above before compiling.
+
+[source, shell]
+----
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+----
+
+You can run the tests if you like:
+
+[source, shell]
+cargo test --all
+
+Start your node:
+
+[source, shell]
+cargo run --release
+
+To see a list of command line options, enter:
+
+[source, shell]
+cargo run --release -- --help
+
+For example, you can choose a custom node name:
+
+[source, shell]
+cargo run --release -- --name my_custom_name
+
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Charred%20Cherry 
+
 
 == Documentation
 

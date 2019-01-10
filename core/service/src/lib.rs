@@ -34,7 +34,6 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate parity_codec as codec;
 extern crate substrate_transaction_pool as transaction_pool;
-extern crate substrate_consensus_aura_primitives as aura_primitives;
 extern crate substrate_rpc_servers as rpc;
 extern crate target_info;
 extern crate tokio;
@@ -58,7 +57,6 @@ mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
-pub mod consensus;
 
 use std::io;
 use std::net::SocketAddr;
@@ -82,7 +80,6 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
-pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
@@ -107,7 +104,7 @@ pub struct Service<Components: components::Components> {
 	/// Configuration of this Service
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
-	_telemetry: Option<tel::Telemetry>,
+	_telemetry: Option<Arc<tel::Telemetry>>,
 }
 
 /// Creates bare client without any networking.
@@ -255,31 +252,28 @@ impl<Components: components::Components> Service<Components> {
 		)?;
 
 		// Telemetry
-		let telemetry = match config.telemetry_url.clone() {
-			Some(url) => {
-				let is_authority = config.roles == Roles::AUTHORITY;
-				let pubkey = format!("{}", public_key);
-				let name = config.name.clone();
-				let impl_name = config.impl_name.to_owned();
-				let version = version.clone();
-				let chain_name = config.chain_spec.name().to_owned();
-				Some(tel::init_telemetry(tel::TelemetryConfig {
-					url: url,
-					on_connect: Box::new(move || {
-						telemetry!("system.connected";
-							"name" => name.clone(),
-							"implementation" => impl_name.clone(),
-							"version" => version.clone(),
-							"config" => "",
-							"chain" => chain_name.clone(),
-							"pubkey" => &pubkey,
-							"authority" => is_authority
-						);
-					}),
-				}))
-			},
-			None => None,
-		};
+		let telemetry = config.telemetry_url.clone().map(|url| {
+			let is_authority = config.roles == Roles::AUTHORITY;
+			let pubkey = format!("{}", public_key);
+			let name = config.name.clone();
+			let impl_name = config.impl_name.to_owned();
+			let version = version.clone();
+			let chain_name = config.chain_spec.name().to_owned();
+			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+				url: url,
+				on_connect: Box::new(move || {
+					telemetry!("system.connected";
+						"name" => name.clone(),
+						"implementation" => impl_name.clone(),
+						"version" => version.clone(),
+						"config" => "",
+						"chain" => chain_name.clone(),
+						"pubkey" => &pubkey,
+						"authority" => is_authority
+					);
+				}),
+			}))
+		});
 
 		Ok(Service {
 			client,
@@ -305,6 +299,10 @@ impl<Components: components::Components> Service<Components> {
 		} else {
 			None
 		}
+	}
+
+	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
+		self._telemetry.as_ref().map(|t| t.clone())
 	}
 }
 

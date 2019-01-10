@@ -16,8 +16,10 @@
 
 use super::*;
 
-use network::{self, SyncState, SyncStatus, ProtocolStatus};
+use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
+use network::config::Roles;
 use test_client::runtime::Block;
+use primitives::H256;
 
 #[derive(Default)]
 struct Status {
@@ -36,6 +38,15 @@ impl network::SyncProvider<Block> for Status {
 			num_peers: self.peers,
 			num_active_peers: 0,
 		}
+	}
+
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, NetworkPeerInfo<Block>)> {
+		vec![(1, Some(PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into()), NetworkPeerInfo {
+			roles: Roles::FULL,
+			protocol_version: 1,
+			best_hash: Default::default(),
+			best_number: 1
+		})]
 	}
 }
 
@@ -86,11 +97,12 @@ fn system_properties_works() {
 #[test]
 fn system_health() {
 	assert_matches!(
-		api(None).system_health().unwrap_err().kind(),
-		error::ErrorKind::NotHealthy(Health {
+		api(None).system_health().unwrap(),
+		Health {
 			peers: 0,
 			is_syncing: false,
-		})
+			should_have_peers: true,
+		}
 	);
 
 	assert_matches!(
@@ -98,11 +110,12 @@ fn system_health() {
 			peers: 5,
 			is_syncing: true,
 			is_dev: true,
-		}).system_health().unwrap_err().kind(),
-		error::ErrorKind::NotHealthy(Health {
+		}).system_health().unwrap(),
+		Health {
 			peers: 5,
 			is_syncing: true,
-		})
+			should_have_peers: false,
+		}
 	);
 
 	assert_eq!(
@@ -114,6 +127,7 @@ fn system_health() {
 		Health {
 			peers: 5,
 			is_syncing: false,
+			should_have_peers: true,
 		}
 	);
 
@@ -126,6 +140,22 @@ fn system_health() {
 		Health {
 			peers: 0,
 			is_syncing: false,
+			should_have_peers: false,
 		}
+	);
+}
+
+#[test]
+fn system_peers() {
+	assert_eq!(
+		api(None).system_peers().unwrap(),
+		vec![PeerInfo {
+			index: 1,
+			peer_id: "QmS5oyTmdjwBowwAH1D9YQnoe2HyWpVemH8qHiU5RqWPh4".into(),
+			roles: "FULL".into(),
+			protocol_version: 1,
+			best_hash: Default::default(),
+			best_number: 1u64,
+		}]
 	);
 }
