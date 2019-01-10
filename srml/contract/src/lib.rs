@@ -307,10 +307,13 @@ impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	type Key2 = Vec<u8>;
 	type Value = Vec<u8>;
 
+	/// Hashed by XX
 	fn derive_key1(key1_data: Vec<u8>) -> Vec<u8> {
 		twox_128(&key1_data).to_vec()
 	}
 
+	/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
+	/// thus will be susceptible for a untrusted input.
 	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8> {
 		blake2_256(&key2_data).to_vec()
 	}
