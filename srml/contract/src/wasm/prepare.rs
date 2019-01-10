@@ -241,59 +241,83 @@ mod tests {
 		prepare_contract::<Test, ::wasm::runtime::Env>(wasm.as_ref(), &schedule)
 	}
 
-	#[test]
-	fn internal_memory_declaration() {
-		let r = parse_and_prepare_wat(r#"(module (memory 1 1))"#);
-		assert_matches!(r, Err("module declares internal memory"));
+	macro_rules! prepare_test {
+		($name:ident, $wat:expr, $($expected:tt)*) => {
+			#[test]
+			fn $name() {
+				let wasm = wabt::Wat2Wasm::new().validate(false).convert($wat).unwrap();
+				let schedule = Schedule::<u64>::default();
+				let r = prepare_contract::<Test, ::wasm::runtime::Env>(wasm.as_ref(), &schedule);
+				assert_matches!(r, $($expected)*);
+			}
+		};
 	}
 
-	#[test]
-	fn memory() {
-		// This test assumes that maximum page number is configured to a certain number.
-		assert_eq!(Schedule::<u64>::default().max_memory_pages, 16);
+	prepare_test!(internal_memory_declaration,
+		r#"(module (memory 1 1))"#,
+		Err("module declares internal memory")
+	);
 
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 1)))"#);
-		assert_matches!(r, Ok(_));
+	mod memories {
+		use super::*;
 
-		// No memory import
-		let r = parse_and_prepare_wat(r#"(module)"#);
-		assert_matches!(r, Ok(_));
+		// Tests below assumes that maximum page number is configured to a certain number.
+		#[test]
+		fn assume_memory_size() {
+			assert_eq!(Schedule::<u64>::default().max_memory_pages, 16);
+		}
 
-		// initial exceed maximum
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
-		assert_matches!(
-			r,
+		prepare_test!(it_works,
+			r#"(module (import "env" "memory" (memory 1 1)))"#,
+			Ok(_)
+		);
+
+		prepare_test!(no_memory_import,
+			r#"(module)"#,
+			Ok(_)
+		);
+
+		prepare_test!(initial_exceeds_maximum,
+			r#"(module (import "env" "memory" (memory 16 1)))"#,
 			Err("Requested initial number of pages should not exceed the requested maximum")
 		);
 
-		// no maximum
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1)))"#);
-		assert_matches!(r, Err("Maximum number of pages should be always declared."));
+		prepare_test!(no_maximum,
+			r#"(module (import "env" "memory" (memory 1)))"#,
+			Err("Maximum number of pages should be always declared.")
+		);
 
-		// requested maximum exceed configured maximum
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 17)))"#);
-		assert_matches!(
-			r,
+		prepare_test!(requested_maximum_exceeds_configured_maximum,
+			r#"(module (import "env" "memory" (memory 1 17)))"#,
 			Err("Maximum number of pages should not exceed the configured maximum.")
 		);
 	}
 
-	#[test]
-	fn imports() {
-		// nothing can be imported from non-"env" module for now.
-		let r =
-			parse_and_prepare_wat(r#"(module (import "another_module" "memory" (memory 1 1)))"#);
-		assert_matches!(r, Err("module has imports from a non-'env' namespace"));
+	mod imports {
+		use super::*;
 
-		let r = parse_and_prepare_wat(r#"(module (import "env" "gas" (func (param i32))))"#);
-		assert_matches!(r, Ok(_));
+		prepare_test!(can_import_legit_function,
+			r#"(module (import "env" "gas" (func (param i32))))"#,
+			Ok(_)
+		);
+
+		// nothing can be imported from non-"env" module for now.
+		prepare_test!(non_env_import,
+			r#"(module (import "another_module" "memory" (memory 1 1)))"#,
+			Err("module has imports from a non-'env' namespace")
+		);
 
 		// wrong signature
-		let r = parse_and_prepare_wat(r#"(module (import "env" "gas" (func (param i64))))"#);
-		assert_matches!(r, Err("module imports a non-existent function"));
+		prepare_test!(wrong_signature,
+			r#"(module (import "env" "gas" (func (param i64))))"#,
+			Err("module imports a non-existent function")
+		);
 
-		// unknown function name
-		let r = parse_and_prepare_wat(r#"(module (import "env" "unknown_func" (func)))"#);
-		assert_matches!(r, Err("module imports a non-existent function"));
+		prepare_test!(unknown_func_name,
+			r#"(module (import "env" "unknown_func" (func)))"#,
+			Err("module imports a non-existent function")
+		);
 	}
+
+	// TODO: call & deploy
 }
