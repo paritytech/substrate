@@ -14,6 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+//! A module that implements instrumented code cache.
+//!
+//! - In order to run contract code we need to instrument it with gas metering.
+//! To do that we need provide the schedule which will supply exact gas costs values.
+//! We cache this code in the storage saving the schedule version.
+//! - Before running contract code we check if the cached code has the schedule version that is equal to the current saved schedule.
+//! If it is equal then run the code, if it isn't reinstrument with the current schedule.
+//! - When we update the schedule we want it to have stricly greater version than the current saved one:
+//! this guarantees that every instrumented contract code in cache cannot have the version equal to the current one.
+//! Thus, before executing a contract it should be reinstrument with new schedule.
+
 use gas::{GasMeter, Token};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash, Bounded};

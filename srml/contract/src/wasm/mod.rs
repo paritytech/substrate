@@ -27,13 +27,14 @@ use {CodeHash, Schedule, Trait};
 
 #[macro_use]
 mod env_def;
-mod code;
+mod code_cache;
 mod prepare;
 mod runtime;
 
 use self::runtime::{to_execution_result, Runtime};
+use self::code_cache::load as load_code;
 
-pub use self::code::save as save_code;
+pub use self::code_cache::save as save_code;
 
 /// A prepared wasm module ready for execution.
 #[derive(Clone, Encode, Decode)]
@@ -73,14 +74,14 @@ impl<'a, T: Trait> ::exec::Loader<T> for WasmLoader<'a, T> {
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let prefab_module = code::load::<T>(code_hash, self.schedule)?;
+		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
 			entrypoint_name: b"deploy",
 			prefab_module,
 		})
 	}
 	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
-		let prefab_module = code::load::<T>(code_hash, self.schedule)?;
+		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
 		Ok(WasmExecutable {
 			entrypoint_name: b"call",
 			prefab_module,
