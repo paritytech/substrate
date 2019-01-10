@@ -313,6 +313,7 @@ mod tests {
 	use super::*;
 	use std::fmt;
 	use tests::Test;
+	use exec::Ext;
 	use wabt;
 
 	impl fmt::Debug for PrefabWasmModule {
@@ -321,13 +322,20 @@ mod tests {
 		}
 	}
 
+	// Define test environment for tests. We need ImportSatisfyCheck
+	// implementation from it. So actual implementations doesn't matter.
+	define_env!(TestEnv, <E: Ext>,
+		panic(_ctx) => { unreachable!(); },
+		gas(_ctx, _amount: u32) => { unreachable!(); },
+	);
+
 	macro_rules! prepare_test {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
 			fn $name() {
 				let wasm = wabt::Wat2Wasm::new().validate(false).convert($wat).unwrap();
 				let schedule = Schedule::<u64>::default();
-				let r = prepare_contract::<Test, ::wasm::runtime::Env>(wasm.as_ref(), &schedule);
+				let r = prepare_contract::<Test, TestEnv>(wasm.as_ref(), &schedule);
 				assert_matches!(r, $($expected)*);
 			}
 		};
@@ -479,6 +487,59 @@ mod tests {
 			)
 			"#,
 			Ok(_)
+		);
+
+		prepare_test!(omit_deploy,
+			r#"
+			(module
+				(func (export "call"))
+			)
+			"#,
+			Err("deploy function isn't exported")
+		);
+
+		prepare_test!(omit_call,
+			r#"
+			(module
+				(func (export "deploy"))
+			)
+			"#,
+			Err("call function isn't exported")
+		);
+
+		// Try to use imported function as an entry point.
+		prepare_test!(try_sneak_export_as_entrypoint,
+			r#"
+			(module
+				(import "env" "panic" (func))
+
+				(func (export "deploy"))
+
+				(export "call" (func 0))
+			)
+			"#,
+			Err("entry point points to an imported function")
+		);
+
+		// Try to use imported function as an entry point.
+		prepare_test!(try_sneak_export_as_global,
+			r#"
+			(module
+				(func (export "deploy"))
+				(global (export "call") i32 (i32.const 0))
+			)
+			"#,
+			Err("expected a function")
+		);
+
+		prepare_test!(wrong_signature,
+			r#"
+			(module
+				(func (export "deploy"))
+				(func (export "call") (param i32))
+			)
+			"#,
+			Err("entry point has wrong signature")
 		);
 	}
 }
