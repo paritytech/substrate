@@ -592,8 +592,8 @@ impl Addr {
 /// Divides a `Duration` with a `Duration`. This exists in the stdlib but isn't stable yet.
 // TODO: remove this function once stable
 fn div_dur_with_dur(a: Duration, b: Duration) -> u32 {
-	let a_ms = a.as_secs() * 1_000_000 + a.subsec_micros() as u64;
-	let b_ms = b.as_secs() * 1_000_000 + b.subsec_micros() as u64;
+	let a_ms = a.as_secs() * 1_000_000 + u64::from(a.subsec_micros());
+	let b_ms = b.as_secs() * 1_000_000 + u64::from(b.subsec_micros());
 	(a_ms / b_ms) as u32
 }
 
