@@ -178,6 +178,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		self.handler.on_block_imported(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
 	}
 
+	/// Called when a new block is finalized by the client.
+	pub fn on_block_finalized(&self, hash: B::Hash, header: &B::Header) {
+		self.handler.on_block_finalized(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
+	}
+
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));

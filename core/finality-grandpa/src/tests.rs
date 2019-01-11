@@ -494,7 +494,7 @@ fn transition_3_voters_twice_1_observer() {
 	let transitions = api.scheduled_changes.clone();
 	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	net.lock().peer(0).push_blocks(1, false);
 	net.lock().sync();
@@ -619,6 +619,7 @@ fn transition_3_voters_twice_1_observer() {
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
+			net.lock().send_finality_notifications();
 			net.lock().sync();
 			Ok(())
 		})

@@ -495,7 +495,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Perform time based maintenance.
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.consensus_gossip.write().collect_garbage(|_| true);
-		// collect garbage from chain sync justifications
 		self.maintain_peers(io);
 		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
 	}
@@ -717,6 +716,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}));
 			}
 		}
+	}
+
+	pub fn on_block_finalized(&self, _io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
+		self.sync.write().block_finalized(&hash, *header.number());
 	}
 
 	fn on_remote_call_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteCallRequest<B::Hash>) {

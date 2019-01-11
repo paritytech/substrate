@@ -223,6 +223,23 @@ impl<Components: components::Components> Service<Components> {
 		}
 
 		{
+			// finality notifications
+			let network = Arc::downgrade(&network);
+
+			let events = client.finality_notification_stream()
+				.for_each(move |notification| {
+					if let Some(network) = network.upgrade() {
+						network.on_block_finalized(notification.hash, &notification.header);
+					}
+					Ok(())
+				})
+				.select(exit.clone())
+				.then(|_| Ok(()));
+
+			task_executor.spawn(events);
+		}
+
+		{
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
 			let events = transaction_pool.import_notification_stream()
@@ -554,7 +571,7 @@ macro_rules! construct_service_factory {
 
 			fn new_full(
 				config: $crate::FactoryFullConfiguration<Self>,
-				executor: $crate::TaskExecutor
+				executor: $crate::TaskExecutor,
 			) -> Result<Self::FullService, $crate::Error>
 			{
 				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {

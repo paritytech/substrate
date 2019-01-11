@@ -163,6 +163,12 @@ impl<B: BlockT> PendingJustifications<B> {
 			self.pending_requests.push_front(request);
 		}
 	}
+
+	fn collect_garbage(&mut self, best_finalized: NumberFor<B>) {
+		self.justifications.retain(|(_, n)| *n > best_finalized);
+		self.pending_requests.retain(|(_, n)| *n > best_finalized);
+		self.peer_requests.retain(|_, (_, n)| *n > best_finalized);
+	}
 }
 
 /// Relay chain sync strategy.
@@ -431,6 +437,10 @@ impl<B: BlockT> ChainSync<B> {
 
 	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		trace!(target: "sync", "Block imported successfully {} ({})", number, hash);
+	}
+
+	pub fn block_finalized(&mut self, _hash: &B::Hash, number: NumberFor<B>) {
+		self.justifications.collect_garbage(number);
 	}
 
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
