@@ -97,15 +97,11 @@ pub struct CoreParams {
 	#[structopt(long = "name", value_name = "NAME")]
 	name: Option<String>,
 
-	/// Should connect to the Substrate telemetry server (telemetry is off by default on local chains)
-	#[structopt(short = "t", long = "telemetry")]
-	telemetry: bool,
-
 	/// Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
 	#[structopt(long = "no-telemetry")]
 	no_telemetry: bool,
 
-	/// The URL of the telemetry server. Implies --telemetry
+	/// The URL of the telemetry server to connect to
 	#[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL")]
 	telemetry_url: Option<String>,
 

@@ -103,21 +103,11 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 
 	fn system_health(&self) -> Result<Health> {
 		let status = self.sync.status();
-
-		let is_syncing = status.sync.is_major_syncing();
-		let peers = status.num_peers;
-
-		let health = Health {
-			peers,
-			is_syncing,
-		};
-
-		let has_no_peers = peers == 0 && self.should_have_peers;
-		if has_no_peers || is_syncing {
-			Err(error::ErrorKind::NotHealthy(health))?
-		} else {
-			Ok(health)
-		}
+		Ok(Health {
+			peers: status.num_peers,
+			is_syncing: status.sync.is_major_syncing(),
+			should_have_peers: self.should_have_peers,
+		})
 	}
 
 	fn system_peers(&self) -> Result<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>> {
