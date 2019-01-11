@@ -534,7 +534,7 @@ pub struct OpaqueExtrinsic(pub Vec<u8>);
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		::codec::Encode::using_encoded(&self.0, |bytes| seq.serialize_bytes(bytes))
+		::codec::Encode::using_encoded(&self.0, |bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
@@ -616,5 +616,11 @@ mod tests {
 
 		// check that as-style methods are not working with regular items
 		assert!(b1.as_authorities_change().is_none());
+	}
+
+	#[test]
+	fn opaque_extrinsic_serialization() {
+		let ex = super::OpaqueExtrinsic(vec![1, 2, 3, 4]);
+		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x1001020304\"".to_owned());
 	}
 }
