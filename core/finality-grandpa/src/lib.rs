@@ -948,6 +948,32 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
+	fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
+		let chain_info = match self.inner.info() {
+			Ok(info) => info.chain,
+			_ => return,
+		};
+
+		for pending_change in self.authority_set.inner().read().pending_changes() {
+			if pending_change.effective_number() > chain_info.finalized_number &&
+				pending_change.effective_number() <= chain_info.best_number
+			{
+				let effective_block_hash = self.inner.best_containing(
+					pending_change.canon_hash,
+					Some(pending_change.effective_number()),
+				);
+
+				if let Ok(Some(hash)) = effective_block_hash {
+					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
+						if *header.number() == pending_change.effective_number() {
+							link.request_justification(&header.hash(), *header.number());
+						}
+					}
+				}
+			}
+		}
+	}
+
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{

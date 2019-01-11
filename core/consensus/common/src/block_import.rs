@@ -145,6 +145,9 @@ impl<Block: BlockT> ImportBlock<Block> {
 /// Block import trait.
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
+
+	fn on_start(&self, _link: &::import_queue::Link<B>) { }
+
 	/// Import a Block alongside the new authorities valid from this block forward
 	fn import_block(
 		&self,

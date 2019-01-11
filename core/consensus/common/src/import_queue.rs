@@ -163,6 +163,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 		let verifier = self.verifier.clone();
 		let block_import = self.block_import.clone();
 		*self.handle.lock() = Some(::std::thread::Builder::new().name("ImportQueue".into()).spawn(move || {
+			block_import.on_start(&link);
 			import_thread(block_import, link, qdata, verifier)
 		})?);
 		Ok(())
