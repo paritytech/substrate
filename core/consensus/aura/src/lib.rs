@@ -317,7 +317,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							signature,
 						);
 
-						let import_block : ImportBlock<B> = ImportBlock {
+						let import_block: ImportBlock<B> = ImportBlock {
 							origin: BlockOrigin::Own,
 							header,
 							justification: None,
