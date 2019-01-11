@@ -36,6 +36,7 @@ use sandbox;
 
 struct Heap {
 	end: u32,
+	total_size: u32,
 }
 
 impl Heap {
@@ -55,6 +56,13 @@ impl Heap {
 	fn allocate(&mut self, size: u32) -> u32 {
 		let r = self.end;
 		self.end += size;
+		let new_total_size = r + size;
+		if new_total_size > self.total_size {
+			if new_total_size / 1024 / 1024 > self.total_size / 1024 / 1024 {
+				trace!(target: "wasm-heap", "Allocated over {} MB",  new_total_size / 1024 / 1024);
+			}
+			self.total_size = new_total_size;
+		}
 		r
 	}
 
