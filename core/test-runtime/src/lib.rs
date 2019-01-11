@@ -104,9 +104,9 @@ pub struct Transfer {
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Extrinsic {
-	pub transfer: Transfer,
-	pub signature: Ed25519Signature,
+pub enum Extrinsic {
+	AuthoritiesChange(Vec<Ed25519AuthorityId>),
+	Transfer(Transfer, Ed25519Signature),
 }
 
 #[cfg(feature = "std")]
@@ -121,10 +121,15 @@ impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
 	fn check(self) -> Result<Self, &'static str> {
-		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
-			Ok(self)
-		} else {
-			Err("bad signature")
+		match self {
+			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
+			Extrinsic::Transfer(transfer, signature) => {
+				if ::runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+					Ok(Extrinsic::Transfer(transfer, signature))
+				} else {
+					Err("bad signature")
+				}
+			},
 		}
 	}
 }
@@ -132,6 +137,15 @@ impl BlindCheckable for Extrinsic {
 impl ExtrinsicT for Extrinsic {
 	fn is_signed(&self) -> Option<bool> {
 		Some(true)
+	}
+}
+
+impl Extrinsic {
+	pub fn transfer(&self) -> &Transfer {
+		match self {
+			Extrinsic::Transfer(ref transfer, _) => transfer,
+			_ => panic!("cannot convert to transfer ref"),
+		}
 	}
 }
 

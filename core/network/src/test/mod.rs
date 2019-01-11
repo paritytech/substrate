@@ -27,9 +27,10 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
+use primitives::Ed25519AuthorityId;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Zero, AuthorityIdFor};
+use runtime_primitives::traits::{Block as BlockT, Zero, Header, Digest, DigestItem, AuthorityIdFor};
 use io::SyncIo;
 use protocol::{Context, Protocol, ProtocolContext};
 use config::ProtocolConfig;
@@ -92,6 +93,9 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
+			.map(|auth| auth.iter().cloned().collect());
+
 		Ok((ImportBlock {
 			origin,
 			header,
@@ -101,7 +105,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			post_digests: vec![],
 			auxiliary: Vec::new(),
 			fork_choice: ForkChoiceStrategy::LongestChain,
-		}, None))
+		}, new_authorities))
 	}
 }
 
@@ -414,13 +418,20 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 					nonce,
 				};
 				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
-				builder.push(Extrinsic { transfer, signature }).unwrap();
+				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()
 			});
 		} else {
 			self.generate_blocks(count, BlockOrigin::File, |builder| builder.bake().unwrap());
 		}
+	}
+
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<Ed25519AuthorityId>) {
+		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
+			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
+			builder.bake().unwrap()
+		});
 	}
 
 	/// Execute a function with specialization for this peer.
