@@ -84,7 +84,6 @@ extern crate assert_matches;
 extern crate wabt;
 
 mod account_db;
-mod double_map;
 mod exec;
 mod vm;
 mod gas;
@@ -94,15 +93,15 @@ mod tests;
 
 use exec::ExecutionContext;
 use account_db::{AccountDb, OverlayAccountDb};
-use double_map::StorageDoubleMap;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::{Codec, HasCompact};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic};
 use runtime_support::dispatch::Result;
-use runtime_support::{Parameter, StorageMap, StorageValue};
+use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
 use system::ensure_signed;
+use runtime_io::{blake2_256, twox_128};
 
 pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
@@ -302,11 +301,22 @@ decl_storage! {
 ///
 /// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
 pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
-impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
+impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	const PREFIX: &'static [u8] = b"con:sto:";
 	type Key1 = T::AccountId;
 	type Key2 = Vec<u8>;
 	type Value = Vec<u8>;
+
+	/// Hashed by XX
+	fn derive_key1(key1_data: Vec<u8>) -> Vec<u8> {
+		twox_128(&key1_data).to_vec()
+	}
+
+	/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
+	/// thus will be susceptible for a untrusted input.
+	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8> {
+		blake2_256(&key2_data).to_vec()
+	}
 }
 
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
