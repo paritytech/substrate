@@ -815,10 +815,13 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
+      pub fn call_module() -> $crate::dispatch::CallMetadata {
+				__call_to_metadata!($($rest)*)
+			}
 			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
 				$crate::dispatch::ModuleMetadata {
 					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($mod_type)),
-					call: __call_to_metadata!($($rest)*),
+					call: Self::call_module(),
 				}
 			}
 		}
