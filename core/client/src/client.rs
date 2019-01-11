@@ -572,38 +572,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
-			Some(transaction_state) => {
-				let mut overlay = Default::default();
-				let mut r = self.executor.call_at_state(
-					transaction_state,
-					&mut overlay,
-					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
-					match (origin, self.block_execution_strategy) {
-						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
-							ExecutionManager::NativeWhenPossible,
-						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
-						_ => ExecutionManager::Both(|wasm_result, native_result| {
-							let header = import_headers.post();
-							warn!("Consensus error between wasm and native block execution at block {}", hash);
-							warn!("   Header {:?}", header);
-							warn!("   Native result {:?}", native_result);
-							warn!("   Wasm result {:?}", wasm_result);
-							telemetry!("block.execute.consensus_failure";
-								"hash" => ?hash,
-								"origin" => ?origin,
-								"header" => ?header
-							);
-							wasm_result
-						}),
-					},
-				);
-				let (_, storage_update, changes_update) = r?;
-				overlay.commit_prospective();
-				(Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect()))
+
+		let block_author: bool = match origin {
+			BlockOrigin::Own => true,
+			_ => false,
+		};
+
+		// TODO: create update struct to clean up function signature
+		let storage_changes = match block_author {
+			true => {
+			trace!("Locally-authored block: skipping re-execution");
+			None
 			},
-			None => (None, None, None)
+			false => {
+			trace!("Execute Block");
+			self.block_execution(import_headers,origin,hash,body,transaction)?
+			},
 		};
 
 		// TODO: non longest-chain rule.
@@ -631,14 +615,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Some(authorities) = authorities {
 			transaction.update_authorities(authorities);
 		}
-		if let Some(storage_update) = storage_update {
-			transaction.update_db_storage(storage_update)?;
-		}
 		if let Some(storage_changes) = storage_changes.clone() {
 			transaction.update_storage(storage_changes)?;
-		}
-		if let Some(Some(changes_update)) = changes_update {
-			transaction.update_changes_trie(changes_update)?;
 		}
 
 		transaction.set_aux(aux)?;
@@ -673,6 +651,66 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		Ok(ImportResult::Queued)
+	}
+
+	fn block_execution(
+		&self,
+		import_headers: PrePostHeader<Block::Header>,
+		origin: BlockOrigin,
+		hash: Block::Hash,
+		body: Option<Vec<Block::Extrinsic>>,
+		transaction: B::BlockImportOperation,
+	) -> error::Result<Option<(Vec<u8>, Option<Vec<u8>>)>> where
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	{
+		let parent_hash = import_headers.post().parent_hash().clone();
+
+		match transaction.state()? {
+			Some(transaction_state) => {
+				let mut overlay = Default::default();
+				let mut r = self.executor.call_at_state(
+					transaction_state,
+					&mut overlay,
+					"Core_execute_block",
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
+					match (origin, self.block_execution_strategy) {
+						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
+							ExecutionManager::NativeWhenPossible,
+						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
+						_ => ExecutionManager::Both(|wasm_result, native_result| {
+							let header = import_headers.post();
+							warn!("Consensus error between wasm and native block execution at block {}", hash);
+							warn!("   Header {:?}", header);
+							warn!("   Native result {:?}", native_result);
+							warn!("   Wasm result {:?}", wasm_result);
+							telemetry!("block.execute.consensus_failure";
+								"hash" => ?hash,
+								"origin" => ?origin,
+								"header" => ?header
+							);
+							wasm_result
+						}),
+					},
+				);
+				let (_, storage_update, changes_update) = r?;
+				overlay.commit_prospective();
+				// let storage_changes = Some(overlay.into_committed().collect());
+
+				transaction.update_db_storage(storage_update)?;
+
+				if let Some(changes_update) = changes_update {
+					transaction.update_changes_trie(changes_update)?;
+				}
+
+				// if let Some(storage_changes) = storage_changes.clone() {
+				// 	transaction.update_storage(storage_changes)?;
+				// }
+
+				Ok(Some(overlay.into_committed().collect()))
+			},
+			None => Ok(None) //(None, None, None)
+		}
+		
 	}
 
 	/// Finalizes all blocks up to given. If a justification is provided it is
