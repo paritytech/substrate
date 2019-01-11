@@ -249,12 +249,6 @@ impl RegisteredProtocols {
 		self.0.len()
 	}
 
-	/// Finds a protocol in the list by its id.
-	pub fn find_protocol(&self, protocol: ProtocolId)
-		-> Option<&RegisteredProtocol> {
-		self.0.iter().find(|p| p.id == protocol)
-	}
-
 	/// Returns true if the given protocol is in the list.
 	pub fn has_protocol(&self, protocol: ProtocolId) -> bool {
 		self.0.iter().any(|p| p.id == protocol)
