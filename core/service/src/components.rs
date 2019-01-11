@@ -561,7 +561,7 @@ mod tests {
 				to: Default::default(),
 			};
 			let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
-			Extrinsic { transfer, signature }
+			Extrinsic::Transfer(transfer, signature)
 		};
 		// store the transaction in the pool
 		pool.submit_one(&BlockId::hash(client.best_block_header().unwrap().hash()), transaction.clone()).unwrap();

@@ -24,7 +24,7 @@ use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use codec::{KeyedVec, Encode};
-use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
+use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
 use primitives::{Ed25519AuthorityId, Blake2Hasher};
 use primitives::storage::well_known_keys;
 
@@ -36,6 +36,7 @@ storage_items! {
 	// The current block number being processed. Set by `execute_block`.
 	Number: b"sys:num" => required BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
+	NewAuthorities: b"sys:new_auth" => Vec<Ed25519AuthorityId>;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -96,17 +97,20 @@ pub fn execute_block(block: Block) {
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
+	if let Some(new_authorities) = <NewAuthorities>::take() {
+		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
-	let tx = match check_signature(&utx) {
-		Ok(tx) => tx,
-		Err(_) => return TransactionValidity::Invalid,
-	};
+	if check_signature(&utx).is_err() {
+		return TransactionValidity::Invalid;
+	}
 
+	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
 	if tx.nonce < expected_nonce {
@@ -166,6 +170,9 @@ pub fn finalise_block() -> Header {
 	if let Some(storage_changes_root) = storage_changes_root {
 		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root));
 	}
+	if let Some(new_authorities) = <NewAuthorities>::take() {
+		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+	}
 
 	Header {
 		number,
@@ -177,21 +184,21 @@ pub fn finalise_block() -> Header {
 }
 
 #[inline(always)]
-fn check_signature(utx: &Extrinsic) -> Result<::Transfer, ApplyError> {
+fn check_signature(utx: &Extrinsic) -> Result<(), ApplyError> {
 	use runtime_primitives::traits::BlindCheckable;
-
-	let utx = match utx.clone().check() {
-		Ok(tx) => tx,
-		Err(_) => return Err(ApplyError::BadSignature),
-	};
-
-	Ok(utx.transfer)
+	utx.clone().check().map_err(|_| ApplyError::BadSignature)?;
+	Ok(())
 }
 
 fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
-	// check signature
-	let tx = check_signature(utx)?;
+	check_signature(utx)?;
+	match utx {
+		Extrinsic::Transfer(ref transfer, _) => execute_transfer_backend(transfer),
+		Extrinsic::AuthoritiesChange(ref new_auth) => execute_new_authorities_backend(new_auth),
+	}
+}
 
+fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
@@ -214,6 +221,12 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	let to_balance: u64 = storage::get_or(&to_balance_key, 0);
 	storage::put(&from_balance_key, &(from_balance - tx.amount));
 	storage::put(&to_balance_key, &(to_balance + tx.amount));
+	Ok(ApplyOutcome::Success)
+}
+
+fn execute_new_authorities_backend(new_authorities: &[Ed25519AuthorityId]) -> ApplyResult {
+	let new_authorities: Vec<Ed25519AuthorityId> = new_authorities.iter().cloned().collect();
+	<NewAuthorities>::put(new_authorities);
 	Ok(ApplyOutcome::Success)
 }
 
@@ -266,7 +279,7 @@ mod tests {
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
 		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
-		Extrinsic { transfer: tx, signature }
+		Extrinsic::Transfer(tx, signature)
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
@@ -318,7 +331,7 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("c3d2cc317b5897af4c7f65d76b028971ce9fad745678732ff6d42301b4245a9c").into(),
-				extrinsics_root: hex!("4e689a607609f69df099af82577ae6c5969c44f1afe33a43cd7af926eba42272").into(),
+				extrinsics_root: hex!("198205cb7729fec8ccdc2e58571a4858586a4f305898078e0e8bee1dddea7e4b").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
@@ -343,7 +356,7 @@ mod tests {
 				parent_hash: b.header.hash(),
 				number: 2,
 				state_root: hex!("2c822d948bb68d7f7a1976d4f827a276a95a3ba1c4c15dbfab3bafbeb85f2b4d").into(),
-				extrinsics_root: hex!("009268a854b21f339c53d3c7a6619a27f564703311d91f11f61573a7fed5ca1c").into(),
+				extrinsics_root: hex!("041fa8971dda28745967179a9f39e3ca1a595c510682105df1cff74ae6f05e0d").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
