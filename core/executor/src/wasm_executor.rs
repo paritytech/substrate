@@ -46,9 +46,9 @@ impl Heap {
 	///
 	/// This could mean that wasm binary specifies memory
 	/// limit and we are trying to allocate beyond that limit.
-	fn new(memory: &MemoryRef) -> Self {
+	fn new(reserved: u32) -> Self {
 		Heap {
-			end: memory.used_size().0 as u32,
+			end: reserved,
 		}
 	}
 
@@ -84,7 +84,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: Heap::new(&m),
+			heap: Heap::new(m.used_size().0 as u32),
 			memory: m,
 			table: t,
 			ext: e,
