@@ -66,7 +66,7 @@ test:rust:stable:                  &test
 
 
 
-.build:only:                      &build:only
+.build_only:                      &build_only
   only:
     - master
     - tags
@@ -78,7 +78,7 @@ test:rust:stable:                  &test
 build:rust:linux:release:          &build
   stage:                           build
   <<:                              *collect_artifacts
-  <<:                              *build:only
+  <<:                              *build_only
   tags:
     - linux-docker
   before_script:
@@ -115,17 +115,17 @@ build:rust:doc:release:            &build
 
 #### stage:                        publish
 
-.publish:build:                    &publish:build
+.publish_build:                    &publish_build
   stage:                           publish
   dependencies:
     - build:rust:linux:release
   cache: {}
-  <<:                              *build:only
+  <<:                              *build_only
 
 
 
 publish:docker:release:
-  <<:                              *publish:build
+  <<:                              *publish_build
   tags:
     - shell
   variables:
@@ -146,7 +146,7 @@ publish:docker:release:
 
 
 publish:s3:release:
-  <<:                              *publish:build
+  <<:                              *publish_build
   image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
