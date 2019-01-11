@@ -100,6 +100,18 @@ struct Peer<B: BlockT, H: ExHashT> {
 	next_request_id: message::RequestId,
 }
 
+impl<B: BlockT, H: ExHashT> Peer<B, H> {
+	fn min_request_timestamp(&self) -> Option<&time::Instant> {
+		match (self.block_request_timestamp, self.block_justification_request_timestamp) {
+			(Some(t1), Some(t2)) if t1 < t2 => self.block_request_timestamp.as_ref(),
+			(Some(t1), Some(t2)) => self.block_justification_request_timestamp.as_ref(),
+			(Some(_), None) => self.block_request_timestamp.as_ref(),
+			(None, Some(_)) => self.block_justification_request_timestamp.as_ref(),
+			_ => None,
+		}
+	}
+}
+
 /// Info about a peer's known state.
 #[derive(Debug)]
 pub struct PeerInfo<B: BlockT> {
@@ -506,8 +518,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let peers = self.context_data.peers.read();
 			let handshaking_peers = self.handshaking_peers.read();
 			for (who, timestamp) in peers.iter()
-				.filter_map(|(id, peer)| peer.block_request_timestamp.as_ref().map(|r| (id, r)))
-				.chain(handshaking_peers.iter()) {
+				.filter_map(|(id, peer)| peer.min_request_timestamp().map(|r| (id, r)))
+				.chain(handshaking_peers.iter())
+			{
 				if (tick - *timestamp).as_secs() > REQUEST_TIMEOUT_SEC {
 					trace!(target: "sync", "Timeout {}", who);
 					aborting.push(*who);
