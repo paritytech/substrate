@@ -16,6 +16,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
@@ -35,6 +36,7 @@ const MAX_BLOCKS_TO_REQUEST: usize = 128;
 const MAX_IMPORTING_BLOCKS: usize = 2048;
 // Number of blocks in the queue that prevents ancestry search.
 const MAJOR_SYNC_BLOCKS: usize = 5;
+const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
@@ -51,23 +53,31 @@ enum PeerSyncState<B: BlockT> {
 	DownloadingStale(B::Hash),
 }
 
+type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
+
 struct PendingJustifications<B: BlockT> {
-	justifications: HashSet<(B::Hash, NumberFor<B>)>,
-	pending_requests: VecDeque<(B::Hash, NumberFor<B>)>,
-	peer_requests: HashMap<NodeIndex, (B::Hash, NumberFor<B>)>,
+	justifications: HashSet<PendingJustification<B>>,
+	pending_requests: VecDeque<PendingJustification<B>>,
+	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
+	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
 }
 
 impl<B: BlockT> PendingJustifications<B> {
 	fn new() -> PendingJustifications<B> {
 		PendingJustifications {
-			// TODO: persist this set somehow
 			justifications: HashSet::new(),
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
+			previous_requests: HashMap::new(),
 		}
 	}
 
 	fn dispatch(&mut self, peers: &HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
+		// clean up previous failed requests so we can retry again
+		for (_, requests) in self.previous_requests.iter_mut() {
+			requests.retain(|(_, instant)| instant.elapsed() < JUSTIFICATION_RETRY_WAIT);
+		}
+
 		let mut peers = peers.iter().filter_map(|(peer, status)| {
 			// don't request to any peers that already have pending requests
 			if self.peer_requests.contains_key(peer) {
@@ -86,15 +96,20 @@ impl<B: BlockT> PendingJustifications<B> {
 				_ => break,
 			};
 
-			// only ask peers that have synced past the block number that
-			// we're asking the justification for
+			// only ask peers that have synced past the block number that we're
+			// asking the justification for and to whom we haven't already made
+			// the same request recently
 			let peer_eligible = {
 				let request = match self.pending_requests.front() {
 					Some(r) => r.clone(),
 					_ => break,
 				};
 
-				peer_best_number >= request.1
+				peer_best_number >= request.1 &&
+					!self.previous_requests
+						 .get(&request)
+						 .map(|requests| requests.iter().any(|i| i.0 == peer))
+						 .unwrap_or(false)
 			};
 
 			if !peer_eligible {
@@ -130,7 +145,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		self.pending_requests.append(&mut unhandled_requests);
 	}
 
-	fn queue_request(&mut self, justification: &(B::Hash, NumberFor<B>)) {
+	fn queue_request(&mut self, justification: &PendingJustification<B>) {
 		if !self.justifications.insert(*justification) {
 			return;
 		}
@@ -156,8 +171,14 @@ impl<B: BlockT> PendingJustifications<B> {
 			if let Some(justification) = justification {
 				if import_queue.import_justification(request.0, request.1, justification) {
 					self.justifications.remove(&request);
+					self.previous_requests.remove(&request);
 					return;
 				}
+			} else {
+				self.previous_requests
+					.entry(request)
+					.or_insert(Vec::new())
+					.push((who, Instant::now()));
 			}
 
 			self.pending_requests.push_front(request);
@@ -168,6 +189,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		self.justifications.retain(|(_, n)| *n > best_finalized);
 		self.pending_requests.retain(|(_, n)| *n > best_finalized);
 		self.peer_requests.retain(|_, (_, n)| *n > best_finalized);
+		self.previous_requests.retain(|(_, n), _| *n > best_finalized);
 	}
 }
 
