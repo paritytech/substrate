@@ -67,12 +67,14 @@ pub mod metadata;
 mod runtime;
 #[macro_use]
 pub mod inherent;
+mod double_map;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
+pub use double_map::StorageDoubleMap;
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;

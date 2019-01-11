@@ -14,12 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
-use runtime_support::StorageMap;
+use runtime_support::{StorageMap, StorageDoubleMap};
 use substrate_primitives::{Blake2Hasher};
 use system::{Phase, EventRecord};
 use wabt;
