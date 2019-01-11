@@ -98,6 +98,11 @@ build:rust:linux:release:          &build
 build:rust:doc:release:            &build
   stage:                           build
   <<:                              *collect_artifacts
+  cache:
+    key:                             "${CI_JOB_NAME}"
+    paths:
+      - ./.cargo/
+      - ./target/doc
   only:
     - master
     - tags
