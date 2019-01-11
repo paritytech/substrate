@@ -107,9 +107,8 @@ build:rust:doc:release:            &build
     - linux-docker
   script:
     - time cargo doc --release --verbose
-    - find . -maxdepth 3 -ls
     - mkdir -p ./artifacts
-    - mv ./target/release/doc ./artifacts/.
+    - mv ./target/doc ./artifacts/.
 
 
 
