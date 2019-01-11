@@ -45,7 +45,7 @@ pub fn start_service<TProtos>(
 where TProtos: IntoIterator<Item = RegisteredProtocol> {
 
 	if let Some(ref path) = config.net_config_path {
-	    fs::create_dir_all(Path::new(path))?;
+		fs::create_dir_all(Path::new(path))?;
 	}
 
 	// Private and public keys configuration.
@@ -92,7 +92,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 			Err(_) => {
 				// If the format of the bootstrap node is not a multiaddr, try to parse it as
 				// a `SocketAddr`. This corresponds to the format `IP:PORT`.
-				let addr = match bootnode.parse::<SocketAddr>() { 
+				let addr = match bootnode.parse::<SocketAddr>() {
 					Ok(SocketAddr::V4(socket)) => multiaddr![Ip4(*socket.ip()), Tcp(socket.port())],
 					Ok(SocketAddr::V6(socket)) => multiaddr![Ip6(*socket.ip()), Tcp(socket.port())],
 					_ => {
