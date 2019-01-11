@@ -525,6 +525,25 @@ impl CheckInherentError {
 	}
 }
 
+/// Simple blob to hold an extrinsic without commiting to its format and ensure it is serialized
+/// correctly.
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaqueExtrinsic(pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl ::serde::Serialize for OpaqueExtrinsic {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		::codec::Encode::using_encoded(&self.0, |bytes| seq.serialize_bytes(bytes))
+	}
+}
+
+impl traits::Extrinsic for OpaqueExtrinsic {
+	fn is_signed(&self) -> Option<bool> {
+		None
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;
