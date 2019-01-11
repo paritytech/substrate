@@ -581,13 +581,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// TODO: create update struct to clean up function signature
 		let storage_changes = match block_author {
 			true => {
-			trace!("Locally-authored block: skipping re-execution");
-			None
-			},
+				trace!("Locally-authored block: skipping re-execution");
+				None
+				},
 			false => {
-			trace!("Execute Block");
-			self.block_execution(import_headers,origin,hash,body,transaction)?
-			},
+				trace!("Execute Block");
+				self.block_execution(&import_headers,origin,hash,body.clone(),&mut transaction)?
+				},
 		};
 
 		// TODO: non longest-chain rule.
@@ -655,15 +655,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	fn block_execution(
 		&self,
-		import_headers: PrePostHeader<Block::Header>,
+		import_headers: &PrePostHeader<Block::Header>,
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		body: Option<Vec<Block::Extrinsic>>,
-		transaction: B::BlockImportOperation,
-	) -> error::Result<Option<(Vec<u8>, Option<Vec<u8>>)>> where
+		transaction: &mut B::BlockImportOperation,
+	) -> error::Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
-		let parent_hash = import_headers.post().parent_hash().clone();
 
 		match transaction.state()? {
 			Some(transaction_state) => {
@@ -694,7 +693,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				);
 				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
-				// let storage_changes = Some(overlay.into_committed().collect());
 
 				transaction.update_db_storage(storage_update)?;
 
@@ -702,13 +700,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					transaction.update_changes_trie(changes_update)?;
 				}
 
-				// if let Some(storage_changes) = storage_changes.clone() {
-				// 	transaction.update_storage(storage_changes)?;
-				// }
-
 				Ok(Some(overlay.into_committed().collect()))
 			},
-			None => Ok(None) //(None, None, None)
+			None => Ok(None)
 		}
 		
 	}
