@@ -86,6 +86,9 @@ pub trait Backend<H: Hasher> {
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
 
+	/// Get all keys with given prefix
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>>;
+
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
 }
@@ -281,6 +284,10 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.inner.get(&None).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.clone()))).collect()
+	}
+
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		self.inner.get(&None).into_iter().flat_map(|map| map.keys().filter(|k| k.starts_with(prefix)).cloned()).collect()
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {

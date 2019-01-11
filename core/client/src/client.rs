@@ -265,6 +265,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self.backend
 	}
 
+	/// Return storage entry keys in state in a block of given hash with given prefix.
+	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> error::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
+		Ok(keys)
+	}
+
 	/// Return single storage entry of contract under given address in state in a block of given hash.
 	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
