@@ -67,6 +67,18 @@ pub trait Lookup {
 	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, &'static str>;
 }
 
+/// Means of changing one type into another in a manner dependent on the source type.
+/// This variant is different to `Lookup` in that it doesn't (can cannot) require any
+/// context.
+pub trait StaticLookup {
+	/// Type to lookup from.
+	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	/// Type to lookup into.
+	type Target;
+	/// Attempt a lookup.
+	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
 /// Get the "current" block number.
 pub trait CurrentHeight {
 	/// The type of the block number.
