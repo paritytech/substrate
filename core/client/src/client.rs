@@ -573,22 +573,24 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 
-		let block_author: bool = match origin {
-			BlockOrigin::Own => true,
-			_ => false,
-		};
+		// // TODO: correct path logic
+		// let block_author: bool = match origin {
+		// 	BlockOrigin::Own => true,
+		// 	_ => false,
+		// };
 
-		// TODO: create update struct to clean up function signature
-		let storage_changes = match block_author {
-			true => {
-				trace!("Locally-authored block: skipping re-execution");
-				None
-				},
-			false => {
-				trace!("Execute Block");
-				self.block_execution(&import_headers,origin,hash,body.clone(),&mut transaction)?
-				},
-		};
+		// let storage_changes = match block_author {
+		// 	true => {
+		// 		trace!("Locally-authored block: skipping re-execution");
+		// 		None
+		// 		},
+		// 	false => {
+		// 		trace!("Execute Block");
+		// 		self.block_execution(&import_headers,origin,hash,body.clone(),&mut transaction)?
+		// 		},
+		// };
+
+		let storage_changes = self.block_execution(&import_headers,origin,hash,body.clone(),&mut transaction)?;
 
 		// TODO: non longest-chain rule.
 		let is_new_best = finalized || match fork_choice {
@@ -664,7 +666,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 
-		match transaction.state()? {
+		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
 				let mut r = self.executor.call_at_state(
@@ -694,16 +696,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
 
-				transaction.update_db_storage(storage_update)?;
-
-				if let Some(changes_update) = changes_update {
-					transaction.update_changes_trie(changes_update)?;
-				}
-
-				Ok(Some(overlay.into_committed().collect()))
+				(Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect()))
 			},
-			None => Ok(None)
+			None => (None, None, None)
+		};
+
+		if let Some(storage_update) = storage_update {
+			transaction.update_db_storage(storage_update)?;
 		}
+
+		if let Some(Some(changes_update)) = changes_update {
+			transaction.update_changes_trie(changes_update)?;
+		}
+
+		Ok(storage_changes)
 		
 	}
 
