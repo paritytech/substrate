@@ -97,7 +97,7 @@ use account_db::{AccountDb, OverlayAccountDb};
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::{Codec, HasCompact};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic, StaticLookup};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
 use system::ensure_signed;
@@ -152,7 +152,7 @@ decl_module! {
 		/// Make a call to a specified account, optionally transferring some balance.
 		fn call(
 			origin,
-			dest: T::AccountId,
+			dest: <T::Lookup as StaticLookup>::Source,
 			value: <T::Balance as HasCompact>::Type,
 			gas_limit: <T::Gas as HasCompact>::Type,
 			data: Vec<u8>
@@ -160,6 +160,7 @@ decl_module! {
 			let origin = ensure_signed(origin)?;
 			let value = value.into();
 			let gas_limit = gas_limit.into();
+			let dest = T::Lookup::lookup(dest)?;
 
 			// Pay for the gas upfront.
 			//
