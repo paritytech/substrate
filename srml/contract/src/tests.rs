@@ -225,7 +225,7 @@ fn contract_transfer() {
 				event: MetaEvent::balances(
 					balances::RawEvent::NewAccount(
 						CONTRACT_SHOULD_TRANSFER_TO,
-						0
+						6
 					)
 				),
 			},
@@ -544,7 +544,7 @@ fn contract_create() {
 				event: MetaEvent::balances(
 					balances::RawEvent::NewAccount(
 						derived_address,
-						0
+						3
 					)
 				),
 			},
