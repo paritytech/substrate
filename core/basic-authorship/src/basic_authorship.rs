@@ -232,15 +232,16 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				self.transaction_pool.remove_invalid(&unqueue_invalid);
 			})?;
 
-		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
-			  block.header().number(),
-			  <<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
-			  block.header().parent_hash(),
-			  block.extrinsics().iter()
-			  .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
-			  .collect::<Vec<_>>()
-			  .join(", ")
-			 );
+		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
+			block.header().number(),
+			<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
+			block.header().parent_hash(),
+			block.extrinsics()
+				.iter()
+				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
 
 		let substrate_block = Decode::decode(&mut block.encode().as_slice())
 			.expect("blocks are defined to serialize to substrate blocks correctly; qed");

@@ -304,6 +304,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 						}
 
 						let (header, body) = b.deconstruct();
+						let header_num = header.number().clone();
 						let pre_hash = header.hash();
 						let parent_hash = header.parent_hash().clone();
 
@@ -316,7 +317,7 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							signature,
 						);
 
-						let import_block = ImportBlock {
+						let import_block: ImportBlock<B> = ImportBlock {
 							origin: BlockOrigin::Own,
 							header,
 							justification: None,
@@ -326,6 +327,12 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 							auxiliary: Vec::new(),
 							fork_choice: ForkChoiceStrategy::LongestChain,
 						};
+
+						info!("Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+							header_num,
+							import_block.post_header().hash(),
+							pre_hash
+						);
 
 						if let Err(e) = block_import.import_block(import_block, None) {
 							warn!(target: "aura", "Error with block built on {:?}: {:?}",

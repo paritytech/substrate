@@ -26,4 +26,4 @@ unsigned-varint = { version = "0.2.1", features = ["codec"] }
 
 [dev-dependencies]
 assert_matches = "1.2"
-parity-bytes = { git = "https://github.com/paritytech/parity-common", rev = "616b40150ded71f57f650067fcbc5c99d7c343e6" }
+parity-bytes = { git = "https://github.com/paritytech/parity-common", rev = "b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
