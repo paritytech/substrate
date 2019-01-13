@@ -555,7 +555,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value.into(), 0.into()))
+		Call::Balances(balances::Call::set_balance(42, value.into(), 0.into()))
 	}
 
 	fn propose_set_balance(who: u64, value: u64, locked: u64) -> super::Result {
