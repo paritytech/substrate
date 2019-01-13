@@ -46,7 +46,8 @@ extern crate sr_primitives as primitives;
 extern crate srml_system as system;
 
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::traits::{Member, SimpleArithmetic, Zero};
+use codec::HasCompact;
+use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -79,10 +80,12 @@ decl_module! {
 		}
 
 		/// Move some assets from one holder to another.
-		fn transfer(origin, id: AssetId, target: T::AccountId, amount: T::Balance) {
+		fn transfer(origin, id: AssetId, target: <T::Lookup as StaticLookup>::Source, amount: <T::Balance as HasCompact>::Type) {
 			let origin = ensure_signed(origin)?;
 			let origin_account = (id, origin.clone());
 			let origin_balance = <Balances<T>>::get(&origin_account);
+			let target = T::Lookup::lookup(target)?;
+			let amount = amount.into();
 			ensure!(!amount.is_zero(), "transfer amount should be non-zero");
 			ensure!(origin_balance >= amount, "origin account balance must be greater than or equal to the transfer amount");
 
@@ -200,10 +203,10 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50.into()));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
-			assert_ok!(Assets::transfer(Origin::signed(2), 0, 3, 31));
+			assert_ok!(Assets::transfer(Origin::signed(2), 0, 3, 31.into()));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 19);
 			assert_eq!(Assets::balance(0, 3), 31);
@@ -217,7 +220,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50.into()));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
 		});
@@ -228,12 +231,12 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50));
+			assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 50.into()));
 			assert_eq!(Assets::balance(0, 1), 50);
 			assert_eq!(Assets::balance(0, 2), 50);
 			assert_ok!(Assets::destroy(Origin::signed(1), 0));
 			assert_eq!(Assets::balance(0, 1), 0);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50), "origin account balance must be greater than or equal to the transfer amount");
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 1, 50.into()), "origin account balance must be greater than or equal to the transfer amount");
 		});
 	}
 
@@ -242,7 +245,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0), "transfer amount should be non-zero");
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 0.into()), "transfer amount should be non-zero");
 		});
 	}
 
@@ -251,7 +254,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert_ok!(Assets::issue(Origin::signed(1), 100));
 			assert_eq!(Assets::balance(0, 1), 100);
-			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101), "origin account balance must be greater than or equal to the transfer amount");
+			assert_noop!(Assets::transfer(Origin::signed(1), 0, 2, 101.into()), "origin account balance must be greater than or equal to the transfer amount");
 		});
 	}
 
