@@ -290,6 +290,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
@@ -299,7 +300,6 @@ mod tests {
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
 		type EnsureAccountLiquid = ();
-		type Lookup = IdentityLookup<u64>;
 		type Event = ();
 	}
 	impl Trait for Test {

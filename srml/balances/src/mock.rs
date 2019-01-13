@@ -39,13 +39,13 @@ impl system::Trait for Runtime {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
 }
 impl Trait for Runtime {
 	type Balance = u64;
-	type Lookup = IdentityLookup<u64>;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();

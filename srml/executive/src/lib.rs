@@ -275,7 +275,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256};
+	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use system;
 
@@ -301,14 +301,15 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = MetaEvent;
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
 		type Event = MetaEvent;
 	}
@@ -326,7 +327,6 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
-			reclaim_rebate: 0,
 		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69.into()));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);

@@ -269,7 +269,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnFinalise}, testing::{Digest, DigestItem, Header}
+		BuildStorage, traits::{BlakeTwo256, OnFinalise, IdentityLookup}, testing::{Digest, DigestItem, Header}
 	};
 
 	impl_outer_origin! {
@@ -289,14 +289,15 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
 		type Event = ();
 	}

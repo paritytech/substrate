@@ -874,8 +874,8 @@ mod tests {
 
 			System::set_block_number(6);
 			assert!(Council::presentation_active());
-			assert_eq!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()), Ok(()));
-			assert_eq!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()), Ok(()));
+			assert_eq!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()), Ok(()));
 			assert_eq!(Council::leaderboard(), Some(vec![(0, 0), (0, 0), (20, 2), (50, 5)]));
 
 			assert_ok!(Council::end_block(System::block_number()));
@@ -900,7 +900,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_noop!(Council::present_winner(Origin::signed(4), 2.into(), 0.into(), 0.into()), "stake deposited to present winner and be added to leaderboard should be non-zero");
+			assert_noop!(Council::present_winner(Origin::signed(4), 2, 0.into(), 0.into()), "stake deposited to present winner and be added to leaderboard should be non-zero");
 		});
 	}
 
@@ -917,9 +917,9 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()));
-			assert_eq!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()), Err("duplicate presentation"));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()));
+			assert_eq!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()), Err("duplicate presentation"));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
@@ -936,7 +936,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -945,12 +945,12 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 1.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_ok!(Council::reap_inactive_voter(Origin::signed(5),
 				(Council::voters().iter().position(|&i| i == 5).unwrap() as u32).into(),
-				2.into(), (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
+				2, (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
 				2.into()
 			));
 
@@ -970,7 +970,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -979,7 +979,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_noop!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 1.into()), "candidate must not form a duplicated member if elected");
+			assert_noop!(Council::present_winner(Origin::signed(4), 2, 20.into(), 1.into()), "candidate must not form a duplicated member if elected");
 		});
 	}
 
@@ -992,7 +992,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -1001,7 +1001,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 1.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(11);
@@ -1009,7 +1009,7 @@ mod tests {
 
 			assert_ok!(Council::reap_inactive_voter(Origin::signed(5),
 				(Council::voters().iter().position(|&i| i == 5).unwrap() as u32).into(),
-				2.into(), (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
+				2, (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
 				2.into()
 			));
 
@@ -1029,7 +1029,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -1038,12 +1038,12 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 1.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_noop!(Council::reap_inactive_voter(Origin::signed(2),
 				42.into(),
-				2.into(), (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
+				2, (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
 				2.into()
 			), "bad reporter index");
 		});
@@ -1058,7 +1058,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -1067,12 +1067,12 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 1.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_noop!(Council::reap_inactive_voter(Origin::signed(2),
 				(Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
-				2.into(), 42.into(),
+				2, 42.into(),
 				2.into()
 			), "bad target index");
 		});
@@ -1093,10 +1093,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 3.into(), 30.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 4.into(), 40.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 4, 40.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -1104,8 +1104,8 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 1.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 3.into(), 30.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30.into(), 1.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::vote_index(), 2);
@@ -1115,7 +1115,7 @@ mod tests {
 
 			assert_ok!(Council::reap_inactive_voter(Origin::signed(4),
 				(Council::voters().iter().position(|&i| i == 4).unwrap() as u32).into(),
-				2.into(),
+				2,
 				(Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
 				2.into()
 			));
@@ -1135,7 +1135,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -1144,12 +1144,12 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 1.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_noop!(Council::reap_inactive_voter(Origin::signed(4),
 				0.into(),
-				2.into(), (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
+				2, (Council::voters().iter().position(|&i| i == 2).unwrap() as u32).into(),
 				2.into()
 			), "reporter must be a voter");
 		});
@@ -1172,10 +1172,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 1.into(), 60.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 3.into(), 30.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 4.into(), 40.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 1, 60.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 4, 40.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()));
 
 			assert_eq!(Council::leaderboard(), Some(vec![
 				(30, 3),
@@ -1184,7 +1184,7 @@ mod tests {
 				(60, 1)
 			]));
 
-			assert_noop!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()), "candidate not worthy of leaderboard");
+			assert_noop!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()), "candidate not worthy of leaderboard");
 		});
 	}
 
@@ -1205,11 +1205,11 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 1.into(), 60.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 3.into(), 30.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 4.into(), 40.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 2, 20.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 1, 60.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 4, 40.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()));
 
 			assert_eq!(Council::leaderboard(), Some(vec![
 				(30, 3),
@@ -1225,7 +1225,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
-			assert_noop!(Council::present_winner(Origin::signed(5), 5.into(), 1.into(), 0.into()), "cannot present outside of presentation period");
+			assert_noop!(Council::present_winner(Origin::signed(5), 5, 1.into(), 0.into()), "cannot present outside of presentation period");
 		});
 	}
 
@@ -1240,7 +1240,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_noop!(Council::present_winner(Origin::signed(4), 2.into(), 20.into(), 1.into()), "index not current");
+			assert_noop!(Council::present_winner(Origin::signed(4), 2, 20.into(), 1.into()), "index not current");
 		});
 	}
 
@@ -1259,7 +1259,7 @@ mod tests {
 			System::set_block_number(6);
 			assert_eq!(Balances::free_balance(&1), 1);
 			assert_eq!(Balances::reserved_balance(&1), 9);
-			assert_noop!(Council::present_winner(Origin::signed(1), 1.into(), 20.into(), 0.into()), "presenter must have sufficient slashable funds");
+			assert_noop!(Council::present_winner(Origin::signed(1), 1, 20.into(), 0.into()), "presenter must have sufficient slashable funds");
 		});
 	}
 
@@ -1277,7 +1277,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_err!(Council::present_winner(Origin::signed(4), 2.into(), 80.into(), 0.into()), "incorrect total");
+			assert_err!(Council::present_winner(Origin::signed(4), 2, 80.into(), 0.into()), "incorrect total");
 
 			assert_eq!(Balances::total_balance(&4), 38);
 		});
@@ -1304,7 +1304,7 @@ mod tests {
 
 			System::set_block_number(6);
 			assert!(Council::presentation_active());
-			assert_ok!(Council::present_winner(Origin::signed(4), 1.into(), 60.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 1, 60.into(), 0.into()));
 			// leaderboard length is the empty seats plus the carry count (i.e. 5 + 2), where those
 			// to be carried are the lowest and stored in lowest indexes
 			assert_eq!(Council::leaderboard(), Some(vec![
@@ -1313,9 +1313,9 @@ mod tests {
 				(0, 0),
 				(60, 1)
 			]));
-			assert_ok!(Council::present_winner(Origin::signed(4), 3.into(), 30.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 4.into(), 40.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 4, 40.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()));
 			assert_eq!(Council::leaderboard(), Some(vec![
 				(30, 3),
 				(40, 4),
@@ -1361,10 +1361,10 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_ok!(Council::present_winner(Origin::signed(4), 1.into(), 60.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 3.into(), 30.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 4.into(), 40.into(), 0.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 5.into(), 50.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 1, 60.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 30.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 4, 40.into(), 0.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 5, 50.into(), 0.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
@@ -1373,8 +1373,8 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
-			assert_ok!(Council::present_winner(Origin::signed(4), 3.into(), 90.into(), 1.into()));
-			assert_ok!(Council::present_winner(Origin::signed(4), 4.into(), 40.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 3, 90.into(), 1.into()));
+			assert_ok!(Council::present_winner(Origin::signed(4), 4, 40.into(), 1.into()));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert!(!Council::presentation_active());

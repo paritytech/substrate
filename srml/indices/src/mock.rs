@@ -21,7 +21,7 @@
 use std::collections::HashSet;
 use ref_thread_local::RefThreadLocal;
 use primitives::BuildStorage;
-use primitives::testing::{Digest, DigestItem, Header};
+use primitives::{traits::IdentityLookup, testing::{Digest, DigestItem, Header}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, system};
@@ -73,6 +73,7 @@ impl system::Trait for Runtime {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = Indices;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
