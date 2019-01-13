@@ -225,8 +225,7 @@ fn contract_transfer() {
 				event: MetaEvent::balances(
 					balances::RawEvent::NewAccount(
 						CONTRACT_SHOULD_TRANSFER_TO,
-						0,
-						balances::NewAccountOutcome::NoHint
+						0
 					)
 				),
 			},
@@ -545,8 +544,7 @@ fn contract_create() {
 				event: MetaEvent::balances(
 					balances::RawEvent::NewAccount(
 						derived_address,
-						0,
-						balances::NewAccountOutcome::NoHint
+						0
 					)
 				),
 			},
@@ -705,7 +703,7 @@ fn account_removal_removes_storage() {
 			// the balance of account 1 is will be below than exsistential threshold.
 			//
 			// This should lead to the removal of all storage associated with this account.
-			assert_ok!(Balances::transfer(Origin::signed(1), 2.into(), 20.into()));
+			assert_ok!(Balances::transfer(Origin::signed(1), 2, 20.into()));
 
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.

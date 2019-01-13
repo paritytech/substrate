@@ -47,7 +47,7 @@ extern crate substrate_primitives;
 use rstd::{prelude::*, result, marker::PhantomData};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Lookup, Member, CurrentHeight, BlockNumberToHash};
+use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
 use address::Address as RawAddress;
 use system::{IsDeadAccount, OnNewAccount};
 
@@ -218,35 +218,5 @@ impl<T: Trait> StaticLookup for Module<T> {
 	type Target = T::AccountId;
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
 		Self::lookup_address(a).ok_or("invalid account index")
-	}
-}
-
-pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
-impl<T> Default for ChainContext<T> {
-	fn default() -> Self {
-		ChainContext(::rstd::marker::PhantomData)
-	}
-}
-
-impl<T: Trait> Lookup for ChainContext<T> {
-	type Source = address::Address<T::AccountId, T::AccountIndex>;
-	type Target = T::AccountId;
-	fn lookup(&self, a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		<Module<T> as StaticLookup>::lookup(a)
-	}
-}
-
-impl<T: Trait> CurrentHeight for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	fn current_height(&self) -> Self::BlockNumber {
-		<system::Module<T>>::block_number()
-	}
-}
-
-impl<T: Trait> BlockNumberToHash for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	type Hash = T::Hash;
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
-		Some(<system::Module<T>>::block_hash(n))
 	}
 }

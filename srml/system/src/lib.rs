@@ -423,10 +423,10 @@ impl<T> Default for ChainContext<T> {
 }
 
 impl<T: Trait> Lookup for ChainContext<T> {
-	type Source = T::AccountId;
-	type Target = T::AccountId;
+	type Source = <T::Lookup as StaticLookup>::Source;
+	type Target = <T::Lookup as StaticLookup>::Target;
 	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
-		Ok(s)
+		<T::Lookup as StaticLookup>::lookup(s)
 	}
 }
 
@@ -451,7 +451,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
-	use primitives::traits::BlakeTwo256;
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{
@@ -468,6 +468,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = u16;
 		type Log = DigestItem;
