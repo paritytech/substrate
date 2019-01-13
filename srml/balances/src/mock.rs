@@ -18,29 +18,14 @@
 
 #![cfg(test)]
 
-use rstd::{result::Result, marker::PhantomData};
 use primitives::BuildStorage;
-use codec::Codec;
-use primitives::{traits::{MaybeDebug, Lookup, StaticLookup}, testing::{Digest, DigestItem, Header}};
+use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, system};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
-}
-
-#[derive(Default)]
-pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
-	type Source = T;
-	type Target = T;
-	fn lookup(x: T) -> Result<T, &'static str> { Ok(x) }
-}
-impl<T> Lookup for IdentityLookup<T> {
-	type Source = T;
-	type Target = T;
-	fn lookup(&self, x: T) -> Result<T, &'static str> { Ok(x) }
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -62,6 +47,7 @@ impl Trait for Runtime {
 	type Balance = u64;
 	type Lookup = IdentityLookup<u64>;
 	type OnFreeBalanceZero = ();
+	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();
 	type Event = ();
 }

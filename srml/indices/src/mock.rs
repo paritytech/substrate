@@ -98,5 +98,4 @@ pub fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	t.into()
 }
 
-pub type System = system::Module<Runtime>;
 pub type Indices = Module<Runtime>;

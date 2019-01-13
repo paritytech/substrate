@@ -44,12 +44,12 @@ extern crate sr_io as runtime_io;
 #[cfg(test)]
 extern crate substrate_primitives;
 
-use rstd::{prelude::*, result};
+use rstd::{prelude::*, result, marker::PhantomData};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::traits::{One, SimpleArithmetic, As, Lookup, Member, CurrentHeight,
-	BlockNumberToHash, Convert};
+use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Lookup, Member, CurrentHeight, BlockNumberToHash};
 use address::Address as RawAddress;
+use system::{IsDeadAccount, OnNewAccount};
 
 mod mock;
 
@@ -61,32 +61,17 @@ const ENUM_SET_SIZE: usize = 64;
 
 pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
-/// Determinator to say whether a given account is unused.
-pub trait IsDeadAccount<AccountId> {
-	/// Is the given account dead?
-	// Defined in balances, should be:
-	// Self::total_balance(who).is_zero()
-	fn is_dead_account(who: &AccountId) -> bool;
-}
-
-impl<AccountId> IsDeadAccount<AccountId> for () {
-	fn is_dead_account(_who: &AccountId) -> bool {
-		true
-	}
-}
-
-// TODO: Move to system
-/// Handler for when a new account has been created.
-pub trait OnNewAccount<AccountId> {
-	/// A new account `who` has been registered.
-	fn on_new_account(who: &AccountId);
-}
-
 /// Turn an Id into an Index, or None for the purpose of getting
 /// a hint at a possibly desired index.
 pub trait ResolveHint<AccountId: Encode, AccountIndex: As<usize>> {
 	/// Turn an Id into an Index, or None for the purpose of getting
 	/// a hint at a possibly desired index.
+	fn resolve_hint(who: &AccountId) -> Option<AccountIndex>;
+}
+
+/// Simple encode-based resolve hint implemenntation.
+pub struct SimpleResolveHint<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
+impl<AccountId: Encode, AccountIndex: As<usize>> ResolveHint<AccountId, AccountIndex> for SimpleResolveHint<AccountId, AccountIndex> {
 	fn resolve_hint(who: &AccountId) -> Option<AccountIndex> {
 		Some(AccountIndex::sa(who.using_encoded(|e| e[0] as usize + e[1] as usize * 256)))
 	}
@@ -228,6 +213,14 @@ impl<T: Trait> OnNewAccount<T::AccountId> for Module<T> {
 	}
 }
 
+impl<T: Trait> StaticLookup for Module<T> {
+	type Source = address::Address<T::AccountId, T::AccountIndex>;
+	type Target = T::AccountId;
+	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
+		Self::lookup_address(a).ok_or("invalid account index")
+	}
+}
+
 pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
 impl<T> Default for ChainContext<T> {
 	fn default() -> Self {
@@ -239,7 +232,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 	fn lookup(&self, a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		<Module<T>>::lookup_address(a).ok_or("invalid account index")
+		<Module<T> as StaticLookup>::lookup(a)
 	}
 }
 

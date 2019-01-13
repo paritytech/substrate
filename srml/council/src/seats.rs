@@ -18,11 +18,11 @@
 
 use rstd::prelude::*;
 use codec::{Compact, HasCompact};
-use primitives::traits::{Zero, One, As};
+use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
 use srml_support::{StorageValue, StorageMap, dispatch::Result};
 use democracy;
-use balances::{self, address::Address};
+use balances;
 use system::{self, ensure_signed};
 
 // no polynomial attacks:
@@ -127,14 +127,14 @@ decl_module! {
 		fn reap_inactive_voter(
 			origin,
 			reporter_index: Compact<u32>,
-			who: Address<T::AccountId, T::AccountIndex>,
+			who: <T::Lookup as StaticLookup>::Source,
 			who_index: Compact<u32>,
 			assumed_vote_index: Compact<VoteIndex>
 		) {
 			let reporter = ensure_signed(origin)?;
 			let assumed_vote_index: VoteIndex = assumed_vote_index.into();
 
-			let who = <balances::Module<T>>::lookup(who)?;
+			let who = T::Lookup::lookup(who)?;
 			ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 			ensure!(Self::voter_last_active(&reporter).is_some(), "reporter must be a voter");
 			let last_active = Self::voter_last_active(&who).ok_or("target for inactivity cleanup must be active")?;
@@ -226,7 +226,7 @@ decl_module! {
 		/// `signed` should have at least
 		fn present_winner(
 			origin,
-			candidate: Address<T::AccountId, T::AccountIndex>,
+			candidate: <T::Lookup as StaticLookup>::Source,
 			total: <T::Balance as HasCompact>::Type,
 			index: Compact<VoteIndex>
 		) -> Result {
@@ -235,7 +235,7 @@ decl_module! {
 			ensure!(!total.is_zero(), "stake deposited to present winner and be added to leaderboard should be non-zero");
 			let index: VoteIndex = index.into();
 
-			let candidate = <balances::Module<T>>::lookup(candidate)?;
+			let candidate = T::Lookup::lookup(candidate)?;
 			ensure!(index == Self::vote_index(), "index not current");
 			let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
 			let stakes = Self::snapshoted_stakes();
@@ -288,8 +288,8 @@ decl_module! {
 		/// Remove a particular member. A tally will happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
 		/// This is effective immediately.
-		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) {
-			let who = <balances::Module<T>>::lookup(who)?;
+		fn remove_member(who: <T::Lookup as StaticLookup>::Source) {
+			let who = T::Lookup::lookup(who)?;
 			let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 				.into_iter()
 				.filter(|i| i.0 != who)

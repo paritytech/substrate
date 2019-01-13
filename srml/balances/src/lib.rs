@@ -48,7 +48,7 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
 	As, StaticLookup, Member, CheckedAdd, CheckedSub};
-use system::ensure_signed;
+use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
 mod tests;
@@ -108,13 +108,14 @@ pub trait Trait: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64>;
 
-	type Lookup: StaticLookup<Target = Self::AccountId>;
-
 	/// A function which is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
+
+	/// Handler for when a new account is created.
+	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// A function that returns true iff a given account can transfer its funds to another account.
 	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId>;
@@ -485,7 +486,7 @@ impl<T: Trait> Module<T> {
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) {
 		// TODO:
-		// T::OnNewAccount::on_new_account(&who)
+		T::OnNewAccount::on_new_account(&who);
 		Self::deposit_event(RawEvent::NewAccount(who.clone(), balance.clone()));
 	}
 
@@ -540,5 +541,11 @@ impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 		Self::set_free_balance(transactor, b - transaction_fee);
 		Self::decrease_total_stake_by(transaction_fee);
 		Ok(())
+	}
+}
+
+impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
+	fn is_dead_account(who: &T::AccountId) -> bool {
+		Self::total_balance(who).is_zero()
 	}
 }

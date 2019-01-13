@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use mock::{Indices, new_test_ext, Runtime, System, make_account, kill_account, TestIsDeadAccount};
+use mock::{Indices, new_test_ext, make_account, kill_account, TestIsDeadAccount};
 use runtime_io::with_externalities;
 
 // TODO: Test properly in balances
