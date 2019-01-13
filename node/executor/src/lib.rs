@@ -685,7 +685,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(addr, 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::call::<Runtime>(indices::address::Address::Id(addr), 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]
