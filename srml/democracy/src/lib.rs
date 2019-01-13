@@ -154,9 +154,9 @@ decl_module! {
 		}
 
 		/// Cancel a proposal queued for enactment.
-		pub fn cancel_queued(when: T::BlockNumber, which: u32) -> Result {
-			let which = which as usize;
-			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
+		pub fn cancel_queued(when: <T::BlockNumber as HasCompact>::Type, which: Compact<u32>) -> Result {
+			let which = u32::from(which) as usize;
+			<DispatchQueue<T>>::mutate(when.into(), |items| if items.len() > which { items[which] = None });
 			Ok(())
 		}
 
