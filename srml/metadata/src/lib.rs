@@ -120,7 +120,16 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 	}
 }
 
-type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
+pub type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
+
+impl<B> DecodeDifferentArray<B> {
+	pub fn iter(&self) -> rstd::slice::Iter<B> {
+		match self {
+			DecodeDifferent::Encode(ref slice) => slice.iter(),
+			DecodeDifferent::Decoded(ref vec) => vec.iter(),
+		}
+	}
+}
 
 #[cfg(feature = "std")]
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
@@ -191,6 +200,55 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 				S: serde::Serializer,
 	{
 		self.0().serialize(serializer)
+	}
+}
+
+/// Newtype wrapper for accessing function
+#[derive(Clone,Eq)]
+pub struct FnEncodeModule<E>(pub &'static str, pub fn(&'static str) -> E) 
+  where E: Encode + 'static;
+
+impl<E: Encode> FnEncodeModule<E> {
+  fn exec(&self) -> E {
+    self.1(self.0)
+  }
+}
+
+impl<E: Encode> Encode for FnEncodeModule<E> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.exec().encode_to(dest);
+	}
+}
+
+impl<E: Encode + PartialEq> PartialEq for FnEncodeModule<E> {
+	fn eq(&self, other: &Self) -> bool {
+		self.exec().eq(&other.exec())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<E: Encode + ::std::fmt::Debug> std::fmt::Debug for FnEncodeModule<E> {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.exec().fmt(f)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<E: Encode + serde::Serialize> serde::Serialize for FnEncodeModule<E> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+				S: serde::Serializer,
+	{
+		self.exec().serialize(serializer)
+	}
+}
+
+type DFn<T> = DecodeDifferent<FnEncode<T>, T>;
+
+fn dfn_eval<T: Encode + 'static>(input: DFn<T>) -> T {
+	match input {
+		DecodeDifferent::Encode(dfn) => dfn.0(),
+		DecodeDifferent::Decoded(t) => t, 
 	}
 }
 
@@ -319,17 +377,67 @@ pub struct OuterDispatchCall {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeModuleMetadata {
 	pub prefix: DecodeDifferentStr,
-	pub module: DecodeDifferent<FnEncode<ModuleMetadata>, ModuleMetadata>,
-	pub storage: Option<DecodeDifferent<FnEncode<StorageMetadata>, StorageMetadata>>,
+	pub module: DFn<ModuleMetadata>,
+	pub storage: Option<DFn<StorageMetadata>>,
 }
 
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadata {
+pub struct RuntimeMetadataOld {
 	pub outer_event: OuterEventMetadata,
 	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
 	pub outer_dispatch: OuterDispatchMetadata,
+}
+
+/// The metadata of a runtime.
+/// It is prefixed by a version ID encoded/decoded through
+/// the enum nature of `RuntimeMetadata`.
+#[derive(Eq, Encode, PartialEq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub enum RuntimeMetadata {
+	V1(RuntimeMetadataV1),
+}
+
+/// The metadata of a runtime version 1.
+#[derive(Eq, Encode, PartialEq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct RuntimeMetadataV1 {
+	pub modules: DecodeDifferentArray<RuntimeModuleMetadataV1>,
+}
+
+/// All metadata about an runtime module.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct RuntimeModuleMetadataV1 {
+	pub name: DecodeDifferentStr,
+	pub prefix: DecodeDifferentStr,
+	pub storage: Option<DFn<StorageMetadata>>,
+	pub call: DFn<CallMetadata>,
+	pub outer_dispatch: DecodeDifferent<FnEncodeModule<Option<OuterDispatchCall>>, Option<OuterDispatchCall>>,
+	pub event: DecodeDifferent<FnEncodeModule<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
+}
+
+/// A Call from the outer dispatch.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct OuterDispatchCallV1 {
+	pub index: u16,
+	pub name: DecodeDifferentStr,
+}
+
+/// All metadata about the outer dispatch.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct OuterDispatchMetadataV1 {
+	pub name: DecodeDifferentStr,
+	pub calls: DecodeDifferentArray<OuterDispatchCallV1>,
+}
+
+impl Into<primitives::OpaqueMetadata> for RuntimeMetadataOld {
+	fn into(self) -> primitives::OpaqueMetadata {
+		primitives::OpaqueMetadata::new(self.encode())
+	}
 }
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {

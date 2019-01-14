@@ -67,6 +67,10 @@ build_rpc_trait! {
 		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
 		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
 
+		/// Deprecated, returns the runtime metadata as an opaque blob.
+		#[rpc(name = "state_getMetadataOld")]
+		fn metadata_old(&self, Trailing<Hash>) -> Result<Bytes>;
+
 		/// Returns the runtime metadata as an opaque blob.
 		#[rpc(name = "state_getMetadata")]
 		fn metadata(&self, Trailing<Hash>) -> Result<Bytes>;
@@ -172,6 +176,12 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	fn storage_size(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<u64>> {
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
+
+	fn metadata_old(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
+		let block = self.unwrap_or_best(block)?;
+		self.client.runtime_api().metadata_old(&BlockId::Hash(block)).map(Into::into).map_err(Into::into)
+	}
+
 
 	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;

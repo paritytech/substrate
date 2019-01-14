@@ -100,6 +100,8 @@ decl_runtime_apis! {
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
 	pub trait Metadata {
+    /// Deprecated version of metadata for runtime
+		fn metadata_old() -> OpaqueMetadata;
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
 	}

@@ -15,8 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use srml_metadata::{
-	DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata,
+	DecodeDifferent, FnEncode, FnEncodeModule, RuntimeMetadataOld, RuntimeMetadata,
+	RuntimeModuleMetadata, RuntimeMetadataV1,
 	DefaultByteGetter,
+	RuntimeModuleMetadataV1,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -34,12 +36,19 @@ macro_rules! impl_runtime_metadata {
 		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
-				$crate::metadata::RuntimeMetadata {
+			pub fn metadata_old() -> $crate::metadata::RuntimeMetadataOld {
+				$crate::metadata::RuntimeMetadataOld {
 					outer_event: Self::outer_event_metadata(),
-					modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+					modules: __runtime_modules_to_metadata_old!($runtime;; $( $rest )*),
 					outer_dispatch: Self::outer_dispatch_metadata(),
 				}
+			}
+			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
+				$crate::metadata::RuntimeMetadata::V1 (
+					$crate::metadata::RuntimeMetadataV1 {
+						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+					}
+				)
 			}
 		}
 	}
@@ -47,14 +56,14 @@ macro_rules! impl_runtime_metadata {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __runtime_modules_to_metadata {
+macro_rules! __runtime_modules_to_metadata_old {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident,
 		$( $rest:tt )*
 	) => {
-		__runtime_modules_to_metadata!(
+		__runtime_modules_to_metadata_old!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
 				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
@@ -72,7 +81,7 @@ macro_rules! __runtime_modules_to_metadata {
 		$mod:ident::$module:ident with Storage,
 		$( $rest:tt )*
 	) => {
-		__runtime_modules_to_metadata!(
+		__runtime_modules_to_metadata_old!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
 				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
@@ -94,6 +103,71 @@ macro_rules! __runtime_modules_to_metadata {
 	};
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __runtime_modules_to_metadata {
+	(
+		$runtime: ident;
+		$( $metadata:expr ),*;
+		$mod:ident::$module:ident,
+		$( $rest:tt )*
+	) => {
+		__runtime_modules_to_metadata!(
+			$runtime;
+			$( $metadata, )* $crate::metadata::RuntimeModuleMetadataV1 {
+				name: $crate::metadata::DecodeDifferent::Encode(stringify!($module)),
+				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
+				storage: None,
+				call: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::call_module)
+				),
+				outer_dispatch: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_dispatch)
+				),
+				event: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_events)
+				),
+			};
+			$( $rest )*
+		)
+	};
+	(
+		$runtime: ident;
+		$( $metadata:expr ),*;
+		$mod:ident::$module:ident with Storage,
+		$( $rest:tt )*
+	) => {
+		__runtime_modules_to_metadata!(
+			$runtime;
+			$( $metadata, )* $crate::metadata::RuntimeModuleMetadataV1 {
+				name: $crate::metadata::DecodeDifferent::Encode(stringify!($module)),
+				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
+				storage: Some($crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::store_metadata)
+				)),
+				call: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::call_module)
+				),
+				outer_dispatch: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_dispatch)
+				),
+				event: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_events)
+				),
+			};
+			$( $rest )*
+		)
+	};
+	(
+		$runtime:ident;
+		$( $metadata:expr ),*;
+	) => {
+		$crate::metadata::DecodeDifferent::Encode(&[ $( $metadata ),* ])
+	};
+}
+
+
+
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
@@ -102,7 +176,8 @@ mod tests {
 	use srml_metadata::{
 		EventMetadata, OuterEventMetadata, RuntimeModuleMetadata, CallMetadata, ModuleMetadata,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
-		StorageMetadata, StorageFunctionMetadata, OuterDispatchMetadata, OuterDispatchCall
+		StorageMetadata, StorageFunctionMetadata, OuterDispatchMetadata, OuterDispatchCall,
+		RuntimeModuleMetadataV1, DecodeDifferentArray,
 	};
 	use codec::{Decode, Encode};
 
@@ -242,41 +317,45 @@ mod tests {
 			event_module2::Module with Storage,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata {
+	const EVENTS: DecodeDifferentArray<(&'static str, FnEncode<&'static [EventMetadata]>),
+		(String, Vec<EventMetadata>)> = DecodeDifferent::Encode(&[
+			(
+				"system",
+				FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("SystemEvent"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}
+				])
+			),
+			(
+				"event_module",
+				FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("TestEvent"),
+						arguments: DecodeDifferent::Encode(&["Balance"]),
+						documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
+					}
+				])
+			),
+			(
+				"event_module2",
+				FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("TestEvent"),
+						arguments: DecodeDifferent::Encode(&["Balance"]),
+						documentation: DecodeDifferent::Encode(&[])
+					}
+				])
+			)
+		]);
+
+
+	const EXPECTED_METADATA_OLD: RuntimeMetadataOld = RuntimeMetadataOld {
 		outer_event: OuterEventMetadata {
 			name: DecodeDifferent::Encode("TestEvent"),
-			events: DecodeDifferent::Encode(&[
-				(
-					"system",
-					FnEncode(|| &[
-						EventMetadata {
-							name: DecodeDifferent::Encode("SystemEvent"),
-							arguments: DecodeDifferent::Encode(&[]),
-							documentation: DecodeDifferent::Encode(&[]),
-						}
-					])
-				),
-				(
-					"event_module",
-					FnEncode(|| &[
-						EventMetadata {
-							name: DecodeDifferent::Encode("TestEvent"),
-							arguments: DecodeDifferent::Encode(&["Balance"]),
-							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
-						}
-					])
-				),
-				(
-					"event_module2",
-					FnEncode(|| &[
-						EventMetadata {
-							name: DecodeDifferent::Encode("TestEvent"),
-							arguments: DecodeDifferent::Encode(&["Balance"]),
-							documentation: DecodeDifferent::Encode(&[])
-						}
-					])
-				)
-			]),
+			events: EVENTS,
 		},
 		modules: DecodeDifferent::Encode(&[
 			RuntimeModuleMetadata {
@@ -346,6 +425,107 @@ mod tests {
 			])
 		}
 	};
+
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1 (
+		RuntimeMetadataV1 {
+		modules: DecodeDifferent::Encode(&[
+			RuntimeModuleMetadataV1 {
+				prefix: DecodeDifferent::Encode("event_module"),
+				name: DecodeDifferent::Encode("Module"),
+				storage: None,
+				// lost DecodeDifferent::Encode("Module"), aka module metadata name
+				call: DecodeDifferent::Encode(FnEncode(||
+					CallMetadata {
+						name: DecodeDifferent::Encode("Call"),
+						functions: DecodeDifferent::Encode(&[
+					 		FunctionMetadata {
+						 		id: 0,
+								name: DecodeDifferent::Encode("aux_0"),
+								arguments: DecodeDifferent::Encode(&[]),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						]),
+				})),
+				outer_dispatch: DecodeDifferent::Encode(
+					FnEncodeModule("event_module", |_|
+						Some(OuterDispatchCall {
+							name: DecodeDifferent::Encode("EventModule"),
+							prefix: DecodeDifferent::Encode("event_module"),
+							index: 0,
+						})
+					)
+				),
+				event: DecodeDifferent::Encode(
+					FnEncodeModule("event_module", |_|
+				 		FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("TestEvent"),
+								arguments: DecodeDifferent::Encode(&["Balance"]),
+								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
+							}
+				 		])
+					)
+				),
+			},
+			RuntimeModuleMetadataV1 {
+				prefix: DecodeDifferent::Encode("event_module2"),
+				name: DecodeDifferent::Encode("Module"),
+				storage: Some(DecodeDifferent::Encode(FnEncode(||
+					StorageMetadata {
+						prefix: DecodeDifferent::Encode("TestStorage"),
+						functions: DecodeDifferent::Encode(&[
+							StorageFunctionMetadata {
+								name: DecodeDifferent::Encode("StorageMethod"),
+								modifier: StorageFunctionModifier::Optional,
+								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+								default: DecodeDifferent::Encode(
+									DefaultByteGetter(
+										&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
+									)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
+					}
+				))),
+				// lost DecodeDifferent::Encode("Module"), aka module metadata name
+				call: DecodeDifferent::Encode(FnEncode(||
+					CallMetadata {
+						name: DecodeDifferent::Encode("Call"),
+						functions: DecodeDifferent::Encode(&[]),
+					}
+				)),
+				outer_dispatch: DecodeDifferent::Encode(
+					FnEncodeModule("event_module2", |_|
+						Some(OuterDispatchCall {
+							name: DecodeDifferent::Encode("EventModule2"),
+							prefix: DecodeDifferent::Encode("event_module2"),
+							index: 1,
+						})
+					)
+				),
+				event: DecodeDifferent::Encode(
+					FnEncodeModule("event_module2", |_|
+				 		FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("TestEvent"),
+								arguments: DecodeDifferent::Encode(&["Balance"]),
+								documentation: DecodeDifferent::Encode(&[])
+							}
+				 		])
+					)
+				),
+			},
+		])},
+	);
+
+	#[test]
+	fn runtime_metadata_old() {
+		let metadata_encoded = TestRuntime::metadata_old().encode();
+		let metadata_decoded = RuntimeMetadataOld::decode(&mut &metadata_encoded[..]);
+
+		assert_eq!(EXPECTED_METADATA_OLD, metadata_decoded.unwrap());
+	}
 
 	#[test]
 	fn runtime_metadata() {
