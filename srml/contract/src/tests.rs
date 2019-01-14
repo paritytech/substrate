@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-// TODO: Tests to add
-// - Block gas limit
-// - top_level_call_refunds_even_if_fails
-// - test commit/discard of a tx.
+// TODO: #1417 Add more integration tests
+// also remove the #![allow(unused)] below.
 
 #![allow(unused)]
 
