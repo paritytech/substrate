@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 
 use log::{debug, trace, info};
 use parity_codec::Encode;
@@ -388,7 +388,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_cache: HashMap<Vec<u8>, Vec<u8>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		let hash = block.post_header().hash();
@@ -406,8 +406,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		// we don't want to finalize on `inner.import_block`
 		let mut justification = block.justification.take();
-		let enacts_consensus_change = new_authorities.is_some();
-		let import_result = self.inner.import_block(block, new_authorities);
+		let enacts_consensus_change = !new_cache.is_empty();
+		let import_result = self.inner.import_block(block, new_cache);
 
 		let mut imported_aux = {
 			match import_result {

@@ -512,7 +512,7 @@ mod tests {
 		}
 
 		// check method that doesn't requires environment
-		let (remote, local) = execute(&remote_client, 0, "Core_authorities");
+		let (remote, local) = execute(&remote_client, 0, "Core_version");
 		assert_eq!(remote, local);
 
 		// check method that requires environment
