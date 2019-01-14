@@ -312,9 +312,10 @@ decl_module! {
 		fn collect(origin) {
 			let sender = ensure_signed(origin)?;
 
-			let mut b = <Bets<T>>::get(&sender);
-			Self::consolidate(&sender, &mut b);
-			let is_unlocked = b.state == State::Idle && b.locked_until.map_or(true, |l| l <= Self::index());
+			let is_unlocked = <Bets<T>>::mutate(&sender, |b| {
+				Self::consolidate(&sender, b);
+				b.state == State::Idle && b.locked_until.map_or(true, |l| l <= Self::index())
+			});
 
 			if is_unlocked {
 				<Bets<T>>::remove(&sender);
@@ -346,28 +347,35 @@ decl_module! {
 					println!("Ending period: {:?} block #{:?}", Self::index(), n);
 
 					let prices = <Prices<T>>::take();
-					let mean = prices.iter().fold(T::Balance::default(), |total, &item| total + item) / T::Balance::sa(samples);
-					if mean < Self::target() {
-						// payout
-						let pot = <Pot<T>>::take();
-						let total = Self::total();
-						<Target<T>>::put(mean);
-						let accrued_outgoing = if !total.is_zero() {
-							<Outgoing<T>>::take() * (total + pot) / total
+					if !Self::total().is_zero() {
+						let mean = prices.iter().fold(T::Balance::default(), |total, &item| total + item) / T::Balance::sa(samples);
+
+						println!("prices {:?} mean {:?} target {:?}", prices, mean, Self::target());
+						if mean < Self::target() {
+							// payout
+							let pot = <Pot<T>>::take();
+							let total = Self::total();
+							<Target<T>>::put(mean);
+							let accrued_outgoing = if !total.is_zero() {
+								<Outgoing<T>>::take() * (total + pot) / total
+							} else {
+								Zero::zero()
+							};
+							<Total<T>>::put(total + pot + <Incoming<T>>::take() - accrued_outgoing);
+							// This is where the total should be expanded for contiguous betters.
+							<Payouts<T>>::insert(Self::index(), (total, pot));
 						} else {
-							Zero::zero()
-						};
-						<Total<T>>::put(total + pot + <Incoming<T>>::take() - accrued_outgoing);
-						// This is where the total should be expanded for contiguous betters.
-						<Payouts<T>>::insert(Self::index(), (total, pot));
+							// wipeout
+							<Target<T>>::mutate(|p| *p = *p / Self::target_attenuation() * (Self::target_attenuation() + One::one()));
+							<Outgoing<T>>::kill();
+							<Total<T>>::put(<Incoming<T>>::take());
+						}
+
+						println!("Payout: {:?}", Self::payouts(Self::index()));
 					} else {
-						// wipeout
-						<Target<T>>::mutate(|p| *p = *p / Self::target_attenuation() * (Self::target_attenuation() + One::one()));
-						<Outgoing<T>>::kill();
+						println!("No payout - no users");
 						<Total<T>>::put(<Incoming<T>>::take());
 					}
-
-					println!("Payout: {:?}", Self::payouts(Self::index()));
 
 					<Index<T>>::mutate(|i| *i += One::one());
 					println!("Next period: {:?}", Self::index());
@@ -423,6 +431,8 @@ impl<T: Trait> Module<T> {
 		}
 
 		betting.balance = new_balance;
+
+		println!("Consolidated: {:?}", betting);
 		result
 	}
 
@@ -553,7 +563,7 @@ mod tests {
 			period: 5,
 			samples: 2,
 			target_attenuation: 10,
-			target: 100,
+			target: 120,
 		}.build_storage().unwrap().0);
 		t.into()
 	}
@@ -572,7 +582,7 @@ mod tests {
 			assert_eq!(Bet::period(), 5);
 			assert_eq!(Bet::samples(), 2);
 			assert_eq!(Bet::target_attenuation(), 10);
-			assert_eq!(Bet::target(), 100);
+			assert_eq!(Bet::target(), 120);
 			assert_eq!(Bet::index(), 0);
 			assert_eq!(Bet::bets(0), Betting::default());
 			assert_eq!(Bet::prices(), vec![]);
@@ -585,6 +595,8 @@ mod tests {
 	#[test]
 	fn price_sampling_works() {
 		with_externalities(&mut new_test_ext(), || {
+			<Total<Test>>::put(1);
+
 			System::set_block_number(1);
 			set_price(120);
 			Bet::on_finalise(System::block_number());
@@ -604,7 +616,7 @@ mod tests {
 			set_price(100);
 			Bet::on_finalise(System::block_number());
 			assert_eq!(Bet::prices(), vec![]);
-			assert_eq!(Bet::payouts(0), Some((0, 0)));
+			assert_eq!(Bet::payouts(0), Some((1, 0)));
 			assert_eq!(Bet::index(), 1);
 			assert_eq!(Bet::target(), 90);
 		});
@@ -728,6 +740,242 @@ mod tests {
 			assert_eq!(Balances::free_balance(&1), 5);
 			assert!(Bet::ensure_account_liquid(&1).is_ok());
 			assert_eq!(Bet::total(), 0);
+		});
+	}
+
+	#[test]
+	fn duplicate_bet_is_noop() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			// index == 0
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 10);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			proceed_to_next_index();
+			// index == 1
+
+			assert_ok!(Bet::bet(Some(1).into()));
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::total(), 10);
+			assert_eq!(Bet::outgoing(), 0);
+			assert_eq!(Bet::incoming(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			Bet::contribute(10);
+			set_price(100);
+
+			proceed_to_next_index();
+			// index == 2
+
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert_eq!(Balances::free_balance(&1), 20);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+		});
+	}
+
+	#[test]
+	fn duplicate_unbet_is_noop() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			// index == 0
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 10);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			proceed_to_next_index();
+			// index == 1
+
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::total(), 10);
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+			assert_ok!(Bet::unbet(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Bet::outgoing(), 10);
+			assert_eq!(Bet::incoming(), 0);
+
+			Bet::contribute(10);
+			set_price(100);
+
+			proceed_to_next_index();
+			// index == 2
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+			assert_eq!(Bet::outgoing(), 0);
+			assert_eq!(Bet::incoming(), 0);
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert_eq!(Balances::free_balance(&1), 20);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+
+			proceed_to_next_index();
+			// index == 3
+			assert_ok!(Bet::unbet(Some(1).into()));
+			assert_eq!(Bet::outgoing(), 0);
+			assert_eq!(Bet::incoming(), 0);
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_ok());
+		});
+	}
+
+	#[test]
+	fn accumulated_bet_works() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			// index == 0
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 10);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			proceed_to_next_index();
+			// index == 1
+
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::total(), 10);
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			Bet::contribute(10);
+			set_price(100);
+
+			proceed_to_next_index();
+			// index == 2
+
+			assert_eq!(Bet::index(), 2);
+			assert_eq!(Bet::total(), 20);
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 20);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 20);
+
+			Bet::contribute(10);
+			set_price(80);
+
+			proceed_to_next_index();
+			// index == 3
+
+			assert_eq!(Bet::index(), 3);
+			assert_eq!(Bet::total(), 0);
+
+			assert_ok!(Bet::collect(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 30);
+
+			Bet::contribute(10);
+			set_price(60);
+
+			proceed_to_next_index();
+			// index == 4
+		
+			assert_eq!(Bet::index(), 4);
+			assert_eq!(Bet::total(), 0);
+
+			assert_ok!(Bet::collect(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert_eq!(Balances::free_balance(&1), 30);
+		});
+	}
+
+	#[test]
+	fn unbet_bet_is_noop() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			// index == 0
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 10);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			proceed_to_next_index();
+			// index == 1
+
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::total(), 10);
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+			
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 10);
+
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			Bet::contribute(10);
+			set_price(100);
+
+			proceed_to_next_index();
+			// index == 2
+
+			assert_eq!(Bet::index(), 2);
+			assert_eq!(Bet::total(), 20);
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 20);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 20);
+
+			Bet::contribute(10);
+			set_price(80);
+
+			proceed_to_next_index();
+			// index == 3
+
+			assert_eq!(Bet::index(), 3);
+			assert_eq!(Bet::total(), 0);
+
+			assert_ok!(Bet::collect(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 30);
+
+			proceed_to_next_index();
+			// index == 4
+		
+			assert_eq!(Bet::index(), 4);
+			assert_eq!(Bet::total(), 0);
+
+			assert_ok!(Bet::collect(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 0);
+			assert_eq!(Bet::outgoing(), 0);
+			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert_eq!(Balances::free_balance(&1), 30);
 		});
 	}
 }
