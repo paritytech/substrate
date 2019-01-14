@@ -58,6 +58,12 @@ error_chain! {
 			display("Message signature {:?} by {:?} is invalid.", s, a),
 		}
 
+		/// Invalid authorities set received from the runtime.
+		InvalidAuthoritiesSet {
+			description("authorities set is invalid"),
+			display("Current state of blockchain has invalid authorities set"),
+		}
+
 		/// Account is not an authority.
 		InvalidAuthority(a: Public) {
 			description("Message sender is not a valid authority"),

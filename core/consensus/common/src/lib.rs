@@ -53,7 +53,9 @@ pub use block_import::{
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
-	type Error: ::std::error::Error + Send + 'static;	/// Get the authorities at the given block.
+	type Error: std::error::Error + Send + 'static;
+
+	/// Get the authorities at the given block.
 	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
 }
 
@@ -114,4 +116,10 @@ impl<T: SyncOracle> SyncOracle for Arc<T> {
 	fn is_offline(&self) -> bool {
 		T::is_offline(&*self)
 	}
+}
+
+/// A list of all well known keys in the cache.
+pub mod well_known_cache_keys {
+	/// A list of authorities.
+	pub const AUTHORITIES: &'static [u8] = b"auth";
 }
