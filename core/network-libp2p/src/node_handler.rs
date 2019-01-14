@@ -159,7 +159,7 @@ pub enum SubstrateOutEvent<TSubstream> {
 	/// The remote wants us to answer a Kademlia `FIND_NODE` request.
 	///
 	/// The `responder` should be used to answer that query.
-	// FIXME: this API with the "responder" is bad, but changing it requires modifications in libp2p
+	// TODO: this API with the "responder" is bad, but changing it requires modifications in libp2p
 	KadFindNode {
 		/// The value being searched.
 		searched: PeerId,
@@ -203,7 +203,7 @@ impl<TSubstream> IdentificationRequest<TSubstream> {
 		listen_addrs: Vec<Multiaddr>,
 		remote_addr: &Multiaddr
 	) where TSubstream: AsyncRead + AsyncWrite + Send + 'static {
-		// FIXME: what to return for `protocol_version` and `agent_version`?
+		// TODO: what to return for `protocol_version` and `agent_version`?
 		let sender = self.sender.send(
 			identify::IdentifyInfo {
 				public_key: local_key,
@@ -233,7 +233,7 @@ pub enum SubstrateInEvent {
 	},
 
 	/// Requests to open a Kademlia substream.
-	// FIXME: document better
+	// TODO: document better
 	OpenKademlia,
 }
 
@@ -247,7 +247,7 @@ macro_rules! listener_upgrade {
 			upgrade::map(KadConnecConfig::new(), move |(c, s)| FinalUpgrade::Kad(c, s))),
 			upgrade::map(ping::protocol::Ping::default(), move |p| FinalUpgrade::from(p))),
 			upgrade::map(identify::IdentifyProtocolConfig, move |i| FinalUpgrade::from(i)))
-			// FIXME: meh for cloning a Vec here
+			// TODO: meh for cloning a Vec here
 	)
 }
 
@@ -321,7 +321,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		match purpose {
 			UpgradePurpose::Custom(id) => {
 				let wanted = if let Some(proto) = self.registered_custom.find_protocol(id) {
-					// FIXME: meh for cloning
+					// TODO: meh for cloning
 					upgrade::map(proto.clone(), move |c| FinalUpgrade::Custom(c))
 				} else {
 					error!(target: "sub-libp2p", "Logic error: wrong custom protocol id for \
@@ -370,13 +370,13 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			},
 			SubstrateInEvent::OpenKademlia => self.open_kademlia(),
 			SubstrateInEvent::Accept => {
-				// FIXME: implement
+				// TODO: implement
 			},
 		}
 	}
 
 	fn shutdown(&mut self) {
-		// FIXME: close gracefully
+		// TODO: close gracefully
 		self.is_shutting_down = true;
 
 		for custom_proto in &mut self.custom_protocols_substreams {
@@ -390,7 +390,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 	fn poll(&mut self) -> Poll<Option<NodeHandlerEvent<Self::OutboundOpenInfo, Self::OutEvent>>, IoError> {
 		if self.is_shutting_down {
-			// FIXME: finish only when everything is closed
+			// TODO: finish only when everything is closed
 			return Ok(Async::Ready(None));
 		}
 
@@ -645,7 +645,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				Ok(Async::NotReady) =>
 					self.upgrades_in_progress_dial.push((purpose, in_progress)),
 				Err(err) => {
-					// FIXME: dispatch depending on actual error ; right now we assume that
+					// TODO: dispatch depending on actual error ; right now we assume that
 					// error == not supported, which is not necessarily true in theory
 					if let UpgradePurpose::Custom(_) = purpose {
 						return Ok(Async::Ready(Some(SubstrateOutEvent::Useless)));

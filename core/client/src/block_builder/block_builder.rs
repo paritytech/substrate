@@ -101,7 +101,7 @@ where
 			})
 		}
 
-		//FIXME: Please NLL, help me!
+		//FIXME: Replace with NLL as soon as we've switched to 2018: https://github.com/paritytech/substrate/issues/1413
 		impl_push(&mut self.api, &self.block_id, xt, &mut self.extrinsics)
 	}
 

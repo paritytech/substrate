@@ -80,7 +80,7 @@ impl NetworkConfiguration {
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			client_version: "Parity-network".into(),		// FIXME: meh
+			client_version: "Parity-network".into(),		// TODO: meh
 		}
 	}
 

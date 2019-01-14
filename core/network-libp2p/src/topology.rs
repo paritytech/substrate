@@ -58,7 +58,7 @@ const FAIL_BACKOFF_MULTIPLIER: u32 = 2;
 /// We need a maximum value for the backoff, overwise we risk an overflow.
 const MAX_BACKOFF: Duration = Duration::from_secs(30 * 60);
 
-// FIXME: should be merged with the Kademlia k-buckets
+// TODO: should be merged with the Kademlia k-buckets
 
 /// Stores information about the topology of the network.
 #[derive(Debug)]
@@ -111,7 +111,7 @@ impl NetTopology {
 		};
 
 		let file = fs::File::create(path)?;
-		// FIXME: the capacity of the BufWriter is kind of arbitrary ; decide better
+		// TODO: the capacity of the BufWriter is kind of arbitrary ; decide better
 		serialize(BufWriter::with_capacity(1024 * 1024, file), &self.store)
 	}
 
@@ -142,7 +142,7 @@ impl NetTopology {
 		let peer = if let Some(peer) = self.store.get(peer) {
 			peer
 		} else {
-			// FIXME: use an EitherIterator or something
+			// TODO: use an EitherIterator or something
 			return Vec::new().into_iter();
 		};
 
@@ -158,7 +158,7 @@ impl NetTopology {
 			}
 		}).collect::<Vec<_>>();
 		list.sort_by(|a, b| a.0.cmp(&b.0));
-		// FIXME: meh, optimize
+		// TODO: meh, optimize
 		let l = list.into_iter().map(|(_, connec, addr)| (addr, connec)).collect::<Vec<_>>();
 		l.into_iter()
 	}
@@ -171,7 +171,7 @@ impl NetTopology {
 	/// the earlier known time when a new entry will be added automatically to
 	/// the list.
 	pub fn addrs_to_attempt(&self) -> (impl Iterator<Item = (&PeerId, &Multiaddr)>, Instant) {
-		// FIXME: optimize
+		// TODO: optimize
 		let now = Instant::now();
 		let now_systime = SystemTime::now();
 		let mut instant = now + Duration::from_secs(3600);
@@ -367,7 +367,7 @@ impl NetTopology {
 					continue;
 				}
 
-				// FIXME: a else block would be better, but we get borrowck errors
+				// TODO: a else block would be better, but we get borrowck errors
 				info_in_store.addrs.push(Addr {
 					addr: addr.clone(),
 					expires: SystemTime::now() + EXPIRATION_PUSH_BACK_CONNEC,
@@ -469,7 +469,7 @@ pub enum DisconnectReason {
 }
 
 fn peer_access<'a>(store: &'a mut FnvHashMap<PeerId, PeerInfo>, peer: &PeerId) -> &'a mut PeerInfo {
-	// FIXME: should be optimizable if HashMap gets a better API
+	// TODO: should be optimizable if HashMap gets a better API
 	store.entry(peer.clone()).or_insert_with(Default::default)
 }
 
@@ -586,7 +586,7 @@ impl Addr {
 }
 
 /// Divides a `Duration` with a `Duration`. This exists in the stdlib but isn't stable yet.
-// FIXME: remove this function once stable
+// TODO: remove this function once stable
 fn div_dur_with_dur(a: Duration, b: Duration) -> u32 {
 	let a_ms = a.as_secs() * 1_000_000 + (a.subsec_nanos() / 1_000) as u64;
 	let b_ms = b.as_secs() * 1_000_000 + (b.subsec_nanos() / 1_000) as u64;
@@ -628,7 +628,7 @@ fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
 	}
 
 	let mut file = match fs::File::open(path) {
-		// FIXME: the capacity of the BufReader is kind of arbitrary ; decide better
+		// TODO: the capacity of the BufReader is kind of arbitrary ; decide better
 		Ok(f) => BufReader::with_capacity(1024 * 1024, f),
 		Err(err) => {
 			warn!(target: "sub-libp2p", "Failed to open peer storage file: {:?}", err);
@@ -647,7 +647,7 @@ fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
 	let num_read = match file.read(&mut first_byte) {
 		Ok(f) => f,
 		Err(err) => {
-			// FIXME: DRY
+			// TODO: DRY
 			warn!(target: "sub-libp2p", "Failed to read peer storage file: {:?}", err);
 			info!(target: "sub-libp2p", "Deleting peer storage file {:?}", path);
 			let _ = fs::remove_file(path);
