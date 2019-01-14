@@ -178,6 +178,9 @@ build it. Ensure you have Rust and the support software installed:
 [source, shell]
 ----
 curl https://sh.rustup.rs -sSf | sh
+# on Windows download and run rustup-init.exe
+# from https://rustup.rs instead
+
 rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
@@ -193,6 +196,28 @@ sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
  - Mac:
 [source, shell]
 brew install cmake pkg-config openssl git llvm
+
+ - Windows (PowerShell):
++
+[source, shell]
+----
+# Install LLVM
+# Download and install the Pre Build Windows binaries
+# of LLVM  from http://releases.llvm.org/download.html
+
+# Install OpenSSL (through vcpkg)
+mkdir \Tools
+cd \Tools
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+.\bootstrap-vcpkg.bat
+.\vcpkg.exe install openssl:x64-windows-static
+
+$env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
+$env:OPENSSL_STATIC = 'Yes'
+[System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
+[System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
+----
 
 Then, grab the Substrate source code:
 
