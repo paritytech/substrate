@@ -26,10 +26,11 @@ use generic::Digest;
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Header<Number, Hash: HashT, DigestItem> {
+pub struct Header<Number: Copy + Into<u128>, Hash: HashT, DigestItem> {
 	/// The parent hash.
 	pub parent_hash: <Hash as HashT>::Output,
 	/// The block number.
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_number"))]
 	pub number: Number,
 	/// The state trie merkle root
 	pub state_root: <Hash as HashT>::Output,
@@ -39,8 +40,17 @@ pub struct Header<Number, Hash: HashT, DigestItem> {
 	pub digest: Digest<DigestItem>,
 }
 
+#[cfg(feature = "std")]
+pub fn serialize_number<S, T: Copy + Into<u128>>(val: &T, s: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	use substrate_primitives::uint::U256;
+	let v: u128 = (*val).into();
+	let lower = U256::from(v as u64);
+	let upper = U256::from(v.rotate_left(64) as u64) << 64;
+	::serde::Serialize::serialize(&(upper + lower), s)
+}
+
 impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
-	Number: HasCompact,
+	Number: HasCompact + Copy + Into<u128>,
 	Hash: HashT,
 	Hash::Output: Decode,
 	DigestItem: DigestItemT + Decode,
@@ -57,7 +67,7 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
-	Number: HasCompact + Copy,
+	Number: HasCompact + Copy + Into<u128>,
 	Hash: HashT,
 	Hash::Output: Encode,
 	DigestItem: DigestItemT + Encode,
@@ -72,7 +82,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
-	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
+	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128>,
 	Hash: HashT,
 	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
@@ -116,7 +126,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 }
 
 impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
+	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u128>,
 	Hash: HashT,
 	DigestItem: DigestItemT + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
@@ -126,4 +136,27 @@ impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
 	pub fn hash(&self) -> Hash::Output {
 		Hash::hash_of(self)
 	}
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_serialize_numbers() {
+		fn serialize(num: u128) -> String {
+			let mut v = vec![];
+			{
+				let mut ser = ::serde_json::Serializer::new(::std::io::Cursor::new(&mut v));
+				serialize_number(&num, &mut ser).unwrap();
+			}
+			String::from_utf8(v).unwrap()
+		}
+
+		assert_eq!(serialize(0), "\"0x0\"".to_owned());
+		assert_eq!(serialize(1), "\"0x1\"".to_owned());
+		assert_eq!(serialize(u64::max_value() as u128), "\"0xffffffffffffffff\"".to_owned());
+		assert_eq!(serialize(u64::max_value() as u128 + 1), "\"0x10000000000000000\"".to_owned());
+	}
+
 }

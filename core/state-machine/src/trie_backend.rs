@@ -105,6 +105,26 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		}
 	}
 
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		let mut read_overlay = MemoryDB::default();	// TODO: use new for correctness
+		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
+
+		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
+			let mut v = Vec::new();
+			for x in trie.iter()? {
+				let (key, _) = x?;
+				if key.starts_with(prefix) {
+					v.push(key.to_vec());
+				}
+			}
+
+			Ok(v)
+		};
+
+		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{

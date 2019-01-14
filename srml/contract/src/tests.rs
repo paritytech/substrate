@@ -21,14 +21,13 @@
 
 #![allow(unused)]
 
-use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, Header, H256};
 use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::BuildStorage;
-use runtime_support::StorageMap;
-use substrate_primitives::Blake2Hasher;
-use system::{EventRecord, Phase};
+use runtime_support::{StorageMap, StorageDoubleMap};
+use substrate_primitives::{Blake2Hasher};
+use system::{Phase, EventRecord};
 use wabt;
 use {
 	balances, runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,

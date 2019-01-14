@@ -97,6 +97,10 @@ decl_runtime_apis! {
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
+		///
+		/// When called at block B, it will return the set of authorities that should be
+		/// used to finalize descendants of this block (B+1, B+2, ...). The block B itself
+		/// is finalized by the authorities from block B-1.
 		fn grandpa_authorities() -> Vec<(Ed25519AuthorityId, u64)>;
 	}
 }
