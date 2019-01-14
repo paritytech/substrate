@@ -75,6 +75,10 @@ impl<B: BlockT> PendingJustifications<B> {
 	}
 
 	fn dispatch(&mut self, peers: &HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
+		if self.pending_requests.is_empty() {
+			return;
+		}
+
 		// clean up previous failed requests so we can retry again
 		for (_, requests) in self.previous_requests.iter_mut() {
 			requests.retain(|(_, instant)| instant.elapsed() < JUSTIFICATION_RETRY_WAIT);
