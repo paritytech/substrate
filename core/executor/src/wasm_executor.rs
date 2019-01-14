@@ -56,7 +56,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: heap::Heap::new(&m),
+			heap: heap::Heap::new(m.used_size().0 as u32),
 			memory: m,
 			table: t,
 			ext: e,
