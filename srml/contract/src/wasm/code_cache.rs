@@ -72,7 +72,7 @@ pub fn save<T: Trait>(
 	let prefab_module = prepare::prepare_contract::<T, Env>(&original_code, schedule)?;
 	let code_hash = T::Hashing::hash(&original_code);
 
-	// TODO: validate the code. If the code is not valid, then don't store it.
+	// TODO: #1416 validate the code. If the code is not valid, then don't store it.
 
 	<CodeStorage<T>>::insert(code_hash, prefab_module);
 	<PristineCode<T>>::insert(code_hash, original_code);
