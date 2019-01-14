@@ -27,13 +27,13 @@ pub fn build_transport(
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
 
+	// TODO: rework the transport creation (https://github.com/libp2p/rust-libp2p/issues/783)
 	libp2p::tcp::TcpConfig::new()
 		.with_upgrade(secio::SecioConfig::new(local_private_key))
 		.and_then(move |out, endpoint| {
 			let peer_id = out.remote_key.into_peer_id();
 			let peer_id2 = peer_id.clone();
 			let upgrade = core::upgrade::SelectUpgrade::new(yamux::Config::default(), mplex_config)
-				// TODO: use a single `.map` instead of two maps
 				.map_inbound(move |muxer| (peer_id, muxer))
 				.map_outbound(move |muxer| (peer_id2, muxer));
 

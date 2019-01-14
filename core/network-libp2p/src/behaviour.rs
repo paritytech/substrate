@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -49,7 +49,7 @@ pub struct Behaviour<TSubstream> {
 
 impl<TSubstream> Behaviour<TSubstream> {
 	/// Builds a new `Behaviour`.
-	// TODO: redundancy between config and local_peer_id
+	// TODO: redundancy between config and local_peer_id (https://github.com/libp2p/rust-libp2p/issues/745)
 	pub fn new(config: &NetworkConfiguration, local_peer_id: PeerId, protocols: RegisteredProtocols) -> Self {
 		Behaviour {
 			ping: Ping::new(),

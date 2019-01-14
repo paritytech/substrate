@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -137,7 +137,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 		}
 	}
 
-	/// Try to add a reserved peer.
+	/// Adds a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId) {
 		self.reserved_peers.insert(peer_id);
 
@@ -145,7 +145,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 		self.next_connect_to_nodes = Delay::new(Instant::now());
 	}
 
-	/// Try to remove a reserved peer.
+	/// Removes a reserved peer.
 	///
 	/// If we are in reserved mode and we were connected to a node with this peer ID, then this
 	/// method will disconnect it and return its index.
@@ -235,7 +235,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 	fn connect_to_nodes(&mut self, params: &mut PollParameters<NetTopology>) {
 		// Make sure we are connected or connecting to all the reserved nodes.
 		for reserved in self.reserved_peers.iter() {
-			// TODO: don't generate an event if we're already in a pending connection
+			// TODO: don't generate an event if we're already in a pending connection (https://github.com/libp2p/rust-libp2p/issues/697)
 			if !self.enabled_peers.contains_key(&reserved) {
 				self.events.push(NetworkBehaviourAction::DialPeer { peer_id: reserved.clone() });
 			}
@@ -309,7 +309,7 @@ where
 		// Check whether peer is banned.
 		if !is_reserved {
 			if let Some((_, expire)) = self.banned_peers.iter().find(|(p, _)| p == &peer_id) {
-				if *expire < Instant::now() {
+				if *expire >= Instant::now() {
 					debug!(target: "sub-libp2p", "Ignoring banned peer {:?}", peer_id);
 					return
 				}
