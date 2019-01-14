@@ -454,6 +454,10 @@ impl<B: BlockT> ChainSync<B> {
 		self.justifications.dispatch(&self.peers, protocol);
 	}
 
+	pub fn tick(&mut self, protocol: &mut Context<B>) {
+		self.justifications.dispatch(&self.peers, protocol);
+	}
+
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.justifications.queue_request(&(*hash, number));
 		self.justifications.dispatch(&self.peers, protocol);

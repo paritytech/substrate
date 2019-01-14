@@ -508,6 +508,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn tick(&self, io: &mut SyncIo) {
 		self.consensus_gossip.write().collect_garbage(|_| true);
 		self.maintain_peers(io);
+		self.sync.write().tick(&mut ProtocolContext::new(&self.context_data, io));
 		self.on_demand.as_ref().map(|s| s.maintain_peers(io));
 	}
 
