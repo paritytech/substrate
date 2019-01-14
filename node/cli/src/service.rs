@@ -21,7 +21,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use client;
+use client::{self, backend::Backend, blockchain::Backend as _};
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
 use grandpa;
 use node_executor;
@@ -89,10 +89,12 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
+					let cache = client.backend().blockchain().cache();
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
 						client,
+						cache,
 						block_import.clone(),
 						proposer,
 						service.network(),
@@ -141,11 +143,13 @@ construct_service_factory! {
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
+				let cache = client.backend().blockchain().cache();
 				import_queue::<_, _, _, ed25519::Pair>(
 					slot_duration,
 					block_import,
 					Some(justification_import),
 					client,
+					cache,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
 					true,
@@ -153,11 +157,13 @@ construct_service_factory! {
 			}},
 		LightImportQueue = AuraImportQueue<Self::Block>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
+				let cache = client.backend().blockchain().cache();
 				import_queue::<_, _, _, ed25519::Pair>(
 					SlotDuration::get_or_compute(&*client)?,
 					client.clone(),
 					None,
 					client,
+						cache,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
 					true,
