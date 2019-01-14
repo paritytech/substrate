@@ -135,7 +135,7 @@ impl<T: Trait> Module<T> {
 
 	/// Verify an inherent slot that is used in a block seal against a timestamp
 	/// extracted from the block.
-	// TODO: ensure `ProvideInherent` can deal with dependencies like this.
+	// FIXME: ensure `ProvideInherent` can deal with dependencies like this.
 	// https://github.com/paritytech/substrate/issues/1228
 	pub fn verify_inherent(timestamp: T::Moment, seal_slot: u64) -> Result {
 		let timestamp_based_slot = timestamp.as_() / Self::slot_duration();

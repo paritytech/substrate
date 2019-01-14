@@ -159,7 +159,7 @@ fn write_sandbox_memory<T: Trait>(
 // * AFTER MAKING A CHANGE MAKE SURE TO UPDATE COMPLEXITY.MD *
 // ***********************************************************
 
-// TODO: ext_balance, ext_address, ext_callvalue, etc.
+// FIXME: ext_balance, ext_address, ext_callvalue, etc.
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
 // a function set which can be imported by an executed contract.

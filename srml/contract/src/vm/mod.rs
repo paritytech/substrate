@@ -225,7 +225,7 @@ mod tests {
 				gas_left: gas_meter.gas_left(),
 			});
 			// Assume for now that it was just a plain transfer.
-			// TODO: Add tests for different call outcomes.
+			// FIXME: Add tests for different call outcomes.
 			Ok(())
 		}
 		fn caller(&self) -> &u64 {

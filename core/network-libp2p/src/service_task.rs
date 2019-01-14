@@ -144,7 +144,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 				}
 			},
 			Err(_) =>
-				// TODO: also handle the `IP:PORT` format ; however we need to somehow add the
+				// FIXME: also handle the `IP:PORT` format ; however we need to somehow add the
 				// reserved ID to `reserved_peers` at some point
 				warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved),
 		}
@@ -257,13 +257,13 @@ pub struct Service {
 	topology: NetTopology,
 
 	/// Handles the Kademlia queries.
-	// TODO: put the kbuckets in the topology instead
+	// FIXME: put the kbuckets in the topology instead
 	kad_system: KadSystem,
 
 	/// List of Kademlia controller we want to open.
 	///
 	/// A clone of tihs `Arc` is stored in each Kademlia query stream.
-	// TODO: use a better container?
+	// FIXME: use a better container?
 	kad_pending_ctrls: Arc<Mutex<FnvHashMap<PeerId, Vec<oneshot::Sender<KadConnecController>>>>>,
 
 	/// Sender whenever we inserted an entry in `kad_pending_ctrls`, so that we can process it.
@@ -374,7 +374,7 @@ impl Service {
 	}
 
 	/// Sends a message to a peer using the custom protocol.
-	// TODO: report invalid node index or protocol?
+	// FIXME: report invalid node index or protocol?
 	pub fn send_custom_message(
 		&mut self,
 		node_index: NodeIndex,
@@ -418,7 +418,7 @@ impl Service {
 	) {
 		let peer_id = match self.swarm.peer_id_of_node(node_index) {
 			Some(pid) => pid.clone(),
-			None => return,		// TODO: report?
+			None => return,		// FIXME: report?
 		};
 
 		// Kill the node from the swarm, and inject an event about it.
@@ -563,7 +563,7 @@ impl Service {
 					}
 				}
 			})
-			// TODO: we really want to remove nodes with no multiaddress from
+			// FIXME: we really want to remove nodes with no multiaddress from
 			// the results, but a flaw in the Kad protocol of libp2p makes it
 			// impossible to return empty results ; therefore we must at least
 			// return ourselves
@@ -846,7 +846,7 @@ impl Service {
 					}
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
 				Ok(Async::Ready(None)) => unreachable!("The Swarm stream never ends"),
-				// TODO: this `Err` contains a `Void` ; remove variant when Rust allows that
+				// FIXME: this `Err` contains a `Void` ; remove variant when Rust allows that
 				Err(_) => unreachable!("The Swarm stream never errors"),
 			}
 		}

@@ -240,7 +240,7 @@ impl Pair {
 	}
 
 	/// Derive a child key. Probably unsafe and broken.
-	// TODO: proper HD derivation https://cardanolaunch.com/assets/Ed25519_BIP.pdf
+	// FIXME: proper HD derivation https://cardanolaunch.com/assets/Ed25519_BIP.pdf
 	pub fn derive_child_probably_bad(&self, chain_data: &[u8]) -> Pair {
 		let sig = self.sign(chain_data);
 		let mut seed = [0u8; 32];

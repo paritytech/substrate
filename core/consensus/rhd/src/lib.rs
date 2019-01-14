@@ -460,7 +460,7 @@ impl<B, P, I, InStream, OutSink> Drop for BftFuture<B, P, I, InStream, OutSink> 
 	OutSink: Sink<SinkItem=Communication<B>, SinkError=Error>,
 {
 	fn drop(&mut self) {
-		// TODO: have a trait member to pass misbehavior reports into.
+		// FIXME: have a trait member to pass misbehavior reports into.
 		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
 		self.inner.context().proposer.import_misbehavior(misbehavior);
 	}
@@ -494,7 +494,7 @@ pub struct BftService<B: Block, P, I> {
 	live_agreement: Mutex<Option<(B::Header, AgreementHandle)>>,
 	round_cache: Arc<Mutex<RoundCache<B::Hash>>>,
 	round_timeout_multiplier: u64,
-	key: Arc<ed25519::Pair>, // TODO: key changing over time.
+	key: Arc<ed25519::Pair>, // FIXME: key changing over time.
 	factory: P,
 }
 
@@ -516,14 +516,14 @@ impl<B, P, I> BftService<B, P, I>
 				start_round: 0,
 			})),
 			round_timeout_multiplier: 10,
-			key: key, // TODO: key changing over time.
+			key: key, // FIXME: key changing over time.
 			factory,
 		}
 	}
 
 	/// Get the local Authority ID.
 	pub fn local_id(&self) -> AuthorityId {
-		// TODO: based on a header and some keystore.
+		// FIXME: based on a header and some keystore.
 		self.key.public().into()
 	}
 
@@ -1112,7 +1112,7 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 				self.transaction_pool.ready(|pending_iterator| {
 					let mut pending_size = 0;
 					for pending in pending_iterator {
-						// TODO [ToDr] Probably get rid of it, and validate in runtime.
+						// FIXME [ToDr] Probably get rid of it, and validate in runtime.
 						let encoded_size = pending.data.encode().len();
 						if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
 

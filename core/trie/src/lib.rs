@@ -16,7 +16,7 @@
 
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
-// TODO: no_std
+// FIXME: no_std
 
 extern crate trie_root;
 extern crate parity_codec as codec;
@@ -85,7 +85,7 @@ pub fn delta_trie_root<H: Hasher, I, A, B>(db: &mut HashDB<H>, mut root: H::Out,
 		for (key, change) in delta {
 			match change {
 				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?, // TODO: archive mode
+				None => trie.remove(key.as_ref())?, // FIXME: archive mode
 			};
 		}
 	}
@@ -164,7 +164,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], db: &mut H
 		for (key, change) in delta {
 			match change {
 				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?, // TODO: archive mode
+				None => trie.remove(key.as_ref())?, // FIXME: archive mode
 			};
 		}
 	}

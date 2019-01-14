@@ -233,7 +233,7 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi<Api = C::RuntimeApi>,
 	C::RuntimeApi: TaggedTransactionQueue<ComponentBlock<C>>,
 {
-	// TODO [ToDr] Optimize and re-use tags from the pool.
+	// FIXME [ToDr] Optimize and re-use tags from the pool.
 	fn on_block_imported(
 		id: &BlockId<ComponentBlock<C>>,
 		client: &ComponentClient<C>,
@@ -283,7 +283,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// ImportQueue for light clients
 	type LightImportQueue: consensus_common::import_queue::ImportQueue<Self::Block> + 'static;
 
-	//TODO: replace these with a constructor trait. that TransactionPool implements. (#1242)
+	//FIXME: replace these with a constructor trait. that TransactionPool implements. (#1242)
 	/// Extrinsic pool constructor for the full client.
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<FullClient<Self>>)
 		-> Result<TransactionPool<Self::FullTransactionPoolApi>, error::Error>;
@@ -345,7 +345,7 @@ pub trait Components: Sized + 'static {
 	type RuntimeApi: Send + Sync;
 	/// A type that can start the RPC.
 	type RPC: StartRPC<Self>;
-	// TODO [ToDr] Traitify transaction pool and allow people to implement their own. (#1242)
+	// FIXME [ToDr] Traitify transaction pool and allow people to implement their own. (#1242)
 	/// A type that can maintain transaction pool.
 	type TransactionPool: MaintainTransactionPool<Self>;
 	/// Extrinsic pool type.

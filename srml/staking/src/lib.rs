@@ -72,7 +72,7 @@ pub enum LockStatus<BlockNumber: Parameter> {
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise
+pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // FIXME: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	#[codec(compact)]
 	pub unstake_threshold: u32,
@@ -362,7 +362,7 @@ impl<T: Trait> Module<T> {
 			let noms = Self::current_nominators_for(v);
 			let total = noms.iter().map(<balances::Module<T>>::total_balance).fold(T::Balance::zero(), |acc, x| acc + x);
 			if !total.is_zero() {
-				let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
+				let safe_mul_rational = |b| b * rem / total;// FIXME: avoid overflow
 				for n in noms.iter() {
 					let _ = <balances::Module<T>>::slash(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));	// best effort - not much that can be done on fail.
 				}
@@ -383,7 +383,7 @@ impl<T: Trait> Module<T> {
 				.map(<balances::Module<T>>::total_balance)
 				.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
 				.max(One::one());
-			let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
+			let safe_mul_rational = |b| b * reward / total;// FIXME: avoid overflow
 			for n in noms.iter() {
 				let _ = <balances::Module<T>>::reward(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));
 			}
@@ -461,7 +461,7 @@ impl<T: Trait> Module<T> {
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
 		// <ValidatorCount<T>>::get() of them.
-		// TODO: this is not sound. this should be moved to an off-chain solution mechanism.
+		// FIXME: this is not sound. this should be moved to an off-chain solution mechanism.
 		let mut intentions = Self::intentions()
 			.into_iter()
 			.map(|v| (Self::slashable_balance(&v), v))

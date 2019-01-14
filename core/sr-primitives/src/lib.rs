@@ -116,10 +116,10 @@ impl BuildStorage for StorageMap {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
-// TODO: impl Mul<Permill> for N where N: As<usize>
+// FIXME: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
 	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// TODO: handle overflows
+		// FIXME: handle overflows
 		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
 	}
 
@@ -151,11 +151,11 @@ impl From<f32> for Permill {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Perbill(u32);
 
-// TODO: impl Mul<Perbill> for N where N: As<usize>
+// FIXME: impl Mul<Perbill> for N where N: As<usize>
 impl Perbill {
 	/// Attenuate `b` by self.
 	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// TODO: handle overflows
+		// FIXME: handle overflows
 		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
 	}
 
@@ -474,7 +474,7 @@ macro_rules! impl_outer_log {
 	};
 }
 
-//TODO: https://github.com/paritytech/substrate/issues/1022
+//FIXME: https://github.com/paritytech/substrate/issues/1022
 /// Basic Inherent data to include in a block; used by simple runtimes.
 #[derive(Encode, Decode)]
 pub struct BasicInherentData {
@@ -497,7 +497,7 @@ impl BasicInherentData {
 	}
 }
 
-//TODO: https://github.com/paritytech/substrate/issues/1022
+//FIXME: https://github.com/paritytech/substrate/issues/1022
 /// Error type used while checking inherents.
 #[derive(Encode)]
 #[cfg_attr(feature = "std", derive(Decode))]
@@ -576,7 +576,7 @@ mod tests {
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 
-	// TODO try to avoid redundant brackets: a(AuthoritiesChange), b
+	// FIXME try to avoid redundant brackets: a(AuthoritiesChange), b
 	impl_outer_log! {
 		pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
 			a(AuthoritiesChange), b()

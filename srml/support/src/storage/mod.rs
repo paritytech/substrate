@@ -24,7 +24,7 @@ use codec::{Codec, Decode, KeyedVec, Input};
 #[macro_use]
 pub mod generator;
 
-// TODO: consider using blake256 to avoid possible preimage attack.
+// FIXME: consider using blake256 to avoid possible preimage attack.
 
 struct IncrementalInput<'a> {
 	key: &'a [u8],

@@ -155,7 +155,7 @@ pub enum SwarmEvent {
 	},
 
 	/// Opened a Kademlia substream with the node.
-	// TODO: the controller API is bad, but we need to make changes in libp2p to improve that
+	// FIXME: the controller API is bad, but we need to make changes in libp2p to improve that
 	KadOpen {
 		/// Index of the node.
 		node_index: NodeIndex,
@@ -166,7 +166,7 @@ pub enum SwarmEvent {
 	/// The remote wants us to answer a Kademlia `FIND_NODE` request.
 	///
 	/// The `responder` should be used to answer that query.
-	// TODO: this API with the "responder" is bad, but changing it requires modifications in libp2p
+	// FIXME: this API with the "responder" is bad, but changing it requires modifications in libp2p
 	KadFindNode {
 		/// Index of the node that wants an answer.
 		node_index: NodeIndex,
@@ -285,7 +285,7 @@ impl Swarm {
 	}
 
 	/// Sends a message to a peer using the custom protocol.
-	// TODO: report invalid node index or protocol?
+	// FIXME: report invalid node index or protocol?
 	pub fn send_custom_message(
 		&mut self,
 		node_index: NodeIndex,
@@ -346,7 +346,7 @@ impl Swarm {
 	///
 	/// Returns an error if the node index is invalid, or if it was already accepted.
 	pub fn accept_node(&mut self, node_index: NodeIndex) -> Result<(), ()> {
-		// TODO: detect if already accepted?
+		// FIXME: detect if already accepted?
 		let peer_id = match self.nodes_info.get(&node_index) {
 			Some(info) => &info.peer_id,
 			None => return Err(())

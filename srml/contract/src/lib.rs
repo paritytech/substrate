@@ -147,7 +147,7 @@ decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
-		// TODO: Change AccountId to staking::Address
+		// FIXME: Change AccountId to staking::Address
 		/// Make a call to a specified account, optionally transferring some balance.
 		/// Make a call to a specified account, optionally transferring some balance.
 		fn call(
@@ -290,16 +290,16 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
 		/// The code associated with an account.
-		pub CodeOf: map T::AccountId => Vec<u8>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
+		pub CodeOf: map T::AccountId => Vec<u8>;	// FIXME Vec<u8> values should be optimised to not do a length prefix.
 	}
 }
 
-// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
+// FIXME: consider storing upper-bound for contract's gas limit in fixed-length runtime
 // code in contract itself and use that.
 
 /// The storage items associated with an account/key.
 ///
-/// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
+/// FIXME: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
 pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
 impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	const PREFIX: &'static [u8] = b"con:sto:";

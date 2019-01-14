@@ -330,7 +330,7 @@ where Block: BlockT<Hash=H256>,
 	}
 
 	fn reset_storage(&mut self, mut top: StorageMap, children: ChildrenStorageMap) -> Result<H256, client::error::Error> {
-		// TODO: wipe out existing trie.
+		// FIXME: wipe out existing trie.
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::ErrorKind::GenesisInvalid.into());
@@ -402,7 +402,7 @@ struct DbGenesisStorage(pub H256);
 impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to make it more correct
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// FIXME: use new() to make it more correct
 		state_machine::TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}
@@ -803,7 +803,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			};
 
 			if finalized {
-				// TODO: ensure best chain contains this block.
+				// FIXME: ensure best chain contains this block.
 				self.note_finalized(&mut transaction, &pending_block.header, hash)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
@@ -856,7 +856,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 		if let Some(header) = ::client::blockchain::HeaderBackend::header(&self.blockchain, block)? {
 			let mut transaction = DBTransaction::new();
-			// TODO: ensure best chain contains this block.
+			// FIXME: ensure best chain contains this block.
 			let hash = header.hash();
 			self.note_finalized(&mut transaction, &header, hash.clone())?;
 			if let Some(justification) = justification {
@@ -970,7 +970,7 @@ mod tests {
 
 	fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<Blake2Hasher>) {
 		let mut changes_root = H256::default();
-		let mut changes_trie_update = MemoryDB::<Blake2Hasher>::default();		// TODO: change to new() to make more correct
+		let mut changes_trie_update = MemoryDB::<Blake2Hasher>::default();		// FIXME: change to new() to make more correct
 		{
 			let mut trie = TrieDBMut::<Blake2Hasher>::new(
 				&mut changes_trie_update,

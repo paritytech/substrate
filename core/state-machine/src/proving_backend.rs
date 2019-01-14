@@ -195,7 +195,7 @@ where
 	H: Hasher,
 	H::Out: HeapSizeOf,
 {
-	let mut db = MemoryDB::default();	// TODO: use new for correctness
+	let mut db = MemoryDB::default();	// FIXME: use new for correctness
 	for item in proof {
 		db.insert(&item);
 	}

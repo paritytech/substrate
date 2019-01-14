@@ -23,12 +23,12 @@ use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
 use balances::{self, EnsureAccountLiquid};
 
-// TODO: Add logs
+// FIXME: Add logs
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
 }
 
-// TODO: Add logs.
+// FIXME: Add logs.
 pub struct CallReceipt;
 
 pub struct ExecutionContext<'a, T: Trait + 'a> {

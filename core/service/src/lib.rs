@@ -226,7 +226,7 @@ impl<Components: components::Components> Service<Components> {
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
 			let events = transaction_pool.import_notification_stream()
-				// TODO [ToDr] Consider throttling?
+				// FIXME [ToDr] Consider throttling?
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();

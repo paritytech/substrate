@@ -156,7 +156,7 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> 
 	}
 }
 
-/// TODO: use derive when possible.
+/// FIXME: use derive when possible.
 #[cfg(feature = "std")]
 impl<Address, Index, Signature, Call> fmt::Debug
 	for UncheckedExtrinsic<Address, Index, Call, Signature>

@@ -168,7 +168,7 @@ impl<Address: Encode, Index, Signature: Encode, Call: Encode> serde::Serialize
 	}
 }
 
-/// TODO: use derive when possible.
+/// FIXME: use derive when possible.
 #[cfg(feature = "std")]
 impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature> where
 	Address: fmt::Debug,

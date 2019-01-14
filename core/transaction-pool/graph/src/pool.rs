@@ -226,7 +226,7 @@ impl<B: ChainApi> Pool<B> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
-	/// TODO [ToDr] Options
+	/// FIXME [ToDr] Options
 	pub fn new(_options: Options, api: B) -> Self {
 		Pool {
 			api,

@@ -140,7 +140,7 @@ decl_storage! {
 impl<T: Trait> Module<T> {
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
-		<Validators<T>>::get().len() as u32	// TODO: can probably optimised
+		<Validators<T>>::get().len() as u32	// FIXME: can probably optimised
 	}
 
 	/// The last length change, if there was one, zero if not.
@@ -160,7 +160,7 @@ impl<T: Trait> Module<T> {
 	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
-		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
+		<Validators<T>>::put(&new.to_vec());			// FIXME: optimise.
 		<consensus::Module<T>>::set_authorities(
 			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
 		);

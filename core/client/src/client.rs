@@ -64,7 +64,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. FIXME: replace this with block queue
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
@@ -102,7 +102,7 @@ pub trait BlockBody<Block: BlockT> {
 }
 
 /// Client info
-// TODO: split queue info from chain info and amalgamate into single struct.
+// FIXME: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
@@ -296,7 +296,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
-		// TODO: Post Poc-2 return an error if version is missing
+		// FIXME: Post Poc-2 return an error if version is missing
 		self.executor.runtime_version(id)
 	}
 
@@ -612,7 +612,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			None => (None, None, None)
 		};
 
-		// TODO: non longest-chain rule.
+		// FIXME: non longest-chain rule.
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
 			ForkChoiceStrategy::Custom(v) => v,
@@ -652,7 +652,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		if make_notifications {
 			if let Some(storage_changes) = storage_changes {
-				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+				// FIXME [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 				self.storage_notifications.lock()
 					.trigger(&hash, storage_changes.into_iter());
 			}
@@ -717,7 +717,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
 		if route_from_best.common_block().hash != block {
-			// TODO: reorganize best block to be the best chain containing
+			// FIXME: reorganize best block to be the best chain containing
 			// `block`.
 		}
 
@@ -782,7 +782,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get block status.
 	pub fn block_status(&self, id: &BlockId<Block>) -> error::Result<BlockStatus> {
-		// TODO: more efficient implementation
+		// FIXME: more efficient implementation
 		if let BlockId::Hash(ref h) = id {
 			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
 				return Ok(BlockStatus::Queued);
@@ -831,9 +831,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// If `maybe_max_block_number` is `Some(max_block_number)`
 	/// the search is limited to block `numbers <= max_block_number`.
 	/// in other words as if there were no blocks greater `max_block_number`.
-	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
+	/// FIXME [snd] possibly implement this on blockchain::Backend and just redirect here
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
-	/// TODO [snd] write down time complexity
+	/// FIXME [snd] write down time complexity
 	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>)
 		-> error::Result<Option<Block::Hash>>
 	{
@@ -893,7 +893,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// waiting until we are <= max_number
 			if let Some(max_number) = maybe_max_number {
 				loop {
-					// TODO [snd] this should be a panic
+					// FIXME [snd] this should be a panic
 					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
@@ -913,7 +913,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					return Ok(Some(best_hash));
 				}
 
-				// TODO [snd] this should be a panic
+				// FIXME [snd] this should be a panic
 				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 

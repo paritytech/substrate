@@ -94,7 +94,7 @@ impl trie_root::TrieStream for TrieStream {
 			_ => {
 //				println!("[append_substream] would have hashed, because data.len() = {}", data.len());
 //				data.encode_to(&mut self.buffer)
-				// TODO: re-enable hashing before merging
+				// FIXME: re-enable hashing before merging
 				H::hash(&data).as_ref().encode_to(&mut self.buffer)
 			}
 		}

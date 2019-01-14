@@ -199,7 +199,7 @@ decl_module! {
 		/// Report some misbehaviour.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
-			// TODO: requires extension trait.
+			// FIXME: requires extension trait.
 		}
 
 		/// Note the previous block's validator missed their opportunity to propose a block.

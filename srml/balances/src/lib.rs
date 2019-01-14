@@ -399,7 +399,7 @@ impl<T: Trait> Module<T> {
 		// account is reaped).
 		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
 		// value of which makes even the `free_balance` unspendable.
-		// TODO: enforce this for the other balance-altering functions.
+		// FIXME: enforce this for the other balance-altering functions.
 		if balance < ed {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled

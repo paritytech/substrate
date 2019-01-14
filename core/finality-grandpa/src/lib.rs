@@ -517,7 +517,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		// TODO: dispatch this with `mpsc::spawn`.
+		// FIXME: dispatch this with `mpsc::spawn`.
 		let incoming = ::communication::checked_message_stream::<Block, _>(
 			round,
 			self.set_id,

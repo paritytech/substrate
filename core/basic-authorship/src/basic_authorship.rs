@@ -214,7 +214,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				let pending_iterator = self.transaction_pool.ready();
 
 				for pending in pending_iterator {
-					// TODO [ToDr] Probably get rid of it, and validate in runtime.
+					// FIXME [ToDr] Probably get rid of it, and validate in runtime.
 					let encoded_size = pending.data.encode().len();
 					if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
 
