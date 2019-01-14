@@ -24,7 +24,9 @@ use tokio::runtime::TaskExecutor;
 use tokio::timer::Interval;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
-use client::BlockchainEvents;
+use client::{backend::Backend, BlockchainEvents};
+
+use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 
 const TIMER_INTERVAL_MS: u64 = 5000;
@@ -46,10 +48,10 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 		let sync_status = network.status();
 
-		if let Ok(best_block) = client.best_block_header() {
-			let hash = best_block.hash();
+		if let Ok(info) = client.info() {
+			let best_number: u64 = info.chain.best_number.as_();
+			let best_hash = info.chain.best_hash;
 			let num_peers = sync_status.num_peers;
-			let best_number: u64 = best_block.number().as_();
 			let speed = move || speed(best_number, last_number);
 			let (status, target) = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
 				(SyncState::Idle, _) => ("Idle".into(), "".into()),
@@ -58,14 +60,17 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			};
 			last_number = Some(best_number);
 			let txpool_status = txpool.status();
+			let finalized_number: u64 = info.chain.finalized_number.as_();
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({})",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({})",
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", sync_status.num_peers)),
 				Colour::White.paint(format!("{}", best_number)),
-				hash
+				best_hash,
+				Colour::White.paint(format!("{}", finalized_number)),
+				info.chain.finalized_hash,
 			);
 
 			// get cpu usage and memory usage of this process
@@ -79,10 +84,12 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"status" => format!("{}{}", status, target),
 				"peers" => num_peers,
 				"height" => best_number,
-				"best" => ?hash,
+				"best" => ?best_hash,
 				"txcount" => txpool_status.ready,
 				"cpu" => cpu_usage,
-				"memory" => memory
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"finalized_hash" => ?info.chain.finalized_hash,
 			);
 		} else {
 			warn!("Error getting best block information");
@@ -92,7 +99,36 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	});
 
 	let client = service.client();
-	let display_block_import = client.import_notification_stream().for_each(|n| {
+	let mut last = match client.info() {
+		Ok(info) => Some((info.chain.best_number, info.chain.best_hash)),
+		Err(e) => { warn!("Error getting best block information: {:?}", e); None }
+	};
+
+	let display_block_import = client.import_notification_stream().for_each(move |n| {
+		// detect and log reorganizations.
+		if let Some((ref last_num, ref last_hash)) = last {
+			if n.header.parent_hash() != last_hash {
+				let tree_route = ::client::blockchain::tree_route(
+					client.backend().blockchain(),
+					BlockId::Hash(last_hash.clone()),
+					BlockId::Hash(n.hash),
+				);
+
+				match tree_route {
+					Ok(ref t) if !t.retracted().is_empty() => info!(
+						"Reorg from #{},{} to #{},{}, common ancestor #{},{}",
+						last_num, last_hash,
+						n.header.number(), n.hash,
+						t.common_block().number, t.common_block().hash,
+					),
+					Ok(_) => {},
+					Err(e) => warn!("Error computing tree route: {}", e),
+				}
+			}
+		}
+
+		last = Some((n.header.number().clone(), n.hash.clone()));
+
 		info!(target: "substrate", "Imported #{} ({})", n.header.number(), n.hash);
 		Ok(())
 	});

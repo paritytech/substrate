@@ -31,11 +31,11 @@
 /// )
 /// ```
 ///
-/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config}`.
+/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config<T>}`.
 /// The identifier `System` is the name of the module and the lower case identifier `system` is the
 /// name of the rust module for this module.
 /// The module `Test: test::{default, Log(Test)}` will expand to
-/// `Test: test::{Module, Call, Storage, Event<T>, Config, Log(Test)}`.
+/// `Test: test::{Module, Call, Storage, Event<T>, Config<T>, Log(Test)}`.
 /// The module `Test2: test_with_long_module::{Module}` will expand to
 /// `Test2: test_with_long_module::{Module}`.
 ///

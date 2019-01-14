@@ -19,7 +19,7 @@ sr-primitives = { path = "../../sr-primitives" }
 sr-version = { path = "../../sr-version" }
 sr-io = { path = "../../sr-io" }
 tokio = "0.1.7"
-parking_lot = "0.4"
+parking_lot = "0.7.1"
 error-chain = "0.12"
 log = "0.4"
 rhododendron = { version = "0.4.0", features = ["codec"] }

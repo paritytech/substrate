@@ -26,8 +26,8 @@ use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::{block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::Core};
 use codec::{Decode, Encode};
 use consensus_common::{self, evaluation};
-use primitives::{H256, AuthorityId, ed25519, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi};
+use primitives::{H256, Blake2Hasher};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::BasicInherentData;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
@@ -125,8 +125,7 @@ impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Blo
 	fn init(
 		&self,
 		parent_header: &<<C as AuthoringApi>::Block as BlockT>::Header,
-		_: &[AuthorityId],
-		_: Arc<ed25519::Pair>,
+		_: &[AuthorityIdFor<<C as AuthoringApi>::Block>],
 	) -> Result<Self::Proposer, error::Error> {
 		let parent_hash = parent_header.hash();
 
@@ -233,15 +232,16 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 				self.transaction_pool.remove_invalid(&unqueue_invalid);
 			})?;
 
-		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
-			  block.header().number(),
-			  <<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
-			  block.header().parent_hash(),
-			  block.extrinsics().iter()
-			  .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
-			  .collect::<Vec<_>>()
-			  .join(", ")
-			 );
+		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics: [{}]]",
+			block.header().number(),
+			<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
+			block.header().parent_hash(),
+			block.extrinsics()
+				.iter()
+				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
 
 		let substrate_block = Decode::decode(&mut block.encode().as_slice())
 			.expect("blocks are defined to serialize to substrate blocks correctly; qed");

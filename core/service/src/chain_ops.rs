@@ -21,7 +21,7 @@ use futures::Future;
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{As, Block, Header};
-use network::import_queue::{ImportQueue, Link, BlockData};
+use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
 use network::message;
 
 use consensus_common::BlockOrigin;
@@ -123,7 +123,15 @@ pub fn import_blocks<F, E, R>(mut config: FactoryFullConfiguration<F>, exit: E, 
 				message_queue: None
 			};
 			// import queue handles verification and importing it into the client
-			queue.import_blocks(BlockOrigin::File, vec![BlockData::<F::Block> { block, origin: None }]);
+			queue.import_blocks(BlockOrigin::File, vec![
+				IncomingBlock::<F::Block>{
+					hash: block.hash,
+					header: block.header,
+					body: block.body,
+					justification: block.justification,
+					origin: None,
+				}
+			]);
 		} else {
 			warn!("Error reading block data at {}.", b);
 			break;

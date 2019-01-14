@@ -294,6 +294,13 @@ pub struct Status {
 	pub future: usize,
 }
 
+impl Status {
+	/// Returns true if the are no transactions in the pool.
+	pub fn is_empty(&self) -> bool {
+		self.ready == 0 && self.future == 0
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

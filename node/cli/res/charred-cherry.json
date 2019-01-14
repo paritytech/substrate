@@ -2,6 +2,7 @@
 	"name": "Charred Cherry",
 	"id": "charred-cherry",
 	"properties": {
+		"tokenDecimals": 15,
 		"tokenSymbol": "CHR"
 	},
 	"telemetryUrl": "wss://telemetry.polkadot.io/submit/",

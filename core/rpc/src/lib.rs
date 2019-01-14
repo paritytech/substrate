@@ -22,6 +22,7 @@ extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_pubsub;
 extern crate parity_codec as codec;
 extern crate parking_lot;
+extern crate serde;
 extern crate serde_json;
 extern crate sr_primitives as runtime_primitives;
 extern crate sr_version as runtime_version;

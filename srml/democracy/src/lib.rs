@@ -87,7 +87,7 @@ pub trait Trait: balances::Trait + Sized {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Propose a sensitive action to be taken.
 		fn propose(
@@ -376,7 +376,7 @@ impl<T: Trait> Module<T> {
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed
 			.filter(|&(_, vote)| vote.is_aye() == approved)	// Just the winning coins
-		{	
+		{
 			// now plus: the base lock period multiplied by the number of periods this voter offered to
 			// lock should they win...
 			let locked_until = now + lock_period * T::BlockNumber::sa((vote.multiplier()) as u64);

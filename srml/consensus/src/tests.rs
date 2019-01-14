@@ -18,21 +18,20 @@
 
 #![cfg(test)]
 
-use primitives::{generic, testing, traits::{OnFinalise, ProvideInherent}};
+use primitives::{generic, testing::{self, UintAuthorityId}, traits::{OnFinalise, ProvideInherent}};
 use runtime_io::with_externalities;
-use substrate_primitives::H256;
 use mock::{Consensus, System, new_test_ext};
 
 #[test]
 fn authorities_change_logged() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Consensus::set_authorities(&[4, 5, 6]);
+		Consensus::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)]);
 		Consensus::on_finalise(1);
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
-				generic::DigestItem::AuthoritiesChange::<H256, u64>(vec![4, 5, 6]),
+				generic::DigestItem::AuthoritiesChange(vec![UintAuthorityId(4).into(), UintAuthorityId(5).into(), UintAuthorityId(6).into()]),
 			],
 		});
 	});
@@ -54,8 +53,8 @@ fn authorities_change_is_not_logged_when_not_changed() {
 fn authorities_change_is_not_logged_when_changed_back_to_original() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Consensus::set_authorities(&[4, 5, 6]);
-		Consensus::set_authorities(&[1, 2, 3]);
+		Consensus::set_authorities(&[UintAuthorityId(4), UintAuthorityId(5), UintAuthorityId(6)]);
+		Consensus::set_authorities(&[UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 		Consensus::on_finalise(1);
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {

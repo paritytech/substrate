@@ -53,11 +53,23 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 	}
 }
 
+/// Host functions, provided by the executor.
+/// A WebAssembly runtime module would "import" these to access the execution environment
+/// (most importantly, storage) or perform heavy hash calculations.
+/// See also "ext_" functions in sr-sandbox and sr-std
 extern "C" {
+	/// Most of the functions below return fixed-size arrays (e.g. hashes) by writing them into
+	/// memory regions that should be preallocated by module. 
+	/// Functions that return variable-sized data use host-side allocations. These should be
+	/// manually freed by the module.
 	fn ext_free(addr: *mut u8);
+	
+	/// Printing, useful for debugging
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
+	
+	/// Host storage access and verification
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
@@ -66,18 +78,26 @@ extern "C" {
 	fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
 	fn ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32);
+	/// Host-side result allocation
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
+	/// Host-side result allocation
 	fn ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
-	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
+	/// Host-side result allocation
+	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8; 
 	fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_num: u64, result: *mut u8) -> u32;
-	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
+	
+	/// The current relay chain identifier.
 	fn ext_chain_id() -> u64;
+	
+	/// Hash calculation and verification
+	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
+	/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
 }
 

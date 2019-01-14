@@ -20,17 +20,19 @@ use std::{io, thread};
 use std::time::Duration;
 use futures::{self, Future, Stream, stream, sync::oneshot};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, ErrorKind};
+use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProtocol};
 use io::NetSyncIo;
+use consensus::import_queue::{ImportQueue, Link};
 use consensus_gossip::ConsensusGossip;
-use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
+use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo};
 use config::Params;
 use error::Error;
 use specialization::NetworkSpecialization;
-use import_queue::ImportQueue;
-use runtime_primitives::traits::{Block as BlockT};
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sync::ChainSync;
+use std::sync::Weak;
 use tokio::{runtime::Runtime, timer::Interval};
 
 /// Type that represents fetch completion future.
@@ -43,6 +45,8 @@ const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
+	/// Get currently connected peers
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
 }
 
 /// Minimum Requirements for a Hash within Networking
@@ -65,6 +69,53 @@ pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	fn execute_in_context<F: Fn(&mut Context<B>)>(&self, closure: F);
 }
 
+/// A link implementation that connects to the network.
+pub struct NetworkLink<B: BlockT, E: ExecuteInContext<B>> {
+	/// The chain-sync handle
+	pub(crate) sync: Weak<RwLock<ChainSync<B>>>,
+	/// Network context.
+	pub(crate) context: Weak<E>,
+}
+
+impl<B: BlockT, E: ExecuteInContext<B>> NetworkLink<B, E> {
+	/// Execute closure with locked ChainSync.
+	fn with_sync<F: Fn(&mut ChainSync<B>, &mut Context<B>)>(&self, closure: F) {
+		if let (Some(sync), Some(service)) = (self.sync.upgrade(), self.context.upgrade()) {
+			service.execute_in_context(move |protocol| {
+				let mut sync = sync.write();
+				closure(&mut *sync, protocol)
+			});
+		}
+	}
+}
+
+impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
+	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>) {
+		self.with_sync(|sync, _| sync.block_imported(&hash, number))
+	}
+
+	fn maintain_sync(&self) {
+		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
+	}
+
+	fn useless_peer(&self, who: NodeIndex, reason: &str) {
+		trace!(target:"sync", "Useless peer {}, {}", who, reason);
+		self.with_sync(|_, protocol| protocol.report_peer(who, Severity::Useless(reason)))
+	}
+
+	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str) {
+		trace!(target:"sync", "Bad peer {}, {}", who, reason);
+		self.with_sync(|sync, protocol| {
+			protocol.report_peer(who, Severity::Useless(reason));	// is this actually malign or just useless?
+			sync.restart(protocol);
+		})
+	}
+
+	fn restart(&self) {
+		self.with_sync(|sync, protocol| sync.restart(protocol))
+	}
+}
+
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Network service
@@ -85,7 +136,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: Arc<I>,
-	) -> Result<Arc<Service<B, S, H>>, Error> {
+	) -> Result<Arc<Service<B, S, H>>, Error>
+		where I: ImportQueue<B>
+	{
 		let handler = Arc::new(Protocol::new(
 			params.config,
 			params.chain,
@@ -106,7 +159,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		});
 
 		// connect the import-queue to the network service.
-		let link = ::import_queue::NetworkLink {
+		let link = NetworkLink {
 			sync: Arc::downgrade(service.handler.sync()),
 			context: Arc::downgrade(&service),
 		};
@@ -176,6 +229,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> SyncProvider<
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.status()
+	}
+
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
+		let peers = self.handler.peers();
+		let network = self.network.lock();
+		peers.into_iter().map(|(idx, info)| {
+			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)
+		}).collect::<Vec<_>>()
 	}
 }
 
