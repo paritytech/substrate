@@ -197,7 +197,6 @@ publish:s3:doc:
         multipart_chunksize = 16MB
         max_bandwidth = 50MB/s
         use_accelerate_endpoint = true
-        addressing_style = path
       EOC
   script:
     - aws s3 sync --delete ./target/doc/ s3://${BUCKET}/${PREFIX}/
