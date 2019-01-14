@@ -70,10 +70,18 @@ impl<BlockNumber: Parameter> Default for State<BlockNumber> {
 	}
 }
 
+#[derive(Copy, Clone, PartialEq, Debug)]
 enum ConsolidatedState {
 	Idle,
+	AboutToBegin,
 	JustBegan,
 	AboutToEnd,
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum BetResult<Balance> {
+	Success(Balance),
+	Wipeout(Balance),
 }
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Default)]
@@ -118,8 +126,14 @@ decl_storage! {
 		/// The pot.
 		Pot get(pot): T::Balance;
 
-		/// The cumulative amount that is staked for the next payout.
-		NextTotal get(next_total): T::Balance;
+		/// The cumulative amount that is staked for reward or wipeout at the end of the current index.
+		Total get(total): T::Balance;
+
+		/// The cumulative amount that will become additionally staked at the next index.
+		Incoming get(incoming): T::Balance;
+
+		/// The cumulative amount that will become unstaked at the next index iff it isn't a wipeout.
+		Outgoing get(outgoing): T::Balance;
 
 		/// Payout history. Some is when there's a payout (the first parameter is the total amount
 		/// that was at stake at the point of payout, the second was the pot). None is when
@@ -192,7 +206,7 @@ bet
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Add the sender to the betting system. At the next period they will be betting
 		/// that the price will go up and their funds locked for at least two periods. If they
@@ -212,7 +226,7 @@ decl_module! {
 
 				// Bets(sender) may no longer exist now (if our history implied we got wiped
 				// out; check this and early-exit if so):
-				if b.balance.is_zero() {
+				if b.balance.is_zero() && cs != ConsolidatedState::Idle {
 					return true;
 				}
 
@@ -220,8 +234,9 @@ decl_module! {
 					ConsolidatedState::Idle => {
 						b.state = State::BeganAt(next);
 						b.balance = <balances::Module<T>>::free_balance(&sender);
+						<Incoming<T>>::mutate(|total| *total += b.balance);
 					}
-					ConsolidatedState::JustBegan => {
+					ConsolidatedState::AboutToBegin | ConsolidatedState::JustBegan => {
 						// Already betting. Nothing to do; bail to avoid erroneously accumulating balance.
 						return b.balance.is_zero()
 					}
@@ -231,10 +246,10 @@ decl_module! {
 						// `account_balance` since it would invalidate the current period's win calculation;
 						// instead we use the old betted balance.
 						b.state = State::BeganAt(current);
+						<Outgoing<T>>::mutate(|total| *total -= b.balance);
 					}
 				};
 
-				<NextTotal<T>>::mutate(|total| *total += b.balance);
 				b.balance.is_zero()
 			});
 
@@ -242,6 +257,8 @@ decl_module! {
 			if balance_at_stake_is_zero {
 				<Bets<T>>::remove(&sender)
 			}
+
+			println!("{:?}", <Bets<T>>::get(&sender));
 		}
 
 		/// Remove the sender from the betting system. At the next period they will no
@@ -252,9 +269,11 @@ decl_module! {
 
 			let balance_at_stake_is_zero = <Bets<T>>::mutate(&sender, |b| {
 				let cs = Self::consolidate(&sender, b);
+				println!("unbet(): CONS {:?}", cs);
 
 				// We are now guaranteed that b.state will be one of:
 				// - Idle
+				// - BeganAt(next)
 				// - BeganAt(current)
 				// - EndingAt(next)
 
@@ -269,7 +288,13 @@ decl_module! {
 						let next = Self::index() + One::one();
 						b.state = State::EndingAt(next);
 						b.locked_until = Some(next + One::one());
-						<NextTotal<T>>::mutate(|total| *total -= b.balance)
+						println!("JUST BEGAN {:?} {:?}", b.balance, Self::total());
+						<Outgoing<T>>::mutate(|total| *total += b.balance)
+					}
+					ConsolidatedState::AboutToBegin => {
+						b.state = State::Idle;
+						println!("ABOUT TO BEGIN {:?} {:?}", b.balance, Self::total());
+						<Incoming<T>>::mutate(|total| *total -= b.balance)
 					}
 					_ => {}
 				};
@@ -287,10 +312,9 @@ decl_module! {
 		fn collect(origin) {
 			let sender = ensure_signed(origin)?;
 
-			let is_unlocked = <Bets<T>>::mutate(&sender, |b| {
-				Self::consolidate(&sender, b);
-				b.state == State::Idle && b.locked_until.map_or(true, |l| l <= Self::index())
-			});
+			let mut b = <Bets<T>>::get(&sender);
+			Self::consolidate(&sender, &mut b);
+			let is_unlocked = b.state == State::Idle && b.locked_until.map_or(true, |l| l <= Self::index());
 
 			if is_unlocked {
 				<Bets<T>>::remove(&sender);
@@ -319,22 +343,34 @@ decl_module! {
 
 				if ph.is_zero() {
 					// end of period
+					println!("Ending period: {:?} block #{:?}", Self::index(), n);
 
 					let prices = <Prices<T>>::take();
 					let mean = prices.iter().fold(T::Balance::default(), |total, &item| total + item) / T::Balance::sa(samples);
 					if mean < Self::target() {
+						// payout
 						let pot = <Pot<T>>::take();
-						let total = Self::next_total();
+						let total = Self::total();
 						<Target<T>>::put(mean);
-						<NextTotal<T>>::put(total + pot);
+						let accrued_outgoing = if !total.is_zero() {
+							<Outgoing<T>>::take() * (total + pot) / total
+						} else {
+							Zero::zero()
+						};
+						<Total<T>>::put(total + pot + <Incoming<T>>::take() - accrued_outgoing);
 						// This is where the total should be expanded for contiguous betters.
 						<Payouts<T>>::insert(Self::index(), (total, pot));
 					} else {
+						// wipeout
 						<Target<T>>::mutate(|p| *p = *p / Self::target_attenuation() * (Self::target_attenuation() + One::one()));
-						<NextTotal<T>>::kill();
+						<Outgoing<T>>::kill();
+						<Total<T>>::put(<Incoming<T>>::take());
 					}
 
+					println!("Payout: {:?}", Self::payouts(Self::index()));
+
 					<Index<T>>::mutate(|i| *i += One::one());
+					println!("Next period: {:?}", Self::index());
 				}
 			}
 		}
@@ -351,24 +387,29 @@ impl<T: Trait> Module<T> {
 	/// Calling this could delete the relevant entry in `Bets`.
 	fn consolidate(who: &T::AccountId, betting: &mut Betting<T::BlockNumber, T::Balance>) -> ConsolidatedState {
 		let now = Self::index();
+		println!("consolidate CONS {:?} now: {}", betting, now);
 		let (new_balance, result) = match betting.state.clone() {
 			State::BeganAt(n) if n < now => {
 				// calculate and impose new balance implied by [n ... now)
 				betting.state = State::BeganAt(now);
-				(
-					Self::calculate_new_balance(betting.balance, n, now),
-					ConsolidatedState::JustBegan
-				)
+				match Self::calculate_new_balance(betting.balance, n, now) {
+					BetResult::Success(b) => (b, ConsolidatedState::JustBegan),
+					BetResult::Wipeout(b) => { betting.locked_until = None; (b, ConsolidatedState::Idle) }
+				}
 			}
 			State::EndingAt(n) if n <= now => {
 				// calculate new balance implied by n
 				betting.state = State::Idle;
 				(
-					Self::calculate_new_balance(betting.balance, n, n + One::one()),
+					match Self::calculate_new_balance(betting.balance, n - One::one(), n) {
+						BetResult::Success(b) => b,
+						BetResult::Wipeout(b) => { betting.locked_until = None; b }
+					},
 					ConsolidatedState::Idle
 				)
 			}
-			State::BeganAt(_) => return ConsolidatedState::JustBegan,
+			State::BeganAt(n) if n == now => return ConsolidatedState::JustBegan,
+			State::BeganAt(_) /*if _ > now*/ => return ConsolidatedState::AboutToBegin,
 			State::EndingAt(_) => return ConsolidatedState::AboutToEnd,
 			State::Idle => return ConsolidatedState::Idle,
 		};
@@ -386,10 +427,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Returns the new balance (i.e. old plus the payout reward); will be zero if there was a wipeout.
-	fn calculate_new_balance(balance: T::Balance, begin: T::BlockNumber, end: T::BlockNumber) -> <T as balances::Trait>::Balance {
+	fn calculate_new_balance(balance: T::Balance, begin: T::BlockNumber, end: T::BlockNumber) -> BetResult<<T as balances::Trait>::Balance> {
+		println!("Calculating new... {:?} {:?} {:?}", balance, begin, end);
 		if balance.is_zero() {
 			// nothing to be done here
-			return balance
+			return BetResult::Wipeout(balance)
 		}
 		// pay out (or wipeout) coming...
 		let mut b = begin;
@@ -401,18 +443,19 @@ impl<T: Trait> Module<T> {
 					// A(nother) win! Accumulate.
 					// TODO: check for overflow (we're assuming 32-bits at the upper end here).
 					// See #935.
-					let payout = ((balance >> 32) / total_stake * pot) << 32;
+					let payout = ((balance << 32) / total_stake * pot) >> 32;
+					println!("Payout: {:?} from pot of {:?} (total staked was {:?})", payout, pot, total_stake);
 					new_balance += payout;
 					// This is where the total should be expanded for contiguous betters.
 				}
 				None => {
 					// wipeout.
-					return Zero::zero()
+					return BetResult::Wipeout(new_balance >> 1)
 				}
 			}
 			b += One::one();
 		}
-		new_balance
+		BetResult::Success(new_balance)
 	}
 }
 
@@ -497,7 +540,15 @@ mod tests {
 	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
+		t.extend(balances::GenesisConfig::<Test>{
+			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40)],
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
+			existential_deposit: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			reclaim_rebate: 0,		// TODO: remove when merge to master!
+		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			period: 5,
 			samples: 2,
@@ -505,6 +556,14 @@ mod tests {
 			target: 100,
 		}.build_storage().unwrap().0);
 		t.into()
+	}
+
+	fn proceed_to_next_index() {
+		let i = Bet::index();
+		while Bet::index() == i {
+			Bet::on_finalise(System::block_number());
+			System::set_block_number(System::block_number() + 1);
+		}
 	}
 
 	#[test]
@@ -518,7 +577,7 @@ mod tests {
 			assert_eq!(Bet::bets(0), Betting::default());
 			assert_eq!(Bet::prices(), vec![]);
 			assert_eq!(Bet::pot(), 0);
-			assert_eq!(Bet::next_total(), 0);
+			assert_eq!(Bet::total(), 0);
 			assert_eq!(Bet::payouts(0), None);
 		});
 	}
@@ -548,6 +607,127 @@ mod tests {
 			assert_eq!(Bet::payouts(0), Some((0, 0)));
 			assert_eq!(Bet::index(), 1);
 			assert_eq!(Bet::target(), 90);
+		});
+	}
+
+	#[test]
+	fn bet_unbet_works() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+			assert_ok!(Bet::unbet(Some(1).into()));
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert_eq!(Balances::free_balance(&1), 10);
+		});
+	}
+
+	#[test]
+	fn bet_locking_works() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+		});
+	}
+
+	#[test]
+	fn bet_invalid_collect_should_not_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 10);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			proceed_to_next_index();
+
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::total(), 10);
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+		});
+	}
+
+	#[test]
+	fn bet_win_unbet_collect_works() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			// index == 0
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 10);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			proceed_to_next_index();
+			// index == 1
+
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::total(), 10);
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Bet::outgoing(), 10);
+
+			Bet::contribute(10);
+			set_price(100);
+
+			proceed_to_next_index();
+			// index == 2
+
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert_eq!(Balances::free_balance(&1), 20);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+
+			proceed_to_next_index();
+			// index == 3
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_ok());
+		});
+	}
+
+	#[test]
+	fn bet_lose_unbet_works() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			// index == 0
+			set_price(120);
+			assert_ok!(Bet::bet(Some(1).into()));
+
+			assert_eq!(Bet::incoming(), 10);
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Balances::free_balance(&1), 10);
+
+			proceed_to_next_index();
+			// index == 1
+
+			assert_eq!(Bet::index(), 1);
+			assert_eq!(Bet::total(), 10);
+
+			assert_ok!(Bet::unbet(Some(1).into()));
+			assert!(Bet::ensure_account_liquid(&1).is_err());
+			assert_eq!(Bet::outgoing(), 10);
+
+			Bet::contribute(10);
+			set_price(140);
+
+			proceed_to_next_index();
+			// index == 2
+
+			assert_ok!(Bet::collect(Some(1).into()));
+			assert_eq!(Balances::free_balance(&1), 5);
+			assert!(Bet::ensure_account_liquid(&1).is_ok());
+			assert_eq!(Bet::total(), 0);
 		});
 	}
 }

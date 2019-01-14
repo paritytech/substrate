@@ -24,7 +24,7 @@ extern crate serde;
 
 #[doc(hidden)]
 pub extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
+pub extern crate sr_io as runtime_io;
 #[doc(hidden)]
 pub extern crate sr_primitives as runtime_primitives;
 extern crate srml_metadata;
@@ -99,9 +99,9 @@ macro_rules! ensure {
 #[cfg(feature = "std")]
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
-		let h = runtime_io::storage_root();
+		let h = $crate::runtime_io::storage_root();
 		assert_err!($x, $y);
-		assert_eq!(h, runtime_io::storage_root());
+		assert_eq!(h, $crate::runtime_io::storage_root());
 	}
 }
 
