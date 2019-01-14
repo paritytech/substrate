@@ -186,8 +186,9 @@ publish:s3:doc:
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate-rustdoc"
   before_script:
+    - mkdir -p ${HOME}/.aws
     - |
-      cat > ${HOME}/.aws/config <EOC
+      cat > ${HOME}/.aws/config <<EOC
       [default]
       s3 =
         max_concurrent_requests = 20
