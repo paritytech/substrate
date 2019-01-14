@@ -192,6 +192,7 @@ You will also need to install the following packages:
  - Linux:
 [source, shell]
 sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
+sudo pacman -S cmake pkgconf openssl git clang
 
  - Mac:
 [source, shell]
