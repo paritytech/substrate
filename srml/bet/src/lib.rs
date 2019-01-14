@@ -258,7 +258,7 @@ decl_module! {
 				<Bets<T>>::remove(&sender)
 			}
 
-			println!("{:?}", <Bets<T>>::get(&sender));
+//			println!("{:?}", <Bets<T>>::get(&sender));
 		}
 
 		/// Remove the sender from the betting system. At the next period they will no
@@ -269,7 +269,7 @@ decl_module! {
 
 			let balance_at_stake_is_zero = <Bets<T>>::mutate(&sender, |b| {
 				let cs = Self::consolidate(&sender, b);
-				println!("unbet(): CONS {:?}", cs);
+//				println!("unbet(): CONS {:?}", cs);
 
 				// We are now guaranteed that b.state will be one of:
 				// - Idle
@@ -288,12 +288,12 @@ decl_module! {
 						let next = Self::index() + One::one();
 						b.state = State::EndingAt(next);
 						b.locked_until = Some(next + One::one());
-						println!("JUST BEGAN {:?} {:?}", b.balance, Self::total());
+//						println!("JUST BEGAN {:?} {:?}", b.balance, Self::total());
 						<Outgoing<T>>::mutate(|total| *total += b.balance)
 					}
 					ConsolidatedState::AboutToBegin => {
 						b.state = State::Idle;
-						println!("ABOUT TO BEGIN {:?} {:?}", b.balance, Self::total());
+//						println!("ABOUT TO BEGIN {:?} {:?}", b.balance, Self::total());
 						<Incoming<T>>::mutate(|total| *total -= b.balance)
 					}
 					_ => {}
@@ -344,13 +344,13 @@ decl_module! {
 
 				if ph.is_zero() {
 					// end of period
-					println!("Ending period: {:?} block #{:?}", Self::index(), n);
+//					println!("Ending period: {:?} block #{:?}", Self::index(), n);
 
 					let prices = <Prices<T>>::take();
 					if !Self::total().is_zero() {
 						let mean = prices.iter().fold(T::Balance::default(), |total, &item| total + item) / T::Balance::sa(samples);
 
-						println!("prices {:?} mean {:?} target {:?}", prices, mean, Self::target());
+//						println!("prices {:?} mean {:?} target {:?}", prices, mean, Self::target());
 						if mean < Self::target() {
 							// payout
 							let pot = <Pot<T>>::take();
@@ -371,14 +371,14 @@ decl_module! {
 							<Total<T>>::put(<Incoming<T>>::take());
 						}
 
-						println!("Payout: {:?}", Self::payouts(Self::index()));
+//						println!("Payout: {:?}", Self::payouts(Self::index()));
 					} else {
-						println!("No payout - no users");
+//						println!("No payout - no users");
 						<Total<T>>::put(<Incoming<T>>::take());
 					}
 
 					<Index<T>>::mutate(|i| *i += One::one());
-					println!("Next period: {:?}", Self::index());
+//					println!("Next period: {:?}", Self::index());
 				}
 			}
 		}
@@ -395,7 +395,7 @@ impl<T: Trait> Module<T> {
 	/// Calling this could delete the relevant entry in `Bets`.
 	fn consolidate(who: &T::AccountId, betting: &mut Betting<T::BlockNumber, T::Balance>) -> ConsolidatedState {
 		let now = Self::index();
-		println!("consolidate CONS {:?} now: {}", betting, now);
+//		println!("consolidate CONS {:?} now: {}", betting, now);
 		let (new_balance, result) = match betting.state.clone() {
 			State::BeganAt(n) if n < now => {
 				// calculate and impose new balance implied by [n ... now)
@@ -432,13 +432,13 @@ impl<T: Trait> Module<T> {
 
 		betting.balance = new_balance;
 
-		println!("Consolidated: {:?}", betting);
+//		println!("Consolidated: {:?}", betting);
 		result
 	}
 
 	/// Returns the new balance (i.e. old plus the payout reward); will be zero if there was a wipeout.
 	fn calculate_new_balance(balance: T::Balance, begin: T::BlockNumber, end: T::BlockNumber) -> BetResult<<T as balances::Trait>::Balance> {
-		println!("Calculating new... {:?} {:?} {:?}", balance, begin, end);
+//		println!("Calculating new... {:?} {:?} {:?}", balance, begin, end);
 		if balance.is_zero() {
 			// nothing to be done here
 			return BetResult::Wipeout(balance)
@@ -454,7 +454,7 @@ impl<T: Trait> Module<T> {
 					// TODO: check for overflow (we're assuming 32-bits at the upper end here).
 					// See #935.
 					let payout = ((balance << 32) / total_stake * pot) >> 32;
-					println!("Payout: {:?} from pot of {:?} (total staked was {:?})", payout, pot, total_stake);
+//					println!("Payout: {:?} from pot of {:?} (total staked was {:?})", payout, pot, total_stake);
 					new_balance += payout;
 					// This is where the total should be expanded for contiguous betters.
 				}
