@@ -23,6 +23,63 @@ use mock::{Balances, ExtBuilder, Runtime, System};
 use runtime_io::with_externalities;
 
 #[test]
+fn default_indexing_on_new_accounts_should_not_work2() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.creation_fee(50)
+			.monied(true)
+			.build(),
+		|| {
+			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
+			// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 9, not satisfies for ext_deposit
+			assert_noop!(
+				Balances::transfer(Some(1).into(), 5, 9.into()),
+				"value too low to create account"
+			);
+			assert_eq!(Balances::is_dead_account(&5), true); // account 5 should not exist
+			assert_eq!(Balances::free_balance(&1), 256 * 10);
+		},
+	);
+}
+
+#[test]
+fn reserved_balance_should_prevent_reclaim_count() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(256 * 1)
+			.monied(true)
+			.build(),
+		|| {
+			System::inc_account_nonce(&2);
+			assert_eq!(Balances::is_dead_account(&2), false);
+			assert_eq!(Balances::is_dead_account(&5), true);
+			assert_eq!(Balances::total_balance(&2), 256 * 20);
+
+			assert_ok!(Balances::reserve(&2, 256 * 19 + 1)); // account 2 becomes mostly reserved
+			assert_eq!(Balances::free_balance(&2), 0); // "free" account deleted."
+			assert_eq!(Balances::total_balance(&2), 256 * 19 + 1); // reserve still exists.
+			assert_eq!(Balances::is_dead_account(&2), false);
+			assert_eq!(System::account_nonce(&2), 1);
+
+			assert_ok!(Balances::transfer(Some(4).into(), 5, (256 * 1 + 0x69).into())); // account 4 tries to take index 1 for account 5.
+			assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
+			assert_eq!(Balances::is_dead_account(&5), false);
+
+			assert_eq!(Balances::slash(&2, 256 * 18 + 2), None); // account 2 gets slashed
+			assert_eq!(Balances::total_balance(&2), 0); // "reserve" account reduced to 255 (below ED) so account deleted
+			assert_eq!(System::account_nonce(&2), 0);	// nonce zero
+			assert_eq!(Balances::is_dead_account(&2), true);
+
+			assert_ok!(Balances::transfer(Some(4).into(), 6, (256 * 1 + 0x69).into())); // account 4 tries to take index 1 again for account 6.
+			assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
+			assert_eq!(Balances::is_dead_account(&6), false);
+		},
+	);
+}
+
+
+#[test]
 fn reward_should_work() {
 	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
 		assert_eq!(Balances::total_balance(&1), 10);
