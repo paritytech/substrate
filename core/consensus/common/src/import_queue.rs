@@ -305,7 +305,7 @@ pub enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debu
 	ImportedKnown(H, N),
 	/// Imported unknown block.
 	ImportedUnknown(H, N),
-	/// Imported unknown block.
+	/// Imported unjustified block that requires one.
 	ImportedUnjustified(H, N),
 }
 

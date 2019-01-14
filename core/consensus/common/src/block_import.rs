@@ -146,6 +146,7 @@ impl<Block: BlockT> ImportBlock<Block> {
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
+	/// Called by the import queue when it is started.
 	fn on_start(&self, _link: &::import_queue::Link<B>) { }
 
 	/// Import a Block alongside the new authorities valid from this block forward

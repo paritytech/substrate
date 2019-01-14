@@ -36,6 +36,7 @@ const MAX_BLOCKS_TO_REQUEST: usize = 128;
 const MAX_IMPORTING_BLOCKS: usize = 2048;
 // Number of blocks in the queue that prevents ancestry search.
 const MAJOR_SYNC_BLOCKS: usize = 5;
+// Time to wait before trying to get a justification from the same peer.
 const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 
 struct PeerSync<B: BlockT> {
@@ -55,6 +56,7 @@ enum PeerSyncState<B: BlockT> {
 
 type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
+/// Manages pending block justification requests.
 struct PendingJustifications<B: BlockT> {
 	justifications: HashSet<PendingJustification<B>>,
 	pending_requests: VecDeque<PendingJustification<B>>,

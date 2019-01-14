@@ -954,6 +954,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			_ => return,
 		};
 
+		// request justifications for all pending changes for which change blocks have already been imported
 		for pending_change in self.authority_set.inner().read().pending_changes() {
 			if pending_change.effective_number() > chain_info.finalized_number &&
 				pending_change.effective_number() <= chain_info.best_number

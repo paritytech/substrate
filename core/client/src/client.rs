@@ -1098,6 +1098,9 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
 
+	/// Import a block justification and finalize the block. The justification
+	/// isn't interpreted by the client and is assumed to have been validated
+	/// previously. The block is finalized unconditionally.
 	fn import_justification(
 		&self,
 		hash: Block::Hash,
