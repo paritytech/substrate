@@ -339,7 +339,6 @@ impl<T: Trait> Module<T> {
 		// account is reaped).
 		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
 		// value of which makes even the `free_balance` unspendable.
-		// TODO: enforce this for the other balance-altering functions.
 		if balance < ed {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
@@ -485,7 +484,6 @@ impl<T: Trait> Module<T> {
 
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) {
-		// TODO:
 		T::OnNewAccount::on_new_account(&who);
 		Self::deposit_event(RawEvent::NewAccount(who.clone(), balance.clone()));
 	}
