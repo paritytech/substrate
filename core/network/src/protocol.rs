@@ -104,7 +104,7 @@ impl<B: BlockT, H: ExHashT> Peer<B, H> {
 	fn min_request_timestamp(&self) -> Option<&time::Instant> {
 		match (self.block_request_timestamp, self.block_justification_request_timestamp) {
 			(Some(t1), Some(t2)) if t1 < t2 => self.block_request_timestamp.as_ref(),
-			(Some(t1), Some(t2)) => self.block_justification_request_timestamp.as_ref(),
+			(Some(_), Some(_)) => self.block_justification_request_timestamp.as_ref(),
 			(Some(_), None) => self.block_request_timestamp.as_ref(),
 			(None, Some(_)) => self.block_justification_request_timestamp.as_ref(),
 			_ => None,
