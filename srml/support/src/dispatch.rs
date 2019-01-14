@@ -775,9 +775,21 @@ macro_rules! __impl_outer_dispatch_metadata {
 			pub fn outer_dispatch_metadata() -> $crate::dispatch::OuterDispatchMetadata {
 				$crate::dispatch::OuterDispatchMetadata {
 					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($outer_name)),
-					calls: __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*),
+					calls: $crate::dispatch::DecodeDifferent::Encode(
+            __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*)
+          ),
 				}
 			}
+			pub fn module_dispatch(mod_name: &'static str) -> Option<$crate::dispatch::OuterDispatchCall> {
+				let metas = __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*);
+				for i in metas.iter() {
+					if i.prefix == $crate::dispatch::DecodeDifferent::Encode(mod_name) {
+						return Some(i.clone());
+					}
+				}
+				None
+			}
+
 		}
 	};
 	(@encode_calls
@@ -802,7 +814,7 @@ macro_rules! __impl_outer_dispatch_metadata {
 		$index:expr;
 		$( $encoded_call:expr ),*;
 	) => {
-		$crate::dispatch::DecodeDifferent::Encode(&[ $( $encoded_call ),* ])
+		&[ $( $encoded_call ),* ]
 	};
 }
 

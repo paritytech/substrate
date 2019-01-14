@@ -123,7 +123,7 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 pub type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
 
 impl<B> DecodeDifferentArray<B> {
-	fn iter(&self) -> rstd::slice::Iter<B> {
+	pub fn iter(&self) -> rstd::slice::Iter<B> {
 		match self {
 			DecodeDifferent::Encode(ref slice) => slice.iter(),
 			DecodeDifferent::Decoded(ref vec) => vec.iter(),
@@ -384,7 +384,7 @@ pub struct RuntimeModuleMetadata {
 /// The metadata of a runtime.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadata {
+pub struct RuntimeMetadataOld {
 	pub outer_event: OuterEventMetadata,
 	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
 	pub outer_dispatch: OuterDispatchMetadata,
@@ -392,10 +392,10 @@ pub struct RuntimeMetadata {
 
 /// The metadata of a runtime.
 /// It is prefixed by a version ID encoded/decoded through
-/// the enum nature of `RuntimeMetadata2`.
+/// the enum nature of `RuntimeMetadata`.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub enum RuntimeMetadata2 {
+pub enum RuntimeMetadata {
 	V1(RuntimeMetadataV1),
 }
 
@@ -403,98 +403,27 @@ pub enum RuntimeMetadata2 {
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV1 {
-	pub modules: DecodeDifferentArray<RuntimeModuleMetadataV1>, // Note it is same as modules but we need to feed it with outer event and outer_dispatch
-	pub outer_dispatch: OuterDispatchMetadata, // TODO what are we doing with those infos
+	pub modules: DecodeDifferentArray<RuntimeModuleMetadataV1>,
 }
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeModuleMetadataV1 {
-	//pub prefix: DecodeDifferentStr, // existing
-	pub module_id: DecodeDifferentStr, // TODO from moduleMetadata name ??? or is it previous prefix value
-	pub storage: Option<DFn<StorageMetadata>>, // TODO keep optional ??
-	pub call: DFn<CallMetadata>, // TODO check if name is module name switch from modul to Call TODO rename call?? TODO insert outerevent???
-	pub event: DecodeDifferent<FnEncodeModule<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>, // TODO painfull query from outer event
-	//pub event: DecodeDifferentArray<FnEncode<&'static [EventMetadata]>, Vec<EventMetadata>>, // TODO painfull query from outer event
-
+	pub name: DecodeDifferentStr,
+	pub prefix: DecodeDifferentStr,
+	pub storage: Option<DFn<StorageMetadata>>,
+	pub call: DFn<CallMetadata>,
+	pub outer_dispatch: DecodeDifferent<FnEncodeModule<Option<OuterDispatchCall>>, Option<OuterDispatchCall>>,
+	pub event: DecodeDifferent<FnEncodeModule<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
 }
 
-pub fn build_module_metadata_v1(input: RuntimeMetadata) -> DecodeDifferentArray<RuntimeModuleMetadataV1> {
-
-/*pub struct RuntimeMetadata {
-	pub outer_event: OuterEventMetadata,
-	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
-	pub outer_dispatch: OuterDispatchMetadata,
-}*/
-	let mut res: Vec<RuntimeModuleMetadataV1> = Vec::new(); // TODO transfor to iterable function??
-	for module in input.modules.iter() {
-		// clone could be avoid in decode by running over a into_iter variant. TODO try a general
-		// into_iter
-		let module_id = module.prefix.clone();
-		let module_meta = dfn_eval(module.module.clone());
-		let storage = module.storage.clone();
-		let call = unimplemented!();// module_meta.call;
-/*DecodeDifferentArray<
-		(&'static str, FnEncode<&'static [EventMetadata]>),
-		(StringBuf, Vec<EventMetadata>)*/
-
-		let event = match input.outer_event.events {
-			DecodeDifferent::Encode(ref r) => {
-     /*   // bad heuristic : we expect that we do not mix encode and decode
-        // meaning that on building RuntimeModuleMetadataV1 from static source 
-        // for events and non static for module_id this will fail
-        // Both being from different macro, not sure it could be done differently
-        let mid = if let DecodeDifferent::Encode(id) = module_id { id } else {
-          unreachable!("Heuristic on metadata macros running all statically")
-        };
-        FnEncodeModule(mid, || {
-         for mod_events in r.iter() {
-						if module_id == mod_events.0 {
-							events.push(mod_events.1.clone())
-						}
-					}
-        });
-that's shit code let's gen fn from macro instead
-        */
-        unimplemented!()
-/*				let mut events = Vec::new();
-					for mod_events in r.iter() {
-						if module_id == DecodeDifferent::Encode(mod_events.0) {
-							events.push(mod_events.1.clone())
-						}
-					}
-				DecodeDifferent::Encode(events)*/
-			},
-			DecodeDifferent::Decoded(ref r) => {
-				let mut events = None;
-				for mod_events in r.iter() {
-					// TODO comparison related clone : remove (compare on ref)
-					if module_id == DecodeDifferent::Decoded(mod_events.0.clone()) {
-						events = Some(mod_events.1.clone());
-            break;
-					}
-				}
-				DecodeDifferent::Decoded(events.unwrap_or(Vec::new()))
-			},
-		};
-		res.push( RuntimeModuleMetadataV1 {
-			module_id,
-			storage,
-			call,
-			event,
-		});
-	}
-
-	DecodeDifferent::Decoded(res)
-}
 /// A Call from the outer dispatch.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct OuterDispatchCallV1 {
 	pub index: u16,
 	pub name: DecodeDifferentStr,
-//	pub prefix: DecodeDifferentStr, aka module name (unneeded)
 }
 
 /// All metadata about the outer dispatch.
@@ -503,6 +432,12 @@ pub struct OuterDispatchCallV1 {
 pub struct OuterDispatchMetadataV1 {
 	pub name: DecodeDifferentStr,
 	pub calls: DecodeDifferentArray<OuterDispatchCallV1>,
+}
+
+impl Into<primitives::OpaqueMetadata> for RuntimeMetadataOld {
+	fn into(self) -> primitives::OpaqueMetadata {
+		primitives::OpaqueMetadata::new(self.encode())
+	}
 }
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {

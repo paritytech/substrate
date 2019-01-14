@@ -212,6 +212,10 @@ impl_runtime_apis! {
 	}
 
 	impl client_api::Metadata<Block> for Runtime {
+		fn metadata_old() -> OpaqueMetadata {
+			unimplemented!()
+		}
+
 		fn metadata() -> OpaqueMetadata {
 			unimplemented!()
 		}

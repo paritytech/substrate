@@ -71,7 +71,7 @@ pub mod inherent;
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
-pub use self::metadata::RuntimeMetadata;
+pub use self::metadata::RuntimeMetadataOld;
 pub use runtime_io::print;
 
 #[doc(inline)]
