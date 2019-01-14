@@ -574,7 +574,7 @@ where
 mod tests {
 	use super::{
 		ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
-		Vm, VmExecResult,
+		Vm, VmExecResult, InstantiateReceipt, RawEvent,
 	};
 	use account_db::AccountDb;
 	use gas::GasMeter;
@@ -675,12 +675,6 @@ mod tests {
 			})
 		}
 	}
-
-	// TODO: Tests to add:
-	// - Instantiate accounts in a proper way (i.e. via `instantiate`)
-	// - Verify sanity of initial setup. I.e. no active account should have a zero balance.
-	// - test events acruing in success and failure cases.
-	// - test instantiation yields an instantiation event.
 
 	#[test]
 	fn it_works() {
@@ -1150,6 +1144,140 @@ mod tests {
 					),
 					Err(_)
 				);
+			}
+		);
+	}
+
+	#[test]
+	fn instantiation() {
+		let vm = MockVm::new();
+
+		let mut loader = MockLoader::empty();
+		let dummy_ch = loader.insert(|_| VmExecResult::Ok);
+
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&ALICE, 1000);
+
+				let created_contract_address = assert_matches!(
+					ctx.instantiate(
+						100,
+						&mut GasMeter::<Test>::with_limit(10000, 1),
+						&dummy_ch,
+						&[],
+					),
+					Ok(InstantiateReceipt { address }) => address
+				);
+
+				// Check that the newly created account has the expected code hash and
+				// there are instantiation event.
+				assert_eq!(ctx.overlay.get_code(&created_contract_address).unwrap(), dummy_ch);
+				assert_eq!(&ctx.events, &[
+					RawEvent::Transfer(ALICE, created_contract_address, 100),
+					RawEvent::Instantiated(ALICE, created_contract_address),
+				]);
+			}
+		);
+	}
+
+	#[test]
+	fn instantiation_from_contract() {
+		let vm = MockVm::new();
+
+		let mut loader = MockLoader::empty();
+		let dummy_ch = loader.insert(|_| VmExecResult::Ok);
+		let created_contract_address = Rc::new(RefCell::new(None::<u64>));
+		let creator_ch = loader.insert({
+			let dummy_ch = dummy_ch.clone();
+			let created_contract_address = Rc::clone(&created_contract_address);
+			move |ctx| {
+				// Instantiate a contract and save it's address in `created_contract_address`.
+				*created_contract_address.borrow_mut() =
+					ctx.ext.instantiate(
+						&dummy_ch,
+						15u64,
+						ctx.gas_meter,
+						&[]
+					)
+					.unwrap()
+					.address.into();
+
+				VmExecResult::Ok
+			}
+		});
+
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&ALICE, 1000);
+				ctx.overlay.set_code(&BOB, Some(creator_ch));
+
+				assert_matches!(
+					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
+					Ok(_)
+				);
+
+				let created_contract_address = created_contract_address.borrow().as_ref().unwrap().clone();
+
+				// Check that the newly created account has the expected code hash and
+				// there are instantiation event.
+				assert_eq!(ctx.overlay.get_code(&created_contract_address).unwrap(), dummy_ch);
+				assert_eq!(&ctx.events, &[
+					RawEvent::Transfer(ALICE, BOB, 20),
+					RawEvent::Transfer(BOB, created_contract_address, 15),
+					RawEvent::Instantiated(BOB, created_contract_address),
+				]);
+			}
+		);
+	}
+
+	#[test]
+	fn instantiation_fails() {
+		let vm = MockVm::new();
+
+		let mut loader = MockLoader::empty();
+		let dummy_ch = loader.insert(|_| VmExecResult::Trap("It's a trap!"));
+		let creator_ch = loader.insert({
+			let dummy_ch = dummy_ch.clone();
+			move |ctx| {
+				// Instantiate a contract and save it's address in `created_contract_address`.
+				assert_matches!(
+					ctx.ext.instantiate(
+						&dummy_ch,
+						15u64,
+						ctx.gas_meter,
+						&[]
+					),
+					Err("It's a trap!")
+				);
+
+				VmExecResult::Ok
+			}
+		});
+
+		with_externalities(
+			&mut ExtBuilder::default().existential_deposit(15).build(),
+			|| {
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&ALICE, 1000);
+				ctx.overlay.set_code(&BOB, Some(creator_ch));
+
+				assert_matches!(
+					ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), &[], EmptyOutputBuf::new()),
+					Ok(_)
+				);
+
+				// The contract wasn't created so we don't expect to see an instantiation
+				// event here.
+				assert_eq!(&ctx.events, &[
+					RawEvent::Transfer(ALICE, BOB, 20),
+				]);
 			}
 		);
 	}
