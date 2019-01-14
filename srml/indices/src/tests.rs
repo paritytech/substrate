@@ -22,10 +22,6 @@ use super::*;
 use mock::{Indices, new_test_ext, make_account, kill_account, TestIsDeadAccount};
 use runtime_io::with_externalities;
 
-// TODO: Test properly in balances
-// default_indexing_on_new_accounts_should_not_work
-// reserved_balance_should_prevent_reclaim_count
-
 #[test]
 fn indexing_lookup_should_work() {
 	with_externalities(
