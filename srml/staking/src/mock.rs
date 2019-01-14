@@ -118,7 +118,7 @@ pub fn new_test_ext(
 		validator_count: 2,
 		minimum_validator_count: 0,
 		bonding_duration: sessions_per_era * session_length * 3,
-		session_reward: Perbill::from_millionths((1000000 * reward / balance_factor) as u32),
+		session_reward: Perbill::from_millionths(((1000000 * reward / balance_factor) as u32).min(1000000)),
 		offline_slash: if monied { Perbill::from_percent(40) } else { Perbill::zero() },
 		current_session_reward: reward,
 		current_offline_slash: 20,
