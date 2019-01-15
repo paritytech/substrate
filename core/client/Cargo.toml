@@ -2,6 +2,7 @@
 name = "substrate-client"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 error-chain = { version = "0.12", optional = true }
