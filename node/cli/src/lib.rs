@@ -168,7 +168,7 @@ fn run_until_exit<T, C, E>(
 	let _telemetry = service.telemetry();
 	drop(service);
 
-	// FIXME [andre]: timeout this future #1318
+	// TODO [andre]: timeout this future #1318
 	let _ = runtime.shutdown_on_idle().wait();
 
 	Ok(())

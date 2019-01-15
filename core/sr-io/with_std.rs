@@ -37,7 +37,6 @@ use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
 use hash_db::Hasher;
 
-// FIXME: use the real error, not NoError.
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
 
