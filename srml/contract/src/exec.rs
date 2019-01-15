@@ -57,7 +57,7 @@ pub trait Ext {
 
 	/// Instantiate a contract from the given code.
 	///
-	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
+	/// The newly created account will be associated with `code`. `value` specifies the amount of value
 	/// transfered from this to the newly created account (also known as endowment).
 	fn instantiate(
 		&mut self,
