@@ -22,7 +22,7 @@ cache:
   key:                             "${CI_JOB_NAME}"
   paths:
     - ${CARGO_HOME}
-
+    - ./target
 
 .collect_artifacts:                &collect_artifacts
   artifacts:
@@ -99,17 +99,12 @@ build:rust:linux:release:          &build
 
 build:rust:doc:release:            &build
   stage:                           build
-  cache:
-    key:                           "${CI_JOB_NAME}"
-    paths:
-      - ${CARGO_HOME}
-      - ./target
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
     when:                          on_success
     expire_in:                     7 days
     paths:
-    - ./target/doc
+    - ./crate-docs
   only:
     - master
     - tags
@@ -119,6 +114,8 @@ build:rust:doc:release:            &build
     - linux-docker
   script:
     - time cargo doc --release --verbose
+    - cp -R ./target/doc ./crate-docs
+    - echo "<meta http-equiv=refresh content=0;url=foo/index.html>" > ./crate-docs/index.html
 
 
 
@@ -196,10 +193,11 @@ publish:s3:doc:
         multipart_threshold = 64MB
         multipart_chunksize = 16MB
         max_bandwidth = 50MB/s
-        use_accelerate_endpoint = true
+        use_accelerate_endpoint = false
+        addressing_style = path
       EOC
   script:
-    - aws s3 sync --delete ./target/doc/ s3://${BUCKET}/${PREFIX}/
+    - aws s3 sync --delete --size-only --only-show-errors ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
   tags:
