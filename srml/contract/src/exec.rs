@@ -82,6 +82,9 @@ pub trait Ext {
 
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
+
+	/// Returns the balance of the current contract.
+	fn balance(&self) -> BalanceOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -557,6 +560,10 @@ where
 
 	fn caller(&self) -> &T::AccountId {
 		&self.caller
+	}
+
+	fn balance(&self) -> T::Balance {
+		self.ctx.overlay.get_balance(&self.ctx.self_account)
 	}
 }
 
