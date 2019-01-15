@@ -64,7 +64,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. FIXME: replace this with block queue
+	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. FIXME #1439 : should be replaced with a queue
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
@@ -102,7 +102,6 @@ pub trait BlockBody<Block: BlockT> {
 }
 
 /// Client info
-// FIXME: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
@@ -717,7 +716,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
 		if route_from_best.common_block().hash != block {
-			// FIXME: reorganize best block to be the best chain containing
+			// FIXME: #1442 reorganize best block to be the best chain containing
 			// `block`.
 		}
 
@@ -782,7 +781,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get block status.
 	pub fn block_status(&self, id: &BlockId<Block>) -> error::Result<BlockStatus> {
-		// FIXME: more efficient implementation
+		// this can probably be implemented more efficiently
 		if let BlockId::Hash(ref h) = id {
 			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
 				return Ok(BlockStatus::Queued);
@@ -831,9 +830,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// If `maybe_max_block_number` is `Some(max_block_number)`
 	/// the search is limited to block `numbers <= max_block_number`.
 	/// in other words as if there were no blocks greater `max_block_number`.
-	/// FIXME [snd] possibly implement this on blockchain::Backend and just redirect here
+	/// TODO : we want to move this implement to `blockchain::Backend`, see [#1443](https://github.com/paritytech/substrate/issues/1443)
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
-	/// FIXME [snd] write down time complexity
+	/// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
 	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>)
 		-> error::Result<Option<Block::Hash>>
 	{
@@ -893,7 +892,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// waiting until we are <= max_number
 			if let Some(max_number) = maybe_max_number {
 				loop {
-					// FIXME [snd] this should be a panic
 					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
@@ -913,7 +911,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					return Ok(Some(best_hash));
 				}
 
-				// FIXME [snd] this should be a panic
 				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
