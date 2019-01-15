@@ -181,6 +181,7 @@ mod tests {
 	};
 	use codec::{Decode, Encode};
 
+
 	mod system {
 		pub trait Trait {
 			type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
@@ -313,6 +314,7 @@ mod tests {
 
 	impl_runtime_metadata!(
 		for TestRuntime with modules
+			system::Module,
 			event_module::Module,
 			event_module2::Module with Storage,
 	);
@@ -358,6 +360,20 @@ mod tests {
 			events: EVENTS,
 		},
 		modules: DecodeDifferent::Encode(&[
+			RuntimeModuleMetadata {
+				prefix: DecodeDifferent::Encode("system"),
+				module: DecodeDifferent::Encode(FnEncode(||
+					ModuleMetadata {
+					 name: DecodeDifferent::Encode("Module"),
+					 call: CallMetadata {
+						 name: DecodeDifferent::Encode("Call"),
+						 functions: DecodeDifferent::Encode(&[
+						 ])
+					 }
+					}
+				)),
+				storage: None,
+			},
 			RuntimeModuleMetadata {
 				prefix: DecodeDifferent::Encode("event_module"),
 				module: DecodeDifferent::Encode(FnEncode(||
@@ -429,6 +445,33 @@ mod tests {
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1 (
 		RuntimeMetadataV1 {
 		modules: DecodeDifferent::Encode(&[
+			RuntimeModuleMetadataV1 {
+				name: DecodeDifferent::Encode("Module"),
+				prefix: DecodeDifferent::Encode("system"),
+				storage: None,
+				// lost DecodeDifferent::Encode("Module"), aka module metadata name
+				call: DecodeDifferent::Encode(FnEncode(||
+					CallMetadata {
+						name: DecodeDifferent::Encode("Call"),
+						functions: DecodeDifferent::Encode(&[
+						]),
+				})),
+				outer_dispatch: DecodeDifferent::Encode(
+					FnEncodeModule("system", |_| None)
+				),
+				event: DecodeDifferent::Encode(
+					FnEncodeModule("event_module", |_|
+				 		FnEncode(||&[
+							EventMetadata {
+								name: DecodeDifferent::Encode("SystemEvent"),
+								arguments: DecodeDifferent::Encode(&[]),
+								documentation: DecodeDifferent::Encode(&[])
+							}
+				 		])
+					)
+				),
+			},
+	
 			RuntimeModuleMetadataV1 {
 				prefix: DecodeDifferent::Encode("event_module"),
 				name: DecodeDifferent::Encode("Module"),
