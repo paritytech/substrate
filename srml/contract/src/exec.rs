@@ -36,7 +36,7 @@ pub struct CallReceipt {
 	pub output_data: Vec<u8>,
 }
 
-/// An interface that provides an access to the external environment in which the
+/// An interface that provides access to the external environment in which the
 /// smart-contract is executed.
 ///
 /// This interface is specialised to an account of the executing code, so all
