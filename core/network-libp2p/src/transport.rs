@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use libp2p::{self, InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport, mplex, secio, yamux};
+use libp2p::{InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport, mplex, secio, yamux, tcp, dns};
 use libp2p::core::{self, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use std::{io, time::Duration, usize};
 
@@ -27,8 +27,11 @@ pub fn build_transport(
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
 
+	let transport = tcp::TcpConfig::new();
+	let transport = dns::DnsConfig::new(transport);
+
 	// TODO: rework the transport creation (https://github.com/libp2p/rust-libp2p/issues/783)
-	libp2p::tcp::TcpConfig::new()
+	transport
 		.with_upgrade(secio::SecioConfig::new(local_private_key))
 		.and_then(move |out, endpoint| {
 			let peer_id = out.remote_key.into_peer_id();
