@@ -40,7 +40,7 @@ use proc_macro::TokenStream;
 ///
 /// ## Example
 ///
-/// ```compile_fail
+/// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Dummy get(dummy) config(): Option<T::Balance>;
@@ -55,7 +55,7 @@ use proc_macro::TokenStream;
 /// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
 ///
 /// An optional `GenesisConfig` struct for storage initialization can be defined, either specifically as in :
-/// ```compile_fail
+/// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 	}
@@ -68,7 +68,6 @@ use proc_macro::TokenStream;
 /// ```
 /// or when at least one storage field requires default initialization (both `get` and `config` or `build`).
 /// This struct can be expose as `Config` by `decl_runtime` macro.
-	
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)
