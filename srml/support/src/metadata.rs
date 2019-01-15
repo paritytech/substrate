@@ -43,9 +43,10 @@ macro_rules! impl_runtime_metadata {
 					outer_dispatch: Self::outer_dispatch_metadata(),
 				}
 			}
-			pub fn metadata(version: usize) -> $crate::metadata::RuntimeMetadata {
+			pub fn metadata(version: u16) -> $crate::metadata::RuntimeMetadata {
+        let version = if version == 0 { $crate::metadata::RuntimeMetadataVersion::default() as u16 } else { version };
 				match version {
-					x if x == $crate::metadata::RuntimeMetadataVersion::V1 as usize =>
+					x if x == $crate::metadata::RuntimeMetadataVersion::V1 as u16 =>
 						$crate::metadata::RuntimeMetadata::V1 (
 							$crate::metadata::RuntimeMetadataV1 {
 								modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),

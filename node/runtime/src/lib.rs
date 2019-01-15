@@ -281,9 +281,8 @@ impl_runtime_apis! {
 			Runtime::metadata_old().into()
 		}
 
-		fn metadata(version: Vec<u8>) -> OpaqueMetadata {
-      let version: Option<codec::Compact<u64>> = codec::Decode::decode(&mut &version[..]);
-			Runtime::metadata(version.map(|v|v.0 as usize).unwrap_or(0)).into()
+		fn metadata(version: u16) -> OpaqueMetadata {
+			Runtime::metadata(version).into()
 		}
 	}
 

@@ -102,7 +102,7 @@ decl_runtime_apis! {
 		/// Deprecated version of metadata for runtime
 		fn metadata_old() -> OpaqueMetadata;
 		/// Returns the metadata of a runtime.
-		fn metadata(version: Vec<u8>) -> OpaqueMetadata;
+		fn metadata(version: u16) -> OpaqueMetadata;
 	}
 
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
