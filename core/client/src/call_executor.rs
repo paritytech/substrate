@@ -16,18 +16,18 @@
 
 use std::sync::Arc;
 use std::cmp::Ord;
-use codec::Encode;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Ext,
+use crate::codec::Encode;
+use crate::runtime_primitives::generic::BlockId;
+use crate::runtime_primitives::traits::Block as BlockT;
+use crate::state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
-use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
+use crate::executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
-use trie::MemoryDB;
-use primitives::{H256, Blake2Hasher};
+use crate::trie::MemoryDB;
+use crate::primitives::{H256, Blake2Hasher};
 
-use backend;
-use error;
+use crate::backend;
+use crate::error;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>

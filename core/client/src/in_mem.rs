@@ -19,21 +19,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use error;
-use backend::{self, NewBlockState};
-use light;
-use primitives::storage::well_known_keys;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
+use crate::error;
+use crate::backend::{self, NewBlockState};
+use crate::light;
+use crate::primitives::storage::well_known_keys;
+use crate::runtime_primitives::generic::BlockId;
+use crate::runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
-use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
-use blockchain::{self, BlockStatus, HeaderBackend};
-use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
-use state_machine::InMemoryChangesTrieStorage;
+use crate::runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
+use crate::blockchain::{self, BlockStatus, HeaderBackend};
+use crate::state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
+use crate::state_machine::InMemoryChangesTrieStorage;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use leaves::LeafSet;
-use trie::MemoryDB;
+use crate::leaves::LeafSet;
+use crate::trie::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -166,7 +166,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) -> ::error::Result<()> {
+	) -> crate::error::Result<()> {
 		let number = header.number().clone();
 		let best_tree_route = match new_state.is_best() {
 			false => None,
@@ -175,7 +175,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				if &best_hash == header.parent_hash() {
 					None
 				} else {
-					let route = ::blockchain::tree_route(
+					let route = crate::blockchain::tree_route(
 						self,
 						BlockId::Hash(best_hash),
 						BlockId::Hash(*header.parent_hash()),
@@ -664,8 +664,8 @@ pub fn cache_authorities_at<Block: BlockT>(
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use test_client;
-	use primitives::Blake2Hasher;
+	use crate::test_client;
+	use crate::primitives::Blake2Hasher;
 
 	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, Blake2Hasher>;
 

@@ -16,7 +16,7 @@
 
 //! Tool for creating the genesis block.
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
+use crate::runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
@@ -40,20 +40,20 @@ pub fn construct_genesis_block<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Encode, Decode, Joiner};
-	use keyring::Keyring;
-	use executor::NativeExecutionDispatch;
-	use state_machine::{execute, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
-	use state_machine::backend::InMemory;
-	use test_client;
-	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
-	use runtime_primitives::traits::BlakeTwo256;
-	use primitives::{Blake2Hasher, ed25519::{Public, Pair}};
+	use crate::codec::{Encode, Decode, Joiner};
+	use crate::keyring::Keyring;
+	use crate::executor::NativeExecutionDispatch;
+	use crate::state_machine::{execute, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
+	use crate::state_machine::backend::InMemory;
+	use crate::test_client;
+	use crate::test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+	use crate::test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
+	use crate::runtime_primitives::traits::BlakeTwo256;
+	use crate::primitives::{Blake2Hasher, ed25519::{Public, Pair}};
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
-	fn executor() -> ::executor::NativeExecutor<Executor> {
+	fn executor() -> crate::executor::NativeExecutor<Executor> {
 		NativeExecutionDispatch::new()
 	}
 
@@ -64,7 +64,7 @@ mod tests {
 		state_root: Hash,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
-		use trie::ordered_trie_root;
+		use crate::trie::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
 			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.to_fixed_bytes())).unwrap())

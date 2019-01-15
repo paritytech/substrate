@@ -17,38 +17,38 @@
 //! Substrate Client
 
 use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
-use error::Error;
+use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
-use runtime_primitives::{
+use crate::runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
-use runtime_primitives::traits::{
+use crate::consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
+use crate::runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
-use runtime_primitives::BuildStorage;
-use runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
-use primitives::storage::{StorageKey, StorageData};
-use primitives::storage::well_known_keys;
-use codec::Decode;
-use state_machine::{
+use crate::runtime_primitives::BuildStorage;
+use crate::runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
+use crate::primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
+use crate::primitives::storage::{StorageKey, StorageData};
+use crate::primitives::storage::well_known_keys;
+use crate::codec::Decode;
+use crate::state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges
 };
 
-use backend::{self, BlockImportOperation};
-use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
-use call_executor::{CallExecutor, LocalCallExecutor};
-use executor::{RuntimeVersion, RuntimeInfo};
-use notifications::{StorageNotifications, StorageEventStream};
-use light::{call_executor::prove_execution, fetcher::ChangesProof};
-use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
+use crate::backend::{self, BlockImportOperation};
+use crate::blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
+use crate::call_executor::{CallExecutor, LocalCallExecutor};
+use crate::executor::{RuntimeVersion, RuntimeInfo};
+use crate::notifications::{StorageNotifications, StorageEventStream};
+use crate::light::{call_executor::prove_execution, fetcher::ChangesProof};
+use crate::{cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -236,7 +236,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				genesis_block.deconstruct().0,
 				Some(vec![]),
 				None,
-				::backend::NewBlockState::Final
+				crate::backend::NewBlockState::Final
 			)?;
 			backend.commit_operation(op)?;
 		}
@@ -581,7 +581,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let mut r = self.executor.call_at_state(
+				let r = self.executor.call_at_state(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
@@ -618,11 +618,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			ForkChoiceStrategy::Custom(v) => v,
 		};
 		let leaf_state = if finalized {
-			::backend::NewBlockState::Final
+			crate::backend::NewBlockState::Final
 		} else if is_new_best {
-			::backend::NewBlockState::Best
+			crate::backend::NewBlockState::Best
 		} else {
-			::backend::NewBlockState::Normal
+			crate::backend::NewBlockState::Normal
 		};
 
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
@@ -695,7 +695,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 
 		if block == last_finalized { return Ok(()) }
-		let route_from_finalized = ::blockchain::tree_route(
+		let route_from_finalized = crate::blockchain::tree_route(
 			self.backend.blockchain(),
 			BlockId::Hash(last_finalized),
 			BlockId::Hash(block),
@@ -708,7 +708,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			bail!(error::ErrorKind::NotInFinalizedChain);
 		}
 
-		let route_from_best = ::blockchain::tree_route(
+		let route_from_best = crate::blockchain::tree_route(
 			self.backend.blockchain(),
 			BlockId::Hash(best_block),
 			BlockId::Hash(block),
@@ -1039,7 +1039,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		import_block: ImportBlock<Block>,
 		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	) -> Result<ImportResult, Self::Error> {
-		use runtime_primitives::traits::Digest;
+		use crate::runtime_primitives::traits::Digest;
 
 		let ImportBlock {
 			origin,
@@ -1198,26 +1198,26 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
 	>(&self, insert: I, delete: D) -> error::Result<()> {
-		::backend::AuxStore::insert_aux(&*self.backend, insert, delete)
+		crate::backend::AuxStore::insert_aux(&*self.backend, insert, delete)
 	}
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
-		::backend::AuxStore::get_aux(&*self.backend, key)
+		crate::backend::AuxStore::get_aux(&*self.backend, key)
 	}
 }
 #[cfg(test)]
 pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
-	use keyring::Keyring;
-	use primitives::twox_128;
-	use runtime_primitives::traits::DigestItem as DigestItemT;
-	use runtime_primitives::generic::DigestItem;
-	use test_client::{self, TestClient};
-	use consensus::BlockOrigin;
-	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
-	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
+	use crate::keyring::Keyring;
+	use crate::primitives::twox_128;
+	use crate::runtime_primitives::traits::DigestItem as DigestItemT;
+	use crate::runtime_primitives::generic::DigestItem;
+	use crate::test_client::{self, TestClient};
+	use crate::consensus::BlockOrigin;
+	use crate::test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
+	use crate::test_client::BlockBuilderExt;
+	use crate::test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -1469,7 +1469,7 @@ pub(crate) mod tests {
 		// NOTE: we use the version of the trait from `test_client`
 		// because that is actually different than the version linked to
 		// in the test facade crate.
-		use test_client::blockchain::Backend as BlockchainBackendT;
+		use crate::test_client::blockchain::Backend as BlockchainBackendT;
 
 		// block tree:
 		// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -1716,7 +1716,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn import_with_justification() {
-		use test_client::blockchain::Backend;
+		use crate::test_client::blockchain::Backend;
 
 		let client = test_client::new();
 

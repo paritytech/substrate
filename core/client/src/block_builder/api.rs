@@ -16,8 +16,8 @@
 
 //! The runtime api for building blocks.
 
-use runtime_primitives::{traits::Block as BlockT, ApplyResult, CheckInherentError};
-use rstd::vec::Vec;
+use crate::runtime_primitives::{traits::Block as BlockT, ApplyResult, CheckInherentError};
+use crate::rstd::vec::Vec;
 
 decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.

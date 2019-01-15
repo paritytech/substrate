@@ -23,17 +23,17 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
-use primitives::{H256, Blake2Hasher};
-use runtime_primitives::BuildStorage;
-use runtime_primitives::traits::Block as BlockT;
-use state_machine::{CodeExecutor, ExecutionStrategy};
+use crate::primitives::{H256, Blake2Hasher};
+use crate::runtime_primitives::BuildStorage;
+use crate::runtime_primitives::traits::Block as BlockT;
+use crate::state_machine::{CodeExecutor, ExecutionStrategy};
 
-use client::Client;
-use error::Result as ClientResult;
-use light::backend::Backend;
-use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::call_executor::RemoteCallExecutor;
-use light::fetcher::{Fetcher, LightDataChecker};
+use crate::client::Client;
+use crate::error::Result as ClientResult;
+use crate::light::backend::Backend;
+use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::call_executor::RemoteCallExecutor;
+use crate::light::fetcher::{Fetcher, LightDataChecker};
 use hash_db::Hasher;
 
 /// Create an instance of light client blockchain backend.

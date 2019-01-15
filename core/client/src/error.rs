@@ -19,9 +19,9 @@
 #![allow(missing_docs)]
 
 use std;
-use state_machine;
-use runtime_primitives::ApplyError;
-use consensus;
+use crate::state_machine;
+use crate::runtime_primitives::ApplyError;
+use crate::consensus;
 
 error_chain! {
 	links {

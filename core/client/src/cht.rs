@@ -27,15 +27,15 @@ use std::collections::HashSet;
 
 use hash_db;
 use heapsize::HeapSizeOf;
-use trie;
+use crate::trie;
 
-use primitives::{H256, convert_hash};
-use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
-use state_machine::backend::InMemory as InMemoryState;
-use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
+use crate::primitives::{H256, convert_hash};
+use crate::runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
+use crate::state_machine::backend::InMemory as InMemoryState;
+use crate::state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 
 /// The size of each CHT. This value is passed to every CHT-related function from
 /// production code. Other values are passed from tests.
@@ -306,8 +306,8 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 
 #[cfg(test)]
 mod tests {
-	use primitives::{Blake2Hasher};
-	use test_client::runtime::Header;
+	use crate::primitives::{Blake2Hasher};
+	use crate::test_client::runtime::Header;
 	use super::*;
 
 	#[test]

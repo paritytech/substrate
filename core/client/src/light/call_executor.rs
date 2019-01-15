@@ -22,22 +22,22 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
 
-use codec::Encode;
-use primitives::{H256, Blake2Hasher, convert_hash};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
-use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
+use crate::codec::Encode;
+use crate::primitives::{H256, Blake2Hasher, convert_hash};
+use crate::runtime_primitives::generic::BlockId;
+use crate::runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
+use crate::state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager};
 use hash_db::Hasher;
 
-use blockchain::Backend as ChainBackend;
-use call_executor::CallExecutor;
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::fetcher::{Fetcher, RemoteCallRequest};
-use executor::{RuntimeVersion, NativeVersion};
-use codec::Decode;
+use crate::blockchain::Backend as ChainBackend;
+use crate::call_executor::CallExecutor;
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::fetcher::{Fetcher, RemoteCallRequest};
+use crate::executor::{RuntimeVersion, NativeVersion};
+use crate::codec::Decode;
 use heapsize::HeapSizeOf;
-use trie::MemoryDB;
+use crate::trie::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -231,9 +231,9 @@ pub fn check_execution_proof<Header, E, H>(
 
 #[cfg(test)]
 mod tests {
-	use consensus::BlockOrigin;
-	use test_client::{self, runtime::{Block, Header}, runtime::RuntimeApi, TestClient};
-	use executor::NativeExecutionDispatch;
+	use crate::consensus::BlockOrigin;
+	use crate::test_client::{self, runtime::{Block, Header}, runtime::RuntimeApi, TestClient};
+	use crate::executor::NativeExecutionDispatch;
 	use super::*;
 
 	#[test]
