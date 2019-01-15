@@ -230,7 +230,7 @@ impl_runtime_apis! {
 			unimplemented!()
 		}
 
-		fn metadata() -> OpaqueMetadata {
+		fn metadata(_version: Vec<u8>) -> OpaqueMetadata {
 			unimplemented!()
 		}
 	}

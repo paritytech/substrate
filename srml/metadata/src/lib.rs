@@ -206,12 +206,12 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 /// Newtype wrapper for accessing function
 #[derive(Clone,Eq)]
 pub struct FnEncodeModule<E>(pub &'static str, pub fn(&'static str) -> E) 
-  where E: Encode + 'static;
+	where E: Encode + 'static;
 
 impl<E: Encode> FnEncodeModule<E> {
-  fn exec(&self) -> E {
-    self.1(self.0)
-  }
+	fn exec(&self) -> E {
+		self.1(self.0)
+	}
 }
 
 impl<E: Encode> Encode for FnEncodeModule<E> {
@@ -396,7 +396,22 @@ pub struct RuntimeMetadataOld {
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum RuntimeMetadata {
+	None,
 	V1(RuntimeMetadataV1),
+}
+
+/// Version only runtime metadata enum.
+#[derive(Eq,PartialEq)]
+pub enum RuntimeMetadataVersion {
+	None = 0,
+	V1 = 1,
+}
+
+/// used as latest
+impl Default for RuntimeMetadataVersion {
+	fn default() -> Self {
+		RuntimeMetadataVersion::V1
+	}
 }
 
 /// The metadata of a runtime version 1.

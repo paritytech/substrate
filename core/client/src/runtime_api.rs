@@ -36,7 +36,6 @@ use error;
 use rstd::vec::Vec;
 use primitives::OpaqueMetadata;
 
-
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
 pub trait ConstructRuntimeApi<Block: BlockT> {
@@ -100,10 +99,10 @@ decl_runtime_apis! {
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
 	pub trait Metadata {
-    /// Deprecated version of metadata for runtime
+		/// Deprecated version of metadata for runtime
 		fn metadata_old() -> OpaqueMetadata;
 		/// Returns the metadata of a runtime.
-		fn metadata() -> OpaqueMetadata;
+		fn metadata(version: Vec<u8>) -> OpaqueMetadata;
 	}
 
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.

@@ -16,7 +16,7 @@
 
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, FnEncodeModule, RuntimeMetadataOld, RuntimeMetadata,
-	RuntimeModuleMetadata, RuntimeMetadataV1,
+	RuntimeModuleMetadata, RuntimeMetadataV1, RuntimeMetadataVersion,
 	DefaultByteGetter,
 	RuntimeModuleMetadataV1,
 };
@@ -43,12 +43,16 @@ macro_rules! impl_runtime_metadata {
 					outer_dispatch: Self::outer_dispatch_metadata(),
 				}
 			}
-			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
-				$crate::metadata::RuntimeMetadata::V1 (
-					$crate::metadata::RuntimeMetadataV1 {
-						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
-					}
-				)
+			pub fn metadata(version: usize) -> $crate::metadata::RuntimeMetadata {
+				match version {
+					x if x == $crate::metadata::RuntimeMetadataVersion::V1 as usize =>
+						$crate::metadata::RuntimeMetadata::V1 (
+							$crate::metadata::RuntimeMetadataV1 {
+								modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+							}
+						),
+					_ => $crate::metadata::RuntimeMetadata::None,
+				}
 			}
 		}
 	}
@@ -572,7 +576,7 @@ mod tests {
 
 	#[test]
 	fn runtime_metadata() {
-		let metadata_encoded = TestRuntime::metadata().encode();
+		let metadata_encoded = TestRuntime::metadata(0).encode();
 		let metadata_decoded = RuntimeMetadata::decode(&mut &metadata_encoded[..]);
 
 		assert_eq!(EXPECTED_METADATA, metadata_decoded.unwrap());
