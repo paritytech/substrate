@@ -157,7 +157,7 @@ decl_module! {
 
 		/// Updates the schedule for metering contracts.
 		///
-		/// The schedule should have a greater version than the stored schedule.
+		/// The schedule must have a greater version than the stored schedule.
 		fn update_schedule(schedule: Schedule<T::Gas>) -> Result {
 			if <Module<T>>::current_schedule().version >= schedule.version {
 				return Err("new schedule must have a greater version than current");
