@@ -22,6 +22,7 @@ use std;
 use crate::state_machine;
 use crate::runtime_primitives::ApplyError;
 use crate::consensus;
+use error_chain::*;
 
 error_chain! {
 	links {

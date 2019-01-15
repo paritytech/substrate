@@ -35,7 +35,7 @@ pub use crate::codec::{Encode, Decode};
 use crate::error;
 use crate::rstd::vec::Vec;
 use crate::primitives::OpaqueMetadata;
-
+use sr_api_macros::decl_runtime_apis;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]

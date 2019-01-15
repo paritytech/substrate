@@ -20,58 +20,19 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-#[cfg(feature = "std")]
-extern crate substrate_trie as trie;
-extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate sr_primitives as runtime_primitives;
-#[cfg(feature = "std")]
-extern crate substrate_state_machine as state_machine;
-#[cfg(feature = "std")]
-extern crate substrate_consensus_common as consensus;
-extern crate sr_version as runtime_version;
-extern crate sr_std as rstd;
-#[macro_use]
-extern crate sr_api_macros;
+use substrate_trie as trie;
+use parity_codec as codec;
+use substrate_primitives as primitives;
+use sr_primitives as runtime_primitives;
+use substrate_state_machine as state_machine;
+use substrate_consensus_common as consensus;
+use sr_version as runtime_version;
+use sr_std as rstd;
 #[cfg(test)]
-extern crate substrate_keyring as keyring;
+use substrate_keyring as keyring;
 #[cfg(test)]
-extern crate substrate_test_client as test_client;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate substrate_telemetry;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
-
-#[cfg(feature = "std")]
-extern crate fnv;
-#[cfg(feature = "std")]
-extern crate futures;
-#[cfg(feature = "std")]
-extern crate parking_lot;
-#[cfg(feature = "std")]
-extern crate hash_db;
-#[cfg(feature = "std")]
-extern crate heapsize;
-#[cfg(feature = "std")]
-extern crate kvdb;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate error_chain;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate log;
-#[cfg(feature = "std")]
-#[cfg_attr(test, macro_use)]
-extern crate substrate_executor as executor;
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-#[cfg(feature = "std")]
-#[cfg(test)]
-extern crate kvdb_memorydb;
+use substrate_test_client as test_client;
+use substrate_executor as executor;
 
 #[macro_use]
 pub mod runtime_api;
