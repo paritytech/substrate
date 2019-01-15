@@ -84,7 +84,12 @@ pub trait Ext {
 	fn address(&self) -> &AccountIdOf<Self::T>;
 
 	/// Returns the balance of the current contract.
+	///
+	/// The `value_transferred` is already added.
 	fn balance(&self) -> BalanceOf<Self::T>;
+
+	/// Returns the value transfered along with this call or as endowment.
+	fn value_transferred(&self) -> BalanceOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -295,6 +300,7 @@ where
 						&mut CallContext {
 							ctx: &mut nested,
 							caller: self.self_account.clone(),
+							value_transferred: value,
 						},
 						input_data,
 						empty_output_buf,
@@ -364,6 +370,7 @@ where
 					&mut CallContext {
 						ctx: &mut nested,
 						caller: self.self_account.clone(),
+						value_transferred: endowment,
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -512,6 +519,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	ctx: &'a mut ExecutionContext<'b, T, V, L>,
 	caller: T::AccountId,
+	value_transferred: T::Balance,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -564,6 +572,10 @@ where
 
 	fn balance(&self) -> T::Balance {
 		self.ctx.overlay.get_balance(&self.ctx.self_account)
+	}
+
+	fn value_transferred(&self) -> T::Balance {
+		self.value_transferred
 	}
 }
 

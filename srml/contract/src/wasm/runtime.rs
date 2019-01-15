@@ -471,6 +471,14 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Stores the value transferred along with this call or as endowment into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_value_transferred(ctx) => {
+		ctx.scratch_buf = ctx.ext.value_transferred().encode();
+		Ok(())
+	},
+
 	// Returns the size of the input buffer.
 	ext_input_size(ctx) -> u32 => {
 		Ok(ctx.input_data.len() as u32)

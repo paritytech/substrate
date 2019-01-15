@@ -257,6 +257,9 @@ mod tests {
 		fn balance(&self) -> u64 {
 			228
 		}
+		fn value_transferred(&self) -> u64 {
+			1337
+		}
 	}
 
 	fn execute<E: Ext>(
@@ -689,29 +692,6 @@ mod tests {
 		.unwrap();
 	}
 
-	const CODE_RETURN_FROM_START_FN: &str = r#"
-(module
-	(import "env" "ext_return" (func $ext_return (param i32 i32)))
-	(import "env" "memory" (memory 1 1))
-
-	(start $start)
-	(func $start
-		(call $ext_return
-			(i32.const 8)
-			(i32.const 4)
-		)
-		(unreachable)
-	)
-
-	(func (export "call")
-		(unreachable)
-	)
-	(func (export "deploy"))
-
-	(data (i32.const 8) "\01\02\03\04")
-)
-"#;
-
 	const CODE_BALANCE: &str = r#"
 (module
 	(import "env" "ext_balance" (func $ext_balance))
@@ -898,6 +878,94 @@ mod tests {
 		)
 		.unwrap();
 	}
+
+	const CODE_VALUE_TRANSFERRED: &str = r#"
+(module
+	(import "env" "ext_value_transferred" (func $ext_value_transferred))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the value transferred in the scratch buffer
+		(call $ext_value_transferred)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 1337.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 1337)
+			)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn value_transferred() {
+		let mut mock_ext = MockExt::default();
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		execute(
+			CODE_VALUE_TRANSFERRED,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut gas_meter,
+		)
+		.unwrap();
+	}
+
+
+	const CODE_RETURN_FROM_START_FN: &str = r#"
+(module
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(start $start)
+	(func $start
+		(call $ext_return
+			(i32.const 8)
+			(i32.const 4)
+		)
+		(unreachable)
+	)
+
+	(func (export "call")
+		(unreachable)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\01\02\03\04")
+)
+"#;
+
 
 	#[test]
 	fn return_from_start_fn() {
