@@ -32,10 +32,10 @@ pub use rstd::{slice, mem};
 use rstd::result;
 pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
-use error;
+use crate::error;
 use rstd::vec::Vec;
 use primitives::OpaqueMetadata;
-
+use sr_api_macros::decl_runtime_apis;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]

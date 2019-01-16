@@ -16,7 +16,7 @@
 
 //! Substrate Client data backend
 
-use error;
+use crate::error;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
@@ -109,7 +109,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H>;
 	/// Associated blockchain backend type.
-	type Blockchain: ::blockchain::Backend<Block>;
+	type Blockchain: crate::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H>;
 	/// Changes trie storage.
