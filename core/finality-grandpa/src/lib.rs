@@ -1138,6 +1138,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 {
+
+	/// Import a block justification and finalize the block.
+	///
+	/// If `enacts_change` is set to true, then finalizing this block *must*
+	/// enact an authority set change, the function will panic otherwise.
 	fn import_justification(
 		&self,
 		hash: Block::Hash,
