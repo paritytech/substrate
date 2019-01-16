@@ -23,8 +23,8 @@ use std::{
 
 use fnv::{FnvHashSet, FnvHashMap};
 use futures::sync::mpsc;
-use crate::primitives::storage::{StorageKey, StorageData};
-use crate::runtime_primitives::traits::Block as BlockT;
+use primitives::storage::{StorageKey, StorageData};
+use runtime_primitives::traits::Block as BlockT;
 
 /// Storage change set
 #[derive(Debug)]

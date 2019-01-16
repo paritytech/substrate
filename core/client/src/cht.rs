@@ -27,12 +27,12 @@ use std::collections::HashSet;
 
 use hash_db;
 use heapsize::HeapSizeOf;
-use crate::trie;
+use trie;
 
-use crate::primitives::{H256, convert_hash};
-use crate::runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
-use crate::state_machine::backend::InMemory as InMemoryState;
-use crate::state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
+use primitives::{H256, convert_hash};
+use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
+use state_machine::backend::InMemory as InMemoryState;
+use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
 	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
 use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};

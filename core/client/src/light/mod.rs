@@ -23,10 +23,10 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
-use crate::primitives::{H256, Blake2Hasher};
-use crate::runtime_primitives::BuildStorage;
-use crate::runtime_primitives::traits::Block as BlockT;
-use crate::state_machine::{CodeExecutor, ExecutionStrategy};
+use primitives::{H256, Blake2Hasher};
+use runtime_primitives::BuildStorage;
+use runtime_primitives::traits::Block as BlockT;
+use state_machine::{CodeExecutor, ExecutionStrategy};
 
 use crate::client::Client;
 use crate::error::Result as ClientResult;

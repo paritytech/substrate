@@ -21,8 +21,8 @@ use std::sync::Weak;
 use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
-use crate::runtime_primitives::{Justification, generic::BlockId};
-use crate::runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
+use runtime_primitives::{Justification, generic::BlockId};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
 use crate::backend::{AuxStore, NewBlockState};
 use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,

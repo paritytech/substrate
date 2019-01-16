@@ -17,16 +17,16 @@
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use std::marker::PhantomData;
-use crate::codec::Encode;
+use codec::Encode;
 use crate::blockchain::HeaderBackend;
-use crate::runtime_primitives::traits::{
+use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
 };
-use crate::primitives::H256;
-use crate::runtime_primitives::generic::BlockId;
+use primitives::H256;
+use runtime_primitives::generic::BlockId;
 use crate::runtime_api::Core;
 use crate::error;
-use crate::runtime_primitives::ApplyOutcome;
+use runtime_primitives::ApplyOutcome;
 
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.

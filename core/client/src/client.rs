@@ -20,22 +20,22 @@ use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
-use crate::runtime_primitives::{
+use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
-use crate::consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
-use crate::runtime_primitives::traits::{
+use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
+use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
-use crate::runtime_primitives::BuildStorage;
+use runtime_primitives::BuildStorage;
 use crate::runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
-use crate::primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
-use crate::primitives::storage::{StorageKey, StorageData};
-use crate::primitives::storage::well_known_keys;
-use crate::codec::Decode;
-use crate::state_machine::{
+use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
+use primitives::storage::{StorageKey, StorageData};
+use primitives::storage::well_known_keys;
+use codec::Decode;
+use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
@@ -45,10 +45,15 @@ use crate::state_machine::{
 use crate::backend::{self, BlockImportOperation};
 use crate::blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use crate::call_executor::{CallExecutor, LocalCallExecutor};
-use crate::executor::{RuntimeVersion, RuntimeInfo};
+use executor::{RuntimeVersion, RuntimeInfo};
 use crate::notifications::{StorageNotifications, StorageEventStream};
 use crate::light::{call_executor::prove_execution, fetcher::ChangesProof};
-use crate::{cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
+use crate::cht;
+use crate::error;
+use crate::in_mem;
+use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
+use crate::genesis;
+use consensus;
 use substrate_telemetry::telemetry;
 
 use slog::slog_info;
@@ -1044,7 +1049,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		import_block: ImportBlock<Block>,
 		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	) -> Result<ImportResult, Self::Error> {
-		use crate::runtime_primitives::traits::Digest;
+		use runtime_primitives::traits::Digest;
 
 		let ImportBlock {
 			origin,

@@ -20,20 +20,6 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-use substrate_trie as trie;
-use parity_codec as codec;
-use substrate_primitives as primitives;
-use sr_primitives as runtime_primitives;
-use substrate_state_machine as state_machine;
-use substrate_consensus_common as consensus;
-use sr_version as runtime_version;
-use sr_std as rstd;
-#[cfg(test)]
-use substrate_keyring as keyring;
-#[cfg(test)]
-use substrate_test_client as test_client;
-use substrate_executor as executor;
-
 #[macro_use]
 pub mod runtime_api;
 #[cfg(feature = "std")]
@@ -74,7 +60,7 @@ pub use crate::client::{
 #[cfg(feature = "std")]
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};
 #[cfg(feature = "std")]
-pub use crate::state_machine::ExecutionStrategy;
+pub use state_machine::ExecutionStrategy;
 #[cfg(feature = "std")]
 pub use crate::leaves::LeafSet;
 

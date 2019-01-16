@@ -22,11 +22,11 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
 
-use crate::codec::Encode;
-use crate::primitives::{H256, Blake2Hasher, convert_hash};
-use crate::runtime_primitives::generic::BlockId;
-use crate::runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
-use crate::state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
+use codec::{Encode, Decode};
+use primitives::{H256, Blake2Hasher, convert_hash};
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
+use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager};
 use hash_db::Hasher;
 
@@ -34,10 +34,9 @@ use crate::blockchain::Backend as ChainBackend;
 use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteCallRequest};
-use crate::executor::{RuntimeVersion, NativeVersion};
-use crate::codec::Decode;
+use executor::{RuntimeVersion, NativeVersion};
 use heapsize::HeapSizeOf;
-use crate::trie::MemoryDB;
+use trie::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.

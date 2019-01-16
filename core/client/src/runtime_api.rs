@@ -18,23 +18,23 @@
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use crate::state_machine::OverlayedChanges;
+pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
-pub use crate::runtime_primitives::{
+pub use runtime_primitives::{
 	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
 	generic::BlockId, transaction_validity::TransactionValidity
 };
 #[doc(hidden)]
-pub use crate::runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
+pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 #[doc(hidden)]
-pub use crate::rstd::{slice, mem};
+pub use rstd::{slice, mem};
 #[cfg(feature = "std")]
-use crate::rstd::result;
-pub use crate::codec::{Encode, Decode};
+use rstd::result;
+pub use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use crate::error;
-use crate::rstd::vec::Vec;
-use crate::primitives::OpaqueMetadata;
+use rstd::vec::Vec;
+use primitives::OpaqueMetadata;
 use sr_api_macros::decl_runtime_apis;
 
 /// Something that can be constructed to a runtime api.

@@ -17,12 +17,12 @@
 //! Substrate Client data backend
 
 use crate::error;
-use crate::runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use crate::runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
-use crate::state_machine::backend::Backend as StateBackend;
-use crate::state_machine::ChangesTrieStorage as StateChangesTrieStorage;
+use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
+use state_machine::backend::Backend as StateBackend;
+use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use hash_db::Hasher;
-use crate::trie::MemoryDB;
+use trie::MemoryDB;
 
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

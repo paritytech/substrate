@@ -23,9 +23,9 @@ use futures::IntoFuture;
 
 use hash_db::{HashDB, Hasher};
 use heapsize::HeapSizeOf;
-use crate::primitives::{ChangesTrieConfiguration, convert_hash};
-use crate::runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
-use crate::state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
+use primitives::{ChangesTrieConfiguration, convert_hash};
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
+use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
 
 use crate::cht;

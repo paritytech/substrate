@@ -21,9 +21,9 @@ use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
-use crate::runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use crate::state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
-use crate::runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor};
+use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
+use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor};
 
 use crate::in_mem;
 use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
@@ -32,7 +32,7 @@ use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
-use crate::trie::MemoryDB;
+use trie::MemoryDB;
 use heapsize::HeapSizeOf;
 
 /// Light client backend.

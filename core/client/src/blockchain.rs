@@ -16,9 +16,9 @@
 
 //! Substrate blockchain trait
 
-use crate::runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor};
-use crate::runtime_primitives::generic::BlockId;
-use crate::runtime_primitives::Justification;
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::Justification;
 
 use crate::error::{ErrorKind, Result};
 
@@ -191,7 +191,7 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 	from: BlockId<Block>,
 	to: BlockId<Block>,
 ) -> Result<TreeRoute<Block>> {
-	use crate::runtime_primitives::traits::Header;
+	use runtime_primitives::traits::Header;
 
 	let load_header = |id: BlockId<Block>| {
 		match backend.header(id) {

@@ -22,18 +22,18 @@ use parking_lot::RwLock;
 use crate::error;
 use crate::backend::{self, NewBlockState};
 use crate::light;
-use crate::primitives::storage::well_known_keys;
-use crate::runtime_primitives::generic::BlockId;
-use crate::runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
+use primitives::storage::well_known_keys;
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
-use crate::runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
+use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
 use crate::blockchain::{self, BlockStatus, HeaderBackend};
-use crate::state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
-use crate::state_machine::InMemoryChangesTrieStorage;
+use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
+use state_machine::InMemoryChangesTrieStorage;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use crate::leaves::LeafSet;
-use crate::trie::MemoryDB;
+use trie::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
