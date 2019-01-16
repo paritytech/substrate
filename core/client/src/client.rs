@@ -685,7 +685,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			transaction.update_changes_trie(changes_update)?;
 		}
 
-		transaction.set_aux(aux)?;
+		transaction.insert_aux(aux)?;
 		self.backend.commit_operation(transaction)?;
 
 		if make_notifications {

@@ -413,7 +413,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
-	aux: Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 }
 
 impl<Block, H> backend::BlockImportOperation<Block, H> for BlockImportOperation<Block, H>
@@ -485,10 +485,10 @@ where
 		Ok(root)
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux = Some(ops.into_iter().collect());
+		self.aux.append(&mut ops.into_iter().collect());
 		Ok(())
 	}
 
@@ -569,7 +569,7 @@ where
 			old_state: state,
 			new_state: None,
 			changes_trie_update: None,
-			aux: None,
+			aux: Default::default(),
 		})
 	}
 
@@ -598,8 +598,8 @@ where
 			}
 		}
 
-		if let Some(ops) = operation.aux {
-			self.blockchain.write_aux(ops);
+		if !operation.aux.is_empty() {
+			self.blockchain.write_aux(operation.aux);
 		}
 		Ok(())
 	}

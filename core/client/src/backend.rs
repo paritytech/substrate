@@ -76,8 +76,8 @@ pub trait BlockImportOperation<Block, H> where
 	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
-	/// Update auxiliary keys. Values are `None` if should be deleted.
-	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+	/// Insert auxiliary keys. Values are `None` if should be deleted.
+	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 }
 

@@ -363,10 +363,10 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> Result<(), client::error::Error>
+	fn insert_aux<I>(&mut self, ops: I) -> Result<(), client::error::Error>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux_ops = ops.into_iter().collect();
+		self.aux_ops.append(&mut ops.into_iter().collect());
 		Ok(())
 	}
 

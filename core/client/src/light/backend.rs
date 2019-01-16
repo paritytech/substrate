@@ -203,10 +203,10 @@ where
 		op.reset_storage(top, children)
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> ClientResult<()>
+	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux_ops = ops.into_iter().collect();
+		self.aux_ops.append(&mut ops.into_iter().collect());
 		Ok(())
 	}
 
