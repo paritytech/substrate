@@ -15,10 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 use fnv::FnvHashMap;
-use parking_lot::Mutex;
-use libp2p::{Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, identify::IdentifyTopology, multihash::Multihash};
+use libp2p::core::{PublicKey, swarm::ConnectedPoint, topology::DisconnectReason, topology::Topology};
+use libp2p::kad::{KBucketsPeerId, KadConnectionType, KademliaTopology};
 use serde_json;
-use std::{cmp, fs};
+use std::{cmp, fs, iter, vec};
 use std::io::{Read, Cursor, Error as IoError, ErrorKind as IoErrorKind, Write, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -46,8 +47,6 @@ const KADEMLIA_DISCOVERY_EXPIRATION: Duration = Duration::from_secs(2 * 3600);
 const EXPIRATION_PUSH_BACK_CONNEC: Duration = Duration::from_secs(2 * 3600);
 /// Initial score that a bootstrap node receives when registered.
 const BOOTSTRAP_NODE_SCORE: u32 = 100;
-/// Score modifier to apply on a peer that has been determined to be useless.
-const USELESS_PEER_SCORE_CHANGE: i32 = -9;
 /// Time to live of a boostrap node. This only applies if you start the node later *without*
 /// that bootstrap node configured anymore.
 const BOOTSTRAP_NODE_EXPIRATION: Duration = Duration::from_secs(24 * 3600);
@@ -63,15 +62,16 @@ const MAX_BACKOFF: Duration = Duration::from_secs(30 * 60);
 /// Stores information about the topology of the network.
 #[derive(Debug)]
 pub struct NetTopology {
+	/// The actual storage. Never contains a key for `local_peer_id`.
 	store: FnvHashMap<PeerId, PeerInfo>,
+	/// Optional path to the file that caches the serialized version of `store`.
 	cache_path: Option<PathBuf>,
-}
-
-impl Default for NetTopology {
-	#[inline]
-	fn default() -> NetTopology {
-		NetTopology::memory()
-	}
+	/// Public key of the local node.
+	local_public_key: PublicKey,
+	/// PeerId of the local node. Derived from `local_public_key`.
+	local_peer_id: PeerId,
+	/// Known addresses for the local node to report to the network.
+	external_addresses: Vec<Multiaddr>,
 }
 
 impl NetTopology {
@@ -79,10 +79,14 @@ impl NetTopology {
 	///
 	/// `flush_to_disk()` will be a no-op.
 	#[inline]
-	pub fn memory() -> NetTopology {
+	pub fn memory(local_public_key: PublicKey) -> NetTopology {
+		let local_peer_id = local_public_key.clone().into_peer_id();
 		NetTopology {
 			store: Default::default(),
 			cache_path: None,
+			local_peer_id,
+			local_public_key,
+			external_addresses: Vec::new(),
 		}
 	}
 
@@ -92,19 +96,24 @@ impl NetTopology {
 	/// or contains garbage data, the execution still continues.
 	///
 	/// Calling `flush_to_disk()` in the future writes to the given path.
-	pub fn from_file<P: AsRef<Path>>(path: P) -> NetTopology {
+	pub fn from_file<P: AsRef<Path>>(local_public_key: PublicKey, path: P) -> NetTopology {
 		let path = path.as_ref();
+		let local_peer_id = local_public_key.clone().into_peer_id();
 		debug!(target: "sub-libp2p", "Initializing peer store for JSON file {:?}", path);
+		let store = try_load(path, &local_peer_id);
 		NetTopology {
-			store: try_load(path),
+			store,
 			cache_path: Some(path.to_owned()),
+			local_peer_id,
+			local_public_key,
+			external_addresses: Vec::new(),
 		}
 	}
 
 	/// Writes the topology into the path passed to `from_file`.
 	///
 	/// No-op if the object was created with `memory()`.
-	pub fn flush_to_disk(&self) -> Result<(), IoError> {
+	pub fn flush_to_disk(&mut self) -> Result<(), IoError> {
 		let path = match self.cache_path {
 			Some(ref p) => p,
 			None => return Ok(())
@@ -112,10 +121,10 @@ impl NetTopology {
 
 		let file = fs::File::create(path)?;
 		// TODO: the capacity of the BufWriter is kind of arbitrary ; decide better
-		serialize(BufWriter::with_capacity(1024 * 1024, file), &self.store)
+		serialize(BufWriter::with_capacity(1024 * 1024, file), &mut self.store)
 	}
 
-	/// Returns the number of peers in the topology.
+	/// Returns the number of peers in the topology, excluding the local peer.
 	#[inline]
 	pub fn num_peers(&self) -> usize {
 		self.store.len()
@@ -127,40 +136,19 @@ impl NetTopology {
 	pub fn cleanup(&mut self) {
 		let now_systime = SystemTime::now();
 		self.store.retain(|_, peer| {
-			peer.addrs.retain(|a| {
-				a.expires > now_systime || a.is_connected()
-			});
+			let new_addrs = peer.addrs
+				.drain(..)
+				.filter(|a| a.expires > now_systime || a.is_connected())
+				.collect();
+			peer.addrs = new_addrs;
 			!peer.addrs.is_empty()
 		});
 	}
 
-	/// Returns the known potential addresses of a peer, ordered by score. Excludes backed-off
-	/// addresses.
-	///
-	/// The boolean associated to each address indicates whether we're connected to it.
-	pub fn addrs_of_peer(&self, peer: &PeerId) -> impl Iterator<Item = (&Multiaddr, bool)> {
-		let peer = if let Some(peer) = self.store.get(peer) {
-			peer
-		} else {
-			// TODO: use an EitherIterator or something
-			return Vec::new().into_iter();
-		};
-
-		let now_st = SystemTime::now();
-		let now_is = Instant::now();
-
-		let mut list = peer.addrs.iter().filter_map(move |addr| {
-			let (score, connected) = addr.score_and_is_connected();
-			if (addr.expires >= now_st && score > 0 && addr.back_off_until < now_is) || connected {
-				Some((score, connected, &addr.addr))
-			} else {
-				None
-			}
-		}).collect::<Vec<_>>();
-		list.sort_by(|a, b| a.0.cmp(&b.0));
-		// TODO: meh, optimize
-		let l = list.into_iter().map(|(_, connec, addr)| (addr, connec)).collect::<Vec<_>>();
-		l.into_iter()
+	/// Add the external addresses that are known for the local node.
+	pub fn add_external_addrs<TIter>(&mut self, addrs: TIter)
+	where TIter: Iterator<Item = Multiaddr> {
+		self.external_addresses.extend(addrs);
 	}
 
 	/// Returns a list of all the known addresses of peers, ordered by the
@@ -170,7 +158,7 @@ impl NetTopology {
 	/// by itself over time. The `Instant` that is returned corresponds to
 	/// the earlier known time when a new entry will be added automatically to
 	/// the list.
-	pub fn addrs_to_attempt(&self) -> (impl Iterator<Item = (&PeerId, &Multiaddr)>, Instant) {
+	pub fn addrs_to_attempt(&mut self) -> (impl Iterator<Item = (&PeerId, &Multiaddr)>, Instant) {
 		// TODO: optimize
 		let now = Instant::now();
 		let now_systime = SystemTime::now();
@@ -179,20 +167,20 @@ impl NetTopology {
 
 		let mut peer_addrs = Vec::new();
 
-		'peer_loop: for (peer, info) in &self.store {
+		'peer_loop: for (peer, info) in &mut self.store {
 			peer_addrs.clear();
 
-			for addr in &info.addrs {
+			for addr in &mut info.addrs {
 				let (score, is_connected) = addr.score_and_is_connected();
 				if is_connected {
-					continue 'peer_loop;
+					continue 'peer_loop
 				}
 				if score == 0 || addr.expires < now_systime {
-					continue;
+					continue
 				}
 				if addr.back_off_until > now {
 					instant = cmp::min(instant, addr.back_off_until);
-					continue;
+					continue
 				}
 
 				peer_addrs.push(((peer, &addr.addr), score));
@@ -217,15 +205,19 @@ impl NetTopology {
 		let peer = peer_access(&mut self.store, peer);
 
 		let mut found = false;
-		peer.addrs.retain(|a| {
-			if a.expires < now_systime && !a.is_connected() {
-				return false;
-			}
-			if a.addr == addr {
-				found = true;
-			}
-			true
-		});
+		let new_addrs = peer.addrs
+			.drain(..)
+			.filter_map(|a| {
+				if a.expires < now_systime && !a.is_connected() {
+					return None
+				}
+				if a.addr == addr {
+					found = true;
+				}
+				Some(a)
+			})
+			.collect();
+		peer.addrs = new_addrs;
 
 		if !found {
 			peer.addrs.push(Addr {
@@ -233,48 +225,13 @@ impl NetTopology {
 				expires: now_systime + BOOTSTRAP_NODE_EXPIRATION,
 				back_off_until: now,
 				next_back_off: FIRST_CONNECT_FAIL_BACKOFF,
-				score: Mutex::new(AddrScore {
+				score: AddrScore {
 					connected_since: None,
 					score: BOOTSTRAP_NODE_SCORE,
 					latest_score_update: now,
-				}),
+				},
 			});
 		}
-	}
-
-	/// Adds addresses that a node says it is listening on.
-	///
-	/// The addresses are most likely to be valid.
-	///
-	/// Returns `true` if the topology has changed in some way. Returns `false` if calling this
-	/// method was a no-op.
-	#[inline]
-	pub fn add_self_reported_listen_addrs<I>(
-		&mut self,
-		peer_id: &PeerId,
-		addrs: I,
-	) -> bool
-		where I: Iterator<Item = Multiaddr> {
-		self.add_discovered_addrs(peer_id, addrs.map(|a| (a, true)))
-	}
-
-	/// Adds addresses discovered through the Kademlia DHT.
-	///
-	/// The addresses are not necessarily valid and should expire after a TTL.
-	///
-	/// For each address, incorporates a boolean. If true, that means we have some sort of hint
-	/// that this address can be reached.
-	///
-	/// Returns `true` if the topology has changed in some way. Returns `false` if calling this
-	/// method was a no-op.
-	#[inline]
-	pub fn add_kademlia_discovered_addrs<I>(
-		&mut self,
-		peer_id: &PeerId,
-		addrs: I,
-	) -> bool
-		where I: Iterator<Item = (Multiaddr, bool)> {
-		self.add_discovered_addrs(peer_id, addrs)
 	}
 
 	/// Inner implementaiton of the `add_*_discovered_addrs` methods.
@@ -292,15 +249,19 @@ impl NetTopology {
 
 		let peer = peer_access(&mut self.store, peer_id);
 
-		peer.addrs.retain(|a| {
-			if a.expires < now_systime && !a.is_connected() {
-				return false;
-			}
-			if let Some(pos) = addrs.iter().position(|&(ref addr, _)| addr == &a.addr) {
-				addrs.remove(pos);
-			}
-			true
-		});
+		let new_addrs = peer.addrs
+			.drain(..)
+			.filter_map(|a| {
+				if a.expires < now_systime && !a.is_connected() {
+					return None
+				}
+				if let Some(pos) = addrs.iter().position(|&(ref addr, _)| addr == &a.addr) {
+					addrs.remove(pos);
+				}
+				Some(a)
+			})
+			.collect();
+		peer.addrs = new_addrs;
 
 		let mut anything_changed = false;
 
@@ -322,7 +283,7 @@ impl NetTopology {
 
 			// Enforce `MAX_ADDRESSES_PER_PEER` before inserting, or skip this entry.
 			while peer.addrs.len() >= MAX_ADDRESSES_PER_PEER {
-				let pos = peer.addrs.iter().position(|addr| addr.score() <= initial_score);
+				let pos = peer.addrs.iter_mut().position(|addr| addr.score() <= initial_score);
 				if let Some(pos) = pos {
 					let _ = peer.addrs.remove(pos);
 				} else {
@@ -336,23 +297,109 @@ impl NetTopology {
 				expires: now_systime + KADEMLIA_DISCOVERY_EXPIRATION,
 				back_off_until: now,
 				next_back_off: FIRST_CONNECT_FAIL_BACKOFF,
-				score: Mutex::new(AddrScore {
+				score: AddrScore {
 					connected_since: None,
 					score: initial_score,
 					latest_score_update: now,
-				}),
+				},
 			});
 		}
 
 		anything_changed
 	}
+}
 
-	/// Indicates the peer store that we're connected to this given address.
-	///
-	/// This increases the score of the address that we connected to. Since we assume that only
-	/// one peer can be reached with any specific address, we also remove all addresses from other
-	/// peers that match the one we connected to.
-	pub fn report_connected(&mut self, addr: &Multiaddr, peer: &PeerId) {
+impl KademliaTopology for NetTopology {
+	type ClosestPeersIter = vec::IntoIter<PeerId>;
+	type GetProvidersIter = iter::Empty<PeerId>;
+
+	fn add_kad_discovered_address(&mut self, peer: PeerId, addr: Multiaddr, ty: KadConnectionType) {
+		self.add_discovered_addrs(&peer, iter::once((addr, ty == KadConnectionType::Connected)));
+	}
+
+	fn closest_peers(&mut self, target: &Multihash, _max: usize) -> Self::ClosestPeersIter {
+		// TODO: very inefficient
+		let mut peers = self.store.keys().cloned().collect::<Vec<_>>();
+		peers.push(self.local_peer_id.clone());
+		peers.sort_by(|a, b| {
+			b.as_ref().distance_with(target).cmp(&a.as_ref().distance_with(target))
+		});
+		peers.into_iter()
+	}
+
+	fn add_provider(&mut self, _: Multihash, _: PeerId) {
+		// We don't implement ADD_PROVIDER/GET_PROVIDERS
+	}
+
+	fn get_providers(&mut self, _: &Multihash) -> Self::GetProvidersIter {
+		// We don't implement ADD_PROVIDER/GET_PROVIDERS
+		iter::empty()
+	}
+}
+
+impl IdentifyTopology for NetTopology {
+	#[inline]
+	fn add_identify_discovered_addrs<TIter>(&mut self, peer: &PeerId, addrs: TIter)
+	where
+		TIter: Iterator<Item = Multiaddr>
+	{
+		// These are addresses that peers indicate for themselves.
+		// The typical use case is:
+		// - A peer connects to one of our listening points.
+		// - We send an identify request to it, and it answers with a list of addresses.
+		// - If later it disconnects, we can try to dial it back through one of these addresses.
+		self.add_discovered_addrs(peer, addrs.map(move |a| (a, true)));
+	}
+}
+
+impl Topology for NetTopology {
+	#[inline]
+	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
+		if peer == &self.local_peer_id {
+			return self.external_addresses.clone()
+		}
+
+		let peer = if let Some(peer) = self.store.get_mut(peer) {
+			peer
+		} else {
+			return Vec::new()
+		};
+
+		let now_st = SystemTime::now();
+		let now_is = Instant::now();
+
+		let mut list = peer.addrs.iter_mut().filter_map(move |addr| {
+			let (score, connected) = addr.score_and_is_connected();
+			if (addr.expires >= now_st && score > 0 && addr.back_off_until < now_is) || connected {
+				Some((score, &addr.addr))
+			} else {
+				None
+			}
+		}).collect::<Vec<_>>();
+		list.sort_by(|a, b| a.0.cmp(&b.0));
+		// TODO: meh, optimize
+		list.into_iter().map(|(_, addr)| addr.clone()).collect::<Vec<_>>()
+	}
+
+	fn add_local_external_addrs<TIter>(&mut self, addrs: TIter)
+	where TIter: Iterator<Item = Multiaddr> {
+		self.add_external_addrs(addrs)
+	}
+
+	fn local_peer_id(&self) -> &PeerId {
+		&self.local_peer_id
+	}
+
+	fn local_public_key(&self) -> &PublicKey {
+		&self.local_public_key
+	}
+
+	fn set_connected(&mut self, peer: &PeerId, endpoint: &ConnectedPoint) {
+		let addr = match endpoint {
+			ConnectedPoint::Dialer { address } => address,
+			ConnectedPoint::Listener { .. } => return
+		};
+
 		let now = Instant::now();
 
 		// Just making sure that we have an entry for this peer in `store`, but don't use it.
@@ -364,20 +411,19 @@ impl NetTopology {
 					addr.connected_now(CONNECTED_MINIMUM_SCORE);
 					addr.back_off_until = now;
 					addr.next_back_off = FIRST_CONNECT_FAIL_BACKOFF;
-					continue;
+					continue
 				}
 
-				// TODO: a else block would be better, but we get borrowck errors
 				info_in_store.addrs.push(Addr {
 					addr: addr.clone(),
 					expires: SystemTime::now() + EXPIRATION_PUSH_BACK_CONNEC,
 					back_off_until: now,
 					next_back_off: FIRST_CONNECT_FAIL_BACKOFF,
-					score: Mutex::new(AddrScore {
+					score: AddrScore {
 						connected_since: Some(now),
 						latest_score_update: now,
 						score: CONNECTED_MINIMUM_SCORE,
-					}),
+					},
 				});
 
 			} else {
@@ -391,17 +437,16 @@ impl NetTopology {
 		}
 	}
 
-	/// Indicates the peer store that we're disconnected from an address.
-	///
-	/// There's no need to indicate a peer ID, as each address can only have one peer ID.
-	/// If we were indeed connected to this addr, then we can find out which peer ID it is.
-	pub fn report_disconnected(&mut self, addr: &Multiaddr, reason: DisconnectReason) {
+	fn set_disconnected(&mut self, _: &PeerId, endpoint: &ConnectedPoint, reason: DisconnectReason) {
+		let addr = match endpoint {
+			ConnectedPoint::Dialer { address } => address,
+			ConnectedPoint::Listener { .. } => return
+		};
+
 		let score_diff = match reason {
-			DisconnectReason::NoSlot => -1,
-			DisconnectReason::FoundBetterAddr => -5,
-			DisconnectReason::RemoteClosed => -5,
-			DisconnectReason::Useless => -5,
-			DisconnectReason::Banned => -5,
+			DisconnectReason::Replaced => -3,
+			DisconnectReason::Graceful => -1,
+			DisconnectReason::Error => -5,
 		};
 
 		for info in self.store.values_mut() {
@@ -414,58 +459,26 @@ impl NetTopology {
 					if a.expires < expires_push_back {
 						a.expires = expires_push_back;
 					}
-					return;
+					return
 				}
 			}
 		}
 	}
 
-	/// Indicates the peer store that we failed to connect to an address.
-	///
-	/// We don't care about which peer is supposed to be behind that address. If we failed to dial
-	/// it for a specific peer, we would also fail to dial it for all peers that have this
-	/// address.
-	pub fn report_failed_to_connect(&mut self, addr: &Multiaddr) {
+	fn set_unreachable(&mut self, addr: &Multiaddr) {
 		for info in self.store.values_mut() {
 			for a in info.addrs.iter_mut() {
-				if &a.addr == addr {
-					a.adjust_score(SCORE_DIFF_ON_FAILED_TO_CONNECT);
-					trace!(target: "sub-libp2p", "Back off for {} = {:?}", addr, a.next_back_off);
-					a.back_off_until = Instant::now() + a.next_back_off;
-					a.next_back_off = cmp::min(a.next_back_off * FAIL_BACKOFF_MULTIPLIER, MAX_BACKOFF);
+				if &a.addr != addr {
+					continue
 				}
+
+				a.adjust_score(SCORE_DIFF_ON_FAILED_TO_CONNECT);
+				trace!(target: "sub-libp2p", "Back off for {} = {:?}", addr, a.next_back_off);
+				a.back_off_until = Instant::now() + a.next_back_off;
+				a.next_back_off = cmp::min(a.next_back_off * FAIL_BACKOFF_MULTIPLIER, MAX_BACKOFF);
 			}
 		}
 	}
-
-	/// Indicates the peer store that the given peer is useless.
-	///
-	/// This decreases the scores of the addresses of that peer.
-	pub fn report_useless(&mut self, peer: &PeerId) {
-		for (peer_in_store, info_in_store) in self.store.iter_mut() {
-			if peer == peer_in_store {
-				for addr in info_in_store.addrs.iter_mut() {
-					addr.adjust_score(USELESS_PEER_SCORE_CHANGE);
-				}
-			}
-		}
-	}
-}
-
-/// Reason why we disconnected from a peer.
-#[derive(Debug)]
-pub enum DisconnectReason {
-	/// No slot available locally anymore for this peer.
-	NoSlot,
-	/// A better way to connect to this peer has been found, therefore we disconnect from
-	/// the old one.
-	FoundBetterAddr,
-	/// The remote closed the connection.
-	RemoteClosed,
-	/// This node is considered useless for our needs. This includes time outs.
-	Useless,
-	/// The peer has been banned.
-	Banned,
 }
 
 fn peer_access<'a>(store: &'a mut FnvHashMap<PeerId, PeerInfo>, peer: &PeerId) -> &'a mut PeerInfo {
@@ -488,17 +501,17 @@ struct Addr {
 	next_back_off: Duration,
 	/// Don't try to connect to this node until `Instant`.
 	back_off_until: Instant,
-	score: Mutex<AddrScore>,
+	score: AddrScore,
 }
 
 impl Clone for Addr {
 	fn clone(&self) -> Addr {
 		Addr {
 			addr: self.addr.clone(),
-			expires: self.expires.clone(),
-			next_back_off: self.next_back_off.clone(),
-			back_off_until: self.back_off_until.clone(),
-			score: Mutex::new(self.score.lock().clone()),
+			expires: self.expires,
+			next_back_off: self.next_back_off,
+			back_off_until: self.back_off_until,
+			score: self.score.clone(),
 		}
 	}
 }
@@ -516,58 +529,52 @@ struct AddrScore {
 impl Addr {
 	/// Sets the addr to connected. If the score is lower than the given value, raises it to this
 	/// value.
-	fn connected_now(&self, raise_to_min: u32) {
-		let mut score = self.score.lock();
+	fn connected_now(&mut self, raise_to_min: u32) {
 		let now = Instant::now();
-		Addr::flush(&mut score, now);
-		score.connected_since = Some(now);
-		if score.score < raise_to_min {
-			score.score = raise_to_min;
+		Addr::flush(&mut self.score, now);
+		self.score.connected_since = Some(now);
+		if self.score.score < raise_to_min {
+			self.score.score = raise_to_min;
 		}
 	}
 
 	/// Applies a modification to the score.
-	fn adjust_score(&self, score_diff: i32) {
-		let mut score = self.score.lock();
-		Addr::flush(&mut score, Instant::now());
+	fn adjust_score(&mut self, score_diff: i32) {
+		Addr::flush(&mut self.score, Instant::now());
 		if score_diff >= 0 {
-			score.score = cmp::min(MAX_SCORE, score.score + score_diff as u32);
+			self.score.score = cmp::min(MAX_SCORE, self.score.score + score_diff as u32);
 		} else {
-			score.score = score.score.saturating_sub(-score_diff as u32);
+			self.score.score = self.score.score.saturating_sub(-score_diff as u32);
 		}
 	}
 
 	/// Sets the addr to disconnected and applies a modification to the score.
-	fn disconnected_now(&self, score_diff: i32) {
-		let mut score = self.score.lock();
-		Addr::flush(&mut score, Instant::now());
-		score.connected_since = None;
+	fn disconnected_now(&mut self, score_diff: i32) {
+		Addr::flush(&mut self.score, Instant::now());
+		self.score.connected_since = None;
 		if score_diff >= 0 {
-			score.score = cmp::min(MAX_SCORE, score.score + score_diff as u32);
+			self.score.score = cmp::min(MAX_SCORE, self.score.score + score_diff as u32);
 		} else {
-			score.score = score.score.saturating_sub(-score_diff as u32);
+			self.score.score = self.score.score.saturating_sub(-score_diff as u32);
 		}
 	}
 
 	/// Returns true if we are connected to this addr.
 	fn is_connected(&self) -> bool {
-		let score = self.score.lock();
-		score.connected_since.is_some()
+		self.score.connected_since.is_some()
 	}
 
 	/// Returns the score, and true if we are connected to this addr.
-	fn score_and_is_connected(&self) -> (u32, bool) {
-		let mut score = self.score.lock();
-		Addr::flush(&mut score, Instant::now());
-		let is_connected = score.connected_since.is_some();
-		(score.score, is_connected)
+	fn score_and_is_connected(&mut self) -> (u32, bool) {
+		Addr::flush(&mut self.score, Instant::now());
+		let is_connected = self.score.connected_since.is_some();
+		(self.score.score, is_connected)
 	}
 
 	/// Updates `score` and `latest_score_update`, and returns the score.
-	fn score(&self) -> u32 {
-		let mut score = self.score.lock();
-		Addr::flush(&mut score, Instant::now());
-		score.score
+	fn score(&mut self) -> u32 {
+		Addr::flush(&mut self.score, Instant::now());
+		self.score.score
 	}
 
 	fn flush(score: &mut AddrScore, now: Instant) {
@@ -588,8 +595,8 @@ impl Addr {
 /// Divides a `Duration` with a `Duration`. This exists in the stdlib but isn't stable yet.
 // TODO: remove this function once stable
 fn div_dur_with_dur(a: Duration, b: Duration) -> u32 {
-	let a_ms = a.as_secs() * 1_000_000 + (a.subsec_nanos() / 1_000) as u64;
-	let b_ms = b.as_secs() * 1_000_000 + (b.subsec_nanos() / 1_000) as u64;
+	let a_ms = a.as_secs() * 1_000_000 + u64::from(a.subsec_micros());
+	let b_ms = b.as_secs() * 1_000_000 + u64::from(b.subsec_micros());
 	(a_ms / b_ms) as u32
 }
 
@@ -607,8 +614,8 @@ struct SerializedAddr {
 	score: u32,
 }
 
-impl<'a> From<&'a Addr> for SerializedAddr {
-	fn from(addr: &'a Addr) -> SerializedAddr {
+impl<'a> From<&'a mut Addr> for SerializedAddr {
+	fn from(addr: &'a mut Addr) -> SerializedAddr {
 		SerializedAddr {
 			addr: addr.addr.to_string(),
 			expires: addr.expires,
@@ -618,9 +625,10 @@ impl<'a> From<&'a Addr> for SerializedAddr {
 }
 
 /// Attempts to load storage from a file.
+/// Ignores any entry equal to `local_peer_id`.
 /// Deletes the file and returns an empty map if the file doesn't exist, cannot be opened
 /// or is corrupted.
-fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
+fn try_load(path: impl AsRef<Path>, local_peer_id: &PeerId) -> FnvHashMap<PeerId, PeerInfo> {
 	let path = path.as_ref();
 	if !path.exists() {
 		debug!(target: "sub-libp2p", "Peer storage file {:?} doesn't exist", path);
@@ -664,7 +672,8 @@ fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
 		let data = Cursor::new(first_byte).chain(file);
 		match serde_json::from_reader::<_, serde_json::Value>(data) {
 			Ok(serde_json::Value::Null) => Default::default(),
-			Ok(serde_json::Value::Object(map)) => deserialize_tolerant(map.into_iter()),
+			Ok(serde_json::Value::Object(map)) =>
+				deserialize_tolerant(map.into_iter(), local_peer_id),
 			Ok(_) | Err(_) => {
 				// The `Ok(_)` case means that the file doesn't contain a map.
 				let _ = fs::remove_file(path);
@@ -676,9 +685,10 @@ fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
 
 /// Attempts to turn a deserialized version of the storage into the final version.
 ///
-/// Skips entries that are invalid.
+/// Skips entries that are invalid or equal to `local_peer_id`.
 fn deserialize_tolerant(
-	iter: impl Iterator<Item = (String, serde_json::Value)>
+	iter: impl Iterator<Item = (String, serde_json::Value)>,
+	local_peer_id: &PeerId
 ) -> FnvHashMap<PeerId, PeerInfo> {
 	let now = Instant::now();
 	let now_systime = SystemTime::now();
@@ -689,6 +699,10 @@ fn deserialize_tolerant(
 			Ok(p) => p,
 			Err(_) => continue,
 		};
+
+		if &peer == local_peer_id {
+			continue
+		}
 
 		let info: SerializedPeerInfo = match serde_json::from_value(info) {
 			Ok(i) => i,
@@ -711,16 +725,16 @@ fn deserialize_tolerant(
 				expires: addr.expires,
 				next_back_off: FIRST_CONNECT_FAIL_BACKOFF,
 				back_off_until: now,
-				score: Mutex::new(AddrScore {
+				score: AddrScore {
 					connected_since: None,
 					score: addr.score,
 					latest_score_update: now,
-				}),
+				},
 			});
 		}
 
 		if addrs.is_empty() {
-			continue;
+			continue
 		}
 
 		out.insert(peer, PeerInfo { addrs });
@@ -732,18 +746,21 @@ fn deserialize_tolerant(
 /// Attempts to turn a deserialized version of the storage into the final version.
 ///
 /// Skips entries that are invalid or expired.
-fn serialize<W: Write>(out: W, map: &FnvHashMap<PeerId, PeerInfo>) -> Result<(), IoError> {
+fn serialize<W: Write>(out: W, map: &mut FnvHashMap<PeerId, PeerInfo>) -> Result<(), IoError> {
 	let now = SystemTime::now();
-	let array: FnvHashMap<_, _> = map.iter().filter_map(|(peer, info)| {
+	let array: FnvHashMap<_, _> = map.iter_mut().filter_map(|(peer, info)| {
 		if info.addrs.is_empty() {
 			return None
 		}
 
 		let peer = peer.to_base58();
 		let info = SerializedPeerInfo {
-			addrs: info.addrs.iter()
-				.filter(|a| a.expires > now || a.is_connected())
-				.map(Into::into)
+			addrs: info.addrs.iter_mut()
+				.filter_map(|a| if a.expires > now || a.is_connected() {
+					Some(a.into())
+				} else {
+					None
+				})
 				.collect(),
 		};
 
