@@ -147,7 +147,8 @@ impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubs
 impl<TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behaviour<TSubstream> {
 	fn inject_event(&mut self, out: KademliaOut) {
 		// We only ever use Kademlia for discovering nodes, and nodes discovered by Kademlia are
-		// automatically added to the topology. Therefore we don't need to do anything.
+		// automatically added to the topology. Therefore we don't need to perform any further
+		// action.
 		match out {
 			KademliaOut::FindNodeResult { key, closer_peers } => {
 				trace!(target: "sub-libp2p", "Kademlia query for {:?} yielded {:?} results",
