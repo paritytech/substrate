@@ -275,7 +275,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256};
+	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use system;
 
@@ -301,20 +301,21 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = MetaEvent;
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
 		type Event = MetaEvent;
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, balances::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
@@ -326,9 +327,8 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
-			reclaim_rebate: 0,
 		}.build_storage().unwrap().0);
-		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69.into()));
+		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69.into()));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
@@ -352,7 +352,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("d9e26179ed13b3df01e71ad0bf622d56f2066a63e04762a83c0ae9deeb4da1d0").into(),
+					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -386,7 +386,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("d9e26179ed13b3df01e71ad0bf622d56f2066a63e04762a83c0ae9deeb4da1d0").into(),
+					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -398,7 +398,7 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext();
-		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33.into(), 69.into()));
+		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33, 69.into()));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());

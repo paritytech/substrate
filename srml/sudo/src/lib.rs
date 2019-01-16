@@ -35,6 +35,7 @@ extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 
 use sr_std::prelude::*;
+use sr_primitives::traits::StaticLookup;
 use support::{StorageValue, Parameter, Dispatchable};
 use system::ensure_signed;
 
@@ -60,10 +61,11 @@ decl_module! {
 			Self::deposit_event(RawEvent::Sudid(ok));
 		}
 
-		fn set_key(origin, new: T::AccountId) {
+		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), "only the current sudo key can change the sudo key");
+			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);

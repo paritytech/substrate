@@ -16,7 +16,7 @@
 
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
-use runtime_primitives::traits::{BlakeTwo256};
+use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_support::{StorageMap, StorageDoubleMap};
 use substrate_primitives::{Blake2Hasher};
@@ -50,14 +50,15 @@ impl system::Trait for Test {
 	type Hashing = BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = MetaEvent;
 	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
-	type AccountIndex = u64;
 	type OnFreeBalanceZero = Contract;
+	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();
 	type Event = MetaEvent;
 }
@@ -129,7 +130,6 @@ impl ExtBuilder {
 				existential_deposit: self.existential_deposit,
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
-				reclaim_rebate: 0,
 			}.build_storage()
 			.unwrap().0,
 		);
@@ -224,8 +224,7 @@ fn contract_transfer() {
 				event: MetaEvent::balances(
 					balances::RawEvent::NewAccount(
 						CONTRACT_SHOULD_TRANSFER_TO,
-						0,
-						balances::NewAccountOutcome::NoHint
+						6
 					)
 				),
 			},
@@ -544,8 +543,7 @@ fn contract_create() {
 				event: MetaEvent::balances(
 					balances::RawEvent::NewAccount(
 						derived_address,
-						0,
-						balances::NewAccountOutcome::NoHint
+						3
 					)
 				),
 			},
@@ -704,7 +702,7 @@ fn account_removal_removes_storage() {
 			// the balance of account 1 is will be below than exsistential threshold.
 			//
 			// This should lead to the removal of all storage associated with this account.
-			assert_ok!(Balances::transfer(Origin::signed(1), 2.into(), 20.into()));
+			assert_ok!(Balances::transfer(Origin::signed(1), 2, 20.into()));
 
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.

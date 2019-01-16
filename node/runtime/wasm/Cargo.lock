@@ -499,6 +499,7 @@ dependencies = [
  "srml-democracy 0.1.0",
  "srml-executive 0.1.0",
  "srml-grandpa 0.1.0",
+ "srml-indices 0.1.0",
  "srml-session 0.1.0",
  "srml-staking 0.1.0",
  "srml-sudo 0.1.0",
@@ -1010,7 +1011,7 @@ dependencies = [
  "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1172,6 +1173,24 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-finality-grandpa-primitives 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-indices"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1445,7 +1464,7 @@ dependencies = [
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-trie 0.4.0",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1490,7 +1509,7 @@ dependencies = [
  "sr-std 0.1.0",
  "twox-hash 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1831,7 +1850,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "wasmi"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2043,7 +2062,7 @@ dependencies = [
 "checksum url 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dd4e7c0d531266369519a4aa4f399d748bd37043b00bde1e4ff1f60a120b355a"
 "checksum vcpkg 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "def296d3eb3b12371b2c7d0e83bfe1403e4db2d7a0bba324a12b21c4ee13143d"
 "checksum void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
-"checksum wasmi 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "8a60b9508cff2b7c27ed41200dd668806280740fadc8c88440e9c88625e84f1a"
+"checksum wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "21ef487a11df1ed468cf613c78798c26282da5c30e9d49f824872d4c77b47d1d"
 "checksum winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 "checksum winapi 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "92c1eb33641e276cfa214a0522acad57be5c56b10cb348b3c5117db75f3ac4b0"
 "checksum winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2d315eee3b34aca4797b2da6b13ed88266e6d612562a0c46390af8299fc699bc"
