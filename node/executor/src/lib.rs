@@ -381,7 +381,7 @@ mod tests {
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
-					function: Call::Consensus(consensus::Call::remark(vec![0; 120000])),
+					function: Call::Consensus(consensus::Call::remark(vec![0; 140000])),
 				}
 			]
 		)
