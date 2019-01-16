@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::{HashMap, HashSet, BTreeMap};
-use std::{mem, cmp};
+use std::cmp;
 use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
@@ -297,7 +297,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					let (timestamp, request) = request_visitor(peer);
 
 					*timestamp = None;
-					match mem::replace(request, None) {
+					match request.take() {
 						Some(r) => r,
 						None => {
 							io.report_peer(who, Severity::Bad("Unexpected response packet received from peer"));
