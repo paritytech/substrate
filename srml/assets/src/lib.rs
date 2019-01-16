@@ -81,7 +81,11 @@ decl_module! {
 		}
 
 		/// Move some assets from one holder to another.
-		fn transfer(origin, id: Compact<AssetId>, target: <T::Lookup as StaticLookup>::Source, amount: <T::Balance as HasCompact>::Type) {
+		fn transfer(origin,
+			id: Compact<AssetId>,
+			target: <T::Lookup as StaticLookup>::Source,
+			amount: <T::Balance as HasCompact>::Type
+		) {
 			let origin = ensure_signed(origin)?;
 			let id = id.into();
 			let origin_account = (id, origin.clone());
