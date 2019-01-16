@@ -54,6 +54,7 @@ enum PeerSyncState<B: BlockT> {
 	DownloadingStale(B::Hash),
 }
 
+/// Pending justification request for the given block (hash and number).
 type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
 /// Manages pending block justification requests.
@@ -74,6 +75,11 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 	}
 
+	/// Dispatches all possible pending requests to the given peers. Peers are
+	/// filtered according to the current known best block (i.e. we won't send a
+	/// justification request for block #10 to a peer at block #2), and we also
+	/// throttle requests to the same peer if a previous justification request
+	/// yielded no results.
 	fn dispatch(&mut self, peers: &HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
 		if self.pending_requests.is_empty() {
 			return;
@@ -151,6 +157,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		self.pending_requests.append(&mut unhandled_requests);
 	}
 
+	/// Queue a justification request (without dispatching it).
 	fn queue_request(&mut self, justification: &PendingJustification<B>) {
 		if !self.justifications.insert(*justification) {
 			return;
@@ -158,12 +165,16 @@ impl<B: BlockT> PendingJustifications<B> {
 		self.pending_requests.push_back(*justification);
 	}
 
+	/// Retry any pending request if a peer disconnected.
 	fn peer_disconnected(&mut self, who: NodeIndex) {
 		if let Some(request) = self.peer_requests.remove(&who) {
 			self.pending_requests.push_front(request);
 		}
 	}
 
+	/// Processes the response for the request previously sent to the given
+	/// peer. Queues a retry in case the import fails or the given justification
+	/// was `None`.
 	fn on_response(
 		&mut self,
 		who: NodeIndex,
@@ -197,6 +208,8 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 	}
 
+	/// Removes any pending justification requests for blocks lower than the
+	/// given best finalized.
 	fn collect_garbage(&mut self, best_finalized: NumberFor<B>) {
 		self.justifications.retain(|(_, n)| *n > best_finalized);
 		self.pending_requests.retain(|(_, n)| *n > best_finalized);
