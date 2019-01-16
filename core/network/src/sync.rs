@@ -343,6 +343,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Handle new block data.
 	pub(crate) fn on_block_data(
 		&mut self,
 		protocol: &mut Context<B>,
@@ -439,6 +440,7 @@ impl<B: BlockT> ChainSync<B> {
 		Some((origin, new_blocks))
 	}
 
+	/// Handle new justification data.
 	pub(crate) fn on_block_justification_data(
 		&mut self,
 		protocol: &mut Context<B>,
@@ -450,6 +452,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.maintain_sync(protocol);
 	}
 
+	/// Maintain the sync process (download new blocks, fetch justifications).
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
 		let peers: Vec<NodeIndex> = self.peers.keys().map(|p| *p).collect();
 		for peer in peers {
@@ -458,19 +461,25 @@ impl<B: BlockT> ChainSync<B> {
 		self.justifications.dispatch(&self.peers, protocol);
 	}
 
+	/// Called periodically to perform any time-based actions.
 	pub fn tick(&mut self, protocol: &mut Context<B>) {
 		self.justifications.dispatch(&self.peers, protocol);
 	}
 
+	/// Request a justification for the given block.
+	///
+	/// Queues a new justification request and tries to dispatch all pending requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.justifications.queue_request(&(*hash, number));
 		self.justifications.dispatch(&self.peers, protocol);
 	}
 
+	/// Notify about successful import of the given block.
 	pub fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		trace!(target: "sync", "Block imported successfully {} ({})", number, hash);
 	}
 
+	/// Notify about finalization of the given block.
 	pub fn block_finalized(&mut self, _hash: &B::Hash, number: NumberFor<B>) {
 		self.justifications.collect_garbage(number);
 	}
@@ -500,6 +509,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.block_queued(&hash, best_header.number().clone())
 	}
 
+	/// Handle new block announcement.
 	pub(crate) fn on_block_announce(&mut self, protocol: &mut Context<B>, who: NodeIndex, hash: B::Hash, header: &B::Header) {
 		let number = *header.number();
 		if number <= As::sa(0) {
@@ -552,6 +562,7 @@ impl<B: BlockT> ChainSync<B> {
 		block_status(&*protocol.client(), &*self.import_queue, *hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
 
+	/// Handle disconnected peer.
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
 		self.blocks.clear_peer_download(who);
 		self.peers.remove(&who);
@@ -559,6 +570,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.maintain_sync(protocol);
 	}
 
+	/// Restart the sync process.
 	pub(crate) fn restart(&mut self, protocol: &mut Context<B>) {
 		self.import_queue.clear();
 		self.blocks.clear();
@@ -580,6 +592,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Clear all sync data.
 	pub(crate) fn clear(&mut self) {
 		self.blocks.clear();
 		self.peers.clear();

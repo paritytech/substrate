@@ -396,8 +396,8 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
 	}
 
-	#[cfg(test)]
 	/// Request a justification for the given block.
+	#[cfg(test)]
 	fn request_justification(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
 		self.executor.execute_in_context(|context| {
 			self.sync.sync().write().request_justification(hash, number, context);
