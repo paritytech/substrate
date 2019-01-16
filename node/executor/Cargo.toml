@@ -29,6 +29,7 @@ srml-timestamp = { path = "../../srml/timestamp" }
 srml-treasury = { path = "../../srml/treasury" }
 srml-contract = { path = "../../srml/contract" }
 srml-grandpa = { path = "../../srml/grandpa" }
+srml-indices = { path = "../../srml/indices" }
 wabt = "~0.7.4"
 
 [features]

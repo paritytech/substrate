@@ -28,7 +28,7 @@ use primitives::Blake2Hasher;
 use primitives::storage::well_known_keys;
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES :u64 = 1024;
+const DEFAULT_HEAP_PAGES: u64 = 1024;
 
 // For the internal Runtime Cache:
 // Is it compatible enough to run this natively or do we need to fall back on the WasmModule

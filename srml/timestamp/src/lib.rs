@@ -195,7 +195,7 @@ mod tests {
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::BlakeTwo256;
+	use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 	use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
 
 	impl_outer_origin! {
@@ -212,6 +212,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
