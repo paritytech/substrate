@@ -574,7 +574,7 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
-	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+	fn log<T: ?Sized, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
 		self.logs().iter()
 			.filter_map(predicate)
 			.next()
