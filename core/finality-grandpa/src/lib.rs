@@ -1142,7 +1142,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
 
 		match result {
 			Err(ExitOrError::AuthoritiesChanged(new)) => {
-				debug!(target: "finality", "Imported justification for block #{} that enacts authority set change, signalling voter.", number);
+				info!(target: "finality", "Imported justification for block #{} that enacts authority set change, signalling voter.", number);
 				if let Err(e) = self.authority_set_change.unbounded_send(new) {
 					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
 				}
