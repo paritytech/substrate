@@ -19,7 +19,7 @@ use std::cmp::{Ord, Ordering};
 use kvdb::{KeyValueDB, DBTransaction};
 use runtime_primitives::traits::SimpleArithmetic;
 use codec::{Encode, Decode};
-use error;
+use crate::error;
 
 /// helper wrapper type to keep a list of block hashes ordered
 /// by `number` descending in a `BTreeSet` which allows faster and simpler

@@ -28,10 +28,10 @@ use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberF
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
 
-use cht;
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::call_executor::check_execution_proof;
+use crate::cht;
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::call_executor::check_execution_proof;
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -391,17 +391,17 @@ pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
 	use keyring::Keyring;
-	use client::tests::prepare_client_with_key_changes;
+	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
-	use error::Error as ClientError;
+	use crate::error::Error as ClientError;
 	use test_client::{self, TestClient, blockchain::HeaderBackend};
 	use test_client::runtime::{self, Hash, Block, Header};
 	use consensus::BlockOrigin;
 
-	use in_mem::{Blockchain as InMemoryBlockchain};
-	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
+	use crate::in_mem::{Blockchain as InMemoryBlockchain};
+	use crate::light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
-	use light::blockchain::tests::{DummyStorage, DummyBlockchain};
+	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{twox_128, Blake2Hasher};
 	use primitives::storage::well_known_keys;
 	use runtime_primitives::generic::BlockId;
@@ -454,7 +454,7 @@ pub mod tests {
 			remote_block_header.clone(),
 			None,
 			None,
-			::backend::NewBlockState::Final,
+			crate::backend::NewBlockState::Final,
 		).unwrap();
 		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
