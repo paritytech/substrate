@@ -604,11 +604,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Some(authorities) = authorities {
 			transaction.update_authorities(authorities);
 		}
-		if let Some(storage_changes) = storage_changes.clone() {
-			transaction.update_storage(storage_changes)?;
-		}
 		if let Some(storage_update) = storage_update {
 			transaction.update_db_storage(storage_update)?;
+		}
+		if let Some(storage_changes) = storage_changes.clone() {
+			transaction.update_storage(storage_changes)?;
 		}
 		if let Some(Some(changes_update)) = changes_update {
 			transaction.update_changes_trie(changes_update)?;
