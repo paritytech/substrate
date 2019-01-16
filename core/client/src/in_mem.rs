@@ -664,8 +664,8 @@ pub fn cache_authorities_at<Block: BlockT>(
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use crate::test_client;
-	use crate::primitives::Blake2Hasher;
+	use test_client;
+	use primitives::Blake2Hasher;
 
 	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, Blake2Hasher>;
 

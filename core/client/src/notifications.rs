@@ -179,7 +179,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 #[cfg(test)]
 mod tests {
-	use crate::runtime_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
+	use runtime_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 	use futures::Stream;
 

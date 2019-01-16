@@ -165,7 +165,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 #[cfg(test)]
 pub mod tests {
 	use std::collections::HashMap;
-	use crate::test_client::runtime::{Hash, Block, Header};
+	use test_client::runtime::{Hash, Block, Header};
 	use crate::blockchain::Info;
 	use crate::light::fetcher::tests::OkCallFetcher;
 	use super::*;

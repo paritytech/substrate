@@ -390,22 +390,22 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number
 pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
-	use crate::keyring::Keyring;
+	use keyring::Keyring;
 	use crate::client::tests::prepare_client_with_key_changes;
-	use crate::executor::{self, NativeExecutionDispatch};
+	use executor::{self, NativeExecutionDispatch};
 	use crate::error::Error as ClientError;
-	use crate::test_client::{self, TestClient, blockchain::HeaderBackend};
-	use crate::test_client::runtime::{self, Hash, Block, Header};
-	use crate::consensus::BlockOrigin;
+	use test_client::{self, TestClient, blockchain::HeaderBackend};
+	use test_client::runtime::{self, Hash, Block, Header};
+	use consensus::BlockOrigin;
 
 	use crate::in_mem::{Blockchain as InMemoryBlockchain};
 	use crate::light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
-	use crate::primitives::{twox_128, Blake2Hasher};
-	use crate::primitives::storage::well_known_keys;
-	use crate::runtime_primitives::generic::BlockId;
-	use crate::state_machine::Backend;
+	use primitives::{twox_128, Blake2Hasher};
+	use primitives::storage::well_known_keys;
+	use runtime_primitives::generic::BlockId;
+	use state_machine::Backend;
 	use super::*;
 
 	pub type OkCallFetcher = Mutex<Vec<u8>>;

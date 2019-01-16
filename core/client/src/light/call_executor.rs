@@ -230,9 +230,9 @@ pub fn check_execution_proof<Header, E, H>(
 
 #[cfg(test)]
 mod tests {
-	use crate::consensus::BlockOrigin;
-	use crate::test_client::{self, runtime::{Block, Header}, runtime::RuntimeApi, TestClient};
-	use crate::executor::NativeExecutionDispatch;
+	use consensus::BlockOrigin;
+	use test_client::{self, runtime::{Block, Header}, runtime::RuntimeApi, TestClient};
+	use executor::NativeExecutionDispatch;
 	use super::*;
 
 	#[test]

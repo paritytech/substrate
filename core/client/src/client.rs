@@ -1219,15 +1219,15 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 pub(crate) mod tests {
 	use std::collections::HashMap;
 	use super::*;
-	use crate::keyring::Keyring;
-	use crate::primitives::twox_128;
-	use crate::runtime_primitives::traits::DigestItem as DigestItemT;
-	use crate::runtime_primitives::generic::DigestItem;
-	use crate::test_client::{self, TestClient};
-	use crate::consensus::BlockOrigin;
-	use crate::test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
-	use crate::test_client::BlockBuilderExt;
-	use crate::test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
+	use keyring::Keyring;
+	use primitives::twox_128;
+	use runtime_primitives::traits::DigestItem as DigestItemT;
+	use runtime_primitives::generic::DigestItem;
+	use test_client::{self, TestClient};
+	use consensus::BlockOrigin;
+	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
+	use test_client::BlockBuilderExt;
+	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -1479,7 +1479,7 @@ pub(crate) mod tests {
 		// NOTE: we use the version of the trait from `test_client`
 		// because that is actually different than the version linked to
 		// in the test facade crate.
-		use crate::test_client::blockchain::Backend as BlockchainBackendT;
+		use test_client::blockchain::Backend as BlockchainBackendT;
 
 		// block tree:
 		// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -1726,7 +1726,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn import_with_justification() {
-		use crate::test_client::blockchain::Backend;
+		use test_client::blockchain::Backend;
 
 		let client = test_client::new();
 
