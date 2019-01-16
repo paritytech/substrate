@@ -168,6 +168,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		&mut self,
 		who: NodeIndex,
 		justification: Option<Justification>,
+		protocol: &mut Context<B>,
 		import_queue: &ImportQueue<B>,
 	) {
 		// we assume that the request maps to the given response, this is
@@ -179,6 +180,11 @@ impl<B: BlockT> PendingJustifications<B> {
 					self.justifications.remove(&request);
 					self.previous_requests.remove(&request);
 					return;
+				} else {
+					protocol.report_peer(
+						who,
+						Severity::Bad(&format!("Invalid justification provided for #{}", request.0)),
+					);
 				}
 			} else {
 				self.previous_requests
@@ -448,7 +454,7 @@ impl<B: BlockT> ChainSync<B> {
 		_request: message::BlockJustificationRequest<B>,
 		response: message::BlockJustificationResponse,
 	) {
-		self.justifications.on_response(who, response.justification, &*self.import_queue);
+		self.justifications.on_response(who, response.justification, protocol, &*self.import_queue);
 		self.maintain_sync(protocol);
 	}
 
