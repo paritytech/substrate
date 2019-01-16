@@ -1148,13 +1148,13 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
 				}
 			},
 			Err(ExitOrError::Error(e)) => {
-				match e {
-					Error::Grandpa(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
-					Error::Network(error) => return Err(ConsensusErrorKind::ClientImport(error).into()),
-					Error::Blockchain(error) => return Err(ConsensusErrorKind::ClientImport(error).into()),
-					Error::Client(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
-					Error::Timer(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
-				}
+				return Err(match e {
+					Error::Grandpa(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+					Error::Network(error) => ConsensusErrorKind::ClientImport(error),
+					Error::Blockchain(error) => ConsensusErrorKind::ClientImport(error),
+					Error::Client(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+					Error::Timer(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+				}.into());
 			},
 			Ok(_) => {
 				assert!(!enacts_change, "returns Ok when no authority set change should be enacted; qed;");
