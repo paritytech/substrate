@@ -39,7 +39,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
-	key_changes, key_changes_proof, OverlayedChanges
+	key_changes, key_changes_proof, OverlayedChanges,
 };
 
 use backend::{self, BlockImportOperation};
@@ -55,6 +55,9 @@ pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotific
 
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
+
+type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as backend::BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
+type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
@@ -573,24 +576,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 
-		// // TODO: correct path logic
-		// let block_author: bool = match origin {
-		// 	BlockOrigin::Own => true,
-		// 	_ => false,
-		// };
-
-		// let storage_changes = match block_author {
-		// 	true => {
-		// 		trace!("Locally-authored block: skipping re-execution");
-		// 		None
-		// 		},
-		// 	false => {
-		// 		trace!("Execute Block");
-		// 		self.block_execution(&import_headers,origin,hash,body.clone(),&mut transaction)?
-		// 		},
-		// };
-
-		let storage_changes = self.block_execution(&import_headers,origin,hash,body.clone(),&mut transaction)?;
+		// TODO: correct path logic
+		let (storage_update,changes_update,storage_changes) = self.block_execution(&import_headers, origin, hash, body.clone(), &transaction)?;
 
 		// TODO: non longest-chain rule.
 		let is_new_best = finalized || match fork_choice {
@@ -619,6 +606,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 		if let Some(storage_changes) = storage_changes.clone() {
 			transaction.update_storage(storage_changes)?;
+		}
+		if let Some(storage_update) = storage_update {
+			transaction.update_db_storage(storage_update)?;
+		}
+		if let Some(Some(changes_update)) = changes_update {
+			transaction.update_changes_trie(changes_update)?;
 		}
 
 		transaction.set_aux(aux)?;
@@ -661,12 +654,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		body: Option<Vec<Block::Extrinsic>>,
-		transaction: &mut B::BlockImportOperation,
-	) -> error::Result<Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>> where
+		transaction: &B::BlockImportOperation,
+	) -> error::Result<(Option<StorageUpdate<B, Block>>, Option<Option<ChangesUpdate>>, Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>)> where
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
-
-		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
+		match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
 				let mut r = self.executor.call_at_state(
@@ -696,20 +688,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
 
-				(Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect()))
+				Ok((Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect())))
 			},
-			None => (None, None, None)
-		};
-
-		if let Some(storage_update) = storage_update {
-			transaction.update_db_storage(storage_update)?;
+			
+			None => Ok((None, None, None))
 		}
-
-		if let Some(Some(changes_update)) = changes_update {
-			transaction.update_changes_trie(changes_update)?;
-		}
-
-		Ok(storage_changes)
 		
 	}
 
