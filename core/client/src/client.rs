@@ -694,7 +694,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// find tree route from last finalized to given block.
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 
-		if block == last_finalized { return Ok(()) }
+		if block == last_finalized {
+			warn!("Possible safety violation: attempted to re-finalize last finalized block {:?} ", last_finalized);
+			return Ok(())
+		}
+
 		let route_from_finalized = ::blockchain::tree_route(
 			self.backend.blockchain(),
 			BlockId::Hash(last_finalized),
