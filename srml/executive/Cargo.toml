@@ -16,6 +16,7 @@ srml-system = { path = "../system", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../../core/primitives" }
+srml-indices = { path = "../indices" }
 srml-balances = { path = "../balances" }
 
 [features]

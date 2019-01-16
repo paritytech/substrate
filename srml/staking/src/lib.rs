@@ -45,14 +45,12 @@ extern crate sr_io as runtime_io;
 #[cfg(test)]
 extern crate srml_timestamp as timestamp;
 
-use rstd::prelude::*;
-use rstd::cmp;
+use rstd::{prelude::*, cmp};
 use codec::{HasCompact, Compact};
-use runtime_support::{Parameter, StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
+use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
 use session::OnSessionChange;
-use primitives::{Perbill, traits::{Zero, One, Bounded, As}};
-use balances::{address::Address, OnDilution};
+use primitives::{Perbill, traits::{Zero, One, Bounded, As, StaticLookup}};
+use balances::OnDilution;
 use system::ensure_signed;
 
 mod mock;
@@ -130,9 +128,9 @@ decl_module! {
 			Self::apply_unstake(&who, intentions_index as usize)
 		}
 
-		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) {
+		fn nominate(origin, target: <T::Lookup as StaticLookup>::Source) {
 			let who = ensure_signed(origin)?;
-			let target = <balances::Module<T>>::lookup(target)?;
+			let target = T::Lookup::lookup(target)?;
 
 			ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
 			ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already staked.");
