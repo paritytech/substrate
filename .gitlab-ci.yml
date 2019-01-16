@@ -1,5 +1,7 @@
 # .gitlab-ci.yml
-#
+
+
+
 stages:
   - test
   - build
@@ -19,8 +21,8 @@ variables:
 cache:
   key:                             "${CI_JOB_NAME}"
   paths:
-    - ./.cargo/
-
+    - ${CARGO_HOME}
+    - ./target
 
 .collect_artifacts:                &collect_artifacts
   artifacts:
@@ -65,21 +67,26 @@ test:rust:stable:                  &test
 
 
 
+
+.build_only:                      &build_only
+  only:
+    - master
+    - tags
+    - web
+
+
 #### stage:                        build
 
 build:rust:linux:release:          &build
   stage:                           build
   <<:                              *collect_artifacts
-  only:
-    - master
-    - tags
-    - web
+  <<:                              *build_only
   tags:
     - linux-docker
   before_script:
    - ./scripts/build.sh
   script:
-    - time cargo build --release --verbose;
+    - time cargo build --release --verbose
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
     - echo -n "Substrate version = "
@@ -90,22 +97,42 @@ build:rust:linux:release:          &build
 
 
 
-
-#### stage:                        publish
-
-.publish:                          &publish
-  stage:                           publish
-  dependencies:
-    - build:rust:linux:release
-  cache: {}
+build:rust:doc:release:            &build
+  stage:                           build
+  artifacts:
+    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
+    when:                          on_success
+    expire_in:                     7 days
+    paths:
+    - ./crate-docs
   only:
     - master
     - tags
     - web
+    - publish-rustdoc
+  tags:
+    - linux-docker
+  script:
+    - time cargo doc --release --verbose
+    - cp -R ./target/doc ./crate-docs
+    - echo "<meta http-equiv=refresh content=0;url=substrate_service/index.html>" > ./crate-docs/index.html
+
+
+
+
+#### stage:                        publish
+
+.publish_build:                    &publish_build
+  stage:                           publish
+  dependencies:
+    - build:rust:linux:release
+  cache: {}
+  <<:                              *build_only
+
 
 
 publish:docker:release:
-  <<:                              *publish
+  <<:                              *publish_build
   tags:
     - shell
   variables:
@@ -126,7 +153,7 @@ publish:docker:release:
 
 
 publish:s3:release:
-  <<:                              *publish
+  <<:                              *publish_build
   image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
@@ -134,6 +161,43 @@ publish:s3:release:
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   script:
     - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
+  after_script:
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/
+  tags:
+    - linux-docker
+
+
+
+publish:s3:doc:
+  stage:                           publish
+  dependencies:
+    - build:rust:doc:release
+  cache: {}
+  only:
+    - master
+    - tags
+    - web
+    - publish-rustdoc
+  variables:
+    GIT_STRATEGY:                  none
+    BUCKET:                        "releases.parity.io"
+    PREFIX:                        "substrate-rustdoc"
+  before_script:
+    - mkdir -p ${HOME}/.aws
+    - |
+      cat > ${HOME}/.aws/config <<EOC
+      [default]
+      s3 =
+        max_concurrent_requests = 20
+        max_queue_size = 10000
+        multipart_threshold = 64MB
+        multipart_chunksize = 16MB
+        max_bandwidth = 50MB/s
+        use_accelerate_endpoint = false
+        addressing_style = path
+      EOC
+  script:
+    - aws s3 sync --delete --size-only --only-show-errors ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
   tags:

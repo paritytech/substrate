@@ -220,7 +220,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value.into(), 0.into()))
+		Call::Balances(balances::Call::set_balance(42, value.into(), 0.into()))
 	}
 
 	#[test]
@@ -237,7 +237,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 3))
 				}
 			]);
 		});
@@ -290,11 +290,11 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(1, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false, 0, 1))
+					event: OuterEvent::motions(RawEvent::Voted(1, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), false, 0, 1))
 				}
 			]);
 		});
@@ -312,15 +312,15 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 3))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false, 1, 1))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), false, 1, 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Disapproved(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into()))
+					event: OuterEvent::motions(RawEvent::Disapproved(hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()))
 				}
 			]);
 		});
@@ -338,19 +338,19 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), true, 2, 0))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), true, 2, 0))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Approved(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into()))
+					event: OuterEvent::motions(RawEvent::Approved(hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into()))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Executed(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false))
+					event: OuterEvent::motions(RawEvent::Executed(hex!["cd0b662a49f004093b80600415cf4126399af0d27ed6c185abeb1469c17eb5bf"].into(), false))
 				}
 			]);
 		});

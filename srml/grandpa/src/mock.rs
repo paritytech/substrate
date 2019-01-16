@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
+use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header}};
 use primitives::generic::DigestItem as GenDigestItem;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
@@ -51,6 +51,7 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = TestEvent;
 	type Log = DigestItem;

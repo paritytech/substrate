@@ -18,8 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::BuildStorage;
-use primitives::Perbill;
+use primitives::{traits::IdentityLookup, BuildStorage, Perbill};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -46,14 +45,15 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
-	type AccountIndex = u64;
 	type OnFreeBalanceZero = Staking;
+	type OnNewAccount = ();
 	type EnsureAccountLiquid = Staking;
 	type Event = ();
 }
@@ -109,7 +109,6 @@ pub fn new_test_ext(
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,
-		reclaim_rebate: 0,
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
