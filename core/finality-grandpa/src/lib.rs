@@ -16,6 +16,8 @@
 
 //! Integration of the GRANDPA finality gadget into substrate.
 //!
+//! This crate is unstable and the API and usage may change.
+//!
 //! This crate provides a long-running future that produces finality notifications.
 //!
 //! # Usage
