@@ -41,6 +41,7 @@ use state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof, OverlayedChanges
 };
+use hash_db::Hasher;
 
 use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
 use crate::blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
@@ -79,6 +80,9 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
 }
+
+/// Client import operation, a wrapper for the backend.
+pub struct ClientImportOperation<Block: BlockT, H: Hasher<Out=Block::Hash>, B: backend::Backend<Block, H>>(B::BlockImportOperation);
 
 /// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {

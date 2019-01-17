@@ -92,18 +92,6 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>>;
 }
 
-/// Block import outcome
-pub enum ImportResult<E> {
-	/// Imported successfully.
-	Imported,
-	/// Block already exists, skippped.
-	AlreadyInChain,
-	/// Unknown parent.
-	UnknownParent,
-	/// Other errror.
-	Err(E),
-}
-
 /// Blockchain info
 #[derive(Debug)]
 pub struct Info<Block: BlockT> {
