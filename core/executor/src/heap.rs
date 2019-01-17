@@ -66,14 +66,11 @@ impl Heap {
 	/// Gets requested number of bytes to allocate and returns an index offset.
 	/// The index offset starts at 0.
 	pub fn allocate(&mut self, size: u32) -> u32 {
-		self.total_size += size;
-		trace!(target: "wasm-heap", "Heap size over {} Bytes after allocation", self.total_size);
-
 		// Get the requested level from number of blocks requested
 		let blocks_needed = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 		let levels_needed = Heap::get_tree_levels(blocks_needed);
 		if levels_needed > self.levels {
-			panic!("heap is too small: {:?} > {:?}", levels_needed, self.levels);
+			trace!(target: "wasm-heap", "Heap is too small: {:?} > {:?}", levels_needed, self.levels);
 		}
 
 		// Start at tree root and traverse down
@@ -131,7 +128,7 @@ impl Heap {
 			// Backtrack once we're at the bottom and haven't matched a free block yet
 			'up: loop {
 				if index == 0 {
-					panic!("heap is too small: tree root reached.");
+					trace!(target: "wasm-heap", "Heap is too small: tree root reached.");
 				}
 
 				index = self.get_parent_node_index(index);
@@ -151,20 +148,30 @@ impl Heap {
 		let ptr = BLOCK_SIZE * block_offset as u32;
 		self.allocated_bytes.insert(ptr, size as u32);
 
-		ptr
+		self.total_size += size;
+		trace!(target: "wasm-heap", "Heap size over {} Bytes after allocation", self.total_size);
+
+		ptr + 1
 	}
 
 	/// Deallocates all blocks which were allocated for a pointer.
-	pub fn deallocate(&mut self, ptr: u32) {
-		let allocated_size = self.allocated_bytes.get(&ptr).unwrap().clone();
+	pub fn deallocate(&mut self, mut ptr: u32) {
+		ptr -= 1;
 
-		self.total_size = self.total_size.checked_sub(allocated_size).unwrap_or(0);
-		trace!(target: "wasm-heap", "Heap size over {} Bytes after deallocation", self.total_size);
+		let allocated_size = match self.allocated_bytes.get(&ptr) {
+			Some(v) => *v,
+
+			// If nothing has been allocated for the pointer nothing happens
+			None => return (),
+		};
 
 		let count_blocks = (allocated_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 		let block_offset = ptr / BLOCK_SIZE;
 		self.free(block_offset, count_blocks);
-		self.allocated_bytes.remove(&ptr).unwrap();
+		self.allocated_bytes.remove(&ptr).unwrap_or_default();
+
+		self.total_size = self.total_size.checked_sub(allocated_size).unwrap_or(0);
+		trace!(target: "wasm-heap", "Heap size over {} Bytes after deallocation", self.total_size);
 	}
 
 	fn free(&mut self, block_offset: u32, count_blocks: u32) {
@@ -174,7 +181,7 @@ impl Heap {
 		let index_offset = current_level_offset + level_offset;
 
 		if index_offset > self.tree.len() as u32 - 1 {
-			panic!("index offset {} is > length of tree {}", index_offset, self.tree.len());
+			trace!(target: "wasm-heap", "Index offset {} is > length of tree {}", index_offset, self.tree.len());
 		}
 
 		self.free_and_merge(index_offset as usize);
@@ -230,15 +237,16 @@ impl Heap {
 		self.update_parent_nodes(parent);
 	}
 
-	fn get_tree_levels(count_blocks: u32) -> u32 {
-		let requested_blocks;
+	fn get_tree_levels(mut count_blocks: u32) -> u32 {
 		if count_blocks == 0 {
-			requested_blocks = 1;
+				0
 		} else {
-			requested_blocks = count_blocks.next_power_of_two();
+				let mut counter = 0;
+				while {count_blocks >>= 1; count_blocks > 0} {
+						counter += 1;
+				}
+				counter
 		}
-
-		(requested_blocks as f64).log2() as u32
 	}
 
 }
@@ -246,6 +254,20 @@ impl Heap {
 #[cfg(test)]
 mod tests {
 	use heap::BLOCK_SIZE;
+
+	#[test]
+	fn first_pointer_should_be_one() {
+		let mut heap = super::Heap::new(20);
+		let ptr = heap.allocate(5);
+		assert_eq!(ptr, 1);
+	}
+
+	#[test]
+	fn deallocation_for_nonexistent_pointer_should_not_panic() {
+		let mut heap = super::Heap::new(20);
+		let ret = heap.deallocate(5);
+		assert_eq!(ret, ());
+	}
 
 	#[test]
 	fn should_calculate_tree_size_from_heap_size() {
@@ -284,7 +306,7 @@ mod tests {
 			assert_eq!(heap.total_size, 0);
 
 			let ptr = heap.allocate(42);
-			assert_eq!(ptr, 0);
+			assert_eq!(ptr, 1);
 			assert_eq!(heap.total_size, 42);
 
 			heap.deallocate(ptr);
