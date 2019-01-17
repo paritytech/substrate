@@ -145,6 +145,22 @@ impl From<f32> for Permill {
 	}
 }
 
+impl codec::CompactAs for Permill {
+	type As = u32;
+	fn encode_as(&self) -> &u32 {
+		&self.0
+	}
+	fn decode_from(x: u32) -> Permill {
+		Permill(x)
+	}
+}
+
+impl From<codec::Compact<Permill>> for Permill {
+	fn from(x: codec::Compact<Permill>) -> Permill {
+		x.0
+	}
+}
+
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -197,6 +213,22 @@ impl From<f64> for Perbill {
 impl From<f32> for Perbill {
 	fn from(x: f32) -> Perbill {
 		Perbill::from_fraction(x as f64)
+	}
+}
+
+impl codec::CompactAs for Perbill {
+	type As = u32;
+	fn encode_as(&self) -> &u32 {
+		&self.0
+	}
+	fn decode_from(x: u32) -> Perbill {
+		Perbill(x)
+	}
+}
+
+impl From<codec::Compact<Perbill>> for Perbill {
+	fn from(x: codec::Compact<Perbill>) -> Perbill {
+		x.0
 	}
 }
 
@@ -622,5 +654,44 @@ mod tests {
 	fn opaque_extrinsic_serialization() {
 		let ex = super::OpaqueExtrinsic(vec![1, 2, 3, 4]);
 		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x1001020304\"".to_owned());
+	}
+
+	#[test]
+	fn compact_permill_perbill_encoding() {
+		let tests = [(0u32, 1usize), (63, 1), (64, 2), (16383, 2), (16384, 4), (1073741823, 4), (1073741824, 5), (u32::max_value(), 5)];
+		for &(n, l) in &tests {
+			let compact: codec::Compact<super::Permill> = super::Permill(n).into();
+			let encoded = compact.encode();
+			assert_eq!(encoded.len(), l);
+			let decoded = <codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
+			let permill: super::Permill = decoded.into();
+			assert_eq!(permill, super::Permill(n));
+
+			let compact: codec::Compact<super::Perbill> = super::Perbill(n).into();
+			let encoded = compact.encode();
+			assert_eq!(encoded.len(), l);
+			let decoded = <codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
+			let perbill: super::Perbill = decoded.into();
+			assert_eq!(perbill, super::Perbill(n));
+		}
+	}
+
+	#[derive(Encode, Decode, PartialEq, Eq, Debug)]
+	struct WithCompact<T: codec::HasCompact> {
+		data: T,
+	}
+
+	#[test]
+	fn test_has_compact_permill() {
+		let data = WithCompact { data: super::Permill(1) };
+		let encoded = data.encode();
+		assert_eq!(data, WithCompact::<super::Permill>::decode(&mut &encoded[..]).unwrap());
+	}
+
+	#[test]
+	fn test_has_compact_perbill() {
+		let data = WithCompact { data: super::Perbill(1) };
+		let encoded = data.encode();
+		assert_eq!(data, WithCompact::<super::Perbill>::decode(&mut &encoded[..]).unwrap());
 	}
 }

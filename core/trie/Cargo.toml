@@ -11,7 +11,7 @@ name = "bench"
 harness = false
 
 [dependencies]
-parity-codec = { version = "2.1" }
+parity-codec = { version = "2.2" }
 hash-db = { git = "https://github.com/paritytech/trie", default-features = false }
 trie-db = { git = "https://github.com/paritytech/trie", optional = true }
 trie-root = { git = "https://github.com/paritytech/trie", default-features = false }

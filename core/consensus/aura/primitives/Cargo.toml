@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for Aura consensus"
 
 [dependencies]
-parity-codec = { version = "2.1", default-features = false }
+parity-codec = { version = "2.2", default-features = false }
 substrate-client = { path = "../../../client", default-features = false }
 substrate-primitives = { path = "../../../primitives", default-features = false }
 srml-support = { path = "../../../../srml/support", default-features = false }
