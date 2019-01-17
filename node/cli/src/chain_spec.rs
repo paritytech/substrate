@@ -73,7 +73,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			ids: endowed_accounts.clone(),
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
+			validators: initial_authorities.iter().cloned().map(|k| (k.into(), 1)).collect(),
 			session_length: 5 * MINUTES,
 		}),
 		staking: Some(StakingConfig {
@@ -198,7 +198,7 @@ pub fn testnet_genesis(
 			balances: endowed_accounts.iter().map(|&k| (k.into(), (1 << 60))).collect(),
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
+			validators: initial_authorities.iter().cloned().map(|k| (k.into(), 1)).collect(),
 			session_length: 10,
 		}),
 		staking: Some(StakingConfig {
