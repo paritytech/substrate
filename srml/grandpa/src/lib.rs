@@ -279,8 +279,7 @@ impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 
 		let next_authorities = <session::Module<T>>::validators()
 			.into_iter()
-			.map(T::ConvertAccountIdToSessionKey::convert)
-			.map(|key| (key, 1)) // evenly-weighted.
+			.map(|(account_id, weight)| (T::ConvertAccountIdToSessionKey::convert(account_id), weight))
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 
 		// instant changes
