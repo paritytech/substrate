@@ -403,7 +403,7 @@ pub mod tests {
 		RemoteCallRequest, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{twox_128, Blake2Hasher};
-	use primitives::storage::well_known_keys;
+	use primitives::storage::{StorageKey, well_known_keys};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -546,6 +546,7 @@ pub mod tests {
 			let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 			// 'fetch' changes proof from remote node
+			let key = StorageKey(key);
 			let remote_proof = remote_client.key_changes_proof(
 				begin_hash, end_hash, begin_hash, max_hash, &key
 			).unwrap();
@@ -558,7 +559,7 @@ pub mod tests {
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
 				tries_roots: (begin, begin_hash, local_roots_range),
-				key: key,
+				key: key.0,
 				retry_count: None,
 			};
 			let local_result = local_checker.check_changes_proof(&request, ChangesProof {
@@ -583,6 +584,7 @@ pub mod tests {
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
 		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
 		// we're fetching changes for range b1..b4
@@ -611,7 +613,7 @@ pub mod tests {
 			last_block: (4, b4),
 			max_block: (4, b4),
 			tries_roots: (3, b3, vec![remote_roots[2].clone(), remote_roots[3].clone()]),
-			key: dave,
+			key: dave.0,
 			retry_count: None,
 		};
 		let local_result = local_checker.check_changes_proof_with_cht_size(&request, ChangesProof {
@@ -640,6 +642,7 @@ pub mod tests {
 		let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 		// 'fetch' changes proof from remote node
+		let key = StorageKey(key);
 		let remote_proof = remote_client.key_changes_proof(
 			begin_hash, end_hash, begin_hash, max_hash, &key).unwrap();
 
@@ -650,7 +653,7 @@ pub mod tests {
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),
 			tries_roots: (begin, begin_hash, local_roots_range.clone()),
-			key: key,
+			key: key.0,
 			retry_count: None,
 		};
 
@@ -693,6 +696,7 @@ pub mod tests {
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
 			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
 		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
 		// we're fetching changes for range b1..b4
