@@ -189,9 +189,12 @@ cargo install --git https://github.com/alexcrichton/wasm-gc
 
 You will also need to install the following packages:
 
- - Linux:
+ - Ubuntu:
 [source, shell]
 sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
+
+ - Arch Linux:
+[source, shell]
 sudo pacman -S cmake pkgconf openssl git clang
 
  - Mac:
