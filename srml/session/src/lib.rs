@@ -117,7 +117,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 
 		/// The current set of validators.
-		pub Validators get(validators) config(): Vec<T::AccountId>;
+		pub Validators get(validators) config(): Vec<(T::AccountId, u64)>;
 		/// Current length of the session.
 		pub SessionLength get(length) config(session_length): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// Current index of the session.
@@ -159,10 +159,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
-	pub fn set_validators(new: &[T::AccountId]) {
+	pub fn set_validators(new: &[(T::AccountId, u64)]) {
 		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
 		<consensus::Module<T>>::set_authorities(
-			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
+			&new.iter().cloned().map(|(account_id, _)| T::ConvertAccountIdToSessionKey::convert(account_id)).collect::<Vec<_>>()
 		);
 	}
 
@@ -207,7 +207,7 @@ impl<T: Trait> Module<T> {
 
 		// Update any changes in session keys.
 		Self::validators().iter().enumerate().for_each(|(i, v)| {
-			if let Some(n) = <NextKeyFor<T>>::take(v) {
+			if let Some(n) = <NextKeyFor<T>>::take(v.0.clone()) {
 				<consensus::Module<T>>::set_authority(i as u32, &n);
 			}
 		});
@@ -291,7 +291,7 @@ mod tests {
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
-			validators: vec![1, 2, 3],
+			validators: vec![(1, 1), (2, 1), (3, 1)],
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
@@ -301,7 +301,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(3).into()]);
 			assert_eq!(Session::length(), 2);
-			assert_eq!(Session::validators(), vec![1, 2, 3]);
+			assert_eq!(Session::validators(), vec![(1, 1), (2, 1), (3, 1)]);
 		});
 	}
 
