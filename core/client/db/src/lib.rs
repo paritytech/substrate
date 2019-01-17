@@ -430,7 +430,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	}
 
 	/// Prune obsolete changes tries.
-	pub fn prune(&self, config: Option<ChangesTrieConfiguration>, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {
+	pub fn prune(&self, config: Option<ChangesTrieConfiguration>, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {	
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => min_blocks_to_keep,
@@ -453,6 +453,23 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 				number: block_num.as_(),
 			},
 			|node| tx.delete(columns::CHANGES_TRIE, node.as_ref()));
+	}
+}
+
+impl<Block: BlockT> client::backend::PrunableStateChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
+	fn oldest_changes_trie_block(
+		&self,
+		config: &ChangesTrieConfiguration,
+		best_finalized_block: u64
+	) -> u64 {
+		match self.min_blocks_to_keep {
+			Some(min_blocks_to_keep) => state_machine::oldest_non_pruned_changes_trie(
+				config,
+				min_blocks_to_keep,
+				best_finalized_block,
+			),
+			None => 1,
+		}
 	}
 }
 
