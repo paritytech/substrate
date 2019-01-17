@@ -36,7 +36,7 @@ extern crate srml_system as system;
 
 use rstd::prelude::*;
 use rstd::result;
-use codec::{HasCompact, Compact};
+use codec::Compact;
 use primitives::traits::{Zero, As};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::dispatch::Result;
@@ -93,10 +93,9 @@ decl_module! {
 		fn propose(
 			origin,
 			proposal: Box<T::Proposal>,
-			value: <T::Balance as HasCompact>::Type
+			#[compact] value: T::Balance
 		) {
 			let who = ensure_signed(origin)?;
-			let value = value.into();
 
 			ensure!(value >= Self::minimum_deposit(), "value too low");
 			<balances::Module<T>>::reserve(&who, value)
@@ -154,9 +153,9 @@ decl_module! {
 		}
 
 		/// Cancel a proposal queued for enactment.
-		pub fn cancel_queued(when: <T::BlockNumber as HasCompact>::Type, which: Compact<u32>) -> Result {
+		pub fn cancel_queued(#[compact] when: T::BlockNumber, which: Compact<u32>) -> Result {
 			let which = u32::from(which) as usize;
-			<DispatchQueue<T>>::mutate(when.into(), |items| if items.len() > which { items[which] = None });
+			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
 			Ok(())
 		}
 
@@ -555,7 +554,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(42, value.into(), 0.into()))
+		Call::Balances(balances::Call::set_balance(42, value.into(), 0))
 	}
 
 	fn propose_set_balance(who: u64, value: u64, locked: u64) -> super::Result {
