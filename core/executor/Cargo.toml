@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.12"
-parity-codec = "2.1"
+parity-codec = "2.2"
 sr-io = { path = "../sr-io" }
 substrate-primitives = { path = "../primitives" }
 substrate-trie = { path = "../trie" }
