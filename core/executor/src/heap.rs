@@ -45,21 +45,31 @@ enum Node {
 pub struct Heap {
 	allocated_bytes: FnvHashMap<u32, u32>,
 	levels: u32,
+	ptr_offset: u32,
 	tree: vec::Vec<Node>,
 	total_size: u32,
 }
 
 impl Heap {
 
-	/// Creates a new buddy allocation heap with a fixed size (in Bytes).
-	pub fn new(reserved: u32) -> Self {
-		let leaves = reserved / BLOCK_SIZE;
+	/// Creates a new buddy allocation heap.
+	///
+	/// # Arguments
+	///
+	/// * `ptr_offset` - The indices returned by `allocate()`
+	///   will start from this offset on.
+	/// * `heap_size` - The size available to this heap instance
+	///   (in Bytes) for allocating memory.
+	///
+	pub fn new(ptr_offset: u32, heap_size: u32) -> Self {
+		let leaves = heap_size / BLOCK_SIZE;
 		let levels = Heap::get_tree_levels(leaves);
 		let node_count: usize = (1 << levels + 1) - 1;
 
 		Heap {
 			allocated_bytes: FnvHashMap::default(),
 			levels,
+			ptr_offset,
 			tree: vec![Node::Free; node_count],
 			total_size: 0,
 		}
@@ -81,7 +91,7 @@ impl Heap {
 		self.total_size += size;
 		trace!(target: "wasm-heap", "Heap size over {} Bytes after allocation", self.total_size);
 
-		ptr + 1
+		self.ptr_offset + ptr
 	}
 
 	fn allocate_block_in_tree(&mut self, blocks_needed: u32) -> Option<usize> {
@@ -169,7 +179,7 @@ impl Heap {
 
 	/// Deallocates all blocks which were allocated for a pointer.
 	pub fn deallocate(&mut self, mut ptr: u32) {
-		ptr -= 1;
+		ptr -= self.ptr_offset;
 
 		let allocated_size = match self.allocated_bytes.get(&ptr) {
 			Some(v) => *v,
@@ -269,23 +279,38 @@ mod tests {
 	use heap::BLOCK_SIZE;
 
 	#[test]
-	fn first_pointer_should_be_one() {
-		let mut heap = super::Heap::new(20);
-		let ptr = heap.allocate(5);
-		assert_eq!(ptr, 1);
+	fn first_pointer_should_start_at_offset() {
+		let start_offset = 42;
+		let heap_size = BLOCK_SIZE * 4;
+		let mut heap = super::Heap::new(start_offset, heap_size);
+
+		let ptr = heap.allocate(BLOCK_SIZE - 1);
+		assert_eq!(ptr, start_offset);
+	}
+
+	#[test]
+	fn second_pointer_should_start_at_second_block() {
+		let start_offset = 42;
+		let heap_size = BLOCK_SIZE * 4;
+		let mut heap = super::Heap::new(start_offset, heap_size);
+
+		let _ptr1 = heap.allocate(BLOCK_SIZE - 1);
+		let ptr2 = heap.allocate(BLOCK_SIZE - 1);
+		assert_eq!(ptr2, start_offset + BLOCK_SIZE);
 	}
 
 	#[test]
 	fn deallocation_for_nonexistent_pointer_should_not_panic() {
-		let mut heap = super::Heap::new(20);
-		let ret = heap.deallocate(5);
+		let heap_size = BLOCK_SIZE * 4;
+		let mut heap = super::Heap::new(1, heap_size);
+		let ret = heap.deallocate(heap_size + 1);
 		assert_eq!(ret, ());
 	}
 
 	#[test]
 	fn should_calculate_tree_size_from_heap_size() {
 		let heap_size = BLOCK_SIZE * 4;
-		let heap = super::Heap::new(heap_size);
+		let heap = super::Heap::new(1, heap_size);
 
 		assert_eq!(heap.levels, 2);
 	}
@@ -293,7 +318,7 @@ mod tests {
 	#[test]
 	fn should_round_tree_size_to_nearest_possible() {
 		let heap_size = BLOCK_SIZE * 4 + 1;
-		let heap = super::Heap::new(heap_size);
+		let heap = super::Heap::new(1, heap_size);
 
 		assert_eq!(heap.levels, 2);
 	}
@@ -301,7 +326,7 @@ mod tests {
 	#[test]
 	fn heap_size_should_stay_zero_in_total() {
 		let heap_size = BLOCK_SIZE * 4;
-		let mut heap = super::Heap::new(heap_size);
+		let mut heap = super::Heap::new(1, heap_size);
 		assert_eq!(heap.total_size, 0);
 
 		let ptr = heap.allocate(42);
@@ -314,7 +339,7 @@ mod tests {
 	#[test]
 	fn heap_size_should_stay_constant() {
 		let heap_size = BLOCK_SIZE * 4;
-		let mut heap = super::Heap::new(heap_size);
+		let mut heap = super::Heap::new(1, heap_size);
 		for _ in 1..10 {
 			assert_eq!(heap.total_size, 0);
 
