@@ -54,7 +54,6 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
-		let page_size = 65_536;
 		let current_size: Bytes = m.current_size().into();
 		let current_size = current_size.0 as u32;
 		let used_size = m.used_size().0 as u32;

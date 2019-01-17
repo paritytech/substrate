@@ -275,7 +275,7 @@ impl Heap {
 
 #[cfg(test)]
 mod tests {
-	use heap::BLOCK_SIZE;
+	use super::*;
 
 	#[test]
 	fn first_pointer_should_start_at_offset() {
