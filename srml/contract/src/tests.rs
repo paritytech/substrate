@@ -29,7 +29,7 @@ use system::{ensure_signed, Phase, EventRecord};
 use wabt;
 use {
 	balances, runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
-	Trait, RawOrigin,
+	Trait
 };
 
 mod contract {
@@ -44,9 +44,7 @@ impl_outer_event! {
 	}
 }
 impl_outer_origin! {
-	pub enum Origin for Test {
-		contract<T>,
-	}
+	pub enum Origin for Test { }
 }
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
@@ -173,11 +171,6 @@ impl ExtBuilder {
 		);
 		runtime_io::TestExternalities::new(t)
 	}
-}
-
-#[test]
-fn make_sure_contract_origin_coerces_into_signed() {
-	assert_eq!(1337, ensure_signed(Origin::contract(RawOrigin::Contract(1337))).unwrap());
 }
 
 #[test]

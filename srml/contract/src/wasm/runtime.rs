@@ -482,11 +482,11 @@ define_env!(Env, <E: Ext>,
 	ext_dispatch_call(ctx, call_ptr: u32, call_len: u32) => {
 		let call = {
 			let call_buf = read_sandbox_memory(ctx, call_ptr, call_len)?;
-			// TODO: Not Balance but Call
 			<<<E as Ext>::T as Trait>::Call>::decode(&mut &call_buf[..])
 				.ok_or_else(|| sandbox::HostError)?
 		};
 
+		// TODO: Charge for the dispatch appropriately.
 		ctx.ext.note_dispatch_call(call);
 
 		Ok(())

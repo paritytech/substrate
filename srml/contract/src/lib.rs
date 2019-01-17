@@ -106,12 +106,13 @@ use codec::{Codec, HasCompact};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use runtime_support::dispatch::{Result, Dispatchable};
 use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
-use system::ensure_signed;
+use system::{ensure_signed, Origin, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 
 pub trait Trait: balances::Trait {
+	// TODO: Review this.
 	/// The outer origin type.
 	type Origin: From<Origin<Self>>;
 
@@ -155,14 +156,6 @@ where
 		T::Hashing::hash(&buf[..]).into()
 	}
 }
-
-/// Origin for the contract module.
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum RawOrigin<AccountId> {
-	Contract(AccountId),
-}
-pub type Origin<T> = RawOrigin<<T as system::Trait>::AccountId>;
 
 decl_module! {
 	/// Contracts module.
@@ -237,13 +230,6 @@ decl_module! {
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
-
-				// Dispatch every recorded call with an appropriate origin.
-				// TODO: Do we need to put this after gas refund?
-				ctx.calls.into_iter().for_each(|(who, call)| {
-					let result = call.dispatch(RawOrigin::Contract(who.clone()).into());
-					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
-				});
 			}
 
 			// Refund cost of the unused gas.
@@ -251,6 +237,12 @@ decl_module! {
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
 			gas::refund_unused_gas::<T>(&origin, gas_meter);
+
+			// Dispatch every recorded call with an appropriate origin.
+			ctx.calls.into_iter().for_each(|(who, call)| {
+				let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
+				Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
+			});
 
 			result.map(|_| ())
 		}
