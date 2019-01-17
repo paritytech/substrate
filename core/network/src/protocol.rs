@@ -22,6 +22,7 @@ use parking_lot::RwLock;
 use rustc_hex::ToHex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
 use runtime_primitives::generic::BlockId;
+use primitives::storage::StorageKey;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
 use consensus::import_queue::ImportQueue;
@@ -712,11 +713,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn on_remote_changes_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteChangesRequest<B::Hash>) {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id, who, request.key.to_hex(), request.first, request.last);
-		let proof = match self.context_data.chain.key_changes_proof(request.first, request.last, request.min, request.max, &request.key) {
+		let key = StorageKey(request.key);
+		let proof = match self.context_data.chain.key_changes_proof(request.first, request.last, request.min, request.max, &key) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
-					request.id, who, request.key.to_hex(), request.first, request.last, error);
+					request.id, who, key.0.to_hex(), request.first, request.last, error);
 				ChangesProof::<B::Header> {
 					max_block: Zero::zero(),
 					proof: vec![],
