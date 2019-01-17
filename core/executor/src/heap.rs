@@ -29,9 +29,8 @@ use std::collections::HashMap;
 //
 // In our case the alignment for wasm32-unknown-unknown is
 // 1 byte though, i.e. the pointer will always be aligned.
-const BLOCK_SIZE: usize = 8192; // 2^13 Bytes
+const BLOCK_SIZE: u32 = 8192; // 2^13 Bytes
 
-#[repr(u8)]
 #[derive(PartialEq, Copy, Clone)]
 enum Node {
 	Free,
@@ -52,7 +51,7 @@ impl Heap {
 
 	/// Creates a new buddy allocation heap with a fixed size (in Bytes).
 	pub fn new(reserved: u32) -> Self {
-		let leaves = reserved / BLOCK_SIZE as u32;
+		let leaves = reserved / BLOCK_SIZE;
 		let levels = Heap::get_tree_levels(leaves);
 		let node_count: usize = (1 << levels + 1) - 1;
 
@@ -67,14 +66,11 @@ impl Heap {
 	/// Gets requested number of bytes to allocate and returns an index offset.
 	/// The index offset starts at 0.
 	pub fn allocate(&mut self, size: u32) -> u32 {
-		let new_total_size = self.total_size + size;
-		if new_total_size > self.total_size {
-			trace!(target: "wasm-heap", "Heap size is over {} Bytes after allocation", new_total_size);
-		}
-		self.total_size = new_total_size;
+		self.total_size += size;
+		trace!(target: "wasm-heap", "Heap size over {} Bytes after allocation", self.total_size);
 
 		// Get the requested level from number of blocks requested
-		let blocks_needed = (size as f32 / BLOCK_SIZE as f32).ceil() as u32;
+		let blocks_needed = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 		let levels_needed = Heap::get_tree_levels(blocks_needed);
 		if levels_needed > self.levels {
 			panic!("heap is too small: {:?} > {:?}", levels_needed, self.levels);
@@ -104,7 +100,7 @@ impl Heap {
 							// Check if buddy is free
 							index += 1;
 						} else {
-							break;
+							break 'down;
 						}
 						continue 'down;
 					},
@@ -152,27 +148,23 @@ impl Heap {
 		let level_offset = index - current_level_offset;
 		let block_offset = level_offset * (1 << current_level);
 
-		let ptr = BLOCK_SIZE as u32 * block_offset as u32;
+		let ptr = BLOCK_SIZE * block_offset as u32;
 		self.allocated_bytes.insert(ptr, size as u32);
 
 		ptr
 	}
 
 	/// Deallocates all blocks which were allocated for a pointer.
-	pub fn deallocate(&mut self, ptr_: u32) {
-		let ptr = &(ptr_ as u32);
-		let allocated_size = self.allocated_bytes.get(ptr).unwrap().clone() as u32;
+	pub fn deallocate(&mut self, ptr: u32) {
+		let allocated_size = self.allocated_bytes.get(&ptr).unwrap().clone();
 
-		let new_total_size = self.total_size - allocated_size;
-		if new_total_size < self.total_size {
-			trace!(target: "wasm-heap", "Heap size over {} Bytes after deallocation", new_total_size);
-		}
-		self.total_size = new_total_size;
+		self.total_size = self.total_size.checked_sub(allocated_size).unwrap_or(0);
+		trace!(target: "wasm-heap", "Heap size over {} Bytes after deallocation", self.total_size);
 
-		let count_blocks = (allocated_size as f32 / BLOCK_SIZE as f32).ceil() as u32;
-		let block_offset = ptr / BLOCK_SIZE as u32;
+		let count_blocks = (allocated_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+		let block_offset = ptr / BLOCK_SIZE;
 		self.free(block_offset, count_blocks);
-		self.allocated_bytes.remove(ptr).unwrap();
+		self.allocated_bytes.remove(&ptr).unwrap();
 	}
 
 	fn free(&mut self, block_offset: u32, count_blocks: u32) {
@@ -202,13 +194,12 @@ impl Heap {
 			return;
 		}
 
-		let other_node: usize;
 		let has_right_buddy = (index & 1) == 1;
-		if has_right_buddy {
-			other_node = index + 1;
+		let other_node = if has_right_buddy {
+			index + 1
 		} else {
-			other_node = index - 1;
-		}
+			index - 1
+		};
 
 		if self.tree[other_node] == Node::Free {
 			let parent = self.get_parent_node_index(index);
@@ -259,7 +250,7 @@ mod tests {
 	#[test]
 	fn should_calculate_tree_size_from_heap_size() {
 		let heap_size = BLOCK_SIZE * 4;
-		let heap = super::Heap::new(heap_size as u32);
+		let heap = super::Heap::new(heap_size);
 
 		assert_eq!(heap.levels, 2);
 	}
@@ -267,7 +258,7 @@ mod tests {
 	#[test]
 	fn should_round_tree_size_to_nearest_possible() {
 		let heap_size = BLOCK_SIZE * 4 + 1;
-		let heap = super::Heap::new(heap_size as u32);
+		let heap = super::Heap::new(heap_size);
 
 		assert_eq!(heap.levels, 2);
 	}
@@ -275,7 +266,7 @@ mod tests {
 	#[test]
 	fn heap_size_should_stay_zero_in_total() {
 		let heap_size = BLOCK_SIZE * 4;
-		let mut heap = super::Heap::new(heap_size as u32);
+		let mut heap = super::Heap::new(heap_size);
 		assert_eq!(heap.total_size, 0);
 
 		let ptr = heap.allocate(42);
@@ -288,7 +279,7 @@ mod tests {
 	#[test]
 	fn heap_size_should_stay_constant() {
 		let heap_size = BLOCK_SIZE * 4;
-		let mut heap = super::Heap::new(heap_size as u32);
+		let mut heap = super::Heap::new(heap_size);
 		for _ in 1..10 {
 			assert_eq!(heap.total_size, 0);
 
