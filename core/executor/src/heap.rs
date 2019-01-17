@@ -23,15 +23,15 @@ extern crate fnv;
 use std::vec;
 use self::fnv::FnvHashMap;
 
-// The pointers need to be aligned. By choosing a block size
-// which is a multiple of the memory alignment requirement
-// it is ensured that a pointer is always aligned. This is
-// because in buddy allocation a pointer always points to the
-// start of a block.
-//
-// In our case the alignment for wasm32-unknown-unknown is
-// 1 byte though, i.e. the pointer will always be aligned.
-const BLOCK_SIZE: u32 = 8192; // 2^13 Bytes
+// The pointers need to be aligned to 8 bytes.
+const ALIGNMENT: u32 = 8;
+
+// The block size needs to be a multiple of the memory alignment
+// requirement. This is so that the pointer returned by `allocate()`
+// always fulfills the alignment. In buddy allocation a pointer always
+// points to the start of a block, which with a fitting block size
+// will then be a multiple of the alignment requirement.
+const BLOCK_SIZE: u32 = 8192; // 2^13 bytes
 
 #[derive(PartialEq, Copy, Clone)]
 enum Node {
@@ -57,11 +57,21 @@ impl Heap {
 	/// # Arguments
 	///
 	/// * `ptr_offset` - The pointers returned by `allocate()`
-	///   will start from this offset on.
-	/// * `heap_size` - The size available to this heap instance
-	///   (in Bytes) for allocating memory.
+	///   start from this offset on. The pointer offset needs
+	///   to be aligned to a multiple of `ALIGNMENT`, hence a
+	///   padding might be added to align `ptr_offset` properly.
 	///
-	pub fn new(ptr_offset: u32, heap_size: u32) -> Self {
+	/// * `heap_size` - The size available to this heap instance
+	///   (in bytes) for allocating memory.
+	///
+	pub fn new(mut ptr_offset: u32, heap_size: u32) -> Self {
+		assert!(BLOCK_SIZE % ALIGNMENT == 0, "Block size is no multiple of alignment!");
+
+		let padding = ptr_offset % ALIGNMENT;
+		if padding != 0 {
+			ptr_offset += ALIGNMENT - padding;
+		}
+
 		let leaves = heap_size / BLOCK_SIZE;
 		let levels = Heap::get_tree_levels(leaves);
 		let node_count: usize = (1 << levels + 1) - 1;
@@ -88,7 +98,7 @@ impl Heap {
 		self.allocated_bytes.insert(ptr, size as u32);
 
 		self.total_size += size;
-		trace!(target: "wasm-heap", "Heap size over {} Bytes after allocation", self.total_size);
+		trace!(target: "wasm-heap", "Heap size over {} bytes after allocation", self.total_size);
 
 		self.ptr_offset + ptr
 	}
@@ -193,7 +203,7 @@ impl Heap {
 		self.allocated_bytes.remove(&ptr).unwrap_or_default();
 
 		self.total_size = self.total_size.checked_sub(allocated_size).unwrap_or(0);
-		trace!(target: "wasm-heap", "Heap size over {} Bytes after deallocation", self.total_size);
+		trace!(target: "wasm-heap", "Heap size over {} bytes after deallocation", self.total_size);
 	}
 
 	fn free(&mut self, block_offset: u32, count_blocks: u32) {
@@ -278,8 +288,17 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn first_pointer_should_start_at_offset() {
-		let start_offset = 42;
+	fn should_always_align_pointers_to_multiples_of_8() {
+		let heap_size = BLOCK_SIZE * 4;
+		let mut heap = super::Heap::new(13, heap_size);
+
+		let ptr = heap.allocate(1);
+		assert_eq!(ptr, 16); // 16 is the next multiple of 8 from 13
+	}
+
+	#[test]
+	fn should_start_first_pointer_at_offset() {
+		let start_offset = 40;
 		let heap_size = BLOCK_SIZE * 4;
 		let mut heap = super::Heap::new(start_offset, heap_size);
 
@@ -288,8 +307,8 @@ mod tests {
 	}
 
 	#[test]
-	fn second_pointer_should_start_at_second_block() {
-		let start_offset = 42;
+	fn should_start_second_pointer_at_second_block() {
+		let start_offset = 40;
 		let heap_size = BLOCK_SIZE * 4;
 		let mut heap = super::Heap::new(start_offset, heap_size);
 
@@ -299,7 +318,7 @@ mod tests {
 	}
 
 	#[test]
-	fn deallocation_for_nonexistent_pointer_should_not_panic() {
+	fn should_not_panic_on_deallocation_of_nonexistent_pointer() {
 		let heap_size = BLOCK_SIZE * 4;
 		let mut heap = super::Heap::new(1, heap_size);
 		let ret = heap.deallocate(heap_size + 1);
@@ -338,12 +357,12 @@ mod tests {
 	#[test]
 	fn heap_size_should_stay_constant() {
 		let heap_size = BLOCK_SIZE * 4;
-		let mut heap = super::Heap::new(1, heap_size);
+		let mut heap = super::Heap::new(9, heap_size);
 		for _ in 1..10 {
 			assert_eq!(heap.total_size, 0);
 
 			let ptr = heap.allocate(42);
-			assert_eq!(ptr, 1);
+			assert_eq!(ptr, 16);
 			assert_eq!(heap.total_size, 42);
 
 			heap.deallocate(ptr);
