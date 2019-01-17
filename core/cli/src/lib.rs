@@ -79,6 +79,7 @@ use names::{Generator, Name};
 use regex::Regex;
 use structopt::StructOpt;
 pub use params::{CoreParams, CoreCommands, ExecutionStrategy};
+use app_dirs::{AppInfo, AppDataType};
 
 use futures::Future;
 
@@ -129,10 +130,15 @@ fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G
 	Ok(spec)
 }
 
-fn base_path(matches: &clap::ArgMatches) -> PathBuf {
+fn base_path(matches: &clap::ArgMatches, app_info: &AppInfo) -> PathBuf {
 	matches.value_of("base_path")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(default_base_path)
+		.unwrap_or_else(|| 
+			app_dirs::get_app_root(
+				AppDataType::UserData,
+				app_info,
+			).expect("app directories exist on all supported platforms; qed")
+		)
 }
 
 fn create_input_err<T: Into<String>>(msg: T) -> error::Error {
@@ -189,7 +195,8 @@ pub fn parse_matches<'a, F, S>(
 	spec_factory: S,
 	version: VersionInfo,
 	impl_name: &'static str,
-	matches: &clap::ArgMatches<'a>
+	matches: &clap::ArgMatches<'a>,
+	app_info: &AppInfo,
 ) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>
 where
 	F: ServiceFactory,
@@ -219,7 +226,7 @@ where
 		)
 	}
 
-	let base_path = base_path(&matches);
+	let base_path = base_path(&matches, &app_info);
 
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
@@ -336,7 +343,8 @@ where
 
 fn get_db_path_for_subcommand(
 	main_cmd: &clap::ArgMatches,
-	sub_cmd: &clap::ArgMatches
+	sub_cmd: &clap::ArgMatches,
+	app_info: &AppInfo,
 ) -> error::Result<PathBuf> {
 	if main_cmd.is_present("chain") && sub_cmd.is_present("chain") {
 		bail!(create_input_err("`--chain` option is present two times"));
@@ -367,9 +375,9 @@ fn get_db_path_for_subcommand(
 	}
 
 	let base_path = if sub_cmd.is_present("base_path") {
-		base_path(sub_cmd)
+		base_path(sub_cmd, app_info)
 	} else {
-		base_path(main_cmd)
+		base_path(main_cmd, app_info)
 	};
 
 	Ok(db_path(&base_path, &spec_id))
@@ -388,7 +396,8 @@ pub fn execute_default<'a, F, E>(
 	spec: ChainSpec<FactoryGenesis<F>>,
 	exit: E,
 	matches: &clap::ArgMatches<'a>,
-	config: &FactoryFullConfiguration<F>
+	config: &FactoryFullConfiguration<F>,
+	app_info: &AppInfo,
 ) -> error::Result<Action<E>>
 where
 	E: IntoExit,
@@ -405,7 +414,7 @@ where
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("export-blocks") {
 		export_blocks::<F, _>(
-			get_db_path_for_subcommand(matches, sub_matches)?,
+			get_db_path_for_subcommand(matches, sub_matches, app_info)?,
 			matches,
 			spec,
 			exit.into_exit()
@@ -413,7 +422,7 @@ where
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("import-blocks") {
 		import_blocks::<F, _>(
-			get_db_path_for_subcommand(matches, sub_matches)?,
+			get_db_path_for_subcommand(matches, sub_matches, app_info)?,
 			matches,
 			spec,
 			exit.into_exit()
@@ -421,13 +430,13 @@ where
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("revert") {
 		revert_chain::<F>(
-			get_db_path_for_subcommand(matches, sub_matches)?,
+			get_db_path_for_subcommand(matches, sub_matches, app_info)?,
 			sub_matches,
 			spec
 		)?;
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("purge-chain") {
-		purge_chain::<F>(get_db_path_for_subcommand(matches, sub_matches)?)?;
+		purge_chain::<F>(get_db_path_for_subcommand(matches, sub_matches, app_info)?)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
@@ -621,20 +630,6 @@ fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	path.push(chain_id);
 	path.push("network");
 	path
-}
-
-fn default_base_path() -> PathBuf {
-	use app_dirs::{AppInfo, AppDataType};
-
-	let app_info = AppInfo {
-		name: "Substrate",
-		author: "Parity Technologies",
-	};
-
-	app_dirs::get_app_root(
-		AppDataType::UserData,
-		&app_info,
-	).expect("app directories exist on all supported platforms; qed")
 }
 
 fn init_logger(pattern: &str) {
