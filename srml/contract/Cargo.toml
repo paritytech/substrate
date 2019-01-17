@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 serde = { version = "1.0", default-features = false }
-pwasm-utils = { version = "0.3", default-features = false }
+pwasm-utils = { version = "0.6.1", default-features = false }
 parity-codec = { version = "2.2", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 parity-wasm = { version = "0.31", default-features = false }
@@ -21,6 +21,7 @@ srml-balances = { path = "../balances", default-features = false }
 [dev-dependencies]
 wabt = "~0.7.4"
 assert_matches = "1.1"
+hex-literal = "0.1.0"
 
 [features]
 default = ["std"]

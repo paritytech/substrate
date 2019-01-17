@@ -16,7 +16,7 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeOf, StorageOf, Trait};
+use super::{CodeHash, CodeHashOf, StorageOf, Trait};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
@@ -25,7 +25,8 @@ use {balances, system};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
-	code: Option<Vec<u8>>,
+	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
+	code: Option<Option<CodeHash<T>>>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -44,7 +45,7 @@ pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>
 
 pub trait AccountDb<T: Trait> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
+	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
 	fn commit(&mut self, change_set: ChangeSet<T>);
@@ -55,8 +56,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
 		<StorageOf<T>>::get(account.clone(), location.to_vec())
 	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
-		<CodeOf<T>>::get(account)
+	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
+		<CodeHashOf<T>>::get(account)
 	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		balances::Module::<T>::free_balance(account)
@@ -68,13 +69,17 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					balances::Module::<T>::set_free_balance_creating(&address, balance)
 				{
 					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
-					// which will make removal of CodeOf and StorageOf for this account.
+					// which will make removal of CodeHashOf and StorageOf for this account.
 					// In order to avoid writing over the deleted properties we `continue` here.
 					continue;
 				}
 			}
 			if let Some(code) = changed.code {
-				<CodeOf<T>>::insert(&address, &code);
+				if let Some(code) = code {
+					<CodeHashOf<T>>::insert(&address, code);
+				} else {
+					<CodeHashOf<T>>::remove(&address);
+				}
 			}
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
@@ -116,7 +121,7 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 			.storage
 			.insert(location, value);
 	}
-	pub fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
+	pub fn set_code(&mut self, account: &T::AccountId, code: Option<CodeHash<T>>) {
 		self.local
 			.borrow_mut()
 			.entry(account.clone())
@@ -141,7 +146,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, location))
 	}
-	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
+	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local
 			.borrow()
 			.get(account)
