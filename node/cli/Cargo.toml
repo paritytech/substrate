@@ -13,6 +13,7 @@ exit-future = "0.1"
 substrate-cli = { path = "../../core/cli" }
 parity-codec = { version = "2.2" }
 slog = "^2"
+app_dirs = "1.2"
 sr-io = { path = "../../core/sr-io" }
 substrate-client = { path = "../../core/client" }
 substrate-primitives = { path = "../../core/primitives" }
