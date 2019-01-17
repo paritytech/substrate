@@ -6,7 +6,7 @@ description = "Rhododendron Round-Based consensus-algorithm for substrate"
 
 [dependencies]
 futures = "0.1.17"
-parity-codec = { version = "2.1" }
+parity-codec = { version = "2.2" }
 parity-codec-derive = { version = "2.0" }
 substrate-primitives = { path = "../../primitives" }
 substrate-consensus-common = { path = "../common" }
