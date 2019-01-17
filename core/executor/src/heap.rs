@@ -68,6 +68,18 @@ impl Heap {
 	pub fn allocate(&mut self, size: u32) -> u32 {
 		// Get the requested level from number of blocks requested
 		let blocks_needed = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+		let block_offset = self.allocate_block_in_tree(blocks_needed);
+
+		let ptr = BLOCK_SIZE * block_offset as u32;
+		self.allocated_bytes.insert(ptr, size as u32);
+
+		self.total_size += size;
+		trace!(target: "wasm-heap", "Heap size over {} Bytes after allocation", self.total_size);
+
+		ptr + 1
+	}
+
+	fn allocate_block_in_tree(&mut self, blocks_needed: u32) -> usize {
 		let levels_needed = Heap::get_tree_levels(blocks_needed);
 		if levels_needed > self.levels {
 			trace!(target: "wasm-heap", "Heap is too small: {:?} > {:?}", levels_needed, self.levels);
@@ -145,15 +157,9 @@ impl Heap {
 
 		let current_level_offset = (1 << self.levels - current_level) - 1;
 		let level_offset = index - current_level_offset;
+
 		let block_offset = level_offset * (1 << current_level);
-
-		let ptr = BLOCK_SIZE * block_offset as u32;
-		self.allocated_bytes.insert(ptr, size as u32);
-
-		self.total_size += size;
-		trace!(target: "wasm-heap", "Heap size over {} Bytes after allocation", self.total_size);
-
-		ptr + 1
+		block_offset as usize
 	}
 
 	/// Deallocates all blocks which were allocated for a pointer.
