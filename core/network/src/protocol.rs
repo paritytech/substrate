@@ -86,30 +86,14 @@ struct Peer<B: BlockT, H: ExHashT> {
 	best_number: <B::Header as HeaderT>::Number,
 	/// Pending block request if any
 	block_request: Option<message::BlockRequest<B>>,
-	/// Pending block request timestamp
-	block_request_timestamp: Option<time::Instant>,
-	/// Pending block justification request if any
-	block_justification_request: Option<message::BlockJustificationRequest<B>>,
-	/// Pending block justification request timestamp
-	block_justification_request_timestamp: Option<time::Instant>,
+	/// Request timestamp
+	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions known to this peer.
 	known_extrinsics: HashSet<H>,
 	/// Holds a set of blocks known to this peer.
 	known_blocks: HashSet<B::Hash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
-}
-
-impl<B: BlockT, H: ExHashT> Peer<B, H> {
-	fn min_request_timestamp(&self) -> Option<&time::Instant> {
-		match (self.block_request_timestamp, self.block_justification_request_timestamp) {
-			(Some(t1), Some(t2)) if t1 < t2 => self.block_request_timestamp.as_ref(),
-			(Some(_), Some(_)) => self.block_justification_request_timestamp.as_ref(),
-			(Some(_), None) => self.block_request_timestamp.as_ref(),
-			(None, Some(_)) => self.block_justification_request_timestamp.as_ref(),
-			_ => None,
-		}
-	}
 }
 
 /// Info about a peer's known state.
@@ -280,74 +264,35 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		};
 
-		fn validate_response<B: BlockT, H: ExHashT, R, F, G>(
-			io: &mut SyncIo,
-			who: NodeIndex,
-			context: &ContextData<B, H>,
-			response_id: message::RequestId,
-			request_visitor: F,
-			request_id: G,
-		) -> Option<R>
-		where F: Fn(&mut Peer<B, H>) -> (&mut Option<time::Instant>, &mut Option<R>),
-			  G: Fn(&R) -> message::RequestId,
-		{
-			let request = {
-				let mut peers = context.peers.write();
-				if let Some(ref mut peer) = peers.get_mut(&who) {
-					let (timestamp, request) = request_visitor(peer);
-
-					*timestamp = None;
-					match request.take() {
-						Some(r) => r,
-						None => {
-							io.report_peer(who, Severity::Bad("Unexpected response packet received from peer"));
-							return None;
-						}
-					}
-				} else {
-					io.report_peer(who, Severity::Bad("Unexpected packet received from peer"));
-					return None;
-				}
-			};
-
-			let request_id = request_id(&request);
-			if request_id != response_id {
-				trace!(target: "sync", "Ignoring mismatched response packet from {} (expected {} got {})", who, request_id, response_id);
-				return None;
-			}
-
-			Some(request)
-		}
-
 		match message {
 			GenericMessage::Status(s) => self.on_status_message(io, who, s),
 			GenericMessage::BlockRequest(r) => self.on_block_request(io, who, r),
 			GenericMessage::BlockResponse(r) => {
-				if let Some(request) = validate_response(
-					io,
-					who,
-					&self.context_data,
-					r.id,
-					|peer| (&mut peer.block_request_timestamp, &mut peer.block_request),
-					|block_request| block_request.id,
-				) {
-					self.on_block_response(io, who, request, r);
+				let request = {
+					let mut peers = self.context_data.peers.write();
+					if let Some(ref mut peer) = peers.get_mut(&who) {
+						peer.request_timestamp = None;
+						match peer.block_request.take() {
+							Some(r) => r,
+							None => {
+								io.report_peer(who, Severity::Bad("Unexpected response packet received from peer"));
+								return;
+							}
+						}
+					} else {
+						io.report_peer(who, Severity::Bad("Unexpected packet received from peer"));
+						return;
+					}
+				};
+
+				if request.id != r.id {
+					trace!(target: "sync", "Ignoring mismatched response packet from {} (expected {} got {})", who, request.id, r.id);
+					return;
 				}
+
+				self.on_block_response(io, who, request, r);
 			},
 			GenericMessage::BlockAnnounce(announce) => self.on_block_announce(io, who, announce),
-			GenericMessage::BlockJustificationRequest(r) => self.on_block_justification_request(io, who, r),
-			GenericMessage::BlockJustificationResponse(r) => {
-				if let Some(request) = validate_response(
-					io,
-					who,
-					&self.context_data,
-					r.id,
-					|peer| (&mut peer.block_justification_request_timestamp, &mut peer.block_justification_request),
-					|block_justification_request| block_justification_request.id,
-				) {
-					self.on_block_justification_response(io, who, request, r);
-				}
-			},
 			GenericMessage::Transactions(m) => self.on_extrinsics(io, who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(io, who, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, who, response),
@@ -406,7 +351,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn on_block_request(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockRequest<B>) {
-		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}", request.id, peer, request.from, request.to, request.max);
+		trace!(target: "sync", "BlockRequest {} from {} with fields {:?}: from {:?} to {:?} max {:?}",
+			request.id,
+			peer,
+			request.fields,
+			request.from,
+			request.to,
+			request.max,
+		);
+
 		let mut blocks = Vec::new();
 		let mut id = match request.from {
 			message::FromBlock::Hash(h) => BlockId::Hash(h),
@@ -464,44 +417,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks{}",
 			response.id, peer, response.blocks.len(), blocks_range);
 
-		// import_queue.import_blocks also acquires sync.write();
-		// Break the cycle by doing these separately from the outside;
-		let new_blocks = {
+		// TODO [andre]: move this logic to the import queue so that
+		// justifications are imported asynchronously
+		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			let mut sync = self.sync.write();
-			sync.on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response)
-		};
+			sync.on_block_justification_data(
+				&mut ProtocolContext::new(&self.context_data, io),
+				peer,
+				request,
+				response,
+			);
+		} else {
+			// import_queue.import_blocks also acquires sync.write();
+			// Break the cycle by doing these separately from the outside;
+			let new_blocks = {
+				let mut sync = self.sync.write();
+				sync.on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response)
+			};
 
-		if let Some((origin, new_blocks)) = new_blocks {
-			let import_queue = self.sync.read().import_queue();
-			import_queue.import_blocks(origin, new_blocks);
+			if let Some((origin, new_blocks)) = new_blocks {
+				let import_queue = self.sync.read().import_queue();
+				import_queue.import_blocks(origin, new_blocks);
+			}
 		}
-	}
-
-	fn on_block_justification_request(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockJustificationRequest<B>) {
-		trace!(target: "sync", "BlockJustificationRequest {} from {}: for {:?}", request.id, peer, request.block);
-		let justification = self.context_data.chain.justification(&BlockId::Hash(request.block)).unwrap_or(None);
-		let response = message::BlockJustificationResponse {
-			id: request.id,
-			justification,
-		};
-		trace!(target: "sync", "Sending BlockJustificationResponse {} for {:?}", request.id, request.block);
-		self.send_message(io, peer, GenericMessage::BlockJustificationResponse(response))
-	}
-
-	fn on_block_justification_response(
-		&self,
-		io: &mut SyncIo,
-		peer: NodeIndex,
-		request: message::BlockJustificationRequest<B>,
-		response: message::BlockJustificationResponse,
-	) {
-		let mut sync = self.sync.write();
-		sync.on_block_justification_data(
-			&mut ProtocolContext::new(&self.context_data, io),
-			peer,
-			request,
-			response,
-		);
 	}
 
 	/// Perform time based maintenance.
@@ -519,7 +457,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let peers = self.context_data.peers.read();
 			let handshaking_peers = self.handshaking_peers.read();
 			for (who, timestamp) in peers.iter()
-				.filter_map(|(id, peer)| peer.min_request_timestamp().map(|r| (id, r)))
+				.filter_map(|(id, peer)| peer.request_timestamp.as_ref().map(|r| (id, r)))
 				.chain(handshaking_peers.iter())
 			{
 				if (tick - *timestamp).as_secs() > REQUEST_TIMEOUT_SEC {
@@ -583,9 +521,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				best_hash: status.best_hash,
 				best_number: status.best_number,
 				block_request: None,
-				block_request_timestamp: None,
-				block_justification_request: None,
-				block_justification_request_timestamp: None,
+				request_timestamp: None,
 				known_extrinsics: HashSet::new(),
 				known_blocks: HashSet::new(),
 				next_request_id: 0,
@@ -846,16 +782,7 @@ fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B,
 				r.id = peer.next_request_id;
 				peer.next_request_id = peer.next_request_id + 1;
 				peer.block_request = Some(r.clone());
-				peer.block_request_timestamp = Some(time::Instant::now());
-			}
-		},
-		GenericMessage::BlockJustificationRequest(ref mut r) => {
-			let mut peers = peers.write();
-			if let Some(ref mut peer) = peers.get_mut(&who) {
-				r.id = peer.next_request_id;
-				peer.next_request_id = peer.next_request_id + 1;
-				peer.block_justification_request = Some(r.clone());
-				peer.block_justification_request_timestamp = Some(time::Instant::now());
+				peer.request_timestamp = Some(time::Instant::now());
 			}
 		},
 		_ => (),

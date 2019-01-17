@@ -52,6 +52,7 @@ enum PeerSyncState<B: BlockT> {
 	Available,
 	DownloadingNew(NumberFor<B>),
 	DownloadingStale(B::Hash),
+	DownloadingJustification(B::Hash),
 }
 
 /// Pending justification request for the given block (hash and number).
@@ -80,7 +81,7 @@ impl<B: BlockT> PendingJustifications<B> {
 	/// justification request for block #10 to a peer at block #2), and we also
 	/// throttle requests to the same peer if a previous justification request
 	/// yielded no results.
-	fn dispatch(&mut self, peers: &HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
+	fn dispatch(&mut self, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
 		if self.pending_requests.is_empty() {
 			return;
 		}
@@ -90,20 +91,20 @@ impl<B: BlockT> PendingJustifications<B> {
 			requests.retain(|(_, instant)| instant.elapsed() < JUSTIFICATION_RETRY_WAIT);
 		}
 
-		let mut peers = peers.iter().filter_map(|(peer, status)| {
+		let mut available_peers = peers.iter().filter_map(|(peer, sync)| {
 			// don't request to any peers that already have pending requests
-			if self.peer_requests.contains_key(peer) {
-				None
+			if let PeerSyncState::Available = sync.state {
+				Some((*peer, sync.best_number))
 			} else {
-				Some((*peer, status.best_number))
+				None
 			}
 		}).collect::<VecDeque<_>>();
 
-		let mut last_peer = peers.back().map(|p| p.0);
+		let mut last_peer = available_peers.back().map(|p| p.0);
 		let mut unhandled_requests = VecDeque::new();
 
 		loop {
-			let (peer, peer_best_number) = match peers.pop_front() {
+			let (peer, peer_best_number) = match available_peers.pop_front() {
 				Some(p) => p,
 				_ => break,
 			};
@@ -125,11 +126,11 @@ impl<B: BlockT> PendingJustifications<B> {
 			};
 
 			if !peer_eligible {
-				peers.push_back((peer, peer_best_number));
+				available_peers.push_back((peer, peer_best_number));
 
 				// we tried all peers and none can answer this request
 				if Some(peer) == last_peer {
-					last_peer = peers.back().map(|p| p.0);
+					last_peer = available_peers.back().map(|p| p.0);
 
 					let request = self.pending_requests.pop_front()
 						.expect("verified to be Some in the beginning of the loop; qed");
@@ -140,18 +141,27 @@ impl<B: BlockT> PendingJustifications<B> {
 				continue;
 			}
 
-			last_peer = peers.back().map(|p| p.0);
+			last_peer = available_peers.back().map(|p| p.0);
 
 			let request = self.pending_requests.pop_front()
 				.expect("verified to be Some in the beginning of the loop; qed");
 
 			self.peer_requests.insert(peer, request);
-			let request = message::generic::BlockJustificationRequest {
+
+			peers.get_mut(&peer)
+				.expect("peer was is taken from available_peers; available_peers is a subset of peers; qed")
+				.state = PeerSyncState::DownloadingJustification(request.0);
+
+			let request = message::generic::BlockRequest {
 				id: 0,
-				block: request.0,
+				fields: message::BlockAttributes::JUSTIFICATION,
+				from: message::FromBlock::Hash(request.0),
+				to: None,
+				direction: message::Direction::Ascending,
+				max: Some(1),
 			};
 
-			protocol.send_message(peer, GenericMessage::BlockJustificationRequest(request));
+			protocol.send_message(peer, GenericMessage::BlockRequest(request));
 		}
 
 		self.pending_requests.append(&mut unhandled_requests);
@@ -440,10 +450,10 @@ impl<B: BlockT> ChainSync<B> {
 						}
 					}
 				},
-				PeerSyncState::Available => Vec::new(),
+				PeerSyncState::Available | PeerSyncState::DownloadingJustification(..) => Vec::new(),
 			}
 		} else {
-			vec![]
+			Vec::new()
 		};
 
 		let best_seen = self.best_seen_block();
@@ -464,10 +474,47 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		protocol: &mut Context<B>,
 		who: NodeIndex,
-		_request: message::BlockJustificationRequest<B>,
-		response: message::BlockJustificationResponse,
+		_request: message::BlockRequest<B>,
+		response: message::BlockResponse<B>,
 	) {
-		self.justifications.on_response(who, response.justification, protocol, &*self.import_queue);
+		if let Some(ref mut peer) = self.peers.get_mut(&who) {
+			if let PeerSyncState::DownloadingJustification(hash) = peer.state {
+				peer.state = PeerSyncState::Available;
+
+				// we only request one justification at a time
+				match response.blocks.into_iter().next() {
+					Some(response) => {
+						if hash != response.hash {
+							let msg = format!(
+								"Invalid block justification provided: requested: {:?} got: {:?}",
+								hash,
+								response.hash,
+							);
+
+							protocol.report_peer(who, Severity::Bad(&msg));
+							return;
+						}
+
+						self.justifications.on_response(
+							who,
+							response.justification,
+							protocol,
+							&*self.import_queue,
+						);
+					},
+					None => {
+						let msg = format!(
+							"Provided empty response for justification request {:?}",
+							hash,
+						);
+
+						protocol.report_peer(who, Severity::Useless(&msg));
+						return;
+					},
+				}
+			}
+		}
+
 		self.maintain_sync(protocol);
 	}
 
@@ -477,12 +524,12 @@ impl<B: BlockT> ChainSync<B> {
 		for peer in peers {
 			self.download_new(protocol, peer);
 		}
-		self.justifications.dispatch(&self.peers, protocol);
+		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
 	/// Called periodically to perform any time-based actions.
 	pub fn tick(&mut self, protocol: &mut Context<B>) {
-		self.justifications.dispatch(&self.peers, protocol);
+		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
 	/// Request a justification for the given block.
@@ -490,7 +537,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// Queues a new justification request and tries to dispatch all pending requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.justifications.queue_request(&(*hash, number));
-		self.justifications.dispatch(&self.peers, protocol);
+		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
 	/// Notify about successful import of the given block.
