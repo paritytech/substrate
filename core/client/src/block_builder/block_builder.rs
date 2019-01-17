@@ -18,15 +18,16 @@ use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use std::marker::PhantomData;
 use codec::Encode;
-use blockchain::HeaderBackend;
+use crate::blockchain::HeaderBackend;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
 };
 use primitives::H256;
 use runtime_primitives::generic::BlockId;
-use runtime_api::Core;
-use error;
+use crate::runtime_api::Core;
+use crate::error;
 use runtime_primitives::ApplyOutcome;
+
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block, InherentData, A: ProvideRuntimeApi> where Block: BlockT {
@@ -82,27 +83,22 @@ where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		fn impl_push<'a, T, Block: BlockT, InherentData>(
-			api: &mut ApiRef<'a, T>,
-			block_id: &BlockId<Block>,
-			xt: Block::Extrinsic,
-			extrinsics: &mut Vec<Block::Extrinsic>
-		) -> error::Result<()> where T: BlockBuilderApi<Block, InherentData> {
-			api.map_api_result(|api| {
-				match api.apply_extrinsic(block_id, &xt)? {
-					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
-						extrinsics.push(xt);
-						Ok(())
-					}
-					Err(e) => {
-						Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())
-					}
+		use crate::runtime_api::ApiExt;
+		
+		let block_id = &self.block_id;
+		let extrinsics = &mut self.extrinsics;
+		
+		self.api.map_api_result(|api| {
+			match api.apply_extrinsic(block_id, &xt)? {
+				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
+					extrinsics.push(xt);
+					Ok(())
 				}
-			})
-		}
-
-		//FIXME: Please NLL, help me!
-		impl_push(&mut self.api, &self.block_id, xt, &mut self.extrinsics)
+				Err(e) => {
+					Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())
+				}
+			}
+		})
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.

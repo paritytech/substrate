@@ -252,31 +252,28 @@ impl<Components: components::Components> Service<Components> {
 		)?;
 
 		// Telemetry
-		let telemetry = match config.telemetry_url.clone() {
-			Some(url) => {
-				let is_authority = config.roles == Roles::AUTHORITY;
-				let pubkey = format!("{}", public_key);
-				let name = config.name.clone();
-				let impl_name = config.impl_name.to_owned();
-				let version = version.clone();
-				let chain_name = config.chain_spec.name().to_owned();
-				Some(Arc::new(tel::init_telemetry(tel::TelemetryConfig {
-					url: url,
-					on_connect: Box::new(move || {
-						telemetry!("system.connected";
-							"name" => name.clone(),
-							"implementation" => impl_name.clone(),
-							"version" => version.clone(),
-							"config" => "",
-							"chain" => chain_name.clone(),
-							"pubkey" => &pubkey,
-							"authority" => is_authority
-						);
-					}),
-				})))
-			},
-			None => None,
-		};
+		let telemetry = config.telemetry_url.clone().map(|url| {
+			let is_authority = config.roles == Roles::AUTHORITY;
+			let pubkey = format!("{}", public_key);
+			let name = config.name.clone();
+			let impl_name = config.impl_name.to_owned();
+			let version = version.clone();
+			let chain_name = config.chain_spec.name().to_owned();
+			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+				url: url,
+				on_connect: Box::new(move || {
+					telemetry!("system.connected";
+						"name" => name.clone(),
+						"implementation" => impl_name.clone(),
+						"version" => version.clone(),
+						"config" => "",
+						"chain" => chain_name.clone(),
+						"pubkey" => &pubkey,
+						"authority" => is_authority
+					);
+				}),
+			}))
+		});
 
 		Ok(Service {
 			client,

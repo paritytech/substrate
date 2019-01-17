@@ -947,7 +947,7 @@ pub mod tests {
 		// last peer was not updated
 		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
-		let mut network = TestIo::new(&queue, None);
+		let _network = TestIo::new(&queue, None);
 
 		on_demand.remote_header(RemoteHeaderRequest {
 			cht_root: Default::default(),
@@ -972,7 +972,7 @@ pub mod tests {
 	fn tries_to_send_all_pending_requests() {
 		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
-		let mut network = TestIo::new(&queue, None);
+		let _network = TestIo::new(&queue, None);
 
 		on_demand.remote_header(RemoteHeaderRequest {
 			cht_root: Default::default(),

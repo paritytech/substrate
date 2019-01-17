@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use libp2p::core::{ConnectionUpgrade, Endpoint};
+use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
-use futures::{prelude::*, future, stream, task};
+use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
 use ProtocolId;
@@ -80,8 +80,6 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	protocol_id: ProtocolId,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
-	/// Task to notify when something is changed and we need to be polled.
-	to_notify: Option<task::Task>,
 }
 
 impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
@@ -105,9 +103,6 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	/// After calling this, the stream is guaranteed to finish soon-ish.
 	pub fn shutdown(&mut self) {
 		self.is_closing = true;
-		if let Some(task) = self.to_notify.take() {
-			task.notify();
-		}
 	}
 
 	/// Sends a message to the substream.
@@ -118,10 +113,6 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 		if self.send_queue.len() >= 2048 {
 			warn!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
 				large: {}", self.send_queue.len());
-		}
-
-		if let Some(task) = self.to_notify.take() {
-			task.notify();
 		}
 	}
 }
@@ -135,7 +126,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		// If we are closing, close as soon as the Sink is closed.
 		if self.is_closing {
-			return Ok(self.inner.close()?.map(|()| None));
+			return Ok(self.inner.close()?.map(|()| None))
 		}
 
 		// Flushing the local queue.
@@ -143,7 +134,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 			match self.inner.start_send(packet)? {
 				AsyncSink::NotReady(packet) => {
 					self.send_queue.push_front(packet);
-					break;
+					break
 				},
 				AsyncSink::Ready => self.requires_poll_complete = true,
 			}
@@ -158,51 +149,64 @@ where TSubstream: AsyncRead + AsyncWrite,
 
 		// Receiving incoming packets.
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
-		loop {
-			match self.inner.poll()? {
-				Async::Ready(Some(data)) =>
-					return Ok(Async::Ready(Some(data.freeze()))),
-				Async::Ready(None) =>
-					if !self.requires_poll_complete && self.send_queue.is_empty() {
-						return Ok(Async::Ready(None))
-					} else {
-						break
-					},
-				Async::NotReady => break,
-			}
+		match self.inner.poll()? {
+			Async::Ready(Some(data)) => Ok(Async::Ready(Some(data.freeze()))),
+			Async::Ready(None) =>
+				if !self.requires_poll_complete && self.send_queue.is_empty() {
+					Ok(Async::Ready(None))
+				} else {
+					Ok(Async::NotReady)
+				},
+			Async::NotReady => Ok(Async::NotReady),
 		}
-
-		self.to_notify = Some(task::current());
-		Ok(Async::NotReady)
 	}
 }
 
-impl<TSubstream> ConnectionUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite,
-{
-	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
-	type UpgradeIdentifier = u8;		// Protocol version
+impl UpgradeInfo for RegisteredProtocol {
+	type Info = RegisteredProtocolName;
+	type InfoIter = VecIntoIter<Self::Info>;
 
 	#[inline]
-	fn protocol_names(&self) -> Self::NamesIter {
+	fn protocol_info(&self) -> Self::InfoIter {
 		// Report each version as an individual protocol.
-		self.supported_versions.iter().map(|&ver| {
-			let num = ver.to_string();
+		self.supported_versions.iter().map(|&version| {
+			let num = version.to_string();
 			let mut name = self.base_name.clone();
 			name.extend_from_slice(num.as_bytes());
-			(name, ver)
+			RegisteredProtocolName {
+				name,
+				version,
+			}
 		}).collect::<Vec<_>>().into_iter()
 	}
+}
 
+/// Implementation of `ProtocolName` for a custom protocol.
+#[derive(Debug, Clone)]
+pub struct RegisteredProtocolName {
+	/// Protocol name, as advertised on the wire.
+	name: Bytes,
+	/// Version number. Stored in string form in `name`, but duplicated here for easier retrieval.
+	version: u8,
+}
+
+impl ProtocolName for RegisteredProtocolName {
+	fn protocol_name(&self) -> &[u8] {
+		&self.name
+	}
+}
+
+impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
+where TSubstream: AsyncRead + AsyncWrite,
+{
 	type Output = RegisteredProtocolSubstream<TSubstream>;
 	type Future = future::FutureResult<Self::Output, io::Error>;
+	type Error = io::Error;
 
-	#[allow(deprecated)]
-	fn upgrade(
+	fn upgrade_inbound(
 		self,
 		socket: TSubstream,
-		protocol_version: Self::UpgradeIdentifier,
-		_: Endpoint
+		info: Self::Info,
 	) -> Self::Future {
 		let framed = Framed::new(socket, UviBytes::default());
 
@@ -212,9 +216,25 @@ where TSubstream: AsyncRead + AsyncWrite,
 			requires_poll_complete: false,
 			inner: framed.fuse(),
 			protocol_id: self.id,
-			protocol_version,
-			to_notify: None,
+			protocol_version: info.version,
 		})
+	}
+}
+
+impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocol
+where TSubstream: AsyncRead + AsyncWrite,
+{
+	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
+	type Future = <Self as InboundUpgrade<TSubstream>>::Future;
+	type Error = <Self as InboundUpgrade<TSubstream>>::Error;
+
+	fn upgrade_outbound(
+		self,
+		socket: TSubstream,
+		info: Self::Info,
+	) -> Self::Future {
+		// Upgrades are symmetrical.
+		self.upgrade_inbound(socket, info)
 	}
 }
 
@@ -229,12 +249,6 @@ impl RegisteredProtocols {
 		self.0.len()
 	}
 
-	/// Finds a protocol in the list by its id.
-	pub fn find_protocol(&self, protocol: ProtocolId)
-		-> Option<&RegisteredProtocol> {
-		self.0.iter().find(|p| p.id == protocol)
-	}
-
 	/// Returns true if the given protocol is in the list.
 	pub fn has_protocol(&self, protocol: ProtocolId) -> bool {
 		self.0.iter().any(|p| p.id == protocol)
@@ -247,36 +261,75 @@ impl Default for RegisteredProtocols {
 	}
 }
 
-impl<TSubstream> ConnectionUpgrade<TSubstream> for RegisteredProtocols
-where TSubstream: AsyncRead + AsyncWrite,
-{
-	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
-	type UpgradeIdentifier = (usize,
-		<RegisteredProtocol as ConnectionUpgrade<TSubstream>>::UpgradeIdentifier);
+impl UpgradeInfo for RegisteredProtocols {
+	type Info = RegisteredProtocolsName;
+	type InfoIter = VecIntoIter<Self::Info>;
 
-	fn protocol_names(&self) -> Self::NamesIter {
+	#[inline]
+	fn protocol_info(&self) -> Self::InfoIter {
 		// We concat the lists of `RegisteredProtocol::protocol_names` for
 		// each protocol.
 		self.0.iter().enumerate().flat_map(|(n, proto)|
-			ConnectionUpgrade::<TSubstream>::protocol_names(proto)
-				.map(move |(name, id)| (name, (n, id)))
+			UpgradeInfo::protocol_info(proto)
+				.map(move |inner| {
+					RegisteredProtocolsName {
+						inner,
+						index: n,
+					}
+				})
 		).collect::<Vec<_>>().into_iter()
 	}
+}
 
-	type Output = <RegisteredProtocol as ConnectionUpgrade<TSubstream>>::Output;
-	type Future = <RegisteredProtocol as ConnectionUpgrade<TSubstream>>::Future;
+/// Implementation of `ProtocolName` for several custom protocols.
+#[derive(Debug, Clone)]
+pub struct RegisteredProtocolsName {
+	/// Inner registered protocol.
+	inner: RegisteredProtocolName,
+	/// Index of the protocol in the list of registered custom protocols.
+	index: usize,
+}
+
+impl ProtocolName for RegisteredProtocolsName {
+	fn protocol_name(&self) -> &[u8] {
+		self.inner.protocol_name()
+	}
+}
+
+impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocols
+where TSubstream: AsyncRead + AsyncWrite,
+{
+	type Output = <RegisteredProtocol as InboundUpgrade<TSubstream>>::Output;
+	type Future = <RegisteredProtocol as InboundUpgrade<TSubstream>>::Future;
+	type Error = io::Error;
 
 	#[inline]
-	fn upgrade(
+	fn upgrade_inbound(
 		self,
 		socket: TSubstream,
-		upgrade_identifier: Self::UpgradeIdentifier,
-		endpoint: Endpoint
+		info: Self::Info,
 	) -> Self::Future {
-		let (protocol_index, inner_proto_id) = upgrade_identifier;
 		self.0.into_iter()
-			.nth(protocol_index)
+			.nth(info.index)
 			.expect("invalid protocol index ; programmer logic error")
-			.upgrade(socket, inner_proto_id, endpoint)
+			.upgrade_inbound(socket, info.inner)
+	}
+}
+
+impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocols
+where TSubstream: AsyncRead + AsyncWrite,
+{
+	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
+	type Future = <Self as InboundUpgrade<TSubstream>>::Future;
+	type Error = <Self as InboundUpgrade<TSubstream>>::Error;
+
+	#[inline]
+	fn upgrade_outbound(
+		self,
+		socket: TSubstream,
+		info: Self::Info,
+	) -> Self::Future {
+		// Upgrades are symmetrical.
+		self.upgrade_inbound(socket, info)
 	}
 }

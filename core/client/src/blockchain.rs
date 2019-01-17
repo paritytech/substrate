@@ -20,7 +20,7 @@ use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as Head
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
 
-use error::{ErrorKind, Result};
+use crate::error::{ErrorKind, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {

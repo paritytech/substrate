@@ -20,7 +20,7 @@ use primitives::{Ed25519AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-	UpgradeKeyConfig, SudoConfig, ContractConfig, GrandpaConfig, Permill, Perbill};
+	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 
@@ -68,7 +68,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			existential_deposit: 1 * DOLLARS,
 			transfer_fee: 1 * CENTS,
 			creation_fee: 1 * CENTS,
-			reclaim_rebate: 1 * CENTS,
+		}),
+		indices: Some(IndicesConfig {
+			ids: endowed_accounts.clone(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
@@ -130,9 +132,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
 		}),
-		upgrade_key: Some(UpgradeKeyConfig {
-			key: endowed_accounts[0].clone(),
-		}),
 		sudo: Some(SudoConfig {
 			key: endowed_accounts[0].clone(),
 		}),
@@ -168,7 +167,7 @@ pub fn get_authority_id_from_seed(seed: &str) -> Ed25519AuthorityId {
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
 	initial_authorities: Vec<Ed25519AuthorityId>,
-	upgrade_key: AccountId,
+	root_key: AccountId,
 	endowed_accounts: Option<Vec<Ed25519AuthorityId>>,
 ) -> GenesisConfig {
 	let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
@@ -187,13 +186,15 @@ pub fn testnet_genesis(
 			authorities: initial_authorities.clone(),
 		}),
 		system: None,
+		indices: Some(IndicesConfig {
+			ids: endowed_accounts.iter().map(|x| x.0.into()).collect(),
+		}),
 		balances: Some(BalancesConfig {
 			transaction_base_fee: 1,
 			transaction_byte_fee: 0,
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
-			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k| (k.into(), (1 << 60))).collect(),
 		}),
 		session: Some(SessionConfig {
@@ -258,11 +259,8 @@ pub fn testnet_genesis(
 			block_gas_limit: 10_000_000,
 			current_schedule: Default::default(),
 		}),
-		upgrade_key: Some(UpgradeKeyConfig {
-			key: upgrade_key,
-		}),
 		sudo: Some(SudoConfig {
-			key: upgrade_key,
+			key: root_key,
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),

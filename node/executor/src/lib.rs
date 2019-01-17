@@ -37,6 +37,7 @@ extern crate node_runtime;
 #[cfg(test)] extern crate srml_treasury as treasury;
 #[cfg(test)] extern crate srml_contract as contract;
 #[cfg(test)] extern crate srml_grandpa as grandpa;
+#[cfg(test)] extern crate srml_indices as indices;
 #[cfg(test)] extern crate node_primitives;
 #[cfg(test)] extern crate parity_codec as codec;
 #[cfg(test)] extern crate sr_io as runtime_io;
@@ -62,12 +63,12 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, staking, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, staking, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, Event, Log};
+		SystemConfig, GrandpaConfig, IndicesConfig, Event, Log};
 	use wabt;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
@@ -90,11 +91,11 @@ mod tests {
 		match xt.signed {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
-				let payload = (index, xt.function, era, GENESIS_HASH);
+				let payload = (index.into(), xt.function, era, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signature: Some((balances::address::Address::Id(signed), signature, payload.0, era)),
+					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
 					function: payload.1,
 				}
 			}
@@ -130,7 +131,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -151,7 +152,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -172,7 +173,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -197,7 +198,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -224,6 +225,9 @@ mod tests {
 				}) } else { None },
 				..Default::default()
 			}),
+			indices: Some(IndicesConfig {
+				ids: vec![alice(), charlie()],
+			}),
 			balances: Some(BalancesConfig {
 				balances: vec![
 					(alice(), 111),
@@ -234,7 +238,6 @@ mod tests {
 				existential_deposit: 0,
 				transfer_fee: 0,
 				creation_fee: 0,
-				reclaim_rebate: 0,
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
@@ -260,7 +263,6 @@ mod tests {
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
-			upgrade_key: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
@@ -313,13 +315,13 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("0bc6c118c326c65da9d0f93199f471aab4f636cfe87ab9a56c823024ca83995a").into()
+				hex!("e2dc1ed62a3878e084c49baef3eed4bc462caaa1ee9db0763eaa8d39d1affc7e").into()
 			} else {
-				hex!("58e1f1493e311d9b1fef3660426ee289736c38eb6f7d98911551c51765163056").into()
+				hex!("7dad66de05ab6391ece9db092288cb39ba723f7f5d0b69b507b753fc92c98b8e").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
-					hex!("cda28e5c630db8eb0e4309b58ce504597c6cbb59bda43fd65e96bb2be73a4586").into(),
+					hex!("f254b62df0bfef049e010a7a0d6f176d73cc5d9710fa945b4e48f519c8d3a291").into(),
 				)]
 			} else {
 				vec![]
@@ -341,7 +343,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("ced5607b16774cdbf750f8f7f0a99cd4afd7eb14db376a44bb8656f2ce02b18e").into(),
+			hex!("f085a4077d071d3334f7553bcc3f10d97fd612e25c6df5c8f94151bbe557e24a").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -370,7 +372,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("8a506a6f72c7efb75fd069a8c4f57c8e0b6b5adbea9646522bda64d4c78f5412").into(),
+			hex!("1d47422645f5fa3d79cff9ab5cd69ee62919c909860f063bdaf18eda834baa05").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -401,7 +403,14 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(balances::RawEvent::NewAccount(bob(), 2, balances::NewAccountOutcome::NoHint))
+					event: Event::indices(indices::RawEvent::NewAccountIndex(bob(), 2))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(balances::RawEvent::NewAccount(
+						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						69
+					))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -660,7 +669,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("ce21753c3f806443c2758c982850861708054b65097fed82689e7b16cd5d6e24").into(),
+			hex!("c442a475a16805d20c326f1134fe5a9656511ed7e1a7f0c7dae2dfc8612e418b").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -676,7 +685,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(addr, 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::call::<Runtime>(indices::address::Address::Id(addr), 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]
@@ -742,7 +751,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -764,7 +773,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 

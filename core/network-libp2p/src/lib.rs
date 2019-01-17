@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate libp2p implementation of the ethcore network library
+//! Networking layer of Substrate.
 
 #![recursion_limit = "128"]
 
@@ -31,6 +31,8 @@ extern crate rand;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate smallvec;
+extern crate void;
 extern crate bytes;
 extern crate unsigned_varint;
 
@@ -41,19 +43,18 @@ extern crate log;
 #[cfg(test)] #[macro_use]
 extern crate assert_matches;
 
+mod behaviour;
 mod custom_proto;
 mod error;
-mod node_handler;
 mod secret;
 mod service_task;
-mod swarm;
 mod topology;
 mod traits;
 mod transport;
 
 pub use custom_proto::RegisteredProtocol;
 pub use error::{Error, ErrorKind, DisconnectReason};
-pub use libp2p::{Multiaddr, multiaddr::{Protocol}, multiaddr, PeerId};
+pub use libp2p::{Multiaddr, multiaddr::{Protocol}, multiaddr, PeerId, core::PublicKey};
 pub use secret::obtain_private_key;
 pub use service_task::{start_service, Service, ServiceEvent};
 pub use traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeerMode};

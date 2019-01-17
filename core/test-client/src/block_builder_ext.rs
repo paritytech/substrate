@@ -40,5 +40,5 @@ impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime:
 
 fn sign_tx(transfer: runtime::Transfer) -> runtime::Extrinsic {
 	let signature = keyring::Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&codec::Encode::encode(&transfer)).into();
-	runtime::Extrinsic { transfer, signature }
+	runtime::Extrinsic::Transfer(transfer, signature)
 }

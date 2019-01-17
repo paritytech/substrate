@@ -42,6 +42,7 @@ use primitives::traits::{As, Zero, One, Convert};
 use codec::HasCompact;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
+use runtime_support::for_each_tuple;
 use system::ensure_signed;
 use rstd::ops::Mul;
 
@@ -49,17 +50,6 @@ use rstd::ops::Mul;
 pub trait OnSessionChange<T> {
 	/// Session has changed.
 	fn on_session_change(time_elapsed: T, should_reward: bool);
-}
-
-macro_rules! for_each_tuple {
-	($m:ident) => {
-		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
-	};
-	(@IMPL $m:ident !!) => { $m! { } };
-	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
-		$m! { $h $($t)* }
-		for_each_tuple! { @IMPL $m !! $($t,)* }
-	}
 }
 
 macro_rules! impl_session_change {
@@ -79,7 +69,6 @@ macro_rules! impl_session_change {
 }
 
 for_each_tuple!(impl_session_change);
-
 
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
@@ -248,7 +237,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::BlakeTwo256;
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 
 	impl_outer_origin!{
@@ -271,6 +260,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;

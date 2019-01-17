@@ -22,6 +22,7 @@ use std;
 use state_machine;
 use runtime_primitives::ApplyError;
 use consensus;
+use error_chain::*;
 
 error_chain! {
 	links {
