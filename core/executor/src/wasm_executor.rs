@@ -58,7 +58,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 		let current_size: Bytes = m.current_size().into();
 		let current_size = current_size.0 as u32;
 		let used_size = m.used_size().0 as u32;
-		let heap_size = current_size * page_size - used_size;
+		let heap_size = current_size - used_size;
 
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
