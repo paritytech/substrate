@@ -85,6 +85,8 @@ use futures::Future;
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
+	/// Implemtation name.
+	pub name: &'static str,
 	/// Implementation version.
 	pub version: &'static str,
 	/// SCM Commit hash.
@@ -193,10 +195,9 @@ where
 /// Parse clap::Matches into config and chain specification
 pub fn parse_matches<'a, F, S>(
 	spec_factory: S,
-	version: VersionInfo,
+	version: &VersionInfo,
 	impl_name: &'static str,
 	matches: &clap::ArgMatches<'a>,
-	app_info: &AppInfo,
 ) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>
 where
 	F: ServiceFactory,
@@ -205,6 +206,11 @@ where
 {
 	let spec = load_spec(&matches, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec.clone());
+
+	let app_info = AppInfo {
+		name: version.name,
+		author: version.author
+	};
 
 	config.impl_name = impl_name;
 	config.impl_commit = version.commit;
@@ -344,7 +350,7 @@ where
 fn get_db_path_for_subcommand(
 	main_cmd: &clap::ArgMatches,
 	sub_cmd: &clap::ArgMatches,
-	app_info: &AppInfo,
+	app_version: &VersionInfo,
 ) -> error::Result<PathBuf> {
 	if main_cmd.is_present("chain") && sub_cmd.is_present("chain") {
 		bail!(create_input_err("`--chain` option is present two times"));
@@ -374,10 +380,15 @@ fn get_db_path_for_subcommand(
 		bail!(create_input_err("`--base_path` option is present two times"));
 	}
 
+	let app_info = AppInfo {
+		name: app_version.name,
+		author: app_version.author
+	};
+
 	let base_path = if sub_cmd.is_present("base_path") {
-		base_path(sub_cmd, app_info)
+		base_path(sub_cmd, &app_info)
 	} else {
-		base_path(main_cmd, app_info)
+		base_path(main_cmd, &app_info)
 	};
 
 	Ok(db_path(&base_path, &spec_id))
@@ -397,7 +408,7 @@ pub fn execute_default<'a, F, E>(
 	exit: E,
 	matches: &clap::ArgMatches<'a>,
 	config: &FactoryFullConfiguration<F>,
-	app_info: &AppInfo,
+	app_info: &VersionInfo,
 ) -> error::Result<Action<E>>
 where
 	E: IntoExit,
