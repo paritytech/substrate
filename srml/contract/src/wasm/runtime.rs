@@ -479,6 +479,11 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Decodes the given buffer as a `T::Call` and adds it to the list
+	// of to-be-dispatched calls.
+	//
+	// All calls made it to the top-level context will be dispatched before
+	// finishing the execution of the calling extrinsic.
 	ext_dispatch_call(ctx, call_ptr: u32, call_len: u32) => {
 		let call = {
 			let call_buf = read_sandbox_memory(ctx, call_ptr, call_len)?;
