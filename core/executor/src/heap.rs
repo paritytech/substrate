@@ -18,8 +18,10 @@
 //! It uses a binary tree and follows the concepts outlined in
 //! https://en.wikipedia.org/wiki/Buddy_memory_allocation.
 
+extern crate fnv;
+
 use std::vec;
-use std::collections::HashMap;
+use self::fnv::FnvHashMap;
 
 // The pointers need to be aligned. By choosing a block size
 // which is a multiple of the memory alignment requirement
@@ -41,7 +43,7 @@ enum Node {
 /// A buddy allocation heap, which tracks allocations and deallocations
 /// using a binary tree.
 pub struct Heap {
-	allocated_bytes: HashMap<u32, u32>,
+	allocated_bytes: FnvHashMap<u32, u32>,
 	levels: u32,
 	tree: vec::Vec<Node>,
 	total_size: u32,
@@ -56,7 +58,7 @@ impl Heap {
 		let node_count: usize = (1 << levels + 1) - 1;
 
 		Heap {
-			allocated_bytes: HashMap::new(),
+			allocated_bytes: FnvHashMap::default(),
 			levels,
 			tree: vec![Node::Free; node_count],
 			total_size: 0,
