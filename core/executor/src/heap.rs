@@ -58,8 +58,8 @@ impl Heap {
 	///
 	/// * `ptr_offset` - The pointers returned by `allocate()`
 	///   start from this offset on. The pointer offset needs
-	///   to be aligned to a multiple of `ALIGNMENT`, hence a
-	///   padding might be added to align `ptr_offset` properly.
+	///   to be aligned to a multiple of 8, hence a padding might
+	///   be added to align `ptr_offset` properly.
 	///
 	/// * `heap_size` - The size available to this heap instance
 	///   (in bytes) for allocating memory.
