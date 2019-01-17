@@ -111,7 +111,9 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 
 		// If the length of the queue goes over a certain arbitrary threshold, we print a warning.
 		if self.send_queue.len() >= 2048 {
-			warn!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
+			// TODO: this used to be a warning, but is now a `debug` in order to avoid too much
+			//	noise in the logs; see https://github.com/paritytech/substrate/issues/1414
+			debug!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
 				large: {}", self.send_queue.len());
 		}
 	}
