@@ -312,3 +312,111 @@ fn instantiate_and_call() {
 		},
 	);
 }
+
+const CODE_DISPATCH_CALL: &str = r#"
+(module
+	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_dispatch_call
+			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
+)
+"#;
+const HASH_DISPATCH_CALL: [u8; 32] = hex!("4de51501fca36406baafc7b1d7022238a173cb3f66d55e530aa440ac16170304");
+
+#[test]
+fn dispatch_call() {
+	// This test can fail due to the encoding changes. In case it becomes too annoying
+	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
+	let encoded = codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50.into())));
+	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
+
+	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL).unwrap();
+
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(50).build(),
+		|| {
+			Balances::set_free_balance(&ALICE, 1_000_000);
+			Balances::increase_total_stake_by(1_000_000);
+
+			assert_ok!(Contract::put_code(
+				Origin::signed(ALICE),
+				100_000.into(),
+				wasm,
+			));
+
+			// Let's keep this assert even though it's redundant. If you ever need to update the
+			// wasm source this test will fail and will show you the actual hash.
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+				},
+			]);
+
+			assert_ok!(Contract::create(
+				Origin::signed(ALICE),
+				100.into(),
+				100_000.into(),
+				HASH_DISPATCH_CALL.into(),
+				vec![],
+			));
+
+			assert_ok!(Contract::call(
+				Origin::signed(ALICE),
+				BOB, // newly created account
+				0.into(),
+				100_000.into(),
+				vec![],
+			));
+
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::CodeStored(HASH_DISPATCH_CALL.into())),
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(
+						balances::RawEvent::NewAccount(BOB, 100)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Transfer(ALICE, BOB, 100))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Instantiated(ALICE, BOB))
+				},
+
+				// Dispatching the call.
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(
+						balances::RawEvent::NewAccount(CHARLIE, 50)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::balances(
+						balances::RawEvent::Transfer(BOB, CHARLIE, 50, 0)
+					)
+				},
+
+				// Event emited as a result of dispatch.
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: MetaEvent::contract(RawEvent::Dispatched(BOB, true))
+				}
+			]);
+		},
+	);
+}

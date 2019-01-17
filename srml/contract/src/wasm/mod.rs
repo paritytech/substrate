@@ -968,7 +968,7 @@ mod tests {
 
 	#[test]
 	fn dispatch_call() {
-		// This test can fail due to the encoding changes. In case it become too annoying
+		// This test can fail due to the encoding changes. In case it becomes too annoying
 		// let's rewrite so as we use this module controlled call or we serialize it in runtime.
 
 		let mut mock_ext = MockExt::default();
