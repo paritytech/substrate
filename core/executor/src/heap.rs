@@ -56,7 +56,7 @@ impl Heap {
 	///
 	/// # Arguments
 	///
-	/// * `ptr_offset` - The indices returned by `allocate()`
+	/// * `ptr_offset` - The pointers returned by `allocate()`
 	///   will start from this offset on.
 	/// * `heap_size` - The size available to this heap instance
 	///   (in Bytes) for allocating memory.
@@ -75,8 +75,7 @@ impl Heap {
 		}
 	}
 
-	/// Gets requested number of bytes to allocate and returns an index offset.
-	/// The index offset starts at 0.
+	/// Gets requested number of bytes to allocate and returns a pointer.
 	pub fn allocate(&mut self, size: u32) -> u32 {
 		// Get the requested level from number of blocks requested
 		let blocks_needed = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
