@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#![warn(missing_docs)]
-
 //! This module implements a buddy allocation heap.
 //! It uses a binary tree and follows the concepts outlined in
 //! https://en.wikipedia.org/wiki/Buddy_memory_allocation.
@@ -23,14 +21,14 @@
 use std::vec;
 use std::collections::HashMap;
 
-// The pointers need to be aligned to u8 allocations.
-// By choosing a block size which is a multiple of this
-// number it is ensured that a pointer is always aligned.
-// This is because in buddy allocation a pointer always
-// points to the start of a block.
+// The pointers need to be aligned. By choosing a block size
+// which is a multiple of the memory alignment requirement
+// it is ensured that a pointer is always aligned. This is
+// because in buddy allocation a pointer always points to the
+// start of a block.
 //
-// In our case the alignment for unknown-unknown-webassembly
-// is 1 byte though, i.e. the pointer will always be aligned.
+// In our case the alignment for wasm32-unknown-unknown is
+// 1 byte though, i.e. the pointer will always be aligned.
 const BLOCK_SIZE: usize = 8192; // 2^13 Bytes
 
 #[repr(u8)]
@@ -41,6 +39,8 @@ enum Node {
 	Split,
 }
 
+/// A buddy allocation heap, which tracks allocations and deallocations
+/// using a binary tree.
 pub struct Heap {
 	allocated_bytes: HashMap<u32, u32>,
 	levels: u32,
@@ -50,9 +50,10 @@ pub struct Heap {
 
 impl Heap {
 
+	/// Creates a new buddy allocation heap with a fixed size (in Bytes).
 	pub fn new(reserved: u32) -> Self {
-		let leafs = reserved / BLOCK_SIZE as u32;
-		let levels = Heap::get_tree_levels(leafs);
+		let leaves = reserved / BLOCK_SIZE as u32;
+		let levels = Heap::get_tree_levels(leaves);
 		let node_count: usize = (1 << levels + 1) - 1;
 
 		Heap {
@@ -64,10 +65,11 @@ impl Heap {
 	}
 
 	/// Gets requested number of bytes to allocate and returns an index offset.
-	pub fn allocate(&mut self, size: u32) -> u32  {
+	/// The index offset starts at 0.
+	pub fn allocate(&mut self, size: u32) -> u32 {
 		let new_total_size = self.total_size + size;
 		if new_total_size > self.total_size {
-			trace!(target: "wasm-heap", "Heap size is over {} Bytes after allocation",  new_total_size);
+			trace!(target: "wasm-heap", "Heap size is over {} Bytes after allocation", new_total_size);
 		}
 		self.total_size = new_total_size;
 
@@ -138,7 +140,7 @@ impl Heap {
 
 				index = self.get_parent_node_index(index);
 				current_level += 1;
-				let has_buddy  = index & 1 == 1;
+				let has_buddy = index & 1 == 1;
 				if has_buddy {
 					index += 1;
 					break 'up;
@@ -156,13 +158,14 @@ impl Heap {
 		ptr
 	}
 
+	/// Deallocates all blocks which were allocated for a pointer.
 	pub fn deallocate(&mut self, ptr_: u32) {
 		let ptr = &(ptr_ as u32);
 		let allocated_size = self.allocated_bytes.get(ptr).unwrap().clone() as u32;
 
 		let new_total_size = self.total_size - allocated_size;
 		if new_total_size < self.total_size {
-			trace!(target: "wasm-heap", "Heap size over {} Bytes after deallocation",  new_total_size);
+			trace!(target: "wasm-heap", "Heap size over {} Bytes after deallocation", new_total_size);
 		}
 		self.total_size = new_total_size;
 
@@ -172,7 +175,7 @@ impl Heap {
 		self.allocated_bytes.remove(ptr).unwrap();
 	}
 
-	pub fn free(&mut self, block_offset: u32, count_blocks: u32) {
+	fn free(&mut self, block_offset: u32, count_blocks: u32) {
 		let requested_level = Heap::get_tree_levels(count_blocks);
 		let current_level_offset = (1 << self.levels - requested_level) - 1;
 		let level_offset = block_offset / (1 << requested_level);
