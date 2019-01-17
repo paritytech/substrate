@@ -85,6 +85,8 @@ use futures::Future;
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
+	/// Implemtation name.
+	pub name: &'static str,
 	/// Implementation version.
 	pub version: &'static str,
 	/// SCM Commit hash.
@@ -130,13 +132,16 @@ fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G
 	Ok(spec)
 }
 
-fn base_path(matches: &clap::ArgMatches, app_info: &AppInfo) -> PathBuf {
+fn base_path(matches: &clap::ArgMatches, version: &VersionInfo) -> PathBuf {
 	matches.value_of("base_path")
 		.map(|x| Path::new(x).to_owned())
 		.unwrap_or_else(|| 
 			app_dirs::get_app_root(
 				AppDataType::UserData,
-				app_info,
+				&AppInfo {
+					name: version.executable_name,
+					author: version.author
+				}
 			).expect("app directories exist on all supported platforms; qed")
 		)
 }
@@ -193,10 +198,9 @@ where
 /// Parse clap::Matches into config and chain specification
 pub fn parse_matches<'a, F, S>(
 	spec_factory: S,
-	version: VersionInfo,
+	version: &VersionInfo,
 	impl_name: &'static str,
 	matches: &clap::ArgMatches<'a>,
-	app_info: &AppInfo,
 ) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>
 where
 	F: ServiceFactory,
@@ -226,7 +230,7 @@ where
 		)
 	}
 
-	let base_path = base_path(&matches, &app_info);
+	let base_path = base_path(&matches, version);
 
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
@@ -344,7 +348,7 @@ where
 fn get_db_path_for_subcommand(
 	main_cmd: &clap::ArgMatches,
 	sub_cmd: &clap::ArgMatches,
-	app_info: &AppInfo,
+	version: &VersionInfo,
 ) -> error::Result<PathBuf> {
 	if main_cmd.is_present("chain") && sub_cmd.is_present("chain") {
 		bail!(create_input_err("`--chain` option is present two times"));
@@ -375,9 +379,9 @@ fn get_db_path_for_subcommand(
 	}
 
 	let base_path = if sub_cmd.is_present("base_path") {
-		base_path(sub_cmd, app_info)
+		base_path(sub_cmd, version)
 	} else {
-		base_path(main_cmd, app_info)
+		base_path(main_cmd, version)
 	};
 
 	Ok(db_path(&base_path, &spec_id))
@@ -397,7 +401,7 @@ pub fn execute_default<'a, F, E>(
 	exit: E,
 	matches: &clap::ArgMatches<'a>,
 	config: &FactoryFullConfiguration<F>,
-	app_info: &AppInfo,
+	app_info: &VersionInfo,
 ) -> error::Result<Action<E>>
 where
 	E: IntoExit,
