@@ -71,6 +71,7 @@ impl Heap {
 		let levels_needed = Heap::get_tree_levels(blocks_needed);
 		if levels_needed > self.levels {
 			trace!(target: "wasm-heap", "Heap is too small: {:?} > {:?}", levels_needed, self.levels);
+			return 0;
 		}
 
 		// Start at tree root and traverse down
@@ -129,6 +130,7 @@ impl Heap {
 			'up: loop {
 				if index == 0 {
 					trace!(target: "wasm-heap", "Heap is too small: tree root reached.");
+					return 0;
 				}
 
 				index = self.get_parent_node_index(index);
