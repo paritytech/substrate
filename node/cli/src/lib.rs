@@ -20,6 +20,7 @@
 #![warn(unused_extern_crates)]
 
 extern crate tokio;
+extern crate app_dirs;
 
 extern crate substrate_cli as cli;
 extern crate substrate_primitives as primitives;
@@ -57,6 +58,13 @@ use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use params::{Params as NodeParams};
 use structopt::StructOpt;
 use std::ops::Deref;
+use app_dirs::AppInfo;
+
+
+const APP_INFO: AppInfo = AppInfo {
+	name: "Substrate Node",
+	author: "Parity Technologies"
+};
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -122,15 +130,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		};
 
 	let (spec, config) = cli::parse_matches::<service::Factory, _>(
-		load_spec, version, "substrate-node", &matches
+		load_spec, version, "substrate-node", &matches, &APP_INFO
 	)?;
 
-	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
+	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config, &APP_INFO)? {
 		cli::Action::ExecutedInternally => (),
 		cli::Action::RunService(exit) => {
-			info!("Substrate Node");
+			info!("{}", APP_INFO.name);
 			info!("  version {}", config.full_version());
-			info!("  by Parity Technologies, 2017, 2018");
+			info!("  by {}, 2017, 2018", APP_INFO.author);
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);
