@@ -25,16 +25,12 @@ use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_support::{StorageMap, StorageDoubleMap};
 use substrate_primitives::{Blake2Hasher};
-use system::{Phase, EventRecord};
+use system::{ensure_signed, Phase, EventRecord};
 use wabt;
 use {
 	balances, runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
-	Trait,
+	Trait, RawOrigin,
 };
-
-impl_outer_origin! {
-	pub enum Origin for Test {}
-}
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -45,6 +41,17 @@ mod contract {
 impl_outer_event! {
 	pub enum MetaEvent for Test {
 		balances<T>, contract<T>,
+	}
+}
+impl_outer_origin! {
+	pub enum Origin for Test {
+		contract<T>,
+	}
+}
+impl_outer_dispatch! {
+	pub enum Call for Test where origin: Origin {
+		balances::Balances,
+		contract::Contract,
 	}
 }
 
@@ -71,6 +78,8 @@ impl balances::Trait for Test {
 	type Event = MetaEvent;
 }
 impl Trait for Test {
+	type Origin = Origin;
+	type Call = Call;
 	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
@@ -164,6 +173,11 @@ impl ExtBuilder {
 		);
 		runtime_io::TestExternalities::new(t)
 	}
+}
+
+#[test]
+fn make_sure_contract_origin_coerces_into_signed() {
+	assert_eq!(1337, ensure_signed(Origin::contract(RawOrigin::Contract(1337))).unwrap());
 }
 
 #[test]

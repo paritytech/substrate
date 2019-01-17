@@ -104,7 +104,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::{Codec, HasCompact};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
-use runtime_support::dispatch::Result;
+use runtime_support::dispatch::{Result, Dispatchable};
 use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
 use system::ensure_signed;
 use runtime_io::{blake2_256, twox_128};
@@ -112,6 +112,12 @@ use runtime_io::{blake2_256, twox_128};
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 
 pub trait Trait: balances::Trait {
+	/// The outer origin type.
+	type Origin: From<Origin<Self>>;
+
+	/// The outer call dispatch type.
+	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin>;
+
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
 
@@ -150,9 +156,17 @@ where
 	}
 }
 
+/// Origin for the contract module.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum RawOrigin<AccountId> {
+	Contract(AccountId),
+}
+pub type Origin<T> = RawOrigin<<T as system::Trait>::AccountId>;
+
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event<T>() = default;
 
 		/// Updates the schedule for metering contracts.
@@ -223,6 +237,13 @@ decl_module! {
 
 				// Then deposit all events produced.
 				ctx.events.into_iter().for_each(Self::deposit_event);
+
+				// Dispatch every recorded call with an appropriate origin.
+				// TODO: Do we need to put this after gas refund?
+				ctx.calls.into_iter().for_each(|(who, call)| {
+					let result = call.dispatch(RawOrigin::Contract(who.clone()).into());
+					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
+				});
 			}
 
 			// Refund cost of the unused gas.
@@ -307,6 +328,10 @@ decl_event! {
 
 		/// Triggered when the current schedule is updated.
 		ScheduleUpdated(u32),
+
+		/// A call was dispatched from the given account. The bool signals whether it was
+		/// successful execution or not.
+		Dispatched(AccountId, bool),
 	}
 }
 

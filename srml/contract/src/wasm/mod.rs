@@ -173,7 +173,7 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use substrate_primitives::H256;
-	use exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
+	use exec::{CallOf, CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
 	use gas::GasMeter;
 	use tests::Test;
 	use wabt;
@@ -247,6 +247,9 @@ mod tests {
 			Ok(CallReceipt {
 				output_data: Vec::new(),
 			})
+		}
+		fn note_dispatch_call(&mut self, _call: CallOf<Self::T>) {
+			// TODO: Add an entry
 		}
 		fn caller(&self) -> &u64 {
 			&42
