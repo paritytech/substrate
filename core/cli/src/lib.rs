@@ -139,7 +139,7 @@ fn base_path(matches: &clap::ArgMatches, version: &VersionInfo) -> PathBuf {
 			app_dirs::get_app_root(
 				AppDataType::UserData,
 				&AppInfo {
-					name: version.name,
+					name: version.executable_name,
 					author: version.author
 				}
 			).expect("app directories exist on all supported platforms; qed")
