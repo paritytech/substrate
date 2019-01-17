@@ -342,7 +342,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the current validators.
 	pub fn validators() -> Vec<T::AccountId> {
-		session::Module::<T>::validators()
+		session::Module::<T>::validators().iter().map(|(account_id, _)| account_id.clone()).collect::<Vec<_>>()
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -423,7 +423,7 @@ impl<T: Trait> Module<T> {
 			let reward = Self::this_session_reward(actual_elapsed);
 			let validators = <session::Module<T>>::validators();
 			for v in validators.iter() {
-				Self::reward_validator(v, reward);
+				Self::reward_validator(&v.0, reward);
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
 			let total_minted = reward * <T::Balance as As<usize>>::sa(validators.len());
@@ -487,16 +487,19 @@ impl<T: Trait> Module<T> {
 			.take(desired_validator_count)
 			.collect::<Vec<_>>();
 		for v in <session::Module<T>>::validators().iter() {
-			<CurrentNominatorsFor<T>>::remove(v);
-			let slash_count = <SlashCount<T>>::take(v);
+			<CurrentNominatorsFor<T>>::remove(v.0.clone());
+			let slash_count = <SlashCount<T>>::take(v.0.clone());
 			if slash_count > 1 {
-				<SlashCount<T>>::insert(v, slash_count - 1);
+				<SlashCount<T>>::insert(v.0.clone(), slash_count - 1);
 			}
 		}
+        let mut validator_weight = Vec::new();
 		for v in vals.iter() {
 			<CurrentNominatorsFor<T>>::insert(v, Self::nominators_for(v));
+            let weight = Self::nomination_balance(v).as_();
+            validator_weight.push((v.clone(), weight));
 		}
-		<session::Module<T>>::set_validators(vals);
+		<session::Module<T>>::set_validators(validator_weight.as_slice());
 
 		// Update the balances for slashing/rewarding according to the stakes.
 		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
@@ -597,7 +600,7 @@ impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
 	fn handle_report(reported_indices: Vec<u32>) {
 		for validator_index in reported_indices {
 			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
-			Self::on_offline_validator(v, 1);
+			Self::on_offline_validator(v.0, 1);
 		}
 	}
 }

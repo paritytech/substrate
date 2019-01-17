@@ -124,7 +124,7 @@ fn note_offline_force_unstake_session_change_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 70);
 		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![(10, 1), (20, 1)]);
 
 		System::set_extrinsic_index(1);
 		Staking::on_offline_validator(10, 1);
@@ -249,7 +249,7 @@ fn staking_should_work() {
 
 		assert_eq!(Staking::era_length(), 2);
 		assert_eq!(Staking::validator_count(), 2);
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![(10, 1), (20, 1)]);
 
 		assert_ok!(Staking::set_bonding_duration(2.into()));
 		assert_eq!(Staking::bonding_duration(), 2);
@@ -261,13 +261,13 @@ fn staking_should_work() {
 		assert_ok!(Staking::stake(Origin::signed(4)));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![(10, 1), (20, 1)]);
 
 		// Block 2: New validator set now.
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::validators(), vec![4, 2]);
+		assert_eq!(Session::validators(), vec![(4, 0), (2, 0)]);
 
 		// Block 3: Unstake highest, introduce another staker. No change yet.
 		System::set_block_number(3);
@@ -280,7 +280,7 @@ fn staking_should_work() {
 		System::set_block_number(4);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
-		assert_eq!(Session::validators(), vec![3, 2]);
+		assert_eq!(Session::validators(), vec![(3, 0), (2, 0)]);
 
 		// Block 5: Transfer stake from highest to lowest. No change yet.
 		System::set_block_number(5);
@@ -290,18 +290,18 @@ fn staking_should_work() {
 		// Block 6: Lowest now validator.
 		System::set_block_number(6);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![1, 3]);
+		assert_eq!(Session::validators(), vec![(1, 0), (3, 0)]);
 
 		// Block 7: Unstake three. No change yet.
 		System::set_block_number(7);
 		assert_ok!(Staking::unstake(Origin::signed(3), (Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32).into()));
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![1, 3]);
+		assert_eq!(Session::validators(), vec![(1, 0), (3, 0)]);
 
 		// Block 8: Back to one and two.
 		System::set_block_number(8);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![1, 2]);
+		assert_eq!(Session::validators(), vec![(1, 0), (2, 0)]);
 	});
 }
 
@@ -311,7 +311,7 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Staking::bonding_duration(), 3);
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![(10, 1), (20, 1)]);
 
 		System::set_block_number(1);
 		assert_ok!(Staking::stake(Origin::signed(1)));
@@ -320,7 +320,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::nominate(Origin::signed(4), 1));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
+		assert_eq!(Session::validators(), vec![(1, 40), (3, 0)]);	// 4 + 1, 3
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_eq!(Balances::total_balance(&2), 20);
 		assert_eq!(Balances::total_balance(&3), 30);
@@ -330,7 +330,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::unnominate(Origin::signed(4), 0.into()));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
-		assert_eq!(Session::validators(), vec![3, 2]);
+		assert_eq!(Session::validators(), vec![(3, 0), (2, 0)]);
 		assert_eq!(Balances::total_balance(&1), 16);
 		assert_eq!(Balances::total_balance(&2), 20);
 		assert_eq!(Balances::total_balance(&3), 60);
@@ -341,7 +341,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::unstake(Origin::signed(3), (Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32).into()));
 		assert_ok!(Staking::nominate(Origin::signed(3), 1));
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![1, 4]);
+		assert_eq!(Session::validators(), vec![(1, 80), (4, 0)]);
 		assert_eq!(Balances::total_balance(&1), 16);
 		assert_eq!(Balances::total_balance(&2), 40);
 		assert_eq!(Balances::total_balance(&3), 80);
@@ -364,7 +364,7 @@ fn rewards_with_off_the_table_should_work() {
 		assert_ok!(Staking::nominate(Origin::signed(2), 1));
 		assert_ok!(Staking::stake(Origin::signed(3)));
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
+		assert_eq!(Session::validators(), vec![(1, 20), (3, 0)]);	// 1 + 2, 3
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_eq!(Balances::total_balance(&2), 20);
 		assert_eq!(Balances::total_balance(&3), 30);
@@ -388,7 +388,7 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Staking::era_length(), 4);
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Staking::bonding_duration(), 12);
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![(10, 1), (20, 1)]);
 
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
@@ -402,7 +402,7 @@ fn nominating_slashes_should_work() {
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
+		assert_eq!(Session::validators(), vec![(1, 40), (3, 20)]);	// 1 + 4, 3 + 2
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_eq!(Balances::total_balance(&2), 20);
 		assert_eq!(Balances::total_balance(&3), 30);
