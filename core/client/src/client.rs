@@ -671,9 +671,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		hash: Block::Hash,
 		body: Option<Vec<Block::Extrinsic>>,
 		transaction: &B::BlockImportOperation,
-	) -> error::Result<(Option<StorageUpdate<B, Block>>, 
-						Option<Option<ChangesUpdate>>, 
-						Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>)> 
+	) -> error::Result<(
+		Option<StorageUpdate<B, Block>>, 
+		Option<Option<ChangesUpdate>>, 
+		Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	)> 
 		where
 			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
