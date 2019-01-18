@@ -115,7 +115,6 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
-
 		/// The current set of validators.
 		pub Validators get(validators) config(): Vec<T::AccountId>;
 		/// Current length of the session.
@@ -247,7 +246,6 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl consensus::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
 		type SessionKey = UintAuthorityId;
 		type InherentOfflineReport = ();
@@ -266,7 +264,6 @@ mod tests {
 		type Log = DigestItem;
 	}
 	impl timestamp::Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
 		type OnTimestampSet = ();
 	}

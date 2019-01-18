@@ -26,7 +26,7 @@ use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, Nothing
 use grandpa;
 use node_executor;
 use primitives::ed25519::Pair;
-use node_primitives::{Block, InherentData};
+use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
@@ -83,6 +83,7 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
+					let inherent_data_providers = client.inherent_data_providers().clone();
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
@@ -91,7 +92,8 @@ construct_service_factory! {
 						proposer,
 						service.network(),
 						service.on_exit(),
-					));
+						inherent_data_providers,
+					)?);
 
 					info!("Running Grandpa session as Authority {}", key.public());
 				}
@@ -99,7 +101,8 @@ construct_service_factory! {
 				executor.spawn(grandpa::run_grandpa(
 					grandpa::Config {
 						local_key,
-						gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
+						// FIXME: make this available through chainspec?
+						gossip_duration: Duration::new(4, 0),
 						justification_period: 4096,
 						name: Some(service.config.name.clone())
 					},
@@ -117,35 +120,40 @@ construct_service_factory! {
 			Self::Block,
 			grandpa::BlockImportForService<Self>,
 			NothingExtra,
-			::consensus::InherentProducingFn<InherentData>,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
-				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client)?;
+				let inherent_data_providers = client.inherent_data_providers().clone();
+
+				let (block_import, link_half) =
+					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(
+						client.clone(), client
+					)?;
 				let block_import = Arc::new(block_import);
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
-				Ok(import_queue(
+				import_queue(
 					slot_duration,
 					block_import,
 					NothingExtra,
-					::consensus::make_basic_inherent as _,
-				))
+					inherent_data_providers,
+				).map_err(Into::into)
 			}},
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
 			LightClient<Self>,
 			NothingExtra,
-			::consensus::InherentProducingFn<InherentData>,
 		>
-			{ |ref mut config, client: Arc<LightClient<Self>>|
-				Ok(import_queue(
-					SlotDuration::get_or_compute(&*client)?,
-					client,
-					NothingExtra,
-					::consensus::make_basic_inherent as _,
-				))
+			{ |ref mut config, client: Arc<LightClient<Self>>| {
+					let inherent_data_providers = client.inherent_data_providers().clone();
+					import_queue(
+						SlotDuration::get_or_compute(&*client)?,
+						client,
+						NothingExtra,
+						inherent_data_providers,
+					).map_err(Into::into)
+				}
 			},
 	}
 }

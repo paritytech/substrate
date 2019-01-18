@@ -68,4 +68,6 @@ pub use core::result;
 
 pub mod collections {
 	pub use alloc::collections::btree_map;
+	pub use alloc::collections::HashMap;
+	pub use alloc::collections::hash_map;
 }

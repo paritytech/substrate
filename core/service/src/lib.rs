@@ -77,7 +77,9 @@ use codec::{Encode, Decode};
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
-pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
+pub use transaction_pool::txpool::{
+	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
+};
 pub use client::{ExecutionStrategy, FinalityNotifications};
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -294,7 +296,8 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let rpc = Components::RPC::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http, config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
+			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
+			config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
 		)?;
 
 		// Telemetry
@@ -392,8 +395,8 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 	}
 }
 
-fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error> where
-	F: Fn(&SocketAddr) -> Result<T, io::Error>,
+fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error>
+	where F: Fn(&SocketAddr) -> Result<T, io::Error>,
 {
 	Ok(match address {
 		Some(mut address) => Some(start(&address)
@@ -428,7 +431,9 @@ impl<C: Components> TransactionPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync{
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
+	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
+{
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		self.pool.ready()
 			.map(|t| {

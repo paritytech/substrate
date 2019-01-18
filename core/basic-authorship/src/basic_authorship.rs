@@ -18,9 +18,7 @@
 
 // FIXME: move this into substrate-consensus-common - https://github.com/paritytech/substrate/issues/1021
 
-use std::sync::Arc;
-use std::time;
-use std;
+use std::{sync::Arc, self};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
@@ -29,13 +27,12 @@ use client::{
 use codec::{Decode, Encode};
 use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
+};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::BasicInherentData;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use aura_primitives::AuraConsensusData;
-
-type Timestamp = u64;
+use inherents::InherentData;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
@@ -59,20 +56,20 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
-		inherent_data: BasicInherentData,
+		inherent_data: InherentData,
 		build_ctx: F,
 	) -> Result<Self::Block, error::Error>;
 }
 
 impl<'a, B, E, Block, RA> BlockBuilder<Block>
-	for client::block_builder::BlockBuilder<'a, Block, BasicInherentData, SubstrateClient<B, E, Block, RA>>
+	for client::block_builder::BlockBuilder<'a, Block, SubstrateClient<B, E, Block, RA>>
 where
 	B: client::backend::Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
@@ -85,7 +82,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
 	type Block = Block;
 	type Error = client::error::Error;
@@ -93,13 +90,13 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
-		inherent_data: BasicInherentData,
+		inherent_data: InherentData,
 		mut build_ctx: F,
 	) -> Result<Self::Block, error::Error> {
 		let mut block_builder = self.new_block_at(at)?;
 
 		let runtime_api = self.runtime_api();
-		if runtime_api.has_api::<BlockBuilderApi<Block, BasicInherentData>>(at)? {
+		if runtime_api.has_api::<BlockBuilderApi<Block>>(at)? {
 			runtime_api.inherent_extrinsics(at, inherent_data)?
 				.into_iter().try_for_each(|i| block_builder.push(i))?;
 		}
@@ -118,12 +115,12 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Block, ConsensusData> for ProposerFactory<C, A> where
+impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
 	C: AuthoringApi,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block, BasicInherentData>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
-	Proposer<<C as AuthoringApi>::Block, C, A>: consensus_common::Proposer<<C as AuthoringApi>::Block, ConsensusData>,
+	Proposer<<C as AuthoringApi>::Block, C, A>: consensus_common::Proposer<<C as AuthoringApi>::Block>,
 {
 	type Proposer = Proposer<<C as AuthoringApi>::Block, C, A>;
 	type Error = error::Error;
@@ -151,10 +148,6 @@ impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Blo
 	}
 }
 
-struct ConsensusData {
-	timestamp: Option<u64>,
-}
-
 /// The proposer logic.
 pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	client: Arc<C>,
@@ -164,52 +157,34 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block, AuraConsensusData> for Proposer<Block, C, A> where
+impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
 	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
 	type Error = error::Error;
 
-	fn propose(&self, consensus_data: AuraConsensusData)
+	fn propose(&self, inherent_data: InherentData)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
-		self.propose_with(ConsensusData { timestamp: Some(consensus_data.timestamp) })
-	}
-}
-
-impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block, ()> for Proposer<Block, C, A> where
-	Block: BlockT,
-	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
-	A: txpool::ChainApi<Block=Block>,
-	client::error::Error: From<<C as AuthoringApi>::Error>
-{
-	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
-	type Error = error::Error;
-
-	fn propose(&self, _consensus_data: ()) -> Result<<C as AuthoringApi>::Block, error::Error> {
-		self.propose_with(ConsensusData { timestamp: None })
+		self.propose_with(inherent_data)
 	}
 }
 
 impl<Block, C, A> Proposer<Block, C, A>	where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
 {
-	fn propose_with(&self, consensus_data: ConsensusData)
+	fn propose_with(&self, inherent_data: InherentData)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
-
-		let timestamp = consensus_data.timestamp.unwrap_or_else(current_timestamp);
-		let inherent_data = BasicInherentData::new(timestamp, 0);
 
 		let block = self.client.build_block(
 			&self.parent_id,
@@ -260,10 +235,4 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 		Ok(substrate_block)
 	}
-}
-
-fn current_timestamp() -> Timestamp {
-	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
-		.expect("now always later than unix epoch; qed")
-		.as_secs()
 }

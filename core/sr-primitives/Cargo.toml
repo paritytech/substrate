@@ -30,5 +30,3 @@ std = [
 	"parity-codec/std",
 	"substrate-primitives/std",
 ]
-api-for-runtime = []
-

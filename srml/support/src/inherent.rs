@@ -17,9 +17,7 @@
 #[doc(hidden)]
 pub use rstd::{cmp, result::Result, vec::Vec};
 #[doc(hidden)]
-pub use runtime_primitives::{
-	traits::{ProvideInherent, Block as BlockT}, CheckInherentError
-};
+pub use runtime_primitives::traits::Block as BlockT;
 
 
 /// Implement the outer inherent.
@@ -47,38 +45,6 @@ macro_rules! impl_outer_inherent {
 			$( $module:ident: $module_ty:ident,)*
 		}
 	) => {
-		impl $runtime {
-			fn check_inherents(
-				block: $block,
-				data: $inherent
-			) -> $crate::inherent::Result<(), $crate::inherent::CheckInherentError> {
-				use $crate::inherent::CheckInherentError;
 
-				let mut max_valid_after = None;
-				$(
-					let res = <$module_ty as $crate::inherent::ProvideInherent>::check_inherent(
-						&block,
-						data.$module,
-						&|xt| match xt.function {
-							Call::$module_ty(ref data) => Some(data),
-							_ => None,
-						},
-					);
-
-					match res {
-						Err(CheckInherentError::ValidAtTimestamp(t)) =>
-							max_valid_after = $crate::inherent::cmp::max(max_valid_after, Some(t)),
-						res => res?
-					}
-				)*
-
-				// once everything else has checked out, take the maximum of
-				// all things which are timestamp-restricted.
-				match max_valid_after {
-					Some(t) => Err(CheckInherentError::ValidAtTimestamp(t)),
-					None => Ok(())
-				}
-			}
-		}
 	};
 }
