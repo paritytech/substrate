@@ -798,6 +798,9 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 	// TODO [andre]: clone only when changed (#1483)
 	let old_authority_set = authority_set.clone();
+	// needed in case there is an authority set change, used for reverting in
+	// case of error
+	let mut old_last_completed = None;
 
 	let mut consensus_changes = consensus_changes.lock();
 	let status = authority_set.apply_changes(number, |canon_number| {
@@ -815,6 +818,8 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			let round_state = RoundState::genesis((*canon_hash, *canon_number));
 			let last_completed: LastCompleted<_, _> = (0, round_state);
 			let encoded = last_completed.encode();
+
+			old_last_completed = Backend::get_aux(&**client.backend(), LAST_COMPLETED_KEY)?;
 
 			Backend::insert_aux(
 				&**client.backend(),
@@ -933,9 +938,34 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		Err(ExitOrError::Error(err)) => {
 			debug!(target: "afg", "Reverting authority set and/or consensus changes after block finalization error: {:?}", err);
 
-			*authority_set = old_authority_set;
+			let mut revert_aux = Vec::new();
+
+			if status.changed {
+				revert_aux.push((AUTHORITY_SET_KEY, old_authority_set.encode()));
+				if let Some(old_last_completed) = old_last_completed {
+					revert_aux.push((LAST_COMPLETED_KEY, old_last_completed));
+				}
+
+				*authority_set = old_authority_set.clone();
+			}
+
 			if let Some(old_consensus_changes) = old_consensus_changes {
+				revert_aux.push((CONSENSUS_CHANGES_KEY, old_consensus_changes.encode()));
+
 				*consensus_changes = old_consensus_changes;
+			}
+
+			let write_result = Backend::insert_aux(
+				&**client.backend(),
+				revert_aux.iter().map(|(k, v)| (*k, &**v)).collect::<Vec<_>>().iter(),
+				&[],
+			);
+
+			if let Err(e) = write_result {
+				warn!(target: "finality", "Failed to revert consensus changes to disk. Bailing.");
+				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+
+				return Err(e.into());
 			}
 
 			Err(ExitOrError::Error(err))
