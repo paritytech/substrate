@@ -241,7 +241,7 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
+				validators: vec![(One.to_raw_public().into(), 1), (Two.to_raw_public().into(), 1), (three, 1)],
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
