@@ -42,6 +42,9 @@ test:rust:stable:                  &test
   stage:                           test
   variables:
     RUST_TOOLCHAIN: stable
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
     TARGET: native
   only:
     - triggers

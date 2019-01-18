@@ -17,154 +17,172 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use exec::CreateReceipt;
+use codec::Compact;
+use exec::{Ext, EmptyOutputBuf, VmExecResult};
 use gas::GasMeter;
 use rstd::prelude::*;
-use {Trait, Schedule};
-use {balances, sandbox, system};
+use sandbox;
+use wasm::env_def::FunctionImplProvider;
+use {CodeHash, Schedule, Trait};
 
-type BalanceOf<T> = <T as balances::Trait>::Balance;
-type AccountIdOf<T> = <T as system::Trait>::AccountId;
-
-mod prepare;
 #[macro_use]
 mod env_def;
+mod code_cache;
+mod prepare;
 mod runtime;
 
-use self::prepare::{prepare_contract, PreparedContract};
 use self::runtime::{to_execution_result, Runtime};
+use self::code_cache::load as load_code;
 
-/// An interface that provides an access to the external environment in which the
-/// smart-contract is executed.
-///
-/// This interface is specialised to an account of the executing code, so all
-/// operations are implicitly performed on that account.
-pub trait Ext {
-	type T: Trait;
+pub use self::code_cache::save as save_code;
 
-	/// Returns the storage entry of the executing account by the given key.
-	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
-
-	/// Sets the storage entry by the given key to the specified value.
-	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
-
-	/// Create a new account for a contract.
+/// A prepared wasm module ready for execution.
+#[derive(Clone, Encode, Decode)]
+pub struct PrefabWasmModule {
+	/// Version of the schedule with which the code was instrumented.
+	#[codec(compact)]
+	schedule_version: u32,
+	#[codec(compact)]
+	initial: u32,
+	#[codec(compact)]
+	maximum: u32,
+	/// This field is reserved for future evolution of format.
 	///
-	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
-	/// transfered from this to the newly created account.
-	fn create(
-		&mut self,
-		code: &[u8],
-		value: BalanceOf<Self::T>,
-		gas_meter: &mut GasMeter<Self::T>,
-		data: &[u8],
-	) -> Result<CreateReceipt<Self::T>, ()>;
-
-	/// Call (possibly transfering some amount of funds) into the specified account.
-	fn call(
-		&mut self,
-		to: &AccountIdOf<Self::T>,
-		value: BalanceOf<Self::T>,
-		gas_meter: &mut GasMeter<Self::T>,
-		data: &[u8],
-		output_data: &mut Vec<u8>,
-	) -> Result<(), ()>;
-
-	/// Returns a reference to the account id of the caller.
-	fn caller(&self) -> &AccountIdOf<Self::T>;
+	/// Basically, for now this field will be serialized as `None`. In the future
+	/// we would be able to extend this structure with.
+	_reserved: Option<()>,
+	/// Code instrumented with the latest schedule.
+	code: Vec<u8>,
 }
 
-/// Error that can occur while preparing or executing wasm smart-contract.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Error {
-	/// Error happened while serializing the module.
-	Serialization,
-
-	/// Error happened while deserializing the module.
-	Deserialization,
-
-	/// Internal memory declaration has been found in the module.
-	InternalMemoryDeclared,
-
-	/// Gas instrumentation failed.
-	///
-	/// This most likely indicates the module isn't valid.
-	GasInstrumentation,
-
-	/// Stack instrumentation failed.
-	///
-	/// This  most likely indicates the module isn't valid.
-	StackHeightInstrumentation,
-
-	/// Error happened during invocation of the contract's entrypoint.
-	///
-	/// Most likely because of trap.
-	Invoke,
-
-	/// Error happened during instantiation.
-	///
-	/// This might indicate that `start` function trapped, or module isn't
-	/// instantiable and/or unlinkable.
-	Instantiate,
-
-	/// Memory creation error.
-	///
-	/// This might happen when the memory import has invalid descriptor or
-	/// requested too much resources.
-	Memory,
+/// Wasm executable loaded by `WasmLoader` and executed by `WasmVm`.
+pub struct WasmExecutable {
+	entrypoint_name: &'static [u8],
+	prefab_module: PrefabWasmModule,
 }
 
-/// Execute the given code as a contract.
-pub fn execute<'a, E: Ext>(
-	code: &[u8],
-	input_data: &[u8],
-	output_data: &mut Vec<u8>,
-	ext: &'a mut E,
-	schedule: &Schedule<<E::T as Trait>::Gas>,
-	gas_meter: &mut GasMeter<E::T>,
-) -> Result<(), Error> {
-	let env = runtime::init_env();
+/// Loader which fetches `WasmExecutable` from the code cache.
+pub struct WasmLoader<'a, T: Trait> {
+	schedule: &'a Schedule<T::Gas>,
+}
 
-	let PreparedContract {
-		instrumented_code,
-		memory,
-	} = prepare_contract(code, &schedule, &env)?;
-
-	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
-	for (func_name, ext_func) in &env.funcs {
-		imports.add_host_func("env", &func_name[..], ext_func.raw_fn_ptr());
+impl<'a, T: Trait> WasmLoader<'a, T> {
+	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
+		WasmLoader { schedule }
 	}
-	imports.add_memory("env", "memory", memory.clone());
+}
 
-	let mut runtime = Runtime::new(ext, input_data, output_data, &schedule, memory, gas_meter);
+impl<'a, T: Trait> ::exec::Loader<T> for WasmLoader<'a, T> {
+	type Executable = WasmExecutable;
 
-	// Instantiate the instance from the instrumented module code.
-	match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
-		// No errors or traps were generated on instantiation! That
-		// means we can now invoke the contract entrypoint.
-		Ok(mut instance) => {
-			let err = instance.invoke(b"call", &[], &mut runtime).err();
-			to_execution_result(runtime, err)
+	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
+		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
+		Ok(WasmExecutable {
+			entrypoint_name: b"deploy",
+			prefab_module,
+		})
+	}
+	fn load_main(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
+		let prefab_module = load_code::<T>(code_hash, self.schedule)?;
+		Ok(WasmExecutable {
+			entrypoint_name: b"call",
+			prefab_module,
+		})
+	}
+}
+
+/// Implementation of `Vm` that takes `WasmExecutable` and executes it.
+pub struct WasmVm<'a, T: Trait> {
+	schedule: &'a Schedule<T::Gas>,
+}
+
+impl<'a, T: Trait> WasmVm<'a, T> {
+	pub fn new(schedule: &'a Schedule<T::Gas>) -> Self {
+		WasmVm { schedule }
+	}
+}
+
+impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
+	type Executable = WasmExecutable;
+
+	fn execute<E: Ext<T = T>>(
+		&self,
+		exec: &WasmExecutable,
+		ext: &mut E,
+		input_data: &[u8],
+		empty_output_buf: EmptyOutputBuf,
+		gas_meter: &mut GasMeter<E::T>,
+	) -> VmExecResult {
+		let memory =
+			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
+				.unwrap_or_else(|_| {
+				// unlike `.expect`, explicit panic preserves the source location.
+				// Needed as we can't use `RUST_BACKTRACE` in here.
+					panic!(
+						"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
+						thus Memory::new must not fail;
+						qed"
+					)
+				});
+
+		let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
+		imports.add_memory("env", "memory", memory.clone());
+		runtime::Env::impls(&mut |name, func_ptr| {
+			imports.add_host_func("env", name, func_ptr);
+		});
+
+		let mut runtime = Runtime::new(
+			ext,
+			input_data,
+			empty_output_buf,
+			&self.schedule,
+			memory,
+			gas_meter,
+		);
+
+		// Instantiate the instance from the instrumented module code.
+		match sandbox::Instance::new(&exec.prefab_module.code, &imports, &mut runtime) {
+			// No errors or traps were generated on instantiation! That
+			// means we can now invoke the contract entrypoint.
+			Ok(mut instance) => {
+				let err = instance
+					.invoke(exec.entrypoint_name, &[], &mut runtime)
+					.err();
+				to_execution_result(runtime, err)
+			}
+			// `start` function trapped. Treat it in the same manner as an execution error.
+			Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
+			Err(_err @ sandbox::Error::Module) => {
+				// `Error::Module` is returned only if instantiation or linking failed (i.e.
+				// wasm bianry tried to import a function that is not provided by the host).
+				// This shouldn't happen because validation proccess ought to reject such binaries.
+				//
+				// Because panics are really undesirable in the runtime code, we treat this as
+				// a trap for now. Eventually, we might want to revisit this.
+				return VmExecResult::Trap("validation error");
+			}
+			// Other instantiation errors.
+			// Return without executing anything.
+			Err(_) => return VmExecResult::Trap("during start function"),
 		}
-		// `start` function trapped. Treat it in the same manner as an execution error.
-		Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
-		// Other instantiation errors.
-		// Return without executing anything.
-		Err(_) => return Err(Error::Instantiate),
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use gas::GasMeter;
 	use std::collections::HashMap;
+	use substrate_primitives::H256;
+	use exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
+	use gas::GasMeter;
 	use tests::Test;
 	use wabt;
+	use wasm::prepare::prepare_contract;
+	use CodeHash;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
-		code: Vec<u8>,
+		code_hash: H256,
 		endowment: u64,
 		data: Vec<u8>,
 		gas_left: u64,
@@ -192,15 +210,15 @@ mod tests {
 		fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
 			*self.storage.entry(key.to_vec()).or_insert(Vec::new()) = value.unwrap_or(Vec::new());
 		}
-		fn create(
+		fn instantiate(
 			&mut self,
-			code: &[u8],
+			code_hash: &CodeHash<Test>,
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-		) -> Result<CreateReceipt<Test>, ()> {
+		) -> Result<InstantiateReceipt<u64>, &'static str> {
 			self.creates.push(CreateEntry {
-				code: code.to_vec(),
+				code_hash: code_hash.clone(),
 				endowment,
 				data: data.to_vec(),
 				gas_left: gas_meter.gas_left(),
@@ -208,7 +226,7 @@ mod tests {
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
-			Ok(CreateReceipt { address })
+			Ok(InstantiateReceipt { address })
 		}
 		fn call(
 			&mut self,
@@ -216,8 +234,8 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-			_output_data: &mut Vec<u8>,
-		) -> Result<(), ()> {
+			_output_data: EmptyOutputBuf,
+		) -> Result<CallReceipt, &'static str> {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
@@ -226,11 +244,46 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(())
+			Ok(CallReceipt {
+				output_data: Vec::new(),
+			})
 		}
 		fn caller(&self) -> &u64 {
 			&42
 		}
+		fn address(&self) -> &u64 {
+			&69
+		}
+	}
+
+	fn execute<E: Ext>(
+		wat: &str,
+		input_data: &[u8],
+		output_data: &mut Vec<u8>,
+		ext: &mut E,
+		gas_meter: &mut GasMeter<E::T>,
+	) -> Result<(), &'static str> {
+		use exec::Vm;
+
+		let wasm = wabt::wat2wasm(wat).unwrap();
+		let schedule = ::Schedule::<u64>::default();
+		let prefab_module =
+			prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
+
+		let exec = WasmExecutable {
+			// Use a "call" convention.
+			entrypoint_name: b"call",
+			prefab_module,
+		};
+
+		let cfg = Default::default();
+		let vm = WasmVm::new(&cfg);
+
+		*output_data = vm
+			.execute(&exec, ext, input_data, EmptyOutputBuf::new(), gas_meter)
+			.into_result()?;
+
+		Ok(())
 	}
 
 	const CODE_TRANSFER: &str = r#"
@@ -259,6 +312,8 @@ mod tests {
 			)
 		)
 	)
+	(func (export "deploy"))
+
 	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
@@ -272,26 +327,22 @@ mod tests {
 
 	#[test]
 	fn contract_transfer() {
-		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			&code_transfer,
+			CODE_TRANSFER,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::<u64>::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(
 			&mock_ext.transfers,
 			&[TransferEntry {
 				to: 9,
 				value: 6,
-				data: vec![
-					1, 2, 3, 4,
-				],
+				data: vec![1, 2, 3, 4],
 				gas_left: 49970,
 			}]
 		);
@@ -313,80 +364,48 @@ mod tests {
 	(func (export "call")
 		(drop
 			(call $ext_create
-				(i32.const 12)   ;; Pointer to `code`
-				(i32.const 8)    ;; Length of `code`
+				(i32.const 16)   ;; Pointer to `code_hash`
+				(i32.const 32)   ;; Length of `code_hash`
 				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 4)    ;; Pointer to the buffer with value to transfer
 				(i32.const 8)    ;; Length of the buffer with value to transfer
-				(i32.const 20)   ;; Pointer to input data buffer address
+				(i32.const 12)   ;; Pointer to input data buffer address
 				(i32.const 4)    ;; Length of input data buffer
 			)
 		)
 	)
+	(func (export "deploy"))
+
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
-	;; Embedded wasm code.
-	(data (i32.const 12) "\00\61\73\6d\01\00\00\00")
 	;; Input data to pass to the contract being created.
-	(data (i32.const 20) "\01\02\03\04")
+	(data (i32.const 12) "\01\02\03\04")
+	;; Hash of code.
+	(data (i32.const 16) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
 )
 "#;
 
 	#[test]
 	fn contract_create() {
-		let code_create = wabt::wat2wasm(CODE_CREATE).unwrap();
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			&code_create,
+			CODE_CREATE,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(
 			&mock_ext.creates,
 			&[CreateEntry {
-				code: vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00],
+				code_hash: [0x11; 32].into(),
 				endowment: 3,
-				data: vec![
-					1, 2, 3, 4,
-				],
-				gas_left: 49970,
+				data: vec![1, 2, 3, 4],
+				gas_left: 49946,
 			}]
-		);
-	}
-
-	const CODE_MEM: &str = r#"
-(module
-	;; Internal memory is not allowed.
-	(memory 1 1)
-
-	(func (export "call")
-		nop
-	)
-)
-"#;
-
-	#[test]
-	fn contract_internal_mem() {
-		let code_mem = wabt::wat2wasm(CODE_MEM).unwrap();
-
-		let mut mock_ext = MockExt::default();
-
-		assert_matches!(
-			execute(
-				&code_mem,
-				&[],
-				&mut Vec::new(),
-				&mut mock_ext,
-				&Schedule::default(),
-				&mut GasMeter::with_limit(100_000, 1)
-			),
-			Err(_)
 		);
 	}
 
@@ -416,6 +435,8 @@ mod tests {
 			)
 		)
 	)
+	(func (export "deploy"))
+
 	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
@@ -429,26 +450,22 @@ mod tests {
 
 	#[test]
 	fn contract_call_limited_gas() {
-		let code_transfer = wabt::wat2wasm(CODE_TRANSFER_LIMITED_GAS).unwrap();
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			&code_transfer,
+			&CODE_TRANSFER_LIMITED_GAS,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
 		assert_eq!(
 			&mock_ext.transfers,
 			&[TransferEntry {
 				to: 9,
 				value: 6,
-				data: vec![
-					1, 2, 3, 4,
-				],
+				data: vec![1, 2, 3, 4],
 				gas_left: 228,
 			}]
 		);
@@ -513,38 +530,35 @@ mod tests {
 		(unreachable)
 	)
 
+	(func (export "deploy"))
+
 	(data (i32.const 4) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
 )
 "#;
 
 	#[test]
 	fn get_storage_puts_data_into_scratch_buf() {
-		let code_get_storage = wabt::wat2wasm(CODE_GET_STORAGE).unwrap();
-
 		let mut mock_ext = MockExt::default();
-		mock_ext.storage.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
+		mock_ext
+			.storage
+			.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
 
 		let mut return_buf = Vec::new();
 		execute(
-			&code_get_storage,
+			CODE_GET_STORAGE,
 			&[],
 			&mut return_buf,
 			&mut mock_ext,
-			&Schedule::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
 
-		assert_eq!(
-			return_buf,
-			[0x22; 32].to_vec(),
-		);
+		assert_eq!(return_buf, [0x22; 32].to_vec());
 	}
-
 
 	/// calls `ext_caller`, loads the address from the scratch buffer and
 	/// compares it with the constant 42.
-	const CODE_CALLER: &'static str =
-r#"
+	const CODE_CALLER: &'static str = r#"
 (module
 	(import "env" "ext_caller" (func $ext_caller))
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
@@ -589,21 +603,125 @@ r#"
 			)
 		)
 	)
+
+	(func (export "deploy"))
 )
 "#;
 
 	#[test]
 	fn caller() {
-		let code_caller = wabt::wat2wasm(CODE_CALLER).unwrap();
-
 		let mut mock_ext = MockExt::default();
 		execute(
-			&code_caller,
+			CODE_CALLER,
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::<u64>::default(),
 			&mut GasMeter::with_limit(50_000, 1),
-		).unwrap();
+		)
+		.unwrap();
+	}
+
+	/// calls `ext_address`, loads the address from the scratch buffer and
+	/// compares it with the constant 69.
+	const CODE_ADDRESS: &'static str = r#"
+(module
+	(import "env" "ext_address" (func $ext_address))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; fill the scratch buffer with the self address.
+		(call $ext_address)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 69.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 69)
+			)
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn address() {
+		let mut mock_ext = MockExt::default();
+		execute(
+			CODE_ADDRESS,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+		.unwrap();
+	}
+
+	const CODE_RETURN_FROM_START_FN: &str = r#"
+(module
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(start $start)
+	(func $start
+		(call $ext_return
+			(i32.const 8)
+			(i32.const 4)
+		)
+		(unreachable)
+	)
+
+	(func (export "call")
+		(unreachable)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\01\02\03\04")
+)
+"#;
+
+	#[test]
+	fn return_from_start_fn() {
+		let mut mock_ext = MockExt::default();
+		let mut output_data = Vec::new();
+		execute(
+			CODE_RETURN_FROM_START_FN,
+			&[],
+			&mut output_data,
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+		.unwrap();
+
+		assert_eq!(output_data, vec![1, 2, 3, 4]);
 	}
 }
