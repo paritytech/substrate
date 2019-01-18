@@ -896,13 +896,18 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		Some(&self.changes_tries_storage)
 	}
 
-	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
+	fn revert(&self, m: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
 		use client::blockchain::HeaderBackend;
 
 		let mut best = self.blockchain.info()?.best_number;
 		let finalized = self.blockchain.info()?.finalized_number;
 		let reversible = best - finalized;
-		let n = if reversible < n { reversible } else { n };
+		let mut n = m;
+
+		if reversible < m { 
+			n = reversible;
+			info!("There are only {} non finalized blocks to revert.", n);
+		};
 
 		for c in 0 .. n.as_() {
 			if best == As::sa(0) {
