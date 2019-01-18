@@ -17,7 +17,8 @@
 //! Substrate state API.
 
 use std::{
-	collections::HashMap,
+	collections::{BTreeMap, HashMap},
+	ops::Range,
 	sync::Arc,
 };
 
@@ -31,7 +32,7 @@ use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi};
+use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, As, NumberFor};
 use runtime_version::RuntimeVersion;
 
 use subscriptions::Subscriptions;
@@ -112,13 +113,153 @@ pub struct State<B, E, Block: BlockT, RA> {
 	subscriptions: Subscriptions,
 }
 
-impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> {
+/// Ranges to query in state_queryStorage.
+struct QueryStorageRange<Block: BlockT> {
+	/// Hashes of all the blocks in the range.
+	pub hashes: Vec<Block::Hash>,
+	/// Number of the first block in the range.
+	pub first_number: NumberFor<Block>,
+	/// Blocks subrange ([begin; end) indices within `hashes`) where we should read keys at
+	/// each state to get changes.
+	pub unfiltered_range: Range<usize>,
+	/// Blocks subrange ([begin; end) indices within `hashes`) where we could pre-filter
+	/// blocks-with-changes by using changes tries.
+	pub filtered_range: Option<Range<usize>>,
+}
+
+impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
+	Block: BlockT<Hash=H256>,
+	B: client::backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+{
 	/// Create new State API RPC handler.
 	pub fn new(client: Arc<Client<B, E, Block, RA>>, subscriptions: Subscriptions) -> Self {
 		Self {
 			client,
 			subscriptions,
 		}
+	}
+
+	/// Splits the `query_storage` block range into 'filtered' and 'unfiltered' subranges.
+	/// Blocks that contain changes within filtered subrange could be filtered using changes tries.
+	/// Blocks that contain changes within unfiltered subrange must be filtered manually.
+	fn split_query_storage_range(
+		&self,
+		from: Block::Hash,
+		to: Trailing<Block::Hash>
+	) -> Result<QueryStorageRange<Block>> {
+		let to = self.unwrap_or_best(to)?;
+		let from_hdr = self.client.header(&BlockId::hash(from))?;
+		let to_hdr = self.client.header(&BlockId::hash(to))?;
+		match (from_hdr, to_hdr) {
+			(Some(ref from), Some(ref to)) if from.number() <= to.number() => {
+				// check if we can get from `to` to `from` by going through parent_hashes.
+				let from_number = *from.number();
+				let blocks = {
+					let mut blocks = vec![to.hash()];
+					let mut last = to.clone();
+					while *last.number() > from_number {
+						if let Some(hdr) = self.client.header(&BlockId::hash(*last.parent_hash()))? {
+							blocks.push(hdr.hash());
+							last = hdr;
+						} else {
+							bail!(invalid_block_range(
+								Some(from),
+								Some(to),
+								format!("Parent of {} ({}) not found", last.number(), last.hash()),
+							))
+						}
+					}
+					if last.hash() != from.hash() {
+						bail!(invalid_block_range(
+							Some(from),
+							Some(to),
+							format!("Expected to reach `from`, got {} ({})", last.number(), last.hash()),
+						))
+					}
+					blocks.reverse();
+					blocks
+				};
+				// check if we can filter blocks-with-changes from some (sub)range using changes tries
+				let changes_trie_range = self.client.max_key_changes_range(from_number, BlockId::Hash(to.hash()))?;
+				let filtered_range_begin = changes_trie_range.map(|(begin, _)| (begin - from_number).as_() as usize);
+				let (unfiltered_range, filtered_range) = split_range(blocks.len(), filtered_range_begin);
+				Ok(QueryStorageRange {
+					hashes: blocks,
+					first_number: from_number,
+					unfiltered_range,
+					filtered_range,
+				})
+			},
+			(from, to) => bail!(
+				invalid_block_range(from.as_ref(), to.as_ref(), "Invalid range or unknown block".into())
+			),
+		}
+	}
+
+	/// Iterates through range.unfiltered_range and check each block for changes of keys' values.
+	fn query_storage_unfiltered(
+		&self,
+		range: &QueryStorageRange<Block>,
+		keys: &[StorageKey],
+		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
+	) -> Result<()> {
+		let mut last_state: HashMap<_, Option<_>> = Default::default();
+		for block in range.unfiltered_range.start..range.unfiltered_range.end {
+			let block_hash = range.hashes[block].clone();
+			let mut block_changes = StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
+			let id = BlockId::hash(block_hash);
+			for key in keys {
+				let (has_changed, data) = {
+					let curr_data = self.client.storage(&id, key)?;
+					let prev_data = last_state.get(key).and_then(|x| x.as_ref());
+					(curr_data.as_ref() != prev_data, curr_data)
+				};
+				if has_changed {
+					block_changes.changes.push((key.clone(), data.clone()));
+				}
+				last_state.insert(key.clone(), data);
+			}
+			changes.push(block_changes);
+		}
+		Ok(())
+	}
+
+	/// Iterates through all blocks that are changing keys within range.filtered_range and collects these changes.
+	fn query_storage_filtered(
+		&self,
+		range: &QueryStorageRange<Block>,
+		keys: &[StorageKey],
+		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
+	) -> Result<()> {
+		let (begin, end) = match range.filtered_range {
+			Some(ref filtered_range) => (
+				range.first_number + As::sa(filtered_range.start as u64),
+				BlockId::Hash(range.hashes[filtered_range.end - 1].clone())
+			),
+			None => return Ok(()),
+		};
+		let mut changes_map: BTreeMap<NumberFor<Block>, StorageChangeSet<Block::Hash>> = BTreeMap::new();
+		for key in keys {
+			let mut last_block = None;
+			for (block, _) in self.client.key_changes(begin, end, key)? {
+				if last_block == Some(block) {
+					continue;
+				}
+				let block_hash = range.hashes[(block - range.first_number).as_() as usize].clone();
+				let id = BlockId::Hash(block_hash);
+				let value_at_block = self.client.storage(&id, key)?;
+				changes_map.entry(block)
+					.or_insert_with(|| StorageChangeSet { block: block_hash, changes: Vec::new() })
+					.changes.push((key.clone(), value_at_block));
+				last_block = Some(block);
+			}
+		}
+		if let Some(additional_capacity) = changes_map.len().checked_sub(changes.len()) {
+			changes.reserve(additional_capacity);
+		}
+		changes.extend(changes_map.into_iter().map(|(_, cs)| cs));
+		Ok(())
 	}
 }
 
@@ -178,72 +319,17 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into).map_err(Into::into)
 	}
 
-	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
-		let to = self.unwrap_or_best(to)?;
-
-		let from_hdr = self.client.header(&BlockId::hash(from))?;
-		let to_hdr = self.client.header(&BlockId::hash(to))?;
-
-		match (from_hdr, to_hdr) {
-			(Some(ref from), Some(ref to)) if from.number() <= to.number() => {
-				let from = from.clone();
-				let to = to.clone();
-				// check if we can get from `to` to `from` by going through parent_hashes.
-				let blocks = {
-					let mut blocks = vec![to.hash()];
-					let mut last = to.clone();
-					while last.number() > from.number() {
-						if let Some(hdr) = self.client.header(&BlockId::hash(*last.parent_hash()))? {
-							blocks.push(hdr.hash());
-							last = hdr;
-						} else {
-							bail!(invalid_block_range(
-								Some(from),
-								Some(to),
-								format!("Parent of {} ({}) not found", last.number(), last.hash()),
-							))
-						}
-					}
-					if last.hash() != from.hash() {
-						bail!(invalid_block_range(
-							Some(from),
-							Some(to),
-							format!("Expected to reach `from`, got {} ({})", last.number(), last.hash()),
-						))
-					}
-					blocks.reverse();
-					blocks
-				};
-				let mut result = Vec::new();
-				let mut last_state: HashMap<_, Option<_>> = Default::default();
-				for block in blocks {
-					let mut changes = vec![];
-					let id = BlockId::hash(block.clone());
-
-					for key in &keys {
-						let (has_changed, data) = {
-							let curr_data = self.client.storage(&id, key)?;
-							let prev_data = last_state.get(key).and_then(|x| x.as_ref());
-
-							(curr_data.as_ref() != prev_data, curr_data)
-						};
-
-						if has_changed {
-							changes.push((key.clone(), data.clone()));
-						}
-
-						last_state.insert(key.clone(), data);
-					}
-
-					result.push(StorageChangeSet {
-						block,
-						changes,
-					});
-				}
-				Ok(result)
-			},
-			(from, to) => bail!(invalid_block_range(from, to, "Invalid range or unknown block".into())),
-		}
+	fn query_storage(
+		&self,
+		keys: Vec<StorageKey>,
+		from: Block::Hash,
+		to: Trailing<Block::Hash>
+	) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
+		let range = self.split_query_storage_range(from, to)?;
+		let mut changes = Vec::new();
+		self.query_storage_unfiltered(&range, &keys, &mut changes)?;
+		self.query_storage_filtered(&range, &keys, &mut changes)?;
+		Ok(changes)
 	}
 
 	fn subscribe_storage(
@@ -348,8 +434,29 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	}
 }
 
-fn invalid_block_range<H: Header>(from: Option<H>, to: Option<H>, reason: String) -> error::ErrorKind {
-	let to_string = |x: Option<H>| match x {
+/// Splits passed range into two subranges where:
+/// - first range has at least one element in it;
+/// - second range (optionally) starts at given `middle` element.
+pub(crate) fn split_range(size: usize, middle: Option<usize>) -> (Range<usize>, Option<Range<usize>>) {
+	// check if we can filter blocks-with-changes from some (sub)range using changes tries
+	let range2_begin = match middle {
+		// some of required changes tries are pruned => use available tries
+		Some(middle) if middle != 0 => Some(middle),
+		// all required changes tries are available, but we still want values at first block
+		// => do 'unfiltered' read for the first block and 'filtered' for the rest
+		Some(_) if size > 1 => Some(1),
+		// range contains single element => do not use changes tries
+		Some(_) => None,
+		// changes tries are not available => do 'unfiltered' read for the whole range
+		None => None,
+	};
+	let range1 = 0..range2_begin.unwrap_or(size);
+	let range2 = range2_begin.map(|begin| begin..size);
+	(range1, range2)
+}
+
+fn invalid_block_range<H: Header>(from: Option<&H>, to: Option<&H>, reason: String) -> error::ErrorKind {
+	let to_string = |x: Option<&H>| match x {
 		None => "unknown hash".into(),
 		Some(h) => format!("{} ({})", h.number(), h.hash()),
 	};

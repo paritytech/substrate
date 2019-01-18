@@ -24,7 +24,7 @@ substrate-consensus-common = { path = "../../core/consensus/common" }
 substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
 substrate-client-db = { path = "../../core/client/db" }
-parity-codec = "2.1"
+parity-codec = "2.2"
 substrate-executor = { path = "../../core/executor" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-rpc-servers = { path = "../../core/rpc-servers" }

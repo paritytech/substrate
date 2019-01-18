@@ -37,6 +37,7 @@ extern crate node_runtime;
 #[cfg(test)] extern crate srml_treasury as treasury;
 #[cfg(test)] extern crate srml_contract as contract;
 #[cfg(test)] extern crate srml_grandpa as grandpa;
+#[cfg(test)] extern crate srml_indices as indices;
 #[cfg(test)] extern crate node_primitives;
 #[cfg(test)] extern crate parity_codec as codec;
 #[cfg(test)] extern crate sr_io as runtime_io;
@@ -60,14 +61,14 @@ mod tests {
 	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration,
 		ed25519::{Public, Pair}};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
+	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, staking, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, staking, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, Event, Log};
+		SystemConfig, GrandpaConfig, IndicesConfig, Event, Log};
 	use wabt;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
@@ -94,7 +95,7 @@ mod tests {
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signature: Some((balances::address::Address::Id(signed), signature, payload.0, era)),
+					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
 					function: payload.1,
 				}
 			}
@@ -130,7 +131,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -151,7 +152,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -172,7 +173,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -197,7 +198,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -224,6 +225,9 @@ mod tests {
 				}) } else { None },
 				..Default::default()
 			}),
+			indices: Some(IndicesConfig {
+				ids: vec![alice(), charlie()],
+			}),
 			balances: Some(BalancesConfig {
 				balances: vec![
 					(alice(), 111),
@@ -234,7 +238,6 @@ mod tests {
 				existential_deposit: 0,
 				transfer_fee: 0,
 				creation_fee: 0,
-				reclaim_rebate: 0,
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
@@ -312,13 +315,13 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("22e7fc466d555b9dce285425081d89751b2063243684979df3840b3ac7e8ecdc").into()
+				hex!("cc63808897a07869d3b9103df5ad92f9be2f865ece506df5de0a87b2a95131d5").into()
 			} else {
-				hex!("7395363e53e682984f817fb1d5a862c5ce8b817375c06270d7a39be7097ad953").into()
+				hex!("fe5275f4d9f8130c8e80d0132f0a718ae0eeea2872c841843192720ad5c3f05a").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
-					hex!("cda28e5c630db8eb0e4309b58ce504597c6cbb59bda43fd65e96bb2be73a4586").into(),
+					hex!("f254b62df0bfef049e010a7a0d6f176d73cc5d9710fa945b4e48f519c8d3a291").into(),
 				)]
 			} else {
 				vec![]
@@ -340,7 +343,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("66b9625c9c824de867815215528fe43014d50af7fb95c8da120910c220a46f6b").into(),
+			hex!("45b6655508fb524467b5c24184a7509b9ae07db4f95e16052ed425af182f39a8").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -369,7 +372,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("66dfdf3a0ef93ec49ec36c0a65fe328d085a865c2382397b2cd6468e391f2f51").into(),
+			hex!("ec00658cc2826d3499dde2954e399f0a0b2596eec1b0da9b76bc72394161dc99").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -400,7 +403,14 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(balances::RawEvent::NewAccount(bob(), 2, balances::NewAccountOutcome::NoHint))
+					event: Event::indices(indices::RawEvent::NewAccountIndex(bob(), 2))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(balances::RawEvent::NewAccount(
+						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						69
+					))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -536,6 +546,8 @@ mod tests {
 	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
 	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
+	(func (export "deploy")
+	)
 	(func (export "call")
 		(block $fail
 			;; fail if ext_input_size != 4
@@ -603,55 +615,15 @@ mod tests {
 )
 "#;
 
-	/// Convert a byte slice to a string with hex values.
-	/// Convert a byte slice to a string with hex values.
-	///
-	/// Each value is preceeded with a `\` character.
-	fn escaped_bytestring(bytes: &[u8]) -> String {
-		use std::fmt::Write;
-		let mut result = String::new();
-		for b in bytes {
-			write!(result, "\\{:02x}", b).unwrap();
-		}
-		result
-	}
-
-	/// Create a constructor for the specified code.
-	///
-	/// When constructor is executed, it will call `ext_return` with code that
-	/// specified in `child_bytecode`.
-	fn code_ctor(child_bytecode: &[u8]) -> String {
-		format!(
-			r#"
-	(module
-		;; ext_return(data_ptr: u32, data_len: u32) -> !
-		(import "env" "ext_return" (func $ext_return (param i32 i32)))
-		(import "env" "memory" (memory 1 1))
-		(func (export "call")
-			(call $ext_return
-				(i32.const 4)
-				(i32.const {code_len})
-			)
-			;; ext_return is diverging, i.e. doesn't return.
-			unreachable
-		)
-		(data (i32.const 4) "{escaped_bytecode}")
-	)
-	"#,
-			escaped_bytecode = escaped_bytestring(child_bytecode),
-			code_len = child_bytecode.len(),
-		)
-	}
-
 	#[test]
 	fn deploying_wasm_contract_should_work() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
-		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
+		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
 
 		let addr = <Runtime as contract::Trait>::DetermineContractAddress::contract_address_for(
-			&code_ctor_transfer,
+			&transfer_ch,
 			&[],
 			&charlie(),
 		);
@@ -659,7 +631,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("8197608e90fff1f7d92b35381169242d081779b1718c910689f2589a8ac09b44").into(),
+			hex!("6a4da4ed61c4d9eba0477aa67024d573693df781176dfe7fe903d1088b38b266").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -669,13 +641,19 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
 					function: Call::Contract(
-						contract::Call::create::<Runtime>(10.into(), 10_000.into(), code_ctor_transfer, Vec::new())
+						contract::Call::put_code::<Runtime>(10_000.into(), transfer_code)
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(addr, 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::create::<Runtime>(10.into(), 10_000.into(), transfer_ch, Vec::new())
+					),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 2)),
+					function: Call::Contract(
+						contract::Call::call::<Runtime>(indices::address::Address::Id(addr), 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]
@@ -685,7 +663,7 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
-			assert_eq!(&contract::CodeOf::<Runtime>::get(addr), &code_transfer);
+			assert_eq!(&contract::CodeHashOf::<Runtime>::get(addr).unwrap(), &transfer_ch);
 		});
 	}
 
@@ -741,7 +719,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -763,7 +741,7 @@ mod tests {
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 

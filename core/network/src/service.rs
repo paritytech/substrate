@@ -260,23 +260,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork
 	}
 
 	fn deny_unreserved_peers(&self) {
-		// This method can disconnect nodes, in which case we have to properly close them in the
-		// protocol.
-		let disconnected = self.network.lock().deny_unreserved_peers();
-		let mut net_sync = NetSyncIo::new(&self.network, self.protocol_id);
-		for node_index in disconnected {
-			self.handler.on_peer_disconnected(&mut net_sync, node_index)
-		}
+		self.network.lock().deny_unreserved_peers();
 	}
 
 	fn remove_reserved_peer(&self, peer: PeerId) {
-		// This method can disconnect a node, in which case we have to properly close it in the
-		// protocol.
-		let disconnected = self.network.lock().remove_reserved_peer(peer);
-		if let Some(node_index) = disconnected {
-			let mut net_sync = NetSyncIo::new(&self.network, self.protocol_id);
-			self.handler.on_peer_disconnected(&mut net_sync, node_index)
-		}
+		self.network.lock().remove_reserved_peer(peer);
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
@@ -388,12 +376,6 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 		let mut net_sync = NetSyncIo::new(&network_service, protocol_id);
 
 		match event {
-			NetworkServiceEvent::NodeClosed { node_index, closed_custom_protocols } => {
-				if !closed_custom_protocols.is_empty() {
-					debug_assert_eq!(closed_custom_protocols, &[protocol_id]);
-					protocol.on_peer_disconnected(&mut net_sync, node_index);
-				}
-			}
 			NetworkServiceEvent::ClosedCustomProtocols { node_index, protocols } => {
 				if !protocols.is_empty() {
 					debug_assert_eq!(protocols, &[protocol_id]);

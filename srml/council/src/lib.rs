@@ -50,7 +50,7 @@ mod tests {
 	pub use runtime_io::with_externalities;
 	pub use substrate_primitives::H256;
 	pub use primitives::BuildStorage;
-	pub use primitives::traits::{BlakeTwo256};
+	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
 	pub use primitives::testing::{Digest, DigestItem, Header};
 	pub use substrate_primitives::{Blake2Hasher};
 	pub use {seats, motions, voting};
@@ -85,14 +85,15 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = Event;
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
 		type Event = Event;
 	}
@@ -121,7 +122,6 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
-			reclaim_rebate: 0,
 		}.build_storage().unwrap().0);
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
