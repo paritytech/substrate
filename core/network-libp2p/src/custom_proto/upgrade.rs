@@ -103,10 +103,15 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	/// After calling this, the stream is guaranteed to finish soon-ish.
 	pub fn shutdown(&mut self) {
 		self.is_closing = true;
+		self.send_queue.clear();
 	}
 
 	/// Sends a message to the substream.
 	pub fn send_message(&mut self, data: Bytes) {
+		if self.is_closing {
+			return
+		}
+
 		self.send_queue.push_back(data);
 
 		// If the length of the queue goes over a certain arbitrary threshold, we print a warning.
