@@ -434,7 +434,7 @@ where
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("revert") {
 		revert_chain::<F>(
-			get_db_path_for_subcommand(matches, sub_matches, app_info)?,
+			&config.database_path,
 			sub_matches,
 			spec
 		)?;
@@ -554,14 +554,14 @@ fn import_blocks<F, E>(
 }
 
 fn revert_chain<F>(
-	db_path: PathBuf,
+	db_path: &str,
 	matches: &clap::ArgMatches,
 	spec: ChainSpec<FactoryGenesis<F>>
 ) -> error::Result<()>
 	where F: ServiceFactory,
 {
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string_lossy().into();
+	config.database_path = db_path.to_string();
 
 	let blocks = match matches.value_of("num") {
 		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
