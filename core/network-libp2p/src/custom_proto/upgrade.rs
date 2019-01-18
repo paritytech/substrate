@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::ProtocolId;
 use bytes::Bytes;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
+use log::debug;
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
-use ProtocolId;
 
 /// Connection upgrade for a single protocol.
 ///

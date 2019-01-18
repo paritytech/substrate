@@ -15,22 +15,23 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{behaviour::Behaviour, custom_proto::CustomProtosOut, secret::obtain_private_key, transport};
+use crate::custom_proto::{RegisteredProtocol, RegisteredProtocols};
+use crate::topology::NetTopology;
+use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 use bytes::Bytes;
-use custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
-use libp2p::{Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, multiaddr};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
+use log::{debug, info, warn};
 use std::collections::hash_map::Entry;
 use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::time::Duration;
-use topology::NetTopology;
 use tokio_timer::Interval;
-use {Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 
 // File where the network topology is stored.
 const NODES_FILE: &str = "nodes.json";

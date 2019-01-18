@@ -14,15 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate futures;
-#[macro_use]
-extern crate substrate_network_libp2p;
-extern crate tokio;
-
-use futures::{future, prelude::*};
+use futures::{future, prelude::*, try_ready};
 use std::{io, iter};
-use substrate_network_libp2p::ServiceEvent;
+use substrate_network_libp2p::{ServiceEvent, multiaddr};
 
 /// Builds two services. The second one has the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
