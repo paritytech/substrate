@@ -15,7 +15,6 @@ sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-support-procedural = { path = "../support/procedural" }
 srml-system = { path = "../system", default-features = false }
-srml-consensus = { path = "../consensus", default-features = false }
 
 [features]
 default = ["std"]
@@ -29,5 +28,4 @@ std = [
 	"substrate-primitives/std",
 	"srml-support/std",
 	"srml-system/std",
-	"srml-consensus/std",
 ]
