@@ -137,8 +137,6 @@ impl<Block: BlockT> ImportBlock<Block> {
 	}
 }
 
-
-
 /// Block import trait.
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
