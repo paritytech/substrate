@@ -418,7 +418,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			response.id, peer, response.blocks.len(), blocks_range);
 
 		// TODO [andre]: move this logic to the import queue so that
-		// justifications are imported asynchronously
+		// justifications are imported asynchronously (#1482)
 		if request.fields == message::BlockAttributes::JUSTIFICATION {
 			let mut sync = self.sync.write();
 			sync.on_block_justification_data(
