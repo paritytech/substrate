@@ -510,6 +510,7 @@ dependencies = [
  "srml-upgrade-key 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]
@@ -1050,6 +1051,7 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1084,6 +1086,7 @@ dependencies = [
  "sr-std 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1341,6 +1344,7 @@ dependencies = [
  "srml-consensus 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1410,6 +1414,7 @@ dependencies = [
  "sr-version 0.1.0",
  "substrate-consensus-common 0.1.0",
  "substrate-executor 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
@@ -1442,6 +1447,7 @@ dependencies = [
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "sr-version 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-primitives 0.1.0",
  "tokio 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1478,6 +1484,17 @@ dependencies = [
  "sr-std 0.1.0",
  "substrate-client 0.1.0",
  "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "substrate-inherents"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
 ]
 
 [[package]]

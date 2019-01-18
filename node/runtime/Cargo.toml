@@ -43,6 +43,7 @@ default = ["std"]
 std = [
 	"parity-codec/std",
 	"substrate-primitives/std",
+	"substrate-inherents/std",
 	"sr-std/std",
 	"sr-primitives/std",
 	"srml-support/std",

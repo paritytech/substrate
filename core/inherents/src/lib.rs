@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 extern crate parity_codec as codec;
 
 use parity_codec_derive::{Encode, Decode};
 
-use rstd::collections::{HashMap, hash_map::IntoIter};
+use rstd::{collections::btree_map::{BTreeMap, IntoIter}, vec::Vec};
 
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
@@ -34,7 +36,7 @@ pub type InherentIdentifier = [u8; 8];
 /// Inherent data to include in a block.
 pub struct InherentData {
 	/// All inherent data encoded with parity-codec and an identifier.
-	data: HashMap<[u8; 8], Vec<u8>>
+	data: BTreeMap<[u8; 8], Vec<u8>>
 }
 
 impl InherentData {

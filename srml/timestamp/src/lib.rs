@@ -32,7 +32,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -50,16 +49,15 @@ extern crate parity_codec as codec;
 extern crate parity_codec_derive;
 extern crate substrate_inherents as inherents;
 
-use codec::{HasCompact, Decode};
+use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, cmp};
 use runtime_support::for_each_tuple;
-use inherents::{
-	RuntimeString, InherentIdentifier, ProvideInherent, ProvideInherentData, IsFatalError,
-	InherentData
-};
+use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
+#[cfg(feature = "std")]
+use inherents::ProvideInherentData;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -67,8 +65,8 @@ pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
 pub type InherentType = u64;
 
 /// Errors that can occur while checking the timestamp inherent.
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Decode))]
 pub enum InherentError {
 	/// The timestamp is valid in the future.
 	/// This is a non-fatal-error and will not stop checking the inherents.
@@ -88,9 +86,10 @@ impl IsFatalError for InherentError {
 
 impl InherentError {
 	/// Try to create an instance ouf of the given identifier and data.
+	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			InherentError::decode(&mut &data[..])
+			<InherentError as codec::Decode>::decode(&mut &data[..])
 		} else {
 			None
 		}

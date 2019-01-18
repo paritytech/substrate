@@ -13,4 +13,9 @@ runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", def
 
 [features]
 default = [ "std" ]
-std = [ "parking_lot", "rstd/std", "parity-codec/std", "runtime_primitives/std" ]
+std = [
+	"parking_lot",
+	"rstd/std",
+	"parity-codec/std",
+	"runtime_primitives/std",
+]

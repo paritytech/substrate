@@ -51,10 +51,9 @@ use rstd::{result, prelude::*};
 use runtime_support::storage::StorageValue;
 use primitives::traits::{As, Zero};
 use timestamp::{OnTimestampSet, TimestampInherentData};
-use inherents::{
-	RuntimeString, InherentIdentifier, InherentData, InherentDataProviders, ProvideInherentData,
-	ProvideInherent, MakeFatalError,
-};
+use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
+#[cfg(feature = "std")]
+use inherents::{InherentDataProviders, ProvideInherentData};
 use parity_codec::Decode;
 
 mod mock;
