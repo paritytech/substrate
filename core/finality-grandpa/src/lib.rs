@@ -909,7 +909,6 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		// to avoid unconditionally notifying.
 		client.finalize_block(BlockId::Hash(hash), justification, true).map_err(|e| {
 			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-			warn!(target: "finality", "Node is in a potentially inconsistent state.");
 			e
 		})?;
 
