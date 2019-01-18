@@ -33,6 +33,13 @@ const ALIGNMENT: u32 = 8;
 // will then be a multiple of the alignment requirement.
 const BLOCK_SIZE: u32 = 8192; // 2^13 bytes
 
+#[allow(path_statements)]
+fn _assert_block_size_aligned() {
+	// mem::transmute checks that type sizes are equal.
+	// this enables us to assert that pointers are aligned -- at compile time.
+	::std::mem::transmute::<[u8; BLOCK_SIZE as usize % ALIGNMENT as usize], [u8; 0]>;
+}
+
 #[derive(PartialEq, Copy, Clone)]
 enum Node {
 	Free,
@@ -65,8 +72,6 @@ impl Heap {
 	///   (in bytes) for allocating memory.
 	///
 	pub fn new(mut ptr_offset: u32, heap_size: u32) -> Self {
-		assert!(BLOCK_SIZE % ALIGNMENT == 0, "Block size is no multiple of alignment!");
-
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
 			ptr_offset += ALIGNMENT - padding;
