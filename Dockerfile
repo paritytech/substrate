@@ -35,4 +35,4 @@ RUN rm -rf /usr/lib/python* && \
 EXPOSE 30333 9933 9944
 VOLUME ["/data"]
 
-CMD ["/usr/local/bin/substrate"]
+ENTRYPOINT ["/usr/local/bin/substrate"]
