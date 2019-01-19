@@ -603,7 +603,78 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.notify_imported(notify_imported)?;
 		}
 
+		*self.importing_block.write() = None;
+
 		Ok(r)
+	}
+
+	/// Apply a checked and validated block to an operation. If a justification is provided
+	/// then `finalized` *must* be true.
+	fn apply_block(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		import_block: ImportBlock<Block>,
+		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
+	) -> error::Result<ImportResult> where
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	{
+		use runtime_primitives::traits::Digest;
+
+		let ImportBlock {
+			origin,
+			header,
+			justification,
+			post_digests,
+			body,
+			finalized,
+			auxiliary,
+			fork_choice,
+		} = import_block;
+
+		assert!(justification.is_some() && finalized || justification.is_none());
+
+		let parent_hash = header.parent_hash().clone();
+
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+
+		let import_headers = if post_digests.is_empty() {
+			PrePostHeader::Same(header)
+		} else {
+			let mut post_header = header.clone();
+			for item in post_digests {
+				post_header.digest_mut().push(item);
+			}
+			PrePostHeader::Different(header, post_header)
+		};
+
+		let hash = import_headers.post().hash();
+		let height: u64 = import_headers.post().number().as_();
+
+		*self.importing_block.write() = Some(hash);
+
+		let result = self.execute_and_import_block(
+			operation,
+			origin,
+			hash,
+			import_headers,
+			justification,
+			body,
+			new_authorities,
+			finalized,
+			auxiliary,
+			fork_choice,
+		);
+
+		telemetry!("block.import";
+			"height" => height,
+			"best" => ?hash,
+			"origin" => ?origin
+		);
+
+		result
 	}
 
 	fn execute_and_import_block(
@@ -837,6 +908,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
+	/// Apply auxiliary data insertion into an operation.
+	pub fn apply_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		insert: I,
+		delete: D
+	) -> error::Result<()> {
+		operation.op.insert_aux(
+			insert.into_iter()
+				.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+		)
+	}
 
 	/// Mark all blocks up to given as finalized in operation. If a
 	/// justification is provided it is stored with the given finalized
@@ -1142,65 +1232,9 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		import_block: ImportBlock<Block>,
 		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	) -> Result<ImportResult, Self::Error> {
-		use runtime_primitives::traits::Digest;
-
-		let ImportBlock {
-			origin,
-			header,
-			justification,
-			post_digests,
-			body,
-			finalized,
-			auxiliary,
-			fork_choice,
-		} = import_block;
-
-		assert!(justification.is_some() && finalized || justification.is_none());
-
-		let parent_hash = header.parent_hash().clone();
-
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash)) {
-			Ok(blockchain::BlockStatus::InChain) => {},
-			Ok(blockchain::BlockStatus::Unknown) => return Ok(ImportResult::UnknownParent),
-            Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
-		}
-
-		let import_headers = if post_digests.is_empty() {
-			PrePostHeader::Same(header)
-		} else {
-			let mut post_header = header.clone();
-			for item in post_digests {
-				post_header.digest_mut().push(item);
-			}
-			PrePostHeader::Different(header, post_header)
-		};
-
-		let hash = import_headers.post().hash();
-		let height: u64 = import_headers.post().number().as_();
-		*self.importing_block.write() = Some(hash);
-
-		let result = self.lock_import_and_run(|operation| {
-			self.execute_and_import_block(
-				operation,
-				origin,
-				hash,
-				import_headers,
-				justification,
-				body,
-				new_authorities,
-				finalized,
-				auxiliary,
-				fork_choice,
-			)
-		});
-
-		*self.importing_block.write() = None;
-		telemetry!("block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
-		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+		self.lock_import_and_run(|operation| {
+			self.apply_block(operation, import_block, new_authorities)
+		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
 }
 
@@ -1303,7 +1337,9 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
 	>(&self, insert: I, delete: D) -> error::Result<()> {
-		crate::backend::AuxStore::insert_aux(&*self.backend, insert, delete)
+		self.lock_import_and_run(|operation| {
+			self.apply_aux(operation, insert, delete)
+		})
 	}
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
