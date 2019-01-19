@@ -585,27 +585,32 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn lock_import_and_run<R, F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> error::Result<R>>(
 		&self, f: F
 	) -> error::Result<R> {
-		let _import_lock = self.import_lock.lock();
+		let inner = || {
+			let _import_lock = self.import_lock.lock();
 
-		let mut op = ClientImportOperation {
-			op: self.backend.begin_operation()?,
-			notify_imported: None,
-			notify_finalized: Vec::new(),
+			let mut op = ClientImportOperation {
+				op: self.backend.begin_operation()?,
+				notify_imported: None,
+				notify_finalized: Vec::new(),
+			};
+
+			let r = f(&mut op)?;
+
+			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
+			self.backend.commit_operation(op)?;
+			self.notify_finalized(notify_finalized)?;
+
+			if let Some(notify_imported) = notify_imported {
+				self.notify_imported(notify_imported)?;
+			}
+
+			Ok(r)
 		};
 
-		let r = f(&mut op)?;
-
-		let ClientImportOperation { op, notify_imported, notify_finalized } = op;
-		self.backend.commit_operation(op)?;
-		self.notify_finalized(notify_finalized)?;
-
-		if let Some(notify_imported) = notify_imported {
-			self.notify_imported(notify_imported)?;
-		}
-
+		let result = inner();
 		*self.importing_block.write() = None;
 
-		Ok(r)
+		result
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
