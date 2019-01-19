@@ -447,6 +447,38 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Stores the gas price for the current transaction into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_gas_price(ctx) => {
+		ctx.scratch_buf = ctx.gas_meter.gas_price().encode();
+		Ok(())
+	},
+
+	// Stores the amount of gas left into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_gas_left(ctx) => {
+		ctx.scratch_buf = ctx.gas_meter.gas_left().encode();
+		Ok(())
+	},
+
+	// Stores the balance of the current account into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_balance(ctx) => {
+		ctx.scratch_buf = ctx.ext.balance().encode();
+		Ok(())
+	},
+
+	// Stores the value transferred along with this call or as endowment into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_value_transferred(ctx) => {
+		ctx.scratch_buf = ctx.ext.value_transferred().encode();
+		Ok(())
+	},
+
 	// Returns the size of the input buffer.
 	ext_input_size(ctx) -> u32 => {
 		Ok(ctx.input_data.len() as u32)
