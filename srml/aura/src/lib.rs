@@ -50,11 +50,14 @@ extern crate parking_lot;
 use rstd::{result, prelude::*};
 use runtime_support::storage::StorageValue;
 use primitives::traits::{As, Zero};
-use timestamp::{OnTimestampSet, TimestampInherentData};
+use timestamp::OnTimestampSet;
+#[cfg(feature = "std")]
+use timestamp::TimestampInherentData;
+#[cfg(feature = "std")]
+use parity_codec::Decode;
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
-use parity_codec::Decode;
 
 mod mock;
 mod tests;

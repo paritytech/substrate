@@ -61,6 +61,7 @@ use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
 use consensus;
 use substrate_telemetry::telemetry;
+use inherents::InherentDataProviders;
 
 use slog::slog_info;
 use log::{info, trace, warn};
