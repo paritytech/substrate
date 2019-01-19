@@ -56,7 +56,6 @@ extern crate srml_treasury as treasury;
 extern crate sr_version as version;
 extern crate node_primitives;
 extern crate substrate_consensus_aura_primitives as consensus_aura;
-extern crate substrate_inherents as inherents;
 
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
@@ -224,10 +223,10 @@ construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
-		InherentData = BasicInherentData
+		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Aura: aura::{Module},
+		Aura: aura::{Module, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
@@ -298,57 +297,11 @@ impl_runtime_apis! {
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-			use inherents::ProvideInherent;
-
-			let mut inherents = Vec::new();
-
-			if let Some(inherent) = Timestamp::create_inherent(&data) {
-				inherents.push(UncheckedExtrinsic::new_unsigned(Call::Timestamp(inherent)));
-			}
-
-			if let Some(inherent) = Consensus::create_inherent(&data) {
-				inherents.push(UncheckedExtrinsic::new_unsigned(Call::Consensus(inherent)));
-			}
-
-			inherents
+			data.create_extrinsics()
 		}
 
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult {
-			use inherents::{ProvideInherent, IsFatalError};
-
-			let mut result = CheckInherentsResult::new();
-			for xt in block.extrinsics() {
-				if xt.is_signed().unwrap_or(false) {
-					break;
-				}
-				match xt.function {
-					Call::Timestamp(ref call) => {
-						if let Err(e) = Timestamp::check_inherent(call, &data) {
-							result.put_error(Timestamp::INHERENT_IDENTIFIER, &e).expect("There is only one fatal error; qed");
-							if e.is_fatal_error() {
-								return result;
-							}
-						}
-						if let Err(e) = Aura::check_inherent(call, &data) {
-							result.put_error(Aura::INHERENT_IDENTIFIER, &e).expect("There is only one fatal error; qed");
-							if e.is_fatal_error() {
-								return result;
-							}
-						}
-					},
-					Call::Consensus(ref call) => {
-						if let Err(e) = Consensus::check_inherent(call, &data) {
-							result.put_error(Consensus::INHERENT_IDENTIFIER, &e).expect("There is only one fatal error; qed");
-							if e.is_fatal_error() {
-								return result;
-							}
-						}
-					},
-					_ => {},
-				}
-			}
-
-			result
+			data.check_extrinsics(&block)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {

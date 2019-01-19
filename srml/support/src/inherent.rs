@@ -15,9 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use rstd::{cmp, result::Result, vec::Vec};
+pub use rstd::vec::Vec;
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;
+#[doc(hidden)]
+pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
 
 
 /// Implement the outer inherent.
@@ -28,23 +30,73 @@ pub use runtime_primitives::traits::Block as BlockT;
 /// ```nocompile
 /// impl_outer_inherent! {
 ///     pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
-///         timestamp: Timestamp export Error as TimestampInherentError,
+///         timestamp: Timestamp,
 ///         consensus: Consensus,
+///         /// Aura module using the `Timestamp` call.
+///         aura: Timestamp,
 ///     }
 /// }
 /// ```
-///
-/// Additional parameters after `UncheckedExtrinsic` are `Error` and `Call`.
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
-		for $runtime:ident,
-			Block = $block:ident,
-			InherentData = $inherent:ty
+		impl Inherents where Block = $block:ident, UncheckedExtrinsic = $uncheckedextrinsic:ident
 		{
-			$( $module:ident: $module_ty:ident,)*
+			$( $module:ident: $call:ident, )*
 		}
 	) => {
+		trait InherentDataExt {
+			fn create_extrinsics(&self) ->
+				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic>;
+			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult;
+		}
 
+		impl InherentDataExt for $crate::inherent::InherentData {
+			fn create_extrinsics(&self) ->
+				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic> {
+				use $crate::inherent::ProvideInherent;
+
+				let mut inherents = Vec::new();
+
+				$(
+					if let Some(inherent) = $module::create_inherent(self) {
+						inherents.push($uncheckedextrinsic::new_unsigned(
+							Call::$call(inherent))
+						);
+					}
+				)*
+
+				inherents
+			}
+
+			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
+				use $crate::inherent::{ProvideInherent, IsFatalError};
+
+				let mut result = $crate::inherent::CheckInherentsResult::new();
+				for xt in block.extrinsics() {
+					if xt.is_signed().unwrap_or(false) {
+						break;
+					}
+
+					$(
+						match xt.function {
+							Call::$call(ref call) => {
+								if let Err(e) = $module::check_inherent(call, self) {
+									result.put_error(
+										$module::INHERENT_IDENTIFIER, &e
+									).expect("There is only one fatal error; qed");
+									if e.is_fatal_error() {
+										return result;
+									}
+								}
+							}
+							_ => {},
+						}
+					)*
+				}
+
+				result
+			}
+		}
 	};
 }
