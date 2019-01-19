@@ -14,12 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use error_chain::*;
 use std::{io, net, fmt};
-use libc::{ENFILE, EMFILE};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum DisconnectReason
-{
+pub enum DisconnectReason {
 	DisconnectRequested,
 	TCPError,
 	BadProtocol,
@@ -135,18 +134,6 @@ error_chain! {
 			display("Packet is too large"),
 		}
 
-		#[doc = "Reached system resource limits for this process"]
-		ProcessTooManyFiles {
-			description("Too many open files in process."),
-			display("Too many open files in this process. Check your resource limits and restart parity"),
-		}
-
-		#[doc = "Reached system wide resource limits"]
-		SystemTooManyFiles {
-			description("Too many open files on system."),
-			display("Too many open files on system. Consider closing some processes/release some file handlers or increas the system-wide resource limits and restart parity."),
-		}
-
 		#[doc = "An unknown IO error occurred."]
 		Io(err: io::Error) {
 			description("IO Error"),
@@ -157,14 +144,9 @@ error_chain! {
 
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
-		match err.raw_os_error() {
-			Some(ENFILE) => ErrorKind::ProcessTooManyFiles.into(),
-			Some(EMFILE) => ErrorKind::SystemTooManyFiles.into(),
-			_ => Error::from_kind(ErrorKind::Io(err))
-		}
+		Error::from_kind(ErrorKind::Io(err))
 	}
 }
-
 
 impl From<net::AddrParseError> for Error {
 	fn from(_err: net::AddrParseError) -> Self { ErrorKind::AddressParse.into() }
@@ -178,27 +160,4 @@ fn test_errors() {
 		r = DisconnectReason::from_u8(i);
 	}
 	assert_eq!(DisconnectReason::Unknown, r);
-}
-
-#[test]
-fn test_io_errors() {
-	use libc::{EMFILE, ENFILE};
-
-	assert_matches!(
-		<Error as From<io::Error>>::from(
-			io::Error::from_raw_os_error(ENFILE)
-			).kind(),
-		ErrorKind::ProcessTooManyFiles);
-
-	assert_matches!(
-		<Error as From<io::Error>>::from(
-			io::Error::from_raw_os_error(EMFILE)
-			).kind(),
-		ErrorKind::SystemTooManyFiles);
-
-	assert_matches!(
-		<Error as From<io::Error>>::from(
-			io::Error::from_raw_os_error(0)
-			).kind(),
-		ErrorKind::Io(_));
 }

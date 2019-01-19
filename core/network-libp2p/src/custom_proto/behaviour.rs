@@ -22,6 +22,7 @@ use fnv::{FnvHashMap, FnvHashSet};
 use futures::prelude::*;
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::core::{protocols_handler::ProtocolsHandler, PeerId};
+use log::{debug, trace, warn};
 use smallvec::SmallVec;
 use std::{io, marker::PhantomData, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
