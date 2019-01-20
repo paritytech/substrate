@@ -141,7 +141,8 @@ impl std::str::FromStr for ExecutionStrategy {
 			"native" => Ok(ExecutionStrategy::Native),
 			"wasm" | "webassembly" => Ok(ExecutionStrategy::Wasm),
 			"both" => Ok(ExecutionStrategy::Both),
-			_ => Err("Please specify either 'native', 'wasm' or 'both".to_owned())
+			"nativeElseWasm" => Ok(ExecutionStrategy::nativeElseWasm),
+			_ => Err("Please specify either 'nativeElseWasm', 'native', 'wasm' or 'both".to_owned())
 
 		}
 	}

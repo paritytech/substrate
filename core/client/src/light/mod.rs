@@ -61,7 +61,7 @@ where
 
 {
 	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
-	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeElseWasm, ExecutionStrategy::NativeElseWasm)
 }
 
 /// Create an instance of fetch data checker.

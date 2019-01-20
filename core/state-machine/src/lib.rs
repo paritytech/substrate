@@ -189,6 +189,8 @@ pub enum ExecutionStrategy {
 	AlwaysWasm,
 	/// Run with both the wasm and the native variant (if compatible). Report any discrepency as an error.
 	Both,
+	/// First native, then if that fails or is not possible, wasm.
+	NativeElseWasm,
 }
 
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
@@ -200,6 +202,8 @@ pub enum ExecutionManager<F> {
 	AlwaysWasm,
 	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
 	Both(F),
+	/// First native, then if that fails or is not possible, wasm.
+	NativeElseWasm,
 }
 
 impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
@@ -207,6 +211,7 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 		match *s {
 			ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
 			ExecutionManager::AlwaysWasm => ExecutionStrategy::AlwaysWasm,
+			ExecutionManager::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
 			ExecutionManager::Both(_) => ExecutionStrategy::Both,
 		}
 	}
@@ -256,6 +261,7 @@ where
 		match strategy {
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, native_result);
 				wasm_result

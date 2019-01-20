@@ -252,13 +252,13 @@ where
 
 	let role =
 		if matches.is_present("light") {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeElseWasm;
 			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
-			config.block_execution_strategy = service::ExecutionStrategy::Both;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeElseWasm;
 			service::Roles::AUTHORITY
 		} else {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeElseWasm;
 			service::Roles::FULL
 		};
 
@@ -266,6 +266,7 @@ where
 		config.block_execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
 			_ => bail!(create_input_err("Invalid execution mode specified")),
 		};
@@ -531,6 +532,7 @@ fn import_blocks<F, E>(
 		config.block_execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
 			_ => return Err(error::ErrorKind::Input("Invalid block execution mode specified".to_owned()).into()),
 		};
@@ -540,6 +542,7 @@ fn import_blocks<F, E>(
 		config.api_execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
 			_ => return Err(error::ErrorKind::Input("Invalid API execution mode specified".to_owned()).into()),
 		};
