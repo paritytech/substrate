@@ -108,7 +108,7 @@ where
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
-		self.call(at, method, call_data).map(|cr| NativeOrEncoded::Encoded(cr.return_data))
+		self.call(at, method, call_data).map(NativeOrEncoded::Encoded)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {

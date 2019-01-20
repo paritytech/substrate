@@ -138,7 +138,6 @@ mod tests {
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
 			&mut t,
-			BLOATY_CODE,
 			"Core_initialise_block",
 			&vec![].and(&from_block_number(1u64)),
 			true,
@@ -147,7 +146,6 @@ mod tests {
 		assert!(r.is_ok());
 		let v = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
 			&mut t,
-			BLOATY_CODE,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
 			true,
@@ -824,7 +822,7 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works_with_changes_trie() {
-		let mut t = new_test_ext(true);
+		let mut t = new_test_ext(COMPACT_CODE, true);
 		Executor::new().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
 			&mut t,
 			"Core_execute_block",

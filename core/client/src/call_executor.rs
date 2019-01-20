@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe};
-use codec::Encode;
+use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
@@ -24,7 +24,7 @@ use state_machine::{
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{H256, Blake2Hasher, NativeOrEncoded};
+use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
 
 use crate::backend;
 use crate::error;
@@ -167,7 +167,9 @@ where
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let return_data = state_machine::execute_using_consensus_failure_handler(
+		let return_data = state_machine::execute_using_consensus_failure_handler::<
+			_, _, _, _, _, _, fn() -> NeverNativeValue
+		>(
 			&state,
 			self.backend.changes_trie_storage(),
 			&mut changes,
@@ -206,7 +208,9 @@ where
 		//TODO: Find a better way to prevent double block initialization
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
-			state_machine::execute_using_consensus_failure_handler(
+			state_machine::execute_using_consensus_failure_handler::<
+				_, _, _, _, _, R, fn() -> R,
+			>(
 				&state,
 				self.backend.changes_trie_storage(),
 				changes,
@@ -229,9 +233,8 @@ where
 			call_data,
 			manager,
 			false,
-			None,
-		)
-		.map(|(result, _, _)| result)?;
+			native_call,
+		).map(|(result, _, _)| result)?;
 
 		self.backend.destroy_state(state)?;
 		Ok(result)

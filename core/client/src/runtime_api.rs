@@ -38,7 +38,7 @@ pub use codec::{Encode, Decode};
 use crate::error;
 use rstd::vec::Vec;
 use sr_api_macros::decl_runtime_apis;
-use primitives::{OpaqueMetadata, NativeOrEncoded};
+use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::panic::UnwindSafe;
 

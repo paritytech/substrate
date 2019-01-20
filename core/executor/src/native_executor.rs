@@ -22,7 +22,7 @@ use wasm_executor::WasmExecutor;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 use runtime_version::{NativeVersion, RuntimeVersion};
 use std::{collections::HashMap, panic::UnwindSafe};
-use codec::Decode;
+use codec::{Decode, Encode};
 use RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 use primitives::storage::well_known_keys;
@@ -204,10 +204,10 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 				use_native,
 				onchain_version
 					.as_ref()
-					.map_or(false, |v| v.can_call_with(&self.native_version.runtime_version))
+					.map_or(false, |v| v.can_call_with(&self.native_version.runtime_version)),
 				native_call,
 			) {
-				(_, false) => {
+				(_, false, _) => {
 					trace!(
 						target: "executor",
 						"Request for native execution failed (native: {}, chain: {})",
@@ -223,7 +223,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 						false
 					)
 				}
-				(false, _) => {
+				(false, _, _) => {
 					(
 						self.fallback
 							.call_in_wasm_module(ext, module, method, data)

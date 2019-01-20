@@ -623,7 +623,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let mut r = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
+				let r = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
