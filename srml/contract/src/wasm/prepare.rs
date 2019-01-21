@@ -229,7 +229,10 @@ impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
 				.get(*type_idx as usize)
 				.ok_or_else(|| "validation: import entry points to a non-existent type")?;
 
-			if !C::can_satisfy(import.field().as_bytes(), func_ty) {
+			// We disallow importing `gas` function here since it is treated as implementation detail.
+			if import.field().as_bytes() == b"gas"
+				|| !C::can_satisfy(import.field().as_bytes(), func_ty)
+			{
 				return Err("module imports a non-existent function");
 			}
 		}
@@ -263,8 +266,6 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
 	contract_module.scan_exports()?;
 	contract_module.ensure_no_internal_memory()?;
-	contract_module.inject_gas_metering()?;
-	contract_module.inject_stack_height_metering()?;
 
 	struct MemoryDefinition {
 		initial: u32,
@@ -300,6 +301,9 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 		}
 	};
 
+	contract_module.inject_gas_metering()?;
+	contract_module.inject_stack_height_metering()?;
+
 	Ok(PrefabWasmModule {
 		schedule_version: schedule.version,
 		initial: memory_def.initial,
@@ -327,7 +331,11 @@ mod tests {
 	// implementation from it. So actual implementations doesn't matter.
 	define_env!(TestEnv, <E: Ext>,
 		panic(_ctx) => { unreachable!(); },
+
+		// gas is an implementation defined function and a contract can't import it.
 		gas(_ctx, _amount: u32) => { unreachable!(); },
+
+		nop(_ctx, _unused: u64) => { unreachable!(); },
 	);
 
 	macro_rules! prepare_test {
@@ -445,13 +453,27 @@ mod tests {
 		prepare_test!(can_import_legit_function,
 			r#"
 			(module
-				(import "env" "gas" (func (param i32)))
+				(import "env" "nop" (func (param i64)))
 
 				(func (export "call"))
 				(func (export "deploy"))
 			)
 			"#,
 			Ok(_)
+		);
+
+		// even though gas is defined the contract can't import it since
+		// it is an implementation defined.
+		prepare_test!(can_not_import_gas_function,
+			r#"
+			(module
+				(import "env" "gas" (func (param i32)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("module imports a non-existent function")
 		);
 
 		// nothing can be imported from non-"env" module for now.
