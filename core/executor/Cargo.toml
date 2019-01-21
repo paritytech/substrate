@@ -19,7 +19,6 @@ byteorder = "1.1"
 lazy_static = "1.0"
 parking_lot = "0.7.1"
 log = "0.4"
-fnv = "1.0.6"
 
 [dev-dependencies]
 assert_matches = "1.1"
