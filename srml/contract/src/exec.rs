@@ -277,8 +277,10 @@ where
 		let mut output_data = Vec::new();
 
 		let (change_set, events) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay);
-			let mut nested = self.nested(overlay, dest.clone());
+			let mut nested = self.nested(
+				OverlayAccountDb::new(&self.overlay),
+				dest.clone()
+			);
 
 			if value > T::Balance::zero() {
 				transfer(
