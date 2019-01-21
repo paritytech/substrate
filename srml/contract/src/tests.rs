@@ -321,7 +321,7 @@ const CODE_DISPATCH_CALL: &str = r#"
 	(func (export "call")
 		(call $ext_dispatch_call
 			(i32.const 8) ;; Pointer to the start of encoded call buffer
-			(i32.const 13) ;; Length of the buffer
+			(i32.const 11) ;; Length of the buffer
 		)
 	)
 	(func (export "deploy"))
@@ -329,7 +329,7 @@ const CODE_DISPATCH_CALL: &str = r#"
 	(data (i32.const 8) "\00\00\03\00\00\00\00\00\00\00\C8")
 )
 "#;
-const HASH_DISPATCH_CALL: [u8; 32] = hex!("4de51501fca36406baafc7b1d7022238a173cb3f66d55e530aa440ac16170304");
+const HASH_DISPATCH_CALL: [u8; 32] = hex!("49dfdcaf9c1553be10634467e95b8e71a3bc15a4f8bf5563c0312b0902e0afb9");
 
 #[test]
 fn dispatch_call() {
