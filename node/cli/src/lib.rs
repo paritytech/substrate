@@ -125,7 +125,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		load_spec, &version, "substrate-node", &matches
 	)?;
 
-	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config, &version)? {
+	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
 		cli::Action::ExecutedInternally => (),
 		cli::Action::RunService(exit) => {
 			info!("{}", version.name);

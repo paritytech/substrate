@@ -345,48 +345,6 @@ where
 	Ok((spec, config))
 }
 
-fn get_db_path_for_subcommand(
-	main_cmd: &clap::ArgMatches,
-	sub_cmd: &clap::ArgMatches,
-	version: &VersionInfo,
-) -> error::Result<PathBuf> {
-	if main_cmd.is_present("chain") && sub_cmd.is_present("chain") {
-		bail!(create_input_err("`--chain` option is present two times"));
-	}
-
-	fn check_contradicting_chain_dev_flags(
-		m0: &clap::ArgMatches,
-		m1: &clap::ArgMatches
-	) -> error::Result<()> {
-		if m0.is_present("dev") && m1.is_present("chain") {
-			bail!(create_input_err("`--dev` and `--chain` given on different levels"));
-		}
-
-		Ok(())
-	}
-
-	check_contradicting_chain_dev_flags(main_cmd, sub_cmd)?;
-	check_contradicting_chain_dev_flags(sub_cmd, main_cmd)?;
-
-	let spec_id = if sub_cmd.is_present("chain") || sub_cmd.is_present("dev") {
-		get_chain_key(sub_cmd)
-	} else {
-		get_chain_key(main_cmd)
-	};
-
-	if main_cmd.is_present("base_path") && sub_cmd.is_present("base_path") {
-		bail!(create_input_err("`--base_path` option is present two times"));
-	}
-
-	let base_path = if sub_cmd.is_present("base_path") {
-		base_path(sub_cmd, version)
-	} else {
-		base_path(main_cmd, version)
-	};
-
-	Ok(db_path(&base_path, &spec_id))
-}
-
 //
 // IANA unassigned port ranges that we could use:
 // 6717-6766		Unassigned
@@ -400,8 +358,7 @@ pub fn execute_default<'a, F, E>(
 	spec: ChainSpec<FactoryGenesis<F>>,
 	exit: E,
 	matches: &clap::ArgMatches<'a>,
-	config: &FactoryFullConfiguration<F>,
-	app_info: &VersionInfo,
+	config: &FactoryFullConfiguration<F>
 ) -> error::Result<Action<E>>
 where
 	E: IntoExit,
@@ -413,34 +370,34 @@ where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
-	if let Some(matches) = matches.subcommand_matches("build-spec") {
-		build_spec::<F>(matches, spec, config)?;
+	if let Some(sub_matches) = matches.subcommand_matches("build-spec") {
+		build_spec::<F>(sub_matches, spec, config)?;
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("export-blocks") {
 		export_blocks::<F, _>(
-			get_db_path_for_subcommand(matches, sub_matches, app_info)?,
-			matches,
+			&config.database_path,
+			sub_matches,
 			spec,
 			exit.into_exit()
 		)?;
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("import-blocks") {
 		import_blocks::<F, _>(
-			get_db_path_for_subcommand(matches, sub_matches, app_info)?,
-			matches,
+			&config.database_path,
+			sub_matches,
 			spec,
 			exit.into_exit()
 		)?;
 		return Ok(Action::ExecutedInternally);
 	} else if let Some(sub_matches) = matches.subcommand_matches("revert") {
 		revert_chain::<F>(
-			get_db_path_for_subcommand(matches, sub_matches, app_info)?,
+			&config.database_path,
 			sub_matches,
 			spec
 		)?;
 		return Ok(Action::ExecutedInternally);
-	} else if let Some(sub_matches) = matches.subcommand_matches("purge-chain") {
-		purge_chain::<F>(get_db_path_for_subcommand(matches, sub_matches, app_info)?)?;
+	} else if let Some(_sub_matches) = matches.subcommand_matches("purge-chain") {
+		purge_chain::<F>(&config.database_path)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
@@ -487,7 +444,7 @@ where
 }
 
 fn export_blocks<F, E>(
-	db_path: PathBuf,
+	db_path: &str,
 	matches: &clap::ArgMatches,
 	spec: ChainSpec<FactoryGenesis<F>>,
 	exit: E
@@ -495,7 +452,7 @@ fn export_blocks<F, E>(
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static,
 {
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string_lossy().into();
+	config.database_path = db_path.to_string();
 	info!("DB path: {}", config.database_path);
 	let from: u64 = match matches.value_of("from") {
 		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
@@ -517,7 +474,7 @@ fn export_blocks<F, E>(
 }
 
 fn import_blocks<F, E>(
-	db_path: PathBuf,
+	db_path: &str,
 	matches: &clap::ArgMatches,
 	spec: ChainSpec<FactoryGenesis<F>>,
 	exit: E
@@ -525,7 +482,7 @@ fn import_blocks<F, E>(
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static,
 {
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string_lossy().into();
+	config.database_path = db_path.to_string();
 
 	if let Some(s) = matches.value_of("execution") {
 		config.block_execution_strategy = match s {
@@ -554,14 +511,14 @@ fn import_blocks<F, E>(
 }
 
 fn revert_chain<F>(
-	db_path: PathBuf,
+	db_path: &str,
 	matches: &clap::ArgMatches,
 	spec: ChainSpec<FactoryGenesis<F>>
 ) -> error::Result<()>
 	where F: ServiceFactory,
 {
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string_lossy().into();
+	config.database_path = db_path.to_string();
 
 	let blocks = match matches.value_of("num") {
 		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
@@ -572,7 +529,7 @@ fn revert_chain<F>(
 }
 
 fn purge_chain<F>(
-	db_path: PathBuf,
+	db_path: &str,
 ) -> error::Result<()>
 	where F: ServiceFactory,
 {
