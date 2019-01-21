@@ -1104,18 +1104,27 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		// we don't want to finalize on `inner.import_block`
 		let justification = block.justification.take();
 		let enacts_consensus_change = new_authorities.is_some();
-		let import_result = self.inner.import_block(block, new_authorities).map_err(|e| {
-			if let Some((old_set, mut authorities)) = just_in_case {
-				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
-				*authorities = old_set;
-			}
-			e
-		});
+		let import_result = self.inner.import_block(block, new_authorities);
 
-		let import_result = match import_result {
-			Ok(ImportResult::Queued) => ImportResult::Queued,
-			Ok(r) => return Ok(r),
-			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+		let import_result = {
+			// we scope this so that `just_in_case` is dropped eagerly and releases the authorities lock
+			let revert_authorities = || if let Some((old_set, mut authorities)) = just_in_case {
+				*authorities = old_set;
+			};
+
+			match import_result {
+				Ok(ImportResult::Queued) => ImportResult::Queued,
+				Ok(r) => {
+					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
+					revert_authorities();
+					return Ok(r);
+				},
+				Err(e) => {
+					debug!(target: "afg", "Restoring old authority set after block import error: {:?}", e);
+					revert_authorities();
+					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+				},
+			}
 		};
 
 		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
