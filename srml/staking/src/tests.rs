@@ -90,7 +90,7 @@ fn note_offline_grace_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 70);
 		Balances::set_free_balance(&20, 70);
-		assert_ok!(Staking::set_offline_slash_grace(1.into()));
+		assert_ok!(Staking::set_offline_slash_grace(1));
 		assert_eq!(Staking::offline_slash_grace(), 1);
 
 		assert_eq!(Staking::slash_count(&10), 0);
@@ -145,7 +145,7 @@ fn note_offline_auto_unstake_session_change_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 7000);
 		Balances::set_free_balance(&20, 7000);
-		assert_ok!(Staking::register_preferences(Origin::signed(10), 0.into(), ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
+		assert_ok!(Staking::register_preferences(Origin::signed(10), 0, ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
 
 		assert_eq!(Staking::intentions(), vec![10, 20]);
 
@@ -327,7 +327,7 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Balances::total_balance(&4), 40);
 
 		System::set_block_number(2);
-		assert_ok!(Staking::unnominate(Origin::signed(4), 0.into()));
+		assert_ok!(Staking::unnominate(Origin::signed(4), 0));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators(), vec![3, 2]);

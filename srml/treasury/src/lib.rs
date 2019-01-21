@@ -41,7 +41,6 @@ extern crate srml_balances as balances;
 use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
-use codec::Compact;
 use balances::OnDilution;
 use system::ensure_signed;
 
@@ -111,10 +110,8 @@ decl_module! {
 		}
 
 		/// Reject a proposed spend. The original deposit will be slashed.
-		fn reject_proposal(origin, proposal_id: Compact<ProposalIndex>) {
+		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::ensure_origin(origin)?;
-			let proposal_id: ProposalIndex = proposal_id.into();
-
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 
 			let value = proposal.bond;
@@ -123,9 +120,8 @@ decl_module! {
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		/// and the original deposit will be returned.
-		fn approve_proposal(origin, proposal_id: Compact<ProposalIndex>) {
+		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
-			let proposal_id = proposal_id.into();
 
 			ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
 
@@ -380,7 +376,7 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0.into()));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(1);
 			assert_eq!(Balances::free_balance(&3), 0);
@@ -404,7 +400,7 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0.into()));
+			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Balances::free_balance(&3), 0);
@@ -418,22 +414,22 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0.into()));
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
+			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
 	}
 
 	#[test]
 	fn reject_non_existant_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
+			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
 	}
 
 	#[test]
 	fn accept_non_existant_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
 	}
 
@@ -443,8 +439,8 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0.into()));
-			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0.into()), "No proposal at that index");
+			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
+			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
 	}
 
@@ -454,7 +450,7 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
-			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0.into()));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Balances::free_balance(&3), 100);
@@ -468,7 +464,7 @@ mod tests {
 			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
-			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0.into()));
+			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Treasury::pot(), 100);
