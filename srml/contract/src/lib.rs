@@ -52,10 +52,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// We need these `extern crate` to be placed here otherwise there will be errors.
+// TODO: https://github.com/paritytech/substrate/issues/1509
 #[macro_use]
 extern crate parity_codec_derive;
 extern crate parity_codec as codec;
-
 #[macro_use]
 extern crate srml_support as runtime_support;
 
