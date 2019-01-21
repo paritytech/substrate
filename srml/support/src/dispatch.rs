@@ -679,7 +679,8 @@ macro_rules! __impl_decode {
 		$param_name:ident;
 		$input:expr;
 	) => {
-		compile_error!(concat!("Invalid attribute for parameter `", stringify!($param_name), "`, should be one attribute `#[compact]`"))
+		compile_error!(concat!("Invalid attribute for parameter `", stringify!($param_name), "`, the following attributes are supported: `#[compact]`"))
+
 	};
 }
 
