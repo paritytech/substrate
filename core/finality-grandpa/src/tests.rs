@@ -222,7 +222,7 @@ impl Network for MessageRouting {
 		Box::new(messages)
 	}
 
-	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
 		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
 		inner.route_until_complete();
