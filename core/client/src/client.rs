@@ -728,7 +728,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// find tree route from last finalized to given block.
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 
-		if block == last_finalized { return Ok(()) }
+		if block == last_finalized {
+			warn!("Possible safety violation: attempted to re-finalize last finalized block {:?} ", last_finalized);
+			return Ok(());
+		}
+
 		let route_from_finalized = crate::blockchain::tree_route(
 			self.backend.blockchain(),
 			BlockId::Hash(last_finalized),
@@ -1093,7 +1097,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash)) {
 			Ok(blockchain::BlockStatus::InChain) => {},
 			Ok(blockchain::BlockStatus::Unknown) => return Ok(ImportResult::UnknownParent),
-            Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
+			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
 		}
 
 		let import_headers = if post_digests.is_empty() {
@@ -1130,6 +1134,19 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			"origin" => ?origin
 		);
 		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+	}
+
+	/// Import a block justification and finalize the block. The justification
+	/// isn't interpreted by the client and is assumed to have been validated
+	/// previously. The block is finalized unconditionally.
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		_number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
 	}
 }
 

@@ -16,7 +16,7 @@
 
 //! Block import helpers.
 
-use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, DigestItemFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
 use runtime_primitives::Justification;
 use std::borrow::Cow;
 
@@ -33,6 +33,9 @@ pub enum ImportResult {
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
+	/// Added to the import queue but must be justified
+	/// (usually required to safely enact consensus changes).
+	NeedsJustification,
 }
 
 /// Block data origin.
@@ -140,9 +143,22 @@ impl<Block: BlockT> ImportBlock<Block> {
 /// Block import trait.
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
-	/// Import a Block alongside the new authorities valid form this block forward
-	fn import_block(&self,
+
+	/// Called by the import queue when it is started.
+	fn on_start(&self, _link: &::import_queue::Link<B>) { }
+
+	/// Import a Block alongside the new authorities valid from this block forward
+	fn import_block(
+		&self,
 		block: ImportBlock<B>,
-		new_authorities: Option<Vec<AuthorityIdFor<B>>>
+		new_authorities: Option<Vec<AuthorityIdFor<B>>>,
 	) -> Result<ImportResult, Self::Error>;
+
+	/// Import a Block justification and finalize the given block.
+	fn import_justification(
+		&self,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		justification: Justification,
+	) -> Result<(), Self::Error>;
 }
