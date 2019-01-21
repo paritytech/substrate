@@ -55,7 +55,7 @@ impl<TSubstream> Behaviour<TSubstream> {
 	pub fn new(config: &NetworkConfiguration, local_peer_id: PeerId, protocols: RegisteredProtocols) -> Self {
 		let identify = {
 			let proto_version = "/substrate/1.0".to_string();
-			let user_agent = config.client_version.clone();
+			let user_agent = format!("{} ({})", config.client_version, config.node_name);
 			Identify::new(proto_version, user_agent)
 		};
 
