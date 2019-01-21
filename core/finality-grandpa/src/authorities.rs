@@ -146,7 +146,6 @@ where
 	}
 
 	/// Inspect pending changes.
-	#[cfg(test)]
 	pub(crate) fn pending_changes(&self) -> &[PendingChange<H, N>] {
 		&self.pending_changes
 	}
@@ -261,7 +260,7 @@ pub(crate) struct PendingChange<H, N> {
 
 impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	/// Returns the effective number this change will be applied at.
-	fn effective_number(&self) -> N {
+	pub fn effective_number(&self) -> N {
 		self.canon_height.clone() + self.finalization_depth.clone()
 	}
 }

@@ -92,6 +92,7 @@ use client::{
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
+use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 	DigestItemFor, DigestItem, As, Zero,
@@ -315,7 +316,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 }
 
 /// Consensus-related data changes tracker.
-#[derive(Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode)]
 struct ConsensusChanges<H, N> {
 	pending_changes: Vec<(N, H)>,
 }
@@ -796,6 +797,13 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 {
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
+
+	// TODO [andre]: clone only when changed (#1483)
+	let old_authority_set = authority_set.clone();
+	// needed in case there is an authority set change, used for reverting in
+	// case of error
+	let mut old_last_completed = None;
+
 	let mut consensus_changes = consensus_changes.lock();
 	let status = authority_set.apply_changes(number, |canon_number| {
 		canonical_at_height(client, (hash, number), canon_number)
@@ -812,6 +820,8 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			let round_state = RoundState::genesis((*canon_hash, *canon_number));
 			let last_completed: LastCompleted<_, _> = (0, round_state);
 			let encoded = last_completed.encode();
+
+			old_last_completed = Backend::get_aux(&**client.backend(), LAST_COMPLETED_KEY)?;
 
 			Backend::insert_aux(
 				&**client.backend(),
@@ -836,7 +846,13 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	// check if this is this is the first finalization of some consensus changes
 	let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
 		.finalize((number, hash), |at_height| canonical_at_height(client, (hash, number), at_height))?;
+
+	// holds the old consensus changes in case it is changed below, needed for
+	// reverting in case of failure
+	let mut old_consensus_changes = None;
 	if alters_consensus_changes {
+		old_consensus_changes = Some(consensus_changes.clone());
+
 		let encoded = consensus_changes.encode();
 		let write_result = Backend::insert_aux(&**client.backend(), &[(CONSENSUS_CHANGES_KEY, &encoded[..])], &[]);
 		if let Err(e) = write_result {
@@ -847,75 +863,115 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		}
 	}
 
-	// NOTE: this code assumes that honest voters will never vote past a
-	// transition block, thus we don't have to worry about the case where
-	// we have a transition with `effective_block = N`, but we finalize
-	// `N+1`. this assumption is required to make sure we store
-	// justifications for transition blocks which will be requested by
-	// syncing clients.
-	let justification = match justification_or_commit {
-		JustificationOrCommit::Justification(justification) => Some(justification.encode()),
-		JustificationOrCommit::Commit((round_number, commit)) => {
-			let mut justification_required =
-				// justification is always required when block that enacts new authorities
-				// set is finalized
-				status.new_set_block.is_some() ||
-				// justification is required when consensus changes are finalized
-				finalizes_consensus_changes;
+	let aux = |authority_set: &authorities::AuthoritySet<Block::Hash, NumberFor<Block>>| {
+		// NOTE: this code assumes that honest voters will never vote past a
+		// transition block, thus we don't have to worry about the case where
+		// we have a transition with `effective_block = N`, but we finalize
+		// `N+1`. this assumption is required to make sure we store
+		// justifications for transition blocks which will be requested by
+		// syncing clients.
+		let justification = match justification_or_commit {
+			JustificationOrCommit::Justification(justification) => Some(justification.encode()),
+			JustificationOrCommit::Commit((round_number, commit)) => {
+				let mut justification_required =
+					// justification is always required when block that enacts new authorities
+					// set is finalized
+					status.new_set_block.is_some() ||
+					// justification is required when consensus changes are finalized
+					finalizes_consensus_changes;
 
-			// justification is required every N blocks to be able to prove blocks
-			// finalization to remote nodes
-			if !justification_required {
-				if let Some(justification_period) = justification_period {
-					let last_finalized_number = client.info()?.chain.finalized_number;
-					justification_required = (!last_finalized_number.is_zero() ||
-						number - last_finalized_number == justification_period) &&
-						(last_finalized_number / justification_period != number / justification_period);
+				// justification is required every N blocks to be able to prove blocks
+				// finalization to remote nodes
+				if !justification_required {
+					if let Some(justification_period) = justification_period {
+						let last_finalized_number = client.info()?.chain.finalized_number;
+						justification_required =
+							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
+							(last_finalized_number / justification_period != number / justification_period);
+					}
 				}
-			}
 
-			if justification_required {
-				let justification = GrandpaJustification::from_commit(
-					client,
-					round_number,
-					commit,
-				)?;
+				if justification_required {
+					let justification = GrandpaJustification::from_commit(
+						client,
+						round_number,
+						commit,
+					)?;
 
-				Some(justification.encode())
+					Some(justification.encode())
+				} else {
+					None
+				}
+			},
+		};
+
+		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+
+		// ideally some handle to a synchronization oracle would be used
+		// to avoid unconditionally notifying.
+		client.finalize_block(BlockId::Hash(hash), justification, true).map_err(|e| {
+			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+			e
+		})?;
+
+		if let Some((canon_hash, canon_number)) = status.new_set_block {
+			// the authority set has changed.
+			let (new_id, set_ref) = authority_set.current();
+
+			if set_ref.len() > 16 {
+				info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
 			} else {
-				None
+				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
-		},
+
+			Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
+				canon_hash,
+				canon_number,
+				set_id: new_id,
+				authorities: set_ref.to_vec(),
+			}))
+		} else {
+			Ok(())
+		}
 	};
 
-	debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+	match aux(&authority_set) {
+		Err(ExitOrError::Error(err)) => {
+			debug!(target: "afg", "Reverting authority set and/or consensus changes after block finalization error: {:?}", err);
 
-	// ideally some handle to a synchronization oracle would be used
-	// to avoid unconditionally notifying.
-	client.finalize_block(BlockId::Hash(hash), justification, true).map_err(|e| {
-		warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-		warn!(target: "finality", "Node is in a potentially inconsistent state.");
-		e
-	})?;
+			let mut revert_aux = Vec::new();
 
-	if let Some((canon_hash, canon_number)) = status.new_set_block {
-		// the authority set has changed.
-		let (new_id, set_ref) = authority_set.current();
+			if status.changed {
+				revert_aux.push((AUTHORITY_SET_KEY, old_authority_set.encode()));
+				if let Some(old_last_completed) = old_last_completed {
+					revert_aux.push((LAST_COMPLETED_KEY, old_last_completed));
+				}
 
-		if set_ref.len() > 16 {
-			info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
-		} else {
-			info!("Applying GRANDPA set change to new set {:?}", set_ref);
-		}
+				*authority_set = old_authority_set.clone();
+			}
 
-		Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
-			canon_hash,
-			canon_number,
-			set_id: new_id,
-			authorities: set_ref.to_vec(),
-		}))
-	} else {
-		Ok(())
+			if let Some(old_consensus_changes) = old_consensus_changes {
+				revert_aux.push((CONSENSUS_CHANGES_KEY, old_consensus_changes.encode()));
+
+				*consensus_changes = old_consensus_changes;
+			}
+
+			let write_result = Backend::insert_aux(
+				&**client.backend(),
+				revert_aux.iter().map(|(k, v)| (*k, &**v)).collect::<Vec<_>>().iter(),
+				&[],
+			);
+
+			if let Err(e) = write_result {
+				warn!(target: "finality", "Failed to revert consensus changes to disk. Bailing.");
+				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+
+				return Err(e.into());
+			}
+
+			Err(ExitOrError::Error(err))
+		},
+		res => res,
 	}
 }
 
@@ -948,6 +1004,33 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		PRA::Api: GrandpaApi<Block>,
 {
 	type Error = ConsensusError;
+
+	fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
+		let chain_info = match self.inner.info() {
+			Ok(info) => info.chain,
+			_ => return,
+		};
+
+		// request justifications for all pending changes for which change blocks have already been imported
+		for pending_change in self.authority_set.inner().read().pending_changes() {
+			if pending_change.effective_number() > chain_info.finalized_number &&
+				pending_change.effective_number() <= chain_info.best_number
+			{
+				let effective_block_hash = self.inner.best_containing(
+					pending_change.canon_hash,
+					Some(pending_change.effective_number()),
+				);
+
+				if let Ok(Some(hash)) = effective_block_hash {
+					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
+						if *header.number() == pending_change.effective_number() {
+							link.request_justification(&header.hash(), *header.number());
+						}
+					}
+				}
+			}
+		}
+	}
 
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
@@ -1045,52 +1128,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		match justification {
 			Some(justification) => {
-				let justification = GrandpaJustification::decode_and_verify(
-					justification,
-					self.authority_set.set_id(),
-					&self.authority_set.current_authorities(),
-				);
-
-				let justification = match justification {
-					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-					Ok(justification) => justification,
-				};
-
-				let result = finalize_block(
-					&*self.inner,
-					&self.authority_set,
-					&self.consensus_changes,
-					None,
-					hash,
-					number,
-					justification.into(),
-				);
-
-				match result {
-					Ok(_) => {
-						assert!(!enacts_change, "returns Ok when no authority set change should be enacted; qed;");
-					},
-					Err(ExitOrError::AuthoritiesChanged(new)) => {
-						assert!(
-							enacts_change,
-							"returns AuthoritiesChanged when authority set change should be enacted; qed;"
-						);
-
-						debug!(target: "finality", "Imported justified block #{} that enacts authority set change, signalling voter.", number);
-						if let Err(e) = self.authority_set_change.unbounded_send(new) {
-							return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
-						}
-					},
-					Err(ExitOrError::Error(e)) => {
-						match e {
-							Error::Grandpa(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
-							Error::Network(error) => return Err(ConsensusErrorKind::ClientImport(error).into()),
-							Error::Blockchain(error) => return Err(ConsensusErrorKind::ClientImport(error).into()),
-							Error::Client(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
-							Error::Timer(error) => return Err(ConsensusErrorKind::ClientImport(error.to_string()).into()),
-						}
-					},
-				}
+				self.import_justification(hash, number, justification, enacts_change)?;
 			},
 			None => {
 				if enacts_change {
@@ -1106,10 +1144,86 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				if enacts_consensus_change {
 					self.consensus_changes.lock().note_change((number, hash));
 				}
-			},
+
+				return Ok(ImportResult::NeedsJustification);
+			}
 		}
 
 		Ok(import_result)
+	}
+
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.import_justification(hash, number, justification, false)
+	}
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
+	GrandpaBlockImport<B, E, Block, RA, PRA> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		RA: Send + Sync,
+{
+
+	/// Import a block justification and finalize the block.
+	///
+	/// If `enacts_change` is set to true, then finalizing this block *must*
+	/// enact an authority set change, the function will panic otherwise.
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		justification: Justification,
+		enacts_change: bool,
+	) -> Result<(), ConsensusError> {
+		let justification = GrandpaJustification::decode_and_verify(
+			justification,
+			self.authority_set.set_id(),
+			&self.authority_set.current_authorities(),
+		);
+
+		let justification = match justification {
+			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+			Ok(justification) => justification,
+		};
+
+		let result = finalize_block(
+			&*self.inner,
+			&self.authority_set,
+			&self.consensus_changes,
+			None,
+			hash,
+			number,
+			justification.into(),
+		);
+
+		match result {
+			Err(ExitOrError::AuthoritiesChanged(new)) => {
+				info!(target: "finality", "Imported justification for block #{} that enacts authority set change, signalling voter.", number);
+				if let Err(e) = self.authority_set_change.unbounded_send(new) {
+					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+				}
+			},
+			Err(ExitOrError::Error(e)) => {
+				return Err(match e {
+					Error::Grandpa(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+					Error::Network(error) => ConsensusErrorKind::ClientImport(error),
+					Error::Blockchain(error) => ConsensusErrorKind::ClientImport(error),
+					Error::Client(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+					Error::Timer(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+				}.into());
+			},
+			Ok(_) => {
+				assert!(!enacts_change, "returns Ok when no authority set change should be enacted; qed;");
+			},
+		}
+
+		Ok(())
 	}
 }
 
