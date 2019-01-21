@@ -76,7 +76,6 @@ impl balances::Trait for Test {
 	type Event = MetaEvent;
 }
 impl Trait for Test {
-	type Origin = Origin;
 	type Call = Call;
 	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;

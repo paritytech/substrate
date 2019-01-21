@@ -106,7 +106,7 @@ use codec::{Codec, HasCompact};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use runtime_support::dispatch::{Result, Dispatchable};
 use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
-use system::{ensure_signed, Origin, RawOrigin};
+use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
@@ -122,12 +122,8 @@ pub trait ComputeDispatchFee<Call, Balance> {
 }
 
 pub trait Trait: balances::Trait {
-	// TODO: Review this.
-	/// The outer origin type.
-	type Origin: From<Origin<Self>>;
-
 	/// The outer call dispatch type.
-	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin>;
+	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
