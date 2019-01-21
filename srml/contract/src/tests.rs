@@ -26,9 +26,9 @@ use runtime_primitives::BuildStorage;
 use runtime_support::{StorageMap, StorageDoubleMap};
 use substrate_primitives::{Blake2Hasher};
 use system::{Phase, EventRecord};
-use wabt;
-use {
-	balances, runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
+use {wabt, balances};
+use crate::{
+	runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
 	Trait,
 };
 

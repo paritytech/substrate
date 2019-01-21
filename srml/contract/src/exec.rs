@@ -15,8 +15,8 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
-use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use gas::{GasMeter, Token};
+use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
+use crate::gas::{GasMeter, Token};
 
 use balances::{self, EnsureAccountLiquid};
 use rstd::prelude::*;
@@ -595,15 +595,15 @@ mod tests {
 		ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
 		Vm, VmExecResult, InstantiateReceipt, RawEvent,
 	};
-	use account_db::AccountDb;
-	use gas::GasMeter;
-	use runtime_io::with_externalities;
+	use crate::account_db::AccountDb;
+	use crate::gas::GasMeter;
+	use crate::runtime_io::with_externalities;
+	use crate::tests::{ExtBuilder, Test};
+	use crate::{CodeHash, Config};
 	use std::cell::RefCell;
 	use std::collections::HashMap;
 	use std::marker::PhantomData;
 	use std::rc::Rc;
-	use tests::{ExtBuilder, Test};
-	use {CodeHash, Config};
 
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;

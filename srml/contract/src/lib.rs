@@ -97,8 +97,8 @@ mod wasm;
 #[cfg(test)]
 mod tests;
 
-use exec::ExecutionContext;
-use account_db::AccountDb;
+use crate::exec::ExecutionContext;
+use crate::account_db::AccountDb;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
@@ -211,8 +211,8 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
-			let vm = ::wasm::WasmVm::new(&cfg.schedule);
-			let loader = ::wasm::WasmLoader::new(&cfg.schedule);
+			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
+			let loader = crate::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 
 			let result = ctx.call(dest, value, &mut gas_meter, &data, exec::EmptyOutputBuf::new());
@@ -261,8 +261,8 @@ decl_module! {
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 			let cfg = Config::preload();
-			let vm = ::wasm::WasmVm::new(&cfg.schedule);
-			let loader = ::wasm::WasmLoader::new(&cfg.schedule);
+			let vm = crate::wasm::WasmVm::new(&cfg.schedule);
+			let loader = crate::wasm::WasmLoader::new(&cfg.schedule);
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			let result = ctx.instantiate(endowment, &mut gas_meter, &code_hash, &data);
 
@@ -343,7 +343,7 @@ decl_storage! {
 /// The storage items associated with an account/key.
 ///
 /// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
-pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
+pub(crate) struct StorageOf<T>(crate::rstd::marker::PhantomData<T>);
 impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	const PREFIX: &'static [u8] = b"con:sto:";
 	type Key1 = T::AccountId;

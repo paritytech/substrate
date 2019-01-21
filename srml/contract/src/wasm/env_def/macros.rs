@@ -96,7 +96,7 @@ macro_rules! unmarshall_then_body {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, ::sandbox::HostError>,
+	F: FnOnce() -> Result<R, crate::sandbox::HostError>,
 {
 	f
 }
@@ -195,12 +195,12 @@ macro_rules! define_env {
 mod tests {
 	use parity_wasm::elements::FunctionType;
 	use parity_wasm::elements::ValueType;
-	use runtime_primitives::traits::{As, Zero};
-	use sandbox::{self, ReturnValue, TypedValue};
-	use wasm::tests::MockExt;
-	use wasm::Runtime;
-	use exec::Ext;
-	use Trait;
+	use crate::runtime_primitives::traits::{As, Zero};
+	use crate::sandbox::{self, ReturnValue, TypedValue};
+	use crate::wasm::tests::MockExt;
+	use crate::wasm::Runtime;
+	use crate::exec::Ext;
+	use crate::Trait;
 
 	#[test]
 	fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
@@ -304,7 +304,7 @@ mod tests {
 
 	#[test]
 	fn macro_define_env() {
-		use wasm::env_def::ImportSatisfyCheck;
+		use crate::wasm::env_def::ImportSatisfyCheck;
 
 		define_env!(Env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {
