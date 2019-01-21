@@ -112,6 +112,7 @@ fn node_config<F: ServiceFactory> (
 		reserved_nodes: vec![],
 		non_reserved_mode: NonReservedPeerMode::Accept,
 		client_version: "network/test/0.1".to_owned(),
+		node_name: "unknown".to_owned(),
 	};
 
 	Configuration {

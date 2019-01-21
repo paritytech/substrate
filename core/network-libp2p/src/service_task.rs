@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{behaviour::Behaviour, custom_proto::CustomProtosOut, secret::obtain_private_key, transport};
+use crate::{behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key, transport};
 use crate::custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use crate::topology::NetTopology;
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
@@ -127,7 +127,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 
 	Ok(Service {
 		swarm,
-		nodes_addresses: Default::default(),
+		nodes_info: Default::default(),
 		index_by_id: Default::default(),
 		next_node_id: 1,
 		cleanup: Interval::new_interval(Duration::from_secs(60)),
@@ -182,10 +182,10 @@ pub struct Service {
 	/// Stream of events of the swarm.
 	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<Substream<StreamMuxerBox>>, NetTopology>,
 
-	/// For each node we're connected to, how we're connected to it.
-	nodes_addresses: FnvHashMap<NodeIndex, (PeerId, ConnectedPoint)>,
+	/// Information about all the nodes we're connected to.
+	nodes_info: FnvHashMap<NodeIndex, NodeInfo>,
 
-	/// Opposite of `nodes_addresses`.
+	/// Opposite of `nodes_info`.
 	index_by_id: FnvHashMap<PeerId, NodeIndex>,
 
 	/// Next index to assign to a node.
@@ -197,6 +197,17 @@ pub struct Service {
 
 	/// Events to produce on the Stream.
 	injected_events: Vec<ServiceEvent>,
+}
+
+/// Information about a node we're connected to.
+#[derive(Debug)]
+struct NodeInfo {
+	/// Hash of the public key of the node.
+	peer_id: PeerId,
+	/// How we're connected to the node.
+	endpoint: ConnectedPoint,
+	/// Version reported by the remote, or `None` if unknown.
+	client_version: Option<String>,
 }
 
 impl Service {
@@ -215,7 +226,7 @@ impl Service {
 	/// Returns the list of all the peers we are connected to.
 	#[inline]
 	pub fn connected_peers<'a>(&'a self) -> impl Iterator<Item = NodeIndex> + 'a {
-		self.nodes_addresses.keys().cloned()
+		self.nodes_info.keys().cloned()
 	}
 
 	/// Try to add a reserved peer.
@@ -247,13 +258,19 @@ impl Service {
 	/// Returns the `PeerId` of a node.
 	#[inline]
 	pub fn peer_id_of_node(&self, node_index: NodeIndex) -> Option<&PeerId> {
-		self.nodes_addresses.get(&node_index).map(|(id, _)| id)
+		self.nodes_info.get(&node_index).map(|info| &info.peer_id)
 	}
 
 	/// Returns the way we are connected to a node.
 	#[inline]
 	pub fn node_endpoint(&self, node_index: NodeIndex) -> Option<&ConnectedPoint> {
-		self.nodes_addresses.get(&node_index).map(|(_, cp)| cp)
+		self.nodes_info.get(&node_index).map(|info| &info.endpoint)
+	}
+
+	/// Returns the client version reported by a node.
+	pub fn node_client_version(&self, node_index: NodeIndex) -> Option<&str> {
+		self.nodes_info.get(&node_index)
+			.and_then(|info| info.client_version.as_ref().map(|s| &s[..]))
 	}
 
 	/// Sends a message to a peer using the custom protocol.
@@ -266,7 +283,7 @@ impl Service {
 		protocol: ProtocolId,
 		data: Vec<u8>
 	) {
-		if let Some(peer_id) = self.nodes_addresses.get(&node_index).map(|(id, _)| id) {
+		if let Some(peer_id) = self.nodes_info.get(&node_index).map(|info| &info.peer_id) {
 			self.swarm.send_custom_message(peer_id, protocol, data);
 		} else {
 			warn!(target: "sub-libp2p", "Tried to send message to unknown node: {:}", node_index);
@@ -278,9 +295,10 @@ impl Service {
 	/// Same as `drop_node`, except that the same peer will not be able to reconnect later.
 	#[inline]
 	pub fn ban_node(&mut self, node_index: NodeIndex) {
-		if let Some(peer_id) = self.nodes_addresses.get(&node_index).map(|(id, _)| id) {
-			info!(target: "sub-libp2p", "Banned {:?} (#{:?})", peer_id, node_index);
-			self.swarm.ban_node(peer_id.clone());
+		if let Some(info) = self.nodes_info.get(&node_index) {
+			info!(target: "sub-libp2p", "Banned {:?} (#{:?}, {:?}, {:?})", info.peer_id,
+				node_index, info.endpoint, info.client_version);
+			self.swarm.ban_node(info.peer_id.clone());
 		}
 	}
 
@@ -290,9 +308,10 @@ impl Service {
 	/// Corresponding closing events will be generated once the closing actually happens.
 	#[inline]
 	pub fn drop_node(&mut self, node_index: NodeIndex) {
-		if let Some(peer_id) = self.nodes_addresses.get(&node_index).map(|(id, _)| id) {
-			debug!(target: "sub-libp2p", "Dropping {:?} on purpose (#{:?})", peer_id, node_index);
-			self.swarm.drop_node(peer_id);
+		if let Some(info) = self.nodes_info.get(&node_index) {
+			debug!(target: "sub-libp2p", "Dropping {:?} on purpose (#{:?}, {:?}, {:?})",
+				info.peer_id, node_index, info.endpoint, info.client_version);
+			self.swarm.drop_node(&info.peer_id);
 		}
 	}
 
@@ -301,13 +320,21 @@ impl Service {
 		match self.index_by_id.entry(peer) {
 			Entry::Occupied(entry) => {
 				let id = *entry.get();
-				self.nodes_addresses.insert(id, (entry.key().clone(), endpoint));
+				self.nodes_info.insert(id, NodeInfo {
+					peer_id: entry.key().clone(),
+					endpoint,
+					client_version: None,
+				});
 				id
 			},
 			Entry::Vacant(entry) => {
 				let id = self.next_node_id;
 				self.next_node_id += 1;
-				self.nodes_addresses.insert(id, (entry.key().clone(), endpoint));
+				self.nodes_info.insert(id, NodeInfo {
+					peer_id: entry.key().clone(),
+					endpoint,
+					client_version: None,
+				});
 				entry.insert(id);
 				id
 			},
@@ -318,7 +345,7 @@ impl Service {
 	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent>, IoError> {
 		loop {
 			match self.swarm.poll() {
-				Ok(Async::Ready(Some(CustomProtosOut::CustomProtocolOpen { protocol_id, peer_id, version, endpoint }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { protocol_id, peer_id, version, endpoint }))) => {
 					debug!(target: "sub-libp2p", "Opened custom protocol with {:?}", peer_id);
 					let node_index = self.index_of_peer_or_assign(peer_id, endpoint);
 					break Ok(Async::Ready(Some(ServiceEvent::OpenedCustomProtocol {
@@ -327,7 +354,7 @@ impl Service {
 						version,
 					})))
 				}
-				Ok(Async::Ready(Some(CustomProtosOut::CustomProtocolClosed { protocol_id, peer_id, result }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolClosed { protocol_id, peer_id, result }))) => {
 					debug!(target: "sub-libp2p", "Custom protocol with {:?} closed: {:?}", peer_id, result);
 					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
 					break Ok(Async::Ready(Some(ServiceEvent::ClosedCustomProtocol {
@@ -335,13 +362,23 @@ impl Service {
 						protocol: protocol_id,
 					})))
 				}
-				Ok(Async::Ready(Some(CustomProtosOut::CustomMessage { protocol_id, peer_id, data }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomMessage { protocol_id, peer_id, data }))) => {
 					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
 					break Ok(Async::Ready(Some(ServiceEvent::CustomMessage {
 						node_index,
 						protocol_id,
 						data,
 					})))
+				}
+				Ok(Async::Ready(Some(BehaviourOut::Identified { peer_id, info }))) => {
+					// Contrary to the other events, this one can happen even on nodes which don't
+					// have any open custom protocol slot. Therefore it is not necessarily in the
+					// list.
+					if let Some(id) = self.index_by_id.get(&peer_id) {
+						self.nodes_info.get_mut(id)
+							.expect("index_by_id and nodes_info are always kept in sync; QED")
+							.client_version = Some(info.agent_version);
+					}
 				}
 				Ok(Async::NotReady) => break Ok(Async::NotReady),
 				Ok(Async::Ready(None)) => unreachable!("The Swarm stream never ends"),
