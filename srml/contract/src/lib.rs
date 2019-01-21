@@ -111,6 +111,16 @@ use runtime_io::{blake2_256, twox_128};
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 
+/// A function that generates an `AccountId` for a contract upon instantiation.
+pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
+	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
+}
+
+/// A function that returns the fee for dispatching a `Call`.
+pub trait ComputeDispatchFee<Call, Balance> {
+	fn compute_dispatch_fee(call: &Call) -> Balance;
+}
+
 pub trait Trait: balances::Trait {
 	// TODO: Review this.
 	/// The outer origin type.
@@ -119,18 +129,20 @@ pub trait Trait: balances::Trait {
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin>;
 
-	/// Function type to get the contract address given the creator.
-	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
+	/// The overarching event type.
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	// As<u32> is needed for wasm-utils
 	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Balance> + As<u64> + As<u32>;
 
-	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-}
+	/// A function type to get the contract address given the creator.
+	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
 
-pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
-	fn contract_address_for(code_hash: &CodeHash, data: &[u8], origin: &AccountId) -> AccountId;
+	/// A function type that computes the fee for dispatching the given `Call`.
+	///
+	/// It is recommended (though not required) for this function to return a fee that would be taken
+	/// by executive module for regular dispatch.
+	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
 }
 
 /// Simple contract address determintator.
@@ -140,7 +152,6 @@ pub trait ContractAddressFor<CodeHash, AccountId: Sized> {
 ///
 /// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
-
 impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
 	T::AccountId: From<T::Hash> + AsRef<[u8]>
@@ -154,6 +165,18 @@ where
 		buf.extend_from_slice(origin.as_ref());
 
 		T::Hashing::hash(&buf[..]).into()
+	}
+}
+
+/// The default dispatch fee computor computes the fee in the same way that
+/// implementation of `MakePayment` for balances module does.
+pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
+impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
+	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
+		let encoded_len = codec::Encode::encode(&call).len();
+		let base_fee = <balances::Module<T>>::transaction_base_fee();
+		let byte_fee = <balances::Module<T>>::transaction_byte_fee();
+		base_fee + byte_fee * <T::Balance as As<u64>>::sa(encoded_len as u64)
 	}
 }
 
@@ -292,6 +315,12 @@ decl_module! {
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
 			gas::refund_unused_gas::<T>(&origin, gas_meter);
+
+			// Dispatch every recorded call with an appropriate origin.
+			ctx.calls.into_iter().for_each(|(who, call)| {
+				let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
+				Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
+			});
 
 			result.map(|_| ())
 		}

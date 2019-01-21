@@ -16,11 +16,11 @@
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
 use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use gas::{GasMeter, Token};
+use gas::{GasMeter, Token, approx_gas_for_balance};
 
 use balances::{self, EnsureAccountLiquid};
 use rstd::prelude::*;
-use runtime_primitives::traits::{As, CheckedAdd, CheckedSub, Zero};
+use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -426,11 +426,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
 			TransferFeeKind::Transfer => metadata.transfer_fee,
 		};
-
-		let amount_in_gas: T::Balance = balance_fee / self.gas_price;
-		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
-
-		amount_in_gas
+		approx_gas_for_balance::<T>(self.gas_price, balance_fee)
 	}
 }
 

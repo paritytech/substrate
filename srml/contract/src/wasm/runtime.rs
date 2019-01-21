@@ -21,11 +21,11 @@ use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt,
 use rstd::prelude::*;
 use rstd::mem;
 use codec::{Decode, Encode};
-use gas::{GasMeter, Token, GasMeterResult};
+use gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use runtime_primitives::traits::{As, CheckedMul, Bounded};
 use sandbox;
 use system;
-use {Trait, CodeHash};
+use {Trait, CodeHash, ComputeDispatchFee};
 
 /// Enumerates all possible *special* trap conditions.
 ///
@@ -96,7 +96,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
-pub enum RuntimeToken {
+pub enum RuntimeToken<Gas> {
 	/// Explicit call to the `gas` function. Charge the gas meter
 	/// with the value provided.
 	Explicit(u32),
@@ -107,9 +107,11 @@ pub enum RuntimeToken {
 	/// The given number of bytes is read from the sandbox memory and
 	/// is returned as the return data buffer of the call.
 	ReturnData(u32),
+	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
+	ComputedDispatchFee(Gas),
 }
 
-impl<T: Trait> Token<T> for RuntimeToken {
+impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 	type Metadata = Schedule<T::Gas>;
 
 	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
@@ -125,6 +127,7 @@ impl<T: Trait> Token<T> for RuntimeToken {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+			ComputedDispatchFee(gas) => Some(gas),
 		};
 
 		value.unwrap_or_else(|| Bounded::max_value())
@@ -491,7 +494,13 @@ define_env!(Env, <E: Ext>,
 				.ok_or_else(|| sandbox::HostError)?
 		};
 
-		// TODO: Charge for the dispatch appropriately.
+		// Charge gas for dispatching this call.
+		let fee = {
+			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
+			approx_gas_for_balance::<<E as Ext>::T>(ctx.gas_meter.gas_price(), balance_fee)
+		};
+		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
+
 		ctx.ext.note_dispatch_call(call);
 
 		Ok(())

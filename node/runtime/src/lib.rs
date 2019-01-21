@@ -208,9 +208,10 @@ impl treasury::Trait for Runtime {
 impl contract::Trait for Runtime {
 	type Call = Call;
 	type Origin = Origin;
+	type Event = Event;
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
-	type Event = Event;
+	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
 }
 
 impl sudo::Trait for Runtime {

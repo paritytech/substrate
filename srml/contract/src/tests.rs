@@ -28,7 +28,7 @@ use substrate_primitives::{Blake2Hasher};
 use system::{ensure_signed, Phase, EventRecord};
 use wabt;
 use {
-	balances, runtime_io, system, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
+	balances, runtime_io, system, ComputeDispatchFee, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
 	Trait
 };
 
@@ -81,6 +81,7 @@ impl Trait for Test {
 	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
+	type ComputeDispatchFee = DummyComputeDispatchFee;
 }
 
 type Balances = balances::Module<Test>;
@@ -91,6 +92,13 @@ pub struct DummyContractAddressFor;
 impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 	fn contract_address_for(_code_hash: &H256, _data: &[u8], origin: &u64) -> u64 {
 		*origin + 1
+	}
+}
+
+pub struct DummyComputeDispatchFee;
+impl ComputeDispatchFee<Call, u64> for DummyComputeDispatchFee {
+	fn compute_dispatch_fee(call: &Call) -> u64 {
+		69
 	}
 }
 
