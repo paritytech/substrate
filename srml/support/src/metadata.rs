@@ -36,13 +36,6 @@ macro_rules! impl_runtime_metadata {
 		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata_old() -> $crate::metadata::RuntimeMetadataOld {
-				$crate::metadata::RuntimeMetadataOld {
-					outer_event: Self::outer_event_metadata(),
-					modules: __runtime_modules_to_metadata_old!($runtime;; $( $rest )*),
-					outer_dispatch: Self::outer_dispatch_metadata(),
-				}
-			}
 			pub fn metadata(version: u16) -> $crate::metadata::RuntimeMetadata {
 				let version = if version == 0 { $crate::metadata::RuntimeMetadataVersion::default() as u16 } else { version };
 				match version {
@@ -577,10 +570,10 @@ mod tests {
 
 	#[test]
 	fn runtime_metadata_old() {
-		let metadata_encoded = TestRuntime::metadata_old().encode();
-		let metadata_decoded = RuntimeMetadataOld::decode(&mut &metadata_encoded[..]);
+		let metadata_encoded = TestRuntime::metadata(42).encode();
+		let metadata_decoded = RuntimeMetadata::decode(&mut &metadata_encoded[..]);
 
-		assert_eq!(EXPECTED_METADATA_OLD, metadata_decoded.unwrap());
+		assert_eq!(RuntimeMetadata::Deprecated (EXPECTED_METADATA_OLD), metadata_decoded.unwrap());
 	}
 
 	#[test]
