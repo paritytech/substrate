@@ -342,6 +342,22 @@ mod tests {
 		};
 	}
 
+	prepare_test!(no_floats,
+		r#"
+		(module
+			(func (export "call")
+				(drop
+					(f32.add
+						(f32.const 0)
+						(f32.const 1)
+					)
+				)
+			)
+			(func (export "deploy"))
+		)"#,
+		Err("gas instrumentation failed")
+	);
+
 	mod memories {
 		use super::*;
 
