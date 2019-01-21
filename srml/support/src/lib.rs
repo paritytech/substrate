@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(feature = "std")]
-extern crate serde;
+pub extern crate serde;
 
 #[doc(hidden)]
 pub extern crate sr_std as rstd;
