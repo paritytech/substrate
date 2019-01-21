@@ -135,7 +135,8 @@ pub trait StartRPC<C: Components> {
 }
 
 impl<C: Components> StartRPC<Self> for C where
-	C::RuntimeApi: Metadata<ComponentBlock<C>>,
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: Metadata<ComponentBlock<C>>,
 {
 	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
 
@@ -189,10 +190,10 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
 ) -> error::Result<()> where
-	Api: TaggedTransactionQueue<Block>,
 	Block: BlockT<Hash = <Blake2Hasher as ::primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher>,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi<Api = Api>,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
 	Executor: client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
@@ -210,7 +211,7 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 			let parent_id = BlockId::hash(*block.block.header().parent_hash());
 			let mut tags = vec![];
 			for tx in block.block.extrinsics() {
-				let tx = client.runtime_api().validate_transaction(&parent_id, &tx)?;
+				let tx = client.runtime_api().validate_transaction(&parent_id, tx.clone())?;
 				match tx {
 					TransactionValidity::Valid { mut provides, .. } => {
 						tags.append(&mut provides);
@@ -230,8 +231,8 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 }
 
 impl<C: Components> MaintainTransactionPool<Self> for C where
-	ComponentClient<C>: ProvideRuntimeApi<Api = C::RuntimeApi>,
-	C::RuntimeApi: TaggedTransactionQueue<ComponentBlock<C>>,
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
 {
 	// TODO [ToDr] Optimize and re-use tags from the pool.
 	fn on_block_imported(

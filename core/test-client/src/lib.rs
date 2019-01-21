@@ -50,7 +50,12 @@ mod local_executor {
 	#![allow(missing_docs)]
 	use super::runtime;
 	// TODO: change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
-	native_executor_instance!(pub LocalExecutor, runtime::api::dispatch, runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(
+		pub LocalExecutor,
+		runtime::api::dispatch,
+		runtime::native_version,
+		include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm")
+	);
 }
 
 /// Native executor used for tests.
@@ -71,7 +76,9 @@ pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::Runti
 }
 
 /// Creates new test client instance that suports changes trie creation.
-pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
+pub fn new_with_changes_trie()
+	-> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi>
+{
 	new_with_backend(Arc::new(Backend::new()), true)
 }
 
@@ -80,9 +87,12 @@ pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Blo
 pub fn new_with_backend<B>(
 	backend: Arc<B>,
 	support_changes_trie: bool
-) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block, runtime::RuntimeApi>
-	where
-		B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+) -> client::Client<
+	B,
+	client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>,
+	runtime::Block,
+	runtime::RuntimeApi
+> where B: backend::LocalBackend<runtime::Block, Blake2Hasher>
 {
 	let executor = NativeExecutor::new();
 	client::new_with_backend(backend, executor, genesis_storage(support_changes_trie)).unwrap()

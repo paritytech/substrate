@@ -84,12 +84,12 @@ where
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
 		use crate::runtime_api::ApiExt;
-		
+
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
-		
+
 		self.api.map_api_result(|api| {
-			match api.apply_extrinsic(block_id, &xt)? {
+			match api.apply_extrinsic(block_id, xt.clone())? {
 				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
 					extrinsics.push(xt);
 					Ok(())
