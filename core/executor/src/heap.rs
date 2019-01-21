@@ -78,7 +78,7 @@ impl Heap {
 		}
 
 		let leaves = heap_size / BLOCK_SIZE;
-		let levels = Heap::get_tree_levels(leaves);
+		let levels = Heap::get_necessary_tree_levels(leaves);
 		let node_count: usize = (1 << levels + 1) - 1;
 
 		Heap {
@@ -109,7 +109,7 @@ impl Heap {
 	}
 
 	fn allocate_block_in_tree(&mut self, blocks_needed: u32) -> Option<usize> {
-		let levels_needed = Heap::get_tree_levels(blocks_needed);
+		let levels_needed = Heap::get_necessary_tree_levels(blocks_needed);
 		if levels_needed > self.levels {
 			trace!(target: "wasm-heap", "Heap is too small: {:?} > {:?}", levels_needed, self.levels);
 			return None;
@@ -212,7 +212,7 @@ impl Heap {
 	}
 
 	fn free(&mut self, block_offset: u32, count_blocks: u32) {
-		let requested_level = Heap::get_tree_levels(count_blocks);
+		let requested_level = Heap::get_necessary_tree_levels(count_blocks);
 		let current_level_offset = (1 << self.levels - requested_level) - 1;
 		let level_offset = block_offset / (1 << requested_level);
 		let index_offset = current_level_offset + level_offset;
@@ -274,7 +274,7 @@ impl Heap {
 		self.update_parent_nodes(parent);
 	}
 
-	fn get_tree_levels(count_blocks: u32) -> u32 {
+	fn get_necessary_tree_levels(count_blocks: u32) -> u32 {
 		if count_blocks == 0 {
 			0
 		} else {
@@ -443,30 +443,30 @@ mod tests {
 	#[test]
 	fn should_calculate_zero_tree_levels_for_zero_blocks() {
 		let count_blocks = 0;
-		let levels = Heap::get_tree_levels(count_blocks);
+		let levels = Heap::get_necessary_tree_levels(count_blocks);
 		assert_eq!(levels, 0);
 	}
 
 	#[test]
 	fn should_calculate_necessary_tree_levels_correctly() {
 		let count_blocks = 1;
-		let levels = Heap::get_tree_levels(count_blocks);
+		let levels = Heap::get_necessary_tree_levels(count_blocks);
 		assert_eq!(levels, 0);
 
 		let count_blocks = 2;
-		let levels = Heap::get_tree_levels(count_blocks);
+		let levels = Heap::get_necessary_tree_levels(count_blocks);
 		assert_eq!(levels, 1);
 
 		let count_blocks = 3;
-		let levels = Heap::get_tree_levels(count_blocks);
+		let levels = Heap::get_necessary_tree_levels(count_blocks);
 		assert_eq!(levels, 2);
 
 		let count_blocks = 4;
-		let levels = Heap::get_tree_levels(count_blocks);
+		let levels = Heap::get_necessary_tree_levels(count_blocks);
 		assert_eq!(levels, 2);
 
 		let count_blocks = 5;
-		let levels = Heap::get_tree_levels(count_blocks);
+		let levels = Heap::get_necessary_tree_levels(count_blocks);
 		assert_eq!(levels, 3);
 	}
 
