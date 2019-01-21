@@ -202,6 +202,9 @@ define_env!(Env, <E: Ext>,
 
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
+	// NOTE: This is a implementation defined call and is NOT a part of the public API.
+	// This call is supposed to be called only by instrumentation injected code.
+	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
 		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::Explicit(amount))?;

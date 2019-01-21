@@ -63,6 +63,7 @@ mod wasm_executor;
 #[macro_use]
 mod native_executor;
 mod sandbox;
+mod heap;
 
 pub mod error;
 pub use wasm_executor::WasmExecutor;
