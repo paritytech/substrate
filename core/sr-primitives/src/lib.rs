@@ -531,7 +531,7 @@ impl BasicInherentData {
 
 //TODO: https://github.com/paritytech/substrate/issues/1022
 /// Error type used while checking inherents.
-#[derive(Encode)]
+#[derive(Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode))]
 pub enum CheckInherentError {
 	/// The inherents are generally valid but a delay until the given timestamp

@@ -30,15 +30,16 @@ extern crate substrate_trie;
 
 extern crate parking_lot;
 extern crate heapsize;
-#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
+#[cfg_attr(test, macro_use)]
+extern crate substrate_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate substrate_trie as trie;
 
-use std::fmt;
+use std::{fmt, panic::UnwindSafe};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use codec::Decode;
-use primitives::storage::well_known_keys;
+use codec::{Decode, Encode};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
 
 pub mod backend;
 mod changes_trie;
@@ -171,13 +172,14 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<E: Externalities<H>>(
+	fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
 		&self,
 		ext: &mut E,
 		method: &str,
 		data: &[u8],
-		use_native: bool
-	) -> (Result<Vec<u8>, Self::Error>, bool);
+		use_native: bool,
+		native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>, Self::Error>, bool);
 }
 
 /// Strategy for executing a call into the runtime.
@@ -213,12 +215,26 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn native_when_possible<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+pub fn native_when_possible<E, R: Decode>() ->
+	ExecutionManager<
+		fn(
+			Result<NativeOrEncoded<R>, E>,
+			Result<NativeOrEncoded<R>, E>
+		) -> Result<NativeOrEncoded<R>, E>
+	>
+{
 	ExecutionManager::NativeWhenPossible
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn always_wasm<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+pub fn always_wasm<E, R: Decode>() ->
+	ExecutionManager<
+		fn(
+			Result<NativeOrEncoded<R>, E>,
+			Result<NativeOrEncoded<R>, E>
+		) -> Result<NativeOrEncoded<R>, E>
+	>
+{
 	ExecutionManager::AlwaysWasm
 }
 
@@ -246,7 +262,9 @@ where
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	execute_using_consensus_failure_handler(
+	// We are not giving a native call and thus we are sure that the result can never be a native
+	// value.
+	execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
 		backend,
 		changes_trie_storage,
 		overlay,
@@ -257,14 +275,19 @@ where
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, native_result);
+				warn!(
+					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
+					wasm_result,
+					native_result
+				);
 				wasm_result
 			}),
 		},
 		true,
+		None,
 	)
 	.map(|(result, storage_tx, changes_tx)| (
-		result,
+		result.into_encoded(),
 		storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
 		changes_tx,
 	))
@@ -278,7 +301,9 @@ where
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
+pub fn execute_using_consensus_failure_handler<
+	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> R + UnwindSafe
+>(
 	backend: &B,
 	changes_trie_storage: Option<&T>,
 	overlay: &mut OverlayedChanges,
@@ -287,14 +312,18 @@ pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
 	compute_tx: bool,
-) -> Result<(Vec<u8>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
+	mut native_call: Option<NC>,
+) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
-	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
+	Handler: FnOnce(
+		Result<NativeOrEncoded<R>, Exec::Error>,
+		Result<NativeOrEncoded<R>, Exec::Error>
+	) -> Result<NativeOrEncoded<R>, Exec::Error>
 {
 	let strategy: ExecutionStrategy = (&manager).into();
 
@@ -325,6 +354,7 @@ where
 					call_data,
 					// attempt to run native first, if we're not directed to run wasm only
 					strategy != ExecutionStrategy::AlwaysWasm,
+					native_call.take(),
 				);
 				let (storage_delta, changes_delta) = if compute_tx {
 					let (storage_delta, changes_delta) = externalities.transaction();
@@ -351,6 +381,7 @@ where
 						method,
 						call_data,
 						false,
+						native_call,
 					);
 					let (storage_delta, changes_delta) = if compute_tx {
 						let (storage_delta, changes_delta) = externalities.transaction();
@@ -363,9 +394,9 @@ where
 				(result, storage_delta, changes_delta)
 			};
 
-			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
-				|| (result.is_err() && wasm_result.is_err())
-			{
+			if (result.is_ok() && wasm_result.is_ok()
+				&& result.as_ref().ok() == wasm_result.as_ref().ok())
+				|| result.is_err() && wasm_result.is_err() {
 				(result, storage_delta, changes_delta)
 			} else {
 				// Consensus error.
@@ -427,7 +458,9 @@ where
 	H::Out: Ord + HeapSizeOf,
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, _, _) = execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
+	let (result, _, _) = execute_using_consensus_failure_handler::
+		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> NeverNativeValue>
+	(
 		&proving_backend,
 		None,
 		overlay,
@@ -436,9 +469,10 @@ where
 		call_data,
 		native_when_possible(),
 		false,
+		None,
 	)?;
 	let proof = proving_backend.extract_proof();
-	Ok((result, proof))
+	Ok((result.into_encoded(), proof))
 }
 
 /// Check execution proof, generated by `prove_execution` call.
@@ -472,7 +506,9 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	execute_using_consensus_failure_handler::<H, _, changes_trie::InMemoryStorage<H>, _, _>(
+	execute_using_consensus_failure_handler::
+		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> NeverNativeValue>
+	(
 		trie_backend,
 		None,
 		overlay,
@@ -481,7 +517,8 @@ where
 		call_data,
 		native_when_possible(),
 		false,
-	).map(|(result, _, _)| result)
+		None,
+	).map(|(result, _, _)| result.into_encoded())
 }
 
 /// Generate storage read proof.
@@ -588,7 +625,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::{Blake2Hasher};
+	use primitives::Blake2Hasher;
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -600,24 +637,41 @@ mod tests {
 	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities<H>>(
+		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
 			&self,
 			ext: &mut E,
 			_method: &str,
 			_data: &[u8],
-			use_native: bool
-		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			use_native: bool,
+			_native_call: Option<NC>,
+		) -> (Result<NativeOrEncoded<R>, Self::Error>, bool) {
 			if self.change_changes_trie_config {
-				ext.place_storage(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), Some(ChangesTrieConfig {
-					digest_interval: 777,
-					digest_levels: 333,
-				}.encode()));
+				ext.place_storage(
+					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+					Some(
+						ChangesTrieConfig {
+							digest_interval: 777,
+							digest_levels: 333,
+						}.encode()
+					)
+				);
 			}
 
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _) | (false, _, true) =>
-					(Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]]), using_native),
+				(true, true, _) | (false, _, true) => {
+					(
+						Ok(
+							NativeOrEncoded::Encoded(
+								vec![
+									ext.storage(b"value1").unwrap()[0] +
+									ext.storage(b"value2").unwrap()[0]
+								]
+							)
+						),
+						using_native
+					)
+				},
 				_ => (Err(0), using_native),
 			}
 		}
@@ -646,7 +700,7 @@ mod tests {
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
 		let mut consensus_failed = false;
-		assert!(execute_using_consensus_failure_handler(
+		assert!(execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -664,6 +718,7 @@ mod tests {
 				we
 			}),
 			true,
+			None,
 		).is_err());
 		assert!(consensus_failed);
 	}

@@ -26,7 +26,7 @@ use keyring::Keyring;
 use client::{
 	BlockchainEvents, error::Result,
 	blockchain::Backend as BlockchainBackend,
-	runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallRuntimeAt},
+	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
@@ -265,7 +265,7 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn execute_block(&self, _: &BlockId<Block>, _: &Block) -> Result<()> {
+	fn execute_block(&self, _: &BlockId<Block>, _: Block) -> Result<()> {
 		unimplemented!("Not required for testing!")
 	}
 
@@ -287,12 +287,6 @@ impl ApiExt<Block> for RuntimeApi {
 	}
 
 	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, _: &BlockId<Block>) -> Result<bool> {
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl ConstructRuntimeApi<Block> for RuntimeApi {
-	fn construct_runtime_api<'a, T: CallRuntimeAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
 		unimplemented!("Not required for testing!")
 	}
 }
