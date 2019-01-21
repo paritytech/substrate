@@ -32,7 +32,7 @@ use runtime::{self, Transfer};
 use runtime_primitives::generic::BlockId;
 
 /// helper to test the `leaves` implementation for various backends
-pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
+pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	// block tree:
@@ -145,7 +145,7 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 }
 
 
-pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
+pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B>) where
 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	// block tree:

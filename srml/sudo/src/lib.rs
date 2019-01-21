@@ -32,14 +32,13 @@ extern crate parity_codec as codec;
 extern crate srml_support as support;
 
 extern crate srml_system as system;
-extern crate srml_consensus as consensus;
 
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
 use support::{StorageValue, Parameter, Dispatchable};
 use system::ensure_signed;
 
-pub trait Trait: consensus::Trait + system::Trait {
+pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 

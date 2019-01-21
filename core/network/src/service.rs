@@ -94,6 +94,10 @@ impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
 
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		self.with_sync(|sync, protocol| sync.request_justification(hash, number, protocol))
+	}
+
 	fn maintain_sync(&self) {
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}
@@ -172,6 +176,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 	/// Called when a new block is imported by the client.
 	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
 		self.handler.on_block_imported(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
+	}
+
+	/// Called when a new block is finalized by the client.
+	pub fn on_block_finalized(&self, hash: B::Hash, header: &B::Header) {
+		self.handler.on_block_finalized(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
 	}
 
 	/// Called when new transactons are imported by the client.

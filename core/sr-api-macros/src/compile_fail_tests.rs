@@ -92,24 +92,6 @@ mod adding_at_parameter {
 	*/
 }
 
-mod adding_parameter_with_type_reference {
-	/*!
-	```compile_fail
-		#[macro_use]
-		extern crate substrate_client;
-		extern crate sr_primitives as runtime_primitives;
-
-		decl_runtime_apis! {
-			pub trait Api {
-				fn test(data: &u64);
-			}
-		}
-
-		fn main() {}
-	```
-	*/
-}
-
 mod invalid_api_version {
 	/*!
 	```compile_fail

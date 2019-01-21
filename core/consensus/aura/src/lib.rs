@@ -492,12 +492,12 @@ impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, 
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
 					let inherent = (self.make_inherent)(timestamp_now, slot_num);
-					let block = Block::new(pre_header.clone(), inner_body);
+					let block: B = Block::new(pre_header.clone(), inner_body);
 
 					let inherent_res = self.client.runtime_api().check_inherents(
 						&BlockId::Hash(parent_hash),
-						&block,
-						&inherent,
+						block.clone(),
+						inherent,
 					).map_err(|e| format!("{:?}", e))?;
 
 					match inherent_res {

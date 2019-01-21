@@ -30,7 +30,7 @@ use client::block_builder::BlockBuilder;
 use primitives::Ed25519AuthorityId;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Zero, Header, Digest, DigestItem, AuthorityIdFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor, Zero};
 use io::SyncIo;
 use protocol::{Context, Protocol, ProtocolContext};
 use config::ProtocolConfig;
@@ -189,6 +189,15 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		self.link.call(origin, blocks);
+	}
+
+	fn import_justification(
+		&self,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		justification: Justification,
+	) -> bool {
+		self.block_import.import_justification(hash, number, justification).is_ok()
 	}
 }
 
@@ -366,6 +375,13 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
 	}
 
+	/// Send block finalization notifications.
+	pub fn send_finality_notifications(&self) {
+		let info = self.client.info().expect("In-mem client does not fail");
+		let header = self.client.header(&BlockId::Hash(info.chain.finalized_hash)).unwrap().unwrap();
+		self.sync.on_block_finalized(&mut TestIo::new(&self.queue, None), info.chain.finalized_hash, &header);
+	}
+
 	/// Restart sync for a peer.
 	fn restart_sync(&self) {
 		self.sync.abort();
@@ -378,6 +394,14 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>, broadcast: bool) {
 		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
+	}
+
+	/// Request a justification for the given block.
+	#[cfg(test)]
+	fn request_justification(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
+		self.executor.execute_in_context(|context| {
+			self.sync.sync().write().request_justification(hash, number, context);
+		})
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -597,6 +621,15 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				peer.send_import_notifications();
+			}
+		})
+	}
+
+	/// Send block finalization notifications for all peers.
+	fn send_finality_notifications(&mut self) {
+		self.mut_peers(|peers| {
+			for peer in peers {
+				peer.send_finality_notifications();
 			}
 		})
 	}

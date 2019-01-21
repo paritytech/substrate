@@ -16,25 +16,29 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
+use primitives::NativeOrEncoded;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
+use consensus::{
+	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
+	BlockOrigin, ForkChoiceStrategy
+};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
 use runtime_primitives::BuildStorage;
-use crate::runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
+use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
+use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::Decode;
+use codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
@@ -566,7 +570,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self
 	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block, InherentData>
+		RA: Send + Sync,
+		Self: ProvideRuntimeApi,
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block, InherentData>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
@@ -576,7 +582,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self, parent: &BlockId<Block>
 	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block, InherentData>
+		RA: Send + Sync,
+		Self: ProvideRuntimeApi,
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block, InherentData>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
@@ -727,7 +735,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let (storage_update, changes_update, storage_changes) = match operation.op.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let r = self.executor.call_at_state(
+				let r = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
@@ -750,6 +758,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							wasm_result
 						}),
 					},
+					None,
 				);
 				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
@@ -817,7 +826,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// find tree route from last finalized to given block.
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 
-		if block == last_finalized { return Ok(()) }
+		if block == last_finalized {
+			warn!("Possible safety violation: attempted to re-finalize last finalized block {:?} ", last_finalized);
+			return Ok(());
+		}
+
 		let route_from_finalized = crate::blockchain::tree_route(
 			self.backend.blockchain(),
 			BlockId::Hash(last_finalized),
@@ -1177,30 +1190,29 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: CoreAPI<Block>
+	RA: ConstructRuntimeApi<Block, Self>
 {
-	type Api = RA;
+	type Api = <RA as ConstructRuntimeApi<Block, Self>>::RuntimeApi;
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		Self::Api::construct_runtime_api(self)
+		RA::construct_runtime_api(self)
 	}
 }
 
 impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
-	Block: BlockT<Hash=H256>,
-	RA: CoreAPI<Block>, // not strictly necessary at the moment
-						// but we want to bound to make sure the API is actually available.
+	Block: BlockT<Hash=H256>
 {
-	fn call_api_at(
+	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
-	) -> error::Result<Vec<u8>> {
+		native_call: Option<NC>,
+	) -> error::Result<NativeOrEncoded<R>> {
 		let execution_manager = match self.api_execution_strategy {
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
@@ -1213,8 +1225,16 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			}),
 		};
 
-		self.executor.contextual_call(at, function, &args, changes, initialised_block,
-			|| self.prepare_environment_block(at), execution_manager)
+		self.executor.contextual_call(
+			at,
+			function,
+			&args,
+			changes,
+			initialised_block,
+			|| self.prepare_environment_block(at),
+			execution_manager,
+			native_call,
+		)
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {
@@ -1240,6 +1260,19 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_authorities)
 		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+	}
+
+	/// Import a block justification and finalize the block. The justification
+	/// isn't interpreted by the client and is assumed to have been validated
+	/// previously. The block is finalized unconditionally.
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		_number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
 	}
 }
 
@@ -1363,7 +1396,7 @@ pub(crate) mod tests {
 	use consensus::BlockOrigin;
 	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
 	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
+	use test_client::runtime::{self, Block, Transfer, RuntimeApi, TestAPI};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -1445,14 +1478,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Alice.to_raw_public().into()
+				Keyring::Alice.to_raw_public().into()
 			).unwrap(),
 			1000
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Ferdie.to_raw_public().into()
+				Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
 		);
@@ -1512,14 +1545,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Alice.to_raw_public().into()
+				Keyring::Alice.to_raw_public().into()
 			).unwrap(),
 			958
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Ferdie.to_raw_public().into()
+				Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			42
 		);

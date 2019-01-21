@@ -202,6 +202,9 @@ define_env!(Env, <E: Ext>,
 
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
+	// NOTE: This is a implementation defined call and is NOT a part of the public API.
+	// This call is supposed to be called only by instrumentation injected code.
+	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
 		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::Explicit(amount))?;
@@ -444,6 +447,38 @@ define_env!(Env, <E: Ext>,
 	// Stores the address of the current contract into the scratch buffer.
 	ext_address(ctx) => {
 		ctx.scratch_buf = ctx.ext.address().encode();
+		Ok(())
+	},
+
+	// Stores the gas price for the current transaction into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_gas_price(ctx) => {
+		ctx.scratch_buf = ctx.gas_meter.gas_price().encode();
+		Ok(())
+	},
+
+	// Stores the amount of gas left into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_gas_left(ctx) => {
+		ctx.scratch_buf = ctx.gas_meter.gas_left().encode();
+		Ok(())
+	},
+
+	// Stores the balance of the current account into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_balance(ctx) => {
+		ctx.scratch_buf = ctx.ext.balance().encode();
+		Ok(())
+	},
+
+	// Stores the value transferred along with this call or as endowment into the scratch buffer.
+	//
+	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
+	ext_value_transferred(ctx) => {
+		ctx.scratch_buf = ctx.ext.value_transferred().encode();
 		Ok(())
 	},
 

@@ -19,7 +19,6 @@ use super::*;
 use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
 use network::config::Roles;
 use test_client::runtime::Block;
-use primitives::H256;
 
 #[derive(Default)]
 struct Status {
