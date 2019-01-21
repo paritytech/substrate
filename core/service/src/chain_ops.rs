@@ -155,7 +155,7 @@ pub fn revert_chain<F>(config: FactoryFullConfiguration<F>, blocks: FactoryBlock
 	let reverted = client.revert(blocks)?;
 	let info = client.info()?.chain;
 	
-	if reverted.as_() <= 0 {
+	if reverted.as_() == 0 {
 		info!("There isn't non finalized blocks to revert.");
 	} else {
 		if reverted < blocks {
