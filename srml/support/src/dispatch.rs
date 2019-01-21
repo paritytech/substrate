@@ -481,8 +481,6 @@ macro_rules! decl_module {
 				$origin_type;
 				$from;
 				$fn_vis fn $fn_name (
-					// TODO: do we allow those meta here probbly not but so we have to enforce that
-					// meta are only for us, so it doesn't just disappear for user
 					$from $(, $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
 			}
@@ -584,7 +582,6 @@ macro_rules! decl_module {
 				if let $call_type::__OtherPhantomItem(_) = *self { unreachable!() }
 			}
 		}
-		// TODO: do we need to change this also ?
 		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance>
 		{
@@ -611,13 +608,11 @@ macro_rules! decl_module {
 			type Call = $call_type<$trait_instance>;
 		}
 
-		// TODO: seems ok but not sure
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
 				d.dispatch(origin)
 			}
 		}
-		// TODO: what is it ? understand and do as such
 		__dispatch_impl_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
 			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*); )*}
