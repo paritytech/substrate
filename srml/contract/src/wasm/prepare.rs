@@ -448,7 +448,7 @@ mod tests {
 
 		// even though gas is defined the contract can't import it since
 		// it is an implementation defined.
-		prepare_test!(can_import_gas_function,
+		prepare_test!(can_not_import_gas_function,
 			r#"
 			(module
 				(import "env" "gas" (func (param i32)))
