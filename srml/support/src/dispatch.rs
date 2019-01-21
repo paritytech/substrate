@@ -1041,7 +1041,7 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
 			fn aux_0(_origin) -> Result { unreachable!() }
-			fn aux_1(_origin, _data: i32) -> Result { unreachable!() }
+			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
@@ -1067,7 +1067,7 @@ mod tests {
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
 							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
+							ty: DecodeDifferent::Encode("Compact<u32>")
 						}
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
