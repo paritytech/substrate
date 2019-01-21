@@ -3000,6 +3000,7 @@ dependencies = [
 name = "sr-version"
 version = "0.1.0"
 dependencies = [
+ "impl-serde 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
