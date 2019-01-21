@@ -69,7 +69,7 @@ build_rpc_trait! {
 
 		/// Returns the runtime metadata as an opaque blob.
 		#[rpc(name = "state_getMetadata")]
-		fn metadata(&self, Trailing<u16>) -> Result<Bytes>;
+		fn metadata(&self, Trailing<Hash>) -> Result<Bytes>;
 
 		/// Get the runtime version.
 		#[rpc(name = "state_getRuntimeVersion", alias = ["chain_getRuntimeVersion", ])]
@@ -173,10 +173,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn metadata(&self, version: Trailing<u16>) -> Result<Bytes> {
-    let version = version.unwrap_or_default();
-		let block = self.client.info()?.chain.best_hash;
-		self.client.runtime_api().metadata(&BlockId::Hash(block), &version).map(Into::into).map_err(Into::into)
+	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
+		let block = self.unwrap_or_best(block)?;
+		self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into).map_err(Into::into)
 	}
 
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {

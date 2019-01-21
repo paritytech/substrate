@@ -144,7 +144,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-	    { $( $deposit_event:tt )* }
+			{ $( $deposit_event:tt )* }
 		{}
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -776,8 +776,8 @@ macro_rules! __impl_outer_dispatch_metadata {
 				$crate::dispatch::OuterDispatchMetadata {
 					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($outer_name)),
 					calls: $crate::dispatch::DecodeDifferent::Encode(
-            __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*)
-          ),
+						__impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*)
+					),
 				}
 			}
 			pub fn module_dispatch(mod_name: &'static str) -> Option<$crate::dispatch::OuterDispatchCall> {
@@ -827,7 +827,7 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-      pub fn call_module() -> $crate::dispatch::CallMetadata {
+			pub fn call_module() -> $crate::dispatch::CallMetadata {
 				__call_to_metadata!($($rest)*)
 			}
 			pub fn metadata() -> $crate::dispatch::ModuleMetadata {

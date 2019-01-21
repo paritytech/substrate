@@ -277,8 +277,8 @@ impl_runtime_apis! {
 	}
 
 	impl client_api::Metadata<Block> for Runtime {
-		fn metadata(version: u16) -> OpaqueMetadata {
-			Runtime::metadata(version).into()
+		fn metadata() -> OpaqueMetadata {
+			Runtime::metadata().into()
 		}
 	}
 

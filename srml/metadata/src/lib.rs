@@ -236,13 +236,6 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncodeModule<E> {
 
 type DFn<T> = DecodeDifferent<FnEncode<T>, T>;
 
-fn dfn_eval<T: Encode + 'static>(input: DFn<T>) -> T {
-	match input {
-		DecodeDifferent::Encode(dfn) => dfn.0(),
-		DecodeDifferent::Decoded(t) => t, 
-	}
-}
-
 /// All the metadata about an outer event.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -363,24 +356,6 @@ pub struct OuterDispatchCall {
 	pub index: u16,
 }
 
-/// All metadata about an runtime module.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeModuleMetadata {
-	pub prefix: DecodeDifferentStr,
-	pub module: DFn<ModuleMetadata>,
-	pub storage: Option<DFn<StorageMetadata>>,
-}
-
-/// The metadata of a runtime.
-#[derive(Eq, Encode, PartialEq)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataOld {
-	pub outer_event: OuterEventMetadata,
-	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
-	pub outer_dispatch: OuterDispatchMetadata,
-}
-
 /// The metadata of a runtime.
 /// It is prefixed by a version ID encoded/decoded through
 /// the enum nature of `RuntimeMetadata`.
@@ -389,7 +364,6 @@ pub struct RuntimeMetadataOld {
 pub enum RuntimeMetadata {
 	None,
 	V1(RuntimeMetadataV1),
-	Deprecated(RuntimeMetadataOld),
 }
 
 /// Version only runtime metadata enum.
@@ -397,7 +371,6 @@ pub enum RuntimeMetadata {
 pub enum RuntimeMetadataVersion {
 	None = 0,
 	V1 = 1,
-  Deprecated = 42,
 }
 
 /// used as latest
@@ -411,41 +384,19 @@ impl Default for RuntimeMetadataVersion {
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV1 {
-	pub modules: DecodeDifferentArray<RuntimeModuleMetadataV1>,
+	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
 }
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeModuleMetadataV1 {
+pub struct RuntimeModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferentStr,
 	pub storage: Option<DFn<StorageMetadata>>,
 	pub call: DFn<CallMetadata>,
 	pub outer_dispatch: DecodeDifferent<FnEncodeModule<Option<OuterDispatchCall>>, Option<OuterDispatchCall>>,
 	pub event: DecodeDifferent<FnEncodeModule<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
-}
-
-/// A Call from the outer dispatch.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct OuterDispatchCallV1 {
-	pub index: u16,
-	pub name: DecodeDifferentStr,
-}
-
-/// All metadata about the outer dispatch.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct OuterDispatchMetadataV1 {
-	pub name: DecodeDifferentStr,
-	pub calls: DecodeDifferentArray<OuterDispatchCallV1>,
-}
-
-impl Into<primitives::OpaqueMetadata> for RuntimeMetadataOld {
-	fn into(self) -> primitives::OpaqueMetadata {
-		primitives::OpaqueMetadata::new(self.encode())
-	}
 }
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {
