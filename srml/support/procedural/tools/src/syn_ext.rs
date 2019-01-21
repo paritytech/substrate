@@ -386,37 +386,5 @@ fn heuristic_is_associated_path(path: &syn::Path,t: &syn::Ident) -> bool {
 	} else {
 		false
 	}
+
 }
-/*
-// bad heuristic to check if associated path: returns true if any two last uppercase items
-// without constraint on last one.
-fn heuristic_is_associated_path(path: &syn::Path) -> bool {
-
-	let size = path.segments.len();
-	if size > 1 {
-		for (ix, p) in path.segments.iter().enumerate() {
-			if ix == size - 2 {
-				let ident = p.ident.to_string();
-				if let Some(c) = ident.chars().next() {
-					if !c.is_uppercase() {
-						break;
-					}
-				}
-			}
-			if ix == size - 1 {
-				let ident = p.ident.to_string();
-				if let Some(c) = ident.chars().next() {
-					if !c.is_uppercase() {
-						break;
-					}
-					// no args on associated typ
-					if let syn::PathArguments::None = p.arguments {
-						return true;
-					}
-				}
-			}
-		}
-	}
-	false
-
-}*/
