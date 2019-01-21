@@ -36,7 +36,7 @@ pub type InherentIdentifier = [u8; 8];
 /// Inherent data to include in a block.
 pub struct InherentData {
 	/// All inherent data encoded with parity-codec and an identifier.
-	data: BTreeMap<[u8; 8], Vec<u8>>
+	data: BTreeMap<InherentIdentifier, Vec<u8>>
 }
 
 impl InherentData {
@@ -227,7 +227,7 @@ impl InherentDataProviders {
 		&self, provider: P
 	) -> Result<(), RuntimeString> {
 		if self.has_provider(&provider.inherent_identifier()) {
-			Err("Inherent data provider with same identifier already exists!".into())
+			Err(format("Inherent data provider with identifier {} already exists!", &provider.inherent_identifier()).into())
 		} else {
 			provider.on_register(self)?;
 			self.providers.write().push(Box::new(provider));

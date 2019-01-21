@@ -315,7 +315,8 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		};
 
 		let expected =
-			match data.get_data::<<T::InherentOfflineReport as InherentOfflineReport>::Inherent>(
+let expected = data.get_data::<<T::InherentOfflineReport as InherentOfflineReport>::Inherent(&INHERENT_IDENTIFIER)?
+    .ok_or(Err(RuntimeString::from("No `offline_report` found in the inherent data!"))?;
 				&INHERENT_IDENTIFIER
 			)? {
 				Some(expected) => expected,
