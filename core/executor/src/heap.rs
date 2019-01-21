@@ -274,15 +274,16 @@ impl Heap {
 		self.update_parent_nodes(parent);
 	}
 
-	fn get_tree_levels(mut count_blocks: u32) -> u32 {
+	fn get_tree_levels(count_blocks: u32) -> u32 {
 		if count_blocks == 0 {
-				0
+			0
 		} else {
-				let mut counter = 0;
-				while {count_blocks >>= 1; count_blocks > 0} {
-						counter += 1;
-				}
-				counter
+			let mut necessary_levels = 0;
+			let mut necessary_blocks = count_blocks.next_power_of_two();
+			while {necessary_blocks >>= 1; necessary_blocks > 0} {
+				necessary_levels += 1;
+			}
+			necessary_levels
 		}
 	}
 
@@ -375,6 +376,98 @@ mod tests {
 		}
 
 		assert_eq!(heap.total_size, 0);
+	}
+
+	#[test]
+	fn should_allocate_exactly_entire_tree() {
+		let blocks = 16;
+		let heap_size = BLOCK_SIZE * blocks;
+		let mut heap = super::Heap::new(0, heap_size);
+
+		for i in 0..16 {
+			let ptr = heap.allocate(BLOCK_SIZE);
+			assert_eq!(ptr, i * BLOCK_SIZE);
+			assert_eq!(heap.total_size, (i+1) * BLOCK_SIZE);
+		}
+
+		let ptr = heap.allocate(BLOCK_SIZE);
+		assert_eq!(ptr, 0);
+	}
+
+	#[test]
+	fn should_deallocate_entire_tree_exactly() {
+		let blocks = 12;
+		let heap_size = BLOCK_SIZE * blocks;
+		let mut heap = super::Heap::new(0, heap_size);
+		for i in 0..blocks {
+			let ptr = heap.allocate(BLOCK_SIZE);
+			assert_eq!(ptr, i * BLOCK_SIZE);
+			assert_eq!(heap.total_size, (i+1) * BLOCK_SIZE);
+		}
+
+		for i in 0..blocks {
+			let ptr = i * BLOCK_SIZE;
+			heap.deallocate(ptr);
+			assert_eq!(heap.total_size, blocks * BLOCK_SIZE - (i+1) * BLOCK_SIZE);
+		}
+
+		assert_eq!(heap.total_size, 0);
+	}
+
+	#[test]
+	fn should_allocate_pointers_with_odd_blocks_properly() {
+		let blocks = 6;
+		let heap_size = BLOCK_SIZE * blocks;
+		let mut heap = super::Heap::new(0, heap_size);
+
+		let ptr = heap.allocate(3 * BLOCK_SIZE);
+		assert_eq!(ptr, 0);
+
+		let ptr = heap.allocate(BLOCK_SIZE);
+		assert_eq!(ptr, 4 * BLOCK_SIZE);
+	}
+
+	#[test]
+	fn should_handle_odd_blocks_properly() {
+		let blocks = 8;
+		let heap_size = BLOCK_SIZE * blocks;
+		let mut heap = super::Heap::new(0, heap_size);
+
+		let ptr = heap.allocate(3 * BLOCK_SIZE);
+		assert_eq!(ptr, 0);
+
+		let ptr = heap.allocate(3 * BLOCK_SIZE);
+		assert_eq!(ptr, 4 * BLOCK_SIZE);
+	}
+
+	#[test]
+	fn should_calculate_zero_tree_levels_for_zero_blocks() {
+		let count_blocks = 0;
+		let levels = Heap::get_tree_levels(count_blocks);
+		assert_eq!(levels, 0);
+	}
+
+	#[test]
+	fn should_calculate_necessary_tree_levels_correctly() {
+		let count_blocks = 1;
+		let levels = Heap::get_tree_levels(count_blocks);
+		assert_eq!(levels, 0);
+
+		let count_blocks = 2;
+		let levels = Heap::get_tree_levels(count_blocks);
+		assert_eq!(levels, 1);
+
+		let count_blocks = 3;
+		let levels = Heap::get_tree_levels(count_blocks);
+		assert_eq!(levels, 2);
+
+		let count_blocks = 4;
+		let levels = Heap::get_tree_levels(count_blocks);
+		assert_eq!(levels, 2);
+
+		let count_blocks = 5;
+		let levels = Heap::get_tree_levels(count_blocks);
+		assert_eq!(levels, 3);
 	}
 
 }
