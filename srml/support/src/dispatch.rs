@@ -1120,4 +1120,11 @@ mod tests {
 		let metadata = Module::<TraitImpl>::metadata();
 		assert_eq!(EXPECTED_METADATA, metadata);
 	}
+
+	#[test]
+	fn compact_attr() {
+		let call: Call<TraitImpl> = Call::aux_1(0);
+		let encoded = call.encode();
+		assert_eq!(encoded.len(), 2);
+	}
 }
