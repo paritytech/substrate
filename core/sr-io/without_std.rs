@@ -132,9 +132,10 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
-			ext_free(ptr);
-			Some(ret)
+			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+			// See #300 for more details.
+			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
 		}
 	}
 }
@@ -147,9 +148,10 @@ pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
-			ext_free(ptr);
-			Some(ret)
+			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
+			// We don't allocate via String/Vec<T>, but use a custom allocator instead.
+			// See #300 for more details.
+			Some(<Vec<u8>>::from_raw_parts(ptr, length as usize, length as usize))
 		}
 	}
 }
