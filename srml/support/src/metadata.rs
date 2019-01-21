@@ -44,12 +44,20 @@ macro_rules! impl_runtime_metadata {
 				}
 			}
 			pub fn metadata(version: u16) -> $crate::metadata::RuntimeMetadata {
-        let version = if version == 0 { $crate::metadata::RuntimeMetadataVersion::default() as u16 } else { version };
+				let version = if version == 0 { $crate::metadata::RuntimeMetadataVersion::default() as u16 } else { version };
 				match version {
 					x if x == $crate::metadata::RuntimeMetadataVersion::V1 as u16 =>
 						$crate::metadata::RuntimeMetadata::V1 (
 							$crate::metadata::RuntimeMetadataV1 {
 								modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+							}
+						),
+					x if x == $crate::metadata::RuntimeMetadataVersion::Deprecated as u16 =>
+						$crate::metadata::RuntimeMetadata::Deprecated (
+							$crate::metadata::RuntimeMetadataOld {
+								outer_event: Self::outer_event_metadata(),
+								modules: __runtime_modules_to_metadata_old!($runtime;; $( $rest )*),
+								outer_dispatch: Self::outer_dispatch_metadata(),
 							}
 						),
 					_ => $crate::metadata::RuntimeMetadata::None,

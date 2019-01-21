@@ -122,15 +122,6 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 
 pub type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
 
-impl<B> DecodeDifferentArray<B> {
-	pub fn iter(&self) -> rstd::slice::Iter<B> {
-		match self {
-			DecodeDifferent::Encode(ref slice) => slice.iter(),
-			DecodeDifferent::Decoded(ref vec) => vec.iter(),
-		}
-	}
-}
-
 #[cfg(feature = "std")]
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[cfg(not(feature = "std"))]
@@ -398,6 +389,7 @@ pub struct RuntimeMetadataOld {
 pub enum RuntimeMetadata {
 	None,
 	V1(RuntimeMetadataV1),
+	Deprecated(RuntimeMetadataOld),
 }
 
 /// Version only runtime metadata enum.
@@ -405,6 +397,7 @@ pub enum RuntimeMetadata {
 pub enum RuntimeMetadataVersion {
 	None = 0,
 	V1 = 1,
+  Deprecated = 42,
 }
 
 /// used as latest

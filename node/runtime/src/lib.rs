@@ -86,7 +86,7 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
-pub use srml_support::{StorageValue, RuntimeMetadataOld};
+pub use srml_support::StorageValue;
 
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
@@ -277,10 +277,6 @@ impl_runtime_apis! {
 	}
 
 	impl client_api::Metadata<Block> for Runtime {
-		fn metadata_old() -> OpaqueMetadata {
-			Runtime::metadata_old().into()
-		}
-
 		fn metadata(version: u16) -> OpaqueMetadata {
 			Runtime::metadata(version).into()
 		}

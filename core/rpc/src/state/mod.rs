@@ -67,14 +67,9 @@ build_rpc_trait! {
 		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
 		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
 
-		/// Deprecated, returns the runtime metadata as an opaque blob.
-		#[rpc(name = "state_getMetadata")]
-		fn metadata_old(&self, Trailing<Hash>) -> Result<Bytes>;
-
 		/// Returns the runtime metadata as an opaque blob.
-		/// If 0 for version latest will be queried.
-		#[rpc(name = "state_getMetadataVersion")]
-		fn metadata(&self, u16, Trailing<Hash>) -> Result<Bytes>;
+		#[rpc(name = "state_getMetadata")]
+		fn metadata(&self, Trailing<u16>) -> Result<Bytes>;
 
 		/// Get the runtime version.
 		#[rpc(name = "state_getRuntimeVersion", alias = ["chain_getRuntimeVersion", ])]
@@ -178,13 +173,9 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn metadata_old(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
-		let block = self.unwrap_or_best(block)?;
-		self.client.runtime_api().metadata_old(&BlockId::Hash(block)).map(Into::into).map_err(Into::into)
-	}
-
-	fn metadata(&self, version: u16, block: Trailing<Block::Hash>) -> Result<Bytes> {
-		let block = self.unwrap_or_best(block)?;
+	fn metadata(&self, version: Trailing<u16>) -> Result<Bytes> {
+    let version = version.unwrap_or_default();
+		let block = self.client.info()?.chain.best_hash;
 		self.client.runtime_api().metadata(&BlockId::Hash(block), &version).map(Into::into).map_err(Into::into)
 	}
 
