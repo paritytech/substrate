@@ -126,6 +126,8 @@ pub enum ExecutionStrategy {
 	Wasm,
 	/// Execute natively when possible, wasm otherwise
 	Both,
+	/// First native, then if that fails or is not possible, wasm
+	NativeElseWasm,
 }
 
 impl Default for ExecutionStrategy {
@@ -141,7 +143,7 @@ impl std::str::FromStr for ExecutionStrategy {
 			"native" => Ok(ExecutionStrategy::Native),
 			"wasm" | "webassembly" => Ok(ExecutionStrategy::Wasm),
 			"both" => Ok(ExecutionStrategy::Both),
-			"nativeElseWasm" => Ok(ExecutionStrategy::nativeElseWasm),
+			"nativeElseWasm" => Ok(ExecutionStrategy::NativeElseWasm),
 			_ => Err("Please specify either 'nativeElseWasm', 'native', 'wasm' or 'both".to_owned())
 
 		}
