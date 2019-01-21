@@ -26,7 +26,7 @@ use keyring::Keyring;
 use client::{
 	BlockchainEvents, error::Result,
 	blockchain::Backend as BlockchainBackend,
-	runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallRuntimeAt},
+	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
@@ -265,7 +265,7 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn execute_block(&self, _: &BlockId<Block>, _: &Block) -> Result<()> {
+	fn execute_block(&self, _: &BlockId<Block>, _: Block) -> Result<()> {
 		unimplemented!("Not required for testing!")
 	}
 
@@ -287,12 +287,6 @@ impl ApiExt<Block> for RuntimeApi {
 	}
 
 	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, _: &BlockId<Block>) -> Result<bool> {
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl ConstructRuntimeApi<Block> for RuntimeApi {
-	fn construct_runtime_api<'a, T: CallRuntimeAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -494,7 +488,7 @@ fn transition_3_voters_twice_1_observer() {
 	let transitions = api.scheduled_changes.clone();
 	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	net.lock().peer(0).push_blocks(1, false);
 	net.lock().sync();
@@ -619,6 +613,7 @@ fn transition_3_voters_twice_1_observer() {
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
+			net.lock().send_finality_notifications();
 			net.lock().sync();
 			Ok(())
 		})
@@ -682,4 +677,55 @@ fn consensus_changes_works() {
 	changes.note_change((1, 1.into()));
 	changes.note_change((1, 101.into()));
 	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1.into()))).unwrap(), (true, true));
+}
+
+#[test]
+fn sync_justifications_on_change_blocks() {
+	::env_logger::init();
+
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers_b = &[Keyring::Alice, Keyring::Bob];
+	let voters = make_ids(peers_b);
+
+	// 4 peers, 3 of them are authorities and participate in grandpa
+	let api = TestApi::new(voters);
+	let transitions = api.scheduled_changes.clone();
+	let mut net = GrandpaTestNet::new(api, 4);
+
+	// add 20 blocks
+	net.peer(0).push_blocks(20, false);
+
+	// at block 21 we do add a transition which is instant
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+		let block = builder.bake().unwrap();
+		transitions.lock().insert(*block.header.parent_hash(), ScheduledChange {
+			next_authorities: make_ids(peers_b),
+			delay: 0,
+		});
+		block
+	});
+
+	// add more blocks on top of it (until we have 25)
+	net.peer(0).push_blocks(4, false);
+	net.sync();
+
+	for i in 0..4 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 25,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(25, net.clone(), peers_a);
+
+	// the first 3 peers are grandpa voters and therefore have already finalized
+	// block 21 and stored a justification
+	for i in 0..3 {
+		assert!(net.lock().peer(i).client().justification(&BlockId::Number(21)).unwrap().is_some());
+	}
+
+	// the last peer should get the justification by syncing from other peers
+	assert!(net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none());
+	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
+		net.lock().sync_steps(100);
+	}
 }

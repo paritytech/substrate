@@ -54,10 +54,11 @@ quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
 	let version = VersionInfo {
+		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),
 		version: env!("CARGO_PKG_VERSION"),
 		executable_name: "substrate",
-		author: "Parity Team <admin@parity.io>",
+		author: "Parity Technologies <admin@parity.io>",
 		description: "Generic substrate node",
 	};
 	cli::run(::std::env::args(), Exit, version)

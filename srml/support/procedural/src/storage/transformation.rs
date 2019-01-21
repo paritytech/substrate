@@ -154,6 +154,7 @@ fn decl_store_extra_genesis(
 
 	let mut is_trait_needed = false;
 	let mut has_trait_field = false;
+	let mut serde_complete_bound = std::collections::HashSet::new();
 	let mut config_field = TokenStream2::new();
 	let mut config_field_default = TokenStream2::new();
 	let mut builders = TokenStream2::new();
@@ -183,6 +184,14 @@ fn decl_store_extra_genesis(
 			if type_infos.is_simple && ext::has_parametric_type(type_infos.full_type, traitinstance) {
 				is_trait_needed = true;
 				has_trait_field = true;
+			}
+			for t in ext::get_non_bound_serde_derive_types(type_infos.full_type, &traitinstance).into_iter() {
+				serde_complete_bound.insert(t);
+			}
+			if let Some(kt) = type_infos.map_key {
+				for t in ext::get_non_bound_serde_derive_types(kt, &traitinstance).into_iter() {
+					serde_complete_bound.insert(t);
+				}
 			}
 			let storage_type = type_infos.typ.clone();
 			config_field.extend(quote!( pub #ident: #storage_type, ));
@@ -246,6 +255,11 @@ fn decl_store_extra_genesis(
 						is_trait_needed = true;
 						has_trait_field = true;
 					}
+
+					for t in ext::get_non_bound_serde_derive_types(extra_type, &traitinstance).into_iter() {
+						serde_complete_bound.insert(t);
+					}
+
 					let extrafield = &extra_field.content;
 					genesis_extrafields.extend(quote!{
 						#attrs pub #extrafield: #extra_type,
@@ -267,6 +281,25 @@ fn decl_store_extra_genesis(
 			}
 		}
 	}
+
+
+	let serde_bug_bound = if serde_complete_bound.len() > 0 {
+
+		let mut b_ser = String::new();
+		let mut b_dser = String::new();
+		for bound in serde_complete_bound {
+			let stype = quote!(#bound);
+			b_ser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::Serialize, ");
+			b_dser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::de::DeserializeOwned, ");
+		}
+
+		quote! {
+			#[serde(bound(serialize = #b_ser))]
+			#[serde(bound(deserialize = #b_dser))]
+		}
+	} else {
+		quote!()
+	};
 
 	let is_extra_genesis_needed = has_scall
 		|| !config_field.is_empty()
@@ -307,6 +340,7 @@ fn decl_store_extra_genesis(
 			#[cfg(feature = "std")]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
+			#serde_bug_bound
 			pub struct GenesisConfig#fparam {
 				#ph_field
 				#config_field

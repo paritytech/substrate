@@ -16,7 +16,8 @@
 
 //! Substrate Client data backend
 
-use error;
+use crate::error;
+use primitives::ChangesTrieConfiguration;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
@@ -109,11 +110,11 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H>;
 	/// Associated blockchain backend type.
-	type Blockchain: ::blockchain::Backend<Block>;
+	type Blockchain: crate::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H>;
 	/// Changes trie storage.
-	type ChangesTrieStorage: StateChangesTrieStorage<H>;
+	type ChangesTrieStorage: PrunableStateChangesTrieStorage<H>;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -152,6 +153,12 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)
 	}
+}
+
+/// Changes trie storage that supports pruning.
+pub trait PrunableStateChangesTrieStorage<H: Hasher>: StateChangesTrieStorage<H> {
+	/// Get number block of oldest, non-pruned changes trie.
+	fn oldest_changes_trie_block(&self, config: &ChangesTrieConfiguration, best_finalized: u64) -> u64;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

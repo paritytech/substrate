@@ -38,7 +38,7 @@ fn note_null_offline_should_work() {
 #[test]
 fn invulnerability_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		Staking::set_invulnerables(vec![10]);
+		assert_ok!(Staking::set_invulnerables(vec![10]));
 		Balances::set_free_balance(&10, 70);
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		assert_eq!(Staking::slash_count(&10), 0);
@@ -284,7 +284,7 @@ fn staking_should_work() {
 
 		// Block 5: Transfer stake from highest to lowest. No change yet.
 		System::set_block_number(5);
-		assert_ok!(Balances::transfer(Origin::signed(4), 1.into(), 40.into()));
+		assert_ok!(Balances::transfer(Origin::signed(4), 1, 40.into()));
 		Session::check_rotate_session(System::block_number());
 
 		// Block 6: Lowest now validator.
@@ -317,7 +317,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::stake(Origin::signed(1)));
 		assert_ok!(Staking::stake(Origin::signed(2)));
 		assert_ok!(Staking::stake(Origin::signed(3)));
-		assert_ok!(Staking::nominate(Origin::signed(4), 1.into()));
+		assert_ok!(Staking::nominate(Origin::signed(4), 1));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
@@ -339,7 +339,7 @@ fn nominating_and_rewards_should_work() {
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(Origin::signed(4)));
 		assert_ok!(Staking::unstake(Origin::signed(3), (Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32).into()));
-		assert_ok!(Staking::nominate(Origin::signed(3), 1.into()));
+		assert_ok!(Staking::nominate(Origin::signed(3), 1));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 4]);
 		assert_eq!(Balances::total_balance(&1), 16);
@@ -361,7 +361,7 @@ fn rewards_with_off_the_table_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
 		System::set_block_number(1);
 		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_ok!(Staking::nominate(Origin::signed(2), 1.into()));
+		assert_ok!(Staking::nominate(Origin::signed(2), 1));
 		assert_ok!(Staking::stake(Origin::signed(3)));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
@@ -397,8 +397,8 @@ fn nominating_slashes_should_work() {
 		System::set_block_number(4);
 		assert_ok!(Staking::stake(Origin::signed(1)));
 		assert_ok!(Staking::stake(Origin::signed(3)));
-		assert_ok!(Staking::nominate(Origin::signed(2), 3.into()));
-		assert_ok!(Staking::nominate(Origin::signed(4), 1.into()));
+		assert_ok!(Staking::nominate(Origin::signed(2), 3));
+		assert_ok!(Staking::nominate(Origin::signed(4), 1));
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Staking::current_era(), 1);
@@ -426,10 +426,10 @@ fn double_staking_should_fail() {
 		System::set_block_number(1);
 		assert_ok!(Staking::stake(Origin::signed(1)));
 		assert_noop!(Staking::stake(Origin::signed(1)), "Cannot stake if already staked.");
-		assert_noop!(Staking::nominate(Origin::signed(1), 1.into()), "Cannot nominate if already staked.");
-		assert_ok!(Staking::nominate(Origin::signed(2), 1.into()));
+		assert_noop!(Staking::nominate(Origin::signed(1), 1), "Cannot nominate if already staked.");
+		assert_ok!(Staking::nominate(Origin::signed(2), 1));
 		assert_noop!(Staking::stake(Origin::signed(2)), "Cannot stake if already nominating.");
-		assert_noop!(Staking::nominate(Origin::signed(2), 1.into()), "Cannot nominate if already nominating.");
+		assert_noop!(Staking::nominate(Origin::signed(2), 1), "Cannot nominate if already nominating.");
 	});
 }
 
@@ -506,7 +506,7 @@ fn staking_balance_transfer_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		Balances::set_free_balance(&1, 111);
 		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_noop!(Balances::transfer(Origin::signed(1), 2.into(), 69.into()), "cannot transfer illiquid funds");
+		assert_noop!(Balances::transfer(Origin::signed(1), 2, 69.into()), "cannot transfer illiquid funds");
 	});
 }
 

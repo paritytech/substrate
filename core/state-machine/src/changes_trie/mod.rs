@@ -44,7 +44,7 @@ mod storage;
 
 pub use self::storage::InMemoryStorage;
 pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
-pub use self::prune::prune;
+pub use self::prune::{prune, oldest_non_pruned_trie};
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;

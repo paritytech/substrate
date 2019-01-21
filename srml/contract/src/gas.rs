@@ -14,10 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use {Trait, Module, GasSpent};
+use balances;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
 use runtime_support::StorageValue;
-use balances;
+use {GasSpent, Module, Trait};
+
+#[cfg(test)]
+use std::{any::Any, fmt::Debug};
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -35,11 +38,54 @@ impl GasMeterResult {
 	}
 }
 
+#[cfg(not(test))]
+pub trait TestAuxiliaries {}
+#[cfg(not(test))]
+impl<T> TestAuxiliaries for T {}
+
+#[cfg(test)]
+pub trait TestAuxiliaries: Any + Debug + PartialEq + Eq {}
+#[cfg(test)]
+impl<T: Any + Debug + PartialEq + Eq> TestAuxiliaries for T {}
+
+/// This trait represents a token that can be used for charging `GasMeter`.
+/// There is no other way of charging it.
+///
+/// Implementing type is expected to be super lightweight hence `Copy` (`Clone` is added
+/// for consistency). If inlined there should be no observable difference compared
+/// to a hand-written code.
+pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
+	/// Metadata type, which the token can require for calculating the amount
+	/// of gas to charge. Can be a some configuration type or
+	/// just the `()`.
+	type Metadata;
+
+	/// Calculate amount of gas that should be taken by this token.
+	///
+	/// This function should be really lightweight and must not fail. It is not
+	/// expected that implementors will query the storage or do any kinds of heavy operations.
+	///
+	/// That said, implementors of this function still can run into overflows
+	/// while calculating the amount. In this case it is ok to use saturating operations
+	/// since on overflow they will return `max_value` which should consume all gas.
+	fn calculate_amount(&self, metadata: &Self::Metadata) -> T::Gas;
+}
+
+/// A wrapper around a type-erased trait object of what used to be a `Token`.
+#[cfg(test)]
+pub struct ErasedToken {
+	pub description: String,
+	pub token: Box<dyn Any>,
+}
+
 pub struct GasMeter<T: Trait> {
 	limit: T::Gas,
 	/// Amount of gas left from initial gas limit. Can reach zero.
 	gas_left: T::Gas,
 	gas_price: T::Balance,
+
+	#[cfg(test)]
+	tokens: Vec<ErasedToken>,
 }
 impl<T: Trait> GasMeter<T> {
 	#[cfg(test)]
@@ -48,17 +94,37 @@ impl<T: Trait> GasMeter<T> {
 			limit: gas_limit,
 			gas_left: gas_limit,
 			gas_price,
+			#[cfg(test)]
+			tokens: Vec::new(),
 		}
 	}
 
 	/// Account for used gas.
 	///
+	/// Amount is calculated by the given `token`.
+	///
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
 	///
-	/// NOTE that `amount` is always consumed, i.e. if there is not enough gas
+	/// NOTE that amount is always consumed, i.e. if there is not enough gas
 	/// then the counter will be set to zero.
-	pub fn charge(&mut self, amount: T::Gas) -> GasMeterResult {
+	#[inline]
+	pub fn charge<Tok: Token<T>>(
+		&mut self,
+		metadata: &Tok::Metadata,
+		token: Tok,
+	) -> GasMeterResult {
+		#[cfg(test)]
+		{
+			// Unconditionally add the token to the storage.
+			let erased_tok = ErasedToken {
+				description: format!("{:?}", token),
+				token: Box::new(token),
+			};
+			self.tokens.push(erased_tok);
+		}
+
+		let amount = token.calculate_amount(metadata);
 		let new_value = match self.gas_left.checked_sub(&amount) {
 			None => None,
 			Some(val) if val.is_zero() => None,
@@ -72,18 +138,6 @@ impl<T: Trait> GasMeter<T> {
 			Some(_) => GasMeterResult::Proceed,
 			None => GasMeterResult::OutOfGas,
 		}
-	}
-
-	/// Account for used gas expressed in balance units.
-	///
-	/// Same as [`charge`], but amount to be charged is converted from units of balance to
-	/// units of gas.
-	///
-	/// [`charge`]: #method.charge
-	pub fn charge_by_balance(&mut self, amount: T::Balance) -> GasMeterResult {
-		let amount_in_gas: T::Balance = amount / self.gas_price;
-		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
-		self.charge(amount_in_gas)
 	}
 
 	/// Allocate some amount of gas and perform some work with
@@ -108,6 +162,8 @@ impl<T: Trait> GasMeter<T> {
 				limit: amount,
 				gas_left: amount,
 				gas_price: self.gas_price,
+				#[cfg(test)]
+				tokens: Vec::new(),
 			};
 
 			let r = f(Some(&mut nested));
@@ -118,6 +174,10 @@ impl<T: Trait> GasMeter<T> {
 		}
 	}
 
+	pub fn gas_price(&self) -> T::Balance {
+		self.gas_price
+	}
+
 	/// Returns how much gas left from the initial budget.
 	pub fn gas_left(&self) -> T::Gas {
 		self.gas_left
@@ -126,6 +186,11 @@ impl<T: Trait> GasMeter<T> {
 	/// Returns how much gas was spent.
 	fn spent(&self) -> T::Gas {
 		self.limit - self.gas_left
+	}
+
+	#[cfg(test)]
+	pub fn tokens(&self) -> &[ErasedToken] {
+		&self.tokens
 	}
 }
 
@@ -162,6 +227,8 @@ pub fn buy_gas<T: Trait>(
 		limit: gas_limit,
 		gas_left: gas_limit,
 		gas_price,
+		#[cfg(test)]
+		tokens: Vec::new(),
 	})
 }
 
@@ -178,4 +245,102 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
 	<balances::Module<T>>::set_free_balance(transactor, b + refund);
 	<balances::Module<T>>::increase_total_stake_by(refund);
+}
+
+/// A simple utility macro that helps to match against a
+/// list of tokens.
+#[macro_export]
+macro_rules! match_tokens {
+	($tokens_iter:ident,) => {
+	};
+	($tokens_iter:ident, $x:expr, $($rest:tt)*) => {
+		{
+			let next = ($tokens_iter).next().unwrap();
+			let pattern = $x;
+
+			// Note that we don't specify the type name directly in this macro,
+			// we only have some expression $x of some type. At the same time, we
+			// have an iterator of Box<dyn Any> and to downcast we need to specify
+			// the type which we want downcast to.
+			//
+			// So what we do is we assign `_pattern_typed_next_ref` to the a variable which has
+			// the required type.
+			//
+			// Then we make `_pattern_typed_next_ref = token.downcast_ref()`. This makes
+			// rustc infer the type `T` (in `downcast_ref<T: Any>`) to be the same as in $x.
+
+			let mut _pattern_typed_next_ref = &pattern;
+			_pattern_typed_next_ref = match next.token.downcast_ref() {
+				Some(p) => {
+					assert_eq!(p, &pattern);
+					p
+				}
+				None => {
+					panic!("expected type {} got {}", stringify!($x), next.description);
+				}
+			};
+		}
+
+		match_tokens!($tokens_iter, $($rest)*);
+	};
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{GasMeter, Token};
+	use tests::Test;
+
+	/// A trivial token that charges 1 unit of gas.
+	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+	struct UnitToken;
+	impl Token<Test> for UnitToken {
+		type Metadata = ();
+		fn calculate_amount(&self, _metadata: &()) -> u64 { 1 }
+	}
+
+	struct DoubleTokenMetadata {
+		multiplier: u64,
+	}
+	/// A simple token that charges for the given amount multipled to
+	/// a multiplier taken from a given metadata.
+	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+	struct DoubleToken(u64);
+
+	impl Token<Test> for DoubleToken {
+		type Metadata = DoubleTokenMetadata;
+		fn calculate_amount(&self, metadata: &DoubleTokenMetadata) -> u64 {
+			// Probably you want to use saturating mul in producation code.
+			self.0 * metadata.multiplier
+		}
+	}
+
+	#[test]
+	fn it_works() {
+		let gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		assert_eq!(gas_meter.gas_left(), 50000);
+	}
+
+	#[test]
+	fn simple() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+
+		let result = gas_meter.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10));
+		assert!(!result.is_out_of_gas());
+
+		assert_eq!(gas_meter.gas_left(), 49_970);
+		assert_eq!(gas_meter.spent(), 30);
+		assert_eq!(gas_meter.gas_price(), 10);
+	}
+
+	#[test]
+	fn tracing() {
+		let mut gas_meter = GasMeter::<Test>::with_limit(50000, 10);
+		assert!(!gas_meter.charge(&(), UnitToken).is_out_of_gas());
+		assert!(!gas_meter
+			.charge(&DoubleTokenMetadata { multiplier: 3 }, DoubleToken(10))
+			.is_out_of_gas());
+
+		let mut tokens = gas_meter.tokens()[0..2].iter();
+		match_tokens!(tokens, UnitToken, DoubleToken(10),);
+	}
 }

@@ -23,6 +23,7 @@ use libp2p::core::{
 	protocols_handler::ProtocolsHandlerUpgrErr,
 	upgrade::{InboundUpgrade, OutboundUpgrade}
 };
+use log::{trace, warn};
 use smallvec::SmallVec;
 use std::{fmt, io};
 use tokio_io::{AsyncRead, AsyncWrite};

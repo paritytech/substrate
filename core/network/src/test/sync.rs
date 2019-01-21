@@ -66,6 +66,27 @@ fn sync_no_common_longer_chain_fails() {
 }
 
 #[test]
+fn sync_justifications() {
+	::env_logger::init().ok();
+	let mut net = TestNet::new(3);
+	net.peer(0).push_blocks(20, false);
+	net.sync();
+
+	// there's currently no justification for block #10
+	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
+	// we finalize block #10 for peer 0 with a justification
+	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
+
+	let header = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
+	net.peer(1).request_justification(&header.hash().into(), 10);
+
+	net.sync();
+
+	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), Some(Vec::new()));
+	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), Some(Vec::new()));
+}
+
+#[test]
 fn sync_after_fork_works() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);

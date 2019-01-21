@@ -62,7 +62,7 @@ pub fn authorities() -> Vec<Ed25519AuthorityId> {
 		.collect()
 }
 
-pub fn initialise_block(header: Header) {
+pub fn initialise_block(header: &Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
