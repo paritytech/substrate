@@ -651,7 +651,7 @@ macro_rules! decl_module {
 		}
 		__dispatch_impl_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
-			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*); )*}
+			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $(#[$codec_attr])* $param_name : $param )*); )*}
 		}
 	}
 }
@@ -926,7 +926,7 @@ macro_rules! __call_to_metadata {
 				$(#[doc = $doc_attr:tt])*
 				fn $fn_name:ident($from:ident
 					$(
-						, $param_name:ident : $param:ty
+						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
 					)*
 				);
 			)*}
@@ -934,7 +934,7 @@ macro_rules! __call_to_metadata {
 		$crate::dispatch::CallMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
 			functions: __functions_to_metadata!(0; $origin_type;; $(
-				fn $fn_name( $( $param_name: $param ),* );
+				fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
 				$( $doc_attr ),*;
 			)*),
 		}
@@ -951,7 +951,7 @@ macro_rules! __functions_to_metadata{
 		$( $function_metadata:expr ),*;
 		fn $fn_name:ident(
 			$(
-				$param_name:ident : $param:ty
+				$(#[$codec_attr:ident])* $param_name:ident : $param:ty
 			),*
 		);
 		$( $fn_doc:expr ),*;
@@ -960,7 +960,7 @@ macro_rules! __functions_to_metadata{
 		__functions_to_metadata!(
 			$fn_id + 1; $origin_type;
 			$( $function_metadata, )* __function_to_metadata!(
-				fn $fn_name($( $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
+				fn $fn_name($( $(#[$codec_attr])* $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
 			);
 			$($rest)*
 		)
@@ -980,7 +980,7 @@ macro_rules! __functions_to_metadata{
 macro_rules! __function_to_metadata {
 	(
 		fn $fn_name:ident(
-			$($param_name:ident : $param:ty),*
+			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
 		);
 		$( $fn_doc:expr ),*;
 		$fn_id:expr;
@@ -992,13 +992,30 @@ macro_rules! __function_to_metadata {
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
-						ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($param)),
+						ty: $crate::dispatch::DecodeDifferent::Encode(
+							__function_to_metadata!(@stringify_expand_attr
+								$(#[$codec_attr])* $param_name: $param
+							)
+						),
 					}
 				),*
 			]),
 			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
 	};
+
+	(@stringify_expand_attr #[compact] $param_name:ident : $param:ty) => {
+		concat!("Compact<", stringify!($param), ">")
+	};
+
+	(@stringify_expand_attr $param_name:ident : $param:ty) => { stringify!($param) };
+
+	(@stringify_expand_attr $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
+		compile_error!(concat!(
+			"Invalid attribute for parameter `", stringify!($param_name),
+			"`, the following attributes are supported: `#[compact]`"
+		))
+	}
 }
 
 #[cfg(test)]
