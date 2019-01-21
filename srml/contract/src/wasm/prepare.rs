@@ -313,10 +313,11 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::fmt;
 	use crate::tests::Test;
 	use crate::exec::Ext;
+	use std::fmt;
 	use wabt;
+	use assert_matches::assert_matches;
 
 	impl fmt::Debug for PrefabWasmModule {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

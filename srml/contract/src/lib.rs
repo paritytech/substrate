@@ -54,38 +54,10 @@
 
 #[macro_use]
 extern crate parity_codec_derive;
-
-extern crate parity_wasm;
-extern crate pwasm_utils;
-
 extern crate parity_codec as codec;
-extern crate sr_io as runtime_io;
-extern crate sr_sandbox as sandbox;
-
-#[cfg_attr(not(feature = "std"), macro_use)]
-extern crate sr_std as rstd;
-
-extern crate srml_balances as balances;
-extern crate srml_system as system;
 
 #[macro_use]
 extern crate srml_support as runtime_support;
-
-extern crate sr_primitives as runtime_primitives;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
-#[cfg(test)]
-extern crate wabt;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
 
 #[macro_use]
 mod gas;
@@ -343,7 +315,7 @@ decl_storage! {
 /// The storage items associated with an account/key.
 ///
 /// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
-pub(crate) struct StorageOf<T>(crate::rstd::marker::PhantomData<T>);
+pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
 impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	const PREFIX: &'static [u8] = b"con:sto:";
 	type Key1 = T::AccountId;
