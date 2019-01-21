@@ -276,6 +276,43 @@ where
 	))
 }
 
+fn execute_aux<H, B, T, Exec>(
+	overlay: &mut OverlayedChanges,
+	backend: &B,
+	changes_trie_storage: Option<&T>,
+	exec: &Exec,
+	method: &str,
+	call_data: &[u8],
+	compute_tx: bool,
+	use_native: bool
+) -> (Result<Vec<u8>, Exec::Error>, bool, Option<B::Transaction>, Option<MemoryDB<H>>)
+where
+	H: Hasher,
+	Exec: CodeExecutor<H>,
+	B: Backend<H>,
+	T: ChangesTrieStorage<H>,
+	H::Out: Ord + HeapSizeOf
+{
+	let ((result, was_native), (storage_delta, changes_delta)) = {
+			let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
+			let retval = exec.call(
+				&mut externalities,
+				method,
+				call_data,
+				// attempt to run native first, if we're not directed to run wasm only
+				use_native,
+			);
+			let (storage_delta, changes_delta) = if compute_tx {
+				let (storage_delta, changes_delta) = externalities.transaction();
+				(Some(storage_delta), changes_delta)
+			} else {
+				(None, None)
+			};
+			(retval, (storage_delta, changes_delta))
+		};
+	(result, was_native, storage_delta, changes_delta)
+}
+
 /// Execute a call using the given state backend, overlayed changes, and call executor.
 /// Produces a state-backend-specific "transaction" which can be used to apply the changes
 /// to the backing store, such as the disk.
@@ -302,8 +339,6 @@ where
 	H::Out: Ord + HeapSizeOf,
 	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
 {
-	let strategy: ExecutionStrategy = (&manager).into();
-
 	// read changes trie configuration. The reason why we're doing it here instead of the
 	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
 	// proof-of-execution on light clients. And the proof is recorded by the backend which
@@ -321,64 +356,49 @@ where
 
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
+		
+		let (result, storage_delta, changes_delta) = match manager {
+			ExecutionManager::Both(on_consensus_failure) => {
+				let (result, was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
+					exec, method, call_data, compute_tx, true);
+				if was_native {
+					overlay.prospective = orig_prospective.clone();
+					let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
+						exec, method, call_data, compute_tx, false);	
 
-		let (result, was_native, storage_delta, changes_delta) = {
-			let ((result, was_native), (storage_delta, changes_delta)) = {
-				let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-				let retval = exec.call(
-					&mut externalities,
-					method,
-					call_data,
-					// attempt to run native first, if we're not directed to run wasm only
-					strategy != ExecutionStrategy::AlwaysWasm,
-				);
-				let (storage_delta, changes_delta) = if compute_tx {
-					let (storage_delta, changes_delta) = externalities.transaction();
-					(Some(storage_delta), changes_delta)
-				} else {
-					(None, None)
-				};
-				(retval, (storage_delta, changes_delta))
-			};
-			(result, was_native, storage_delta, changes_delta)
-		};
-
-		// run wasm separately if we did run native the first time and we're meant to run both
-		let (result, storage_delta, changes_delta) = if let (true, ExecutionManager::Both(on_consensus_failure)) =
-			(was_native, manager)
-		{
-			overlay.prospective = orig_prospective.clone();
-
-			let (wasm_result, wasm_storage_delta, wasm_changes_delta) = {
-				let ((result, _), (storage_delta, changes_delta)) = {
-					let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-					let retval = exec.call(
-						&mut externalities,
-						method,
-						call_data,
-						false,
-					);
-					let (storage_delta, changes_delta) = if compute_tx {
-						let (storage_delta, changes_delta) = externalities.transaction();
-						(Some(storage_delta), changes_delta)
+					if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap())
+						|| (result.is_err() && wasm_result.is_err()) {
+						(result, storage_delta, changes_delta)
 					} else {
-						(None, None)
-					};
-					(retval, (storage_delta, changes_delta))
-				};
+						(on_consensus_failure(wasm_result, result), wasm_storage_delta, wasm_changes_delta)
+					}
+				} else {
+					(result, storage_delta, changes_delta)
+				}
+			},
+			ExecutionManager::NativeElseWasm => {
+				let (result, was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
+					exec, method, call_data, compute_tx, true);
+				if !was_native || result.is_ok() {
+					(result, storage_delta, changes_delta)
+				} else {
+					overlay.prospective = orig_prospective.clone();
+					let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = execute_aux(overlay, backend,
+						changes_trie_storage, exec, method, call_data, compute_tx, false);
+					(wasm_result, wasm_storage_delta, wasm_changes_delta)
+				}
+			},
+			ExecutionManager::AlwaysWasm => {
+				let (result, _, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
+					exec, method, call_data, compute_tx, false);
 				(result, storage_delta, changes_delta)
-			};
+			},
+			ExecutionManager::NativeWhenPossible => {
+				let (result, _was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
+					exec, method, call_data, compute_tx, true);
+				(result, storage_delta, changes_delta)
+			},
 
-			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
-				|| (result.is_err() && wasm_result.is_err())
-			{
-				(result, storage_delta, changes_delta)
-			} else {
-				// Consensus error.
-				(on_consensus_failure(wasm_result, result), wasm_storage_delta, wasm_changes_delta)
-			}
-		} else {
-			(result, storage_delta, changes_delta)
 		};
 		result.map(move |out| (out, storage_delta, changes_delta))
 	};
