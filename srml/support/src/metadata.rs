@@ -16,7 +16,7 @@
 
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, FnEncodeModule, RuntimeMetadata,
-	RuntimeModuleMetadata, RuntimeMetadataV1, RuntimeMetadataVersion,
+	RuntimeModuleMetadata, RuntimeMetadataV1,
 	DefaultByteGetter,
 };
 

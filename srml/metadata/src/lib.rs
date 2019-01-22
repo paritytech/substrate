@@ -366,20 +366,6 @@ pub enum RuntimeMetadata {
 	V1(RuntimeMetadataV1),
 }
 
-/// Version only runtime metadata enum.
-#[derive(Eq,PartialEq)]
-pub enum RuntimeMetadataVersion {
-	None = 0,
-	V1 = 1,
-}
-
-/// used as latest
-impl Default for RuntimeMetadataVersion {
-	fn default() -> Self {
-		RuntimeMetadataVersion::V1
-	}
-}
-
 /// The metadata of a runtime version 1.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]

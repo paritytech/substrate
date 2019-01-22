@@ -424,22 +424,16 @@ macro_rules! __impl_outer_event_json_metadata {
 
 			#[allow(dead_code)]
 			pub fn module_events(mod_name: &'static str) -> $crate::event::FnEncode<&'static [$crate::event::EventMetadata]> {
-				let events = &[
-					("system", $crate::event::FnEncode(system::Event::metadata))
-					$(
-						, (
-							stringify!($module_name),
-							$crate::event::FnEncode(
-								$module_name::Event $( ::<$generic_param> )* ::metadata
-							)
-						)
-					)*
-				];
-				for i in events.iter() {
-					if i.0 == mod_name {
-						return i.1.clone();
-					}
+				if mod_name == "system" {
+					return $crate::event::FnEncode(system::Event::metadata)
 				}
+				$(
+				if mod_name == stringify!($module_name) {
+					return $crate::event::FnEncode(
+						$module_name::Event $( ::<$generic_param> )* ::metadata
+					)
+				}
+				)*
 				return $crate::event::FnEncode(||&[])
 			}
 		}

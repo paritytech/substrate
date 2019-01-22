@@ -797,7 +797,6 @@ macro_rules! __impl_outer_dispatch_common {
 		}
 	}
 }
-
 /// Implement metadata for outer dispatch.
 #[macro_export]
 #[doc(hidden)]
@@ -808,51 +807,45 @@ macro_rules! __impl_outer_dispatch_metadata {
 		$( $module:ident::$call:ident, )*
 	) => {
 		impl $runtime {
-			pub fn outer_dispatch_metadata() -> $crate::dispatch::OuterDispatchMetadata {
-				$crate::dispatch::OuterDispatchMetadata {
-					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($outer_name)),
-					calls: $crate::dispatch::DecodeDifferent::Encode(
-						__impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*)
-					),
-				}
-			}
 			pub fn module_dispatch(mod_name: &'static str) -> Option<$crate::dispatch::OuterDispatchCall> {
-				let metas = __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*);
-				for i in metas.iter() {
-					if i.prefix == $crate::dispatch::DecodeDifferent::Encode(mod_name) {
-						return Some(i.clone());
-					}
-				}
+				__impl_outer_dispatch_metadata!(@filter mod_name; 0; ; $( $module::$call, )*);
 				None
 			}
-
 		}
 	};
-	(@encode_calls
+	(@filter
+		$mod_name:ident;
 		$index:expr;
-		$( $encoded_call:expr ),*;
+		$( $encoded_call:expr )*;
 		$module:ident::$call:ident,
 		$( $rest_module:ident::$rest:ident, )*
 	) => {
 		__impl_outer_dispatch_metadata!(
-			@encode_calls
+			@filter
+			$mod_name;
 			$index + 1;
-			$( $encoded_call, )*
-			$crate::dispatch::OuterDispatchCall {
-				name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
-				prefix: $crate::dispatch::DecodeDifferent::Encode(stringify!($module)),
-				index: $index,
-			};
+			$( $encoded_call )*
+			if $mod_name == stringify!($module) {
+				return Some($crate::dispatch::OuterDispatchCall {
+					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
+					prefix: $crate::dispatch::DecodeDifferent::Encode(stringify!($module)),
+					index: $index,
+				})
+			}
+			;
 			$( $rest_module::$rest, )*
 		)
 	};
-	(@encode_calls
+	(@filter
+		$mod_name:ident;
 		$index:expr;
-		$( $encoded_call:expr ),*;
+		$( $encoded_call:expr )*;
 	) => {
-		&[ $( $encoded_call ),* ]
+		$( $encoded_call )*
 	};
+
 }
+
 
 /// Implement metadata for dispatch.
 #[macro_export]
