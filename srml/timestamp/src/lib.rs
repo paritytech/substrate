@@ -59,24 +59,30 @@ use runtime_primitives::traits::{
 };
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, vec::Vec};
+use runtime_support::for_each_tuple;
 
 /// A trait which is called when the timestamp is set.
 pub trait OnTimestampSet<Moment> {
 	fn on_timestamp_set(moment: Moment);
 }
 
-impl<Moment> OnTimestampSet<Moment> for () {
-	fn on_timestamp_set(_moment: Moment) { }
-}
+macro_rules! impl_timestamp_set {
+	() => (
+		impl<Moment> OnTimestampSet<Moment> for () {
+			fn on_timestamp_set(_: Moment) {}
+		}
+	);
 
-impl<A, B, Moment: Clone> OnTimestampSet<Moment> for (A, B)
-	where A: OnTimestampSet<Moment>, B: OnTimestampSet<Moment>
-{
-	fn on_timestamp_set(moment: Moment) {
-		A::on_timestamp_set(moment.clone());
-		B::on_timestamp_set(moment);
+	( $($t:ident)* ) => {
+		impl<Moment: Clone, $($t: OnTimestampSet<Moment>),*> OnTimestampSet<Moment> for ($($t,)*) {
+			fn on_timestamp_set(moment: Moment) {
+				$($t::on_timestamp_set(moment.clone());)*
+			}
+		}
 	}
 }
+
+for_each_tuple!(impl_timestamp_set);
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
@@ -193,8 +199,8 @@ mod tests {
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::BlakeTwo256;
-	use runtime_primitives::testing::{Digest, DigestItem, Header};
+	use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
+	use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -210,6 +216,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
@@ -217,7 +224,7 @@ mod tests {
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
-		type SessionKey = u64;
+		type SessionKey = UintAuthorityId;
 		type InherentOfflineReport = ();
 	}
 	impl Trait for Test {

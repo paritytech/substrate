@@ -28,11 +28,10 @@ use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberF
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	TrieBackend, read_proof_check, key_changes_proof_check, create_proof_check_backend_storage};
 
-use call_executor::CallResult;
-use cht;
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::call_executor::check_execution_proof;
+use crate::cht;
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::call_executor::check_execution_proof;
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -118,7 +117,7 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	/// Remote storage read future.
 	type RemoteReadResult: IntoFuture<Item=Option<Vec<u8>>, Error=ClientError>;
 	/// Remote call result future.
-	type RemoteCallResult: IntoFuture<Item=CallResult, Error=ClientError>;
+	type RemoteCallResult: IntoFuture<Item=Vec<u8>, Error=ClientError>;
 	/// Remote changes result future.
 	type RemoteChangesResult: IntoFuture<Item=Vec<(NumberFor<Block>, u32)>, Error=ClientError>;
 
@@ -156,7 +155,7 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		&self,
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<CallResult>;
+	) -> ClientResult<Vec<u8>>;
 	/// Check remote changes query proof.
 	fn check_changes_proof(
 		&self,
@@ -344,7 +343,7 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 		&self,
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
-	) -> ClientResult<CallResult> {
+	) -> ClientResult<Vec<u8>> {
 		check_execution_proof::<_, _, H>(&self.executor, request, remote_proof)
 	}
 
@@ -392,30 +391,29 @@ pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
 	use keyring::Keyring;
-	use call_executor::CallResult;
-	use client::tests::prepare_client_with_key_changes;
+	use crate::client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
-	use error::Error as ClientError;
+	use crate::error::Error as ClientError;
 	use test_client::{self, TestClient, blockchain::HeaderBackend};
 	use test_client::runtime::{self, Hash, Block, Header};
 	use consensus::BlockOrigin;
 
-	use in_mem::{Blockchain as InMemoryBlockchain};
-	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
+	use crate::in_mem::{Blockchain as InMemoryBlockchain};
+	use crate::light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
-	use light::blockchain::tests::{DummyStorage, DummyBlockchain};
+	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{twox_128, Blake2Hasher};
-	use primitives::storage::well_known_keys;
+	use primitives::storage::{StorageKey, well_known_keys};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
 
-	pub type OkCallFetcher = Mutex<CallResult>;
+	pub type OkCallFetcher = Mutex<Vec<u8>>;
 
 	impl Fetcher<Block> for OkCallFetcher {
 		type RemoteHeaderResult = FutureResult<Header, ClientError>;
 		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
-		type RemoteCallResult = FutureResult<CallResult, ClientError>;
+		type RemoteCallResult = FutureResult<Vec<u8>, ClientError>;
 		type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, ClientError>;
 
 		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {
@@ -456,7 +454,7 @@ pub mod tests {
 			remote_block_header.clone(),
 			None,
 			None,
-			::backend::NewBlockState::Final,
+			crate::backend::NewBlockState::Final,
 		).unwrap();
 		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage::new())), local_executor);
@@ -548,6 +546,7 @@ pub mod tests {
 			let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 			// 'fetch' changes proof from remote node
+			let key = StorageKey(key);
 			let remote_proof = remote_client.key_changes_proof(
 				begin_hash, end_hash, begin_hash, max_hash, &key
 			).unwrap();
@@ -560,7 +559,7 @@ pub mod tests {
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
 				tries_roots: (begin, begin_hash, local_roots_range),
-				key: key,
+				key: key.0,
 				retry_count: None,
 			};
 			let local_result = local_checker.check_changes_proof(&request, ChangesProof {
@@ -585,6 +584,7 @@ pub mod tests {
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
 		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
 		// we're fetching changes for range b1..b4
@@ -613,7 +613,7 @@ pub mod tests {
 			last_block: (4, b4),
 			max_block: (4, b4),
 			tries_roots: (3, b3, vec![remote_roots[2].clone(), remote_roots[3].clone()]),
-			key: dave,
+			key: dave.0,
 			retry_count: None,
 		};
 		let local_result = local_checker.check_changes_proof_with_cht_size(&request, ChangesProof {
@@ -642,6 +642,7 @@ pub mod tests {
 		let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 		// 'fetch' changes proof from remote node
+		let key = StorageKey(key);
 		let remote_proof = remote_client.key_changes_proof(
 			begin_hash, end_hash, begin_hash, max_hash, &key).unwrap();
 
@@ -652,7 +653,7 @@ pub mod tests {
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),
 			tries_roots: (begin, begin_hash, local_roots_range.clone()),
-			key: key,
+			key: key.0,
 			retry_count: None,
 		};
 
@@ -695,6 +696,7 @@ pub mod tests {
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
 			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
 		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let dave = StorageKey(dave);
 
 		// 'fetch' changes proof from remote node:
 		// we're fetching changes for range b1..b4

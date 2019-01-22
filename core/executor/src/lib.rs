@@ -45,9 +45,6 @@ extern crate parking_lot;
 extern crate log;
 
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate error_chain;
 
 #[cfg(test)]
@@ -66,6 +63,7 @@ mod wasm_executor;
 #[macro_use]
 mod native_executor;
 mod sandbox;
+mod heap;
 
 pub mod error;
 pub use wasm_executor::WasmExecutor;
@@ -84,7 +82,5 @@ pub trait RuntimeInfo {
 	fn runtime_version<E: Externalities<Blake2Hasher>> (
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8]
 	) -> Option<RuntimeVersion>;
 }

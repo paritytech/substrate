@@ -110,7 +110,7 @@ impl EncryptedKey {
 
 		let mac = blake2_256(&crypto::derive_mac(&derived_right_bits, &self.ciphertext));
 
-		if subtle::slices_equal(&mac[..], &self.mac[..]) != 1 {
+		if subtle::ConstantTimeEq::ct_eq(&mac[..], &self.mac[..]).unwrap_u8() != 1 {
 			return Err(ErrorKind::InvalidPassword.into());
 		}
 

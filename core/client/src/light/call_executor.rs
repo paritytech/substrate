@@ -17,25 +17,22 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
-use std::collections::HashSet;
-use std::marker::PhantomData;
-use std::sync::Arc;
+use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 use futures::{IntoFuture, Future};
 
-use codec::Encode;
-use primitives::{H256, Blake2Hasher, convert_hash};
+use codec::{Encode, Decode};
+use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
 use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager};
 use hash_db::Hasher;
 
-use blockchain::Backend as ChainBackend;
-use call_executor::{CallExecutor, CallResult};
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::fetcher::{Fetcher, RemoteCallRequest};
+use crate::blockchain::Backend as ChainBackend;
+use crate::call_executor::CallExecutor;
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::{RuntimeVersion, NativeVersion};
-use codec::Decode;
 use heapsize::HeapSizeOf;
 use trie::MemoryDB;
 
@@ -74,7 +71,7 @@ where
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<CallResult> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<Vec<u8>> {
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
 
@@ -89,7 +86,12 @@ where
 
 	fn contextual_call<
 		PB: Fn() -> ClientResult<Block::Header>,
-		EM: Fn(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+		EM: Fn(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -99,31 +101,38 @@ where
 		initialised_block: &mut Option<BlockId<Block>>,
 		_prepare_environment_block: PB,
 		_manager: ExecutionManager<EM>,
-	) -> ClientResult<Vec<u8>> where ExecutionManager<EM>: Clone {
+		_native_call: Option<NC>,
+	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
 		if !changes.is_empty() || initialised_block.is_some() {
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
-		self.call(at, method, call_data).map(|cr| cr.return_data)
+		self.call(at, method, call_data).map(NativeOrEncoded::Encoded)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
 		let call_result = self.call(id, "version", &[])?;
-		RuntimeVersion::decode(&mut call_result.return_data.as_slice())
+		RuntimeVersion::decode(&mut call_result.as_slice())
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<
 		S: StateBackend<H>,
-		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
+		FF: FnOnce(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R,
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-		_m: ExecutionManager<FF>
-	) -> ClientResult<(Vec<u8>, S::Transaction, Option<MemoryDB<H>>)> {
+		_m: ExecutionManager<FF>,
+		_native_call: Option<NC>,
+	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<H>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -189,7 +198,7 @@ pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: Vec<Vec<u8>>
-) -> ClientResult<CallResult>
+) -> ClientResult<Vec<u8>>
 	where
 		Header: HeaderT,
 		E: CodeExecutor<H>,
@@ -226,7 +235,7 @@ pub fn check_execution_proof<Header, E, H>(
 		&request.call_data,
 	)?;
 
-	Ok(CallResult { return_data: local_result, changes })
+	Ok(local_result)
 }
 
 #[cfg(test)]
@@ -273,7 +282,7 @@ mod tests {
 				retry_count: None,
 			}, remote_execution_proof).unwrap();
 
-			(remote_result, local_result.return_data)
+			(remote_result, local_result)
 		}
 
 		// prepare remote client

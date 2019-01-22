@@ -100,6 +100,7 @@ construct_service_factory! {
 					grandpa::Config {
 						local_key,
 						gossip_duration: Duration::new(4, 0), // FIXME: make this available through chainspec?
+						justification_period: 4096,
 						name: Some(service.config.name.clone())
 					},
 					link_half,

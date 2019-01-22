@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result};
+use rstd::{self, result, marker::PhantomData};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
@@ -55,7 +55,7 @@ pub trait Verify {
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	type Success;
-	fn ensure_origin(o: OuterOrigin) -> Result<Self::Success, &'static str>;
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -66,6 +66,31 @@ pub trait Lookup {
 	type Target;
 	/// Attempt a lookup.
 	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
+/// Means of changing one type into another in a manner dependent on the source type.
+/// This variant is different to `Lookup` in that it doesn't (can cannot) require any
+/// context.
+pub trait StaticLookup {
+	/// Type to lookup from.
+	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	/// Type to lookup into.
+	type Target;
+	/// Attempt a lookup.
+	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
+#[derive(Default)]
+pub struct IdentityLookup<T>(PhantomData<T>);
+impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
+	type Source = T;
+	type Target = T;
+	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+}
+impl<T> Lookup for IdentityLookup<T> {
+	type Source = T;
+	type Target = T;
+	fn lookup(&self, x: T) -> result::Result<T, &'static str> { Ok(x) }
 }
 
 /// Get the "current" block number.
@@ -415,6 +440,16 @@ pub trait MaybeDisplay {}
 impl<T> MaybeDisplay for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeHash: ::rstd::hash::Hash {}
+#[cfg(feature = "std")]
+impl<T: ::rstd::hash::Hash> MaybeHash for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeHash {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeHash for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeDecode: ::codec::Decode {}
 #[cfg(feature = "std")]
 impl<T: ::codec::Decode> MaybeDecode for T {}
@@ -432,11 +467,11 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Digest<Hash = Self::Hash>;
+	type Digest: Digest<Hash = Self::Hash> + Codec;
 
 	fn new(
 		number: Self::Number,
@@ -472,7 +507,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
@@ -501,6 +536,8 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
 /// Extract the digest item type for a block.
 pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
+/// Extract the authority ID type for a block.
+pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -552,7 +589,7 @@ pub trait Applyable: Sized + Send + Sync {
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
 pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
-	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
+	type Hash: Member;
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
@@ -563,7 +600,7 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
-	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+	fn log<T: ?Sized, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
 		self.logs().iter()
 			.filter_map(predicate)
 			.next()
@@ -575,8 +612,8 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
-	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
-	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize;
+	type Hash: Member;
+	type AuthorityId: Member + MaybeHash + codec::Encode + codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;

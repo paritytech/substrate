@@ -47,6 +47,7 @@ use primitives::traits::{As, Zero, One, Convert};
 use codec::HasCompact;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
+use runtime_support::for_each_tuple;
 use system::ensure_signed;
 use rstd::ops::Mul;
 
@@ -54,17 +55,6 @@ use rstd::ops::Mul;
 pub trait OnSessionChange<T> {
 	/// Session has changed.
 	fn on_session_change(time_elapsed: T, should_reward: bool);
-}
-
-macro_rules! for_each_tuple {
-	($m:ident) => {
-		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
-	};
-	(@IMPL $m:ident !!) => { $m! { } };
-	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
-		$m! { $h $($t)* }
-		for_each_tuple! { @IMPL $m !! $($t,)* }
-	}
 }
 
 macro_rules! impl_session_change {
@@ -84,7 +74,6 @@ macro_rules! impl_session_change {
 }
 
 for_each_tuple!(impl_session_change);
-
 
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
@@ -253,8 +242,8 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Identity, BlakeTwo256};
-	use primitives::testing::{Digest, DigestItem, Header};
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
+	use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -265,7 +254,7 @@ mod tests {
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
-		type SessionKey = u64;
+		type SessionKey = UintAuthorityId;
 		type InherentOfflineReport = ();
 	}
 	impl system::Trait for Test {
@@ -276,6 +265,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
@@ -286,7 +276,7 @@ mod tests {
 		type OnTimestampSet = ();
 	}
 	impl Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
+		type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 		type OnSessionChange = ();
 		type Event = ();
 	}
@@ -299,7 +289,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
-			authorities: vec![1, 2, 3],
+			authorities: vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)],
 		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
@@ -314,7 +304,7 @@ mod tests {
 	#[test]
 	fn simple_setup_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1).into(), UintAuthorityId(2).into(), UintAuthorityId(3).into()]);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
 		});
@@ -410,25 +400,25 @@ mod tests {
 			// Block 1: No change
 			System::set_block_number(1);
 			Session::check_rotate_session(1);
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 2: Session rollover, but no change.
 			System::set_block_number(2);
 			Session::check_rotate_session(2);
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 3: Set new key for validator 2; no visible change.
 			System::set_block_number(3);
-			assert_ok!(Session::set_key(Origin::signed(2), 5));
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_ok!(Session::set_key(Origin::signed(2), UintAuthorityId(5)));
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			Session::check_rotate_session(3);
-			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 			// Block 4: Session rollover, authority 2 changes.
 			System::set_block_number(4);
 			Session::check_rotate_session(4);
-			assert_eq!(Consensus::authorities(), vec![1, 5, 3]);
+			assert_eq!(Consensus::authorities(), vec![UintAuthorityId(1), UintAuthorityId(5), UintAuthorityId(3)]);
 		});
 	}
 }

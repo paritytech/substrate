@@ -154,6 +154,7 @@ fn decl_store_extra_genesis(
 
 	let mut is_trait_needed = false;
 	let mut has_trait_field = false;
+	let mut serde_complete_bound = std::collections::HashSet::new();
 	let mut config_field = TokenStream2::new();
 	let mut config_field_default = TokenStream2::new();
 	let mut builders = TokenStream2::new();
@@ -169,7 +170,7 @@ fn decl_store_extra_genesis(
 			..
 		} = sline;
 
-		let is_simple = if let DeclStorageType::Simple(..) = storage_type { true } else { false };
+		let type_infos = get_type_infos(storage_type);
 
 		let mut opt_build;
 		// need build line
@@ -180,20 +181,24 @@ fn decl_store_extra_genesis(
 				let ident = &getter.getfn.content;
 				quote!( #ident )
 			};
-			let option_extracteed = if let DeclStorageType::Simple(ref st) = storage_type {
-				if ext::has_parametric_type(st, traitinstance) {
-					is_trait_needed = true;
-					has_trait_field = true;
+			if type_infos.is_simple && ext::has_parametric_type(type_infos.full_type, traitinstance) {
+				is_trait_needed = true;
+				has_trait_field = true;
+			}
+			for t in ext::get_non_bound_serde_derive_types(type_infos.full_type, &traitinstance).into_iter() {
+				serde_complete_bound.insert(t);
+			}
+			if let Some(kt) = type_infos.map_key {
+				for t in ext::get_non_bound_serde_derive_types(kt, &traitinstance).into_iter() {
+					serde_complete_bound.insert(t);
 				}
-				ext::extract_type_option(st)
-			} else { None };
-			let is_option = option_extracteed.is_some();
-			let storage_type = option_extracteed.unwrap_or_else(|| quote!( #storage_type ));
+			}
+			let storage_type = type_infos.typ.clone();
 			config_field.extend(quote!( pub #ident: #storage_type, ));
 			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
 				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance>| config.#ident.clone()) )));
 			let fielddefault = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d|
-				if is_option {
+				if type_infos.is_option {
 					quote!( #d.unwrap_or_default() )
 				} else {
 					quote!( #d )
@@ -204,20 +209,25 @@ fn decl_store_extra_genesis(
 			opt_build = build.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
 		}
 
+		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
 			is_trait_needed = true;
-			if is_simple {
+			if type_infos.is_simple {
 				builders.extend(quote!{{
 					use #scrate::codec::Encode;
 					let v = (#builder)(&self);
-					r.insert(Self::hash(<#name<#traitinstance>>::key()).to_vec(), v.encode());
+					r.insert(Self::hash(
+						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::key()
+						).to_vec(), v.encode());
 				}});
 			} else {
+				let kty = type_infos.map_key.clone().expect("is not simple; qed");
 				builders.extend(quote!{{
 					use #scrate::codec::Encode;
 					let data = (#builder)(&self);
 					for (k, v) in data.into_iter() {
-						r.insert(Self::hash(&<#name<#traitinstance>>::key_for(k)).to_vec(), v.encode());
+						let key = <#name<#traitinstance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(&k);
+						r.insert(Self::hash(&key[..]).to_vec(), v.encode());
 					}
 				}});
 			}
@@ -245,6 +255,11 @@ fn decl_store_extra_genesis(
 						is_trait_needed = true;
 						has_trait_field = true;
 					}
+
+					for t in ext::get_non_bound_serde_derive_types(extra_type, &traitinstance).into_iter() {
+						serde_complete_bound.insert(t);
+					}
+
 					let extrafield = &extra_field.content;
 					genesis_extrafields.extend(quote!{
 						#attrs pub #extrafield: #extra_type,
@@ -266,6 +281,25 @@ fn decl_store_extra_genesis(
 			}
 		}
 	}
+
+
+	let serde_bug_bound = if serde_complete_bound.len() > 0 {
+
+		let mut b_ser = String::new();
+		let mut b_dser = String::new();
+		for bound in serde_complete_bound {
+			let stype = quote!(#bound);
+			b_ser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::Serialize, ");
+			b_dser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::de::DeserializeOwned, ");
+		}
+
+		quote! {
+			#[serde(bound(serialize = #b_ser))]
+			#[serde(bound(deserialize = #b_dser))]
+		}
+	} else {
+		quote!()
+	};
 
 	let is_extra_genesis_needed = has_scall
 		|| !config_field.is_empty()
@@ -306,6 +340,7 @@ fn decl_store_extra_genesis(
 			#[cfg(feature = "std")]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
+			#serde_bug_bound
 			pub struct GenesisConfig#fparam {
 				#ph_field
 				#config_field
@@ -361,25 +396,22 @@ fn decl_storage_items(
 			..
 		} = sline;
 
-		let (is_simple, extracted_opt, stk, gettype) = match storage_type {
-			DeclStorageType::Simple(ref st) => (true, ext::extract_type_option(st), None, st),
-			DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
-		};
-		let is_option = extracted_opt.is_some();
+		let type_infos = get_type_infos(storage_type);
+		let gettype = type_infos.full_type;
 		let fielddefault = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
 			.unwrap_or_else(|| quote!{ Default::default() });
 
-		let typ = extracted_opt.unwrap_or(quote!( #gettype ));
+		let typ = type_infos.typ;
 
-		let option_simple_1 = if !is_option {
+		let option_simple_1 = if !type_infos.is_option {
 			// raw type case
 			quote!( unwrap_or_else )
 		} else {
 			// Option<> type case
 			quote!( or_else )
 		};
-		let implementation = if is_simple {
-			let mutate_impl = if !is_option {
+		let implementation = if type_infos.is_simple {
+			let mutate_impl = if !type_infos.is_option {
 				quote!{
 					<Self as #scrate::storage::generator::StorageValue<#typ>>::put(&val, storage)
 				}
@@ -430,8 +462,8 @@ fn decl_storage_items(
 
 			}
 		} else {
-			let kty = stk.expect("is not simple; qed");
-			let mutate_impl = if !is_option {
+			let kty = type_infos.map_key.expect("is not simple; qed");
+			let mutate_impl = if !type_infos.is_option {
 				quote!{
 					<Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage)
 				}
@@ -531,20 +563,19 @@ fn impl_store_fns(
 
 		if let Some(getter) = getter {
 			let get_fn = &getter.getfn.content;
-			let (is_simple, extracted_opt, stk, gettype) = match storage_type {
-				DeclStorageType::Simple(ref st) => (true, ext::extract_type_option(st), None, st),
-				DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
-			};
 
-			let typ = extracted_opt.unwrap_or(quote!(#gettype));
-			let item = if is_simple {
+			let type_infos = get_type_infos(storage_type);
+			let gettype = type_infos.full_type;
+
+			let typ = type_infos.typ;
+			let item = if type_infos.is_simple {
 				quote!{
 					pub fn #get_fn() -> #gettype {
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
 					}
 				}
 			} else {
-				let kty = stk.expect("is not simple; qed");
+				let kty = type_infos.map_key.expect("is not simple; qed");
 				// map
 				quote!{
 					pub fn #get_fn<K: #scrate::storage::generator::Borrow<#kty>>(key: K) -> #gettype {
@@ -576,14 +607,11 @@ fn store_functions_to_metadata (
 			..
 		} = sline;
 
-		let (is_simple, extracted_opt, stk, gettype) = match storage_type {
-			DeclStorageType::Simple(ref st) => (true, ext::extract_type_option(st), None, st),
-			DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
-		};
+		let type_infos = get_type_infos(storage_type);
+		let gettype = type_infos.full_type;
 
-		let is_option = extracted_opt.is_some();
-		let typ = extracted_opt.unwrap_or(quote!( #gettype ));
-		let stype = if is_simple {
+		let typ = type_infos.typ;
+		let stype = if type_infos.is_simple {
 			let styp = clean_type_string(&typ.to_string());
 			quote!{
 				#scrate::storage::generator::StorageFunctionType::Plain(
@@ -591,7 +619,7 @@ fn store_functions_to_metadata (
 				)
 			}
 		} else {
-			let kty = stk.expect("is not simple; qed");
+			let kty = type_infos.map_key.expect("is not simple; qed");
 			let kty = clean_type_string(&quote!(#kty).to_string());
 			let styp = clean_type_string(&typ.to_string());
 			quote!{
@@ -601,13 +629,13 @@ fn store_functions_to_metadata (
 				}
 			}
 		};
-		let modifier = if !is_option {
+		let modifier = if type_infos.is_option {
 			quote!{
-				#scrate::storage::generator::StorageFunctionModifier::Default
+				#scrate::storage::generator::StorageFunctionModifier::Optional
 			}
 		} else {
 			quote!{
-				#scrate::storage::generator::StorageFunctionModifier::Optional
+				#scrate::storage::generator::StorageFunctionModifier::Default
 			}
 		};
 		let default = default_value.inner.get(0).as_ref().map(|d| &d.expr)
@@ -654,10 +682,10 @@ fn store_functions_to_metadata (
 		let def_get = quote! {
 			pub struct #default_byte_struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
-			static #default_byte_cache_name: #scrate::once_cell::sync::OnceCell<Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #default_byte_cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #default_byte_struct_name<#traitinstance> {
-				fn default_byte(&self) -> Vec<u8> {
+				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					#default_byte_cache_name.get_or_init(|| {
 						let def_val: #gettype = #default;
@@ -667,7 +695,7 @@ fn store_functions_to_metadata (
 			}
 			#[cfg(not(feature = "std"))]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #default_byte_struct_name<#traitinstance> {
-				fn default_byte(&self) -> Vec<u8> {
+				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					let def_val: #gettype = #default;
 					<#gettype as Encode>::encode(&def_val)
@@ -705,3 +733,29 @@ fn store_functions_to_metadata (
 		}
 	})
 }
+
+
+struct DeclStorageTypeInfos<'a> {
+	pub is_simple: bool,
+	pub full_type: &'a syn::Type,
+	pub is_option: bool,
+	pub typ: TokenStream2,
+	pub map_key: Option<&'a syn::Type>,
+}
+
+fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
+	let (is_simple, extracted_type, map_key, full_type) = match storage_type {
+		DeclStorageType::Simple(ref st) => (true, ext::extract_type_option(st), None, st),
+		DeclStorageType::Map(ref map) => (false, ext::extract_type_option(&map.value), Some(&map.key), &map.value),
+	};
+	let is_option = extracted_type.is_some();
+	let typ = extracted_type.unwrap_or(quote!( #full_type ));
+	DeclStorageTypeInfos {
+		is_simple,
+		full_type,
+		is_option,
+		typ,
+		map_key,
+	}
+}
+

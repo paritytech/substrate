@@ -21,17 +21,15 @@ use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
-use primitives::AuthorityId;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
-
-use in_mem;
-use backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
-use blockchain::HeaderBackend as BlockchainHeaderBackend;
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::fetcher::{Fetcher, RemoteReadRequest};
+use state_machine::{Backend as StateBackend, TrieBackend};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor};
+use crate::in_mem;
+use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
+use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
@@ -44,7 +42,7 @@ pub struct Backend<S, F> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F> {
 	header: Option<Block::Header>,
-	authorities: Option<Vec<AuthorityId>>,
+	authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
@@ -96,7 +94,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, S, F>;
-	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
+	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -185,11 +183,11 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
+	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -209,6 +207,11 @@ where
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.aux_ops = ops.into_iter().collect();
+		Ok(())
+	}
+
+	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
+		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 }
@@ -271,6 +274,11 @@ where
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		// whole state is not available on light node
+		Vec::new()
+	}
+
+	fn keys(&self, _prefix: &Vec<u8>) -> Vec<Vec<u8>> {
 		// whole state is not available on light node
 		Vec::new()
 	}

@@ -29,10 +29,9 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
-use primitives::AuthorityId;
 
 use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
 use error::Error as ConsensusError;
 
@@ -68,7 +67,7 @@ pub trait Verifier<B: BlockT>: Send + Sync + Sized {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String>;
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String>;
 }
 
 /// Blocks import queue API.
@@ -93,6 +92,8 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	fn is_importing(&self, hash: &B::Hash) -> bool;
 	/// Import bunch of blocks.
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
+	/// Import a block justification.
+	fn import_justification(&self, hash: B::Hash, number: NumberFor<B>, justification: Justification) -> bool;
 }
 
 /// Import queue status. It isn't completely accurate.
@@ -162,6 +163,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 		let verifier = self.verifier.clone();
 		let block_import = self.block_import.clone();
 		*self.handle.lock() = Some(::std::thread::Builder::new().name("ImportQueue".into()).spawn(move || {
+			block_import.on_start(&link);
 			import_thread(block_import, link, qdata, verifier)
 		})?);
 		Ok(())
@@ -218,6 +220,10 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 		}
 		queue.push_back((origin, blocks));
 		self.data.signal.notify_one();
+	}
+
+	fn import_justification(&self, hash: B::Hash, number: NumberFor<B>, justification: Justification) -> bool {
+		self.block_import.import_justification(hash, number, justification).is_ok()
 	}
 }
 
@@ -280,6 +286,8 @@ fn import_thread<B: BlockT, L: Link<B>, V: Verifier<B>>(
 pub trait Link<B: BlockT>: Send {
 	/// Block imported.
 	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
+	/// Request a justification for the given block.
+	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
 	/// Maintain sync.
 	fn maintain_sync(&self) { }
 	/// Disconnect from peer.
@@ -297,6 +305,8 @@ pub enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debu
 	ImportedKnown(H, N),
 	/// Imported unknown block.
 	ImportedUnknown(H, N),
+	/// Imported unjustified block that requires one.
+	ImportedUnjustified(H, N),
 }
 
 /// Block import error.
@@ -410,6 +420,10 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			trace!(target: "sync", "Block queued {}: {:?}", number, hash);
 			Ok(BlockImportResult::ImportedUnknown(hash, number))
 		},
+		Ok(ImportResult::NeedsJustification) => {
+			trace!(target: "sync", "Block queued but requires justification {}: {:?}", number, hash);
+			Ok(BlockImportResult::ImportedUnjustified(hash, number))
+		},
 		Ok(ImportResult::UnknownParent) => {
 			debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 			Err(BlockImportError::UnknownParent)
@@ -417,7 +431,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		Ok(ImportResult::KnownBad) => {
 			debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
 			Err(BlockImportError::BadBlock(peer)) //TODO: use persistent ID
-		}
+		},
 		Err(e) => {
 			debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
 			Err(BlockImportError::Error)
@@ -438,6 +452,11 @@ pub fn process_import_result<B: BlockT>(
 		},
 		Ok(BlockImportResult::ImportedUnknown(hash, number)) => {
 			link.block_imported(&hash, number);
+			1
+		},
+		Ok(BlockImportResult::ImportedUnjustified(hash, number)) => {
+			link.block_imported(&hash, number);
+			link.request_justification(&hash, number);
 			1
 		},
 		Err(BlockImportError::IncompleteHeader(who)) => {

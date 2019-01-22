@@ -26,18 +26,23 @@ use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
+use serde::Serialize;
 
 use subscriptions::Subscriptions;
 
 mod error;
 #[cfg(test)]
 mod tests;
+mod number;
 
 use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate blockchain API
-	pub trait ChainApi<Hash, Header, Number, SignedBlock> {
+	pub trait ChainApi<Number, Hash> where
+		Header: Serialize,
+		SignedBlock: Serialize,
+	{
 		type Metadata;
 
 		/// Get header of a relay chain block.
@@ -52,7 +57,7 @@ build_rpc_trait! {
 		///
 		/// By default returns latest block hash.
 		#[rpc(name = "chain_getBlockHash", alias = ["chain_getHead", ])]
-		fn block_hash(&self, Trailing<Number>) -> Result<Option<Hash>>;
+		fn block_hash(&self, Trailing<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
 
 		/// Get hash of the last finalised block in the canon chain.
 		#[rpc(name = "chain_getFinalisedHead")]
@@ -65,7 +70,7 @@ build_rpc_trait! {
 
 			/// Unsubscribe from new head subscription.
 			#[rpc(name = "chain_unsubscribeNewHead", alias = ["unsubscribe_newHead", ])]
-			fn unsubscribe_new_head(&self, Self::Metadata, SubscriptionId) -> RpcResult<bool>;
+			fn unsubscribe_new_head(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
 		}
 
 		#[pubsub(name = "chain_finalisedHead")] {
@@ -75,7 +80,7 @@ build_rpc_trait! {
 
 			/// Unsubscribe from new head subscription.
 			#[rpc(name = "chain_unsubscribeFinalisedHeads")]
-			fn unsubscribe_finalised_heads(&self, Self::Metadata, SubscriptionId) -> RpcResult<bool>;
+			fn unsubscribe_finalised_heads(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
 		}
 	}
 }
@@ -148,7 +153,7 @@ impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 	}
 }
 
-impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>> for Chain<B, E, Block, RA> where
+impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>> for Chain<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -168,10 +173,11 @@ impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Sig
 		Ok(self.client.block(&BlockId::Hash(hash))?)
 	}
 
-	fn block_hash(&self, number: Trailing<NumberFor<Block>>) -> Result<Option<Block::Hash>> {
-		Ok(match number.into() {
+	fn block_hash(&self, number: Trailing<number::NumberOrHex<NumberFor<Block>>>) -> Result<Option<Block::Hash>> {
+		let number: Option<number::NumberOrHex<NumberFor<Block>>> = number.into();
+		Ok(match number {
 			None => Some(self.client.info()?.chain.best_hash),
-			Some(number) => self.client.header(&BlockId::number(number))?.map(|h| h.hash()),
+			Some(num_or_hex) => self.client.header(&BlockId::number(num_or_hex.to_number()?))?.map(|h| h.hash()),
 		})
 	}
 
@@ -189,7 +195,7 @@ impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Sig
 		)
 	}
 
-	fn unsubscribe_new_head(&self, _metadata: Self::Metadata, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_new_head(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 
@@ -202,7 +208,7 @@ impl<B, E, Block, RA> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Sig
 		)
 	}
 
-	fn unsubscribe_finalised_heads(&self, _metadata: Self::Metadata, id: SubscriptionId) -> RpcResult<bool> {
+	fn unsubscribe_finalised_heads(&self, _metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 }

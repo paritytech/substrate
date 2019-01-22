@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
-parity-codec = { version = "2.1", default-features = false }
+parity-codec = { version = "2.2", default-features = false }
 srml-metadata = { path = "../metadata", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }

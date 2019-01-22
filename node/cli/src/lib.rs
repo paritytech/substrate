@@ -122,15 +122,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 		};
 
 	let (spec, config) = cli::parse_matches::<service::Factory, _>(
-		load_spec, version, "substrate-node", &matches
+		load_spec, &version, "substrate-node", &matches
 	)?;
 
 	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
 		cli::Action::ExecutedInternally => (),
 		cli::Action::RunService(exit) => {
-			info!("Substrate Node");
+			info!("{}", version.name);
 			info!("  version {}", config.full_version());
-			info!("  by Parity Technologies, 2017, 2018");
+			info!("  by {}, 2017, 2018", version.author);
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);

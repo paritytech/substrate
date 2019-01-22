@@ -50,6 +50,7 @@ extern crate srml_system as system;
 // might find it useful).
 extern crate srml_balances as balances;
 
+use codec::HasCompact;
 use support::{StorageValue, dispatch::Result};
 use system::ensure_signed;
 
@@ -177,9 +178,9 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
-		fn set_dummy(new_value: T::Balance) {
+		fn set_dummy(new_value: <T::Balance as HasCompact>::Type) {
 			// Put the new value into storage.
-			<Dummy<T>>::put(new_value);
+			<Dummy<T>>::put(new_value.into());
 		}
 
 		// The signature could also look like: `fn on_finalise()`
@@ -269,7 +270,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnFinalise}, testing::{Digest, DigestItem, Header}
+		BuildStorage, traits::{BlakeTwo256, OnFinalise, IdentityLookup}, testing::{Digest, DigestItem, Header}
 	};
 
 	impl_outer_origin! {
@@ -289,14 +290,15 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
 		type Event = ();
 	}

@@ -18,9 +18,8 @@
 
 #![cfg(test)]
 
-use primitives::BuildStorage;
-use primitives::{Perbill, traits::Identity};
-use primitives::testing::{Digest, DigestItem, Header};
+use primitives::{traits::IdentityLookup, BuildStorage, Perbill};
+use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
@@ -35,7 +34,7 @@ pub struct Test;
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
-	type SessionKey = u64;
+	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ();
 }
 impl system::Trait for Test {
@@ -46,19 +45,20 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
-	type AccountIndex = u64;
 	type OnFreeBalanceZero = Staking;
+	type OnNewAccount = ();
 	type EnsureAccountLiquid = Staking;
 	type Event = ();
 }
 impl session::Trait for Test {
-	type ConvertAccountIdToSessionKey = Identity;
+	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;
 	type OnSessionChange = Staking;
 	type Event = ();
 }
@@ -109,7 +109,6 @@ pub fn new_test_ext(
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,
-		reclaim_rebate: 0,
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
@@ -123,6 +122,7 @@ pub fn new_test_ext(
 		current_session_reward: reward,
 		current_offline_slash: 20,
 		offline_slash_grace: 0,
+		invulnerables: vec![],
 	}.build_storage().unwrap().0);
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5,

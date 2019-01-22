@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 hex-literal = "0.1.0"
-parity-codec = { version = "2.1", default-features = false }
+parity-codec = { version = "2.2", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 serde = { version = "1.0", default-features = false }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
@@ -22,7 +22,7 @@ substrate-metadata-derive = { path = "../../core/metadata-derive", default-featu
 
 [dev-dependencies]
 lazy_static = "1.0"
-parking_lot = "0.6"
+parking_lot = "0.7.1"
 
 [features]
 default = ["std"]

@@ -25,7 +25,8 @@ use tokio::runtime::current_thread;
 use keyring::Keyring;
 use client::{
 	BlockchainEvents, error::Result,
-	runtime_api::{Core, RuntimeVersion, ApiExt, ConstructRuntimeApi, CallRuntimeAt},
+	blockchain::Backend as BlockchainBackend,
+	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
@@ -221,7 +222,7 @@ impl Network for MessageRouting {
 		Box::new(messages)
 	}
 
-	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
 		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
 		inner.route_until_complete();
@@ -230,12 +231,12 @@ impl Network for MessageRouting {
 
 #[derive(Default, Clone)]
 struct TestApi {
-	genesis_authorities: Vec<(AuthorityId, u64)>,
+	genesis_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
 }
 
 impl TestApi {
-	fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
+	fn new(genesis_authorities: Vec<(Ed25519AuthorityId, u64)>) -> Self {
 		TestApi {
 			genesis_authorities,
 			scheduled_changes: Arc::new(Mutex::new(HashMap::new())),
@@ -260,11 +261,11 @@ impl Core<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn authorities(&self, _: &BlockId<Block>) -> Result<Vec<AuthorityId>> {
+	fn authorities(&self, _: &BlockId<Block>) -> Result<Vec<Ed25519AuthorityId>> {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn execute_block(&self, _: &BlockId<Block>, _: &Block) -> Result<()> {
+	fn execute_block(&self, _: &BlockId<Block>, _: Block) -> Result<()> {
 		unimplemented!("Not required for testing!")
 	}
 
@@ -290,17 +291,11 @@ impl ApiExt<Block> for RuntimeApi {
 	}
 }
 
-impl ConstructRuntimeApi<Block> for RuntimeApi {
-	fn construct_runtime_api<'a, T: CallRuntimeAt<Block>>(_: &'a T) -> ApiRef<'a, Self> {
-		unimplemented!("Not required for testing!")
-	}
-}
-
 impl GrandpaApi<Block> for RuntimeApi {
 	fn grandpa_authorities(
 		&self,
 		at: &BlockId<Block>
-	) -> Result<Vec<(AuthorityId, u64)>> {
+	) -> Result<Vec<(Ed25519AuthorityId, u64)>> {
 		if at == &BlockId::Number(0) {
 			Ok(self.inner.genesis_authorities.clone())
 		} else {
@@ -325,29 +320,14 @@ impl GrandpaApi<Block> for RuntimeApi {
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
-fn make_ids(keys: &[Keyring]) -> Vec<(AuthorityId, u64)> {
+fn make_ids(keys: &[Keyring]) -> Vec<(Ed25519AuthorityId, u64)> {
 	keys.iter()
-		.map(|key| AuthorityId(key.to_raw_public()))
+		.map(|key| Ed25519AuthorityId(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
 }
 
-#[test]
-fn finalize_3_voters_no_observers() {
-	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
-	let voters = make_ids(peers);
-
-	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
-	net.peer(0).push_blocks(20, false);
-	net.sync();
-
-	for i in 0..3 {
-		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 20,
-			"Peer #{} failed to sync", i);
-	}
-
-	let net = Arc::new(Mutex::new(net));
-
+fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) {
 	let mut finality_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
@@ -363,7 +343,7 @@ fn finalize_3_voters_no_observers() {
 		};
 		finality_notifications.push(
 			client.finality_notification_stream()
-				.take_while(|n| Ok(n.header.number() < &20))
+				.take_while(|n| Ok(n.header.number() < &blocks))
 				.for_each(|_| Ok(()))
 		);
 		fn assert_send<T: Send>(_: &T) { }
@@ -371,6 +351,7 @@ fn finalize_3_voters_no_observers() {
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
 				local_key: Some(Arc::new(key.clone().into())),
 				name: Some(format!("peer#{}", peer_id)),
 			},
@@ -395,6 +376,28 @@ fn finalize_3_voters_no_observers() {
 		.map_err(|_| ());
 
 	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+}
+
+#[test]
+fn finalize_3_voters_no_observers() {
+	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	net.peer(0).push_blocks(20, false);
+	net.sync();
+
+	for i in 0..3 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 20,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(20, net.clone(), peers);
+
+	// normally there's no justification for finalized blocks
+	assert!(net.lock().peer(0).client().backend().blockchain().justification(BlockId::Number(20)).unwrap().is_none(),
+		"Extra justification for block#1");
 }
 
 #[test]
@@ -432,6 +435,7 @@ fn finalize_3_voters_1_observer() {
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
@@ -484,7 +488,7 @@ fn transition_3_voters_twice_1_observer() {
 	let transitions = api.scheduled_changes.clone();
 	let net = Arc::new(Mutex::new(GrandpaTestNet::new(api, 8)));
 
-	let mut runtime = tokio::runtime::Runtime::new().unwrap();
+	let mut runtime = current_thread::Runtime::new().unwrap();
 
 	net.lock().peer(0).push_blocks(1, false);
 	net.lock().sync();
@@ -589,6 +593,7 @@ fn transition_3_voters_twice_1_observer() {
 		let voter = run_grandpa(
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
+				justification_period: 32,
 				local_key,
 				name: Some(format!("peer#{}", peer_id)),
 			},
@@ -608,6 +613,7 @@ fn transition_3_voters_twice_1_observer() {
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
+			net.lock().send_finality_notifications();
 			net.lock().sync();
 			Ok(())
 		})
@@ -615,4 +621,111 @@ fn transition_3_voters_twice_1_observer() {
 		.map_err(|_| ());
 
 	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+}
+
+#[test]
+fn justification_is_emitted_when_consensus_data_changes() {
+	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
+
+	// import block#1 WITH consensus data change
+	let new_authorities = vec![Ed25519AuthorityId::from([42; 32])];
+	net.peer(0).push_authorities_change_block(new_authorities);
+	net.sync();
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(1, net.clone(), peers);
+
+	// ... and check that there's no justification for block#1
+	assert!(net.lock().peer(0).client().backend().blockchain().justification(BlockId::Number(1)).unwrap().is_some(),
+		"Missing justification for block#1");
+}
+
+#[test]
+fn justification_is_generated_periodically() {
+	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let voters = make_ids(peers);
+
+	let mut net = GrandpaTestNet::new(TestApi::new(voters), 3);
+	net.peer(0).push_blocks(32, false);
+	net.sync();
+
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(32, net.clone(), peers);
+
+ 	// when block#32 (justification_period) is finalized, justification
+	// is required => generated
+	for i in 0..3 {
+		assert!(net.lock().peer(i).client().backend().blockchain()
+			.justification(BlockId::Number(32)).unwrap().is_some());
+	}
+}
+
+#[test]
+fn consensus_changes_works() {
+	let mut changes = ConsensusChanges::<H256, u64>::empty();
+
+	// pending changes are not finalized
+	changes.note_change((10, 1.into()));
+	assert_eq!(changes.finalize((5, 5.into()), |_| Ok(None)).unwrap(), (false, false));
+
+	// no change is selected from competing pending changes
+	changes.note_change((1, 1.into()));
+	changes.note_change((1, 101.into()));
+	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1001.into()))).unwrap(), (true, false));
+
+	// change is selected from competing pending changes
+	changes.note_change((1, 1.into()));
+	changes.note_change((1, 101.into()));
+	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1.into()))).unwrap(), (true, true));
+}
+
+#[test]
+fn sync_justifications_on_change_blocks() {
+	::env_logger::init();
+
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers_b = &[Keyring::Alice, Keyring::Bob];
+	let voters = make_ids(peers_b);
+
+	// 4 peers, 3 of them are authorities and participate in grandpa
+	let api = TestApi::new(voters);
+	let transitions = api.scheduled_changes.clone();
+	let mut net = GrandpaTestNet::new(api, 4);
+
+	// add 20 blocks
+	net.peer(0).push_blocks(20, false);
+
+	// at block 21 we do add a transition which is instant
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+		let block = builder.bake().unwrap();
+		transitions.lock().insert(*block.header.parent_hash(), ScheduledChange {
+			next_authorities: make_ids(peers_b),
+			delay: 0,
+		});
+		block
+	});
+
+	// add more blocks on top of it (until we have 25)
+	net.peer(0).push_blocks(4, false);
+	net.sync();
+
+	for i in 0..4 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 25,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(25, net.clone(), peers_a);
+
+	// the first 3 peers are grandpa voters and therefore have already finalized
+	// block 21 and stored a justification
+	for i in 0..3 {
+		assert!(net.lock().peer(i).client().justification(&BlockId::Number(21)).unwrap().is_some());
+	}
+
+	// the last peer should get the justification by syncing from other peers
+	assert!(net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none());
+	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
+		net.lock().sync_steps(100);
+	}
 }

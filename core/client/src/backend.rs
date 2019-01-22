@@ -16,10 +16,10 @@
 
 //! Substrate Client data backend
 
-use error;
-use primitives::AuthorityId;
+use crate::error;
+use primitives::ChangesTrieConfiguration;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use hash_db::Hasher;
@@ -67,11 +67,13 @@ pub trait BlockImportOperation<Block, H> where
 
 	/// Append authorities set to the transaction. This is a set of parent block (set which
 	/// has been used to check justification of this block).
-	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
+	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>);
 	/// Inject storage data into the database.
-	fn update_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
+	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out>;
+	/// Set top level storage changes.
+	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
 	/// Update auxiliary keys. Values are `None` if should be deleted.
@@ -108,11 +110,11 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	/// Associated block insertion operation type.
 	type BlockImportOperation: BlockImportOperation<Block, H>;
 	/// Associated blockchain backend type.
-	type Blockchain: ::blockchain::Backend<Block>;
+	type Blockchain: crate::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H>;
 	/// Changes trie storage.
-	type ChangesTrieStorage: StateChangesTrieStorage<H>;
+	type ChangesTrieStorage: PrunableStateChangesTrieStorage<H>;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -128,6 +130,10 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
+	/// Destroy state and save any useful data, such as cache.
+	fn destroy_state(&self, _state: Self::State) -> error::Result<()> {
+		Ok(())
+	}
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
 	/// successfully reverted.
 	fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>>;
@@ -147,6 +153,12 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
 		AuxStore::get_aux(self, key)
 	}
+}
+
+/// Changes trie storage that supports pruning.
+pub trait PrunableStateChangesTrieStorage<H: Hasher>: StateChangesTrieStorage<H> {
+	/// Get number block of oldest, non-pruned changes trie.
+	fn oldest_changes_trie_block(&self, config: &ChangesTrieConfiguration, best_finalized: u64) -> u64;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

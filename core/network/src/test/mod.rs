@@ -27,18 +27,18 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
+use primitives::Ed25519AuthorityId;
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Zero};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor, Zero};
 use io::SyncIo;
-use primitives::AuthorityId;
 use protocol::{Context, Protocol, ProtocolContext};
 use config::ProtocolConfig;
 use service::{NetworkLink, TransactionPool};
 use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::Encode;
-use consensus::{BlockImport, BlockOrigin, ImportBlock};
+use consensus::{BlockImport, BlockOrigin, ImportBlock, ForkChoiceStrategy};
 use consensus::Error as ConsensusError;
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, Verifier};
@@ -92,7 +92,10 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 		header: B::Header,
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityIdFor<B>>>), String> {
+		let new_authorities = header.digest().log(DigestItem::as_authorities_change)
+			.map(|auth| auth.iter().cloned().collect());
+
 		Ok((ImportBlock {
 			origin,
 			header,
@@ -101,7 +104,8 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			justification,
 			post_digests: vec![],
 			auxiliary: Vec::new(),
-		}, None))
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		}, new_authorities))
 	}
 }
 
@@ -185,6 +189,15 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		self.link.call(origin, blocks);
+	}
+
+	fn import_justification(
+		&self,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		justification: Justification,
+	) -> bool {
+		self.block_import.import_justification(hash, number, justification).is_ok()
 	}
 }
 
@@ -362,6 +375,13 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
 	}
 
+	/// Send block finalization notifications.
+	pub fn send_finality_notifications(&self) {
+		let info = self.client.info().expect("In-mem client does not fail");
+		let header = self.client.header(&BlockId::Hash(info.chain.finalized_hash)).unwrap().unwrap();
+		self.sync.on_block_finalized(&mut TestIo::new(&self.queue, None), info.chain.finalized_hash, &header);
+	}
+
 	/// Restart sync for a peer.
 	fn restart_sync(&self) {
 		self.sync.abort();
@@ -374,6 +394,14 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>, broadcast: bool) {
 		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
+	}
+
+	/// Request a justification for the given block.
+	#[cfg(test)]
+	fn request_justification(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
+		self.executor.execute_in_context(|context| {
+			self.sync.sync().write().request_justification(hash, number, context);
+		})
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -414,13 +442,20 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 					nonce,
 				};
 				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
-				builder.push(Extrinsic { transfer, signature }).unwrap();
+				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()
 			});
 		} else {
 			self.generate_blocks(count, BlockOrigin::File, |builder| builder.bake().unwrap());
 		}
+	}
+
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<Ed25519AuthorityId>) {
+		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
+			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
+			builder.bake().unwrap()
+		});
 	}
 
 	/// Execute a function with specialization for this peer.
@@ -586,6 +621,15 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				peer.send_import_notifications();
+			}
+		})
+	}
+
+	/// Send block finalization notifications for all peers.
+	fn send_finality_notifications(&mut self) {
+		self.mut_peers(|peers| {
+			for peer in peers {
+				peer.send_finality_notifications();
 			}
 		})
 	}
