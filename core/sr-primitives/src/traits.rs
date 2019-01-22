@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use rstd::prelude::*;
-use rstd::{self, result};
+use rstd::{self, result, marker::PhantomData};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
@@ -26,9 +26,13 @@ use substrate_primitives::Blake2Hasher;
 use codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
-use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
-	RemAssign, Shl, Shr};
+pub use num_traits::ops::checked::{
+	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+};
+use rstd::ops::{
+	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
+	RemAssign, Shl, Shr
+};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -50,7 +54,7 @@ pub trait Verify {
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	type Success;
-	fn ensure_origin(o: OuterOrigin) -> Result<Self::Success, &'static str>;
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str>;
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
@@ -61,6 +65,31 @@ pub trait Lookup {
 	type Target;
 	/// Attempt a lookup.
 	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
+/// Means of changing one type into another in a manner dependent on the source type.
+/// This variant is different to `Lookup` in that it doesn't (can cannot) require any
+/// context.
+pub trait StaticLookup {
+	/// Type to lookup from.
+	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	/// Type to lookup into.
+	type Target;
+	/// Attempt a lookup.
+	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
+#[derive(Default)]
+pub struct IdentityLookup<T>(PhantomData<T>);
+impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
+	type Source = T;
+	type Target = T;
+	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+}
+impl<T> Lookup for IdentityLookup<T> {
+	type Source = T;
+	type Target = T;
+	fn lookup(&self, x: T) -> result::Result<T, &'static str> { Ok(x) }
 }
 
 /// Get the "current" block number.
@@ -156,6 +185,8 @@ pub trait SimpleArithmetic:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl +
+	CheckedShr +
 	CheckedAdd +
 	CheckedSub +
 	CheckedMul +
@@ -171,6 +202,8 @@ impl<T:
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
 	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl +
+	CheckedShr +
 	CheckedAdd +
 	CheckedSub +
 	CheckedMul +
@@ -246,7 +279,7 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -276,7 +309,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 	fn storage_root() -> Self::Output;
 
 	/// Acquire the global storage changes root.
-	fn storage_changes_root(block: u64) -> Option<Self::Output>;
+	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -308,8 +341,8 @@ impl Hash for BlakeTwo256 {
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
-	fn storage_changes_root(block: u64) -> Option<Self::Output> {
-		runtime_io::storage_changes_root(block).map(Into::into)
+	fn storage_changes_root(parent_hash: Self::Output, parent_number: u64) -> Option<Self::Output> {
+		runtime_io::storage_changes_root(parent_hash.into(), parent_number).map(Into::into)
 	}
 }
 
@@ -366,6 +399,16 @@ pub trait MaybeSerializeDebugButNotDeserialize {}
 impl<T> MaybeSerializeDebugButNotDeserialize for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeSerialize: Serialize {}
+#[cfg(feature = "std")]
+impl<T: Serialize> MaybeSerialize for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerialize {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerialize for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
@@ -374,6 +417,16 @@ impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
 pub trait MaybeSerializeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebug for T {}
+
+#[cfg(feature = "std")]
+pub trait MaybeDebug: Debug {}
+#[cfg(feature = "std")]
+impl<T: Debug> MaybeDebug for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDebug {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDebug for T {}
 
 #[cfg(feature = "std")]
 pub trait MaybeDisplay: Display {}
@@ -386,6 +439,16 @@ pub trait MaybeDisplay {}
 impl<T> MaybeDisplay for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeHash: ::rstd::hash::Hash {}
+#[cfg(feature = "std")]
+impl<T: ::rstd::hash::Hash> MaybeHash for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeHash {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeHash for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeDecode: ::codec::Decode {}
 #[cfg(feature = "std")]
 impl<T: ::codec::Decode> MaybeDecode for T {}
@@ -395,20 +458,19 @@ pub trait MaybeDecode {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDecode for T {}
 
-
-pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
-impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
+pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
+impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Digest<Hash = Self::Hash>;
+	type Digest: Digest<Hash = Self::Hash> + Codec;
 
 	fn new(
 		number: Self::Number,
@@ -444,10 +506,10 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Extrinsic: Member + Codec + Extrinsic;
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
@@ -458,6 +520,13 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stati
 	}
 }
 
+/// Something that acts like an `Extrinsic`.
+pub trait Extrinsic {
+	/// Is this `Extrinsic` signed?
+	/// If no information are available about signed/unsigned, `None` should be returned.
+	fn is_signed(&self) -> Option<bool> { None }
+}
+
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -466,6 +535,8 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
 /// Extract the digest item type for a block.
 pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
+/// Extract the authority ID type for a block.
+pub type AuthorityIdFor<B> = <DigestItemFor<B> as DigestItem>::AuthorityId;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -516,7 +587,7 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
-pub trait Digest: Member + Default {
+pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 	type Hash: Member;
 	type Item: DigestItem<Hash = Self::Hash>;
 
@@ -528,7 +599,7 @@ pub trait Digest: Member + Default {
 	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
-	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+	fn log<T: ?Sized, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
 		self.logs().iter()
 			.filter_map(predicate)
 			.next()
@@ -539,9 +610,9 @@ pub trait Digest: Member + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member {
+pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	type Hash: Member;
-	type AuthorityId: Member;
+	type AuthorityId: Member + MaybeHash + codec::Encode + codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
@@ -554,8 +625,6 @@ pub trait DigestItem: Codec + Member {
 pub trait ProvideInherent {
 	/// The inherent that is provided.
 	type Inherent: Encode + MaybeDecode;
-	/// The error used by this trait.
-	type Error: Encode + MaybeDecode;
 	/// The call for setting the inherent.
 	type Call: Encode + MaybeDecode;
 
@@ -569,12 +638,55 @@ pub trait ProvideInherent {
 	/// Check that the given inherent is valid.
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
-	) -> Result<(), Self::Error>;
+	) -> Result<(), super::CheckInherentError>;
 }
 
-/// Something that acts like an `Extrinsic`.
-pub trait Extrinsic {
-	/// Is this `Extrinsic` signed?
-	/// If no information are available about signed/unsigned, `None` should be returned.
-	fn is_signed(&self) -> Option<bool> { None }
+/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
+pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+
+impl<'a, T> From<T> for ApiRef<'a, T> {
+	fn from(api: T) -> Self {
+		ApiRef(api, Default::default())
+	}
+}
+
+impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+/// Something that provides a runtime api.
+pub trait ProvideRuntimeApi {
+	/// The concrete type that provides the api.
+	type Api;
+
+	/// Returns the runtime api.
+	/// The returned instance will keep track of modifications to the storage. Any successful
+	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
+	/// the modifications will be `discarded`. The modifications will not be applied to the
+	/// storage, even on a `commit`.
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+}
+
+/// A marker trait for something that knows the type of the runtime block.
+pub trait GetRuntimeBlockType {
+	/// The `RuntimeBlock` type.
+	type RuntimeBlock: self::Block;
+}
+
+/// A marker trait for something that knows the type of the node block.
+pub trait GetNodeBlockType {
+	/// The `NodeBlock` type.
+	type NodeBlock: self::Block;
+}
+
+/// Something that provides information about a runtime api.
+pub trait RuntimeApiInfo {
+	/// The identifier of the runtime api.
+	const ID: [u8; 8];
+	/// The version of the runtime api.
+	const VERSION: u32;
 }

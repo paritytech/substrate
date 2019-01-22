@@ -48,7 +48,6 @@ pub type BlockRequest<B> = generic::BlockRequest<
 	<<B as BlockT>::Header as HeaderT>::Number,
 >;
 
-
 /// Type alias for using the BlockData type using block type parameters.
 pub type BlockData<B> = generic::BlockData<
 	<B as BlockT>::Header,
@@ -125,7 +124,7 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use runtime_primitives::Justification;
-	use service::Roles;
+	use config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
 		RequestId, Transactions, Direction
@@ -173,7 +172,7 @@ pub mod generic {
 		/// Transactions.
 		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
-		Consensus(Hash, ConsensusMessage), // topic, opaque Vec<u8>
+		Consensus(Hash, ConsensusMessage, bool), // topic, opaque Vec<u8>, broadcast
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.
@@ -189,7 +188,7 @@ pub mod generic {
 		/// Remote changes request.
 		RemoteChangesRequest(RemoteChangesRequest<Hash>),
 		/// Remote changes reponse.
-		RemoteChangesResponse(RemoteChangesResponse<Number>),
+		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -298,6 +297,9 @@ pub mod generic {
 		pub first: H,
 		/// Hash of the last block of the range (including last) where changes are requested.
 		pub last: H,
+		/// Hash of the first block for which the requester has the changes trie root. All other
+		/// affected roots must be proved.
+		pub min: H,
 		/// Hash of the last block that we can use when querying changes.
 		pub max: H,
 		/// Storage key which changes are requested.
@@ -306,7 +308,7 @@ pub mod generic {
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Remote changes response.
-	pub struct RemoteChangesResponse<N> {
+	pub struct RemoteChangesResponse<N, H> {
 		/// Id of a request this response was made for.
 		pub id: RequestId,
 		/// Proof has been generated using block with this number as a max block. Should be
@@ -314,5 +316,9 @@ pub mod generic {
 		pub max: N,
 		/// Changes proof.
 		pub proof: Vec<Vec<u8>>,
+		/// Changes tries roots missing on the requester' node.
+		pub roots: Vec<(N, H)>,
+		/// Missing changes tries roots proof.
+		pub roots_proof: Vec<Vec<u8>>,
 	}
 }

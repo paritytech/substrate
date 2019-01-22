@@ -16,12 +16,11 @@
 
 //! Substrate blockchain trait
 
-use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
 
-use error::{ErrorKind, Result};
+use crate::error::{ErrorKind, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
@@ -36,9 +35,37 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
 
+	/// Convert an arbitrary block ID into a block hash.
+	fn block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Option<Block::Hash>> {
+		match *id {
+			BlockId::Hash(h) => Ok(Some(h)),
+			BlockId::Number(n) => self.hash(n),
+		}
+	}
+
+	/// Convert an arbitrary block ID into a block hash.
+	fn block_number_from_id(&self, id: &BlockId<Block>) -> Result<Option<NumberFor<Block>>> {
+		match *id {
+			BlockId::Hash(_) => Ok(self.header(*id)?.map(|h| h.number().clone())),
+			BlockId::Number(n) => Ok(Some(n)),
+		}
+	}
+
 	/// Get block header. Returns `UnknownBlock` error if block is not found.
 	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
 		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
+	}
+
+	/// Convert an arbitrary block ID into a block number. Returns `UnknownBlock` error if block is not found.
+	fn expect_block_number_from_id(&self, id: &BlockId<Block>) -> Result<NumberFor<Block>> {
+		self.block_number_from_id(id)
+			.and_then(|n| n.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into()))
+	}
+
+	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is not found.
+	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
+		self.block_hash_from_id(id)
+			.and_then(|n| n.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into()))
 	}
 }
 
@@ -62,7 +89,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 /// Blockchain optional data cache.
 pub trait Cache<Block: BlockT>: Send + Sync {
 	/// Returns the set of authorities, that was active at given block or None if there's no entry in the cache.
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>>;
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>>;
 }
 
 /// Block import outcome

@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use substrate_metadata::{
-	DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata
+pub use srml_metadata::{
+	DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata,
+	DefaultByteGetter,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -98,7 +99,7 @@ macro_rules! __runtime_modules_to_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use substrate_metadata::{
+	use srml_metadata::{
 		EventMetadata, OuterEventMetadata, RuntimeModuleMetadata, CallMetadata, ModuleMetadata,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageMetadata, StorageFunctionMetadata, OuterDispatchMetadata, OuterDispatchCall
@@ -188,8 +189,7 @@ mod tests {
 				StorageMethod : Option<u32>;
 			}
 			add_extra_genesis {
-			    config(_marker) : ::std::marker::PhantomData<T>;
-			    build(|_, _, _| {});
+				build(|_, _, _| {});
 			}
 		}
 	}
@@ -197,7 +197,7 @@ mod tests {
 	type EventModule = event_module::Module<TestRuntime>;
 	type EventModule2 = event_module2::Module<TestRuntime>;
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct TestRuntime;
 
 	impl_outer_event! {
@@ -312,15 +312,20 @@ mod tests {
 				)),
 				storage: Some(DecodeDifferent::Encode(FnEncode(||
 					StorageMetadata {
-					   prefix: DecodeDifferent::Encode("TestStorage"),
-					   functions: DecodeDifferent::Encode(&[
-						   StorageFunctionMetadata {
-							   name: DecodeDifferent::Encode("StorageMethod"),
-							   modifier: StorageFunctionModifier::Optional,
-							   ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
-							   documentation: DecodeDifferent::Encode(&[]),
-						   }
-					   ])
+						prefix: DecodeDifferent::Encode("TestStorage"),
+						functions: DecodeDifferent::Encode(&[
+							StorageFunctionMetadata {
+								name: DecodeDifferent::Encode("StorageMethod"),
+								modifier: StorageFunctionModifier::Optional,
+								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+								default: DecodeDifferent::Encode(
+									DefaultByteGetter(
+										&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
+									)
+								),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
 					}
 				))),
 			}

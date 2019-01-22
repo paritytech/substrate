@@ -19,19 +19,20 @@ use std::sync::Arc;
 use std::{io, thread};
 use std::time::Duration;
 use futures::{self, Future, Stream, stream, sync::oneshot};
-use parking_lot::Mutex;
-use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, ErrorKind};
+use parking_lot::{Mutex, RwLock};
+use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProtocol};
 use io::NetSyncIo;
-use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
-use config::{ProtocolConfig};
+use consensus::import_queue::{ImportQueue, Link};
+use consensus_gossip::ConsensusGossip;
+use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo};
+use config::Params;
 use error::Error;
-use chain::Client;
-use specialization::Specialization;
-use on_demand::OnDemandService;
-use import_queue::ImportQueue;
-use runtime_primitives::traits::{Block as BlockT};
+use specialization::NetworkSpecialization;
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use sync::ChainSync;
+use std::sync::Weak;
 use tokio::{runtime::Runtime, timer::Interval};
 
 /// Type that represents fetch completion future.
@@ -40,40 +41,15 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
 const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 
-bitflags! {
-	/// Node roles bitmask.
-	pub struct Roles: u8 {
-		/// No network.
-		const NONE = 0b00000000;
-		/// Full node, does not participate in consensus.
-		const FULL = 0b00000001;
-		/// Light client node.
-		const LIGHT = 0b00000010;
-		/// Act as an authority
-		const AUTHORITY = 0b00000100;
-	}
-}
-
-impl ::codec::Encode for Roles {
-	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
-		dest.push_byte(self.bits())
-	}
-}
-
-impl ::codec::Decode for Roles {
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Self::from_bits(input.read_byte()?)
-	}
-}
-
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
-	/// Get this node id if available.
-	fn node_id(&self) -> Option<String>;
+	/// Get currently connected peers
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
 }
 
+/// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static {}
 impl<T> ExHashT for T where T: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static {}
 
@@ -93,24 +69,59 @@ pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	fn execute_in_context<F: Fn(&mut Context<B>)>(&self, closure: F);
 }
 
-/// Service initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
-	/// Configuration.
-	pub config: ProtocolConfig,
-	/// Network layer configuration.
-	pub network_config: NetworkConfiguration,
-	/// Substrate relay chain access point.
-	pub chain: Arc<Client<B>>,
-	/// On-demand service reference.
-	pub on_demand: Option<Arc<OnDemandService<B>>>,
-	/// Transaction pool.
-	pub transaction_pool: Arc<TransactionPool<H, B>>,
-	/// Protocol specialization.
-	pub specialization: S,
+/// A link implementation that connects to the network.
+pub struct NetworkLink<B: BlockT, E: ExecuteInContext<B>> {
+	/// The chain-sync handle
+	pub(crate) sync: Weak<RwLock<ChainSync<B>>>,
+	/// Network context.
+	pub(crate) context: Weak<E>,
+}
+
+impl<B: BlockT, E: ExecuteInContext<B>> NetworkLink<B, E> {
+	/// Execute closure with locked ChainSync.
+	fn with_sync<F: Fn(&mut ChainSync<B>, &mut Context<B>)>(&self, closure: F) {
+		if let (Some(sync), Some(service)) = (self.sync.upgrade(), self.context.upgrade()) {
+			service.execute_in_context(move |protocol| {
+				let mut sync = sync.write();
+				closure(&mut *sync, protocol)
+			});
+		}
+	}
+}
+
+impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
+	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>) {
+		self.with_sync(|sync, _| sync.block_imported(&hash, number))
+	}
+
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		self.with_sync(|sync, protocol| sync.request_justification(hash, number, protocol))
+	}
+
+	fn maintain_sync(&self) {
+		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
+	}
+
+	fn useless_peer(&self, who: NodeIndex, reason: &str) {
+		trace!(target:"sync", "Useless peer {}, {}", who, reason);
+		self.with_sync(|_, protocol| protocol.report_peer(who, Severity::Useless(reason)))
+	}
+
+	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str) {
+		trace!(target:"sync", "Bad peer {}, {}", who, reason);
+		self.with_sync(|sync, protocol| {
+			protocol.report_peer(who, Severity::Useless(reason));	// is this actually malign or just useless?
+			sync.restart(protocol);
+		})
+	}
+
+	fn restart(&self) {
+		self.with_sync(|sync, protocol| sync.restart(protocol))
+	}
 }
 
 /// Substrate network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
+pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> {
 	/// Network service
 	network: Arc<Mutex<NetworkService>>,
 	/// Protocol handler
@@ -123,15 +134,15 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 	bg_thread: Option<(oneshot::Sender<()>, thread::JoinHandle<()>)>,
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S, H> {
 	/// Creates and register protocol with the network service
 	pub fn new<I: 'static + ImportQueue<B>>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
-		import_queue: I,
-	) -> Result<Arc<Service<B, S, H>>, Error> {
-		let chain = params.chain.clone();
-		let import_queue = Arc::new(import_queue);
+		import_queue: Arc<I>,
+	) -> Result<Arc<Service<B, S, H>>, Error>
+		where I: ImportQueue<B>
+	{
 		let handler = Arc::new(Protocol::new(
 			params.config,
 			params.chain,
@@ -144,20 +155,22 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
 		let (thread, network) = start_thread(params.network_config, handler.clone(), registered)?;
 
-		let sync = Arc::new(Service {
+		let service = Arc::new(Service {
 			network,
 			protocol_id,
 			handler,
-			bg_thread: Some(thread),
+			bg_thread: Some(thread)
 		});
 
-		import_queue.start(
-			Arc::downgrade(sync.handler.sync()),
-			Arc::downgrade(&sync),
-			Arc::downgrade(&chain)
-		)?;
+		// connect the import-queue to the network service.
+		let link = NetworkLink {
+			sync: Arc::downgrade(service.handler.sync()),
+			context: Arc::downgrade(&service),
+		};
 
-		Ok(sync)
+		import_queue.start(link)?;
+
+		Ok(service)
 	}
 
 	/// Called when a new block is imported by the client.
@@ -165,26 +178,45 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		self.handler.on_block_imported(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
 	}
 
+	/// Called when a new block is finalized by the client.
+	pub fn on_block_finalized(&self, hash: B::Hash, header: &B::Header) {
+		self.handler.on_block_finalized(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
+	}
+
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));
 	}
 
+	/// Send a consensus message through the gossip
+	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
+		self.handler.gossip_consensus_message(
+			&mut NetSyncIo::new(&self.network, self.protocol_id),
+			topic,
+			message,
+			broadcast,
+		)
+	}
 	/// Execute a closure with the chain-specific network specialization.
 	pub fn with_spec<F, U>(&self, f: F) -> U
 		where F: FnOnce(&mut S, &mut Context<B>) -> U
 	{
 		self.handler.with_spec(&mut NetSyncIo::new(&self.network, self.protocol_id), f)
 	}
+
+	/// access the underlying consensus gossip handler
+	pub fn consensus_gossip<'a>(&'a self) -> &'a RwLock<ConsensusGossip<B>> {
+		self.handler.consensus_gossip()
+	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
 	fn is_major_syncing(&self) -> bool {
 		self.handler.sync().read().status().is_major_syncing()
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H:ExHashT> Drop for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H:ExHashT> Drop for Service<B, S, H> {
 	fn drop(&mut self) {
 		self.handler.stop();
 		if let Some((sender, join)) = self.bg_thread.take() {
@@ -196,16 +228,58 @@ impl<B: BlockT + 'static, S: Specialization<B>, H:ExHashT> Drop for Service<B, S
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ExecuteInContext<B> for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ExecuteInContext<B> for Service<B, S, H> {
 	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
 		closure(&mut ProtocolContext::new(self.handler.context_data(), &mut NetSyncIo::new(&self.network, self.protocol_id)))
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> SyncProvider<B> for Service<B, S, H> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> SyncProvider<B> for Service<B, S, H> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.status()
+	}
+
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
+		let peers = self.handler.peers();
+		let network = self.network.lock();
+		peers.into_iter().map(|(idx, info)| {
+			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)
+		}).collect::<Vec<_>>()
+	}
+}
+
+/// Trait for managing network
+pub trait ManageNetwork: Send + Sync {
+	/// Set to allow unreserved peers to connect
+	fn accept_unreserved_peers(&self);
+	/// Set to deny unreserved peers to connect
+	fn deny_unreserved_peers(&self);
+	/// Remove reservation for the peer
+	fn remove_reserved_peer(&self, peer: PeerId);
+	/// Add reserved peer
+	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
+	/// Returns a user-friendly identifier of our node.
+	fn node_id(&self) -> Option<String>;
+}
+
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork for Service<B, S, H> {
+	fn accept_unreserved_peers(&self) {
+		self.network.lock().accept_unreserved_peers();
+	}
+
+	fn deny_unreserved_peers(&self) {
+		self.network.lock().deny_unreserved_peers();
+	}
+
+	fn remove_reserved_peer(&self, peer: PeerId) {
+		self.network.lock().remove_reserved_peer(peer);
+	}
+
+	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+		let (addr, peer_id) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+		self.network.lock().add_reserved_peer(addr, peer_id);
+		Ok(())
 	}
 
 	fn node_id(&self) -> Option<String> {
@@ -222,52 +296,8 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> SyncProvider<B> for 
 	}
 }
 
-/// Trait for managing network
-pub trait ManageNetwork: Send + Sync {
-	/// Set to allow unreserved peers to connect
-	fn accept_unreserved_peers(&self);
-	/// Set to deny unreserved peers to connect
-	fn deny_unreserved_peers(&self);
-	/// Remove reservation for the peer
-	fn remove_reserved_peer(&self, peer: PeerId);
-	/// Add reserved peer
-	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
-}
-
-impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ManageNetwork for Service<B, S, H> {
-	fn accept_unreserved_peers(&self) {
-		self.network.lock().accept_unreserved_peers();
-	}
-
-	fn deny_unreserved_peers(&self) {
-		// This method can disconnect nodes, in which case we have to properly close them in the
-		// protocol.
-		let disconnected = self.network.lock().deny_unreserved_peers();
-		let mut net_sync = NetSyncIo::new(&self.network, self.protocol_id);
-		for node_index in disconnected {
-			self.handler.on_peer_disconnected(&mut net_sync, node_index)
-		}
-	}
-
-	fn remove_reserved_peer(&self, peer: PeerId) {
-		// This method can disconnect a node, in which case we have to properly close it in the
-		// protocol.
-		let disconnected = self.network.lock().remove_reserved_peer(peer);
-		if let Some(node_index) = disconnected {
-			let mut net_sync = NetSyncIo::new(&self.network, self.protocol_id);
-			self.handler.on_peer_disconnected(&mut net_sync, node_index)
-		}
-	}
-
-	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (addr, peer_id) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
-		self.network.lock().add_reserved_peer(addr, peer_id);
-		Ok(())
-	}
-}
-
 /// Starts the background thread that handles the networking.
-fn start_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
+fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	config: NetworkConfiguration,
 	protocol: Arc<Protocol<B, S, H>>,
 	registered: RegisteredProtocol,
@@ -308,7 +338,7 @@ fn start_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
 }
 
 /// Runs the background thread that handles the networking.
-fn run_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
+fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 	network_service: Arc<Mutex<NetworkService>>,
 	protocol: Arc<Protocol<B, S, H>>,
 	protocol_id: ProtocolId,
@@ -355,12 +385,6 @@ fn run_thread<B: BlockT + 'static, S: Specialization<B>, H: ExHashT>(
 		let mut net_sync = NetSyncIo::new(&network_service, protocol_id);
 
 		match event {
-			NetworkServiceEvent::NodeClosed { node_index, closed_custom_protocols } => {
-				if !closed_custom_protocols.is_empty() {
-					debug_assert_eq!(closed_custom_protocols, &[protocol_id]);
-					protocol.on_peer_disconnected(&mut net_sync, node_index);
-				}
-			}
 			NetworkServiceEvent::ClosedCustomProtocols { node_index, protocols } => {
 				if !protocols.is_empty() {
 					debug_assert_eq!(protocols, &[protocol_id]);

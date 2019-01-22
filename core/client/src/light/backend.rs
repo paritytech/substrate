@@ -21,17 +21,15 @@ use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
-use primitives::AuthorityId;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
-
-use in_mem;
-use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
-use blockchain::HeaderBackend as BlockchainHeaderBackend;
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::fetcher::{Fetcher, RemoteReadRequest};
+use state_machine::{Backend as StateBackend, TrieBackend};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor};
+use crate::in_mem;
+use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
+use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
@@ -44,8 +42,9 @@ pub struct Backend<S, F> {
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F> {
 	header: Option<Block::Header>,
-	authorities: Option<Vec<AuthorityId>>,
+	authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	leaf_state: NewBlockState,
+	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -69,6 +68,22 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
+impl<S: AuxStore, F> AuxStore for Backend<S, F> {
+	fn insert_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(&self, insert: I, delete: D) -> ClientResult<()> {
+		self.blockchain.storage().insert_aux(insert, delete)
+	}
+
+	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		self.blockchain.storage().get_aux(key)
+	}
+}
+
 impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
@@ -79,13 +94,14 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, S, F>;
-	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
+	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
 			header: None,
 			authorities: None,
 			leaf_state: NewBlockState::Normal,
+			aux_ops: Vec::new(),
 			_phantom: Default::default(),
 		})
 	}
@@ -96,10 +112,11 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 			header,
 			operation.authorities,
 			operation.leaf_state,
+			operation.aux_ops,
 		)
 	}
 
-	fn finalize_block(&self, block: BlockId<Block>) -> ClientResult<()> {
+	fn finalize_block(&self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
 		self.blockchain.storage().finalize_header(block)
 	}
 
@@ -126,14 +143,6 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
-	}
-
-	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, _insert: I, _delete: D) -> ClientResult<()> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into())
-	}
-
-	fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 }
@@ -174,11 +183,11 @@ where
 		Ok(())
 	}
 
-	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+	fn update_authorities(&mut self, authorities: Vec<AuthorityIdFor<Block>>) {
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
+	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -192,6 +201,18 @@ where
 		let in_mem = in_mem::Backend::<Block, H>::new();
 		let mut op = in_mem.begin_operation(BlockId::Hash(Default::default()))?;
 		op.reset_storage(top, children)
+	}
+
+	fn set_aux<I>(&mut self, ops: I) -> ClientResult<()>
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		self.aux_ops = ops.into_iter().collect();
+		Ok(())
+	}
+
+	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
+		// we're not storing anything locally => ignore changes
+		Ok(())
 	}
 }
 
@@ -253,6 +274,11 @@ where
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		// whole state is not available on light node
+		Vec::new()
+	}
+
+	fn keys(&self, _prefix: &Vec<u8>) -> Vec<Vec<u8>> {
 		// whole state is not available on light node
 		Vec::new()
 	}

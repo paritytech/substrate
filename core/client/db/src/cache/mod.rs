@@ -24,9 +24,8 @@ use kvdb::{KeyValueDB, DBTransaction};
 use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
 use codec::{Encode, Decode};
-use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, AuthorityIdFor};
 use utils::{self, COLUMN_META};
 
 use self::list_cache::ListCache;
@@ -65,14 +64,14 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
-	authorities_at: ListCache<Block, Vec<AuthorityId>, self::list_storage::DbStorage>,
+	authorities_at: ListCache<Block, Vec<AuthorityIdFor<Block>>, self::list_storage::DbStorage>,
 }
 
 impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
 		db: Arc<KeyValueDB>,
-		hash_lookup_column: Option<u32>,
+		key_lookup_column: Option<u32>,
 		header_column: Option<u32>,
 		authorities_column: Option<u32>,
 		best_finalized_block: ComplexBlockId<Block>,
@@ -82,7 +81,7 @@ impl<Block: BlockT> DbCache<Block> {
 				self::list_storage::DbStorage::new(b"auth".to_vec(), db,
 					self::list_storage::DbColumns {
 						meta: COLUMN_META,
-						hash_lookup: hash_lookup_column,
+						key_lookup: key_lookup_column,
 						header: header_column,
 						cache: authorities_column,
 					},
@@ -112,14 +111,14 @@ impl<Block: BlockT> DbCache<Block> {
 
 /// Cache operations that are to be committed after database transaction is committed.
 pub struct DbCacheTransactionOps<Block: BlockT> {
-	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<AuthorityId>>>,
+	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<AuthorityIdFor<Block>>>>,
 }
 
 /// Database-backed blockchain data cache transaction valid for single block import.
 pub struct DbCacheTransaction<'a, Block: BlockT> {
 	cache: &'a mut DbCache<Block>,
 	tx: &'a mut DBTransaction,
-	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<AuthorityId>>>,
+	authorities_at_op: Option<self::list_cache::CommitOperation<Block, Vec<AuthorityIdFor<Block>>>>,
 }
 
 impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
@@ -135,7 +134,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		mut self,
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
-		authorities_at: Option<Vec<AuthorityId>>,
+		authorities_at: Option<Vec<AuthorityIdFor<Block>>>,
 		is_final: bool,
 	) -> ClientResult<Self> {
 		assert!(self.authorities_at_op.is_none());
@@ -179,7 +178,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 pub struct DbCacheSync<Block: BlockT>(pub RwLock<DbCache<Block>>);
 
 impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
-	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
+	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<AuthorityIdFor<Block>>> {
 		let cache = self.0.read();
 		let storage = cache.authorities_at.storage();
 		let db = storage.db();
@@ -188,7 +187,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			BlockId::Hash(hash) => {
 				let header = utils::read_header::<Block>(
 					&**db,
-					columns.hash_lookup,
+					columns.key_lookup,
 					columns.header,
 					BlockId::Hash(hash.clone())).ok()??;
 				ComplexBlockId::new(hash, *header.number())
@@ -196,7 +195,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			BlockId::Number(number) => {
 				let hash = utils::read_header::<Block>(
 					&**db,
-					columns.hash_lookup,
+					columns.key_lookup,
 					columns.header,
 					BlockId::Number(number.clone())).ok()??.hash();
 				ComplexBlockId::new(hash, number)

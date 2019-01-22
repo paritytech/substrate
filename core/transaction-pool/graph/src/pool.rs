@@ -26,6 +26,7 @@ use error;
 use listener::Listener;
 use rotator::PoolRotator;
 use watcher::Watcher;
+use serde::Serialize;
 
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -53,13 +54,13 @@ pub type TransactionFor<A> = Arc<base::Transaction<ExHash<A>, ExtrinsicFor<A>>>;
 pub trait ChainApi: Send + Sync {
 	/// Block type.
 	type Block: traits::Block;
-	/// Hash type
-	type Hash: hash::Hash + Eq + traits::Member;
+	/// Transaction Hash type
+	type Hash: hash::Hash + Eq + traits::Member + Serialize;
 	/// Error type.
 	type Error: From<error::Error> + error::IntoPoolError;
 
 	/// Verify extrinsic at given block.
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
 
 	/// Returns a block number given the block id.
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error>;
@@ -104,10 +105,10 @@ impl<B: ChainApi> Pool<B> {
 					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
 
-				match self.api.validate_transaction(at, &xt)? {
+				match self.api.validate_transaction(at, xt.clone())? {
 					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
-							data:  xt,
+							data: xt,
 							hash,
 							priority,
 							requires,
@@ -287,7 +288,7 @@ fn fire_events<H, H2, Ex>(
 	listener: &mut Listener<H, H2>,
 	imported: &base::Imported<H, Ex>,
 ) where
-	H: hash::Hash + Eq + traits::Member,
+	H: hash::Hash + Eq + traits::Member + Serialize,
 	H2: Clone,
 {
 	match *imported {
@@ -324,9 +325,9 @@ mod tests {
 		type Error = error::Error;
 
 		/// Verify extrinsic at given block.
-		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
 			let block_number = self.block_id_to_number(at)?.unwrap();
-			let nonce = uxt.transfer.nonce;
+			let nonce = uxt.transfer().nonce;
 
 			if nonce < block_number {
 				Ok(TransactionValidity::Invalid)
@@ -358,15 +359,12 @@ mod tests {
 
 		/// Hash the extrinsic.
 		fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash {
-			(uxt.transfer.from.to_low_u64_be() << 5) + uxt.transfer.nonce
+			(uxt.transfer().from.to_low_u64_be() << 5) + uxt.transfer().nonce
 		}
 	}
 
 	fn uxt(transfer: Transfer) -> Extrinsic {
-		Extrinsic {
-			transfer,
-			signature: Default::default(),
-		}
+		Extrinsic::Transfer(transfer, Default::default())
 	}
 
 	fn pool() -> Pool<TestApi> {

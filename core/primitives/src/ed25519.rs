@@ -21,8 +21,11 @@
 use untrusted;
 use blake2_rfc;
 use ring::{rand, signature};
-use {hash::H512, AuthorityId};
+use {hash::H512, Ed25519AuthorityId};
 use base58::{ToBase58, FromBase58};
+
+#[cfg(feature = "std")]
+use serde::{de, Serializer, Deserializer, Deserialize};
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = H512;
@@ -166,14 +169,14 @@ impl AsRef<Pair> for Pair {
 	}
 }
 
-impl Into<AuthorityId> for Public {
-	fn into(self) -> AuthorityId {
-		AuthorityId(self.0)
+impl Into<Ed25519AuthorityId> for Public {
+	fn into(self) -> Ed25519AuthorityId {
+		Ed25519AuthorityId(self.0)
 	}
 }
 
-impl From<AuthorityId> for Public {
-	fn from(id: AuthorityId) -> Self {
+impl From<Ed25519AuthorityId> for Public {
+	fn from(id: Ed25519AuthorityId) -> Self {
 		Public(id.0)
 	}
 }
@@ -276,6 +279,25 @@ impl Verifiable for LocalizedSignature {
 	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool {
 		pubkey.as_ref() == &self.signer && self.signature.verify(message, pubkey)
 	}
+}
+
+/// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
+#[cfg(feature = "std")]
+pub fn deserialize<'de, D, T: From<[u8; 32]>>(deserializer: D) -> Result<T, D::Error> where
+	D: Deserializer<'de>,
+{
+	let ss58 = String::deserialize(deserializer)?;
+	Public::from_ss58check(&ss58)
+		.map_err(|e| de::Error::custom(format!("{:?}", e)))
+		.map(|v| v.0.into())
+}
+
+/// Serializes something that implements `AsRef<[u8; 32]>` into `ss58`.
+#[cfg(feature = "std")]
+pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok, S::Error> where
+	S: Serializer,
+{
+	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
 }
 
 #[cfg(test)]

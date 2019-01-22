@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate state machine implementation.
-// end::description[]
 
 #![warn(missing_docs)]
 
@@ -32,15 +30,16 @@ extern crate substrate_trie;
 
 extern crate parking_lot;
 extern crate heapsize;
-#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
+#[cfg_attr(test, macro_use)]
+extern crate substrate_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate substrate_trie as trie;
 
-use std::fmt;
+use std::{fmt, panic::UnwindSafe};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use codec::Decode;
-use primitives::storage::well_known_keys;
+use codec::{Decode, Encode};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
 
 pub mod backend;
 mod changes_trie;
@@ -55,17 +54,18 @@ pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
-pub use changes_trie::{Storage as ChangesTrieStorage,
+pub use changes_trie::{
+	AnchorBlockId as ChangesTrieAnchorBlockId,
+	Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check,
-	prune as prune_changes_tries};
+	prune as prune_changes_tries,
+	oldest_non_pruned_trie as oldest_non_pruned_changes_trie};
 pub use overlayed_changes::OverlayedChanges;
-pub use trie_backend_essence::Storage;
+pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
+pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
-
-/// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES :u64 = 1024;
 
 /// State Machine Error bound.
 ///
@@ -97,10 +97,15 @@ impl fmt::Display for ExecutionError {
 
 /// Externalities: pinned to specific active address.
 pub trait Externalities<H: Hasher> {
-	/// Read storage of current contract being called.
+	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Read child storage of current contract being called.
+	/// Get storage value hash. This may be optimized for large values.
+	fn storage_hash(&self, key: &[u8]) -> Option<H::Out> {
+		self.storage(key).map(|v| H::hash(&v))
+	}
+
+	/// Read child runtime storage.
 	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Set storage entry `key` of current contract being called (effective immediately).
@@ -156,8 +161,8 @@ pub trait Externalities<H: Hasher> {
 	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
 	fn child_storage_root(&mut self, storage_key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Get the change trie root of the current storage overlay at given block.
-	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> where H::Out: Ord;
+	/// Get the change trie root of the current storage overlay at a block wth given parent.
+	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
 }
 
 /// Code execution engine.
@@ -167,15 +172,14 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<E: Externalities<H>>(
+	fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
 		&self,
 		ext: &mut E,
-		heap_pages: usize,
-		code: &[u8],
 		method: &str,
 		data: &[u8],
-		use_native: bool
-	) -> (Result<Vec<u8>, Self::Error>, bool);
+		use_native: bool,
+		native_call: Option<NC>,
+	) -> (Result<NativeOrEncoded<R>, Self::Error>, bool);
 }
 
 /// Strategy for executing a call into the runtime.
@@ -190,6 +194,7 @@ pub enum ExecutionStrategy {
 }
 
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
+#[derive(Clone)]
 pub enum ExecutionManager<F> {
 	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
 	NativeWhenPossible,
@@ -210,12 +215,26 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn native_when_possible<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+pub fn native_when_possible<E, R: Decode>() ->
+	ExecutionManager<
+		fn(
+			Result<NativeOrEncoded<R>, E>,
+			Result<NativeOrEncoded<R>, E>
+		) -> Result<NativeOrEncoded<R>, E>
+	>
+{
 	ExecutionManager::NativeWhenPossible
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
-pub fn always_wasm<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+pub fn always_wasm<E, R: Decode>() ->
+	ExecutionManager<
+		fn(
+			Result<NativeOrEncoded<R>, E>,
+			Result<NativeOrEncoded<R>, E>
+		) -> Result<NativeOrEncoded<R>, E>
+	>
+{
 	ExecutionManager::AlwaysWasm
 }
 
@@ -243,7 +262,9 @@ where
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	execute_using_consensus_failure_handler(
+	// We are not giving a native call and thus we are sure that the result can never be a native
+	// value.
+	execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
 		backend,
 		changes_trie_storage,
 		overlay,
@@ -254,11 +275,22 @@ where
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, native_result);
+				warn!(
+					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
+					wasm_result,
+					native_result
+				);
 				wasm_result
 			}),
 		},
+		true,
+		None,
 	)
+	.map(|(result, storage_tx, changes_tx)| (
+		result.into_encoded(),
+		storage_tx.expect("storage_tx is always computed when compute_tx is true; qed"),
+		changes_tx,
+	))
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -269,7 +301,9 @@ where
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
+pub fn execute_using_consensus_failure_handler<
+	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> R + UnwindSafe
+>(
 	backend: &B,
 	changes_trie_storage: Option<&T>,
 	overlay: &mut OverlayedChanges,
@@ -277,24 +311,21 @@ pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
 	method: &str,
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
-) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
+	compute_tx: bool,
+	mut native_call: Option<NC>,
+) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
-	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
+	Handler: FnOnce(
+		Result<NativeOrEncoded<R>, Exec::Error>,
+		Result<NativeOrEncoded<R>, Exec::Error>
+	) -> Result<NativeOrEncoded<R>, Exec::Error>
 {
 	let strategy: ExecutionStrategy = (&manager).into();
-
-	// make a copy.
-	let code = try_read_overlay_value(overlay, backend, well_known_keys::CODE)?
-		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
-		.to_vec();
-
-	let heap_pages = try_read_overlay_value(overlay, backend, well_known_keys::HEAP_PAGES)?
-		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(DEFAULT_HEAP_PAGES) as usize;
 
 	// read changes trie configuration. The reason why we're doing it here instead of the
 	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
@@ -317,18 +348,21 @@ where
 		let (result, was_native, storage_delta, changes_delta) = {
 			let ((result, was_native), (storage_delta, changes_delta)) = {
 				let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-				(
-					exec.call(
-						&mut externalities,
-						heap_pages,
-						&code,
-						method,
-						call_data,
-						// attempt to run native first, if we're not directed to run wasm only
-						strategy != ExecutionStrategy::AlwaysWasm,
-					),
-					externalities.transaction()
-				)
+				let retval = exec.call(
+					&mut externalities,
+					method,
+					call_data,
+					// attempt to run native first, if we're not directed to run wasm only
+					strategy != ExecutionStrategy::AlwaysWasm,
+					native_call.take(),
+				);
+				let (storage_delta, changes_delta) = if compute_tx {
+					let (storage_delta, changes_delta) = externalities.transaction();
+					(Some(storage_delta), changes_delta)
+				} else {
+					(None, None)
+				};
+				(retval, (storage_delta, changes_delta))
 			};
 			(result, was_native, storage_delta, changes_delta)
 		};
@@ -342,24 +376,27 @@ where
 			let (wasm_result, wasm_storage_delta, wasm_changes_delta) = {
 				let ((result, _), (storage_delta, changes_delta)) = {
 					let mut externalities = ext::Ext::new(overlay, backend, changes_trie_storage);
-					(
-						exec.call(
-							&mut externalities,
-							heap_pages,
-							&code,
-							method,
-							call_data,
-							false,
-						),
-						externalities.transaction()
-					)
+					let retval = exec.call(
+						&mut externalities,
+						method,
+						call_data,
+						false,
+						native_call,
+					);
+					let (storage_delta, changes_delta) = if compute_tx {
+						let (storage_delta, changes_delta) = externalities.transaction();
+						(Some(storage_delta), changes_delta)
+					} else {
+						(None, None)
+					};
+					(retval, (storage_delta, changes_delta))
 				};
 				(result, storage_delta, changes_delta)
 			};
 
-			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
-				|| (result.is_err() && wasm_result.is_err())
-			{
+			if (result.is_ok() && wasm_result.is_ok()
+				&& result.as_ref().ok() == wasm_result.as_ref().ok())
+				|| result.is_err() && wasm_result.is_err() {
 				(result, storage_delta, changes_delta)
 			} else {
 				// Consensus error.
@@ -380,14 +417,6 @@ where
 }
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.
-/// Produces a state-backend-specific "transaction" which can be used to apply the changes
-/// to the backing store, such as the disk.
-/// Execution proof is the set of all 'touched' storage DBValues from the backend.
-///
-/// On an error, no prospective changes are written to the overlay.
-///
-/// Note: changes to code will be in place if this call is made again. For running partial
-/// blocks (e.g. a transaction at a time), ensure a different method is used.
 pub fn prove_execution<B, H, Exec>(
 	backend: B,
 	overlay: &mut OverlayedChanges,
@@ -403,18 +432,47 @@ where
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
+	prove_execution_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
+}
+
+/// Prove execution using the given trie backend, overlayed changes, and call executor.
+/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+/// to the backing store, such as the disk.
+/// Execution proof is the set of all 'touched' storage DBValues from the backend.
+///
+/// On an error, no prospective changes are written to the overlay.
+///
+/// Note: changes to code will be in place if this call is made again. For running partial
+/// blocks (e.g. a transaction at a time), ensure a different method is used.
+pub fn prove_execution_on_trie_backend<S, H, Exec>(
+	trie_backend: &TrieBackend<S, H>,
+	overlay: &mut OverlayedChanges,
+	exec: &Exec,
+	method: &str,
+	call_data: &[u8],
+) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<Error>>
+where
+	S: trie_backend_essence::TrieBackendStorage<H>,
+	H: Hasher,
+	Exec: CodeExecutor<H>,
+	H::Out: Ord + HeapSizeOf,
+{
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, _, _) = execute::<H, _, changes_trie::InMemoryStorage<H>, _>(
+	let (result, _, _) = execute_using_consensus_failure_handler::
+		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> NeverNativeValue>
+	(
 		&proving_backend,
 		None,
 		overlay,
 		exec,
 		method,
 		call_data,
-		ExecutionStrategy::NativeWhenPossible
+		native_when_possible(),
+		false,
+		None,
 	)?;
 	let proof = proving_backend.extract_proof();
-	Ok((result, proof))
+	Ok((result.into_encoded(), proof))
 }
 
 /// Check execution proof, generated by `prove_execution` call.
@@ -431,9 +489,36 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	let backend = proving_backend::create_proof_check_backend::<H>(root.into(), proof)?;
-	execute::<H, _, changes_trie::InMemoryStorage<H>, _>(&backend, None, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
-		.map(|(result, _, _)| result)
+	let trie_backend = proving_backend::create_proof_check_backend::<H>(root.into(), proof)?;
+	execution_proof_check_on_trie_backend(&trie_backend, overlay, exec, method, call_data)
+}
+
+/// Check execution proof on proving backend, generated by `prove_execution` call.
+pub fn execution_proof_check_on_trie_backend<H, Exec>(
+	trie_backend: &TrieBackend<MemoryDB<H>, H>,
+	overlay: &mut OverlayedChanges,
+	exec: &Exec,
+	method: &str,
+	call_data: &[u8],
+) -> Result<Vec<u8>, Box<Error>>
+where
+	H: Hasher,
+	Exec: CodeExecutor<H>,
+	H::Out: Ord + HeapSizeOf,
+{
+	execute_using_consensus_failure_handler::
+		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> NeverNativeValue>
+	(
+		trie_backend,
+		None,
+		overlay,
+		exec,
+		method,
+		call_data,
+		native_when_possible(),
+		false,
+		None,
+	).map(|(result, _, _)| result.into_encoded())
 }
 
 /// Generate storage read proof.
@@ -444,11 +529,23 @@ pub fn prove_read<B, H>(
 where
 	B: Backend<H>,
 	H: Hasher,
-
 	H::Out: Ord + HeapSizeOf
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
+	prove_read_on_trie_backend(&trie_backend, key)
+}
+
+/// Generate storage read proof on pre-created trie backend.
+pub fn prove_read_on_trie_backend<S, H>(
+	trie_backend: &TrieBackend<S, H>,
+	key: &[u8]
+) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+where
+	S: trie_backend_essence::TrieBackendStorage<H>,
+	H: Hasher,
+	H::Out: Ord + HeapSizeOf
+{
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	let result = proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)?;
 	Ok((result, proving_backend.extract_proof()))
@@ -462,11 +559,22 @@ pub fn read_proof_check<H>(
 ) -> Result<Option<Vec<u8>>, Box<Error>>
 where
 	H: Hasher,
-
 	H::Out: Ord + HeapSizeOf
 {
-	let backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
-	backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
+	let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
+	read_proof_check_on_proving_backend(&proving_backend, key)
+}
+
+/// Check storage read proof on pre-created proving backend.
+pub fn read_proof_check_on_proving_backend<H>(
+	proving_backend: &TrieBackend<MemoryDB<H>, H>,
+	key: &[u8],
+) -> Result<Option<Vec<u8>>, Box<Error>>
+where
+	H: Hasher,
+	H::Out: Ord + HeapSizeOf
+{
+	proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
 }
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
@@ -517,7 +625,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::{Blake2Hasher};
+	use primitives::Blake2Hasher;
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -529,26 +637,41 @@ mod tests {
 	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities<H>>(
+		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
 			&self,
 			ext: &mut E,
-			_heap_pages: usize,
-			_code: &[u8],
 			_method: &str,
 			_data: &[u8],
-			use_native: bool
-		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			use_native: bool,
+			_native_call: Option<NC>,
+		) -> (Result<NativeOrEncoded<R>, Self::Error>, bool) {
 			if self.change_changes_trie_config {
-				ext.place_storage(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), Some(ChangesTrieConfig {
-					digest_interval: 777,
-					digest_levels: 333,
-				}.encode()));
+				ext.place_storage(
+					well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
+					Some(
+						ChangesTrieConfig {
+							digest_interval: 777,
+							digest_levels: 333,
+						}.encode()
+					)
+				);
 			}
 
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
-				(true, true, _) | (false, _, true) =>
-					(Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]]), using_native),
+				(true, true, _) | (false, _, true) => {
+					(
+						Ok(
+							NativeOrEncoded::Encoded(
+								vec![
+									ext.storage(b"value1").unwrap()[0] +
+									ext.storage(b"value2").unwrap()[0]
+								]
+							)
+						),
+						using_native
+					)
+				},
 				_ => (Err(0), using_native),
 			}
 		}
@@ -577,7 +700,7 @@ mod tests {
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
 		let mut consensus_failed = false;
-		assert!(execute_using_consensus_failure_handler(
+		assert!(execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -594,6 +717,8 @@ mod tests {
 				println!("HELLO!");
 				we
 			}),
+			true,
+			None,
 		).is_err());
 		assert!(consensus_failed);
 	}

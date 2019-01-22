@@ -18,11 +18,10 @@
 
 use std::{self, io::{Read, Write}};
 use futures::Future;
-use serde_json;
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{As, Block, Header};
-use network::import_queue::{ImportQueue, BlockData};
+use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
 use network::message;
 
 use consensus_common::BlockOrigin;
@@ -34,7 +33,10 @@ use chain_spec::ChainSpec;
 
 /// Export a range of blocks to a binary stream.
 pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut output: W, from: FactoryBlockNumber<F>, to: Option<FactoryBlockNumber<F>>, json: bool) -> error::Result<()>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, W: Write,
+	where
+	F: ServiceFactory,
+	E: Future<Item=(),Error=()> + Send + 'static,
+	W: Write,
 {
 	let client = new_client::<F>(&config)?;
 	let mut block = from;
@@ -85,11 +87,16 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 }
 
 /// Import blocks from a binary stream.
-pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
+pub fn import_blocks<F, E, R>(mut config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
+	struct DummyLink;
+	impl<B: Block> Link<B> for DummyLink { }
+
 	let client = new_client::<F>(&config)?;
-	let queue = components::FullComponents::<F>::build_import_queue(&config, client.clone())?;
+	// FIXME: this shouldn't need a mutable config. https://github.com/paritytech/substrate/issues/1134
+	let queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone())?;
+	queue.start(DummyLink)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -99,24 +106,32 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 
 	let count: u32 = Decode::decode(&mut input).ok_or("Error reading file")?;
 	info!("Importing {} blocks", count);
-	let mut block_count = 0; 
+	let mut block_count = 0;
 	for b in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
 			break;
 		}
-		if let Some(signed) = SignedBlock::<<F::Block as Block>::Header, <F::Block as Block>::Extrinsic>::decode(&mut input) {
-			let header = signed.block.header;
+		if let Some(signed) = SignedBlock::<F::Block>::decode(&mut input) {
+			let (header, extrinsics) = signed.block.deconstruct();
 			let hash = header.hash();
 			let block  = message::BlockData::<F::Block> {
 				hash: hash,
-				justification: Some(signed.justification),
+				justification: signed.justification,
 				header: Some(header),
-				body: Some(signed.block.extrinsics),
+				body: Some(extrinsics),
 				receipt: None,
 				message_queue: None
 			};
 			// import queue handles verification and importing it into the client
-			queue.import_blocks(BlockOrigin::File, vec![BlockData::<F::Block> { block, origin: None }]);
+			queue.import_blocks(BlockOrigin::File, vec![
+				IncomingBlock::<F::Block>{
+					hash: block.hash,
+					header: block.header,
+					body: block.body,
+					justification: block.justification,
+					origin: None,
+				}
+			]);
 		} else {
 			warn!("Error reading block data at {}.", b);
 			break;
@@ -139,7 +154,12 @@ pub fn revert_chain<F>(config: FactoryFullConfiguration<F>, blocks: FactoryBlock
 	let client = new_client::<F>(&config)?;
 	let reverted = client.revert(blocks)?;
 	let info = client.info()?.chain;
-	info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
+	
+	if reverted.as_() == 0 {
+		info!("There aren't any non-finalized blocks to revert.");
+	} else {
+		info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
+	}
 	Ok(())
 }
 

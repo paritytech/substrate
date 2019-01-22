@@ -1,0 +1,10 @@
+[package]
+name = "srml-support-procedural-tools"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+srml-support-procedural-tools-derive = { path = "./derive" }
+proc-macro2 = "0.4"
+quote = { version = "0.6" }
+syn = { version = "0.15", features = ["full"] }

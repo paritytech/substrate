@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! BFT Agreement based on a rotating proposer in different rounds.
 //!
 //! Where this crate refers to input stream, should never logically conclude.
@@ -30,7 +29,6 @@
 //! conclude without having witnessed the conclusion.
 //! In general, this future should be pre-empted by the import of a justification
 //! set for this block height.
-// end::description[]
 
 #![cfg(feature="rhd")]
 // FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020
@@ -198,7 +196,7 @@ pub trait BlockBuilder<Block: BlockT> {
 pub trait AuthoringApi:
 	Send
 	+ Sync
-	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, InherentData, Error=<Self as AuthoringApi>::Error>
 	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
 	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 {
@@ -419,10 +417,10 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			let import_block = ImportBlock {
 				origin: BlockOrigin::ConsensusBroadcast,
 				header: header,
-				external_justification: just.into(),
+				justification: Some(just),
 				body: Some(body),
 				finalized: true,
-				post_runtime_digests: Default::default(),
+				post_digests: Default::default(),
 				auxiliary: Default::default()
 			};
 
@@ -1176,10 +1174,10 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		let proposed_timestamp = match self.client.check_inherents(
 			&self.parent_id,
 			&unchecked_proposal,
-			&inherent
+			&inherent,
 		) {
 			Ok(Ok(())) => None,
-			Ok(Err(BlockBuilderError::TimestampInFuture(timestamp))) => Some(timestamp),
+			Ok(Err(BlockBuilderError::ValidAtTimestamp(timestamp))) => Some(timestamp),
 			Ok(Err(e)) => {
 				debug!(target: "rhd", "Invalid proposal (check_inherents): {:?}", e);
 				return Box::new(future::ok(false));

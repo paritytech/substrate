@@ -14,30 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(feature = "std")]
+extern crate serde;
 
 extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_aura_primitives as consensus_aura;
 
-#[cfg(feature = "std")]
 #[macro_use]
-extern crate serde_derive;
+extern crate substrate_client as client;
 
 #[macro_use]
 extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
-#[macro_use]
-extern crate sr_api as runtime_api;
 extern crate sr_io as runtime_io;
 #[macro_use]
 extern crate sr_version as runtime_version;
-
 
 #[cfg(test)]
 #[macro_use]
@@ -47,29 +45,37 @@ extern crate substrate_keyring as keyring;
 #[cfg_attr(any(feature = "std", test), macro_use)]
 extern crate substrate_primitives as primitives;
 
+#[cfg(test)] extern crate substrate_executor;
+
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use runtime_api::runtime::*;
-use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT};
-use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
+use client::{runtime_api as client_api, block_builder::api as block_builder_api};
+use runtime_primitives::{
+	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
+	traits::{
+		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
+		GetNodeBlockType, GetRuntimeBlockType
+	}, CheckInherentError
+};
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::AuthorityId;
+use primitives::{Ed25519AuthorityId, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
+use consensus_aura::api as aura_api;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: ver_str!("test"),
-	impl_name: ver_str!("parity-test"),
+	spec_name: create_runtime_str!("test"),
+	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 1,
-	apis: apis_vec!([]),
+	apis: RUNTIME_API_VERSIONS,
 };
 
 fn version() -> RuntimeVersion {
@@ -87,7 +93,7 @@ pub fn native_version() -> NativeVersion {
 
 /// Calls in transactions.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -97,20 +103,33 @@ pub struct Transfer {
 
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Extrinsic {
-	pub transfer: Transfer,
-	pub signature: Ed25519Signature,
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Extrinsic {
+	AuthoritiesChange(Vec<Ed25519AuthorityId>),
+	Transfer(Transfer, Ed25519Signature),
+}
+
+#[cfg(feature = "std")]
+impl serde::Serialize for Extrinsic
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+	}
 }
 
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
 	fn check(self) -> Result<Self, &'static str> {
-		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
-			Ok(self)
-		} else {
-			Err("bad signature")
+		match self {
+			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
+			Extrinsic::Transfer(transfer, signature) => {
+				if ::runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+					Ok(Extrinsic::Transfer(transfer, signature))
+				} else {
+					Err("bad signature")
+				}
+			},
 		}
 	}
 }
@@ -118,6 +137,15 @@ impl BlindCheckable for Extrinsic {
 impl ExtrinsicT for Extrinsic {
 	fn is_signed(&self) -> Option<bool> {
 		Some(true)
+	}
+}
+
+impl Extrinsic {
+	pub fn transfer(&self) -> &Transfer {
+		match self {
+			Extrinsic::Transfer(ref transfer, _) => transfer,
+			_ => panic!("cannot convert to transfer ref"),
+		}
 	}
 }
 
@@ -130,7 +158,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, u64>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256, Ed25519AuthorityId>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.
@@ -158,44 +186,59 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
-mod test_api {
-	decl_apis! {
-		pub trait TestAPI {
-			fn balance_of<AccountId>(id: AccountId) -> u64;
-		}
+decl_runtime_apis! {
+	pub trait TestAPI {
+		fn balance_of(id: AccountId) -> u64;
+		/// A benchmkark function that adds one to the given value and returns the result.
+		fn benchmark_add_one(val: &u64) -> u64;
+		/// A benchmark function that adds one to each value in the given vector and returns the
+		/// result.
+		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
 	}
 }
 
-use test_api::runtime::TestAPI;
+pub struct Runtime;
 
-struct Runtime;
+impl GetNodeBlockType for Runtime {
+	type NodeBlock = Block;
+}
 
-impl_apis! {
-	impl Core<Block, AuthorityId> for Runtime {
+impl GetRuntimeBlockType for Runtime {
+	type RuntimeBlock = Block;
+}
+
+impl_runtime_apis! {
+	impl client_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			version()
 		}
 
-		fn authorities() -> Vec<AuthorityId> {
+		fn authorities() -> Vec<Ed25519AuthorityId> {
 			system::authorities()
 		}
 
 		fn execute_block(block: Block) {
 			system::execute_block(block)
 		}
+
+		fn initialise_block(header: &<Block as BlockT>::Header) {
+			system::initialise_block(header)
+		}
 	}
 
-	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
+	impl client_api::Metadata<Block> for Runtime {
+		fn metadata() -> OpaqueMetadata {
+			unimplemented!()
+		}
+	}
+
+	impl client_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}
 	}
 
-	impl BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			system::initialise_block(header)
-		}
-
+	impl block_builder_api::BlockBuilder<Block, ()> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
@@ -204,12 +247,12 @@ impl_apis! {
 			system::finalise_block()
 		}
 
-		fn inherent_extrinsics(_data: u32) -> Vec<u32> {
+		fn inherent_extrinsics(_data: ()) -> Vec<<Block as BlockT>::Extrinsic> {
 			unimplemented!()
 		}
 
-		fn check_inherents(_block: Block, _data: u32) -> Result<(), u32> {
-			unimplemented!()
+		fn check_inherents(_block: Block, _data: ()) -> Result<(), CheckInherentError> {
+			Ok(())
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
@@ -217,9 +260,23 @@ impl_apis! {
 		}
 	}
 
-	impl TestAPI<AccountId> for Runtime {
+	impl self::TestAPI<Block> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
 		}
+
+		fn benchmark_add_one(val: &u64) -> u64 {
+			val + 1
+		}
+
+		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64> {
+			let mut vec = vec.clone();
+			vec.iter_mut().for_each(|v| *v += 1);
+			vec
+		}
+	}
+
+	impl aura_api::AuraApi<Block> for Runtime {
+		fn slot_duration() -> u64 { 1 }
 	}
 }

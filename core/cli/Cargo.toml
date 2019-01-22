@@ -3,10 +3,9 @@ name = "substrate-cli"
 version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
-build = "build.rs"
 
 [dependencies]
-clap = { version = "~2.32", features = ["yaml"] }
+clap = "~2.32"
 backtrace = "0.3"
 env_logger = "0.5"
 error-chain = "0.12"
@@ -22,15 +21,12 @@ tokio = "0.1.7"
 futures = "0.1.17"
 fdlimit = "0.1"
 exit-future = "0.1"
-sysinfo = "0.6.2"
+sysinfo = "0.7"
 substrate-client = { path = "../../core/client" }
 substrate-network = { path = "../../core/network" }
-substrate-network-libp2p = { path = "../../core/network-libp2p" }
 sr-primitives = { path = "../../core/sr-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
 names = "0.11.0"
-
-[build-dependencies]
-clap = "~2.32"
+structopt = "0.2.13"

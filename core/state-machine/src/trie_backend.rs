@@ -49,6 +49,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSi
 	pub fn root(&self) -> &H::Out {
 		self.essence.root()
 	}
+
+	/// Consumes self and returns underlying storage.
+	pub fn into_storage(self) -> S {
+		self.essence.into_storage()
+	}
 }
 
 impl super::Error for String {}
@@ -98,6 +103,26 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				Vec::new()
 			}
 		}
+	}
+
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		let mut read_overlay = MemoryDB::default();	// TODO: use new for correctness
+		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
+
+		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
+			let mut v = Vec::new();
+			for x in trie.iter()? {
+				let (key, _) = x?;
+				if key.starts_with(prefix) {
+					v.push(key.to_vec());
+				}
+			}
+
+			Ok(v)
+		};
+
+		collect_all().map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e)).unwrap_or_default()
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)

@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles balances.
+//! Balances: Handles setting and retrieval of free balance,
+//! retrieving total balance, reserve and unreserve balance,
+//! repatriating a reserved balance to a beneficiary account that exists,
+//! transfering a balance between accounts (when not reserved),
+//! slashing an account balance, account removal, rewards,
+//! lookup of an index to reclaim an account (when not balance not reserved),
+//! increasing total stake.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 
 #[macro_use]
 extern crate srml_support as runtime_support;
@@ -41,26 +43,15 @@ extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use codec::{Encode, Decode, Codec, Input, Output, HasCompact};
+use codec::Codec;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, SimpleArithmetic, MakePayment,
-	As, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
-use address::Address as RawAddress;
-use system::ensure_signed;
+use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
+	As, StaticLookup, Member, CheckedAdd, CheckedSub};
+use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
-
-pub mod address;
 mod tests;
-
-/// Number of account IDs stored per enum set.
-const ENUM_SET_SIZE: usize = 64;
-
-/// The byte to identify intention to reclaim an existing account index.
-const RECLAIM_INDEX_MAGIC: usize = 0x69;
-
-pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -99,22 +90,32 @@ pub trait EnsureAccountLiquid<AccountId> {
 	/// with the reason why not otherwise.
 	fn ensure_account_liquid(who: &AccountId) -> Result;
 }
-
+impl<
+	AccountId,
+	X: EnsureAccountLiquid<AccountId>,
+	Y: EnsureAccountLiquid<AccountId>,
+> EnsureAccountLiquid<AccountId> for (X, Y) {
+	fn ensure_account_liquid(who: &AccountId) -> Result {
+		X::ensure_account_liquid(who)?;
+		Y::ensure_account_liquid(who)
+	}
+}
 impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 	fn ensure_account_liquid(_who: &AccountId) -> Result { Ok(()) }
 }
 
 pub trait Trait: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
-	/// Type used for storing an account's index; implies the maximum number of accounts the system
-	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64>;
+
 	/// A function which is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
+
+	/// Handler for when a new account is created.
+	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// A function that returns true iff a given account can transfer its funds to another account.
 	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId>;
@@ -125,18 +126,17 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
+		fn deposit_event<T>() = default;
 
 		/// Transfer some liquid free balance to another staker.
 		pub fn transfer(
 			origin,
-			dest: RawAddress<T::AccountId, T::AccountIndex>,
-			value: <T::Balance as HasCompact>::Type
-		) -> Result {
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
 			let transactor = ensure_signed(origin)?;
 
-			let dest = Self::lookup(dest)?;
-			let value = value.into();
+			let dest = T::Lookup::lookup(dest)?;
 			let from_balance = Self::free_balance(&transactor);
 			let to_balance = Self::free_balance(&dest);
 			let would_create = to_balance.is_zero();
@@ -168,20 +168,17 @@ decl_module! {
 				Self::set_free_balance_creating(&dest, new_to_balance);
 				Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
 			}
-
-			Ok(())
 		}
 
 		/// Set the balances of a given account.
 		fn set_balance(
-			who: RawAddress<T::AccountId, T::AccountIndex>,
-			free: <T::Balance as HasCompact>::Type,
-			reserved: <T::Balance as HasCompact>::Type
-		) -> Result {
-			let who = Self::lookup(who)?;
-			Self::set_free_balance(&who, free.into());
-			Self::set_reserved_balance(&who, reserved.into());
-			Ok(())
+			who: <T::Lookup as StaticLookup>::Source,
+			#[compact] free: T::Balance,
+			#[compact] reserved: T::Balance
+		) {
+			let who = T::Lookup::lookup(who)?;
+			Self::set_free_balance(&who, free);
+			Self::set_reserved_balance(&who, reserved);
 		}
 	}
 }
@@ -189,11 +186,10 @@ decl_module! {
 decl_event!(
 	pub enum Event<T> where
 		<T as system::Trait>::AccountId,
-		<T as Trait>::AccountIndex,
 		<T as Trait>::Balance
 	{
 		/// A new account was created.
-		NewAccount(AccountId, AccountIndex, NewAccountOutcome),
+		NewAccount(AccountId, Balance),
 		/// An account was reaped.
 		ReapedAccount(AccountId),
 		/// Transfer succeeded (from, to, value, fees).
@@ -209,19 +205,10 @@ decl_storage! {
 		}): T::Balance;
 		/// The minimum amount allowed to keep an account open.
 		pub ExistentialDeposit get(existential_deposit) config(): T::Balance;
-		/// The amount credited to a destination's account whose index was reclaimed.
-		pub ReclaimRebate get(reclaim_rebate) config(): T::Balance;
 		/// The fee required to make a transfer.
 		pub TransferFee get(transfer_fee) config(): T::Balance;
 		/// The fee required to create an account. At least as big as ReclaimRebate.
 		pub CreationFee get(creation_fee) config(): T::Balance;
-
-		/// The next free enumeration set.
-		pub NextEnumSet get(next_enum_set) build(|config: &GenesisConfig<T>| {
-			T::AccountIndex::sa(config.balances.len() / ENUM_SET_SIZE)
-		}): T::AccountIndex;
-		/// The enumeration sets.
-		pub EnumSet get(enum_set): map T::AccountIndex => Vec<T::AccountId>;
 
 		/// The 'free' balance of a given account.
 		///
@@ -260,23 +247,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
-		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
-			let ids: Vec<_> = config.balances.iter().map(|x| x.0.clone()).collect();
-			for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
-				storage.insert(GenesisConfig::<T>::hash(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
-					ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());
-			}
-		});
 	}
-}
-
-/// Whatever happened about the hint given when creating the new account.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone, Copy)]
-pub enum NewAccountOutcome {
-	NoHint,
-	GoodHint,
-	BadHint,
 }
 
 /// Outcome of a balance update.
@@ -308,30 +279,6 @@ impl<T: Trait> Module<T> {
 			Self::free_balance(who) >= value
 		} else {
 			false
-		}
-	}
-
-	/// Lookup an T::AccountIndex to get an Id, if there's one there.
-	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
-		let enum_set_size = Self::enum_set_size();
-		let set = Self::enum_set(index / enum_set_size);
-		let i: usize = (index % enum_set_size).as_();
-		set.get(i).map(|x| x.clone())
-	}
-
-	/// `true` if the account `index` is ready for reclaim.
-	pub fn can_reclaim(try_index: T::AccountIndex) -> bool {
-		let enum_set_size = Self::enum_set_size();
-		let try_set = Self::enum_set(try_index / enum_set_size);
-		let i = (try_index % enum_set_size).as_();
-		i < try_set.len() && Self::total_balance(&try_set[i]).is_zero()
-	}
-
-	/// Lookup an address to get an Id, if there's one there.
-	pub fn lookup_address(a: address::Address<T::AccountId, T::AccountIndex>) -> Option<T::AccountId> {
-		match a {
-			address::Address::Id(i) => Some(i),
-			address::Address::Index(i) => Self::lookup_index(i),
 		}
 	}
 
@@ -391,22 +338,14 @@ impl<T: Trait> Module<T> {
 		// account is reaped).
 		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
 		// value of which makes even the `free_balance` unspendable.
-		// TODO: enforce this for the other balance-altering functions.
 		if balance < ed {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
 			if !<FreeBalance<T>>::exists(who) {
-				let outcome = Self::new_account(&who, balance);
-				let credit = match outcome {
-					NewAccountOutcome::GoodHint => balance + <Module<T>>::reclaim_rebate(),
-					_ => balance,
-				};
-				Self::set_free_balance(who, credit);
-				Self::increase_total_stake_by(credit - balance);
-			} else {
-				Self::set_free_balance(who, balance);
+				Self::new_account(&who, balance);
 			}
+			Self::set_free_balance(who, balance);
 
 			UpdateBalanceOutcome::Updated
 		}
@@ -542,82 +481,10 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn enum_set_size() -> T::AccountIndex {
-		T::AccountIndex::sa(ENUM_SET_SIZE)
-	}
-
 	/// Register a new account (with existential balance).
-	fn new_account(who: &T::AccountId, balance: T::Balance) -> NewAccountOutcome {
-		let enum_set_size = Self::enum_set_size();
-		let next_set_index = Self::next_enum_set();
-		let reclaim_index_magic = T::AccountIndex::sa(RECLAIM_INDEX_MAGIC);
-		let reclaim_index_modulus = T::AccountIndex::sa(256usize);
-		let quantization = T::AccountIndex::sa(256usize);
-
-		// A little easter-egg for reclaiming dead indexes..
-		let ret = {
-			// we quantise the number of accounts so it stays constant over a reasonable
-			// period of time.
-			let quantized_account_count: T::AccountIndex = (next_set_index * enum_set_size / quantization + One::one()) * quantization;
-			// then modify the starting balance to be modulo this to allow it to potentially
-			// identify an account index for reuse.
-			let maybe_try_index = balance % <T::Balance as As<T::AccountIndex>>::sa(quantized_account_count * reclaim_index_modulus);
-			let maybe_try_index = As::<T::AccountIndex>::as_(maybe_try_index);
-
-			// this identifier must end with magic byte 0x69 to trigger this check (a minor
-			// optimisation to ensure we don't check most unintended account creations).
-			if maybe_try_index % reclaim_index_modulus == reclaim_index_magic {
-				// reuse is probably intended. first, remove magic byte.
-				let try_index = maybe_try_index / reclaim_index_modulus;
-
-				// then check to see if this balance identifies a dead account index.
-				let set_index = try_index / enum_set_size;
-				let mut try_set = Self::enum_set(set_index);
-				let item_index = (try_index % enum_set_size).as_();
-				if item_index < try_set.len() {
-					if Self::total_balance(&try_set[item_index]).is_zero() {
-						// yup - this index refers to a dead account. can be reused.
-						try_set[item_index] = who.clone();
-						<EnumSet<T>>::insert(set_index, try_set);
-
-						Self::deposit_event(RawEvent::NewAccount(who.clone(), try_index, NewAccountOutcome::GoodHint));
-
-						return NewAccountOutcome::GoodHint
-					}
-				}
-				NewAccountOutcome::BadHint
-			} else {
-				NewAccountOutcome::NoHint
-			}
-		};
-
-		// insert normally as a back up
-		let mut set_index = next_set_index;
-		// defensive only: this loop should never iterate since we keep NextEnumSet up to date later.
-		let mut set = loop {
-			let set = Self::enum_set(set_index);
-			if set.len() < ENUM_SET_SIZE {
-				break set;
-			}
-			set_index += One::one();
-		};
-
-		let index = T::AccountIndex::sa(set_index.as_() * ENUM_SET_SIZE + set.len());
-
-		// update set.
-		set.push(who.clone());
-
-		// keep NextEnumSet up to date
-		if set.len() == ENUM_SET_SIZE {
-			<NextEnumSet<T>>::put(set_index + One::one());
-		}
-
-		// write set.
-		<EnumSet<T>>::insert(set_index, set);
-
-		Self::deposit_event(RawEvent::NewAccount(who.clone(), index, ret));
-
-		ret
+	fn new_account(who: &T::AccountId, balance: T::Balance) {
+		T::OnNewAccount::on_new_account(&who);
+		Self::deposit_event(RawEvent::NewAccount(who.clone(), balance.clone()));
 	}
 
 	fn reap_account(who: &T::AccountId) {
@@ -659,43 +526,6 @@ impl<T: Trait> Module<T> {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
-
-	pub fn lookup(a: address::Address<T::AccountId, T::AccountIndex>) -> result::Result<T::AccountId, &'static str> {
-		match a {
-			address::Address::Id(i) => Ok(i),
-			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
-		}
-	}
-}
-
-pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
-impl<T> Default for ChainContext<T> {
-	fn default() -> Self {
-		ChainContext(::rstd::marker::PhantomData)
-	}
-}
-
-impl<T: Trait> Lookup for ChainContext<T> {
-	type Source = address::Address<T::AccountId, T::AccountIndex>;
-	type Target = T::AccountId;
-	fn lookup(&self, a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		<Module<T>>::lookup(a)
-	}
-}
-
-impl<T: Trait> CurrentHeight for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	fn current_height(&self) -> Self::BlockNumber {
-		<system::Module<T>>::block_number()
-	}
-}
-
-impl<T: Trait> BlockNumberToHash for ChainContext<T> {
-	type BlockNumber = T::BlockNumber;
-	type Hash = T::Hash;
-	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
-		Some(<system::Module<T>>::block_hash(n))
-	}
 }
 
 impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
@@ -708,5 +538,11 @@ impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 		Self::set_free_balance(transactor, b - transaction_fee);
 		Self::decrease_total_stake_by(transaction_fee);
 		Ok(())
+	}
+}
+
+impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
+	fn is_dead_account(who: &T::AccountId) -> bool {
+		Self::total_balance(who).is_zero()
 	}
 }

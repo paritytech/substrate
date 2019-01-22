@@ -42,18 +42,18 @@ mod tests {
 	use super::*;
 	use codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
-	use executor::NativeExecutionDispatch;
+	use executor::{NativeExecutionDispatch, native_executor_instance};
 	use state_machine::{execute, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
-	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
 	use runtime_primitives::traits::BlakeTwo256;
 	use primitives::{Blake2Hasher, ed25519::{Public, Pair}};
+	use hex::*;
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
-	fn executor() -> ::executor::NativeExecutor<Executor> {
+	fn executor() -> executor::NativeExecutor<Executor> {
 		NativeExecutionDispatch::new()
 	}
 
@@ -70,7 +70,7 @@ mod tests {
 			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.to_fixed_bytes())).unwrap())
 				.sign(&tx.encode()).into();
 
-			Extrinsic { transfer: tx, signature }
+			Extrinsic::Transfer(tx, signature)
 		}).collect::<Vec<_>>();
 
 		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(transactions.iter().map(Encode::encode)).into();
@@ -91,7 +91,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"initialise_block",
+			"Core_initialise_block",
 			&header.encode(),
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
@@ -102,7 +102,7 @@ mod tests {
 				Some(&InMemoryChangesTrieStorage::new()),
 				&mut overlay,
 				&executor(),
-				"apply_extrinsic",
+				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
 				ExecutionStrategy::NativeWhenPossible,
 			).unwrap();
@@ -113,7 +113,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"finalise_block",
+			"BlockBuilder_finalise_block",
 			&[],
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
@@ -157,7 +157,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"execute_block",
+			"Core_execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();
@@ -182,7 +182,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
-			"execute_block",
+			"Core_execute_block",
 			&b1data,
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
@@ -208,7 +208,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&Executor::new(),
-			"execute_block",
+			"Core_execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,
 		).unwrap();

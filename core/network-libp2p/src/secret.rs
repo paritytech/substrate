@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::NetworkConfiguration;
 use libp2p::secio;
-use rand::{self, Rng};
-use std::fs;
+use log::{trace, warn};
+use rand::Rng;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
-use std::path::Path;
-use NetworkConfiguration;
+use std::{fs, path::Path};
 
 // File where the private key is stored.
 const SECRET_FILE: &str = "secret";
 
 /// Obtains or generates the local private key using the configuration.
-pub(crate) fn obtain_private_key(
+pub fn obtain_private_key(
 	config: &NetworkConfiguration
 ) -> Result<secio::SecioKeyPair, IoError> {
 	if let Some(ref secret) = config.use_secret {
@@ -35,8 +35,6 @@ pub(crate) fn obtain_private_key(
 
 	} else {
 		if let Some(ref path) = config.net_config_path {
-			fs::create_dir_all(Path::new(path))?;
-
 			// Try fetch the key from a the file containing the secret.
 			let secret_path = Path::new(path).join(SECRET_FILE);
 			match load_private_key_from_file(&secret_path) {

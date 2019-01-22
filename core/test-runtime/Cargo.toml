@@ -8,16 +8,20 @@ log = { version = "0.4", optional = true }
 hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
-parity-codec = { version = "2.1", default-features = false }
+parity-codec = { version = "2.2", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 substrate-keyring = { path = "../keyring", optional = true }
+substrate-client = { path = "../client", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
-sr-api = { path = "../sr-api", default-features = false }
+substrate-consensus-aura-primitives = { path = "../consensus/aura/primitives", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 sr-io = { path = "../sr-io", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-version = { path = "../sr-version", default-features = false }
 srml-support = { path = "../../srml/support", default-features = false }
+
+[dev-dependencies]
+substrate-executor = { path = "../executor" }
 
 [features]
 default = ["std"]
@@ -26,13 +30,14 @@ std = [
 	"hex-literal",
 	"serde",
 	"serde_derive",
+	"substrate-client/std",
 	"substrate-keyring",
 	"parity-codec/std",
-	"sr-api/std",
 	"sr-std/std",
 	"sr-io/std",
 	"srml-support/std",
 	"substrate-primitives/std",
 	"sr-primitives/std",
 	"sr-version/std",
+	"substrate-consensus-aura-primitives/std",
 ]

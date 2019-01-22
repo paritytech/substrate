@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
-//! Consensus basics and common features
-// end::description[]
+//! Common utilities for building and using consensus engines in substrate.
+//!
+//! Much of this crate is _unstable_ and thus the API is likely to undergo
+//! change. Implementors of traits should not rely on the interfaces to remain
+//! the same.
 
 // This provides "unused" building blocks to other crates
 #![allow(dead_code)]
@@ -26,52 +28,54 @@
 
 extern crate substrate_primitives as primitives;
 extern crate futures;
+extern crate parking_lot;
 extern crate sr_version as runtime_version;
 extern crate sr_primitives as runtime_primitives;
+#[cfg(any(test, feature = "test-helpers"))]
+extern crate substrate_test_client as test_client;
 extern crate tokio;
 
 extern crate parity_codec as codec;
-#[macro_use]
 extern crate parity_codec_derive;
 
 #[macro_use]
 extern crate error_chain;
+#[macro_use] extern crate log;
 
 use std::sync::Arc;
 
-use primitives::{ed25519, AuthorityId};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block;
+use runtime_primitives::traits::{AuthorityIdFor, Block};
 use futures::prelude::*;
 
 pub mod offline_tracker;
 pub mod error;
 mod block_import;
+pub mod import_queue;
 pub mod evaluation;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 pub use self::error::{Error, ErrorKind};
-pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult};
+pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult, ForkChoiceStrategy};
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
 	type Error: ::std::error::Error + Send + 'static;	/// Get the authorities at the given block.
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityId>, Self::Error>;
+	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityIdFor<B>>, Self::Error>;
 }
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
-pub trait Environment<B: Block> {
+pub trait Environment<B: Block, ConsensusData> {
 	/// The proposer type this creates.
-	type Proposer: Proposer<B>;
+	type Proposer: Proposer<B, ConsensusData>;
 	/// Error which can occur upon creation.
 	type Error: From<Error>;
 
 	/// Initialize the proposal logic on top of a specific header. Provide
-	/// the authorities at that header, and a local key to sign any additional
-	/// consensus messages with as well.
-	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>)
+	/// the authorities at that header.
+	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityIdFor<B>])
 		-> Result<Self::Proposer, Self::Error>;
 }
 
@@ -79,32 +83,15 @@ pub trait Environment<B: Block> {
 ///
 /// This will encapsulate creation and evaluation of proposals at a specific
 /// block.
-pub trait Proposer<B: Block> {
+///
+/// Proposers are generic over bits of "consensus data" which are engine-specific.
+pub trait Proposer<B: Block, ConsensusData> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
 	type Create: IntoFuture<Item=B,Error=Self::Error>;
 	/// Create a proposal.
-	fn propose(&self) -> Self::Create;
-}
-
-/// Inherent data to include in a block.
-#[derive(Encode, Decode)]
-pub struct InherentData {
-	/// Current timestamp.
-	pub timestamp: u64,
-	/// Indices of offline validators.
-	pub offline_indices: Vec<u32>,
-}
-
-impl InherentData {
-	/// Create a new `InherentData` instance.
-	pub fn new(timestamp: u64, offline_indices: Vec<u32>) -> Self {
-		Self {
-			timestamp,
-			offline_indices
-		}
-	}
+	fn propose(&self, consensus_data: ConsensusData) -> Self::Create;
 }
 
 /// An oracle for when major synchronization work is being undertaken.

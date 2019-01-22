@@ -18,18 +18,19 @@
 
 use client::{self, Client as SubstrateClient, ClientInfo, BlockStatus, CallExecutor};
 use client::error::Error;
-use consensus::BlockImport;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use client::light::fetcher::ChangesProof;
+use consensus::{BlockImport, Error as ConsensusError};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, AuthorityIdFor};
 use runtime_primitives::generic::{BlockId};
 use consensus::{ImportBlock, ImportResult};
 use runtime_primitives::Justification;
-use primitives::{H256, Blake2Hasher, AuthorityId};
+use primitives::{H256, Blake2Hasher, storage::StorageKey};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
-	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
-		-> Result<ImportResult, Error>;
+	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityIdFor<Block>>>)
+		-> Result<ImportResult, ConsensusError>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo<Block>, Error>;
@@ -63,66 +64,69 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		&self,
 		first: Block::Hash,
 		last: Block::Hash,
+		min: Block::Hash,
 		max: Block::Hash,
-		key: &[u8]
-	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error>;
+		key: &StorageKey
+	) -> Result<ChangesProof<Block::Header>, Error>;
 }
 
-impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
+impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	Self: BlockImport<Block, Error=Error>,
+	Self: BlockImport<Block, Error=ConsensusError>,
 	Block: BlockT<Hash=H256>,
+	RA: Send + Sync
 {
-	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
-		-> Result<ImportResult, Error>
+	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityIdFor<Block>>>)
+		-> Result<ImportResult, ConsensusError>
 	{
-		(self as &SubstrateClient<B, E, Block>).import_block(block, new_authorities)
+		(self as &SubstrateClient<B, E, Block, RA>).import_block(block, new_authorities)
 	}
 
 	fn info(&self) -> Result<ClientInfo<Block>, Error> {
-		(self as &SubstrateClient<B, E, Block>).info()
+		(self as &SubstrateClient<B, E, Block, RA>).info()
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error> {
-		(self as &SubstrateClient<B, E, Block>).block_status(id)
+		(self as &SubstrateClient<B, E, Block, RA>).block_status(id)
 	}
 
 	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error> {
-		(self as &SubstrateClient<B, E, Block>).block_hash(block_number)
+		(self as &SubstrateClient<B, E, Block, RA>).block_hash(block_number)
 	}
 
 	fn header(&self, id: &BlockId<Block>) -> Result<Option<Block::Header>, Error> {
-		(self as &SubstrateClient<B, E, Block>).header(id)
+		(self as &SubstrateClient<B, E, Block, RA>).header(id)
 	}
 
 	fn body(&self, id: &BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, Error> {
-		(self as &SubstrateClient<B, E, Block>).body(id)
+		(self as &SubstrateClient<B, E, Block, RA>).body(id)
 	}
 
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification>, Error> {
-		(self as &SubstrateClient<B, E, Block>).justification(id)
+		(self as &SubstrateClient<B, E, Block, RA>).justification(id)
 	}
 
 	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error> {
-		(self as &SubstrateClient<B, E, Block>).header_proof(&BlockId::Number(block_number))
+		(self as &SubstrateClient<B, E, Block, RA>).header_proof(&BlockId::Number(block_number))
 	}
 
 	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
-		(self as &SubstrateClient<B, E, Block>).read_proof(&BlockId::Hash(block.clone()), key)
+		(self as &SubstrateClient<B, E, Block, RA>).read_proof(&BlockId::Hash(block.clone()), key)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
-		(self as &SubstrateClient<B, E, Block>).execution_proof(&BlockId::Hash(block.clone()), method, data)
+		(self as &SubstrateClient<B, E, Block, RA>).execution_proof(&BlockId::Hash(block.clone()), method, data)
 	}
 
 	fn key_changes_proof(
 		&self,
 		first: Block::Hash,
 		last: Block::Hash,
+		min: Block::Hash,
 		max: Block::Hash,
-		key: &[u8]
-	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error> {
-		(self as &SubstrateClient<B, E, Block>).key_changes_proof(first, last, max, key)
+		key: &StorageKey
+	) -> Result<ChangesProof<Block::Header>, Error> {
+		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, key)
 	}
 }

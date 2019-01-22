@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
+use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use {GenesisConfig, Trait, Module, system};
@@ -28,13 +28,13 @@ impl_outer_origin!{
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 impl Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
-	type SessionKey = u64;
-	type OnOfflineValidator = ();
+	type SessionKey = UintAuthorityId;
+	type InherentOfflineReport = ::InstantFinalityReportVec<()>;
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -44,6 +44,7 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
@@ -53,7 +54,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blak
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(GenesisConfig::<Test>{
 		code: vec![],
-		authorities,
+		authorities: authorities.into_iter().map(|a| UintAuthorityId(a)).collect(),
 	}.build_storage().unwrap().0);
 	t.into()
 }

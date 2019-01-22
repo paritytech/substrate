@@ -32,6 +32,7 @@ pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec
 
 /// Storage change set
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, PartialEq, Eq))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct StorageChangeSet<Hash> {
 	/// Block hash
 	pub block: Hash,

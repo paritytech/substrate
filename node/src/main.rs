@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Substrate CLI
+//! Substrate Node CLI
 
 #![warn(missing_docs)]
 
@@ -54,10 +54,11 @@ quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
 	let version = VersionInfo {
+		name: "Substrate Node",
 		commit: env!("VERGEN_SHA_SHORT"),
 		version: env!("CARGO_PKG_VERSION"),
 		executable_name: "substrate",
-		author: "Parity Team <admin@parity.io>",
+		author: "Parity Technologies <admin@parity.io>",
 		description: "Generic substrate node",
 	};
 	cli::run(::std::env::args(), Exit, version)

@@ -25,19 +25,18 @@ extern crate sr_io;
 #[cfg(test)]
 extern crate substrate_primitives;
 extern crate sr_primitives;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 #[macro_use]
 extern crate parity_codec_derive;
 extern crate parity_codec as codec;
 #[macro_use]
 extern crate srml_support as support;
+
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 
 use sr_std::prelude::*;
-use support::{StorageValue, dispatch::Result};
+use sr_primitives::traits::StaticLookup;
+use support::StorageValue;
 use system::ensure_signed;
 
 pub trait Trait: consensus::Trait + system::Trait {
@@ -48,27 +47,24 @@ pub trait Trait: consensus::Trait + system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event() = default;
-		fn upgrade(origin, new: Vec<u8>) -> Result {
+		fn deposit_event<T>() = default;
+		fn upgrade(origin, new: Vec<u8>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
 
 			<consensus::Module<T>>::set_code(new)?;
 			Self::deposit_event(RawEvent::Upgraded);
-
-			Ok(())
 		}
 
-		fn set_key(origin, new: T::AccountId) -> Result {
+		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
+			let new = T::Lookup::lookup(new)?;
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
-
-			Ok(())
 		}
 	}
 }

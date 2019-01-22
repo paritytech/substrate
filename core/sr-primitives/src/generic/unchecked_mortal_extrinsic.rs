@@ -30,7 +30,6 @@ const TRANSACTION_VERSION: u8 = 1;
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
@@ -58,7 +57,7 @@ impl<Address, Index, Call, Signature> UncheckedMortalExtrinsic<Address, Index, C
 	}
 }
 
-impl<Address, Index, Call, Signature> Extrinsic for UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
+impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode> Extrinsic for UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}
@@ -155,6 +154,15 @@ where
 			}
 			self.function.encode_to(v);
 		})
+	}
+}
+
+#[cfg(feature = "std")]
+impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode> serde::Serialize
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
 

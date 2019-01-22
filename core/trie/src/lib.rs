@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
-// end::description[]
 
 // TODO: no_std
 
@@ -134,10 +132,11 @@ pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 /// compact-encoded index (using `parity-codec` crate).
 pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out
 where
-	I: IntoIterator<Item = A> + Iterator<Item = A>,
+	I: IntoIterator<Item = A>,
 	A: AsRef<[u8]>,
 {
 	trie_root::<H, _, _, _>(input
+		.into_iter()
 		.enumerate()
 		.map(|(i, v)| (codec::Encode::encode(&codec::Compact(i as u32)), v))
 	)

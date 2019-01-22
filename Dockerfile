@@ -6,6 +6,7 @@ RUN apk add build-base \
     cmake \
     linux-headers \
     openssl-dev \
+    clang-dev \
     cargo
 
 ARG PROFILE=release
@@ -17,7 +18,7 @@ RUN cargo build --$PROFILE
 
 # ===== SECOND STAGE ======
 
-FROM alpine:3.8
+FROM alpine:edge
 LABEL maintainer="chevdor@gmail.com"
 LABEL description="This is the 2nd stage: a very small image where we copy the Substrate binary."
 ARG PROFILE=release
@@ -34,4 +35,4 @@ RUN rm -rf /usr/lib/python* && \
 EXPOSE 30333 9933 9944
 VOLUME ["/data"]
 
-CMD ["/usr/local/bin/substrate"]
+ENTRYPOINT ["/usr/local/bin/substrate"]

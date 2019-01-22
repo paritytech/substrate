@@ -24,12 +24,13 @@ use futures::sync::oneshot::{channel, Receiver, Sender};
 use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
-use client::{self, error::{Error as ClientError, ErrorKind as ClientErrorKind}};
+use client::{error::{Error as ClientError, ErrorKind as ClientErrorKind}};
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
+	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
 use io::SyncIo;
 use message;
 use network_libp2p::{Severity, NodeIndex};
+use config::Roles;
 use service;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
@@ -41,7 +42,7 @@ const RETRY_COUNT: usize = 1;
 /// On-demand service API.
 pub trait OnDemandService<Block: BlockT>: Send + Sync {
 	/// When new node is connected.
-	fn on_connect(&self, peer: NodeIndex, role: service::Roles, best_number: NumberFor<Block>);
+	fn on_connect(&self, peer: NodeIndex, role: Roles, best_number: NumberFor<Block>);
 
 	/// When block is announced by the peer.
 	fn on_block_announce(&self, peer: NodeIndex, best_number: NumberFor<Block>);
@@ -71,7 +72,7 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 		&self,
 		io: &mut SyncIo,
 		peer: NodeIndex,
-		response: message::RemoteChangesResponse<NumberFor<Block>>
+		response: message::RemoteChangesResponse<NumberFor<Block>, Block::Hash>
 	);
 }
 
@@ -106,7 +107,7 @@ struct Request<Block: BlockT> {
 enum RequestData<Block: BlockT> {
 	RemoteHeader(RemoteHeaderRequest<Block::Header>, Sender<Result<Block::Header, ClientError>>),
 	RemoteRead(RemoteReadRequest<Block::Header>, Sender<Result<Option<Vec<u8>>, ClientError>>),
-	RemoteCall(RemoteCallRequest<Block::Header>, Sender<Result<client::CallResult, ClientError>>),
+	RemoteCall(RemoteCallRequest<Block::Header>, Sender<Result<Vec<u8>, ClientError>>),
 	RemoteChanges(RemoteChangesRequest<Block::Header>, Sender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>),
 }
 
@@ -211,8 +212,8 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	E: service::ExecuteInContext<B>,
 	B::Header: HeaderT,
 {
-	fn on_connect(&self, peer: NodeIndex, role: service::Roles, best_number: NumberFor<B>) {
-		if !role.intersects(service::Roles::FULL | service::Roles::AUTHORITY) { // TODO: correct?
+	fn on_connect(&self, peer: NodeIndex, role: Roles, best_number: NumberFor<B>) {
+		if !role.intersects(Roles::FULL | Roles::AUTHORITY) { // TODO: correct?
 			return;
 		}
 
@@ -283,11 +284,15 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		})
 	}
 
-	fn on_remote_changes_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+	fn on_remote_changes_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
 		self.accept_response("changes", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteChanges(request, sender) => match self.checker.check_changes_proof(
-				&request, response.max, response.proof
-			) {
+				&request, ChangesProof {
+					max_block: response.max,
+					proof: response.proof,
+					roots: response.roots.into_iter().collect(),
+					roots_proof: response.roots_proof,
+			}) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
 					let _ = sender.send(Ok(response));
@@ -307,7 +312,7 @@ impl<B, E> Fetcher<B> for OnDemand<B, E> where
 {
 	type RemoteHeaderResult = RemoteResponse<B::Header>;
 	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
-	type RemoteCallResult = RemoteResponse<client::CallResult>;
+	type RemoteCallResult = RemoteResponse<Vec<u8>>;
 	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
@@ -408,16 +413,24 @@ impl<B, E> OnDemandCore<B, E> where
 			None => return,
 		};
 
-		let last_peer = self.idle_peers.back().cloned();
-		while !self.pending_requests.is_empty() {
+		let mut last_peer = self.idle_peers.back().cloned();
+		let mut unhandled_requests = VecDeque::new();
+
+		loop {
 			let peer = match self.idle_peers.pop_front() {
 				Some(peer) => peer,
-				None => return,
+				None => break,
 			};
 
 			// check if request can (optimistically) be processed by the peer
 			let can_be_processed_by_peer = {
-				let request = self.pending_requests.front().expect("checked in loop condition; qed");
+				let request = match self.pending_requests.front() {
+					Some(r) => r,
+					None => {
+						self.idle_peers.push_front(peer);
+						break;
+					},
+				};
 				let peer_best_block = self.best_blocks.get(&peer)
 					.expect("entries are inserted into best_blocks when peer is connected;
 						entries are removed from best_blocks when peer is disconnected;
@@ -431,11 +444,15 @@ impl<B, E> OnDemandCore<B, E> where
 
 				// we have enumerated all peers and noone can handle request
 				if Some(peer) == last_peer {
-					break;
+					let request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
+					unhandled_requests.push_back(request);
+					last_peer = self.idle_peers.back().cloned();
 				}
 
 				continue;
 			}
+
+			last_peer = self.idle_peers.back().cloned();
 
 			let mut request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 			request.timestamp = Instant::now();
@@ -444,6 +461,8 @@ impl<B, E> OnDemandCore<B, E> where
 			service.execute_in_context(|ctx| ctx.send_message(peer, request.message()));
 			self.active_peers.insert(peer, request);
 		}
+
+		self.pending_requests.append(&mut unhandled_requests);
 	}
 }
 
@@ -482,6 +501,7 @@ impl<Block: BlockT> Request<Block> {
 					id: self.id,
 					first: data.first_block.1.clone(),
 					last: data.last_block.1.clone(),
+					min: data.tries_roots.1.clone(),
 					max: data.max_block.1.clone(),
 					key: data.key.clone(),
 				}),
@@ -508,12 +528,14 @@ pub mod tests {
 	use std::time::Instant;
 	use futures::Future;
 	use parking_lot::RwLock;
-	use client::{self, error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
+	use runtime_primitives::traits::NumberFor;
+	use client::{error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
+		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
+	use config::Roles;
 	use message;
 	use network_libp2p::NodeIndex;
-	use service::{Roles, ExecuteInContext};
+	use service::ExecuteInContext;
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{changes_trie_config, Block, Header};
@@ -545,17 +567,14 @@ pub mod tests {
 			}
 		}
 
-		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<client::CallResult> {
+		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Vec<u8>> {
 			match self.ok {
-				true => Ok(client::CallResult {
-					return_data: vec![42],
-					changes: Default::default(),
-				}),
+				true => Ok(vec![42]),
 				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
 			}
 		}
 
-		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: u64, _: Vec<Vec<u8>>) -> ClientResult<Vec<(u64, u32)>> {
+		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: ChangesProof<Header>) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
 			match self.ok {
 				true => Ok(vec![(100, 2)]),
 				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
@@ -774,7 +793,7 @@ pub mod tests {
 		});
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
-			assert_eq!(result.return_data, vec![42]);
+			assert_eq!(result, vec![42]);
 		});
 
 		receive_call_response(&*on_demand, &mut network, 0, 0);
@@ -853,7 +872,7 @@ pub mod tests {
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),
-			tries_roots: vec![],
+			tries_roots: (1, Default::default(), vec![]),
 			key: vec![],
 			retry_count: None,
 		});
@@ -866,6 +885,8 @@ pub mod tests {
 			id: 0,
 			max: 1000,
 			proof: vec![vec![2]],
+			roots: vec![],
+			roots_proof: vec![],
 		});
 		thread.join().unwrap();
 	}
@@ -917,5 +938,56 @@ pub mod tests {
 
 		assert!(!on_demand.core.lock().idle_peers.iter().any(|_| true));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 0);
+	}
+
+	#[test]
+	fn does_not_loop_forever_after_dispatching_request_to_last_peer() {
+		// this test is a regression for a bug where the dispatch function would
+		// loop forever after dispatching a request to the last peer, since the
+		// last peer was not updated
+		let (_x, on_demand) = dummy(true);
+		let queue = RwLock::new(VecDeque::new());
+		let _network = TestIo::new(&queue, None);
+
+		on_demand.remote_header(RemoteHeaderRequest {
+			cht_root: Default::default(),
+			block: 250,
+			retry_count: None,
+		});
+		on_demand.remote_header(RemoteHeaderRequest {
+			cht_root: Default::default(),
+			block: 250,
+			retry_count: None,
+		});
+
+		on_demand.on_connect(1, Roles::FULL, 200);
+		on_demand.on_connect(2, Roles::FULL, 200);
+		on_demand.on_connect(3, Roles::FULL, 250);
+
+		assert_eq!(vec![1, 2], on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>());
+		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
+	}
+
+	#[test]
+	fn tries_to_send_all_pending_requests() {
+		let (_x, on_demand) = dummy(true);
+		let queue = RwLock::new(VecDeque::new());
+		let _network = TestIo::new(&queue, None);
+
+		on_demand.remote_header(RemoteHeaderRequest {
+			cht_root: Default::default(),
+			block: 300,
+			retry_count: None,
+		});
+		on_demand.remote_header(RemoteHeaderRequest {
+			cht_root: Default::default(),
+			block: 250,
+			retry_count: None,
+		});
+
+		on_demand.on_connect(1, Roles::FULL, 250);
+
+		assert!(on_demand.core.lock().idle_peers.iter().cloned().collect::<Vec<_>>().is_empty());
+		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
 }

@@ -21,11 +21,10 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Codec, Input, HasCompact};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup};
+use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
 use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SignatureContent<Address, Index, Signature>
 where
 	Address: Codec,
@@ -40,7 +39,6 @@ where
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Codec,
@@ -74,11 +72,6 @@ where
 			signature: None,
 			function,
 		}
-	}
-
-	/// `true` if there is a signature.
-	pub fn is_signed(&self) -> bool {
-		self.signature.is_some()
 	}
 }
 
@@ -115,6 +108,17 @@ where
 	}
 }
 
+impl<
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+	Call,
+> Extrinsic for UncheckedExtrinsic<Address, Index, Call, Signature> {
+	fn is_signed(&self) -> Option<bool> {
+		Some(self.signature.is_some())
+	}
+}
+
 impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Decode> Decode
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
 {
@@ -140,6 +144,15 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> 
 			self.signature.encode_to(v);
 			self.function.encode_to(v);
 		})
+	}
+}
+
+#[cfg(feature = "std")]
+impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> serde::Serialize
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
@@ -172,5 +185,15 @@ mod test {
 		assert_eq!(decoded, ex);
 		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(as_vec.encode(), encoded);
+	}
+
+
+	#[test]
+	#[cfg(feature = "std")]
+	fn serialization_of_unchecked_extrinsics() {
+		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32>;
+		let ex = Extrinsic::new_unsigned(42);
+
+		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x14002a000000\"");
 	}
 }

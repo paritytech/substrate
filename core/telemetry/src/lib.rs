@@ -14,14 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Telemetry utils.
 //!
 //! `telemetry` macro may be used anywhere in the Substrate codebase
 //! in order to send real-time logging information to the telemetry
 //! server (if there is one). We use the async drain adapter of `slog`
 //! so that the logging thread doesn't get held up at all.
-// end::description[]
 
 extern crate parking_lot;
 extern crate ws;
@@ -29,7 +27,7 @@ extern crate slog_async;
 extern crate slog_json;
 #[macro_use]
 extern crate log;
-#[macro_use(o, kv)]
+#[macro_use(o)]
 extern crate slog;
 extern crate slog_scope;
 
@@ -68,7 +66,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 
 	thread::spawn(move || {
 		loop {
-			trace!(target: "telemetry", "Connecting to Telemetry...");
+			trace!(target: "telemetry", "Connecting to Telemetry... {:?}", config.url);
 			let _ = ws::connect(config.url.as_str(), |out| Connection::new(out, &*out_sync, &config));
 
 			thread::sleep(time::Duration::from_millis(5000));

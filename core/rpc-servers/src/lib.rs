@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate RPC servers.
-// end::description[]
 
 #[warn(missing_docs)]
 
@@ -32,7 +30,10 @@ extern crate sr_primitives;
 extern crate log;
 
 use std::io;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
+
+/// Maximal payload accepted by RPC servers
+const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
@@ -40,7 +41,7 @@ pub type HttpServer = http::Server;
 pub type WsServer = ws::Server;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
+pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 	state: S,
 	chain: C,
 	author: A,
@@ -48,11 +49,10 @@ pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
 ) -> RpcHandler where
 	Block: BlockT + 'static,
 	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
-	PendingExtrinsics: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic, Metadata=Metadata>,
-	A: apis::author::AuthorApi<ExHash, Block::Hash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
-	Y: apis::system::SystemApi,
+	C: apis::chain::ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>, Metadata=Metadata>,
+	A: apis::author::AuthorApi<ExHash, Block::Hash, Metadata=Metadata>,
+	Y: apis::system::SystemApi<Block::Hash, NumberFor<Block>>,
 {
 	let mut io = pubsub::PubSubHandler::default();
 	io.extend_with(state.to_delegate());
@@ -69,8 +69,10 @@ pub fn start_http(
 ) -> io::Result<http::Server> {
 	http::ServerBuilder::new(io)
 		.threads(4)
+		.health_api(("/health", "system_health"))
 		.rest_api(http::RestApi::Unsecure)
 		.cors(http::DomainsValidation::Disabled)
+		.max_request_body_size(MAX_PAYLOAD)
 		.start_http(addr)
 }
 
@@ -80,6 +82,7 @@ pub fn start_ws(
 	io: RpcHandler,
 ) -> io::Result<ws::Server> {
 	ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| Metadata::new(context.sender()))
+		.max_payload(MAX_PAYLOAD)
 		.start(addr)
 		.map_err(|err| match err {
 			ws::Error(ws::ErrorKind::Io(io), _) => io,

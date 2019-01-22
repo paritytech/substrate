@@ -55,6 +55,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		&self.root
 	}
 
+	/// Consumes self and returns underlying storage.
+	pub fn into_storage(self) -> S {
+		self.storage
+	}
+
 	/// Get the value of storage at given key.
 	pub fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = MemoryDB::default();
@@ -269,6 +274,7 @@ impl<'a,
 
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
+	/// Get the value stored at key.
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
 }
 

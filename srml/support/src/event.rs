@@ -11,10 +11,13 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
+//! Macros that define an Event types. Events can be used to easily report changes or conditions
+//! in your runtime to external entities like users, chain explorers, or dApps.
+
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use substrate_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
 
 /// Implement the `Event` for a module.
 ///
@@ -115,7 +118,7 @@ macro_rules! decl_event {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum Event {
 			$(
@@ -216,7 +219,7 @@ macro_rules! __decl_generic_event {
 		pub type Event<$event_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),*> {
 			$(
@@ -265,8 +268,14 @@ macro_rules! __events_to_metadata {
 	}
 }
 
+/// Constructs an Event type for a runtime. This is usually called automatically by the 
+/// construct_runtime macro. See also __create_decl_macro.
 #[macro_export]
 macro_rules! impl_outer_event {
+
+	// Macro transformations (to convert invocations with incomplete parameters to the canonical
+	// form)
+
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident {
@@ -354,6 +363,9 @@ macro_rules! impl_outer_event {
 			$( $module_name::Event $( <$generic_param> )*, )* $module::Event,;
 		);
 	};
+
+	// The main macro expansion that actually renders the Event enum code.
+
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
@@ -364,7 +376,7 @@ macro_rules! impl_outer_event {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
@@ -518,7 +530,7 @@ mod tests {
 		);
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
 	pub struct TestRuntime;
 
 	impl_outer_event! {
@@ -529,7 +541,7 @@ mod tests {
 		}
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
 	pub struct TestRuntime2;
 
 	impl_outer_event! {

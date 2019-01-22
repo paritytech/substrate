@@ -34,13 +34,6 @@ extern crate substrate_primitives;
 // Needed for various traits. In our case, `OnFinalise`.
 extern crate sr_primitives;
 
-// Needed for deriving `Serialize` and `Deserialize` for various types.
-// We only implement the serde traits for std builds - they're unneeded
-// in the wasm runtime.
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 // Needed for deriving `Encode` and `Decode` for `RawEvent`.
 #[macro_use]
 extern crate parity_codec_derive;
@@ -105,7 +98,9 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
-		fn deposit_event() = default;
+		/// For non-generic events, the generic parameter just needs to be dropped, so that it
+		/// looks like: `fn deposit_event() = default;`.
+		fn deposit_event<T>() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
@@ -180,12 +175,11 @@ decl_module! {
 		// calls to be executed - we don't need to care why. Because it's privileged, we can
 		// assume it's a one-off operation and substantial processing/storage/memory can be used
 		// without worrying about gameability or attack scenarios.
-		fn set_dummy(new_value: T::Balance) -> Result {
+		// If you not specify `Result` explicitly as return value, it will be added automatically
+		// for you and `Ok(())` will be returned.
+		fn set_dummy(#[compact] new_value: T::Balance) {
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
-
-			// All good.
-			Ok(())
 		}
 
 		// The signature could also look like: `fn on_finalise()`
@@ -275,7 +269,7 @@ mod tests {
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use sr_primitives::{
-		BuildStorage, traits::{BlakeTwo256, OnFinalise}, testing::{Digest, DigestItem, Header}
+		BuildStorage, traits::{BlakeTwo256, OnFinalise, IdentityLookup}, testing::{Digest, DigestItem, Header}
 	};
 
 	impl_outer_origin! {
@@ -295,14 +289,15 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
 		type Event = ();
 	}

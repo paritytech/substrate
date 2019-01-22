@@ -14,29 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Support code for the runtime.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(feature = "std")]
-extern crate serde;
+pub extern crate serde;
 
 #[doc(hidden)]
 pub extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]
 pub extern crate sr_primitives as runtime_primitives;
-extern crate substrate_metadata;
+extern crate srml_metadata;
 
 extern crate mashup;
+#[cfg_attr(test, macro_use)]
+extern crate srml_support_procedural;
 
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
-#[cfg(test)]
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 #[cfg(test)]
@@ -45,6 +45,11 @@ extern crate parity_codec_derive;
 
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
+
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub extern crate once_cell;
+
 pub use self::storage::generator::Storage as GenericStorage;
 
 #[macro_use]
@@ -62,12 +67,17 @@ pub mod metadata;
 mod runtime;
 #[macro_use]
 pub mod inherent;
+mod double_map;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
+pub use double_map::StorageDoubleMap;
+
+#[doc(inline)]
+pub use srml_support_procedural::decl_storage;
 
 #[macro_export]
 macro_rules! fail {
@@ -122,3 +132,22 @@ pub enum Void {}
 
 #[doc(hidden)]
 pub use mashup::*;
+
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use serde_derive::*;
+
+/// Programatically create derivations for tuples of up to 19 elements. You provide a second macro
+/// which is called once per tuple size, along with a number of identifiers, one for each element
+/// of the tuple.
+#[macro_export]
+macro_rules! for_each_tuple {
+	($m:ident) => {
+		for_each_tuple! { @IMPL $m !! A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, }
+	};
+	(@IMPL $m:ident !!) => { $m! { } };
+	(@IMPL $m:ident !! $h:ident, $($t:ident,)*) => {
+		$m! { $h $($t)* }
+		for_each_tuple! { @IMPL $m !! $($t,)* }
+	}
+}

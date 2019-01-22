@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
-// end::description[]
 
 extern crate substrate_primitives;
 extern crate parity_crypto as crypto;
@@ -112,7 +110,7 @@ impl EncryptedKey {
 
 		let mac = blake2_256(&crypto::derive_mac(&derived_right_bits, &self.ciphertext));
 
-		if subtle::slices_equal(&mac[..], &self.mac[..]) != 1 {
+		if subtle::ConstantTimeEq::ct_eq(&mac[..], &self.mac[..]).unwrap_u8() != 1 {
 			return Err(ErrorKind::InvalidPassword.into());
 		}
 
@@ -129,6 +127,24 @@ type Seed = [u8; 32];
 pub struct Store {
 	path: PathBuf,
 	additional: HashMap<Public, Seed>,
+}
+
+pub fn pad_seed(seed:  &str) -> Seed {
+	let mut s: [u8; 32] = [' ' as u8; 32];
+
+	let was_hex = if seed.len() == 66 && &seed[0..2] == "0x" {
+		if let Ok(d) = hex::decode(&seed[2..]) {
+			s.copy_from_slice(&d);
+			true
+		} else { false }
+	} else { false };
+
+	if !was_hex {
+		let len = ::std::cmp::min(32, seed.len());
+		&mut s[..len].copy_from_slice(&seed.as_bytes()[..len]);
+	}
+
+	s
 }
 
 impl Store {
@@ -153,24 +169,11 @@ impl Store {
 
 	/// Create a new key from seed. Do not place it into the store.
 	/// Only the first 32 bytes of the sead are used. This is meant to be used for testing only.
-	// TODO: Remove this
+	// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
-		let mut s: [u8; 32] = [' ' as u8; 32];
-
-		let was_hex = if seed.len() == 66 && &seed[0..2] == "0x" {
-			if let Ok(d) = hex::decode(&seed[2..]) {
-				s.copy_from_slice(&d);
-				true
-			} else { false }
-		} else { false };
-
-		if !was_hex {
-			let len = ::std::cmp::min(32, seed.len());
-			&mut s[..len].copy_from_slice(&seed.as_bytes()[..len]);
-		}
-
-		let pair = Pair::from_seed(&s);
-		self.additional.insert(pair.public(), s);
+		let padded_seed = pad_seed(seed);
+		let pair = Pair::from_seed(&padded_seed);
+		self.additional.insert(pair.public(), padded_seed);
 		Ok(pair)
 	}
 

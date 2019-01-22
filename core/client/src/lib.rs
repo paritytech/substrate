@@ -14,64 +14,55 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate Client and associated logic.
-// end::description[]
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-extern crate substrate_trie as trie;
-extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_state_machine as state_machine;
-extern crate substrate_consensus_common as consensus;
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_test_client as test_client;
-#[macro_use] extern crate substrate_telemetry;
-#[macro_use] extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
-
-extern crate fnv;
-extern crate futures;
-extern crate parking_lot;
-extern crate hash_db;
-extern crate heapsize;
-extern crate kvdb;
-extern crate sr_api;
-
-#[macro_use] extern crate error_chain;
-#[macro_use] extern crate log;
-#[cfg_attr(test, macro_use)] extern crate substrate_executor as executor;
-#[cfg(test)] #[macro_use] extern crate hex_literal;
-#[cfg(test)] extern crate kvdb_memorydb;
-
+#[macro_use]
+pub mod runtime_api;
+#[cfg(feature = "std")]
 pub mod error;
+#[cfg(feature = "std")]
 pub mod blockchain;
+#[cfg(feature = "std")]
 pub mod backend;
+#[cfg(feature = "std")]
 pub mod cht;
+#[cfg(feature = "std")]
 pub mod in_mem;
+#[cfg(feature = "std")]
 pub mod genesis;
 pub mod block_builder;
+#[cfg(feature = "std")]
 pub mod light;
+#[cfg(feature = "std")]
 mod leaves;
+#[cfg(feature = "std")]
 mod call_executor;
+#[cfg(feature = "std")]
 mod client;
+#[cfg(feature = "std")]
 mod notifications;
 
-pub use blockchain::Info as ChainInfo;
-pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
-pub use client::{
+#[cfg(feature = "std")]
+pub use crate::blockchain::Info as ChainInfo;
+#[cfg(feature = "std")]
+pub use crate::call_executor::{CallExecutor, LocalCallExecutor};
+#[cfg(feature = "std")]
+pub use crate::client::{
 	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	Client, ClientInfo, ChainHead,
+	BlockImportNotification, Client, ClientInfo, ChainHead,
 };
-pub use notifications::{StorageEventStream, StorageChangeSet};
+#[cfg(feature = "std")]
+pub use crate::notifications::{StorageEventStream, StorageChangeSet};
+#[cfg(feature = "std")]
 pub use state_machine::ExecutionStrategy;
-pub use leaves::LeafSet;
+#[cfg(feature = "std")]
+pub use crate::leaves::LeafSet;
 
-/// Traits for interfacing with the runtime from the client.
-pub mod runtime_api {
-	pub use sr_api::*;
-}
+#[doc(inline)]
+pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};

@@ -33,21 +33,30 @@ extern crate substrate_transaction_pool as transaction_pool;
 #[macro_use]
 extern crate substrate_network as network;
 extern crate substrate_consensus_aura as consensus;
+extern crate substrate_client as client;
+extern crate substrate_finality_grandpa as grandpa;
 extern crate node_primitives;
 #[macro_use]
 extern crate substrate_service;
 extern crate node_executor;
+extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;
+extern crate structopt;
 
 pub use cli::error;
-mod chain_spec;
+pub mod chain_spec;
 mod service;
+mod params;
 
+use tokio::prelude::Future;
 use tokio::runtime::Runtime;
 pub use cli::{VersionInfo, IntoExit};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
+use params::{Params as NodeParams};
+use structopt::StructOpt;
+use std::ops::Deref;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -56,8 +65,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The BBQ Birch testnet.
-	BbqBirch,
+	/// The Charred Cherry testnet.
+	CharredCherry,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
 }
@@ -66,7 +75,7 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::BbqBirch => chain_spec::bbq_birch_config()?,
+			ChainSpec::CharredCherry => chain_spec::charred_cherry_config()?,
 			ChainSpec::Development => chain_spec::development_config(),
 			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
@@ -77,7 +86,7 @@ impl ChainSpec {
 		match s {
 			"dev" => Some(ChainSpec::Development),
 			"local" => Some(ChainSpec::LocalTestnet),
-			"" | "bbq-birch" => Some(ChainSpec::BbqBirch),
+			"" | "cherry" | "charred-cherry" => Some(ChainSpec::CharredCherry),
 			"staging" => Some(ChainSpec::StagingTestnet),
 			_ => None,
 		}
@@ -97,32 +106,52 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	match cli::prepare_execution::<service::Factory, _, _, _, _>(args, exit, version, load_spec, "substrate-node")? {
+	let full_version = substrate_service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
+
+	let matches = match NodeParams::clap()
+		.name(version.executable_name)
+		.author(version.author)
+		.about(version.description)
+		.version(&(full_version + "\n")[..])
+		.get_matches_from_safe(args) {
+			Ok(m) => m,
+			Err(e) => e.exit(),
+		};
+
+	let (spec, config) = cli::parse_matches::<service::Factory, _>(
+		load_spec, &version, "substrate-node", &matches
+	)?;
+
+	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
 		cli::Action::ExecutedInternally => (),
-		cli::Action::RunService((config, exit)) => {
-			info!("Substrate Node");
+		cli::Action::RunService(exit) => {
+			info!("{}", version.name);
 			info!("  version {}", config.full_version());
-			info!("  by Parity Technologies, 2017, 2018");
+			info!("  by {}, 2017, 2018", version.author);
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);
 			let mut runtime = Runtime::new()?;
 			let executor = runtime.executor();
 			match config.roles == ServiceRoles::LIGHT {
-				true => run_until_exit(&mut runtime, service::Factory::new_light(config, executor)?, exit)?,
-				false => run_until_exit(&mut runtime, service::Factory::new_full(config, executor)?, exit)?,
+				true => run_until_exit(runtime, service::Factory::new_light(config, executor)?, exit)?,
+				false => run_until_exit(runtime, service::Factory::new_full(config, executor)?, exit)?,
 			}
 		}
 	}
 	Ok(())
 }
 
-fn run_until_exit<C, E>(
-	runtime: &mut Runtime,
-	service: service::Service<C>,
+fn run_until_exit<T, C, E>(
+	mut runtime: Runtime,
+	service: T,
 	e: E,
 ) -> error::Result<()>
 	where
+	    T: Deref<Target=substrate_service::Service<C>>,
 		C: substrate_service::Components,
 		E: IntoExit,
 {
@@ -133,5 +162,14 @@ fn run_until_exit<C, E>(
 
 	let _ = runtime.block_on(e.into_exit());
 	exit_send.fire();
+
+	// we eagerly drop the service so that the internal exit future is fired,
+	// but we need to keep holding a reference to the global telemetry guard
+	let _telemetry = service.telemetry();
+	drop(service);
+
+	// TODO [andre]: timeout this future #1318
+	let _ = runtime.shutdown_on_idle().wait();
+
 	Ok(())
 }

@@ -48,38 +48,35 @@ Other examples include the parachain-heads extrinsic in Polkadot and the "note-m
 
 === Runtime and API
 
-Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implementation of the Substrate client to be able to author blocks. In short these two sets are:
+Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implementation of the Substrate client to be able to author blocks. 
 
-The runtime is API entry points are expected to be in the runtime's `api` module. There is a specific ABI based upon the Substrate Simple Codec (`codec`), which is used to encode and decode the arguments for these functions and specify where and how they should be passed. A special macro is provided called `impl_stubs`, which prepares all functionality for marshalling arguments and basically just allows you to write the functions as you would normally (except for the fact that there must be example one argument - tuples are allowed to workaround).
+If you want to develop a chain with Substrate, you will need to implement the `Core` trait. This `Core` trait generates an API with the minimum necessary functionality to interact with your runtime. A special macro is provided called `impl_runtime_apis!` that help you implement runtime API traits. All runtime API trait implementations need to be done in one call of the `impl_runtime_apis!` macro. All parameters and return values need to implement https://crates.io/crates/parity-codec[`parity-codec`] to be encodable and decodable.
 
-Here's the Polkadot API implementation as of PoC-2:
+Here's a snippet of the Polkadot API implementation as of PoC-3:
 
 ```rust
-pub mod api {
-	impl_stubs!(
+impl_runtime_apis! {
+	impl client_api::Core<Block> for Runtime {
+		fn version() -> RuntimeVersion {
+			VERSION
+		}
 
-		// Standard: Required.
-		version => |()| super::Version::version(),
-		authorities => |()| super::Consensus::authorities(),
-		execute_block => |block| super::Executive::execute_block(block),
+		fn authorities() -> Vec<SessionKey> {
+			Consensus::authorities()
+		}
 
-		// Conventional: Needed for Substrate client's reference block authoring logic to work.
-		initialise_block => |header| super::Executive::initialise_block(&header),
-		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
-		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
+		fn execute_block(block: Block) {
+			Executive::execute_block(block)
+		}
 
-		// Non-standard (Polkadot-specific). This just exposes some stuff that Polkadot client
-		// finds useful.
-		validator_count => |()| super::Session::validator_count(),
-		validators => |()| super::Session::validators()
-	);
+		fn initialise_block(header: <Block as BlockT>::Header) {
+			Executive::initialise_block(&header)
+		}
+	}
+	// ---snip---
 }
 ```
 
-As you can see, at the minimum there are only three API calls to implement. If you want to reuse as much of Substrate's reference block authoring client code, then you'll want to provide the next four entrypoints (though three of them you probably already implemented as part of `execute_block`).
-
-Of the first three, there is `execute_block`, which contains the actions to be taken to execute a block and pretty much defines the blockchain. Then there is `authorities` which tells the AfG consensus algorithm sitting in the Substrate client who the given authorities (known as "validators" in some contexts) are that can finalise the next block. Finally, there is `version`, which is a fairly sophisticated version identifier. This includes a key distinction between *specification version* and *authoring version*, with the former essentially versioning the logic of `execute_block` and the latter versioning only the logic of `inherent_extrinsics` and core aspects of extrinsic validity.
 
 === Inherent Extrinsics
 
@@ -124,7 +121,7 @@ To get going as fast as possible, there is a simple script that installs all req
 
 [source, shell]
 ----
-curl getsubstrate.io -sSf | bash
+curl https://getsubstrate.io -sSf | bash
 ----
 
 You can start a local Substrate development chain with running `substrate --dev`.
@@ -135,7 +132,7 @@ First let's get a template chainspec that you can edit. We'll use the "staging" 
 
 [source, shell]
 ----
-substrate build-spec --chain=staging > ~/chainspec.json
+substrate --chain=staging build-spec > ~/chainspec.json
 ----
 
 Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the Webassembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
@@ -151,7 +148,7 @@ Now with this new chainspec file, you can build a "raw" chain definition for you
 
 [source, shell]
 ----
-substrate build-spec --chain ~/chainspec.json --raw > ~/mychain.json
+substrate --chain ~/chainspec.json build-spec --raw > ~/mychain.json
 ----
 
 This can be fed into Substrate:
@@ -175,12 +172,15 @@ You can distribute `mychain.json` so that everyone can synchronise and (dependin
 
 === Hacking on Substrate
 
-If you'd actually like hack on Substrate, you can just grab the source code and
+If you'd actually like to hack on Substrate, you can just grab the source code and
 build it. Ensure you have Rust and the support software installed:
 
 [source, shell]
 ----
 curl https://sh.rustup.rs -sSf | sh
+# on Windows download and run rustup-init.exe
+# from https://rustup.rs instead
+
 rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
@@ -191,11 +191,33 @@ You will also need to install the following packages:
 
  - Linux:
 [source, shell]
-sudo apt install cmake pkg-config libssl-dev git
+sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
 
  - Mac:
 [source, shell]
-brew install cmake pkg-config openssl git
+brew install cmake pkg-config openssl git llvm
+
+ - Windows (PowerShell):
++
+[source, shell]
+----
+# Install LLVM
+# Download and install the Pre Build Windows binaries
+# of LLVM  from http://releases.llvm.org/download.html
+
+# Install OpenSSL (through vcpkg)
+mkdir \Tools
+cd \Tools
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+.\bootstrap-vcpkg.bat
+.\vcpkg.exe install openssl:x64-windows-static
+
+$env:OPENSSL_DIR = 'C:\Tools\vcpkg\installed\x64-windows-static'
+$env:OPENSSL_STATIC = 'Yes'
+[System.Environment]::SetEnvironmentVariable('OPENSSL_DIR', $env:OPENSSL_DIR, [System.EnvironmentVariableTarget]::User)
+[System.Environment]::SetEnvironmentVariable('OPENSSL_STATIC', $env:OPENSSL_STATIC, [System.EnvironmentVariableTarget]::User)
+----
 
 Then, grab the Substrate source code:
 
@@ -223,22 +245,69 @@ You can start a development chain with:
 [source, shell]
 cargo run -- --dev
 
-Or you can join the BBQ Birch Testnet with:
-[source, shell]
-cargo run
+Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run \-- --dev`.
 
-If you want to see the multi-node consensus algorithm in action locally, then
-you can create a local testnet. You'll need two terminals open. In one, run:
+If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on [Telemetry](https://telemetry.polkadot.io/#/Local%20Testnet). You'll need two terminals windows open.
 
-[source, shell]
-cargo run -- --chain=local --validator --key Alice -d /tmp/alice --node-key 0000000000000000000000000000000000000000000000000000000000000001
-
-and in the other, run:
+We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN`, which is generated from the `--node-key` value that we specify below:
 
 [source, shell]
-cargo run -- --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN
+cargo run -- \
+  --base-path /tmp/alice \
+  --chain=local \
+  --key Alice \
+  --name "ALICE" \
+  --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
+  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --validator
 
-include::doc/packages/packages.adoc[]
+In the second terminal, we'll run the following to start Bob's substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's Bootnode ID on TCP port 30333:
+
+[source, shell]
+cargo run -- \
+  --base-path /tmp/bob \
+  --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN \
+  --chain=local \
+  --key Bob \
+  --name "BOB" \
+  --port 30334 \
+  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --validator
+
+Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
+
+=== Joining the Charred Cherry Testnet
+
+Charred Cherry is the new testnet for Substrate 1.0 beta. Please note that 1.0 beta is not compatible with the BBQ-Birch testnet. Ensure you have the dependencies listed above before compiling.
+
+[source, shell]
+----
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+----
+
+You can run the tests if you like:
+
+[source, shell]
+cargo test --all
+
+Start your node:
+
+[source, shell]
+cargo run --release
+
+To see a list of command line options, enter:
+
+[source, shell]
+cargo run --release -- --help
+
+For example, you can choose a custom node name:
+
+[source, shell]
+cargo run --release -- --name my_custom_name
+
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Charred%20Cherry 
+
 
 == Documentation
 
@@ -251,13 +320,16 @@ You can generate documentation for a Substrate Rust package and have it automati
 cargo doc --package <spec> --open
 ```
 
-Replacing `<spec>` with one of the following (i.e. `cargo doc --package node-cli --open`):
+Replacing `<spec>` with one of the following (i.e. `cargo doc --package substrate --open`):
 
+* All Substrate Packages
+[source, shell]
+substrate
 * Substrate Core
 [source, shell]
-substrate, substrate-bft, substrate-cli, substrate-client, substrate-client-db,
-substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-keystore,
-substrate-metadata, substrate-misbehavior-check, substrate-network,
+substrate, substrate-cli, substrate-client, substrate-client-db,
+substrate-consensus-common, substrate-consensus-rhd,
+substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-keystore, substrate-network,
 substrate-network-libp2p, substrate-primitives, substrate-rpc, substrate-rpc-servers,
 substrate-serializer, substrate-service, substrate-service-test, substrate-state-db,
 substrate-state-machine, substrate-telemetry, substrate-test-client,
@@ -268,16 +340,15 @@ substrate-trie
 sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
 * Substrate Runtime Module Library (SRML)
 [source, shell]
-srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
-srml-executive, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
+srml-assets, srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
+srml-executive, srml-metadata, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
 srml-treasury
 * Node
 [source, shell]
-node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime, node-service
+node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime
 * Subkey
 [source, shell]
 subkey
-
 
 === Contributing to documentation for Substrate packages
 

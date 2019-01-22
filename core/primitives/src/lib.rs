@@ -14,21 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Shareable Substrate types.
-// end::description[]
 
 #![warn(missing_docs)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[macro_use]
-extern crate crunchy;
-#[macro_use]
-extern crate fixed_hash;
-#[macro_use]
-extern crate uint as uint_crate;
+extern crate primitive_types;
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -52,6 +45,10 @@ extern crate untrusted;
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate impl_serde;
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -84,9 +81,12 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 #[cfg(feature = "std")]
-pub mod bytes;
+pub use impl_serde::serialize as bytes;
+
 #[cfg(feature = "std")]
 pub mod hashing;
 #[cfg(feature = "std")]
@@ -109,9 +109,9 @@ mod changes_trie;
 #[cfg(test)]
 mod tests;
 
-pub use self::hash::{H160, H256, H512};
+pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
-pub use authority_id::AuthorityId;
+pub use authority_id::Ed25519AuthorityId;
 pub use changes_trie::ChangesTrieConfiguration;
 
 pub use hash_db::Hasher;
@@ -131,7 +131,99 @@ impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self { Bytes(s) }
 }
 
+impl From<OpaqueMetadata> for Bytes {
+	fn from(s: OpaqueMetadata) -> Self { Bytes(s.0) }
+}
+
 impl Deref for Bytes {
 	type Target = [u8];
 	fn deref(&self) -> &[u8] { &self.0[..] }
+}
+
+/// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
+#[derive(Encode, Decode, PartialEq)]
+pub struct OpaqueMetadata(Vec<u8>);
+
+impl OpaqueMetadata {
+	/// Creates a new instance with the given metadata blob.
+	pub fn new(metadata: Vec<u8>) -> Self {
+		OpaqueMetadata(metadata)
+	}
+}
+
+impl rstd::ops::Deref for OpaqueMetadata {
+	type Target = Vec<u8>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+/// Something that is either a native or an encoded value.
+#[cfg(feature = "std")]
+pub enum NativeOrEncoded<R> {
+	/// The native representation.
+	Native(R),
+	/// The encoded representation.
+	Encoded(Vec<u8>)
+}
+
+#[cfg(feature = "std")]
+impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		self.as_encoded().as_ref().fmt(f)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<R: codec::Encode> NativeOrEncoded<R> {
+	/// Return the value as the encoded format.
+	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
+		match self {
+			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
+			NativeOrEncoded::Native(n) => Cow::Owned(n.encode()),
+		}
+	}
+
+	/// Return the value as the encoded format.
+	pub fn into_encoded(self) -> Vec<u8> {
+		match self {
+			NativeOrEncoded::Encoded(e) => e,
+			NativeOrEncoded::Native(n) => n.encode(),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
+			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
+			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
+				Some(n) == codec::Decode::decode(&mut &e[..]).as_ref(),
+			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
+		}
+	}
+}
+
+/// A value that is never in a native representation.
+/// This is type is useful in conjuction with `NativeOrEncoded`.
+#[cfg(feature = "std")]
+#[derive(PartialEq)]
+pub enum NeverNativeValue {}
+
+#[cfg(feature = "std")]
+impl codec::Encode for NeverNativeValue {
+	fn encode(&self) -> Vec<u8> {
+		// The enum is not constructable, so this function should never be callable!
+		unreachable!()
+	}
+}
+
+#[cfg(feature = "std")]
+impl codec::Decode for NeverNativeValue {
+	fn decode<I: codec::Input>(_: &mut I) -> Option<Self> {
+		None
+	}
 }

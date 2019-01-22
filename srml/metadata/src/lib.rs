@@ -21,14 +21,12 @@
 //! codec-encoded metadata.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
-
-#[cfg(not(feature = "std"))]
-extern crate alloc;
 
 #[macro_use]
 extern crate parity_codec_derive;
 extern crate parity_codec as codec;
+extern crate sr_std as rstd;
+extern crate substrate_primitives as primitives;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -36,17 +34,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(feature = "std")]
-pub mod alloc {
-	pub use std::vec;
-}
-
 use codec::{Encode, Output};
 #[cfg(feature = "std")]
 use codec::{Decode, Input};
-
-// Make Vec available on `std` and `no_std`
-use alloc::vec::Vec;
+use rstd::vec::Vec;
 
 #[cfg(feature = "std")]
 type StringBuf = String;
@@ -119,8 +110,8 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 		O: serde::Serialize + 'static,
 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
+		where
+				S: serde::Serializer,
 	{
 		match self {
 			DecodeDifferent::Encode(b) => b.serialize(serializer),
@@ -196,8 +187,8 @@ impl<E: Encode + ::std::fmt::Debug> std::fmt::Debug for FnEncode<E> {
 #[cfg(feature = "std")]
 impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
+		where
+				S: serde::Serializer,
 	{
 		self.0().serialize(serializer)
 	}
@@ -238,7 +229,53 @@ pub struct StorageFunctionMetadata {
 	pub name: DecodeDifferentStr,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
+	pub default: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
+}
+
+/// A technical trait to store lazy initiated vec value as static dyn pointer.
+pub trait DefaultByte {
+	fn default_byte(&self) -> Vec<u8>;
+}
+
+/// Wrapper over dyn pointer for accessing a cached once byet value.
+#[derive(Clone)]
+pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
+
+/// Decode different for static lazy initiated byte value.
+pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
+
+impl Encode for DefaultByteGetter {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.0.default_byte().encode_to(dest)
+	}
+}
+
+impl PartialEq<DefaultByteGetter> for DefaultByteGetter {
+	fn eq(&self, other: &DefaultByteGetter) -> bool {
+		let left = self.0.default_byte();
+		let right = other.0.default_byte();
+		left.eq(&right)
+	}
+}
+
+impl Eq for DefaultByteGetter { }
+
+#[cfg(feature = "std")]
+impl serde::Serialize for DefaultByteGetter {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+		where
+				S: serde::Serializer,
+	{
+		self.0.default_byte().serialize(serializer)
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for DefaultByteGetter {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.0.default_byte().fmt(f)
+	}
 }
 
 /// A storage function type.
@@ -293,4 +330,10 @@ pub struct RuntimeMetadata {
 	pub outer_event: OuterEventMetadata,
 	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
 	pub outer_dispatch: OuterDispatchMetadata,
+}
+
+impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {
+	fn into(self) -> primitives::OpaqueMetadata {
+		primitives::OpaqueMetadata::new(self.encode())
+	}
 }
