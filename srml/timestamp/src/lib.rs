@@ -225,11 +225,10 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-fn extract_inherent_data(data: &InherentData) -> InherentType {
-	data
-		.get_data::<InherentType>(&INHERENT_IDENTIFIER)
-		.expect("Invalid timestamp inherent data encoding.")
-		.expect("Timestamp inherent data is not provided.")
+fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
+	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+		.map_err(|_| "Invalid timestamp inherent data encoding.".into())?
+		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
@@ -238,7 +237,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let data = extract_inherent_data(data);
+		let data = extract_inherent_data(data).expect("Gets and decodes timestamp inherent data");
 
 		let next_time = cmp::max(As::sa(data), Self::now() + Self::block_period());
 		Some(Call::set(next_time.into()))
@@ -248,11 +247,11 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		const MAX_TIMESTAMP_DRIFT: u64 = 60;
 
 		let t = match call {
-			Call::set(ref t) => t.clone().into(),
+			Call::set(ref t) => t.clone(),
 			_ => return Ok(()),
 		}.as_();
 
-		let data = extract_inherent_data(data);
+		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
 		let minimum = (Self::now() + Self::block_period()).as_();
 		if t > data + MAX_TIMESTAMP_DRIFT {

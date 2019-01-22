@@ -272,7 +272,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		let timestamp = match call {
-			timestamp::Call::set(ref timestamp) => timestamp.clone().into(),
+			timestamp::Call::set(ref timestamp) => timestamp.clone(),
 			_ => return Ok(()),
 		};
 
