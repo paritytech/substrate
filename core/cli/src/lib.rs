@@ -82,7 +82,7 @@ use params::{
 };
 
 /// The core cli parameters.
-pub type CoreParams<CC, RP> = MergeParameters<params::CoreParams, params::CoreCommands<CC, RP>>;
+pub type CoreParams<CC, RP> = MergeParameters<RunCmd, params::CoreCommands<CC, RP>>;
 pub use params::NoCustom;
 use app_dirs::{AppInfo, AppDataType};
 
@@ -219,7 +219,8 @@ where
 		.get_matches_from(args);
 	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
 
-	init_logger(cli_args.left.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	//init_logger(cli_args.left.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
+	init_logger("");
 	fdlimit::raise_fd_limit();
 
 	match cli_args.right {

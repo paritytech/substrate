@@ -41,7 +41,7 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 /// Something that can augment a clapp app with further parameters.
 /// `derive(StructOpt)` is implementing this function by default, so a macro `impl_augment_clap!`
 /// is provided to simplify the implementation of this trait.
-trait AugmentClap {
+pub trait AugmentClap {
 	/// Augment the given clap `App` with further parameters.
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b>;
 }
@@ -58,16 +58,6 @@ macro_rules! impl_augment_clap {
 	}
 }
 
-/// The core parameters accepted in front of all subcommands.
-#[derive(Debug, StructOpt, Clone)]
-pub struct CoreParams {
-	///Sets a custom logging filter
-	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
-	pub log: Option<String>,
-}
-
-impl_augment_clap!(CoreParams);
-
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
@@ -82,6 +72,10 @@ pub struct SharedParams {
 	/// Specify custom base path.
 	#[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
+
+	///Sets a custom logging filter
+	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
+	pub log: Option<String>,
 }
 
 /// Parameters used to create the network configuration.
@@ -322,7 +316,6 @@ pub enum CoreCommands<CC, RP> {
 impl<CC, RP> StructOpt for CoreCommands<CC, RP> where CC: StructOpt, RP: StructOpt {
 	fn clap<'a, 'b>() -> App<'a, 'b> {
 		CC::clap()
-			.subcommand(MergeParameters::<RunCmd, RP>::clap().name("run").about("Run a node."))
 			.subcommand(
 				BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
 					.about("Build a spec.json file, outputing to stdout.")
@@ -344,12 +337,11 @@ impl<CC, RP> StructOpt for CoreCommands<CC, RP> where CC: StructOpt, RP: StructO
 					.about("Remove the whole chain data.")
 			)
 			.setting(AppSettings::SubcommandRequiredElseHelp)
+			.setting(AppSettings::ArgsNegateSubcommands)
 	}
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
 		match matches.subcommand() {
-			("run", Some(matches)) =>
-				CoreCommands::Run(MergeParameters::from_clap(matches)),
 			("build-spec", Some(matches)) =>
 				CoreCommands::BuildSpec(BuildSpecCmd::from_clap(matches)),
 			("export-blocks", Some(matches)) =>
@@ -359,6 +351,7 @@ impl<CC, RP> StructOpt for CoreCommands<CC, RP> where CC: StructOpt, RP: StructO
 			("revert", Some(matches)) => CoreCommands::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
 				CoreCommands::PurgeChain(PurgeChainCmd::from_clap(matches)),
+			(_, None) => CoreCommands::Run(MergeParameters::from_clap(matches)),
 			_ => CoreCommands::Custom(CC::from_clap(matches)),
 		}
 	}
