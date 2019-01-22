@@ -719,7 +719,7 @@ mod tests {
 
 	#[test]
 	fn authoring_blocks() {
-		::env_logger::init().ok();
+		::env_logger::init();
 		let mut net = AuraTestNet::new(3);
 
 		net.start();

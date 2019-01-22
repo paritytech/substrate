@@ -28,4 +28,4 @@ substrate-executor = { path = "../../executor" }
 substrate-network = { path = "../../network", features = ["test-helpers"]}
 substrate-service = { path = "../../service" }
 substrate-test-client = { path = "../../test-client" }
-env_logger = "0.4"
+env_logger = "0.6"
