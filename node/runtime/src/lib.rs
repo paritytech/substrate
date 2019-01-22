@@ -64,14 +64,14 @@ use node_primitives::{
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
-	block_builder::api as block_builder_api, runtime_api as client_api
+	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
+	runtime_api as client_api,
 };
-use runtime_primitives::{ApplyResult, CheckInherentError, BasicInherentData};
+use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, ProvideInherent,
-	StaticLookup
+	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, Extrinsic, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -89,9 +89,6 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use srml_support::{StorageValue, RuntimeMetadata};
-
-const TIMESTAMP_SET_POSITION: u32 = 0;
-const NOTE_OFFLINE_POSITION: u32 = 1;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -146,7 +143,6 @@ impl balances::Trait for Runtime {
 }
 
 impl consensus::Trait for Runtime {
-	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type Log = Log;
 	type SessionKey = SessionKey;
 
@@ -156,7 +152,6 @@ impl consensus::Trait for Runtime {
 }
 
 impl timestamp::Trait for Runtime {
-	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 }
@@ -228,10 +223,10 @@ construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
-		InherentData = BasicInherentData
+		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Aura: aura::{Module},
+		Aura: aura::{Module, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Indices: indices,
@@ -292,7 +287,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<Block, BasicInherentData> for Runtime {
+	impl block_builder_api::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
@@ -301,46 +296,12 @@ impl_runtime_apis! {
 			Executive::finalise_block()
 		}
 
-		fn inherent_extrinsics(data: BasicInherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-			let mut inherent = Vec::new();
-
-			inherent.extend(
-				Timestamp::create_inherent_extrinsics(data.timestamp)
-					.into_iter()
-					.map(|v| (v.0, UncheckedExtrinsic::new_unsigned(Call::Timestamp(v.1))))
-			);
-
-			inherent.extend(
-				Consensus::create_inherent_extrinsics(data.consensus)
-					.into_iter()
-					.map(|v| (v.0, UncheckedExtrinsic::new_unsigned(Call::Consensus(v.1))))
-			);
-
-			inherent.as_mut_slice().sort_unstable_by_key(|v| v.0);
-			inherent.into_iter().map(|v| v.1).collect()
+		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+			data.create_extrinsics()
 		}
 
-		fn check_inherents(block: Block, data: BasicInherentData) -> Result<(), CheckInherentError> {
-			let expected_slot = data.aura_expected_slot;
-
-			// draw timestamp out from extrinsics.
-			let set_timestamp = block.extrinsics()
-				.get(TIMESTAMP_SET_POSITION as usize)
-				.and_then(|xt: &UncheckedExtrinsic| match xt.function {
-					Call::Timestamp(TimestampCall::set(ref t)) => Some(t.clone()),
-					_ => None,
-				})
-				.ok_or_else(|| CheckInherentError::Other("No valid timestamp in block.".into()))?;
-
-			// take the "worse" result of normal verification and the timestamp vs. seal
-			// check.
-			CheckInherentError::combine_results(
-				Runtime::check_inherents(block, data),
-				|| {
-					Aura::verify_inherent(set_timestamp.into(), expected_slot)
-						.map_err(|s| CheckInherentError::Other(s.into()))
-				},
-			)
+		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult {
+			data.check_extrinsics(&block)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {

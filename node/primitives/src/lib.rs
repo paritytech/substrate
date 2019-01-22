@@ -33,8 +33,6 @@ extern crate substrate_primitives as primitives;
 use runtime_primitives::generic;
 use runtime_primitives::{OpaqueExtrinsic, traits::BlakeTwo256};
 
-pub use runtime_primitives::BasicInherentData as InherentData;
-
 /// An index to a block.
 pub type BlockNumber = u64;
 

@@ -182,7 +182,7 @@ impl<F: ServiceFactory> TestNet<F> {
 	}
 }
 
-pub fn connectivity<F: ServiceFactory, Inherent>(spec: FactoryChainSpec<F>) {
+pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	const NUM_NODES: u32 = 10;
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");

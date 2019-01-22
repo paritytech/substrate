@@ -27,6 +27,7 @@
 #![recursion_limit="128"]
 
 extern crate substrate_primitives as primitives;
+extern crate substrate_inherents as inherents;
 extern crate futures;
 extern crate parking_lot;
 extern crate sr_version as runtime_version;
@@ -47,6 +48,7 @@ use std::sync::Arc;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block};
 use futures::prelude::*;
+pub use inherents::InherentData;
 
 pub mod offline_tracker;
 pub mod error;
@@ -67,9 +69,9 @@ pub trait Authorities<B: Block> {
 }
 
 /// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
-pub trait Environment<B: Block, ConsensusData> {
+pub trait Environment<B: Block> {
 	/// The proposer type this creates.
-	type Proposer: Proposer<B, ConsensusData>;
+	type Proposer: Proposer<B>;
 	/// Error which can occur upon creation.
 	type Error: From<Error>;
 
@@ -85,13 +87,13 @@ pub trait Environment<B: Block, ConsensusData> {
 /// block.
 ///
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
-pub trait Proposer<B: Block, ConsensusData> {
+pub trait Proposer<B: Block> {
 	/// Error type which can occur when proposing or evaluating.
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
-	type Create: IntoFuture<Item=B,Error=Self::Error>;
+	type Create: IntoFuture<Item=B, Error=Self::Error>;
 	/// Create a proposal.
-	fn propose(&self, consensus_data: ConsensusData) -> Self::Create;
+	fn propose(&self, inherent_data: InherentData) -> Self::Create;
 }
 
 /// An oracle for when major synchronization work is being undertaken.

@@ -47,7 +47,9 @@ use state_machine::{
 };
 
 use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
-use crate::blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
+use crate::blockchain::{
+	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend
+};
 use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use crate::notifications::{StorageNotifications, StorageEventStream};
@@ -78,7 +80,8 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	// holds the block hash currently being imported. TODO: replace this with block queue
+	importing_block: RwLock<Option<Block::Hash>>,
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
@@ -557,25 +560,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block<InherentData>(
+	pub fn new_block(
 		&self
-	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block, InherentData>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at<InherentData>(
+	pub fn new_block_at(
 		&self, parent: &BlockId<Block>
-	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block, InherentData>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}

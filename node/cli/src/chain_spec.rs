@@ -318,6 +318,6 @@ mod tests {
 
 	#[test]
 	fn test_connectivity() {
-		service_test::connectivity::<Factory, node_primitives::InherentData>(integration_test_config());
+		service_test::connectivity::<Factory>(integration_test_config());
 	}
 }

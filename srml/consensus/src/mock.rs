@@ -31,7 +31,6 @@ impl_outer_origin!{
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 impl Trait for Test {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
 	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ::InstantFinalityReportVec<()>;
