@@ -206,9 +206,11 @@ impl treasury::Trait for Runtime {
 }
 
 impl contract::Trait for Runtime {
+	type Call = Call;
+	type Event = Event;
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
-	type Event = Event;
+	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
 }
 
 impl sudo::Trait for Runtime {
@@ -279,8 +281,8 @@ impl_runtime_apis! {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			Executive::initialise_block(&header)
+		fn initialise_block(header: &<Block as BlockT>::Header) {
+			Executive::initialise_block(header)
 		}
 	}
 
@@ -353,7 +355,7 @@ impl_runtime_apis! {
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_pending_change(digest: DigestFor<Block>)
+		fn grandpa_pending_change(digest: &DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {

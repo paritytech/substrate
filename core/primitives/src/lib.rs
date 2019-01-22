@@ -81,6 +81,8 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -139,7 +141,7 @@ impl Deref for Bytes {
 }
 
 /// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, PartialEq)]
 pub struct OpaqueMetadata(Vec<u8>);
 
 impl OpaqueMetadata {
@@ -154,5 +156,74 @@ impl rstd::ops::Deref for OpaqueMetadata {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+/// Something that is either a native or an encoded value.
+#[cfg(feature = "std")]
+pub enum NativeOrEncoded<R> {
+	/// The native representation.
+	Native(R),
+	/// The encoded representation.
+	Encoded(Vec<u8>)
+}
+
+#[cfg(feature = "std")]
+impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		self.as_encoded().as_ref().fmt(f)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<R: codec::Encode> NativeOrEncoded<R> {
+	/// Return the value as the encoded format.
+	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
+		match self {
+			NativeOrEncoded::Encoded(e) => Cow::Borrowed(e.as_slice()),
+			NativeOrEncoded::Native(n) => Cow::Owned(n.encode()),
+		}
+	}
+
+	/// Return the value as the encoded format.
+	pub fn into_encoded(self) -> Vec<u8> {
+		match self {
+			NativeOrEncoded::Encoded(e) => e,
+			NativeOrEncoded::Native(n) => n.encode(),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
+			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
+			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
+				Some(n) == codec::Decode::decode(&mut &e[..]).as_ref(),
+			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
+		}
+	}
+}
+
+/// A value that is never in a native representation.
+/// This is type is useful in conjuction with `NativeOrEncoded`.
+#[cfg(feature = "std")]
+#[derive(PartialEq)]
+pub enum NeverNativeValue {}
+
+#[cfg(feature = "std")]
+impl codec::Encode for NeverNativeValue {
+	fn encode(&self) -> Vec<u8> {
+		// The enum is not constructable, so this function should never be callable!
+		unreachable!()
+	}
+}
+
+#[cfg(feature = "std")]
+impl codec::Decode for NeverNativeValue {
+	fn decode<I: codec::Input>(_: &mut I) -> Option<Self> {
+		None
 	}
 }

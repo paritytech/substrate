@@ -898,9 +898,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
 		use client::blockchain::HeaderBackend;
+
 		let mut best = self.blockchain.info()?.best_number;
-		// if the best is lower to n(less then 256), just use best number in case overflow
-		let n = if best < n { best } else { n };
+		let finalized = self.blockchain.info()?.finalized_number;
+		let revertible = best - finalized;
+		let n = if revertible < n { revertible } else { n };
 
 		for c in 0 .. n.as_() {
 			if best == As::sa(0) {

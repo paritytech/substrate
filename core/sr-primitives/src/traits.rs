@@ -470,7 +470,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Digest<Hash = Self::Hash>;
+	type Digest: Digest<Hash = Self::Hash> + Codec;
 
 	fn new(
 		number: Self::Number,

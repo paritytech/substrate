@@ -60,7 +60,7 @@ pub trait ChainApi: Send + Sync {
 	type Error: From<error::Error> + error::IntoPoolError;
 
 	/// Verify extrinsic at given block.
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
 
 	/// Returns a block number given the block id.
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error>;
@@ -105,10 +105,10 @@ impl<B: ChainApi> Pool<B> {
 					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
 
-				match self.api.validate_transaction(at, &xt)? {
+				match self.api.validate_transaction(at, xt.clone())? {
 					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
-							data:  xt,
+							data: xt,
 							hash,
 							priority,
 							requires,
@@ -170,7 +170,7 @@ impl<B: ChainApi> Pool<B> {
 					tags.extend(tx.provides.iter().map(|x| x.clone()));
 				},
 				None => {
-					let tx = self.api.validate_transaction(parent, xt);
+					let tx = self.api.validate_transaction(parent, xt.clone());
 					match tx {
 						Ok(TransactionValidity::Valid { mut provides, .. }) => {
 							tags.append(&mut provides);
@@ -375,7 +375,7 @@ mod tests {
 		type Error = error::Error;
 
 		/// Verify extrinsic at given block.
-		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
 			let block_number = self.block_id_to_number(at)?.unwrap();
 			let nonce = uxt.transfer().nonce;
 
