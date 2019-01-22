@@ -8,6 +8,7 @@ description = "Common utilities for substrate consensus"
 log = "0.4"
 parking_lot = "0.7.1"
 substrate-primitives = { path= "../../primitives" }
+substrate-inherents = { path= "../../inherents" }
 error-chain = "0.12"
 futures = "0.1"
 sr-version = { path = "../../sr-version" }

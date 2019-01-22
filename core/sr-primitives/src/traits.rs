@@ -621,26 +621,6 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
 }
 
-/// Something that provides an inherent for a runtime.
-pub trait ProvideInherent {
-	/// The inherent that is provided.
-	type Inherent: Encode + MaybeDecode;
-	/// The call for setting the inherent.
-	type Call: Encode + MaybeDecode;
-
-	/// Create the inherent extrinsics.
-	///
-	/// # Return
-	///
-	/// Returns a vector with tuples containing the index for the extrinsic and the extrinsic itself.
-	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)>;
-
-	/// Check that the given inherent is valid.
-	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
-		block: &Block, data: Self::Inherent, extract_function: &F
-	) -> Result<(), super::CheckInherentError>;
-}
-
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
 

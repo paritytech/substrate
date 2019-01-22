@@ -16,6 +16,7 @@ slog = "^2"
 sr-io = { path = "../../core/sr-io" }
 substrate-client = { path = "../../core/client" }
 substrate-primitives = { path = "../../core/primitives" }
+substrate-inherents = { path = "../../core/inherents" }
 node-runtime = { path = "../runtime" }
 node-primitives = { path = "../primitives" }
 hex-literal = "0.1"
