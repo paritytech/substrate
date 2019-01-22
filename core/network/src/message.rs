@@ -48,7 +48,6 @@ pub type BlockRequest<B> = generic::BlockRequest<
 	<<B as BlockT>::Header as HeaderT>::Number,
 >;
 
-
 /// Type alias for using the BlockData type using block type parameters.
 pub type BlockData<B> = generic::BlockData<
 	<B as BlockT>::Header,

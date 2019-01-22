@@ -145,6 +145,22 @@ impl From<f32> for Permill {
 	}
 }
 
+impl codec::CompactAs for Permill {
+	type As = u32;
+	fn encode_as(&self) -> &u32 {
+		&self.0
+	}
+	fn decode_from(x: u32) -> Permill {
+		Permill(x)
+	}
+}
+
+impl From<codec::Compact<Permill>> for Permill {
+	fn from(x: codec::Compact<Permill>) -> Permill {
+		x.0
+	}
+}
+
 /// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -197,6 +213,22 @@ impl From<f64> for Perbill {
 impl From<f32> for Perbill {
 	fn from(x: f32) -> Perbill {
 		Perbill::from_fraction(x as f64)
+	}
+}
+
+impl codec::CompactAs for Perbill {
+	type As = u32;
+	fn encode_as(&self) -> &u32 {
+		&self.0
+	}
+	fn decode_from(x: u32) -> Perbill {
+		Perbill(x)
+	}
+}
+
+impl From<codec::Compact<Perbill>> for Perbill {
+	fn from(x: codec::Compact<Perbill>) -> Perbill {
+		x.0
 	}
 }
 
@@ -302,8 +334,13 @@ macro_rules! __impl_outer_config_types {
 	($concrete:ident) => ()
 }
 
+/// Implement the output "meta" module configuration struct,
+/// which is basically:
+/// pub struct GenesisConfig {
+/// 	rust_module_one: Option<ModuleOneConfig>,
+/// 	...
+/// }
 #[macro_export]
-/// Implement the output "meta" module configuration struct.
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
@@ -474,54 +511,22 @@ macro_rules! impl_outer_log {
 	};
 }
 
-//TODO: https://github.com/paritytech/substrate/issues/1022
-/// Basic Inherent data to include in a block; used by simple runtimes.
-#[derive(Encode, Decode)]
-pub struct BasicInherentData {
-	/// Current timestamp.
-	pub timestamp: u64,
-	/// Blank report.
-	pub consensus: (),
-	/// Aura expected slot. Can take any value during block construction.
-	pub aura_expected_slot: u64,
-}
+/// Simple blob to hold an extrinsic without commiting to its format and ensure it is serialized
+/// correctly.
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OpaqueExtrinsic(pub Vec<u8>);
 
-impl BasicInherentData {
-	/// Create a new `BasicInherentData` instance.
-	pub fn new(timestamp: u64, expected_slot: u64) -> Self {
-		Self {
-			timestamp,
-			consensus: (),
-			aura_expected_slot: expected_slot,
-		}
+#[cfg(feature = "std")]
+impl ::serde::Serialize for OpaqueExtrinsic {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		::codec::Encode::using_encoded(&self.0, |bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
-//TODO: https://github.com/paritytech/substrate/issues/1022
-/// Error type used while checking inherents.
-#[derive(Encode)]
-#[cfg_attr(feature = "std", derive(Decode))]
-pub enum CheckInherentError {
-	/// The inherents are generally valid but a delay until the given timestamp
-	/// is required.
-	ValidAtTimestamp(u64),
-	/// Some other error has occurred.
-	Other(RuntimeString),
-}
-
-impl CheckInherentError {
-	/// Combine two results, taking the "worse" of the two.
-	pub fn combine_results<F: FnOnce() -> Result<(), Self>>(this: Result<(), Self>, other: F) -> Result<(), Self> {
-		match this {
-			Ok(()) => other(),
-			Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
-			Err(CheckInherentError::ValidAtTimestamp(x)) => match other() {
-				Ok(()) => Err(CheckInherentError::ValidAtTimestamp(x)),
-				Err(CheckInherentError::ValidAtTimestamp(y))
-					=> Err(CheckInherentError::ValidAtTimestamp(rstd::cmp::max(x, y))),
-				Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
-			}
-		}
+impl traits::Extrinsic for OpaqueExtrinsic {
+	fn is_signed(&self) -> Option<bool> {
+		None
 	}
 }
 
@@ -597,5 +602,50 @@ mod tests {
 
 		// check that as-style methods are not working with regular items
 		assert!(b1.as_authorities_change().is_none());
+	}
+
+	#[test]
+	fn opaque_extrinsic_serialization() {
+		let ex = super::OpaqueExtrinsic(vec![1, 2, 3, 4]);
+		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x1001020304\"".to_owned());
+	}
+
+	#[test]
+	fn compact_permill_perbill_encoding() {
+		let tests = [(0u32, 1usize), (63, 1), (64, 2), (16383, 2), (16384, 4), (1073741823, 4), (1073741824, 5), (u32::max_value(), 5)];
+		for &(n, l) in &tests {
+			let compact: codec::Compact<super::Permill> = super::Permill(n).into();
+			let encoded = compact.encode();
+			assert_eq!(encoded.len(), l);
+			let decoded = <codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
+			let permill: super::Permill = decoded.into();
+			assert_eq!(permill, super::Permill(n));
+
+			let compact: codec::Compact<super::Perbill> = super::Perbill(n).into();
+			let encoded = compact.encode();
+			assert_eq!(encoded.len(), l);
+			let decoded = <codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
+			let perbill: super::Perbill = decoded.into();
+			assert_eq!(perbill, super::Perbill(n));
+		}
+	}
+
+	#[derive(Encode, Decode, PartialEq, Eq, Debug)]
+	struct WithCompact<T: codec::HasCompact> {
+		data: T,
+	}
+
+	#[test]
+	fn test_has_compact_permill() {
+		let data = WithCompact { data: super::Permill(1) };
+		let encoded = data.encode();
+		assert_eq!(data, WithCompact::<super::Permill>::decode(&mut &encoded[..]).unwrap());
+	}
+
+	#[test]
+	fn test_has_compact_perbill() {
+		let data = WithCompact { data: super::Perbill(1) };
+		let encoded = data.encode();
+		assert_eq!(data, WithCompact::<super::Perbill>::decode(&mut &encoded[..]).unwrap());
 	}
 }

@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::NetworkConfiguration;
 use libp2p::secio;
-use rand::{self, Rng};
-use std::fs;
+use log::{trace, warn};
+use rand::Rng;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
-use std::path::Path;
-use NetworkConfiguration;
+use std::{fs, path::Path};
 
 // File where the private key is stored.
 const SECRET_FILE: &str = "secret";

@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 
 use codec::{Decode, Encode, Codec, Input};
-use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeHash};
+use traits::{self, Member, DigestItem as DigestItemT, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
 
@@ -57,7 +57,7 @@ impl<Item> traits::Digest for Digest<Item> where
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum DigestItem<Hash, AuthorityId> {
 	/// System digest item announcing that authorities set has been changed
 	/// in the block. Contains the new set of authorities.
@@ -70,6 +70,15 @@ pub enum DigestItem<Hash, AuthorityId> {
 	Seal(u64, Signature),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(Vec<u8>),
+}
+
+#[cfg(feature = "std")]
+impl<Hash: Encode, AuthorityId: Encode> ::serde::Serialize for DigestItem<Hash, AuthorityId> {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| {
+			::substrate_primitives::bytes::serialize(bytes, seq)
+		})
+	}
 }
 
 
@@ -123,8 +132,8 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 }
 
 impl<
-	Hash: Codec + Member + MaybeSerializeDebug,
-	AuthorityId: Codec + Member + MaybeSerializeDebug + MaybeHash
+	Hash: Codec + Member,
+	AuthorityId: Codec + Member + MaybeHash,
 > traits::DigestItem for DigestItem<Hash, AuthorityId> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;
@@ -205,5 +214,27 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 		}
 
 		v
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_serialize_digest() {
+		let digest = Digest {
+			logs: vec![
+				DigestItem::AuthoritiesChange(vec![1]),
+				DigestItem::ChangesTrieRoot(4),
+				DigestItem::Seal(1, 15.into()),
+				DigestItem::Other(vec![1, 2, 3]),
+			],
+		};
+
+		assert_eq!(
+			::serde_json::to_string(&digest).unwrap(),
+			r#"{"logs":["0x010401000000","0x0204000000","0x0301000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f","0x000c010203"]}"#
+		);
 	}
 }

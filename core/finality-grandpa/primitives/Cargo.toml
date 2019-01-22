@@ -6,7 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 substrate-client = { path = "../../client", default-features = false }
 substrate-primitives = { path = "../../primitives", default-features = false }
-parity-codec = { version = "2.1", default-features = false }
+parity-codec = { version = "2.2", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 sr-primitives = { path = "../../sr-primitives", default-features = false }
 sr-std = { path = "../../sr-std", default-features = false }

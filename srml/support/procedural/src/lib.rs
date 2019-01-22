@@ -40,7 +40,7 @@ use proc_macro::TokenStream;
 ///
 /// ## Example
 ///
-/// ```compile_fail
+/// ```nocompile
 /// decl_storage! {
 /// 	trait Store for Module<T: Trait> as Example {
 /// 		Dummy get(dummy) config(): Option<T::Balance>;
@@ -53,6 +53,21 @@ use proc_macro::TokenStream;
 /// storage item. This allows you to gain access to publicly visible storage items from a
 /// module type. Currently you must disambiguate by using `<Module as Store>::Item` rather than
 /// the simpler `Module::Item`. Hopefully the rust guys with fix this soon.
+///
+/// An optional `GenesisConfig` struct for storage initialization can be defined, either specifically as in :
+/// ```nocompile
+/// decl_storage! {
+/// 	trait Store for Module<T: Trait> as Example {
+/// 	}
+///		add_extra_genesis {
+///			config(genesis_field): GenesisFieldType;
+///			build(|_: &mut StorageMap, _: &mut ChildrenStorageMap, _: &GenesisConfig<T>| {
+///			})
+///		}
+/// }
+/// ```
+/// or when at least one storage field requires default initialization (both `get` and `config` or `build`).
+/// This struct can be expose as `Config` by `decl_runtime` macro.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)

@@ -163,15 +163,11 @@ pub struct RunCmd {
 	#[structopt(long = "name", value_name = "NAME")]
 	pub name: Option<String>,
 
-	/// Should connect to the Substrate telemetry server (telemetry is off by default on local chains)
-	#[structopt(short = "t", long = "telemetry")]
-	pub telemetry: bool,
-
 	/// Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
 	#[structopt(long = "no-telemetry")]
 	pub no_telemetry: bool,
 
-	/// The URL of the telemetry server. Implies --telemetry
+	/// The URL of the telemetry server to connect to
 	#[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL")]
 	pub telemetry_url: Option<String>,
 
@@ -281,8 +277,9 @@ pub struct ImportBlocksCmd {
 /// The `revert` command used revert the chain to a previos state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
-	/// Number of blocks to revert. Default is 256.
-	pub num: Option<u64>,
+	/// Number of blocks to revert.
+	#[structopt(default_value = "256")]
+	pub num: u64,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

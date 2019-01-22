@@ -16,23 +16,27 @@
 
 use utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
-	fold_fn_decl_for_client_side, unwrap_or_error
+	fold_fn_decl_for_client_side, unwrap_or_error, extract_parameter_names_types_and_borrows,
+	generate_native_call_generator_fn_name
 };
 
 use proc_macro;
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, Span};
 
 use quote::quote;
 
 use syn::{
-	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error},
+	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error}, ReturnType,
 	fold::{self, Fold}, FnDecl, parse_quote, ItemTrait, Generics, GenericParam, Attribute,
-	visit::{Visit, self}, FnArg, Pat, TraitBound, Type, Meta, NestedMeta, Lit
+	visit::{Visit, self}, FnArg, Pat, TraitBound, Meta, NestedMeta, Lit, TraitItem, Ident, Type
 };
 
 use std::collections::HashMap;
 
 use blake2_rfc;
+
+/// The ident used for the block generic parameter.
+const BLOCK_GENERIC_IDENT: &str = "Block";
 
 /// Unique identifier used to make the hidden includes unique for this macro.
 const HIDDEN_INCLUDES_ID: &str = "DECL_RUNTIME_APIS";
@@ -88,6 +92,167 @@ fn remove_supported_attributes(attrs: &mut Vec<Attribute>) -> HashMap<&'static s
 	result
 }
 
+/// Visits the ast and checks if `Block` ident is used somewhere.
+struct IsUsingBlock {
+	result: bool,
+}
+
+impl<'ast> Visit<'ast> for IsUsingBlock {
+	fn visit_ident(&mut self, i: &'ast Ident) {
+		if i == BLOCK_GENERIC_IDENT {
+			self.result = true;
+		}
+	}
+}
+
+/// Visits the ast and checks if `Block` ident is used somewhere.
+fn type_is_using_block(ty: &Type) -> bool {
+	let mut visitor = IsUsingBlock { result: false };
+	visitor.visit_type(ty);
+	visitor.result
+}
+
+/// Visits the ast and checks if `Block` ident is used somewhere.
+fn return_type_is_using_block(ty: &ReturnType) -> bool {
+	let mut visitor = IsUsingBlock { result: false };
+	visitor.visit_return_type(ty);
+	visitor.result
+}
+
+/// Replace all occurences of `Block` with `NodeBlock`
+struct ReplaceBlockWithNodeBlock {}
+
+impl Fold for ReplaceBlockWithNodeBlock {
+	fn fold_ident(&mut self, input: Ident) -> Ident {
+		if input == BLOCK_GENERIC_IDENT {
+			Ident::new("NodeBlock", Span::call_site())
+		} else {
+			input
+		}
+	}
+}
+
+/// Replace all occurences of `Block` with `NodeBlock`
+fn fn_arg_replace_block_with_node_block(fn_arg: FnArg) -> FnArg {
+	let mut replace = ReplaceBlockWithNodeBlock {};
+	fold::fold_fn_arg(&mut replace, fn_arg)
+}
+
+/// Replace all occurences of `Block` with `NodeBlock`
+fn return_type_replace_block_with_node_block(return_type: ReturnType) -> ReturnType {
+	let mut replace = ReplaceBlockWithNodeBlock {};
+	fold::fold_return_type(&mut replace, return_type)
+}
+
+fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
+	let fns = decl.items.iter().filter_map(|i| match i {
+		TraitItem::Method(ref m) => Some(&m.sig),
+		_ => None,
+	});
+
+	let mut result = Vec::new();
+	let trait_ = &decl.ident;
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+
+	// Auxilariy function that is used to convert between types that use different block types.
+	// The function expects that both a convertable by encoding the one and decoding the other.
+	result.push(quote!(
+		fn convert_between_block_types
+			<I: #crate_::runtime_api::Encode, R: #crate_::runtime_api::Decode>(input: &I) -> R
+		{
+			<R as #crate_::runtime_api::Decode>::decode(
+				&mut &#crate_::runtime_api::Encode::encode(input)[..]
+			).unwrap()
+		}
+	));
+
+	// Generate a native call generator for each function of the given trait.
+	for fn_ in fns {
+		let params = extract_parameter_names_types_and_borrows(&fn_.decl)?;
+		let trait_fn_name = &fn_.ident;
+		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
+		let output = return_type_replace_block_with_node_block(fn_.decl.output.clone());
+
+		// Every type that is using the `Block` generic parameter, we need to encode/decode,
+		// to make it compatible between the runtime/node.
+		let conversions = params.iter().filter(|v| type_is_using_block(&v.1)).map(|(n, t, _)| {
+			quote!(
+				let #n: #t = convert_between_block_types(&#n);
+			)
+		});
+		// Same as for the input types, we need to check if we also need to convert the output,
+		// before returning it.
+		let output_conversion = if return_type_is_using_block(&fn_.decl.output) {
+			quote!( convert_between_block_types(&res) )
+		} else {
+			quote!( res )
+		};
+
+		let input_names = params.iter().map(|v| &v.0);
+		// If the type is using the block generic type, we will encode/decode it to make it
+		// compatible. To ensure that we forward it by ref/value, we use the value given by the
+		// the user. Otherwise if it is not using the block, we don't need to add anything.
+		let input_borrows = params
+			.iter()
+			.map(|v| if type_is_using_block(&v.1) { v.2.clone() } else { quote!() });
+
+		// Replace all `Block` with `NodeBlock`, add `'a` lifetime to references and collect
+		// all the function inputs.
+		let fn_inputs = fn_
+			.decl
+			.inputs
+			.iter()
+			.map(|v| fn_arg_replace_block_with_node_block(v.clone()))
+			.map(|v| match v {
+				FnArg::Captured(ref arg) => {
+					let mut arg = arg.clone();
+					match arg.ty {
+						Type::Reference(ref mut r) => {
+							r.lifetime = Some(parse_quote!( 'a ));
+						},
+						_ => {}
+					}
+					FnArg::Captured(arg)
+				},
+				r => r.clone(),
+			});
+
+		let (impl_generics, ty_generics, where_clause) = decl.generics.split_for_impl();
+		// We need to parse them again, to get an easy access to the actual parameters.
+		let mut impl_generics: Generics = parse_quote!(#impl_generics);
+		let impl_generics_params = impl_generics.params.iter().map(|p| {
+			match p {
+				GenericParam::Type(ref ty) => {
+					let mut ty = ty.clone();
+					ty.bounds.push(parse_quote!( 'a ));
+					GenericParam::Type(ty)
+				},
+				// We should not see anything different than type params here.
+				r => r.clone(),
+			}
+		});
+
+		// Generate the generator function
+		result.push(quote!(
+			#[cfg(any(feature = "std", test))]
+			pub fn #fn_name<
+				'a, ApiImpl: #trait_ #ty_generics, NodeBlock: #crate_::runtime_api::BlockT
+				#(, #impl_generics_params)*
+			>(
+				#( #fn_inputs ),*
+			) -> impl FnOnce() #output + 'a #where_clause {
+				move || {
+					#( #conversions )*
+					let res = ApiImpl::#trait_fn_name(#( #input_borrows #input_names ),*);
+					#output_conversion
+				}
+			}
+		));
+	}
+
+	Ok(quote!( #( #result )* ))
+}
+
 /// Generate the decleration of the trait for the runtime.
 fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 	let mut result = Vec::new();
@@ -101,9 +266,11 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 			generate_runtime_api_version(v as u32)
 		}));
 		let id = generate_runtime_api_id(&decl.ident.to_string());
+		let native_call_generators = unwrap_or_error(generate_native_call_generators(&decl));
 
 		result.push(quote!(
 			#[doc(hidden)]
+			#[allow(dead_code)]
 			pub mod #mod_name {
 				use super::*;
 
@@ -112,6 +279,8 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 				pub #api_version
 
 				pub #id
+
+				#native_call_generators
 			}
 		));
 	}
@@ -143,6 +312,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 		*self.found_attributes = remove_supported_attributes(&mut input.attrs);
 		// Check if this is the `Core` runtime api trait.
 		let is_core_trait = self.found_attributes.contains_key(CORE_TRAIT_ATTRIBUTE);
+		let block_ident = Ident::new(BLOCK_GENERIC_IDENT, Span::call_site());
 
 		if is_core_trait {
 			// Add all the supertraits we want to have for `Core`.
@@ -151,13 +321,12 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 				'static
 				+ Send
 				+ Sync
-				+ #crate_::runtime_api::ConstructRuntimeApi<Block>
-				+ #crate_::runtime_api::ApiExt<Block>
+				+ #crate_::runtime_api::ApiExt<#block_ident>
 			);
 		} else {
 			// Add the `Core` runtime api as super trait.
 			let crate_ = &self.crate_;
-			input.supertraits.push(parse_quote!( #crate_::runtime_api::Core<Block> ));
+			input.supertraits.push(parse_quote!( #crate_::runtime_api::Core<#block_ident> ));
 		}
 
 		// The client side trait is only required when compiling with the feature `std` or `test`.
@@ -291,19 +460,6 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 					},
 					_ => {}
 				}
-
-				match arg.ty {
-					Type::Reference(ref reference) => {
-						self.errors.push(
-							Error::new(
-								reference.span(),
-								"Do not use type references as arguments. The client side \
-								declaration will take all arguments as reference automatically."
-							)
-						)
-					},
-					_ => {},
-				}
 			},
 			FnArg::SelfRef(_) | FnArg::SelfValue(_) => {
 				self.errors.push(Error::new(input.span(), "Self values are not supported."))
@@ -323,7 +479,7 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 
 	fn visit_generic_param(&mut self, input: &'ast GenericParam) {
 		match input {
-			GenericParam::Type(ty) if &ty.ident == "Block" => {
+			GenericParam::Type(ty) if &ty.ident == BLOCK_GENERIC_IDENT => {
 				self.errors.push(
 					Error::new(
 						input.span(),
@@ -340,7 +496,7 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 
 	fn visit_trait_bound(&mut self, input: &'ast TraitBound) {
 		if let Some(last_ident) = input.path.segments.last().map(|v| &v.value().ident) {
-			if last_ident == "BlockT" || last_ident == "Block" {
+			if last_ident == "BlockT" || last_ident == BLOCK_GENERIC_IDENT {
 				self.errors.push(
 					Error::new(
 						input.span(),

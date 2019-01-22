@@ -15,36 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! An implementation of double map backed by storage.
-//!
-//! This implementation is somewhat specialized to the tracking of the storage of accounts.
 
 use rstd::prelude::*;
 use codec::{Codec, Encode};
-use runtime_support::storage::unhashed;
-use runtime_io::{blake2_256, twox_128};
-
-/// Returns only a first part of the storage key.
-///
-/// Hashed by XX.
-fn first_part_of_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1) -> [u8; 16] {
-	let mut raw_prefix = Vec::new();
-	raw_prefix.extend(M::PREFIX);
-	raw_prefix.extend(Encode::encode(&k1));
-	twox_128(&raw_prefix)
-}
-
-/// Returns a compound key that consist of the two parts: (prefix, `k1`) and `k2`.
-///
-/// The first part is hased by XX and then concatenated with a blake2 hash of `k2`.
-fn full_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1, k2: M::Key2) -> Vec<u8> {
-	let first_part = first_part_of_key::<M>(k1);
-	let second_part = blake2_256(&Encode::encode(&k2));
-
-	let mut k = Vec::new();
-	k.extend(&first_part);
-	k.extend(&second_part);
-	k
-}
+use storage::unhashed;
 
 /// An implementation of a map with a two keys.
 ///
@@ -54,11 +28,8 @@ fn full_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1, k2: M::Key2) -> Vec<u8> {
 /// # Mapping of keys to a storage path
 ///
 /// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
-/// The first part is a XX hash of a concatenation of the `PREFIX` and `Key1`. And the second part
-/// is a blake2 hash of a `Key2`.
-///
-/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
-/// thus will be susceptible for a untrusted input.
+/// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
+/// is a hash of a `Key2`.
 pub trait StorageDoubleMap {
 	type Key1: Codec;
 	type Key2: Codec;
@@ -68,28 +39,57 @@ pub trait StorageDoubleMap {
 
 	/// Insert an entry into this map.
 	fn insert(k1: Self::Key1, k2: Self::Key2, val: Self::Value) {
-		unhashed::put(&full_key::<Self>(k1, k2)[..], &val);
+		unhashed::put(&Self::full_key(k1, k2)[..], &val);
 	}
 
 	/// Remove an entry from this map.
 	fn remove(k1: Self::Key1, k2: Self::Key2) {
-		unhashed::kill(&full_key::<Self>(k1, k2)[..]);
+		unhashed::kill(&Self::full_key(k1, k2)[..]);
 	}
 
 	/// Get an entry from this map.
 	///
 	/// If there is entry stored under the given keys, returns `None`.
 	fn get(k1: Self::Key1, k2: Self::Key2) -> Option<Self::Value> {
-		unhashed::get(&full_key::<Self>(k1, k2)[..])
+		unhashed::get(&Self::full_key(k1, k2)[..])
 	}
 
 	/// Returns `true` if value under the specified keys exists.
 	fn exists(k1: Self::Key1, k2: Self::Key2) -> bool {
-		unhashed::exists(&full_key::<Self>(k1, k2)[..])
+		unhashed::exists(&Self::full_key(k1, k2)[..])
 	}
 
 	/// Removes all entries that shares the `k1` as the first key.
 	fn remove_prefix(k1: Self::Key1) {
-		unhashed::kill_prefix(&first_part_of_key::<Self>(k1))
+		unhashed::kill_prefix(&Self::derive_key1(Self::encode_key1(k1)))
+	}
+
+	/// Encode key1 into Vec<u8> and prepend a prefix
+	fn encode_key1(key: Self::Key1) -> Vec<u8> {
+		let mut raw_prefix = Vec::new();
+		raw_prefix.extend(Self::PREFIX);
+		raw_prefix.extend(Encode::encode(&key));
+		raw_prefix
+	}
+
+	/// Encode key2 into Vec<u8>
+	fn encode_key2(key: Self::Key2) -> Vec<u8> {
+		Encode::encode(&key)
+	}
+
+	/// Derive the first part of the key
+	fn derive_key1(key1_data: Vec<u8>) -> Vec<u8>;
+
+	/// Derive the remaining part of the key
+	fn derive_key2(key2_data: Vec<u8>) -> Vec<u8>;
+
+	/// Returns a compound key that consist of the two parts: (prefix, `k1`) and `k2`.
+	/// The first part is hased and then concatenated with a hash of `k2`.
+	fn full_key(k1: Self::Key1, k2: Self::Key2) -> Vec<u8> {
+		let key1_data = Self::encode_key1(k1);
+		let key2_data = Self::encode_key2(k2);
+		let mut key = Self::derive_key1(key1_data);
+		key.extend(Self::derive_key2(key2_data));
+		key
 	}
 }

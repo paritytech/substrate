@@ -84,11 +84,14 @@ use params::{
 /// The core cli parameters.
 pub type CoreParams<CC, RP> = MergeParameters<params::CoreParams, params::CoreCommands<CC, RP>>;
 pub use params::NoCustom;
+use app_dirs::{AppInfo, AppDataType};
 
 use futures::Future;
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
+	/// Implemtation name.
+	pub name: &'static str,
 	/// Implementation version.
 	pub version: &'static str,
 	/// SCM Commit hash.
@@ -128,7 +131,16 @@ fn load_spec<F, G>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G>
 }
 
 fn base_path(cli: &SharedParams) -> PathBuf {
-	cli.base_path.clone().unwrap_or_else(default_base_path)
+	cli.base_path.clone()
+		.unwrap_or_else(||
+			app_dirs::get_app_root(
+				AppDataType::UserData,
+				&AppInfo {
+					name: version.executable_name,
+					author: version.author
+				}
+			).expect("app directories exist on all supported platforms; qed")
+		)
 }
 
 fn create_input_err<T: Into<String>>(msg: T) -> error::Error {
@@ -531,7 +543,7 @@ where
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
 	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
-	let blocks = cli.num.unwrap_or(256);
+	let blocks = cli.num;
 	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
 }
 
@@ -600,20 +612,6 @@ fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	path.push(chain_id);
 	path.push("network");
 	path
-}
-
-fn default_base_path() -> PathBuf {
-	use app_dirs::{AppInfo, AppDataType};
-
-	let app_info = AppInfo {
-		name: "Substrate",
-		author: "Parity Technologies",
-	};
-
-	app_dirs::get_app_root(
-		AppDataType::UserData,
-		&app_info,
-	).expect("app directories exist on all supported platforms; qed")
 }
 
 fn init_logger(pattern: &str) {

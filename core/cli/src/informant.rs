@@ -48,10 +48,10 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 		let sync_status = network.status();
 
-		if let Ok(best_block) = client.best_block_header() {
-			let hash = best_block.hash();
+		if let Ok(info) = client.info() {
+			let best_number: u64 = info.chain.best_number.as_();
+			let best_hash = info.chain.best_hash;
 			let num_peers = sync_status.num_peers;
-			let best_number: u64 = best_block.number().as_();
 			let speed = move || speed(best_number, last_number);
 			let (status, target) = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
 				(SyncState::Idle, _) => ("Idle".into(), "".into()),
@@ -60,14 +60,17 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			};
 			last_number = Some(best_number);
 			let txpool_status = txpool.status();
+			let finalized_number: u64 = info.chain.finalized_number.as_();
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({})",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({})",
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", sync_status.num_peers)),
 				Colour::White.paint(format!("{}", best_number)),
-				hash
+				best_hash,
+				Colour::White.paint(format!("{}", finalized_number)),
+				info.chain.finalized_hash,
 			);
 
 			// get cpu usage and memory usage of this process
@@ -81,10 +84,12 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"status" => format!("{}{}", status, target),
 				"peers" => num_peers,
 				"height" => best_number,
-				"best" => ?hash,
+				"best" => ?best_hash,
 				"txcount" => txpool_status.ready,
 				"cpu" => cpu_usage,
-				"memory" => memory
+				"memory" => memory,
+				"finalized_height" => finalized_number,
+				"finalized_hash" => ?info.chain.finalized_hash,
 			);
 		} else {
 			warn!("Error getting best block information");

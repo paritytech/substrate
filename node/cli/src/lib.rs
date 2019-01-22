@@ -40,6 +40,7 @@ extern crate node_primitives;
 extern crate substrate_service;
 extern crate node_executor;
 extern crate substrate_keystore;
+extern crate substrate_inherents as inherents;
 
 #[macro_use]
 extern crate log;
@@ -103,11 +104,11 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	E: IntoExit,
 {
 	cli::parse_and_execute::<service::Factory, NoCustom, NoCustom, _, _, _, _, _>(
-		load_spec, version, "substrate-node", args, exit,
+		load_spec, &version, "substrate-node", args, exit,
 		|exit, _custom_args, config| {
-			info!("Substrate Node");
+			info!("{}", version.name);
 			info!("  version {}", config.full_version());
-			info!("  by Parity Technologies, 2017, 2018");
+			info!("  by {}, 2017, 2018", version.author);
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);

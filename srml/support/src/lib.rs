@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(feature = "std")]
-extern crate serde;
+pub extern crate serde;
 
 #[doc(hidden)]
 pub extern crate sr_std as rstd;
@@ -30,8 +30,9 @@ pub extern crate sr_primitives as runtime_primitives;
 extern crate srml_metadata;
 
 extern crate mashup;
-#[macro_use]
+#[cfg_attr(test, macro_use)]
 extern crate srml_support_procedural;
+extern crate substrate_inherents as inherents;
 
 #[cfg(test)]
 #[macro_use]
@@ -67,12 +68,14 @@ pub mod metadata;
 mod runtime;
 #[macro_use]
 pub mod inherent;
+mod double_map;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
+pub use double_map::StorageDoubleMap;
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
