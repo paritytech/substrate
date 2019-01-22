@@ -226,6 +226,18 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		self.future.all()
 	}
 
+	/// Return ready transactions given list of hashes.
+	pub fn by_hash(&self, hashes: impl IntoIterator<Item=Hash> + Clone) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+		let ready = self.ready.by_hash(hashes.clone());
+		let future = self.future.by_hash(hashes);
+
+		ready
+			.into_iter()
+			.zip(future)
+			.map(|(a, b)| a.or(b))
+			.collect()
+	}
+
 	/// Removes all transactions represented by the hashes and all other transactions
 	/// that depend on them.
 	///
@@ -236,7 +248,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	/// and you don't want them to be stored in the pool use `prune_tags` method.
 	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = self.ready.remove_invalid(hashes);
-		removed.extend(self.future.remove(hashes).into_iter().map(Arc::new));
+		removed.extend(self.future.remove(hashes));
 		removed
 	}
 
