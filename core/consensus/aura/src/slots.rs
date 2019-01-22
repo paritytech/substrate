@@ -22,6 +22,10 @@ use std::time::{Instant, Duration};
 use tokio::timer::Delay;
 use futures::prelude::*;
 
+use inherents::{InherentDataProviders, InherentData};
+
+use consensus_common::{Error, ErrorKind};
+
 /// Returns the duration until the next slot, based on current duration since
 pub(crate) fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 	let remaining_full_secs = slot_duration - (now.as_secs() % slot_duration) - 1;
@@ -30,7 +34,6 @@ pub(crate) fn time_until_next(now: Duration, slot_duration: u64) -> Duration {
 }
 
 /// Information about a slot.
-#[derive(Debug, Clone)]
 pub(crate) struct SlotInfo {
 	/// The slot number.
 	pub(crate) number: u64,
@@ -38,6 +41,8 @@ pub(crate) struct SlotInfo {
 	pub(crate) timestamp: u64,
 	/// The instant at which the slot ends.
 	pub(crate) ends_at: Instant,
+	/// The inherent data.
+	pub(crate) inherent_data: InherentData,
 }
 
 impl SlotInfo {
@@ -57,22 +62,24 @@ pub(crate) struct Slots {
 	last_slot: u64,
 	slot_duration: u64,
 	inner_delay: Option<Delay>,
+	inherent_data_providers: InherentDataProviders,
 }
 
 impl Slots {
-	/// Create a new `slots` stream.
-	pub(crate) fn new(slot_duration: u64) -> Self {
+	/// Create a new `Slots` stream.
+	pub(crate) fn new(slot_duration: u64, inherent_data_providers: InherentDataProviders) -> Self {
 		Slots {
 			last_slot: 0,
 			slot_duration,
 			inner_delay: None,
+			inherent_data_providers,
 		}
 	}
 }
 
 impl Stream for Slots {
 	type Item = SlotInfo;
-	type Error = tokio::timer::Error;
+	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Option<SlotInfo>, Self::Error> {
 		let slot_duration = self.slot_duration;
@@ -90,30 +97,33 @@ impl Stream for Slots {
 		};
 
 		if let Some(ref mut inner_delay) = self.inner_delay {
-			try_ready!(inner_delay.poll());
+			try_ready!(inner_delay.poll().map_err(|e| Error::from(ErrorKind::FaultyTimer(e))));
 		}
 
 		// timeout has fired.
 
-		let (timestamp, slot_num) = match ::timestamp_and_slot_now(slot_duration) {
-			None => return Ok(Async::Ready(None)),
-			Some(x) => x,
-		};
+		let inherent_data = self.inherent_data_providers.create_inherent_data()
+			.map_err(::inherent_to_common_error)?;
+		let (timestamp, slot_num) = ::extract_timestamp_and_slot(&inherent_data)?;
 
 		// reschedule delay for next slot.
-		let ends_at = Instant::now()
-			+ time_until_next(Duration::from_secs(timestamp), slot_duration);
+		let ends_at = Instant::now() + time_until_next(Duration::from_secs(timestamp), slot_duration);
 		self.inner_delay = Some(Delay::new(ends_at));
 
 		// never yield the same slot twice.
 		if slot_num > self.last_slot {
 			self.last_slot = slot_num;
 
-			Ok(Async::Ready(Some(SlotInfo {
-				number: slot_num,
-				timestamp,
-				ends_at,
-			})))
+			Ok(
+				Async::Ready(
+					Some(SlotInfo {
+						number: slot_num,
+						timestamp,
+						ends_at,
+						inherent_data,
+					})
+				)
+			)
 		} else {
 			// re-poll until we get a new slot.
 			self.poll()

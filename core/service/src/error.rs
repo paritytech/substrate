@@ -19,6 +19,7 @@
 use client;
 use network;
 use keystore;
+use consensus_common;
 
 error_chain! {
 	foreign_links {
@@ -27,6 +28,7 @@ error_chain! {
 
 	links {
 		Client(client::error::Error, client::error::ErrorKind) #[doc="Client error"];
+		Consensus(consensus_common::Error, consensus_common::ErrorKind) #[doc="Consesus error"];
 		Network(network::error::Error, network::error::ErrorKind) #[doc="Network error"];
 		Keystore(keystore::Error, keystore::ErrorKind) #[doc="Keystore error"];
 	}

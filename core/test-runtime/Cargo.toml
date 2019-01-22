@@ -13,6 +13,7 @@ parity-codec-derive = { version = "2.1", default-features = false }
 substrate-keyring = { path = "../keyring", optional = true }
 substrate-client = { path = "../client", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
+substrate-inherents = { path = "../inherents", default-features = false }
 substrate-consensus-aura-primitives = { path = "../consensus/aura/primitives", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 sr-io = { path = "../sr-io", default-features = false }
@@ -37,6 +38,7 @@ std = [
 	"sr-io/std",
 	"srml-support/std",
 	"substrate-primitives/std",
+	"substrate-inherents/std",
 	"sr-primitives/std",
 	"sr-version/std",
 	"substrate-consensus-aura-primitives/std",

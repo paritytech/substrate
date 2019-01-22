@@ -32,7 +32,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -46,15 +45,95 @@ extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 extern crate parity_codec as codec;
+#[macro_use]
+extern crate parity_codec_derive;
+extern crate substrate_inherents as inherents;
 
 use runtime_support::{StorageValue, Parameter};
-use runtime_primitives::CheckInherentError;
-use runtime_primitives::traits::{
-	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
-};
+use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
-use rstd::{result, ops::{Mul, Div}, vec::Vec};
+use rstd::{result, ops::{Mul, Div}, cmp};
 use runtime_support::for_each_tuple;
+use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
+#[cfg(feature = "std")]
+use inherents::ProvideInherentData;
+
+/// The identifier for the `timestamp` inherent.
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
+/// The type of the inherent.
+pub type InherentType = u64;
+
+/// Errors that can occur while checking the timestamp inherent.
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Decode))]
+pub enum InherentError {
+	/// The timestamp is valid in the future.
+	/// This is a non-fatal-error and will not stop checking the inherents.
+	ValidAtTimestamp(InherentType),
+	/// Some other error.
+	Other(RuntimeString),
+}
+
+impl IsFatalError for InherentError {
+	fn is_fatal_error(&self) -> bool {
+		match self {
+			InherentError::ValidAtTimestamp(_) => false,
+			InherentError::Other(_) => true,
+		}
+	}
+}
+
+impl InherentError {
+	/// Try to create an instance ouf of the given identifier and data.
+	#[cfg(feature = "std")]
+	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
+		if id == &INHERENT_IDENTIFIER {
+			<InherentError as codec::Decode>::decode(&mut &data[..])
+		} else {
+			None
+		}
+	}
+}
+
+/// Auxiliary trait to extract timestamp inherent data.
+pub trait TimestampInherentData {
+	/// Get timestamp inherent data.
+	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString>;
+}
+
+impl TimestampInherentData for InherentData {
+	fn timestamp_inherent_data(&self) -> Result<InherentType, RuntimeString> {
+		self.get_data(&INHERENT_IDENTIFIER)
+			.and_then(|r| r.ok_or_else(|| "Timestamp inherent data not found".into()))
+	}
+}
+
+#[cfg(feature = "std")]
+pub struct InherentDataProvider;
+
+#[cfg(feature = "std")]
+impl ProvideInherentData for InherentDataProvider {
+	fn inherent_identifier(&self) -> &'static InherentIdentifier {
+		&INHERENT_IDENTIFIER
+	}
+
+	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
+		use std::time::SystemTime;
+
+		let now = SystemTime::now();
+		now.duration_since(SystemTime::UNIX_EPOCH)
+			.map_err(|_| {
+				"Current time is before unix epoch".into()
+			}).and_then(|d| {
+				let duration: InherentType = d.as_secs();
+				inherent_data.put_data(INHERENT_IDENTIFIER, &duration)
+			})
+	}
+
+	fn error_to_string(&self, error: &[u8]) -> Option<String> {
+		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
+	}
+}
 
 /// A trait which is called when the timestamp is set.
 pub trait OnTimestampSet<Moment> {
@@ -80,11 +159,10 @@ macro_rules! impl_timestamp_set {
 for_each_tuple!(impl_timestamp_set);
 
 pub trait Trait: consensus::Trait + system::Trait {
-	/// The position of the required timestamp-set extrinsic.
-	const TIMESTAMP_SET_POSITION: u32;
-
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default + SimpleArithmetic + Mul<Self::BlockNumber, Output = Self::Moment> + Div<Self::BlockNumber, Output = Self::Moment>;
+	type Moment: Parameter + Default + SimpleArithmetic
+		+ Mul<Self::BlockNumber, Output = Self::Moment>
+		+ Div<Self::BlockNumber, Output = Self::Moment>;
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
 }
@@ -102,11 +180,6 @@ decl_module! {
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_inherent(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
-			assert!(
-				<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
-				"Timestamp extrinsic must be at position {} in the block",
-				T::TIMESTAMP_SET_POSITION
-			);
 			assert!(
 				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
 				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
@@ -152,33 +225,39 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> ProvideInherent for Module<T> {
-	type Inherent = T::Moment;
-	type Call = Call<T>;
+fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
+	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
+		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
+}
 
-	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		let next_time = ::rstd::cmp::max(data, Self::now() + Self::block_period());
-		vec![(T::TIMESTAMP_SET_POSITION, Call::set(next_time.into()))]
+impl<T: Trait> ProvideInherent for Module<T> {
+	type Call = Call<T>;
+	type Error = InherentError;
+	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+		let data = extract_inherent_data(data).expect("Gets and decodes timestamp inherent data");
+
+		let next_time = cmp::max(As::sa(data), Self::now() + Self::block_period());
+		Some(Call::set(next_time.into()))
 	}
 
-	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
-			block: &Block, data: Self::Inherent, extract_function: &F
-	) -> result::Result<(), CheckInherentError> {
+	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		const MAX_TIMESTAMP_DRIFT: u64 = 60;
 
-		let xt = block.extrinsics().get(T::TIMESTAMP_SET_POSITION as usize)
-			.ok_or_else(|| CheckInherentError::Other("No valid timestamp inherent in block".into()))?;
-
-		let t = match (xt.is_signed(), extract_function(&xt)) {
-			(Some(false), Some(Call::set(ref t))) => t.clone(),
-			_ => return Err(CheckInherentError::Other("No valid timestamp inherent in block".into())),
+		let t = match call {
+			Call::set(ref t) => t.clone(),
+			_ => return Ok(()),
 		}.as_();
 
+		let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
+
 		let minimum = (Self::now() + Self::block_period()).as_();
-		if t > data.as_() + MAX_TIMESTAMP_DRIFT {
-			Err(CheckInherentError::Other("Timestamp too far in future to accept".into()))
+		if t > data + MAX_TIMESTAMP_DRIFT {
+			Err(InherentError::Other("Timestamp too far in future to accept".into()))
 		} else if t < minimum {
-			Err(CheckInherentError::ValidAtTimestamp(minimum))
+			Err(InherentError::ValidAtTimestamp(minimum))
 		} else {
 			Ok(())
 		}
@@ -215,13 +294,11 @@ mod tests {
 		type Log = DigestItem;
 	}
 	impl consensus::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
 		type SessionKey = UintAuthorityId;
 		type InherentOfflineReport = ();
 	}
 	impl Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
 		type OnTimestampSet = ();
 	}

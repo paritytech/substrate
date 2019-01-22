@@ -40,6 +40,7 @@ extern crate node_primitives;
 extern crate substrate_service;
 extern crate node_executor;
 extern crate substrate_keystore;
+extern crate substrate_inherents as inherents;
 
 #[macro_use]
 extern crate log;

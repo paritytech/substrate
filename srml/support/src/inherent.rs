@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use rstd::{cmp, result::Result, vec::Vec};
+pub use rstd::vec::Vec;
 #[doc(hidden)]
-pub use runtime_primitives::{
-	traits::{ProvideInherent, Block as BlockT}, CheckInherentError
-};
+pub use runtime_primitives::traits::Block as BlockT;
+#[doc(hidden)]
+pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
 
 
 /// Implement the outer inherent.
@@ -30,54 +30,72 @@ pub use runtime_primitives::{
 /// ```nocompile
 /// impl_outer_inherent! {
 ///     pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
-///         timestamp: Timestamp export Error as TimestampInherentError,
+///         timestamp: Timestamp,
 ///         consensus: Consensus,
+///         /// Aura module using the `Timestamp` call.
+///         aura: Timestamp,
 ///     }
 /// }
 /// ```
-///
-/// Additional parameters after `UncheckedExtrinsic` are `Error` and `Call`.
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
-		for $runtime:ident,
-			Block = $block:ident,
-			InherentData = $inherent:ty
+		impl Inherents where Block = $block:ident, UncheckedExtrinsic = $uncheckedextrinsic:ident
 		{
-			$( $module:ident: $module_ty:ident,)*
+			$( $module:ident: $call:ident, )*
 		}
 	) => {
-		impl $runtime {
-			fn check_inherents(
-				block: $block,
-				data: $inherent
-			) -> $crate::inherent::Result<(), $crate::inherent::CheckInherentError> {
-				use $crate::inherent::CheckInherentError;
+		trait InherentDataExt {
+			fn create_extrinsics(&self) ->
+				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic>;
+			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult;
+		}
 
-				let mut max_valid_after = None;
+		impl InherentDataExt for $crate::inherent::InherentData {
+			fn create_extrinsics(&self) ->
+				$crate::inherent::Vec<<$block as $crate::inherent::BlockT>::Extrinsic> {
+				use $crate::inherent::ProvideInherent;
+
+				let mut inherents = Vec::new();
+
 				$(
-					let res = <$module_ty as $crate::inherent::ProvideInherent>::check_inherent(
-						&block,
-						data.$module,
-						&|xt| match xt.function {
-							Call::$module_ty(ref data) => Some(data),
-							_ => None,
-						},
-					);
-
-					match res {
-						Err(CheckInherentError::ValidAtTimestamp(t)) =>
-							max_valid_after = $crate::inherent::cmp::max(max_valid_after, Some(t)),
-						res => res?
+					if let Some(inherent) = $module::create_inherent(self) {
+						inherents.push($uncheckedextrinsic::new_unsigned(
+							Call::$call(inherent))
+						);
 					}
 				)*
 
-				// once everything else has checked out, take the maximum of
-				// all things which are timestamp-restricted.
-				match max_valid_after {
-					Some(t) => Err(CheckInherentError::ValidAtTimestamp(t)),
-					None => Ok(())
+				inherents
+			}
+
+			fn check_extrinsics(&self, block: &$block) -> $crate::inherent::CheckInherentsResult {
+				use $crate::inherent::{ProvideInherent, IsFatalError};
+
+				let mut result = $crate::inherent::CheckInherentsResult::new();
+				for xt in block.extrinsics() {
+					if xt.is_signed().unwrap_or(false) {
+						break;
+					}
+
+					$(
+						match xt.function {
+							Call::$call(ref call) => {
+								if let Err(e) = $module::check_inherent(call, self) {
+									result.put_error(
+										$module::INHERENT_IDENTIFIER, &e
+									).expect("There is only one fatal error; qed");
+									if e.is_fatal_error() {
+										return result;
+									}
+								}
+							}
+							_ => {},
+						}
+					)*
 				}
+
+				result
 			}
 		}
 	};
