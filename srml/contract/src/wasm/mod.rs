@@ -984,7 +984,7 @@ mod tests {
 		assert_eq!(
 			&mock_ext.dispatches,
 			&[DispatchEntry(
-				Call::Balances(balances::Call::set_balance(42, 1337.into(), 0.into())),
+				Call::Balances(balances::Call::set_balance(42, 1337, 0)),
 			)]
 		);
 	}
