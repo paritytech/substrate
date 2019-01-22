@@ -153,7 +153,7 @@ construct_service_factory! {
 						SlotDuration::get_or_compute(&*client)?,
 						client.clone(),
 						None,
-						client
+						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
