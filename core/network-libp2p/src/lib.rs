@@ -16,33 +16,6 @@
 
 //! Networking layer of Substrate.
 
-#![recursion_limit = "128"]
-
-extern crate parking_lot;
-extern crate fnv;
-extern crate futures;
-extern crate tokio;
-extern crate tokio_io;
-extern crate tokio_timer;
-extern crate libc;
-#[macro_use]
-extern crate libp2p;
-extern crate rand;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
-extern crate smallvec;
-extern crate void;
-extern crate bytes;
-extern crate unsigned_varint;
-
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate log;
-#[cfg(test)] #[macro_use]
-extern crate assert_matches;
-
 mod behaviour;
 mod custom_proto;
 mod error;
@@ -52,13 +25,13 @@ mod topology;
 mod traits;
 mod transport;
 
-pub use custom_proto::RegisteredProtocol;
-pub use error::{Error, ErrorKind, DisconnectReason};
+pub use crate::custom_proto::RegisteredProtocol;
+pub use crate::error::{Error, ErrorKind, DisconnectReason};
+pub use crate::secret::obtain_private_key;
+pub use crate::service_task::{start_service, Service, ServiceEvent};
+pub use crate::traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeerMode};
+pub use crate::traits::{ProtocolId, Secret, Severity};
 pub use libp2p::{Multiaddr, multiaddr::{Protocol}, multiaddr, PeerId, core::PublicKey};
-pub use secret::obtain_private_key;
-pub use service_task::{start_service, Service, ServiceEvent};
-pub use traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeerMode};
-pub use traits::{ProtocolId, Secret, Severity};
 
 /// Check if node url is valid
 pub fn validate_node_url(url: &str) -> Result<(), Error> {

@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
-use std::cmp::Ord;
-use codec::Encode;
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe};
+use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Ext,
-	CodeExecutor, ExecutionManager, native_when_possible};
+use state_machine::{
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, native_when_possible
+};
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
 
 use crate::backend;
 use crate::error;
@@ -56,7 +56,12 @@ where
 	/// of the execution context.
 	fn contextual_call<
 		PB: Fn() -> error::Result<B::Header>,
-		EM: Fn(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+		EM: Fn(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<B>,
@@ -66,7 +71,8 @@ where
 		initialised_block: &mut Option<BlockId<B>>,
 		prepare_environment_block: PB,
 		manager: ExecutionManager<EM>,
-	) -> error::Result<Vec<u8>> where ExecutionManager<EM>: Clone;
+		native_call: Option<NC>,
+	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
 	///
@@ -78,14 +84,20 @@ where
 	/// No changes are made.
 	fn call_at_state<
 		S: state_machine::Backend<H>,
-		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+		F: FnOnce(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(&self,
 		state: &S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
-		manager: ExecutionManager<F>
-	) -> Result<(Vec<u8>, S::Transaction, Option<MemoryDB<H>>), error::Error>;
+		manager: ExecutionManager<F>,
+		native_call: Option<NC>,
+	) -> Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<H>>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -155,7 +167,9 @@ where
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let return_data = state_machine::execute_using_consensus_failure_handler(
+		let return_data = state_machine::execute_using_consensus_failure_handler::<
+			_, _, _, _, _, _, fn() -> NeverNativeValue
+		>(
 			&state,
 			self.backend.changes_trie_storage(),
 			&mut changes,
@@ -164,15 +178,21 @@ where
 			call_data,
 			native_when_possible(),
 			false,
+			None,
 		)
 		.map(|(result, _, _)| result)?;
 		self.backend.destroy_state(state)?;
-		Ok(return_data)
+		Ok(return_data.into_encoded())
 	}
 
 	fn contextual_call<
 		PB: Fn() -> error::Result<Block::Header>,
-		EM: Fn(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+		EM: Fn(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -182,12 +202,15 @@ where
 		initialised_block: &mut Option<BlockId<Block>>,
 		prepare_environment_block: PB,
 		manager: ExecutionManager<EM>,
-	) -> Result<Vec<u8>, error::Error> where ExecutionManager<EM>: Clone {
+		native_call: Option<NC>,
+	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
 		//TODO: Find a better way to prevent double block initialization
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
-			state_machine::execute_using_consensus_failure_handler(
+			state_machine::execute_using_consensus_failure_handler::<
+				_, _, _, _, _, R, fn() -> R,
+			>(
 				&state,
 				self.backend.changes_trie_storage(),
 				changes,
@@ -196,6 +219,7 @@ where
 				&header.encode(),
 				manager.clone(),
 				false,
+				None,
 			)?;
 			*initialised_block = Some(*at);
 		}
@@ -209,8 +233,8 @@ where
 			call_data,
 			manager,
 			false,
-		)
-		.map(|(result, _, _)| result)?;
+			native_call,
+		).map(|(result, _, _)| result)?;
 
 		self.backend.destroy_state(state)?;
 		Ok(result)
@@ -226,14 +250,20 @@ where
 
 	fn call_at_state<
 		S: state_machine::Backend<Blake2Hasher>,
-		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+		F: FnOnce(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
-	) -> error::Result<(Vec<u8>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
+		native_call: Option<NC>,
+	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		state_machine::execute_using_consensus_failure_handler(
 			state,
 			self.backend.changes_trie_storage(),
@@ -243,6 +273,7 @@ where
 			call_data,
 			manager,
 			true,
+			native_call,
 		)
 		.map(|(result, storage_tx, changes_tx)| (
 			result,

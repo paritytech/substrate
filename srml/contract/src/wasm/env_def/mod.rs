@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Ext, Runtime};
+use super::Runtime;
+use exec::Ext;
 use parity_wasm::elements::{FunctionType, ValueType};
-use rstd::prelude::*;
-use rstd::collections::btree_map::BTreeMap;
 use sandbox::{self, TypedValue};
 
 #[macro_use]
@@ -66,45 +65,21 @@ impl ConvertibleToWasm for u64 {
 	}
 }
 
-/// Represents a set of function that defined in this particular environment and
-/// which can be imported and called by the module.
-pub(crate) struct HostFunctionSet<E: Ext> {
-	/// Functions which defined in the environment.
-	pub funcs: BTreeMap<Vec<u8>, HostFunction<E>>,
-}
-impl<E: Ext> HostFunctionSet<E> {
-	pub fn new() -> Self {
-		HostFunctionSet {
-			funcs: BTreeMap::new(),
-		}
-	}
+pub(crate) type HostFunc<E> =
+	fn(
+		&mut Runtime<E>,
+		&[sandbox::TypedValue]
+	) -> Result<sandbox::ReturnValue, sandbox::HostError>;
+
+pub(crate) trait FunctionImplProvider<E: Ext> {
+	fn impls<F: FnMut(&[u8], HostFunc<E>)>(f: &mut F);
 }
 
-pub(crate) struct HostFunction<E: Ext> {
-	pub(crate) f: fn(&mut Runtime<E>, &[sandbox::TypedValue])
-		-> Result<sandbox::ReturnValue, sandbox::HostError>,
-	func_type: FunctionType,
-}
-impl<E: Ext> HostFunction<E> {
-	/// Create a new instance of a host function.
-	pub fn new(
-		func_type: FunctionType,
-		f: fn(&mut Runtime<E>, &[sandbox::TypedValue])
-			-> Result<sandbox::ReturnValue, sandbox::HostError>,
-	) -> Self {
-		HostFunction { func_type, f }
-	}
-
-	/// Returns a function pointer of this host function.
-	pub fn raw_fn_ptr(
-		&self,
-	) -> fn(&mut Runtime<E>, &[sandbox::TypedValue])
-		-> Result<sandbox::ReturnValue, sandbox::HostError> {
-		self.f
-	}
-
-	/// Check if the this function could be invoked with the given function signature.
-	pub fn func_type_matches(&self, func_type: &FunctionType) -> bool {
-		&self.func_type == func_type
-	}
+/// This trait can be used to check whether the host environment can satisfy
+/// a requested function import.
+pub trait ImportSatisfyCheck {
+	/// Returns `true` if the host environment contains a function with
+	/// the specified name and its type matches to the given type, or `false`
+	/// otherwise.
+	fn can_satisfy(name: &[u8], func_type: &FunctionType) -> bool;
 }

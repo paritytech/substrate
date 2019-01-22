@@ -154,9 +154,9 @@ decl_module! {
 		}
 
 		/// Cancel a proposal queued for enactment.
-		pub fn cancel_queued(when: T::BlockNumber, which: u32) -> Result {
-			let which = which as usize;
-			<DispatchQueue<T>>::mutate(when, |items| if items.len() > which { items[which] = None });
+		pub fn cancel_queued(when: <T::BlockNumber as HasCompact>::Type, which: Compact<u32>) -> Result {
+			let which = u32::from(which) as usize;
+			<DispatchQueue<T>>::mutate(when.into(), |items| if items.len() > which { items[which] = None });
 			Ok(())
 		}
 
@@ -441,7 +441,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{BlakeTwo256};
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
 
 	const AYE: Vote = Vote(-1);
@@ -469,14 +469,15 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
-		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
 		type Event = ();
 	}
@@ -498,7 +499,6 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
-			reclaim_rebate: 0,
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
@@ -555,7 +555,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value.into(), 0.into()))
+		Call::Balances(balances::Call::set_balance(42, value.into(), 0.into()))
 	}
 
 	fn propose_set_balance(who: u64, value: u64, locked: u64) -> super::Result {

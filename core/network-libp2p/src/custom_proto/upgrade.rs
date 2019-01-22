@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::ProtocolId;
 use bytes::Bytes;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
+use log::debug;
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
-use ProtocolId;
 
 /// Connection upgrade for a single protocol.
 ///
@@ -103,15 +104,22 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	/// After calling this, the stream is guaranteed to finish soon-ish.
 	pub fn shutdown(&mut self) {
 		self.is_closing = true;
+		self.send_queue.clear();
 	}
 
 	/// Sends a message to the substream.
 	pub fn send_message(&mut self, data: Bytes) {
+		if self.is_closing {
+			return
+		}
+
 		self.send_queue.push_back(data);
 
 		// If the length of the queue goes over a certain arbitrary threshold, we print a warning.
 		if self.send_queue.len() >= 2048 {
-			warn!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
+			// TODO: this used to be a warning, but is now a `debug` in order to avoid too much
+			//	noise in the logs; see https://github.com/paritytech/substrate/issues/1414
+			debug!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
 				large: {}", self.send_queue.len());
 		}
 	}
