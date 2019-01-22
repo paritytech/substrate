@@ -43,7 +43,7 @@ extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use codec::{Codec, HasCompact};
+use codec::Codec;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
@@ -132,12 +132,11 @@ decl_module! {
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
-			value: <T::Balance as HasCompact>::Type
+			#[compact] value: T::Balance
 		) {
 			let transactor = ensure_signed(origin)?;
 
 			let dest = T::Lookup::lookup(dest)?;
-			let value = value.into();
 			let from_balance = Self::free_balance(&transactor);
 			let to_balance = Self::free_balance(&dest);
 			let would_create = to_balance.is_zero();
@@ -174,12 +173,12 @@ decl_module! {
 		/// Set the balances of a given account.
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
-			free: <T::Balance as HasCompact>::Type,
-			reserved: <T::Balance as HasCompact>::Type
+			#[compact] free: T::Balance,
+			#[compact] reserved: T::Balance
 		) {
 			let who = T::Lookup::lookup(who)?;
-			Self::set_free_balance(&who, free.into());
-			Self::set_reserved_balance(&who, reserved.into());
+			Self::set_free_balance(&who, free);
+			Self::set_reserved_balance(&who, reserved);
 		}
 	}
 }

@@ -14,15 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Macros to define a runtime. A runtime is basically all your logic running in Substrate,
+//! consisting of selected SRML modules and maybe some of your own modules.
+//! A lot of supporting logic is automatically generated for a runtime,
+//! mostly for to combine data types and metadata of the included modules.
+
 /// Construct a runtime, with the given name and the given modules.
-///
+/// 
+/// The parameters here are specific types for Block, NodeBlock and InherentData
+/// (TODO: describe the difference between Block and NodeBlock)
+///	and the modules that are used by the runtime.
+/// 
 /// # Example:
 ///
 /// ```nocompile
 /// construct_runtime!(
 ///     pub enum Runtime with Log(interalIdent: DigestItem<SessionKey>) where
 ///         Block = Block,
-///         NodeBlock = runtime::Block
+///         NodeBlock = runtime::Block,
+/// 		InherentData = BasicInherentData
 ///     {
 ///         System: system,
 ///         Test: test::{default, Log(Test)},
@@ -33,9 +43,11 @@
 ///
 /// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config<T>}`.
 /// The identifier `System` is the name of the module and the lower case identifier `system` is the
-/// name of the rust module for this module.
+/// name of the Rust module/crate for this Substrate module.
+/// 
 /// The module `Test: test::{default, Log(Test)}` will expand to
 /// `Test: test::{Module, Call, Storage, Event<T>, Config<T>, Log(Test)}`.
+/// 
 /// The module `Test2: test_with_long_module::{Module}` will expand to
 /// `Test2: test_with_long_module::{Module}`.
 ///
@@ -47,8 +59,15 @@
 /// - `Origin` or `Origin<T>` (if the origin is generic)
 /// - `Config` or `Config<T>` (if the config is generic)
 /// - `Log( $(IDENT),* )`
+/// 
+/// The 
+/// 
 #[macro_export]
 macro_rules! construct_runtime {
+
+	// Macro transformations (to convert invocations with incomplete parameters to the canonical
+	// form)
+
 	(
 		pub enum $runtime:ident with Log ($log_internal:ident: DigestItem<$( $log_genarg:ty ),+>)
 			where
@@ -261,6 +280,9 @@ macro_rules! construct_runtime {
 			)*
 		);
 	};
+
+	// The main macro expansion that actually renders the Runtime code.
+
 	(
 		$runtime:ident;
 		$block:ident;
@@ -277,6 +299,9 @@ macro_rules! construct_runtime {
 			}
 		),*;
 	) => {
+		// This generates a substrate_generate_ident_name macro that will substitute 
+		// "config-ident FooModule" => FooModuleConfig for every module included in the
+		// runtime. 
 		mashup! {
 			$(
 				substrate_generate_ident_name["config-ident" $name] = $name Config;
@@ -354,6 +379,11 @@ macro_rules! construct_runtime {
 	}
 }
 
+/// A macro that generates a "__decl" private macro that transforms parts of the runtime definition
+/// to feed them into a public "impl" macro which accepts the format 
+/// "pub enum $name for $runtime where system = $system".
+/// 
+/// Used to define Event and Origin associated types.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __create_decl_macro {
@@ -516,6 +546,7 @@ macro_rules! __create_decl_macro {
 __create_decl_macro!(__decl_outer_event, impl_outer_event, Event, $);
 __create_decl_macro!(__decl_outer_origin, impl_outer_origin, Origin, $);
 
+/// A macro that defines all modules as an associated types of the Runtime type.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_all_modules {
@@ -620,6 +651,8 @@ macro_rules! __decl_all_modules {
 	}
 }
 
+/// A macro that defines the Call enum to represent calls to functions in the modules included
+/// in the runtime (by wrapping the values of all FooModule::Call enums).
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_outer_dispatch {
@@ -715,6 +748,7 @@ macro_rules! __decl_outer_dispatch {
 	};
 }
 
+/// A private macro that generates metadata() method for the runtime. See impl_runtime_metadata macro.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_runtime_metadata {
@@ -883,6 +917,8 @@ macro_rules! __decl_runtime_metadata {
 		);
 	}
 }
+
+/// A private macro that generates Log enum for the runtime. See impl_outer_log macro.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_outer_log {
@@ -966,6 +1002,7 @@ macro_rules! __decl_outer_log {
 	};
 }
 
+/// A private macro that generates GenesisConfig for the runtime. See impl_outer_config macro.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_outer_config {
@@ -1065,6 +1102,7 @@ macro_rules! __decl_outer_config {
 	};
 }
 
+/// A private macro that generates check_inherents() implementation for the runtime.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_outer_inherent {

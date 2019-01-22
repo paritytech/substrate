@@ -10,7 +10,7 @@ kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c
 # FIXME replace with release as soon as our rocksdb changes are released upstream https://github.com/paritytech/parity-common/issues/88
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 lru-cache = "0.1"
-hash-db = { git = "https://github.com/paritytech/trie" }
+hash-db = { version = "0.9" }
 substrate-primitives = { path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }
 substrate-client = { path = "../../client" }

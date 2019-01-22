@@ -53,14 +53,6 @@ pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
 
-/// The ApiIds for GRANDPA API.
-pub mod id {
-	use client::runtime_api::ApiId;
-
-	/// ApiId for the GrandpaApi trait.
-	pub const GRANDPA_API: ApiId = *b"fgrandpa";
-}
-
 /// Well-known storage keys for GRANDPA.
 pub mod well_known_keys {
 	/// The key for the authorities and weights vector in storage.
@@ -92,7 +84,7 @@ decl_runtime_apis! {
 		/// This should be a pure function: i.e. as long as the runtime can interpret
 		/// the digest type it should return the same result regardless of the current
 		/// state.
-		fn grandpa_pending_change(digest: DigestFor<Block>)
+		fn grandpa_pending_change(digest: &DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>;
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
