@@ -14,13 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Provides types and traits for creating and checking inherents.
+//!
+//! Each inherent is added to a produced block. Each runtime decides on which inherents its
+//! want to attach to its blocks. All data that is required for the runtime to create the inherents
+//! is stored in the `InherentData`. This `InherentData` is constructed by the node and given to
+//! the runtime.
+//!
+//! Types that provide data for inherents, should implement `InherentDataProvider` and need to be
+//! registered at `InherentDataProviders`.
+//!
+//! In the runtime, modules need to implement `ProvideInherent` when they can create and/or check
+//! inherents. By implementing `ProvideInherent`, a module is not enforced to create an inherent.
+//! A module can also just check given inherents. For using a module as inherent provider, it needs
+//! to be registered by the `construct_runtime!` macro. The macro documentation gives more
+//! information on how that is done.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate parity_codec as codec;
 
 use parity_codec_derive::{Encode, Decode};
 
-use rstd::{collections::btree_map::{BTreeMap, IntoIter}, vec::Vec};
+use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
 
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
@@ -52,14 +68,22 @@ impl InherentData {
 	/// # Return
 	///
 	/// Returns `Ok(())` if the data could be inserted an no data for an inherent with the same
-	/// identifier existed, otherwise an error is returned(but the given data is still inserted).
+	/// identifier existed, otherwise an error is returned.
+	///
 	/// Inherent identifiers need to be unique, otherwise decoding of these values will not work!
 	pub fn put_data<I: codec::Encode>(
-		&mut self, identifier: InherentIdentifier, inherent: &I
+		&mut self,
+		identifier: InherentIdentifier,
+		inherent: &I,
 	) -> Result<(), RuntimeString> {
-		match self.data.insert(identifier, inherent.encode()) {
-			Some(_) => Err("Inherent with same identifier already exists!".into()),
-			None => Ok(()),
+		match self.data.entry(identifier) {
+			Entry::Vacant(entry) => {
+				entry.insert(inherent.encode());
+				Ok(())
+			},
+			Entry::Occupied(_) => {
+				Err("Inherent with same identifier already exists!".into())
+			}
 		}
 	}
 
@@ -67,7 +91,9 @@ impl InherentData {
 	///
 	/// If it does not exist, the data is just inserted.
 	pub fn replace_data<I: codec::Encode>(
-		&mut self, identifier: InherentIdentifier, inherent: &I
+		&mut self,
+		identifier: InherentIdentifier,
+		inherent: &I,
 	) {
 		self.data.insert(identifier, inherent.encode());
 	}
@@ -80,7 +106,8 @@ impl InherentData {
 	/// - `Ok(None)` if the data could not be found.
 	/// - `Err(_)` if the data could be found, but deserialization did not work.
 	pub fn get_data<I: codec::Decode>(
-		&self, identifier: &InherentIdentifier
+		&self,
+		identifier: &InherentIdentifier,
 	) -> Result<Option<I>, RuntimeString> {
 		match self.data.get(identifier) {
 			Some(inherent) =>
@@ -121,12 +148,15 @@ impl codec::Decode for InherentData {
 
 /// The result of checking inherents.
 ///
-/// It either returns okay for all checks, or stores all occurred errors.
+/// It either returns okay for all checks, stores all occurred errors or just one fatal error.
+///
+/// When a fatal error occurres, all other errors are removed and the implementation needs to
+/// abbort checking inherents.
 #[derive(Encode, Decode)]
 pub struct CheckInherentsResult {
-	/// Did the check succeeded?
+	/// Did the check succeed?
 	okay: bool,
-	/// Did we encountered a fatal error?
+	/// Did we encounter a fatal error?
 	fatal_error: bool,
 	/// We use the `InherentData` to store our errors.
 	errors: InherentData,
@@ -151,7 +181,9 @@ impl CheckInherentsResult {
 	/// - identifier - The identifier of the inherent that generated the error.
 	/// - error - The error that will be encoded.
 	pub fn put_error<E: codec::Encode + IsFatalError>(
-		&mut self, identifier: InherentIdentifier, error: &E
+		&mut self,
+		identifier: InherentIdentifier,
+		error: &E,
 	) -> Result<(), RuntimeString> {
 		// Don't accept any other error
 		if self.fatal_error {
@@ -178,7 +210,8 @@ impl CheckInherentsResult {
 	/// - `Ok(None)` if the error could not be found.
 	/// - `Err(_)` if the error could be found, but deserialization did not work.
 	pub fn get_error<E: codec::Decode>(
-		&self, identifier: &InherentIdentifier
+		&self,
+		identifier: &InherentIdentifier,
 	) -> Result<Option<E>, RuntimeString> {
 		self.errors.get_data(identifier)
 	}
@@ -233,7 +266,8 @@ impl InherentDataProviders {
 	///
 	/// Will return an error, if a provider with the same identifier already exists.
 	pub fn register_provider<P: ProvideInherentData + Send + Sync +'static>(
-		&self, provider: P
+		&self,
+		provider: P,
 	) -> Result<(), RuntimeString> {
 		if self.has_provider(&provider.inherent_identifier()) {
 			Err(

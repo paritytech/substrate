@@ -102,15 +102,12 @@ impl Stream for Slots {
 
 		// timeout has fired.
 
-		let inherent_data =
-			self.inherent_data_providers
-				.create_inherent_data()
-				.map_err(::inherent_to_common_error)?;
+		let inherent_data = self.inherent_data_providers.create_inherent_data()
+			.map_err(::inherent_to_common_error)?;
 		let (timestamp, slot_num) = ::extract_timestamp_and_slot(&inherent_data)?;
 
 		// reschedule delay for next slot.
-		let ends_at = Instant::now()
-			+ time_until_next(Duration::from_secs(timestamp), slot_duration);
+		let ends_at = Instant::now() + time_until_next(Duration::from_secs(timestamp), slot_duration);
 		self.inner_delay = Some(Delay::new(ends_at));
 
 		// never yield the same slot twice.

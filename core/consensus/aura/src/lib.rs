@@ -481,6 +481,52 @@ pub struct AuraVerifier<C, E> {
 	inherent_data_providers: inherents::InherentDataProviders,
 }
 
+impl<C, E> AuraVerifier<C, E>
+{
+	fn check_inherents<B: Block>(
+		&self,
+		block: B,
+		block_id: BlockId<B>,
+		inherent_data: InherentData,
+		timestamp_now: u64,
+	) -> Result<(), String> where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B> {
+		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
+
+		let inherent_res = self.client.runtime_api().check_inherents(
+			&block_id,
+			block,
+			inherent_data,
+		).map_err(|e| format!("{:?}", e))?;
+
+		if !inherent_res.ok() {
+			inherent_res
+				.into_errors()
+				.try_for_each(|(i, e)| match TIError::try_from(&i, &e) {
+					Some(TIError::ValidAtTimestamp(timestamp)) => {
+						// halt import until timestamp is valid.
+						// reject when too far ahead.
+						if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
+							return Err("Rejecting block too far in future".into());
+						}
+
+						let diff = timestamp.saturating_sub(timestamp_now);
+						info!(
+							target: "aura",
+							"halting for block {} seconds in the future",
+							diff
+						);
+						thread::sleep(Duration::from_secs(diff));
+						Ok(())
+					},
+					Some(TIError::Other(e)) => Err(e.into()),
+					None => Err(self.inherent_data_providers.error_to_string(&i, &e)),
+				})
+		} else {
+			Ok(())
+		}
+	}
+}
+
 /// No-op extra verification.
 #[derive(Debug, Clone, Copy)]
 pub struct NothingExtra;
@@ -506,13 +552,9 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		justification: Option<Justification>,
 		mut body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(ImportBlock<B>, Option<Vec<Ed25519AuthorityId>>), String> {
-		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
-
-		let mut inherent_data =
-			self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
-		let (timestamp_now, slot_now) =
-			extract_timestamp_and_slot(&inherent_data)
-				.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
+		let mut inherent_data = self.inherent_data_providers.create_inherent_data().map_err(String::from)?;
+		let (timestamp_now, slot_now) = extract_timestamp_and_slot(&inherent_data)
+			.map_err(|e| format!("Could not extract timestamp and slot: {:?}", e))?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let authorities = self.client.authorities(&BlockId::Hash(parent_hash))
@@ -538,36 +580,12 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 					inherent_data.aura_replace_inherent_data(slot_num);
 					let block = B::new(pre_header.clone(), inner_body);
 
-					let inherent_res = self.client.runtime_api().check_inherents(
-						&BlockId::Hash(parent_hash),
+					self.check_inherents(
 						block.clone(),
+						BlockId::Hash(parent_hash),
 						inherent_data,
-					).map_err(|e| format!("{:?}", e))?;
-
-					if !inherent_res.ok() {
-						inherent_res
-							.into_errors()
-							.try_for_each(|(i, e)| match TIError::try_from(&i, &e) {
-								Some(TIError::ValidAtTimestamp(timestamp)) => {
-									// halt import until timestamp is valid.
-									// reject when too far ahead.
-									if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
-										return Err("Rejecting block too far in future".into());
-									}
-
-									let diff = timestamp.saturating_sub(timestamp_now);
-									info!(
-										target: "aura",
-										"halting for block {} seconds in the future",
-										diff
-									);
-									thread::sleep(Duration::from_secs(diff));
-									Ok(())
-								},
-								Some(TIError::Other(e)) => Err(e.into()),
-								None => Err(self.inherent_data_providers.error_to_string(&i, &e)),
-							})?;
-					}
+						timestamp_now,
+					)?;
 
 					let (_, inner_body) = block.deconstruct();
 					body = Some(inner_body);
@@ -752,7 +770,7 @@ mod tests {
 			register_aura_inherent_data_provider(
 				&inherent_data_providers,
 				slot_duration.0
-			).unwrap();
+			).expect("Registers aura inherent data provider");
 
 			assert_eq!(slot_duration.0, SLOT_DURATION);
 			Arc::new(AuraVerifier {
@@ -817,7 +835,7 @@ mod tests {
 			let inherent_data_providers = InherentDataProviders::new();
 			register_aura_inherent_data_provider(
 				&inherent_data_providers, slot_duration.0
-			).unwrap();
+			).expect("Registers aura inherent data provider");
 
 			let aura = start_aura(
 				slot_duration,
@@ -828,9 +846,9 @@ mod tests {
 				DummyOracle,
 				futures::empty(),
 				inherent_data_providers,
-			);
+			).expect("Starts aura");
 
-			runtime.spawn(aura.unwrap());
+			runtime.spawn(aura);
 		}
 
 		// wait for all finalized on each.

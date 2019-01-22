@@ -87,6 +87,7 @@ impl AuraInherentData for InherentData {
 	}
 }
 
+/// Provides the slot duration inherent data for `Aura`.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider {
 	slot_duration: u64,
@@ -104,7 +105,8 @@ impl InherentDataProvider {
 #[cfg(feature = "std")]
 impl ProvideInherentData for InherentDataProvider {
 	fn on_register(
-		&self, providers: &InherentDataProviders
+		&self,
+		providers: &InherentDataProviders,
 	) -> result::Result<(), RuntimeString> {
 		if !providers.has_provider(&timestamp::INHERENT_IDENTIFIER) {
 			// Add the timestamp inherent data provider, as we require it.
@@ -119,7 +121,8 @@ impl ProvideInherentData for InherentDataProvider {
 	}
 
 	fn provide_inherent_data(
-		&self, inherent_data: &mut InherentData
+		&self,
+		inherent_data: &mut InherentData,
 	) -> result::Result<(), RuntimeString> {
 		let timestamp = inherent_data.timestamp_inherent_data()?;
 		let slot_num = timestamp / self.slot_duration;
