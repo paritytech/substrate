@@ -118,9 +118,8 @@ decl_module! {
 		/// Retract the desire to stake for the transactor.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn unstake(origin, intentions_index: Compact<u32>) -> Result {
+		fn unstake(origin, #[compact] intentions_index: u32) -> Result {
 			let who = ensure_signed(origin)?;
-			let intentions_index: u32 = intentions_index.into();
 			// unstake fails in degenerate case of having too few existing staked parties
 			if Self::intentions().len() <= Self::minimum_validator_count() as usize {
 				return Err("cannot unstake when there are too few staked participants")
@@ -149,9 +148,8 @@ decl_module! {
 
 		/// Will panic if called when source isn't currently nominating target.
 		/// Updates Nominating, NominatorsFor and NominationBalance.
-		fn unnominate(origin, target_index: Compact<u32>) {
+		fn unnominate(origin, #[compact] target_index: u32) {
 			let source = ensure_signed(origin)?;
-			let target_index: u32 = target_index.into();
 			let target_index = target_index as usize;
 
 			let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
@@ -182,11 +180,10 @@ decl_module! {
 		/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
 		fn register_preferences(
 			origin,
-			intentions_index: Compact<u32>,
+			#[compact] intentions_index: u32,
 			prefs: ValidatorPrefs<T::Balance>
 		) {
 			let who = ensure_signed(origin)?;
-			let intentions_index: u32 = intentions_index.into();
 
 			if Self::intentions().get(intentions_index as usize) != Some(&who) {
 				return Err("Invalid index")
@@ -196,18 +193,17 @@ decl_module! {
 		}
 
 		/// Set the number of sessions in an era.
-		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) {
-			<NextSessionsPerEra<T>>::put(new.into());
+		fn set_sessions_per_era(#[compact] new: T::BlockNumber) {
+			<NextSessionsPerEra<T>>::put(new);
 		}
 
 		/// The length of the bonding duration in eras.
-		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) {
-			<BondingDuration<T>>::put(new.into());
+		fn set_bonding_duration(#[compact] new: T::BlockNumber) {
+			<BondingDuration<T>>::put(new);
 		}
 
 		/// The ideal number of validators.
-		fn set_validator_count(new: Compact<u32>) {
-			let new: u32 = new.into();
+		fn set_validator_count(#[compact] new: u32) {
 			<ValidatorCount<T>>::put(new);
 		}
 
@@ -218,8 +214,7 @@ decl_module! {
 		}
 
 		/// Set the offline slash grace period.
-		fn set_offline_slash_grace(new: Compact<u32>) {
-			let new: u32 = new.into();
+		fn set_offline_slash_grace(#[compact] new: u32) {
 			<OfflineSlashGrace<T>>::put(new);
 		}
 

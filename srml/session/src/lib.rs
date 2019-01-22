@@ -39,7 +39,6 @@ extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, Convert};
-use codec::HasCompact;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use runtime_support::for_each_tuple;
@@ -89,8 +88,8 @@ decl_module! {
 		}
 
 		/// Set a new session length. Won't kick in until the next session change (at current length).
-		fn set_length(new: <T::BlockNumber as HasCompact>::Type) {
-			<NextSessionLength<T>>::put(new.into());
+		fn set_length(#[compact] new: T::BlockNumber) {
+			<NextSessionLength<T>>::put(new);
 		}
 
 		/// Forces a new session.
@@ -309,7 +308,7 @@ mod tests {
 	fn should_work_with_early_exit() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(10.into()));
+			assert_ok!(Session::set_length(10));
 			assert_eq!(Session::blocks_remaining(), 1);
 			Session::check_rotate_session(1);
 
@@ -344,14 +343,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(3.into()));
+			assert_ok!(Session::set_length(3));
 			Session::check_rotate_session(1);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			System::set_block_number(2);
-			assert_ok!(Session::set_length(3.into()));
+			assert_ok!(Session::set_length(3));
 			Session::check_rotate_session(2);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -364,7 +363,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			System::set_block_number(4);
-			assert_ok!(Session::set_length(2.into()));
+			assert_ok!(Session::set_length(2));
 			Session::check_rotate_session(4);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
