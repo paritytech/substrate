@@ -14,8 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Macros that define an Origin type. Every function call to your runtime has an origin which
+//! specifies where the extrinsic was generated from.
+
+/// Constructs an Origin type for a runtime. This is usually called automatically by the 
+/// construct_runtime macro. See also __create_decl_macro.
 #[macro_export]
 macro_rules! impl_outer_origin {
+
+	// Macro transformations (to convert invocations with incomplete parameters to the canonical
+	// form)
+
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident {
@@ -114,6 +123,9 @@ macro_rules! impl_outer_origin {
 			$( $parsed_module $( <$generic_param> )* ),*, $module<$runtime>;
 		);
 	};
+
+	// The main macro expansion that actually renders the Origin enum code.
+
 	(
 		$(#[$attr:meta])*;
 		$name:ident;
