@@ -1000,12 +1000,12 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 
 [[package]]
 name = "hash256-std-hasher"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1298,7 +1298,17 @@ dependencies = [
 [[package]]
 name = "keccak-hasher"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
+dependencies = [
+ "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
+ "hash256-std-hasher 0.9.0 (git+https://github.com/paritytech/trie)",
+ "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "keccak-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
  "hash256-std-hasher 0.9.0 (git+https://github.com/paritytech/trie)",
@@ -1781,7 +1791,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "memory-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 dependencies = [
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4072,7 +4082,7 @@ dependencies = [
  "criterion 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "keccak-hasher 0.1.0 (git+https://github.com/paritytech/trie)",
+ "keccak-hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "memory-db 0.9.0 (git+https://github.com/paritytech/trie)",
  "parity-codec 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
@@ -4484,7 +4494,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "trie-bench"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 dependencies = [
  "criterion 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
@@ -4499,7 +4509,7 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
@@ -4510,7 +4520,7 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 dependencies = [
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
 ]
@@ -4518,7 +4528,7 @@ dependencies = [
 [[package]]
 name = "trie-standardmap"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#2616db2a2529098949e5d39aa06dd4e502a9e5f7"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 dependencies = [
  "criterion 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
@@ -5035,6 +5045,7 @@ dependencies = [
 "checksum jsonrpc-server-utils 9.0.0 (git+https://github.com/paritytech/jsonrpc.git)" = "<none>"
 "checksum jsonrpc-ws-server 9.0.0 (git+https://github.com/paritytech/jsonrpc.git)" = "<none>"
 "checksum keccak-hasher 0.1.0 (git+https://github.com/paritytech/trie)" = "<none>"
+"checksum keccak-hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "22b29b72b07815a4055f91b41ab0a8bff08489544366874bceb8d22ad1b19835"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum kvdb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)" = "<none>"
 "checksum kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)" = "<none>"

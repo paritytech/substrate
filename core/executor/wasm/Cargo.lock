@@ -32,12 +32,12 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 
 [[package]]
 name = "hash256-std-hasher"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -212,6 +212,36 @@ dependencies = [
 name = "unicode-xid"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[patch.unused]]
+name = "keccak-hasher"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
+
+[[patch.unused]]
+name = "memory-db"
+version = "0.9.0"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
+
+[[patch.unused]]
+name = "trie-bench"
+version = "0.9.0"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
+
+[[patch.unused]]
+name = "trie-db"
+version = "0.9.0"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
+
+[[patch.unused]]
+name = "trie-root"
+version = "0.9.0"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
+
+[[patch.unused]]
+name = "trie-standardmap"
+version = "0.9.0"
+source = "git+https://github.com/paritytech/trie#b476c9e64b5d6ab38251b87bd10d6795e5f15a1b"
 
 [metadata]
 "checksum arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)" = "a1e964f9e24d588183fcb43503abda40d288c8657dfc27311516ce2f05675aef"
