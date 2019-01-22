@@ -130,7 +130,7 @@ fn load_spec<F, G>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G>
 	Ok(spec)
 }
 
-fn base_path(cli: &SharedParams) -> PathBuf {
+fn base_path(cli: &SharedParams, version: &VersionInfo) -> PathBuf {
 	cli.base_path.clone()
 		.unwrap_or_else(||
 			app_dirs::get_app_root(
@@ -187,7 +187,7 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 /// parameters are required, `NoCustom` can be used as type here.
 pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
 	spec_factory: S,
-	version: VersionInfo,
+	version: &VersionInfo,
 	impl_name: &'static str,
 	args: I,
 	exit: E,
@@ -224,18 +224,18 @@ where
 
 	match cli_args.right {
 		params::CoreCommands::Run(params) => run_node::<F, _, _, _, _>(
-			params, spec_factory, exit, run_service, impl_name, version
+			params, spec_factory, exit, run_service, impl_name, version,
 		).map(|_| None),
 		params::CoreCommands::BuildSpec(params) =>
-			build_spec::<F, _>(params, spec_factory).map(|_| None),
+			build_spec::<F, _>(params, spec_factory, version).map(|_| None),
 		params::CoreCommands::ExportBlocks(params) =>
-			export_blocks::<F, _, _>(params, spec_factory, exit).map(|_| None),
+			export_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
 		params::CoreCommands::ImportBlocks(params) =>
-			import_blocks::<F, _, _>(params, spec_factory, exit).map(|_| None),
+			import_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
 		params::CoreCommands::PurgeChain(params) =>
-			purge_chain::<F, _>(params, spec_factory).map(|_| None),
+			purge_chain::<F, _>(params, spec_factory, version).map(|_| None),
 		params::CoreCommands::Revert(params) =>
-			revert_chain::<F, _>(params, spec_factory).map(|_| None),
+			revert_chain::<F, _>(params, spec_factory, version).map(|_| None),
 		params::CoreCommands::Custom(params) => Ok(Some(params)),
 	}
 }
@@ -296,7 +296,7 @@ fn fill_network_configuration(
 }
 
 fn create_run_node_config<F, S>(
-	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: VersionInfo
+	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
 ) -> error::Result<FactoryFullConfiguration<F>>
 where
 	F: ServiceFactory,
@@ -325,7 +325,7 @@ where
 		)
 	}
 
-	let base_path = base_path(&cli.shared_params);
+	let base_path = base_path(&cli.shared_params, version);
 
 	config.keystore_path = cli.keystore_path
 		.unwrap_or_else(|| keystore_path(&base_path, config.chain_spec.id()))
@@ -401,7 +401,7 @@ fn run_node<F, S, RS, E, RP>(
 	exit: E,
 	run_service: RS,
 	impl_name: &'static str,
-	version: VersionInfo,
+	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	RP: StructOpt + Clone,
@@ -426,13 +426,14 @@ where
 fn with_default_boot_node<F>(
 	mut spec: ChainSpec<FactoryGenesis<F>>,
 	cli: &BuildSpecCmd,
+	version: &VersionInfo,
 ) -> error::Result<ChainSpec<FactoryGenesis<F>>>
 where
 	F: ServiceFactory
 {
 	if spec.boot_nodes().is_empty() {
 		let network_path =
-			Some(network_path(&base_path(&cli.shared_params), spec.id()).to_string_lossy().into());
+			Some(network_path(&base_path(&cli.shared_params, version), spec.id()).to_string_lossy().into());
 		let network_key = parse_node_key(cli.node_key.clone())?;
 
 		let network_keys =
@@ -453,6 +454,7 @@ where
 fn build_spec<F, S>(
 	cli: BuildSpecCmd,
 	spec_factory: S,
+	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: ServiceFactory,
@@ -460,7 +462,7 @@ where
 {
 	info!("Building chain spec");
 	let spec = load_spec(&cli.shared_params, spec_factory)?;
-	let spec = with_default_boot_node::<F>(spec, &cli)?;
+	let spec = with_default_boot_node::<F>(spec, &cli, version)?;
 	let json = service::chain_ops::build_spec::<FactoryGenesis<F>>(spec, cli.raw)?;
 
 	print!("{}", json);
@@ -469,14 +471,14 @@ where
 }
 
 fn create_config_with_db_path<F, S>(
-	spec_factory: S, cli: &SharedParams
+	spec_factory: S, cli: &SharedParams, version: &VersionInfo,
 ) -> error::Result<FactoryFullConfiguration<F>>
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
 	let spec = load_spec(cli, spec_factory)?;
-	let base_path = base_path(cli);
+	let base_path = base_path(cli, version);
 
 	let mut config = service::Configuration::default_with_spec(spec.clone());
 	config.database_path = db_path(&base_path, spec.id()).to_string_lossy().into();
@@ -487,14 +489,15 @@ where
 fn export_blocks<F, E, S>(
 	cli: ExportBlocksCmd,
 	spec_factory: S,
-	exit: E
+	exit: E,
+	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: ServiceFactory,
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
 	info!("DB path: {}", config.database_path);
 	let from = cli.from.unwrap_or(1);
@@ -514,14 +517,15 @@ where
 fn import_blocks<F, E, S>(
 	cli: ImportBlocksCmd,
 	spec_factory: S,
-	exit: E
+	exit: E,
+	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: ServiceFactory,
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
+	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
 	config.block_execution_strategy = cli.execution.into();
 	config.api_execution_strategy = cli.api_execution.into();
@@ -537,12 +541,13 @@ where
 fn revert_chain<F, S>(
 	cli: RevertCmd,
 	spec_factory: S,
+	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 	let blocks = cli.num;
 	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
 }
@@ -550,12 +555,13 @@ where
 fn purge_chain<F, S>(
 	cli: PurgeChainCmd,
 	spec_factory: S,
+	version: &VersionInfo,
 ) -> error::Result<()>
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params)?;
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
 	let db_path = config.database_path;
 	print!("Are you sure to remove {:?}? (y/n)", &db_path);
