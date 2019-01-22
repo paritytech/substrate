@@ -38,8 +38,7 @@ use service::{NetworkLink, TransactionPool};
 use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::Encode;
-use consensus::{BlockImport, BlockOrigin, ImportBlock, ForkChoiceStrategy};
-use consensus::Error as ConsensusError;
+use consensus::{BlockOrigin, ImportBlock, ForkChoiceStrategy};
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use specialization::NetworkSpecialization;
@@ -507,9 +506,9 @@ pub trait TestNetFactory: Sized {
 
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ConsensusError> + Send + Sync>, Self::PeerData)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Self::PeerData)
 	{
-		(client, Default::default())
+		(client, None, Default::default())
 	}
 
 	fn default_config() -> ProtocolConfig {
@@ -532,9 +531,9 @@ pub trait TestNetFactory: Sized {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(client.clone(), config);
-		let (block_import, data) = self.make_block_import(client.clone());
+		let (block_import, justification_import, data) = self.make_block_import(client.clone());
 
-		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import, None));
+		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import, justification_import));
 		let specialization = DummySpecialization { };
 		let sync = Protocol::new(
 			config.clone(),
