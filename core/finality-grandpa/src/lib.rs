@@ -238,7 +238,7 @@ pub trait Network: Clone {
 	fn commit_messages(&self, set_id: u64) -> Self::In;
 
 	/// Send message over the commit channel.
-	fn send_commit(&self, set_id: u64, message: Vec<u8>);
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
@@ -289,7 +289,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 		self.service.consensus_gossip().write().messages_for(commit_topic::<B>(set_id))
 	}
 
-	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
 		self.service.gossip_consensus_message(topic, message, true);
 	}
@@ -1104,18 +1104,27 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		// we don't want to finalize on `inner.import_block`
 		let justification = block.justification.take();
 		let enacts_consensus_change = new_authorities.is_some();
-		let import_result = self.inner.import_block(block, new_authorities).map_err(|e| {
-			if let Some((old_set, mut authorities)) = just_in_case {
-				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
-				*authorities = old_set;
-			}
-			e
-		});
+		let import_result = self.inner.import_block(block, new_authorities);
 
-		let import_result = match import_result {
-			Ok(ImportResult::Queued) => ImportResult::Queued,
-			Ok(r) => return Ok(r),
-			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+		let import_result = {
+			// we scope this so that `just_in_case` is dropped eagerly and releases the authorities lock
+			let revert_authorities = || if let Some((old_set, mut authorities)) = just_in_case {
+				*authorities = old_set;
+			};
+
+			match import_result {
+				Ok(ImportResult::Queued) => ImportResult::Queued,
+				Ok(r) => {
+					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
+					revert_authorities();
+					return Ok(r);
+				},
+				Err(e) => {
+					debug!(target: "afg", "Restoring old authority set after block import error: {:?}", e);
+					revert_authorities();
+					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+				},
+			}
 		};
 
 		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
@@ -1487,6 +1496,10 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
 
+	// we shadow network with the wrapping/rebroadcasting network to avoid
+	// accidental reuse.
+	let (broadcast_worker, network) = communication::rebroadcasting_network(network);
+
 	let (last_round_number, last_state) = match Backend::get_aux(&**client.backend(), LAST_COMPLETED_KEY)? {
 		None => (0, RoundState::genesis((genesis_hash, <NumberFor<Block>>::zero()))),
 		Some(raw) => LastCompleted::decode(&mut &raw[..])
@@ -1592,7 +1605,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 				trigger_authority_set_change(new, authority_set_change)
 			},
 		}))
-	}).map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
+	});
+
+	let voter_work = voter_work
+		.join(broadcast_worker)
+		.map(|((), ())| ())
+		.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
 
 	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }

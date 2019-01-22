@@ -135,7 +135,7 @@ fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G
 fn base_path(matches: &clap::ArgMatches, version: &VersionInfo) -> PathBuf {
 	matches.value_of("base_path")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(|| 
+		.unwrap_or_else(||
 			app_dirs::get_app_root(
 				AppDataType::UserData,
 				&AppInfo {
@@ -305,6 +305,7 @@ where
 		config.network.public_addresses = Vec::new();
 
 		config.network.client_version = config.client_id();
+		config.network.node_name = config.name.clone();
 		config.network.use_secret = match matches.value_of("node_key").map(H256::from_str) {
 			Some(Ok(secret)) => Some(secret.into()),
 			Some(Err(err)) => bail!(create_input_err(format!("Error parsing node key: {}", err))),

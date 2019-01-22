@@ -22,8 +22,10 @@ use std::sync::Arc;
 use std::time;
 use std;
 
-use client::{self, error, Client as SubstrateClient, CallExecutor};
-use client::{block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::Core};
+use client::{
+	self, error, Client as SubstrateClient, CallExecutor,
+	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{Core, ApiExt}
+};
 use codec::{Decode, Encode};
 use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher};
@@ -68,7 +70,9 @@ where
 	B: client::backend::Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
-	RA: BlockBuilderApi<Block, BasicInherentData>,
+	RA: Send + Sync + 'static,
+	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
@@ -79,7 +83,9 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
-	RA: BlockBuilderApi<Block, BasicInherentData>,
+	RA: Send + Sync + 'static,
+	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
 {
 	type Block = Block;
 	type Error = client::error::Error;
@@ -94,7 +100,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 
 		let runtime_api = self.runtime_api();
 		if runtime_api.has_api::<BlockBuilderApi<Block, BasicInherentData>>(at)? {
-			runtime_api.inherent_extrinsics(at, &inherent_data)?
+			runtime_api.inherent_extrinsics(at, inherent_data)?
 				.into_iter().try_for_each(|i| block_builder.push(i))?;
 		}
 
