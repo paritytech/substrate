@@ -33,6 +33,11 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
+
+extern crate substrate_metadata;
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate sr_primitives as primitives;
 extern crate srml_system as system;
 
@@ -50,6 +55,7 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
 use address::Address as RawAddress;
 use system::{IsDeadAccount, OnNewAccount};
+use substrate_metadata::EncodeMetadata;
 
 mod mock;
 
@@ -63,7 +69,7 @@ pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::
 
 /// Turn an Id into an Index, or None for the purpose of getting
 /// a hint at a possibly desired index.
-pub trait ResolveHint<AccountId: Encode, AccountIndex: As<usize>> {
+pub trait ResolveHint<AccountId: Encode + EncodeMetadata, AccountIndex: As<usize>> {
 	/// Turn an Id into an Index, or None for the purpose of getting
 	/// a hint at a possibly desired index.
 	fn resolve_hint(who: &AccountId) -> Option<AccountIndex>;
@@ -71,7 +77,7 @@ pub trait ResolveHint<AccountId: Encode, AccountIndex: As<usize>> {
 
 /// Simple encode-based resolve hint implemenntation.
 pub struct SimpleResolveHint<AccountId, AccountIndex>(PhantomData<(AccountId, AccountIndex)>);
-impl<AccountId: Encode, AccountIndex: As<usize>> ResolveHint<AccountId, AccountIndex> for SimpleResolveHint<AccountId, AccountIndex> {
+impl<AccountId: Encode + EncodeMetadata, AccountIndex: As<usize>> ResolveHint<AccountId, AccountIndex> for SimpleResolveHint<AccountId, AccountIndex> {
 	fn resolve_hint(who: &AccountId) -> Option<AccountIndex> {
 		Some(AccountIndex::sa(who.using_encoded(|e| e[0] as usize + e[1] as usize * 256)))
 	}
