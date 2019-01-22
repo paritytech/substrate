@@ -714,12 +714,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-
-				let (_, storage_update, changes_update) = self.executor.call_at_state(
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
 							ExecutionManager::NativeWhenPossible,
@@ -738,14 +737,51 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							wasm_result
 						}),
 					},
+					None,
 				)?;
+				//let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
 
 				Ok((Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect())))
 			},
-
 			None => Ok((None, None, None))
 		}
+
+		// match transaction.state()? {
+		// 	Some(transaction_state) => {
+		// 		let mut overlay = Default::default();
+
+		// 		let (_, storage_update, changes_update) = self.executor.call_at_state(
+		// 			transaction_state,
+		// 			&mut overlay,
+		// 			"Core_execute_block",
+		// 			&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+		// 			match (origin, self.block_execution_strategy) {
+		// 				(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
+		// 					ExecutionManager::NativeWhenPossible,
+		// 				(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
+		// 				_ => ExecutionManager::Both(|wasm_result, native_result| {
+		// 					let header = import_headers.post();
+		// 					warn!("Consensus error between wasm and native block execution at block {}", hash);
+		// 					warn!("   Header {:?}", header);
+		// 					warn!("   Native result {:?}", native_result);
+		// 					warn!("   Wasm result {:?}", wasm_result);
+		// 					telemetry!("block.execute.consensus_failure";
+		// 						"hash" => ?hash,
+		// 						"origin" => ?origin,
+		// 						"header" => ?header
+		// 					);
+		// 					wasm_result
+		// 				}),
+		// 			},
+		// 		)?;
+		// 		overlay.commit_prospective();
+
+		// 		Ok((Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect())))
+		// 	},
+
+		// 	None => Ok((None, None, None))
+		// }
 	}
 
 	/// Finalizes all blocks up to given. If a justification is provided it is
