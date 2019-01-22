@@ -536,7 +536,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
 					inherent_data.aura_replace_inherent_data(slot_num);
-					let block = Block::new(pre_header.clone(), inner_body);
+					let block = B::new(pre_header.clone(), inner_body);
 
 					let inherent_res = self.client.runtime_api().check_inherents(
 						&BlockId::Hash(parent_hash),

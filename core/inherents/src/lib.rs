@@ -26,7 +26,7 @@ use rstd::{collections::btree_map::{BTreeMap, IntoIter}, vec::Vec};
 use parking_lot::RwLock;
 
 #[cfg(feature = "std")]
-use std::sync::Arc;
+use std::{sync::Arc, format};
 
 pub use runtime_primitives::RuntimeString;
 
@@ -199,6 +199,15 @@ impl CheckInherentsResult {
 	}
 }
 
+#[cfg(feature = "std")]
+impl PartialEq for CheckInherentsResult {
+	fn eq(&self, other: &Self) -> bool {
+		self.fatal_error == other.fatal_error &&
+		self.okay == other.okay &&
+		self.errors.data == other.errors.data
+	}
+}
+
 /// All `InherentData` providers.
 #[cfg(feature = "std")]
 #[derive(Clone)]
@@ -227,7 +236,12 @@ impl InherentDataProviders {
 		&self, provider: P
 	) -> Result<(), RuntimeString> {
 		if self.has_provider(&provider.inherent_identifier()) {
-			Err(format("Inherent data provider with identifier {} already exists!", &provider.inherent_identifier()).into())
+			Err(
+				format!(
+					"Inherent data provider with identifier {:?} already exists!",
+					&provider.inherent_identifier()
+				).into()
+			)
 		} else {
 			provider.on_register(self)?;
 			self.providers.write().push(Box::new(provider));
