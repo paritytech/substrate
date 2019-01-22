@@ -102,7 +102,7 @@ use account_db::AccountDb;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use codec::{Codec, HasCompact};
+use codec::Codec;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use runtime_support::dispatch::{Result, Dispatchable};
 use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
@@ -198,11 +198,10 @@ decl_module! {
 		/// Stores code in the storage. You can instantiate contracts only with stored code.
 		fn put_code(
 			origin,
-			gas_limit: <T::Gas as HasCompact>::Type,
+			#[compact] gas_limit: T::Gas,
 			code: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let gas_limit = gas_limit.into();
 			let schedule = <Module<T>>::current_schedule();
 
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
@@ -221,13 +220,11 @@ decl_module! {
 		fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
-			value: <T::Balance as HasCompact>::Type,
-			gas_limit: <T::Gas as HasCompact>::Type,
+			#[compact] value: T::Balance,
+			#[compact] gas_limit: T::Gas,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let value = value.into();
-			let gas_limit = gas_limit.into();
 			let dest = T::Lookup::lookup(dest)?;
 
 			// Pay for the gas upfront.
@@ -277,14 +274,12 @@ decl_module! {
 		///   upon any message received by this account.
 		fn create(
 			origin,
-			endowment: <T::Balance as HasCompact>::Type,
-			gas_limit: <T::Gas as HasCompact>::Type,
+			#[compact] endowment: T::Balance,
+			#[compact] gas_limit: T::Gas,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>
 		) -> Result {
 			let origin = ensure_signed(origin)?;
-			let endowment = endowment.into();
-			let gas_limit = gas_limit.into();
 
 			// Pay for the gas upfront.
 			//
