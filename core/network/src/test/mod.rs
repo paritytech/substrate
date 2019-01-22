@@ -27,7 +27,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
-use primitives::Ed25519AuthorityId;
+use primitives::{H256, Ed25519AuthorityId};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor, Zero};
@@ -38,7 +38,7 @@ use service::{NetworkLink, TransactionPool};
 use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::Encode;
-use consensus::{BlockOrigin, ImportBlock, ForkChoiceStrategy};
+use consensus::{BlockOrigin, ImportBlock, JustificationImport, ForkChoiceStrategy, Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use specialization::NetworkSpecialization;
@@ -708,5 +708,64 @@ impl TestNetFactory for TestNet {
 
 	fn set_started(&mut self, new: bool) {
 		self.started = new;
+	}
+}
+
+pub struct ForceFinalized(Arc<PeersClient>);
+
+impl JustificationImport<Block> for ForceFinalized {
+	type Error = ConsensusError;
+
+	fn import_justification(
+		&self,
+		hash: H256,
+		_number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
+	}
+}
+
+pub struct JustificationTestNet(TestNet);
+
+impl TestNetFactory for JustificationTestNet {
+	type Verifier = PassThroughVerifier;
+	type PeerData = ();
+
+	fn from_config(config: &ProtocolConfig) -> Self {
+		JustificationTestNet(TestNet::from_config(config))
+	}
+
+	fn make_verifier(&self, client: Arc<PeersClient>, config: &ProtocolConfig)
+		-> Arc<Self::Verifier>
+	{
+		self.0.make_verifier(client, config)
+	}
+
+	fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
+		self.0.peer(i)
+	}
+
+	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
+		self.0.peers()
+	}
+
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F ) {
+		self.0.mut_peers(closure)
+	}
+
+	fn started(&self) -> bool {
+		self.0.started()
+	}
+
+	fn set_started(&mut self, new: bool) {
+		self.0.set_started(new)
+	}
+
+	fn make_block_import(&self, client: Arc<PeersClient>)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Self::PeerData)
+	{
+		(client.clone(), Some(Arc::new(ForceFinalized(client))), Default::default())
 	}
 }
