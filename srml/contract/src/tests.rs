@@ -189,8 +189,8 @@ fn refunds_unused_gas() {
 		assert_ok!(Contract::call(
 			Origin::signed(0),
 			1,
-			0.into(),
-			100_000.into(),
+			0,
+			100_000,
 			Vec::new()
 		));
 
@@ -220,7 +220,7 @@ fn account_removal_removes_storage() {
 			// the balance of account 1 is will be below than exsistential threshold.
 			//
 			// This should lead to the removal of all storage associated with this account.
-			assert_ok!(Balances::transfer(Origin::signed(1), 2, 20.into()));
+			assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
 
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
@@ -277,14 +277,14 @@ fn instantiate_and_call() {
 
 			assert_ok!(Contract::put_code(
 				Origin::signed(ALICE),
-				100_000.into(),
+				100_000,
 				wasm,
 			));
 
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
-				100.into(),
-				100_000.into(),
+				100,
+				100_000,
 				HASH_RETURN_FROM_START_FN.into(),
 				vec![],
 			));
@@ -335,7 +335,7 @@ const HASH_DISPATCH_CALL: [u8; 32] = hex!("49dfdcaf9c1553be10634467e95b8e71a3bc1
 fn dispatch_call() {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50.into())));
+	let encoded = codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
 	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL).unwrap();
@@ -348,7 +348,7 @@ fn dispatch_call() {
 
 			assert_ok!(Contract::put_code(
 				Origin::signed(ALICE),
-				100_000.into(),
+				100_000,
 				wasm,
 			));
 
@@ -363,8 +363,8 @@ fn dispatch_call() {
 
 			assert_ok!(Contract::create(
 				Origin::signed(ALICE),
-				100.into(),
-				100_000.into(),
+				100,
+				100_000,
 				HASH_DISPATCH_CALL.into(),
 				vec![],
 			));
@@ -372,8 +372,8 @@ fn dispatch_call() {
 			assert_ok!(Contract::call(
 				Origin::signed(ALICE),
 				BOB, // newly created account
-				0.into(),
-				100_000.into(),
+				0,
+				100_000,
 				vec![],
 			));
 
