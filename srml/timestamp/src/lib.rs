@@ -49,7 +49,6 @@ extern crate parity_codec as codec;
 extern crate parity_codec_derive;
 extern crate substrate_inherents as inherents;
 
-use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
@@ -178,10 +177,8 @@ decl_module! {
 		/// if this call hasn't been invoked by that time.
 		///
 		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-		fn set(origin, now: <T::Moment as HasCompact>::Type) {
+		fn set(origin, #[compact] now: T::Moment) {
 			ensure_inherent(origin)?;
-			let now = now.into();
-
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
 				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
@@ -317,7 +314,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -332,8 +329,8 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
-			let _ = Timestamp::dispatch(Call::set(70.into()), Origin::INHERENT);
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
 		});
 	}
 
@@ -347,7 +344,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46.into()), Origin::INHERENT);
+			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});
 	}
 }

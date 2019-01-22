@@ -50,7 +50,6 @@ extern crate srml_system as system;
 // might find it useful).
 extern crate srml_balances as balances;
 
-use codec::HasCompact;
 use support::{StorageValue, dispatch::Result};
 use system::ensure_signed;
 
@@ -178,9 +177,9 @@ decl_module! {
 		// without worrying about gameability or attack scenarios.
 		// If you not specify `Result` explicitly as return value, it will be added automatically
 		// for you and `Ok(())` will be returned.
-		fn set_dummy(new_value: <T::Balance as HasCompact>::Type) {
+		fn set_dummy(#[compact] new_value: T::Balance) {
 			// Put the new value into storage.
-			<Dummy<T>>::put(new_value.into());
+			<Dummy<T>>::put(new_value);
 		}
 
 		// The signature could also look like: `fn on_finalise()`

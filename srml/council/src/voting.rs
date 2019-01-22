@@ -18,7 +18,6 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use codec::HasCompact;
 use primitives::traits::{Hash, As, Zero};
 use runtime_io::print;
 use srml_support::dispatch::Result;
@@ -95,12 +94,12 @@ decl_module! {
 			}
 		}
 
-		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) {
-			<CooloffPeriod<T>>::put(blocks.into());
+		fn set_cooloff_period(#[compact] blocks: T::BlockNumber) {
+			<CooloffPeriod<T>>::put(blocks);
 		}
 
-		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) {
-			<VotingPeriod<T>>::put(blocks.into());
+		fn set_voting_period(#[compact] blocks: T::BlockNumber) {
+			<VotingPeriod<T>>::put(blocks);
 		}
 
 		fn on_finalise(n: T::BlockNumber) {
@@ -259,7 +258,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(42, value.into(), 0.into()))
+		Call::Balances(balances::Call::set_balance(42, value.into(), 0))
 	}
 
 	fn cancel_referendum_proposal(id: u32) -> Call {
