@@ -174,12 +174,15 @@ mod tests {
 	use std::collections::HashMap;
 	use substrate_primitives::H256;
 	use exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
+	use balances;
 	use gas::GasMeter;
-	use tests::Test;
+	use tests::{Test, Call};
 	use wabt;
 	use wasm::prepare::prepare_contract;
 	use CodeHash;
 
+	#[derive(Debug, PartialEq, Eq)]
+	struct DispatchEntry(Call);
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
 		code_hash: H256,
@@ -199,6 +202,7 @@ mod tests {
 		storage: HashMap<Vec<u8>, Vec<u8>>,
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
+		dispatches: Vec<DispatchEntry>,
 		next_account_id: u64,
 	}
 	impl Ext for MockExt {
@@ -247,6 +251,9 @@ mod tests {
 			Ok(CallReceipt {
 				output_data: Vec::new(),
 			})
+		}
+		fn note_dispatch_call(&mut self, call: Call) {
+			self.dispatches.push(DispatchEntry(call));
 		}
 		fn caller(&self) -> &u64 {
 			&42
@@ -942,6 +949,45 @@ mod tests {
 		.unwrap();
 	}
 
+	const CODE_DISPATCH_CALL: &str = r#"
+(module
+	(import "env" "ext_dispatch_call" (func $ext_dispatch_call (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_dispatch_call
+			(i32.const 8) ;; Pointer to the start of encoded call buffer
+			(i32.const 13) ;; Length of the buffer
+		)
+	)
+	(func (export "deploy"))
+
+	(data (i32.const 8) "\00\01\2A\00\00\00\00\00\00\00\E5\14\00")
+)
+"#;
+
+	#[test]
+	fn dispatch_call() {
+		// This test can fail due to the encoding changes. In case it becomes too annoying
+		// let's rewrite so as we use this module controlled call or we serialize it in runtime.
+
+		let mut mock_ext = MockExt::default();
+		execute(
+			CODE_DISPATCH_CALL,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		)
+		.unwrap();
+
+		assert_eq!(
+			&mock_ext.dispatches,
+			&[DispatchEntry(
+				Call::Balances(balances::Call::set_balance(42, 1337.into(), 0.into())),
+			)]
+		);
+	}
 
 	const CODE_RETURN_FROM_START_FN: &str = r#"
 (module
