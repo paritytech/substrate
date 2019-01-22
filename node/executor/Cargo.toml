@@ -6,7 +6,7 @@ description = "Substrate node implementation in Rust."
 
 [dependencies]
 hex-literal = "0.1"
-trie-root = { git = "https://github.com/paritytech/trie" }
+trie-root = "0.9"
 parity-codec = "2.2"
 sr-io = { path = "../../core/sr-io" }
 substrate-state-machine = { path = "../../core/state-machine" }

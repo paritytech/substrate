@@ -334,8 +334,13 @@ macro_rules! __impl_outer_config_types {
 	($concrete:ident) => ()
 }
 
+/// Implement the output "meta" module configuration struct,
+/// which is basically:
+/// pub struct GenesisConfig {
+/// 	rust_module_one: Option<ModuleOneConfig>,
+/// 	...
+/// }
 #[macro_export]
-/// Implement the output "meta" module configuration struct.
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
