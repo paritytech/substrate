@@ -22,18 +22,18 @@ use libp2p::NetworkBehaviour;
 use libp2p::core::{PeerId, ProtocolsHandler};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
-use libp2p::identify::{Identify, IdentifyEvent};
+use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut, KademliaTopology};
 use libp2p::ping::{Ping, PingEvent};
 use log::{debug, trace, warn};
-use std::{cmp, time::Duration, time::Instant};
+use std::{cmp, io, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::Delay;
 use void;
 
 /// General behaviour of the network.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "CustomProtosOut", poll_method = "poll")]
+#[behaviour(out_event = "BehaviourOut", poll_method = "poll")]
 pub struct Behaviour<TSubstream> {
 	/// Periodically ping nodes, and close the connection if it's unresponsive.
 	ping: Ping<TSubstream>,
@@ -46,22 +46,24 @@ pub struct Behaviour<TSubstream> {
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
-	events: Vec<CustomProtosOut>,
+	events: Vec<BehaviourOut>,
 }
 
 impl<TSubstream> Behaviour<TSubstream> {
 	/// Builds a new `Behaviour`.
 	// TODO: redundancy between config and local_peer_id (https://github.com/libp2p/rust-libp2p/issues/745)
 	pub fn new(config: &NetworkConfiguration, local_peer_id: PeerId, protocols: RegisteredProtocols) -> Self {
+		let identify = {
+			let proto_version = "/substrate/1.0".to_string();
+			let user_agent = format!("{} ({})", config.client_version, config.node_name);
+			Identify::new(proto_version, user_agent)
+		};
+
 		Behaviour {
 			ping: Ping::new(),
 			custom_protocols: CustomProtos::new(config, protocols),
 			discovery: DiscoveryBehaviour::new(local_peer_id),
-			identify: Identify::new(
-				// The agent and protocol versions; maybe we should use something better?
-				concat!("substrate/", env!("CARGO_PKG_VERSION")).to_owned(),
-				concat!("substrate/", env!("CARGO_PKG_VERSION")).to_owned()
-			),
+			identify,
 			events: Vec::new(),
 		}
 	}
@@ -123,6 +125,66 @@ impl<TSubstream> Behaviour<TSubstream> {
 	}
 }
 
+/// Event that can be emitted by the behaviour.
+#[derive(Debug)]
+pub enum BehaviourOut {
+	/// Opened a custom protocol with the remote.
+	CustomProtocolOpen {
+		/// Identifier of the protocol.
+		protocol_id: ProtocolId,
+		/// Version of the protocol that has been opened.
+		version: u8,
+		/// Id of the node we have opened a connection with.
+		peer_id: PeerId,
+		/// Endpoint used for this custom protocol.
+		endpoint: ConnectedPoint,
+	},
+
+	/// Closed a custom protocol with the remote.
+	CustomProtocolClosed {
+		/// Id of the peer we were connected to.
+		peer_id: PeerId,
+		/// Identifier of the protocol.
+		protocol_id: ProtocolId,
+		/// Reason why the substream closed. If `Ok`, then it's a graceful exit (EOF).
+		result: io::Result<()>,
+	},
+
+	/// Receives a message on a custom protocol substream.
+	CustomMessage {
+		/// Id of the peer the message came from.
+		peer_id: PeerId,
+		/// Protocol which generated the message.
+		protocol_id: ProtocolId,
+		/// Data that has been received.
+		data: Bytes,
+	},
+
+	/// We have obtained debug information from a peer.
+	Identified {
+		/// Id of the peer that has been identified.
+		peer_id: PeerId,
+		/// Information about the peer.
+		info: IdentifyInfo,
+	},
+}
+
+impl From<CustomProtosOut> for BehaviourOut {
+	fn from(other: CustomProtosOut) -> BehaviourOut {
+		match other {
+			CustomProtosOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint } => {
+				BehaviourOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint }
+			},
+			CustomProtosOut::CustomProtocolClosed { protocol_id, peer_id, result } => {
+				BehaviourOut::CustomProtocolClosed { protocol_id, peer_id, result }
+			},
+			CustomProtosOut::CustomMessage { protocol_id, peer_id, data } => {
+				BehaviourOut::CustomMessage { protocol_id, peer_id, data }
+			},
+		}
+	}
+}
+
 impl<TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviour<TSubstream> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
@@ -131,7 +193,7 @@ impl<TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviour<TSubstre
 
 impl<TSubstream> NetworkBehaviourEventProcess<CustomProtosOut> for Behaviour<TSubstream> {
 	fn inject_event(&mut self, event: CustomProtosOut) {
-		self.events.push(event);
+		self.events.push(event.into());
 	}
 }
 
@@ -140,6 +202,10 @@ impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubs
 		match event {
 			IdentifyEvent::Identified { peer_id, info, .. } => {
 				trace!(target: "sub-libp2p", "Identified {:?} => {:?}", peer_id, info);
+				// TODO: ideally we would delay the first identification to when we open the custom
+				//	protocol, so that we only report id info to the service about the nodes we
+				//	care about (https://github.com/libp2p/rust-libp2p/issues/876)
+				self.events.push(BehaviourOut::Identified { peer_id, info });
 			}
 			IdentifyEvent::Error { .. } => {}
 		}
@@ -176,7 +242,7 @@ impl<TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TSubstrea
 }
 
 impl<TSubstream> Behaviour<TSubstream> {
-	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, CustomProtosOut>> {
+	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, BehaviourOut>> {
 		if !self.events.is_empty() {
 			return Async::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))
 		}

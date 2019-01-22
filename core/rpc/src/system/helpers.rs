@@ -38,17 +38,21 @@ pub struct SystemInfo {
 
 /// Health struct returned by the RPC
 #[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Health {
 	/// Number of connected peers
 	pub peers: usize,
 	/// Is the node syncing
 	pub is_syncing: bool,
 	/// Should this node have any peers
+	///
+	/// Might be false for local chains or when running without discovery.
 	pub should_have_peers: bool,
 }
 
 /// Network Peer information
 #[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PeerInfo<Hash, Number> {
 	/// Peer Node Index
 	pub index: usize,
@@ -69,5 +73,37 @@ impl fmt::Display for Health {
 		write!(fmt, "{} peers ({})", self.peers, if self.is_syncing {
 			"syncing"
 		} else { "idle" })
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_serialize_health() {
+		assert_eq!(
+			::serde_json::to_string(&Health {
+				peers: 1,
+				is_syncing: false,
+				should_have_peers: true,
+			}).unwrap(),
+			r#"{"peers":1,"isSyncing":false,"shouldHavePeers":true}"#,
+		);
+	}
+
+	#[test]
+	fn should_serialize_peer_info() {
+		assert_eq!(
+			::serde_json::to_string(&PeerInfo {
+				index: 1,
+				peer_id: "2".into(),
+				roles: "a".into(),
+				protocol_version: 2,
+				best_hash: 5u32,
+				best_number: 6u32,
+			}).unwrap(),
+			r#"{"index":1,"peerId":"2","roles":"a","protocolVersion":2,"bestHash":5,"bestNumber":6}"#,
+		);
 	}
 }

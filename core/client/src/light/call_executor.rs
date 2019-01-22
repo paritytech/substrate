@@ -17,13 +17,11 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
-use std::collections::HashSet;
-use std::marker::PhantomData;
-use std::sync::Arc;
+use std::{collections::HashSet, marker::PhantomData, sync::Arc};
 use futures::{IntoFuture, Future};
 
 use codec::{Encode, Decode};
-use primitives::{H256, Blake2Hasher, convert_hash};
+use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
 use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
@@ -88,7 +86,12 @@ where
 
 	fn contextual_call<
 		PB: Fn() -> ClientResult<Block::Header>,
-		EM: Fn(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+		EM: Fn(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -98,13 +101,14 @@ where
 		initialised_block: &mut Option<BlockId<Block>>,
 		_prepare_environment_block: PB,
 		_manager: ExecutionManager<EM>,
-	) -> ClientResult<Vec<u8>> where ExecutionManager<EM>: Clone {
+		_native_call: Option<NC>,
+	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
 		if !changes.is_empty() || initialised_block.is_some() {
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
-		self.call(at, method, call_data)
+		self.call(at, method, call_data).map(NativeOrEncoded::Encoded)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
@@ -115,14 +119,20 @@ where
 
 	fn call_at_state<
 		S: StateBackend<H>,
-		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
+		FF: FnOnce(
+			Result<NativeOrEncoded<R>, Self::Error>,
+			Result<NativeOrEncoded<R>, Self::Error>
+		) -> Result<NativeOrEncoded<R>, Self::Error>,
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> R,
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-		_m: ExecutionManager<FF>
-	) -> ClientResult<(Vec<u8>, S::Transaction, Option<MemoryDB<H>>)> {
+		_m: ExecutionManager<FF>,
+		_native_call: Option<NC>,
+	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<H>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
