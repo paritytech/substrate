@@ -489,7 +489,9 @@ impl<C, E> AuraVerifier<C, E>
 		block_id: BlockId<B>,
 		inherent_data: InherentData,
 		timestamp_now: u64,
-	) -> Result<(), String> where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B> {
+	) -> Result<(), String>
+		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
+	{
 		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
 
 		let inherent_res = self.client.runtime_api().check_inherents(
