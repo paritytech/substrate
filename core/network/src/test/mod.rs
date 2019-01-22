@@ -41,7 +41,7 @@ use codec::Encode;
 use consensus::{BlockImport, BlockOrigin, ImportBlock, ForkChoiceStrategy};
 use consensus::Error as ConsensusError;
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
-use consensus::import_queue::{Link, SharedBlockImport, Verifier};
+use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use specialization::NetworkSpecialization;
 use consensus_gossip::ConsensusGossip;
 use service::ExecuteInContext;
@@ -121,17 +121,19 @@ pub struct SyncImportQueue<B: BlockT, V: Verifier<B>> {
 	verifier: Arc<V>,
 	link: ImportCB<B>,
 	block_import: SharedBlockImport<B>,
+	justification_import: Option<SharedJustificationImport<B>>,
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
 impl<B: 'static + BlockT, V: 'static + Verifier<B>> SyncImportQueue<B, V> {
 	/// Create a new SyncImportQueue wrapping the given Verifier and block import
 	/// handle.
-	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>) -> Self {
+	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>, justification_import: Option<SharedJustificationImport<B>>) -> Self {
 		let queue = SyncImportQueue {
 			verifier,
 			link: ImportCB::new(),
 			block_import,
+			justification_import,
 		};
 
 		let v = queue.verifier.clone();
@@ -197,7 +199,9 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 		number: NumberFor<B>,
 		justification: Justification,
 	) -> bool {
-		self.block_import.import_justification(hash, number, justification).is_ok()
+		self.justification_import.as_ref().map(|justification_import| {
+			justification_import.import_justification(hash, number, justification).is_ok()
+		}).unwrap_or(false)
 	}
 }
 
@@ -531,7 +535,7 @@ pub trait TestNetFactory: Sized {
 		let verifier = self.make_verifier(client.clone(), config);
 		let (block_import, data) = self.make_block_import(client.clone());
 
-		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import));
+		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import, None));
 		let specialization = DummySpecialization { };
 		let sync = Protocol::new(
 			config.clone(),

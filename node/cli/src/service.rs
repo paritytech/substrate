@@ -115,20 +115,23 @@ construct_service_factory! {
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
-			grandpa::BlockImportForService<Self>,
+			FullClient<Self>,
 			NothingExtra,
 			::consensus::InherentProducingFn<InherentData>,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
+			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
-				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client)?;
+				let (block_import, link_half) = grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(client.clone(), client.clone())?;
 				let block_import = Arc::new(block_import);
+				let justification_import = block_import.clone();
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				Ok(import_queue(
 					slot_duration,
 					block_import,
+					Some(justification_import),
+					client,
 					NothingExtra,
 					::consensus::make_basic_inherent as _,
 				))
@@ -142,6 +145,8 @@ construct_service_factory! {
 			{ |ref mut config, client: Arc<LightClient<Self>>|
 				Ok(import_queue(
 					SlotDuration::get_or_compute(&*client)?,
+					client.clone(),
+					None,
 					client,
 					NothingExtra,
 					::consensus::make_basic_inherent as _,

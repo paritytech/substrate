@@ -61,8 +61,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use codec::Encode;
-use consensus_common::{Authorities, BlockImport, Environment, Error as ConsensusError, Proposer, ForkChoiceStrategy};
-use consensus_common::import_queue::{Verifier, BasicQueue};
+use consensus_common::{Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy};
+use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
@@ -451,7 +451,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 impl<B: Block, C, E, MakeInherent, Inherent> Verifier<B> for AuraVerifier<C, E, MakeInherent> where
-	C: Authorities<B> + BlockImport<B> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
@@ -600,19 +600,21 @@ impl SlotDuration {
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, E, MakeInherent, Inherent>(
 	slot_duration: SlotDuration,
+	block_import: SharedBlockImport<B>,
+	justification_import: Option<SharedJustificationImport<B>>,
 	client: Arc<C>,
 	extra: E,
 	make_inherent: MakeInherent,
 ) -> AuraImportQueue<B, C, E, MakeInherent> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B,Error=ConsensusError> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B, Inherent>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
 	MakeInherent: Fn(u64, u64) -> Inherent + Send + Sync,
 {
 	let verifier = Arc::new(AuraVerifier { slot_duration, client: client.clone(), extra, make_inherent });
-	BasicQueue::new(verifier, client)
+	BasicQueue::new(verifier, block_import, justification_import)
 }
 
 #[cfg(test)]

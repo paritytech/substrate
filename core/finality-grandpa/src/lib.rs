@@ -91,7 +91,7 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
+use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
@@ -992,7 +992,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	api: Arc<PRA>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -1031,6 +1031,29 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			}
 		}
 	}
+
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.import_justification(hash, number, justification, false)
+	}
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		DigestFor<Block>: Encode,
+		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		RA: Send + Sync,
+		PRA: ProvideRuntimeApi,
+		PRA::Api: GrandpaApi<Block>,
+{
+	type Error = ConsensusError;
 
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
@@ -1159,15 +1182,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		}
 
 		Ok(import_result)
-	}
-
-	fn import_justification(
-		&self,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-		justification: Justification,
-	) -> Result<(), Self::Error> {
-		self.import_justification(hash, number, justification, false)
 	}
 }
 
