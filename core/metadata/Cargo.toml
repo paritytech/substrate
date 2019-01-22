@@ -9,10 +9,17 @@ parity-codec-derive = { version = "2.1", default-features = false }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 sr-std = { path = "../sr-std", default-features = false }
+primitive-types = { version = "0.1", default-features = false, features = ["codec"] }
 
 [features]
 default = ["std"]
 std = [
+	"primitive-types/std",
+	"primitive-types/serde",
+	"primitive-types/heapsize",
+	"primitive-types/byteorder",
+	"primitive-types/rustc-hex",
+	"primitive-types/libc",
 	"serde/std",
 	"serde_derive",
 	"parity-codec/std",

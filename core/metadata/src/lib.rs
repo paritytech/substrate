@@ -13,6 +13,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate primitive_types;
+
+use primitive_types::{H160, H256, H512};
+
 use rstd::prelude::*;
 
 #[cfg(feature = "std")]
@@ -298,5 +302,24 @@ impl parity_codec::Encode for EnumVariantMetadata {
 impl parity_codec::Encode for Metadata {
 	fn encode_to<EncOut: parity_codec::Output>(&self, dest: &mut EncOut) {
 		dest.push(&self.kind);
+	}
+}
+
+
+impl EncodeMetadata for H160 {
+	fn type_metadata() -> Metadata {
+		<[u8; 20] as EncodeMetadata>::type_metadata()
+	}
+}
+
+impl EncodeMetadata for H256 {
+	fn type_metadata() -> Metadata {
+		<[u8; 32] as EncodeMetadata>::type_metadata()
+	}
+}
+
+impl EncodeMetadata for H512 {
+	fn type_metadata() -> Metadata {
+		<[u8; 64] as EncodeMetadata>::type_metadata()
 	}
 }
