@@ -451,7 +451,7 @@ mod tests {
 		});
 
 		// when
-		pool.rotator.ban(&time::Instant::now(), &[pool.hash_of(&uxt)]);
+		pool.rotator.ban(&time::Instant::now(), vec![pool.hash_of(&uxt)]);
 		let res = pool.submit_one(&BlockId::Number(0), uxt);
 		assert_eq!(pool.status().ready, 0);
 		assert_eq!(pool.status().future, 0);
@@ -548,7 +548,7 @@ mod tests {
 		})).unwrap();
 
 		// when
-		pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()]);
+		pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()]).unwrap();
 
 		// then
 		assert!(pool.rotator.is_banned(&hash1));
@@ -571,7 +571,32 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// when
-			pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![2.into()]).unwrap();
+			pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![]).unwrap();
+			assert_eq!(pool.status().ready, 0);
+			assert_eq!(pool.status().future, 0);
+
+			// then
+			let mut stream = watcher.into_stream().wait();
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(2.into()))));
+			assert_eq!(stream.next(), None);
+		}
+
+		#[test]
+		fn should_trigger_ready_and_finalised_when_pruning_via_hash() {
+			// given
+			let pool = pool();
+			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 0,
+			})).unwrap();
+			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.status().future, 0);
+
+			// when
+			pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![2u64]).unwrap();
 			assert_eq!(pool.status().ready, 0);
 			assert_eq!(pool.status().future, 0);
 
