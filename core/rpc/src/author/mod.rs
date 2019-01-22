@@ -30,7 +30,8 @@ use transaction_pool::{
 		watcher::Status,
 	},
 };
-use jsonrpc_pubsub::{typed, SubscriptionId};
+use jsonrpc_macros::pubsub;
+use jsonrpc_pubsub::SubscriptionId;
 use primitives::{Bytes, Blake2Hasher, H256};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
@@ -43,31 +44,30 @@ mod tests;
 
 use self::error::Result;
 
-/// Substrate authoring RPC API
-#[rpc]
-pub trait AuthorApi<Hash, BlockHash> {
-	type Metadata;
+build_rpc_trait! {
+	/// Substrate authoring RPC API
+	pub trait AuthorApi<Hash, BlockHash> {
+		type Metadata;
 
-	/// Submit hex-encoded extrinsic for inclusion in block.
-	#[rpc(name = "author_submitExtrinsic")]
-	fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
+		/// Submit hex-encoded extrinsic for inclusion in block.
+		#[rpc(name = "author_submitExtrinsic")]
+		fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
 
-	/// Returns all pending extrinsics, potentially grouped by sender.
-	#[rpc(name = "author_pendingExtrinsics")]
-	fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
-}
+		/// Returns all pending extrinsics, potentially grouped by sender.
+		#[rpc(name = "author_pendingExtrinsics")]
+		fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
 
-#[rpc(pubsub, name = "author_extrinsicUpdate")]
-pub trait AuthorApiPubSub<Hash, BlockHash> {
-	type Metadata;
+		#[pubsub(name = "author_extrinsicUpdate")] {
+			/// Submit an extrinsic to watch.
+			#[rpc(name = "author_submitAndWatchExtrinsic")]
+			fn watch_extrinsic(&self, Self::Metadata, pubsub::Subscriber<Status<Hash, BlockHash>>, Bytes);
 
-	/// Submit an extrinsic to watch.
-	#[rpc(subscribe, name = "author_submitAndWatchExtrinsic")]
-	fn watch_extrinsic(&self, Self::Metadata, typed::Subscriber<Status<Hash, BlockHash>>, Bytes);
+			/// Unsubscribe from extrinsic watching.
+			#[rpc(name = "author_unwatchExtrinsic")]
+			fn unwatch_extrinsic(&self, Option<Self::Metadata>, SubscriptionId) -> Result<bool>;
+		}
 
-	/// Unsubscribe from extrinsic watching.
-	#[rpc(unsubscribe, name = "author_unwatchExtrinsic")]
-	fn unwatch_extrinsic(&self, Option<Self::Metadata>, SubscriptionId) -> Result<bool>;
+	}
 }
 
 /// Authoring API
@@ -119,19 +119,8 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	fn pending_extrinsics(&self) -> Result<Vec<Bytes>> {
 		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
-}
 
-impl<B, E, P, RA> AuthorApiPubSub<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> where
-	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
-	P: PoolChainApi + Sync + Send + 'static,
-	P::Block: traits::Block<Hash=H256>,
-	P::Error: 'static,
-	RA: Send + Sync + 'static
-{
-	type Metadata = ::metadata::Metadata;
-
-	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: typed::Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
+	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
