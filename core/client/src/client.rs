@@ -623,7 +623,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
 	/// then `finalized` *must* be true.
-	fn apply_block(
+	pub fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		import_block: ImportBlock<Block>,
