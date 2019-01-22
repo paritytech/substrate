@@ -37,7 +37,6 @@ extern crate srml_support_procedural;
 #[macro_use]
 extern crate pretty_assertions;
 #[cfg(feature = "std")]
-#[macro_use]
 extern crate serde_derive;
 #[cfg(test)]
 #[macro_use]

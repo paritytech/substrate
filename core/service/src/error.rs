@@ -16,6 +16,9 @@
 
 //! Errors that can occur during the service operation.
 
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+#![allow(deprecated)]
+
 use client;
 use network;
 use keystore;
