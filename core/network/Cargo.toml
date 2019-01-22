@@ -15,7 +15,7 @@ bitflags = "1.0"
 futures = "0.1.17"
 linked-hash-map = "0.5"
 rustc-hex = "1.0"
-rand = "0.5"
+rand = "0.6"
 substrate-primitives = { path = "../../core/primitives" }
 substrate-consensus-common = { path = "../../core/consensus/common" }
 substrate-client = { path = "../../core/client" }
