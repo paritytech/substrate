@@ -70,7 +70,7 @@ pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotific
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
 
-type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as backend::BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
+type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
 
 /// Substrate Client
@@ -624,7 +624,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 
-		// TODO: correct path logic
+		// TODO: correct path logic for when to execute this function
+		// https://github.com/paritytech/substrate/issues/1232
 		let (storage_update,changes_update,storage_changes) = self.block_execution(&import_headers, origin, hash, body.clone(), &transaction)?;
 
 		// TODO: non longest-chain rule.
@@ -718,7 +719,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
 							ExecutionManager::NativeWhenPossible,
