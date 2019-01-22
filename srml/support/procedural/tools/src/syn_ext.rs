@@ -334,3 +334,57 @@ pub fn has_parametric_type_def(typ: &syn::Type, ident: &Ident, default: bool) ->
 pub fn has_parametric_type(typ: &syn::Type, ident: &Ident) -> bool {
 	has_parametric_type_def(typ, ident, true)
 }
+
+/// Get case where serde does not include bound with serde_derive macros:
+/// see https://github.com/serde-rs/serde/issues/1454
+pub fn get_non_bound_serde_derive_types(typ: &syn::Type, t: &syn::Ident) -> Vec<syn::Type> {
+	let mut result = Vec::new();
+	get_non_bound_serde_derive_types_inner(typ, t, &mut result);
+	result
+}
+
+fn get_non_bound_serde_derive_types_inner(typ: &syn::Type, t: &syn::Ident, result: &mut Vec<syn::Type>) {
+	match *typ {
+		syn::Type::Path(ref path) => {
+			if heuristic_is_associated_path(&path.path,t) {
+					result.push(typ.clone());
+			}
+			for p in path.path.segments.iter() {
+				if let syn::PathArguments::AngleBracketed(ref args) = p.arguments {
+					for a in args.args.iter() {
+						if let syn::GenericArgument::Type(ref ty) = a {
+							get_non_bound_serde_derive_types_inner(ty, t, result)
+						}
+					}
+				}
+			}
+		},
+		syn::Type::Slice(ref inner) => get_non_bound_serde_derive_types_inner(&inner.elem, t, result),
+		syn::Type::Array(ref inner) => get_non_bound_serde_derive_types_inner(&inner.elem, t, result),
+		syn::Type::Ptr(ref inner) => get_non_bound_serde_derive_types_inner(&inner.elem, t, result),
+		syn::Type::Reference(ref inner) => get_non_bound_serde_derive_types_inner(&inner.elem, t, result),
+		syn::Type::BareFn(..) => (),
+		syn::Type::Never(..) => (),
+		syn::Type::Tuple(ref inner) => for e in inner.elems.iter() {
+			get_non_bound_serde_derive_types_inner(e, t, result)
+		},
+		syn::Type::TraitObject(..) => (),
+		syn::Type::ImplTrait(..) => (),
+		syn::Type::Paren(ref inner) => get_non_bound_serde_derive_types_inner(&inner.elem, t, result),
+		syn::Type::Group(ref inner) => get_non_bound_serde_derive_types_inner(&inner.elem, t, result),
+		syn::Type::Infer(..) => (),
+		syn::Type::Macro(..) => (),
+		syn::Type::Verbatim(..) => (),
+	}
+
+}
+
+fn heuristic_is_associated_path(path: &syn::Path,t: &syn::Ident) -> bool {
+
+	if let Some(syn::punctuated::Pair::Punctuated(s,_)) = path.segments.first() {
+		&s.ident == t
+	} else {
+		false
+	}
+
+}

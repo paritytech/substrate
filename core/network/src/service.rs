@@ -26,7 +26,7 @@ use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProto
 use io::NetSyncIo;
 use consensus::import_queue::{ImportQueue, Link};
 use consensus_gossip::ConsensusGossip;
-use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
+use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo};
 use config::Params;
 use error::Error;
 use specialization::NetworkSpecialization;
@@ -45,6 +45,8 @@ const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
+	/// Get currently connected peers
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
 }
 
 /// Minimum Requirements for a Hash within Networking
@@ -90,6 +92,10 @@ impl<B: BlockT, E: ExecuteInContext<B>> NetworkLink<B, E> {
 impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
 	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>) {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
+	}
+
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		self.with_sync(|sync, protocol| sync.request_justification(hash, number, protocol))
 	}
 
 	fn maintain_sync(&self) {
@@ -172,6 +178,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		self.handler.on_block_imported(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
 	}
 
+	/// Called when a new block is finalized by the client.
+	pub fn on_block_finalized(&self, hash: B::Hash, header: &B::Header) {
+		self.handler.on_block_finalized(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
+	}
+
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));
@@ -228,6 +239,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> SyncProvider<
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.status()
 	}
+
+	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
+		let peers = self.handler.peers();
+		let network = self.network.lock();
+		peers.into_iter().map(|(idx, info)| {
+			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)
+		}).collect::<Vec<_>>()
+	}
 }
 
 /// Trait for managing network
@@ -250,23 +269,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ManageNetwork
 	}
 
 	fn deny_unreserved_peers(&self) {
-		// This method can disconnect nodes, in which case we have to properly close them in the
-		// protocol.
-		let disconnected = self.network.lock().deny_unreserved_peers();
-		let mut net_sync = NetSyncIo::new(&self.network, self.protocol_id);
-		for node_index in disconnected {
-			self.handler.on_peer_disconnected(&mut net_sync, node_index)
-		}
+		self.network.lock().deny_unreserved_peers();
 	}
 
 	fn remove_reserved_peer(&self, peer: PeerId) {
-		// This method can disconnect a node, in which case we have to properly close it in the
-		// protocol.
-		let disconnected = self.network.lock().remove_reserved_peer(peer);
-		if let Some(node_index) = disconnected {
-			let mut net_sync = NetSyncIo::new(&self.network, self.protocol_id);
-			self.handler.on_peer_disconnected(&mut net_sync, node_index)
-		}
+		self.network.lock().remove_reserved_peer(peer);
 	}
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
@@ -378,12 +385,6 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 		let mut net_sync = NetSyncIo::new(&network_service, protocol_id);
 
 		match event {
-			NetworkServiceEvent::NodeClosed { node_index, closed_custom_protocols } => {
-				if !closed_custom_protocols.is_empty() {
-					debug_assert_eq!(closed_custom_protocols, &[protocol_id]);
-					protocol.on_peer_disconnected(&mut net_sync, node_index);
-				}
-			}
 			NetworkServiceEvent::ClosedCustomProtocols { node_index, protocols } => {
 				if !protocols.is_empty() {
 					debug_assert_eq!(protocols, &[protocol_id]);

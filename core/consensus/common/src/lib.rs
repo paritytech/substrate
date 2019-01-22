@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Tracks offline validators.
+//! Common utilities for building and using consensus engines in substrate.
+//!
+//! Much of this crate is _unstable_ and thus the API is likely to undergo
+//! change. Implementors of traits should not rely on the interfaces to remain
+//! the same.
 
 // This provides "unused" building blocks to other crates
 #![allow(dead_code)]

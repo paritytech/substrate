@@ -50,6 +50,9 @@ use primitives::traits::{
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
 
+#[cfg(any(feature = "std", test))]
+use substrate_primitives::Ed25519AuthorityId;
+
 mod mock;
 mod tests;
 
@@ -143,7 +146,7 @@ impl<SessionKey: Member> RawLog<SessionKey> {
 
 // Implementation for tests outside of this crate.
 #[cfg(any(feature = "std", test))]
-impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<substrate_primitives::Ed25519AuthorityId> {
+impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<Ed25519AuthorityId> {
 	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
 		match log {
 			RawLog::AuthoritiesChange(authorities) =>

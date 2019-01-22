@@ -146,6 +146,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		self.backend.pairs()
 	}
 
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		self.backend.keys(prefix)
+	}
+
 	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{

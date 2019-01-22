@@ -78,7 +78,7 @@ pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
-pub use client::ExecutionStrategy;
+pub use client::{ExecutionStrategy, FinalityNotifications};
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
@@ -223,6 +223,52 @@ impl<Components: components::Components> Service<Components> {
 		}
 
 		{
+			// finality notifications
+			let network = Arc::downgrade(&network);
+
+			// A utility stream that drops all ready items and only returns the last one.
+			// This is used to only keep the last finality notification and avoid
+			// overloading the sync module with notifications.
+			struct MostRecentNotification<B: network::BlockT>(futures::stream::Fuse<FinalityNotifications<B>>);
+
+			impl<B: network::BlockT> Stream for MostRecentNotification<B> {
+				type Item = <FinalityNotifications<B> as Stream>::Item;
+				type Error = <FinalityNotifications<B> as Stream>::Error;
+
+				fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+					let mut last = None;
+					let last = loop {
+						match self.0.poll()? {
+							Async::Ready(Some(item)) => { last = Some(item) }
+							Async::Ready(None) => match last {
+								None => return Ok(Async::Ready(None)),
+								Some(last) => break last,
+							},
+							Async::NotReady => match last {
+								None => return Ok(Async::NotReady),
+								Some(last) => break last,
+							},
+						}
+					};
+
+					Ok(Async::Ready(Some(last)))
+				}
+			}
+
+			let events = MostRecentNotification(client.finality_notification_stream().fuse())
+				.for_each(move |notification| {
+					if let Some(network) = network.upgrade() {
+						network.on_block_finalized(notification.hash, &notification.header);
+					}
+					Ok(())
+				})
+				.select(exit.clone())
+				.then(|_| Ok(()));
+
+			task_executor.spawn(events);
+		}
+
+		{
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
 			let events = transaction_pool.import_notification_stream()
@@ -252,31 +298,28 @@ impl<Components: components::Components> Service<Components> {
 		)?;
 
 		// Telemetry
-		let telemetry = match config.telemetry_url.clone() {
-			Some(url) => {
-				let is_authority = config.roles == Roles::AUTHORITY;
-				let pubkey = format!("{}", public_key);
-				let name = config.name.clone();
-				let impl_name = config.impl_name.to_owned();
-				let version = version.clone();
-				let chain_name = config.chain_spec.name().to_owned();
-				Some(Arc::new(tel::init_telemetry(tel::TelemetryConfig {
-					url: url,
-					on_connect: Box::new(move || {
-						telemetry!("system.connected";
-							"name" => name.clone(),
-							"implementation" => impl_name.clone(),
-							"version" => version.clone(),
-							"config" => "",
-							"chain" => chain_name.clone(),
-							"pubkey" => &pubkey,
-							"authority" => is_authority
-						);
-					}),
-				})))
-			},
-			None => None,
-		};
+		let telemetry = config.telemetry_url.clone().map(|url| {
+			let is_authority = config.roles == Roles::AUTHORITY;
+			let pubkey = format!("{}", public_key);
+			let name = config.name.clone();
+			let impl_name = config.impl_name.to_owned();
+			let version = version.clone();
+			let chain_name = config.chain_spec.name().to_owned();
+			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
+				url: url,
+				on_connect: Box::new(move || {
+					telemetry!("system.connected";
+						"name" => name.clone(),
+						"implementation" => impl_name.clone(),
+						"version" => version.clone(),
+						"config" => "",
+						"chain" => chain_name.clone(),
+						"pubkey" => &pubkey,
+						"authority" => is_authority
+					);
+				}),
+			}))
+		});
 
 		Ok(Service {
 			client,
@@ -557,7 +600,7 @@ macro_rules! construct_service_factory {
 
 			fn new_full(
 				config: $crate::FactoryFullConfiguration<Self>,
-				executor: $crate::TaskExecutor
+				executor: $crate::TaskExecutor,
 			) -> Result<Self::FullService, $crate::Error>
 			{
 				( $( $full_service_init )* ) (config, executor.clone()).and_then(|service| {

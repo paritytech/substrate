@@ -129,12 +129,12 @@ fn should_return_block_hash() {
 
 
 	assert_matches!(
-		client.block_hash(Some(0u64).into()),
+		client.block_hash(Some(0u64.into()).into()),
 		Ok(Some(ref x)) if x == &client.client.genesis_hash()
 	);
 
 	assert_matches!(
-		client.block_hash(Some(1u64).into()),
+		client.block_hash(Some(1u64.into()).into()),
 		Ok(None)
 	);
 
@@ -142,11 +142,15 @@ fn should_return_block_hash() {
 	client.client.import(BlockOrigin::Own, block.clone()).unwrap();
 
 	assert_matches!(
-		client.block_hash(Some(0u64).into()),
+		client.block_hash(Some(0u64.into()).into()),
 		Ok(Some(ref x)) if x == &client.client.genesis_hash()
 	);
 	assert_matches!(
-		client.block_hash(Some(1u64).into()),
+		client.block_hash(Some(1u64.into()).into()),
+		Ok(Some(ref x)) if x == &block.hash()
+	);
+	assert_matches!(
+		client.block_hash(Some(::primitives::U256::from(1u64).into()).into()),
 		Ok(Some(ref x)) if x == &block.hash()
 	);
 }

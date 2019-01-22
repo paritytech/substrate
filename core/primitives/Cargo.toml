@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 sr-std = { path = "../sr-std", default-features = false }
-parity-codec = { version = "2.1", default-features = false }
+parity-codec = { version = "2.2", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 rustc-hex = { version = "2.0", default-features = false }
 serde = { version = "1.0", default-features = false }
@@ -14,11 +14,11 @@ twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default-features = false }
 primitive-types = { version = "0.1", default-features = false, features = ["codec"] }
 impl-serde = { version = "0.1", optional = true }
-wasmi = { version = "0.4.2", optional = true }
-hash-db = { git = "https://github.com/paritytech/trie", default-features = false }
-hash256-std-hasher = { git = "https://github.com/paritytech/trie", default-features = false }
-ring = { version = "0.12", optional = true }
-untrusted = { version = "0.5", optional = true }
+wasmi = { version = "0.4.3", optional = true }
+hash-db = { version = "0.9", default-features = false }
+hash256-std-hasher = { version = "0.9", default-features = false }
+ring = { version = "0.13", optional = true }
+untrusted = { version = "0.6", optional = true }
 hex-literal = { version = "0.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }

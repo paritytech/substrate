@@ -45,14 +45,12 @@ extern crate sr_io as runtime_io;
 #[cfg(test)]
 extern crate srml_timestamp as timestamp;
 
-use rstd::prelude::*;
-use rstd::cmp;
+use rstd::{prelude::*, cmp};
 use codec::{HasCompact, Compact};
-use runtime_support::{Parameter, StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
+use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
 use session::OnSessionChange;
-use primitives::{Perbill, traits::{Zero, One, Bounded, As}};
-use balances::{address::Address, OnDilution};
+use primitives::{Perbill, traits::{Zero, One, Bounded, As, StaticLookup}};
+use balances::OnDilution;
 use system::ensure_signed;
 
 mod mock;
@@ -120,9 +118,8 @@ decl_module! {
 		/// Retract the desire to stake for the transactor.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn unstake(origin, intentions_index: Compact<u32>) -> Result {
+		fn unstake(origin, #[compact] intentions_index: u32) -> Result {
 			let who = ensure_signed(origin)?;
-			let intentions_index: u32 = intentions_index.into();
 			// unstake fails in degenerate case of having too few existing staked parties
 			if Self::intentions().len() <= Self::minimum_validator_count() as usize {
 				return Err("cannot unstake when there are too few staked participants")
@@ -130,9 +127,9 @@ decl_module! {
 			Self::apply_unstake(&who, intentions_index as usize)
 		}
 
-		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) {
+		fn nominate(origin, target: <T::Lookup as StaticLookup>::Source) {
 			let who = ensure_signed(origin)?;
-			let target = <balances::Module<T>>::lookup(target)?;
+			let target = T::Lookup::lookup(target)?;
 
 			ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
 			ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already staked.");
@@ -151,9 +148,8 @@ decl_module! {
 
 		/// Will panic if called when source isn't currently nominating target.
 		/// Updates Nominating, NominatorsFor and NominationBalance.
-		fn unnominate(origin, target_index: Compact<u32>) {
+		fn unnominate(origin, #[compact] target_index: u32) {
 			let source = ensure_signed(origin)?;
-			let target_index: u32 = target_index.into();
 			let target_index = target_index as usize;
 
 			let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
@@ -184,11 +180,10 @@ decl_module! {
 		/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
 		fn register_preferences(
 			origin,
-			intentions_index: Compact<u32>,
+			#[compact] intentions_index: u32,
 			prefs: ValidatorPrefs<T::Balance>
 		) {
 			let who = ensure_signed(origin)?;
-			let intentions_index: u32 = intentions_index.into();
 
 			if Self::intentions().get(intentions_index as usize) != Some(&who) {
 				return Err("Invalid index")
@@ -198,18 +193,17 @@ decl_module! {
 		}
 
 		/// Set the number of sessions in an era.
-		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) {
-			<NextSessionsPerEra<T>>::put(new.into());
+		fn set_sessions_per_era(#[compact] new: T::BlockNumber) {
+			<NextSessionsPerEra<T>>::put(new);
 		}
 
 		/// The length of the bonding duration in eras.
-		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) {
-			<BondingDuration<T>>::put(new.into());
+		fn set_bonding_duration(#[compact] new: T::BlockNumber) {
+			<BondingDuration<T>>::put(new);
 		}
 
 		/// The ideal number of validators.
-		fn set_validator_count(new: Compact<u32>) {
-			let new: u32 = new.into();
+		fn set_validator_count(#[compact] new: u32) {
 			<ValidatorCount<T>>::put(new);
 		}
 
@@ -220,8 +214,7 @@ decl_module! {
 		}
 
 		/// Set the offline slash grace period.
-		fn set_offline_slash_grace(new: Compact<u32>) {
-			let new: u32 = new.into();
+		fn set_offline_slash_grace(#[compact] new: u32) {
 			<OfflineSlashGrace<T>>::put(new);
 		}
 
@@ -508,55 +501,68 @@ impl<T: Trait> Module<T> {
 	/// Call when a validator is determined to be offline. `count` is the
 	/// number of offences the validator has committed.
 	pub fn on_offline_validator(v: T::AccountId, count: usize) {
-		use primitives::traits::CheckedShl;
+		use primitives::traits::{CheckedAdd, CheckedShl};
 
 		// Early exit if validator is invulnerable.
 		if Self::invulnerables().contains(&v) {
 			return
 		}
 
-		for _ in 0..count {
-			let slash_count = Self::slash_count(&v);
-			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
-			let grace = Self::offline_slash_grace();
+		let slash_count = Self::slash_count(&v);
+		let new_slash_count = slash_count + count as u32;
+		<SlashCount<T>>::insert(v.clone(), new_slash_count);
+		let grace = Self::offline_slash_grace();
 
-			let event = if slash_count >= grace {
+		let event = if new_slash_count > grace {
+			let slash = {
+				let base_slash = Self::current_offline_slash();
 				let instances = slash_count - grace;
 
-				let base_slash = Self::current_offline_slash();
-				let slash = match base_slash.checked_shl(instances) {
-					Some(slash) => slash,
-					None => {
-						// freeze at last maximum valid slash if this starts
-						// to overflow.
-						<SlashCount<T>>::insert(v.clone(), slash_count);
-						base_slash.checked_shl(instances - 1)
-							.expect("slash count no longer incremented after overflow; \
-								prior check only fails with instances >= 1; \
-								thus instances - 1 always works and is a valid amount of bits; qed")
+				let mut total_slash = T::Balance::default();
+				for i in instances..(instances + count as u32) {
+					if let Some(total) = base_slash.checked_shl(i)
+							.and_then(|slash| total_slash.checked_add(&slash)) {
+						total_slash = total;
+					} else {
+						// reset slash count only up to the current
+						// instance. the total slash overflows the unit for
+						// balance in the system therefore we can slash all
+						// the slashable balance for the account
+						<SlashCount<T>>::insert(v.clone(), slash_count + i);
+						total_slash = Self::slashable_balance(&v);
+						break;
 					}
-				};
-
-				let next_slash = slash << 1;
-
-				let _ = Self::slash_validator(&v, slash);
-				if instances >= Self::validator_preferences(&v).unstake_threshold
-					|| Self::slashable_balance(&v) < next_slash
-				{
-					if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
-						Self::apply_unstake(&v, pos)
-							.expect("pos derived correctly from Self::intentions(); \
-								apply_unstake can only fail if pos wrong; \
-								Self::intentions() doesn't change; qed");
-					}
-					let _ = Self::apply_force_new_era(false);
 				}
-				RawEvent::OfflineSlash(v.clone(), slash)
-			} else {
-				RawEvent::OfflineWarning(v.clone(), slash_count)
+
+				total_slash
 			};
-			Self::deposit_event(event);
-		}
+
+			let _ = Self::slash_validator(&v, slash);
+
+			let next_slash = match slash.checked_shl(1) {
+				Some(slash) => slash,
+				None => Self::slashable_balance(&v),
+			};
+
+			let instances = new_slash_count - grace;
+			if instances > Self::validator_preferences(&v).unstake_threshold
+				|| Self::slashable_balance(&v) < next_slash
+				|| next_slash <= slash
+			{
+				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
+					Self::apply_unstake(&v, pos)
+						.expect("pos derived correctly from Self::intentions(); \
+								 apply_unstake can only fail if pos wrong; \
+								 Self::intentions() doesn't change; qed");
+				}
+				let _ = Self::apply_force_new_era(false);
+			}
+			RawEvent::OfflineSlash(v.clone(), slash)
+		} else {
+			RawEvent::OfflineWarning(v.clone(), slash_count)
+		};
+
+		Self::deposit_event(event);
 	}
 }
 

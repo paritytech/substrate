@@ -45,6 +45,8 @@ extern crate substrate_keyring as keyring;
 #[cfg_attr(any(feature = "std", test), macro_use)]
 extern crate substrate_primitives as primitives;
 
+#[cfg(test)] extern crate substrate_executor;
+
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
@@ -102,9 +104,9 @@ pub struct Transfer {
 /// Extrinsic for test-runtime.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Extrinsic {
-	pub transfer: Transfer,
-	pub signature: Ed25519Signature,
+pub enum Extrinsic {
+	AuthoritiesChange(Vec<Ed25519AuthorityId>),
+	Transfer(Transfer, Ed25519Signature),
 }
 
 #[cfg(feature = "std")]
@@ -119,10 +121,15 @@ impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
 	fn check(self) -> Result<Self, &'static str> {
-		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
-			Ok(self)
-		} else {
-			Err("bad signature")
+		match self {
+			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
+			Extrinsic::Transfer(transfer, signature) => {
+				if ::runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+					Ok(Extrinsic::Transfer(transfer, signature))
+				} else {
+					Err("bad signature")
+				}
+			},
 		}
 	}
 }
@@ -130,6 +137,15 @@ impl BlindCheckable for Extrinsic {
 impl ExtrinsicT for Extrinsic {
 	fn is_signed(&self) -> Option<bool> {
 		Some(true)
+	}
+}
+
+impl Extrinsic {
+	pub fn transfer(&self) -> &Transfer {
+		match self {
+			Extrinsic::Transfer(ref transfer, _) => transfer,
+			_ => panic!("cannot convert to transfer ref"),
+		}
 	}
 }
 
@@ -170,13 +186,14 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
-pub mod test_api {
-	use super::AccountId;
-
-	decl_runtime_apis! {
-		pub trait TestAPI {
-			fn balance_of(id: AccountId) -> u64;
-		}
+decl_runtime_apis! {
+	pub trait TestAPI {
+		fn balance_of(id: AccountId) -> u64;
+		/// A benchmkark function that adds one to the given value and returns the result.
+		fn benchmark_add_one(val: &u64) -> u64;
+		/// A benchmark function that adds one to each value in the given vector and returns the
+		/// result.
+		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
 	}
 }
 
@@ -204,7 +221,7 @@ impl_runtime_apis! {
 			system::execute_block(block)
 		}
 
-		fn initialise_block(header: <Block as BlockT>::Header) {
+		fn initialise_block(header: &<Block as BlockT>::Header) {
 			system::initialise_block(header)
 		}
 	}
@@ -243,9 +260,19 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl self::test_api::TestAPI<Block> for Runtime {
+	impl self::TestAPI<Block> for Runtime {
 		fn balance_of(id: AccountId) -> u64 {
 			system::balance_of(id)
+		}
+
+		fn benchmark_add_one(val: &u64) -> u64 {
+			val + 1
+		}
+
+		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64> {
+			let mut vec = vec.clone();
+			vec.iter_mut().for_each(|v| *v += 1);
+			vec
 		}
 	}
 

@@ -38,7 +38,7 @@ extern crate safe_mix;
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
-	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug};
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
 use substrate_primitives::storage::well_known_keys;
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
@@ -51,6 +51,28 @@ use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::ChangesTrieConfiguration;
+
+/// Handler for when a new account has been created.
+pub trait OnNewAccount<AccountId> {
+	/// A new account `who` has been registered.
+	fn on_new_account(who: &AccountId);
+}
+
+impl<AccountId> OnNewAccount<AccountId> for () {
+	fn on_new_account(_who: &AccountId) {}
+}
+
+/// Determinator to say whether a given account is unused.
+pub trait IsDeadAccount<AccountId> {
+	/// Is the given account dead?
+	fn is_dead_account(who: &AccountId) -> bool;
+}
+
+impl<AccountId> IsDeadAccount<AccountId> for () {
+	fn is_dead_account(_who: &AccountId) -> bool {
+		true
+	}
+}
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -71,6 +93,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
 	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
+	type Lookup: StaticLookup<Target = Self::AccountId>;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
@@ -400,10 +423,10 @@ impl<T> Default for ChainContext<T> {
 }
 
 impl<T: Trait> Lookup for ChainContext<T> {
-	type Source = T::AccountId;
-	type Target = T::AccountId;
+	type Source = <T::Lookup as StaticLookup>::Source;
+	type Target = <T::Lookup as StaticLookup>::Target;
 	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
-		Ok(s)
+		<T::Lookup as StaticLookup>::lookup(s)
 	}
 }
 
@@ -428,7 +451,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
-	use primitives::traits::BlakeTwo256;
+	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{
@@ -445,6 +468,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = u16;
 		type Log = DigestItem;
