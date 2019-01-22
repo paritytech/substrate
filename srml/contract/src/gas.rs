@@ -247,6 +247,13 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	<balances::Module<T>>::increase_total_stake_by(refund);
 }
 
+/// A little handy utility for converting a value in balance units into approximitate value in gas units
+/// at the given gas price.
+pub fn approx_gas_for_balance<T: Trait>(gas_price: T::Balance, balance: T::Balance) -> T::Gas {
+	let amount_in_gas: T::Balance = balance / gas_price;
+	<T::Gas as As<T::Balance>>::sa(amount_in_gas)
+}
+
 /// A simple utility macro that helps to match against a
 /// list of tokens.
 #[macro_export]
