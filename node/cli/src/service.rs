@@ -30,9 +30,10 @@ use node_primitives::Block;
 use node_runtime::{GenesisConfig, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor, TaskExecutor,
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
+use inherents::InherentDataProviders;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -45,12 +46,14 @@ pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
 	// https://github.com/paritytech/substrate/issues/1134
 	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
+	inherent_data_providers: InherentDataProviders,
 }
 
 impl<F> Default for NodeConfig<F> where F: substrate_service::ServiceFactory {
 	fn default() -> NodeConfig<F> {
 		NodeConfig {
 			grandpa_import_setup: None,
+			inherent_data_providers: InherentDataProviders::new(),
 		}
 	}
 }
@@ -83,7 +86,6 @@ construct_service_factory! {
 					});
 
 					let client = service.client();
-					let inherent_data_providers = client.inherent_data_providers().clone();
 					executor.spawn(start_aura(
 						SlotDuration::get_or_compute(&*client)?,
 						key.clone(),
@@ -92,7 +94,7 @@ construct_service_factory! {
 						proposer,
 						service.network(),
 						service.on_exit(),
-						inherent_data_providers,
+						service.config.custom.inherent_data_providers.clone(),
 					)?);
 
 					info!("Running Grandpa session as Authority {}", key.public());
@@ -123,7 +125,6 @@ construct_service_factory! {
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
-				let inherent_data_providers = client.inherent_data_providers().clone();
 
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(
@@ -137,7 +138,7 @@ construct_service_factory! {
 					slot_duration,
 					block_import,
 					NothingExtra,
-					inherent_data_providers,
+					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			}},
 		LightImportQueue = AuraImportQueue<
@@ -145,13 +146,12 @@ construct_service_factory! {
 			LightClient<Self>,
 			NothingExtra,
 		>
-			{ |ref mut config, client: Arc<LightClient<Self>>| {
-					let inherent_data_providers = client.inherent_data_providers().clone();
+			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 					import_queue(
 						SlotDuration::get_or_compute(&*client)?,
 						client,
 						NothingExtra,
-						inherent_data_providers,
+						config.custom.inherent_data_providers.clone(),
 					).map_err(Into::into)
 				}
 			},

@@ -61,7 +61,6 @@ use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
 use consensus;
 use substrate_telemetry::telemetry;
-use inherents::InherentDataProviders;
 
 use slog::slog_info;
 use log::{info, trace, warn};
@@ -86,7 +85,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
-	inherent_data_providers: InherentDataProviders,
 }
 
 /// A source of blockchain events.
@@ -271,13 +269,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			block_execution_strategy,
 			api_execution_strategy,
 			_phantom: Default::default(),
-			inherent_data_providers: InherentDataProviders::new(),
 		})
-	}
-
-	/// Returns the inherent data providers.
-	pub fn inherent_data_providers(&self) -> &InherentDataProviders {
-		&self.inherent_data_providers
 	}
 
 	/// Get a reference to the state at a given block.
