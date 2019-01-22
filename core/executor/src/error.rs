@@ -16,6 +16,9 @@
 
 //! Rust executor possible errors.
 
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+#![allow(deprecated)]
+
 use state_machine;
 use serializer;
 use wasmi;
