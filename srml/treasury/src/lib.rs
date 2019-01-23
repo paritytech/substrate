@@ -98,10 +98,10 @@ decl_module! {
 
 		/// (Re-)configure this module.
 		fn configure(
-			proposal_bond: Permill,
+			#[compact] proposal_bond: Permill,
 			#[compact] proposal_bond_minimum: T::Balance,
 			#[compact] spend_period: T::BlockNumber,
-			burn: Permill
+			#[compact] burn: Permill
 		) {
 			<ProposalBond<T>>::put(proposal_bond);
 			<ProposalBondMinimum<T>>::put(proposal_bond_minimum);

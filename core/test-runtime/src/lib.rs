@@ -24,6 +24,7 @@ extern crate serde;
 extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
+extern crate substrate_inherents as inherents;
 extern crate substrate_consensus_aura_primitives as consensus_aura;
 
 #[macro_use]
@@ -59,7 +60,7 @@ use runtime_primitives::{
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType
-	}, CheckInherentError
+	}
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
@@ -67,6 +68,7 @@ use primitives::{Ed25519AuthorityId, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use consensus_aura::api as aura_api;
+use inherents::{CheckInherentsResult, InherentData};
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -238,7 +240,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<Block, ()> for Runtime {
+	impl block_builder_api::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}
@@ -247,12 +249,12 @@ impl_runtime_apis! {
 			system::finalise_block()
 		}
 
-		fn inherent_extrinsics(_data: ()) -> Vec<<Block as BlockT>::Extrinsic> {
+		fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
 			unimplemented!()
 		}
 
-		fn check_inherents(_block: Block, _data: ()) -> Result<(), CheckInherentError> {
-			Ok(())
+		fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
+			CheckInherentsResult::new()
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {

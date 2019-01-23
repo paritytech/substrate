@@ -13,8 +13,9 @@ sr-primitives = { path = "../../sr-primitives" }
 sr-version = { path = "../../sr-version" }
 sr-io = { path = "../../sr-io" }
 substrate-consensus-aura-primitives = { path = "primitives" }
-
+substrate-inherents = { path = "../../inherents" }
 srml-consensus = { path = "../../../srml/consensus" }
+srml-aura = { path = "../../../srml/aura" }
 futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"

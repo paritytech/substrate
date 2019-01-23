@@ -6,9 +6,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 log = "0.4"
 parity-codec = "2.2"
-sr-primitives = { path = "../../core/sr-primitives" }
-substrate-client = { path = "../../core/client" }
-substrate-consensus-aura-primitives = { path = "../../core/consensus/aura/primitives" }
-substrate-consensus-common = { path = "../../core/consensus/common" }
-substrate-primitives = { path = "../../core/primitives" }
-substrate-transaction-pool = { path = "../../core/transaction-pool" }
+sr-primitives = { path = "../sr-primitives" }
+substrate-client = { path = "../client" }
+substrate-consensus-aura-primitives = { path = "../consensus/aura/primitives" }
+substrate-consensus-common = { path = "../consensus/common" }
+substrate-primitives = { path = "../primitives" }
+substrate-inherents = { path = "../inherents" }
+substrate-transaction-pool = { path = "../transaction-pool" }
