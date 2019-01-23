@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::traits::{AugmentClap, GetLogFilter};
+use super::traits::{AugmentClap, GetLogFilter, impl_augment_clap};
 
 use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand}};
