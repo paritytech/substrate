@@ -401,8 +401,9 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			NetworkServiceEvent::CustomMessage { node_index, data, .. } => {
 				protocol.handle_packet(&mut net_sync, node_index, &data);
 			}
-			NetworkServiceEvent::Clogged { node_index, .. } => {
-				protocol.on_clogged_peer(&mut net_sync, node_index);
+			NetworkServiceEvent::Clogged { node_index, messages, .. } => {
+				protocol.on_clogged_peer(&mut net_sync, node_index,
+					messages.iter().map(|d| d.as_ref()));
 			}
 		};
 
