@@ -166,6 +166,8 @@ pub enum BehaviourOut {
 		peer_id: PeerId,
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
 	},
 
 	/// We have obtained debug information from a peer.
@@ -189,8 +191,8 @@ impl From<CustomProtosOut> for BehaviourOut {
 			CustomProtosOut::CustomMessage { protocol_id, peer_id, data } => {
 				BehaviourOut::CustomMessage { protocol_id, peer_id, data }
 			}
-			CustomProtosOut::Clogged { protocol_id, peer_id } => {
-				BehaviourOut::Clogged { protocol_id, peer_id }
+			CustomProtosOut::Clogged { protocol_id, peer_id, messages } => {
+				BehaviourOut::Clogged { protocol_id, peer_id, messages }
 			}
 		}
 	}
