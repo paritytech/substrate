@@ -18,9 +18,10 @@
 
 use client::error::Result as ClientResult;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use parity_codec_derive::{Encode, Decode};
 
-use cache::{CacheItemT, ComplexBlockId};
-use cache::list_storage::{Storage};
+use crate::cache::{CacheItemT, ComplexBlockId};
+use crate::cache::list_storage::{Storage};
 
 /// Single list-based cache entry.
 #[derive(Debug)]
@@ -112,8 +113,8 @@ impl<Block: BlockT, T: CacheItemT> StorageEntry<Block, T> {
 
 #[cfg(test)]
 mod tests {
-	use cache::list_cache::tests::test_id;
-	use cache::list_storage::tests::{DummyStorage, FaultyStorage};
+	use crate::cache::list_cache::tests::test_id;
+	use crate::cache::list_storage::tests::{DummyStorage, FaultyStorage};
 	use super::*;
 
 	#[test]

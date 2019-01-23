@@ -24,32 +24,6 @@
 //!
 //! Finality implies canonicality but not vice-versa.
 
-extern crate substrate_client as client;
-extern crate kvdb_rocksdb;
-extern crate kvdb;
-extern crate hash_db;
-extern crate parking_lot;
-extern crate lru_cache;
-extern crate substrate_state_machine as state_machine;
-extern crate substrate_primitives as primitives;
-extern crate sr_primitives as runtime_primitives;
-extern crate parity_codec as codec;
-extern crate substrate_executor as executor;
-extern crate substrate_state_db as state_db;
-extern crate substrate_trie as trie;
-
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-
-#[cfg(test)]
-extern crate kvdb_memorydb;
-
 pub mod light;
 
 mod cache;
@@ -61,7 +35,7 @@ use std::path::PathBuf;
 use std::io;
 
 use client::backend::NewBlockState;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::MemoryDB;
@@ -78,6 +52,7 @@ use utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_
 use client::LeafSet;
 use state_db::StateDb;
 use storage_cache::{CachingState, SharedCache, new_shared_cache};
+use log::{trace, debug, warn};
 pub use state_db::PruningMode;
 
 const CANONICALIZATION_DELAY: u64 = 256;
@@ -116,7 +91,7 @@ pub fn new_client<E, S, Block, RA>(
 }
 
 mod columns {
-	pub const META: Option<u32> = ::utils::COLUMN_META;
+	pub const META: Option<u32> = crate::utils::COLUMN_META;
 	pub const STATE: Option<u32> = Some(1);
 	pub const STATE_META: Option<u32> = Some(2);
 	/// maps hashes to lookup keys and numbers to canon hashes.
@@ -191,7 +166,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>, client::error::Error> {
-		::utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
+		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
 	fn info(&self) -> Result<client::blockchain::Info<Block>, client::error::Error> {
@@ -486,7 +461,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 			// the block is not finalized
 			let mut current_num = anchor.number;
 			let mut current_hash: Block::Hash = convert_hash(&anchor.hash);
-			let maybe_anchor_header: Block::Header = ::utils::require_header::<Block>(
+			let maybe_anchor_header: Block::Header = utils::require_header::<Block>(
 				&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Number(As::sa(current_num))
 			).map_err(|e| e.to_string())?;
 			if maybe_anchor_header.hash() == current_hash {
@@ -497,7 +472,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 				// => we should find the required block hash by traversing
 				// back from the anchor to the block with given number
 				while current_num != block {
-					let current_header: Block::Header = ::utils::require_header::<Block>(
+					let current_header: Block::Header = utils::require_header::<Block>(
 						&*self.db, columns::KEY_LOOKUP, columns::HEADER, BlockId::Hash(current_hash)
 					).map_err(|e| e.to_string())?;
 
@@ -509,7 +484,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 			}
 		};
 
-		Ok(::utils::require_header::<Block>(&*self.db, columns::KEY_LOOKUP, columns::HEADER, block_id)
+		Ok(utils::require_header::<Block>(&*self.db, columns::KEY_LOOKUP, columns::HEADER, block_id)
 			.map_err(|e| e.to_string())?
 			.digest().log(DigestItem::as_changes_trie_root)
 			.map(|root| H256::from_slice(root.as_ref())))
@@ -638,7 +613,7 @@ impl<Block: BlockT> Backend<Block> {
 				).into())
 			}
 
-			let lookup_key = ::utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
+			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash);
@@ -725,7 +700,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let number = pending_block.header.number().clone();
 
 			// blocks are keyed by number + hash.
-			let lookup_key = ::utils::number_and_hash_to_lookup_key(number, hash);
+			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash);
 
 			let mut enacted = Vec::default();
 			let mut retracted = Vec::default();
@@ -752,7 +727,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 							return Err(::client::error::ErrorKind::NotInFinalizedChain.into());
 						}
 
-						::utils::remove_number_to_key_mapping(
+						utils::remove_number_to_key_mapping(
 							&mut transaction,
 							columns::KEY_LOOKUP,
 							r.number
@@ -762,7 +737,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					// canonicalize: set the number lookup to map to this block's hash.
 					for e in tree_route.enacted() {
 						enacted.push(e.hash.clone());
-						::utils::insert_number_to_key_mapping(
+						utils::insert_number_to_key_mapping(
 							&mut transaction,
 							columns::KEY_LOOKUP,
 							e.number,
@@ -772,7 +747,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				}
 
 				transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
-				::utils::insert_number_to_key_mapping(
+				utils::insert_number_to_key_mapping(
 					&mut transaction,
 					columns::KEY_LOOKUP,
 					number,
@@ -780,7 +755,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				);
 			}
 
-			::utils::insert_hash_to_key_mapping(
+			utils::insert_hash_to_key_mapping(
 				&mut transaction,
 				columns::KEY_LOOKUP,
 				number,
@@ -880,7 +855,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				let number = header.number().clone();
 				transaction.put(
 					columns::JUSTIFICATION,
-					&::utils::number_and_hash_to_lookup_key(number, hash.clone()),
+					&utils::number_and_hash_to_lookup_key(number, hash.clone()),
 					&justification.encode(),
 				);
 			}
@@ -920,7 +895,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let hash = self.blockchain.hash(best)?.ok_or_else(
 						|| client::error::ErrorKind::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
-					let key = ::utils::number_and_hash_to_lookup_key(best.clone(), hash.clone());
+					let key = utils::number_and_hash_to_lookup_key(best.clone(), hash.clone());
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					self.storage.db.write(transaction).map_err(db_err)?;
@@ -978,6 +953,7 @@ where Block: BlockT<Hash=H256> {}
 mod tests {
 	use hash_db::HashDB;
 	use super::*;
+	use crate::columns;
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -1205,7 +1181,7 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert_eq!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1239,7 +1215,7 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert_eq!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1271,12 +1247,12 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().is_none());
+			assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_none());
 		}
 
 		backend.finalize_block(BlockId::Number(1), None).unwrap();
 		backend.finalize_block(BlockId::Number(2), None).unwrap();
-		assert!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().is_none());
+		assert!(backend.storage.db.get(columns::STATE, key.as_bytes()).unwrap().is_none());
 	}
 
 	#[test]
