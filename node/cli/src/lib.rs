@@ -51,7 +51,7 @@ mod service;
 
 use tokio::prelude::Future;
 use tokio::runtime::Runtime;
-pub use cli::{VersionInfo, IntoExit, NoCustom, impl_augment_clap};
+pub use cli::{VersionInfo, IntoExit, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
 

@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
+#[macro_use]
 mod traits;
 mod params;
 pub mod error;
@@ -51,7 +52,7 @@ use params::{
 	NetworkConfigurationParams, SharedParams, MergeParameters
 };
 pub use params::{NoCustom, CoreParams};
-pub use traits::{GetLogFilter, AugmentClap, impl_augment_clap};
+pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 use error_chain::bail;
 use log::info;
