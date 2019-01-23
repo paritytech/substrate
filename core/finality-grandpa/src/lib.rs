@@ -528,10 +528,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			self.voters.clone(),
 		);
 
+		let local_key = self.config.local_key.as_ref()
+			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+
 		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
-			self.config.local_key.clone(),
+			local_key.cloned(),
 			self.voters.clone(),
 			self.network.clone(),
 		);
@@ -1407,6 +1410,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 }
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
 	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
 	client: &Arc<Client<B, E, Block, RA>>,
@@ -1442,9 +1446,14 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		commit_in,
 	);
 
+	let is_voter = local_key
+		.map(|pair| voters.contains_key(&pair.public().into()))
+		.unwrap_or(false);
+
 	let commit_out = ::communication::CommitsOut::<Block, _>::new(
 		network.clone(),
 		set_id,
+		is_voter,
 	);
 
 	let commit_in = commit_in.map_err(Into::into);
@@ -1524,6 +1533,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		);
 
 		let committer_data = committer_communication(
+			config.local_key.clone(),
 			env.set_id,
 			&env.voters,
 			&client,
