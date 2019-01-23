@@ -30,7 +30,8 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
-use consensus_common::{BlockOrigin, Error as ConsensusError};
+use consensus_common::BlockOrigin;
+use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::{collections::HashSet, result};
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
 use runtime_primitives::generic::BlockId;
@@ -100,13 +101,14 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ConsensusError> + Send + Sync>, PeerData)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, PeerData)
 	{
 		let (import, link) = block_import(
 			client,
 			Arc::new(self.test_config.clone())
 		).expect("Could not create block import for fresh peer.");
-		(Arc::new(import), Mutex::new(Some(link)))
+		let shared_import = Arc::new(import);
+		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
 	}
 
 	fn peer(&self, i: usize) -> &GrandpaPeer {
