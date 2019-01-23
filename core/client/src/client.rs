@@ -1388,6 +1388,10 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
 	>(&self, insert: I, delete: D) -> error::Result<()> {
+		// Import is locked here because we may have other block import
+		// operations that tries to set aux data. Note that for consensus
+		// layer, one can always use atomic operations to make sure
+		// import is only locked once.
 		self.lock_import_and_run(|operation| {
 			self.apply_aux(operation, insert, delete)
 		})
