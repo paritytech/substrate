@@ -90,7 +90,7 @@ fn should_watch_extrinsic() {
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
-	let (subscriber, id_rx, data) = ::jsonrpc_macros::pubsub::Subscriber::new_test("test");
+	let (subscriber, id_rx, data) = ::jsonrpc_pubsub::typed::Subscriber::new_test("test");
 
 	// when
 	p.watch_extrinsic(Default::default(), subscriber, uxt(Keyring::Alice, 0).encode().into());
