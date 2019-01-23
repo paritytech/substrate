@@ -18,7 +18,6 @@ use crate::ProtocolId;
 use bytes::Bytes;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
-use log::debug;
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -81,6 +80,9 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	protocol_id: ProtocolId,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
+	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
+	/// unless the buffer empties then fills itself again.
+	clogged_fuse: bool,
 }
 
 impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
@@ -114,21 +116,23 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 		}
 
 		self.send_queue.push_back(data);
-
-		// If the length of the queue goes over a certain arbitrary threshold, we print a warning.
-		if self.send_queue.len() >= 2048 {
-			// TODO: this used to be a warning, but is now a `debug` in order to avoid too much
-			//	noise in the logs; see https://github.com/paritytech/substrate/issues/1414
-			debug!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
-				large: {}", self.send_queue.len());
-		}
 	}
+}
+
+/// Event produced by the `RegisteredProtocolSubstream`.
+#[derive(Debug, Clone)]
+pub enum RegisteredProtocolEvent {
+	/// Received a message from the remote.
+	Message(Bytes),
+	/// Diagnostic event indicating that the connection is clogged and we should avoid sending too
+	/// many messages to it.
+	Clogged,
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite,
 {
-	type Item = Bytes;
+	type Item = RegisteredProtocolEvent;
 	type Error = io::Error;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -148,6 +152,19 @@ where TSubstream: AsyncRead + AsyncWrite,
 			}
 		}
 
+		// Indicating that the remote is clogged if that's the case.
+		if self.send_queue.len() >= 2048 {
+			if !self.clogged_fuse {
+				// Note: this fuse is important not just for preventing us from flooding the logs;
+				// 	if you remove the fuse, then we will always return early from this function and
+				//	thus never read any message from the network.
+				self.clogged_fuse = true;
+				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged)))
+			}
+		} else {
+			self.clogged_fuse = false;
+		}
+
 		// Flushing if necessary.
 		if self.requires_poll_complete {
 			if let Async::Ready(()) = self.inner.poll_complete()? {
@@ -158,7 +175,8 @@ where TSubstream: AsyncRead + AsyncWrite,
 		// Receiving incoming packets.
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		match self.inner.poll()? {
-			Async::Ready(Some(data)) => Ok(Async::Ready(Some(data.freeze()))),
+			Async::Ready(Some(data)) =>
+				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(data.freeze())))),
 			Async::Ready(None) =>
 				if !self.requires_poll_complete && self.send_queue.is_empty() {
 					Ok(Async::Ready(None))
@@ -225,6 +243,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 			inner: framed.fuse(),
 			protocol_id: self.id,
 			protocol_version: info.version,
+			clogged_fuse: false,
 		})
 	}
 }

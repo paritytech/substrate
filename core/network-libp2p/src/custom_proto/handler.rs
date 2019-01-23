@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::ProtocolId;
-use crate::custom_proto::upgrade::{RegisteredProtocol, RegisteredProtocols, RegisteredProtocolSubstream};
+use crate::custom_proto::upgrade::{RegisteredProtocol, RegisteredProtocols, RegisteredProtocolSubstream, RegisteredProtocolEvent};
 use bytes::Bytes;
 use futures::prelude::*;
 use libp2p::core::{
@@ -110,6 +110,13 @@ pub enum CustomProtosHandlerOut {
 		protocol_id: ProtocolId,
 		/// Data that has been received.
 		data: Bytes,
+	},
+
+	/// A substream to the remote is clogged. The send buffer is very large, and we should print
+	/// a diagnostic message and/or avoid sending more data.
+	Clogged {
+		/// Protocol which is clogged.
+		protocol_id: ProtocolId,
 	},
 }
 
@@ -283,10 +290,17 @@ where
 		for n in (0..self.substreams.len()).rev() {
 			let mut substream = self.substreams.swap_remove(n);
 			match substream.poll() {
-				Ok(Async::Ready(Some(data))) => {
+				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(data)))) => {
 					let event = CustomProtosHandlerOut::CustomMessage {
 						protocol_id: substream.protocol_id(),
 						data
+					};
+					self.substreams.push(substream);
+					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(event)))
+				},
+				Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged))) => {
+					let event = CustomProtosHandlerOut::Clogged {
+						protocol_id: substream.protocol_id()
 					};
 					self.substreams.push(substream);
 					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(event)))
