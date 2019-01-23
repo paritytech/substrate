@@ -17,7 +17,6 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use codec::Compact;
 use exec::{Ext, EmptyOutputBuf, VmExecResult};
 use gas::GasMeter;
 use rstd::prelude::*;

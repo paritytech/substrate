@@ -16,6 +16,7 @@
 
 //! Transaction validity interface.
 
+use codec::Compact;
 use rstd::prelude::*;
 
 /// Priority for a transaction. Additive. Higher is better.
@@ -32,12 +33,12 @@ pub type TransactionTag = Vec<u8>;
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
-	Invalid,
+	Invalid(i8),
 	Valid {
-		priority: TransactionPriority,
+		priority: Compact<TransactionPriority>,
 		requires: Vec<TransactionTag>,
 		provides: Vec<TransactionTag>,
-		longevity: TransactionLongevity
+		longevity: Compact<TransactionLongevity>,
 	},
-	Unknown,
+	Unknown(i8),
 }

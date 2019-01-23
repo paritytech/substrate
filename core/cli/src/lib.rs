@@ -45,7 +45,7 @@ use std::str::FromStr;
 use names::{Generator, Name};
 use regex::Regex;
 use structopt::StructOpt;
-pub use params::{CoreParams, CoreCommands, ExecutionStrategy};
+pub use crate::params::{CoreParams, CoreCommands, ExecutionStrategy};
 use app_dirs::{AppInfo, AppDataType};
 use error_chain::bail;
 use log::info;

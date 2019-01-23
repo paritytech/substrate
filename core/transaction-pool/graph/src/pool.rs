@@ -110,18 +110,18 @@ impl<B: ChainApi> Pool<B> {
 						Ok(base::Transaction {
 							data: xt,
 							hash,
-							priority,
+							priority: priority.into(),
 							requires,
 							provides,
-							valid_till: block_number.as_().saturating_add(longevity),
+							valid_till: block_number.as_().saturating_add(longevity.0),
 						})
 					},
-					TransactionValidity::Invalid => {
-						bail!(error::Error::from(error::ErrorKind::InvalidTransaction))
+					TransactionValidity::Invalid(e) => {
+						bail!(error::Error::from(error::ErrorKind::InvalidTransaction(e)))
 					},
-					TransactionValidity::Unknown => {
+					TransactionValidity::Unknown(e) => {
 						self.listener.write().invalid(&hash);
-						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity))
+						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity(e)))
 					},
 				}
 			})
@@ -170,7 +170,7 @@ impl<B: ChainApi> Pool<B> {
 		// Fire mined event for transactions that became invalid.
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
 			Err(Ok(err)) => match err.kind() {
-				error::ErrorKind::InvalidTransaction => Some(hashes[idx].clone()),
+				error::ErrorKind::InvalidTransaction(_) => Some(hashes[idx].clone()),
 				_ => None,
 			},
 			_ => None,

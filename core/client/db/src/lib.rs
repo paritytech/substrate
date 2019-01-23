@@ -48,10 +48,10 @@ use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
-use utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
+use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
 use client::LeafSet;
 use state_db::StateDb;
-use storage_cache::{CachingState, SharedCache, new_shared_cache};
+use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
 
@@ -405,7 +405,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	}
 
 	/// Prune obsolete changes tries.
-	pub fn prune(&self, config: Option<ChangesTrieConfiguration>, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {	
+	pub fn prune(&self, config: Option<ChangesTrieConfiguration>, tx: &mut DBTransaction, block_hash: Block::Hash, block_num: NumberFor<Block>) {
 		// never prune on archive nodes
 		let min_blocks_to_keep = match self.min_blocks_to_keep {
 			Some(min_blocks_to_keep) => min_blocks_to_keep,

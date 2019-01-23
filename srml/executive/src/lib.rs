@@ -223,31 +223,44 @@ impl<
 	///
 	/// Changes made to the storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
+		const UNKNOWN_ERROR: i8 = -127;
+		// bad signature
+		const BAD_SIGNATURE: i8 = 0;
+		// Index errors
+		const INVALID_INDEX: i8 = 10;
+		const OLD_INDEX: i8 = 11;
+		const FUTURE_INDEX: i8 = 12;
+		const MISSING_INDEX: i8 = 13;
+		// other errors
+		const INSUFFICIENT_FUNDS: i8 = 20;
+		const MISSING_SENDER: i8 = 30;
+
 		let encoded_len = uxt.encode().len();
 
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
 			// An unknown account index implies that the transaction may yet become valid.
-			Err("invalid account index") => return TransactionValidity::Unknown,
+			Err("invalid account index") => return TransactionValidity::Unknown(INVALID_INDEX),
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err(_) => return TransactionValidity::Invalid,
+			Err("bad signature") => return TransactionValidity::Invalid(BAD_SIGNATURE),
+			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
 			if Payment::make_payment(sender, encoded_len).is_err() {
-				return TransactionValidity::Invalid
+				return TransactionValidity::Invalid(INSUFFICIENT_FUNDS)
 			}
 
 			// check index
 			let mut expected_index = <system::Module<System>>::account_nonce(sender);
 			if index < &expected_index {
-				return TransactionValidity::Invalid
+				return TransactionValidity::Invalid(OLD_INDEX)
 			}
 			if *index > expected_index + As::sa(256) {
-				return TransactionValidity::Unknown
+				return TransactionValidity::Unknown(FUTURE_INDEX)
 			}
 
 			let mut deps = Vec::new();
@@ -257,13 +270,17 @@ impl<
 			}
 
 			TransactionValidity::Valid {
-				priority: encoded_len as TransactionPriority,
+				priority: (encoded_len as TransactionPriority).into(),
 				requires: deps,
 				provides: vec![(sender, *index).encode()],
-				longevity: TransactionLongevity::max_value(),
+				longevity: TransactionLongevity::max_value().into(),
 			}
 		} else {
-			return TransactionValidity::Invalid
+			return TransactionValidity::Invalid(if xt.sender().is_none() {
+				MISSING_SENDER
+			} else {
+				MISSING_INDEX
+			})
 		}
 	}
 }
