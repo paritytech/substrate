@@ -52,6 +52,8 @@ extern crate error_chain;
 extern crate log;
 extern crate structopt;
 
+#[macro_use]
+mod traits;
 mod params;
 pub mod error;
 pub mod informant;
@@ -82,7 +84,8 @@ use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, SharedParams, MergeParameters
 };
-pub use params::{NoCustom, GetLogFilter, CoreParams, AugmentClap};
+pub use params::{NoCustom, CoreParams};
+pub use traits::{GetLogFilter, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 
 use futures::Future;

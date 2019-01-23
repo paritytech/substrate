@@ -14,9 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::traits::{AugmentClap, GetLogFilter};
+
 use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand}};
 use client;
+
+/// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
+macro_rules! impl_get_log_filter {
+	( $type:ident ) => {
+		impl $crate::GetLogFilter for $type {
+			fn get_log_filter(&self) -> Option<String> {
+				self.shared_params.get_log_filter()
+			}
+		}
+	}
+}
 
 arg_enum! {
 	/// How to execute blocks
@@ -36,33 +49,6 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 		}
 	}
-}
-
-/// Something that can augment a clapp app with further parameters.
-/// `derive(StructOpt)` is implementing this function by default, so a macro `impl_augment_clap!`
-/// is provided to simplify the implementation of this trait.
-pub trait AugmentClap {
-	/// Augment the given clap `App` with further parameters.
-	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b>;
-}
-
-/// Macro for implementing the `AugmentClap` trait.
-/// This requires that the given type uses `derive(StructOpt)`!
-#[macro_export]
-macro_rules! impl_augment_clap {
-	( $type:ident ) => {
-		impl $crate::AugmentClap for $type {
-			fn augment_clap<'a, 'b>(app: $crate::App<'a, 'b>) -> $crate::App<'a, 'b> {
-				$type::augment_clap(app)
-			}
-		}
-	}
-}
-
-/// Returns the log filter given by the user as commandline argument.
-pub trait GetLogFilter {
-	/// Returns the set log filter.
-	fn get_log_filter(&self) -> Option<String>;
 }
 
 /// Shared parameters used by all `CoreParams`.
@@ -88,17 +74,6 @@ pub struct SharedParams {
 impl GetLogFilter for SharedParams {
 	fn get_log_filter(&self) -> Option<String> {
 		self.log.clone()
-	}
-}
-
-/// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
-macro_rules! impl_get_log_filter {
-	( $type:ident ) => {
-		impl GetLogFilter for $type {
-			fn get_log_filter(&self) -> Option<String> {
-				self.shared_params.get_log_filter()
-			}
-		}
 	}
 }
 
