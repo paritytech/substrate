@@ -27,18 +27,19 @@ use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 use client::{cht, LeafSet};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use primitives::Blake2Hasher;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor, Digest, DigestItem, AuthorityIdFor};
-use cache::{DbCacheSync, DbCache, ComplexBlockId};
-use utils::{meta_keys, Meta, db_err, open_database,
+use crate::cache::{DbCacheSync, DbCache, ComplexBlockId};
+use crate::utils::{self, meta_keys, Meta, db_err, open_database,
 	read_db, block_id_to_lookup_key, read_meta};
-use DatabaseSettings;
+use crate::DatabaseSettings;
+use log::{trace, warn, debug};
 
 pub(crate) mod columns {
-	pub const META: Option<u32> = ::utils::COLUMN_META;
+	pub const META: Option<u32> = crate::utils::COLUMN_META;
 	pub const KEY_LOOKUP: Option<u32> = Some(1);
 	pub const HEADER: Option<u32> = Some(2);
 	pub const CACHE: Option<u32> = Some(3);
@@ -135,7 +136,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		Block: BlockT,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		::utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
+		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
 	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
@@ -167,7 +168,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 
 	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
 		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Hash(hash))? {
-			let number = ::utils::lookup_key_to_number(&lookup_key)?;
+			let number = utils::lookup_key_to_number(&lookup_key)?;
 			Ok(Some(number))
 		} else {
 			Ok(None)
@@ -203,7 +204,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			).into())
 		}
 
-		let lookup_key = ::utils::number_and_hash_to_lookup_key(header.number().clone(), hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(header.number().clone(), hash);
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 		// build new CHT(s) if required
@@ -243,7 +244,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				if let Some(hash) = self.hash(prune_block)? {
 					let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::KEY_LOOKUP, BlockId::Number(prune_block))?
 						.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
-					::utils::remove_key_mappings(
+					utils::remove_key_mappings(
 						transaction,
 						columns::KEY_LOOKUP,
 						prune_block,
@@ -324,7 +325,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 
 		// blocks are keyed by number + hash.
-		let lookup_key = ::utils::number_and_hash_to_lookup_key(number, hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(number, hash);
 
 		if leaf_state.is_best() {
 			// handle reorg.
@@ -345,7 +346,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 								(&retracted.number, &retracted.hash));
 						}
 
-						::utils::remove_number_to_key_mapping(
+						utils::remove_number_to_key_mapping(
 							&mut transaction,
 							columns::KEY_LOOKUP,
 							retracted.number
@@ -353,7 +354,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					}
 
 					for enacted in tree_route.enacted() {
-						::utils::insert_number_to_key_mapping(
+						utils::insert_number_to_key_mapping(
 							&mut transaction,
 							columns::KEY_LOOKUP,
 							enacted.number,
@@ -364,7 +365,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			}
 
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
-			::utils::insert_number_to_key_mapping(
+			utils::insert_number_to_key_mapping(
 				&mut transaction,
 				columns::KEY_LOOKUP,
 				number,
@@ -372,7 +373,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			);
 		}
 
-		::utils::insert_hash_to_key_mapping(
+		utils::insert_hash_to_key_mapping(
 			&mut transaction,
 			columns::KEY_LOOKUP,
 			number,
@@ -473,7 +474,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 /// Build the key for inserting header-CHT at given block.
 fn cht_key<N: As<u64>>(cht_type: u8, block: N) -> [u8; 5] {
 	let mut key = [cht_type; 5];
-	key[1..].copy_from_slice(&::utils::number_index_key(block));
+	key[1..].copy_from_slice(&utils::number_index_key(block));
 	key
 }
 
