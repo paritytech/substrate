@@ -3,6 +3,7 @@ name = "substrate-cli"
 version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
+edition = "2018"
 
 [dependencies]
 clap = "~2.32"
@@ -22,11 +23,11 @@ futures = "0.1.17"
 fdlimit = "0.1"
 exit-future = "0.1"
 sysinfo = "0.7"
-substrate-client = { path = "../../core/client" }
-substrate-network = { path = "../../core/network" }
-sr-primitives = { path = "../../core/sr-primitives" }
-substrate-primitives = { path = "../../core/primitives" }
-substrate-service = { path = "../../core/service" }
+client = { package = "substrate-client", path = "../../core/client" }
+network = { package = "substrate-network", path = "../../core/network" }
+runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+service = { package = "substrate-service", path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
 names = "0.11.0"
 structopt = "0.2.13"

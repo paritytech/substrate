@@ -32,6 +32,7 @@ extern crate srml_metadata;
 extern crate mashup;
 #[cfg_attr(test, macro_use)]
 extern crate srml_support_procedural;
+extern crate substrate_inherents as inherents;
 
 #[cfg(test)]
 #[macro_use]

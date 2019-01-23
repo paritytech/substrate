@@ -21,7 +21,7 @@ pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
 pub use rstd::result;
-pub use codec::{Codec, Decode, Encode, Input, Output};
+pub use codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	ModuleMetadata, FunctionMetadata, DecodeDifferent,
 	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
@@ -201,7 +201,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident $(, $param_name:ident : $param:ty)*
+			$origin:ident $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -215,7 +215,7 @@ macro_rules! decl_module {
 				$($t)*
 				$(#[doc = $doc_attr])*
 				$fn_vis fn $fn_name(
-					$origin $( , $param_name : $param )*
+					$origin $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
 			]
 			$($rest)*
@@ -230,7 +230,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident : T::Origin $(, $param_name:ident : $param:ty)*
+			$origin:ident : T::Origin $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -249,7 +249,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			origin : $origin:ty $(, $param_name:ident : $param:ty)*
+			origin : $origin:ty $(, $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -268,7 +268,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$( $param_name:ident : $param:ty),*
+			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -282,7 +282,7 @@ macro_rules! decl_module {
 				$($t)*
 				$(#[doc = $doc_attr])*
 				$fn_vis fn $fn_name(
-					root $( , $param_name : $param )*
+					root $( , $(#[$codec_attr])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
 			]
 			$($rest)*
@@ -475,7 +475,7 @@ macro_rules! decl_module {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				$fn_vis:vis fn $fn_name:ident(
-					$from:ident $( , $param_name:ident : $param:ty)*
+					$from:ident $( , $(#[$codec_attr:ident])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }
 			)*
 		}
@@ -607,13 +607,13 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name> $crate::dispatch::Decode for $call_type<$trait_instance> {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				let _input_id = input.read_byte()?;
-				__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*)
+				__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*)
 			}
 		}
 
 		impl<$trait_instance: $trait_name> $crate::dispatch::Encode for $call_type<$trait_instance> {
 			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
-				__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*);
+				__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
 				if let $call_type::__PhantomItem(_) = *self { unreachable!() }
 				if let $call_type::__OtherPhantomItem(_) = *self { unreachable!() }
 			}
@@ -651,7 +651,7 @@ macro_rules! decl_module {
 		}
 		__dispatch_impl_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
-			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*); )*}
+			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $(#[$codec_attr])* $param_name : $param )*); )*}
 		}
 	}
 }
@@ -665,14 +665,18 @@ macro_rules! __impl_decode {
 		$fn_id:expr;
 		$call_type:ident;
 		fn $fn_name:ident(
-			$( $param_name:ident ),*
+			$( $(#[$codec_attr:ident on type $param:ty])* $param_name:ident ),*
 		);
 		$($rest:tt)*
 	) => {
 		{
 			if $input_id == ($fn_id) {
 				$(
-					let $param_name = $crate::dispatch::Decode::decode($input)?;
+					__impl_decode!(@decode
+						$(#[$codec_attr on type $param])*
+						$param_name;
+						$input;
+					);
 				)*
 				return Some($call_type:: $fn_name( $( $param_name ),* ));
 			}
@@ -687,7 +691,31 @@ macro_rules! __impl_decode {
 		$call_type:ident;
 	) => {
 		None
-	}
+	};
+	(@decode
+		#[compact on type $param:ty]
+		$param_name:ident;
+		$input:expr;
+	) => {
+		let $param_name = <<$param as $crate::dispatch::HasCompact>::Type as $crate::dispatch::Decode>::decode($input)?.into();
+	};
+	(@decode
+		$param_name:ident;
+		$input:expr;
+	) => {
+		let $param_name = $crate::dispatch::Decode::decode($input)?;
+	};
+	(@decode
+		$(#[$codec_attr:ident on type])*
+		$param_name:ident;
+		$input:expr;
+	) => {
+		compile_error!(concat!(
+			"Invalid attribute for parameter `",
+			stringify!($param_name),
+			"`, the following attributes are supported: `#[compact]`"
+		))
+	};
 }
 
 #[macro_export]
@@ -699,7 +727,7 @@ macro_rules! __impl_encode {
 		$fn_id:expr;
 		$call_type:ident;
 		fn $fn_name:ident(
-			$( $param_name:ident ),*
+			$( $(#[$codec_attr:ident on type $param:ty])* $param_name:ident ),*
 		);
 		$($rest:tt)*
 	) => {
@@ -711,7 +739,11 @@ macro_rules! __impl_encode {
 			) = $self {
 				$dest.push_byte(($fn_id) as u8);
 				$(
-					$param_name.encode_to($dest);
+					__impl_encode!(@encode_as
+						$(#[$codec_attr on type $param])*
+						$param_name;
+						$dest;
+					);
 				)*
 			}
 
@@ -723,7 +755,30 @@ macro_rules! __impl_encode {
 		$self:expr;
 		$fn_id:expr;
 		$call_type:ident;
-	) => {{}}
+	) => {{}};
+	(@encode_as
+		#[compact on type $param:ty]
+		$param_name:ident;
+		$dest:expr;
+	) => {
+		<<$param as $crate::dispatch::HasCompact>::Type as $crate::dispatch::EncodeAsRef<$param>>::RefType::from($param_name).encode_to($dest);
+	};
+	(@encode_as
+		$param_name:ident;
+		$dest:expr;
+	) => {
+		$param_name.encode_to($dest);
+	};
+	(@encode_as
+		$(#[$codec_attr:ident on type $param:ty])*
+		$param_name:ident;
+		$dest:expr;
+	) => {
+		compile_error!(concat!(
+			"Invalid attribute for parameter `", stringify!($param_name),
+			"`, the following attributes are supported: `#[compact]`"
+		))
+	};
 }
 
 pub trait IsSubType<T: Callable> {
@@ -871,7 +926,7 @@ macro_rules! __call_to_metadata {
 				$(#[doc = $doc_attr:tt])*
 				fn $fn_name:ident($from:ident
 					$(
-						, $param_name:ident : $param:ty
+						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
 					)*
 				);
 			)*}
@@ -879,7 +934,7 @@ macro_rules! __call_to_metadata {
 		$crate::dispatch::CallMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
 			functions: __functions_to_metadata!(0; $origin_type;; $(
-				fn $fn_name( $( $param_name: $param ),* );
+				fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
 				$( $doc_attr ),*;
 			)*),
 		}
@@ -896,7 +951,7 @@ macro_rules! __functions_to_metadata{
 		$( $function_metadata:expr ),*;
 		fn $fn_name:ident(
 			$(
-				$param_name:ident : $param:ty
+				$(#[$codec_attr:ident])* $param_name:ident : $param:ty
 			),*
 		);
 		$( $fn_doc:expr ),*;
@@ -905,7 +960,7 @@ macro_rules! __functions_to_metadata{
 		__functions_to_metadata!(
 			$fn_id + 1; $origin_type;
 			$( $function_metadata, )* __function_to_metadata!(
-				fn $fn_name($( $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
+				fn $fn_name($( $(#[$codec_attr])* $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
 			);
 			$($rest)*
 		)
@@ -925,7 +980,7 @@ macro_rules! __functions_to_metadata{
 macro_rules! __function_to_metadata {
 	(
 		fn $fn_name:ident(
-			$($param_name:ident : $param:ty),*
+			$( $(#[$codec_attr:ident])* $param_name:ident : $param:ty),*
 		);
 		$( $fn_doc:expr ),*;
 		$fn_id:expr;
@@ -937,13 +992,30 @@ macro_rules! __function_to_metadata {
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
-						ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($param)),
+						ty: $crate::dispatch::DecodeDifferent::Encode(
+							__function_to_metadata!(@stringify_expand_attr
+								$(#[$codec_attr])* $param_name: $param
+							)
+						),
 					}
 				),*
 			]),
 			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
 	};
+
+	(@stringify_expand_attr #[compact] $param_name:ident : $param:ty) => {
+		concat!("Compact<", stringify!($param), ">")
+	};
+
+	(@stringify_expand_attr $param_name:ident : $param:ty) => { stringify!($param) };
+
+	(@stringify_expand_attr $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
+		compile_error!(concat!(
+			"Invalid attribute for parameter `", stringify!($param_name),
+			"`, the following attributes are supported: `#[compact]`"
+		))
+	}
 }
 
 #[cfg(test)]
@@ -969,7 +1041,7 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
 			fn aux_0(_origin) -> Result { unreachable!() }
-			fn aux_1(_origin, _data: i32) -> Result { unreachable!() }
+			fn aux_1(_origin, #[compact] _data: u32) -> Result { unreachable!() }
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
@@ -995,7 +1067,7 @@ mod tests {
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
 							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
+							ty: DecodeDifferent::Encode("Compact<u32>")
 						}
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
@@ -1047,5 +1119,12 @@ mod tests {
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::metadata();
 		assert_eq!(EXPECTED_METADATA, metadata);
+	}
+
+	#[test]
+	fn compact_attr() {
+		let call: Call<TraitImpl> = Call::aux_1(0);
+		let encoded = call.encode();
+		assert_eq!(encoded.len(), 2);
 	}
 }
