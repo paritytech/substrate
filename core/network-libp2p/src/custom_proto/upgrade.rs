@@ -124,9 +124,13 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 pub enum RegisteredProtocolEvent {
 	/// Received a message from the remote.
 	Message(Bytes),
+
 	/// Diagnostic event indicating that the connection is clogged and we should avoid sending too
 	/// many messages to it.
-	Clogged,
+	Clogged {
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
+	},
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
@@ -159,7 +163,9 @@ where TSubstream: AsyncRead + AsyncWrite,
 				// 	if you remove the fuse, then we will always return early from this function and
 				//	thus never read any message from the network.
 				self.clogged_fuse = true;
-				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged)))
+				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged {
+					messages: self.send_queue.iter().cloned().collect(),
+				})))
 			}
 		} else {
 			self.clogged_fuse = false;

@@ -117,6 +117,8 @@ pub enum CustomProtosHandlerOut {
 	Clogged {
 		/// Protocol which is clogged.
 		protocol_id: ProtocolId,
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
 	},
 }
 
@@ -298,9 +300,10 @@ where
 					self.substreams.push(substream);
 					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(event)))
 				},
-				Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged))) => {
+				Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged { messages }))) => {
 					let event = CustomProtosHandlerOut::Clogged {
-						protocol_id: substream.protocol_id()
+						protocol_id: substream.protocol_id(),
+						messages,
 					};
 					self.substreams.push(substream);
 					return Ok(Async::Ready(ProtocolsHandlerEvent::Custom(event)))

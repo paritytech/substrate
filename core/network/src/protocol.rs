@@ -16,6 +16,7 @@
 
 use std::collections::{HashMap, HashSet, BTreeMap};
 use std::cmp;
+use std::io::Cursor;
 use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
@@ -353,13 +354,29 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
 	/// our messaging rate fast enough.
-	pub fn on_clogged_peer(&self, io: &mut SyncIo, who: NodeIndex) {
+	pub fn on_clogged_peer<'a>(
+		&self,
+		_io: &mut SyncIo,
+		who: NodeIndex,
+		clogging_messages: impl ExactSizeIterator<Item = &'a [u8]>
+	) {
 		// We don't do anything but print some diagnostics for now.
 		if let Some(peer) = self.context_data.peers.read().get(&who) {
 			debug!(target: "sync", "Clogged peer {} (protocol_version: {:?}; roles: {:?}; \
 				known_extrinsics: {:?}; known_blocks: {:?}; best_hash: {:?}; best_number: {:?})",
 				who, peer.protocol_version, peer.roles, peer.known_extrinsics, peer.known_blocks,
 				peer.best_hash, peer.best_number);
+		} else {
+			debug!(target: "sync", "Peer clogged before being properly connected");
+		}
+
+		debug!(target: "sync", "{} clogging messages:", clogging_messages.len());
+		for msg_bytes in clogging_messages {
+			if let Some(msg) = <Message<B> as Decode>::decode(&mut Cursor::new(msg_bytes)) {
+				debug!(target: "sync", "{:?}", msg);
+			} else {
+				debug!(target: "sync", "{:?}", msg_bytes)
+			}
 		}
 	}
 
