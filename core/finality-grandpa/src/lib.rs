@@ -528,10 +528,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			self.voters.clone(),
 		);
 
+		let local_key = self.config.local_key.as_ref()
+			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+
 		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
-			self.config.local_key.clone(),
+			local_key.cloned(),
 			self.voters.clone(),
 			self.network.clone(),
 		);
