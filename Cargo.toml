@@ -49,6 +49,7 @@ members = [
 	"core/keystore",
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
+	"core/inherents",
 	"srml/support",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",

@@ -406,7 +406,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-		where F: FnMut(BlockBuilder<Block, (), PeersClient>) -> Block
+		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
 	{
 		for _  in 0..count {
 			let builder = self.client.new_block().unwrap();
@@ -492,7 +492,6 @@ pub trait TestNetFactory: Sized {
 	/// These two need to be implemented!
 	fn from_config(config: &ProtocolConfig) -> Self;
 	fn make_verifier(&self, client: Arc<PeersClient>, config: &ProtocolConfig) -> Arc<Self::Verifier>;
-
 
 	/// Get reference to peer.
 	fn peer(&self, i: usize) -> &Peer<Self::Verifier, Self::PeerData>;

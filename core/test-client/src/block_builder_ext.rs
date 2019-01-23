@@ -29,9 +29,9 @@ pub trait BlockBuilderExt {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, (), A> where
+impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
 	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block> + 'a,
-	A::Api: BlockBuilder<runtime::Block, ()>
+	A::Api: BlockBuilder<runtime::Block>
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))
@@ -39,6 +39,9 @@ impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime:
 }
 
 fn sign_tx(transfer: runtime::Transfer) -> runtime::Extrinsic {
-	let signature = keyring::Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&codec::Encode::encode(&transfer)).into();
+	let signature = keyring::Keyring::from_raw_public(transfer.from.to_fixed_bytes())
+		.unwrap()
+		.sign(&codec::Encode::encode(&transfer))
+		.into();
 	runtime::Extrinsic::Transfer(transfer, signature)
 }

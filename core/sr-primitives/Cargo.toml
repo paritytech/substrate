@@ -34,5 +34,3 @@ std = [
 	"substrate-metadata/std",
 	"substrate-metadata-derive/std",
 ]
-api-for-runtime = []
-

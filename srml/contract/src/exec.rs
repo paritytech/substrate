@@ -16,14 +16,15 @@
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
 use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use gas::{GasMeter, Token};
+use gas::{GasMeter, Token, approx_gas_for_balance};
 
 use balances::{self, EnsureAccountLiquid};
 use rstd::prelude::*;
-use runtime_primitives::traits::{As, CheckedAdd, CheckedSub, Zero};
+use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
+pub type CallOf<T> = <T as Trait>::Call;
 
 #[cfg_attr(test, derive(Debug))]
 pub struct InstantiateReceipt<AccountId> {
@@ -77,11 +78,15 @@ pub trait Ext {
 		empty_output_buf: EmptyOutputBuf,
 	) -> Result<CallReceipt, &'static str>;
 
+	/// Notes a call dispatch.
+	fn note_dispatch_call(&mut self, call: CallOf<Self::T>);
+
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
 
 	/// Returns a reference to the account id of the current contract.
 	fn address(&self) -> &AccountIdOf<Self::T>;
+
 
 	/// Returns the balance of the current contract.
 	///
@@ -214,6 +219,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
+	pub calls: Vec<(T::AccountId, T::Call)>,
 	pub config: &'a Config<T>,
 	pub vm: &'a V,
 	pub loader: &'a L,
@@ -235,6 +241,7 @@ where
 			depth: 0,
 			overlay,
 			events: Vec::new(),
+			calls: Vec::new(),
 			config: &cfg,
 			vm: &vm,
 			loader: &loader,
@@ -247,6 +254,7 @@ where
 			self_account: dest,
 			depth: self.depth + 1,
 			events: Vec::new(),
+			calls: Vec::new(),
 			config: self.config,
 			vm: self.vm,
 			loader: self.loader,
@@ -276,7 +284,7 @@ where
 		let dest_code_hash = self.overlay.get_code(&dest);
 		let mut output_data = Vec::new();
 
-		let (change_set, events) = {
+		let (change_set, events, calls) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 			let mut nested = self.nested(overlay, dest.clone());
 
@@ -309,11 +317,12 @@ where
 					.into_result()?;
 			}
 
-			(nested.overlay.into_change_set(), nested.events)
+			(nested.overlay.into_change_set(), nested.events, nested.calls)
 		};
 
 		self.overlay.commit(change_set);
 		self.events.extend(events);
+		self.calls.extend(calls);
 
 		Ok(CallReceipt { output_data })
 	}
@@ -347,7 +356,7 @@ where
 			return Err("contract already exists");
 		}
 
-		let (change_set, events) = {
+		let (change_set, events, calls) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 			overlay.set_code(&dest, Some(code_hash.clone()));
 			let mut nested = self.nested(overlay, dest.clone());
@@ -381,11 +390,12 @@ where
 			// Deposit an instantiation event.
 			nested.events.push(RawEvent::Instantiated(self.self_account.clone(), dest.clone()));
 
-			(nested.overlay.into_change_set(), nested.events)
+			(nested.overlay.into_change_set(), nested.events, nested.calls)
 		};
 
 		self.overlay.commit(change_set);
 		self.events.extend(events);
+		self.calls.extend(calls);
 
 		Ok(InstantiateReceipt { address: dest })
 	}
@@ -416,11 +426,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<T::Balance> {
 			TransferFeeKind::AccountCreate => metadata.account_create_fee,
 			TransferFeeKind::Transfer => metadata.transfer_fee,
 		};
-
-		let amount_in_gas: T::Balance = balance_fee / self.gas_price;
-		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
-
-		amount_in_gas
+		approx_gas_for_balance::<T>(self.gas_price, balance_fee)
 	}
 }
 
@@ -560,6 +566,13 @@ where
 	) -> Result<CallReceipt, &'static str> {
 		self.ctx
 			.call(to.clone(), value, gas_meter, input_data, empty_output_buf)
+	}
+
+	/// Notes a call dispatch.
+	fn note_dispatch_call(&mut self, call: CallOf<Self::T>) {
+		self.ctx.calls.push(
+			(self.ctx.self_account.clone(), call)
+		);
 	}
 
 	fn address(&self) -> &T::AccountId {
