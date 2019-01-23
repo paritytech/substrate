@@ -37,7 +37,7 @@ use self::code_cache::load as load_code;
 pub use self::code_cache::save as save_code;
 
 /// A prepared wasm module ready for execution.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, EncodeMetadata)]
 pub struct PrefabWasmModule {
 	/// Version of the schedule with which the code was instrumented.
 	#[codec(compact)]

@@ -34,7 +34,7 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 	};
 
 	let mut new_name = "_IMPL_ENCODEMETADATA_FOR_".to_string();
-	new_name.push_str(name.to_string().trim_left_matches("r#"));
+	new_name.push_str(name.to_string().trim_start_matches("r#"));
 	let dummy_const = Ident::new(&new_name, Span::call_site());
 
 	let generated = quote! {

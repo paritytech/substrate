@@ -73,7 +73,7 @@ pub trait Lookup {
 /// context.
 pub trait StaticLookup {
 	/// Type to lookup from.
-	type Source: Codec + Clone + PartialEq + MaybeDebug;
+	type Source: Codec + Clone + PartialEq + MaybeDebug + EncodeMetadata;
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
@@ -82,7 +82,7 @@ pub trait StaticLookup {
 
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
-impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
+impl<T: Codec + Clone + PartialEq + MaybeDebug + EncodeMetadata> StaticLookup for IdentityLookup<T> {
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
