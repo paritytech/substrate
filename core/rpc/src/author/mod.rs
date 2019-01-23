@@ -47,6 +47,7 @@ use self::error::Result;
 /// Substrate authoring RPC API
 #[rpc]
 pub trait AuthorApi<Hash, BlockHash> {
+	/// RPC metadata
 	type Metadata;
 
 	/// Submit hex-encoded extrinsic for inclusion in block.

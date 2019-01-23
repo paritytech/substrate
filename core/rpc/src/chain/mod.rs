@@ -38,8 +38,8 @@ use self::error::Result;
 
 /// Substrate blockchain API
 #[rpc]
-pub trait ChainApi<Number, Hash, Header, SignedBlock>
-{
+pub trait ChainApi<Number, Hash, Header, SignedBlock> {
+	/// RPC metadata
 	type Metadata;
 
 	/// Get header of a relay chain block.

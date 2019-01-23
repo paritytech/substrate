@@ -45,6 +45,7 @@ use self::error::Result;
 /// Substrate state API
 #[rpc]
 pub trait StateApi<Hash> {
+	/// RPC Metadata
 	type Metadata;
 
 	/// Call a contract at a block's state.
