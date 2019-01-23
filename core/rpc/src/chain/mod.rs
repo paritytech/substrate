@@ -61,19 +61,37 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	fn finalised_head(&self) -> Result<Hash>;
 
 	/// New head subscription
-	#[pubsub(subscription = "chain_newHead", subscribe, name = "chain_subscribeNewHead", alias("subscribe_newHead"))]
+	#[pubsub(
+		subscription = "chain_newHead",
+		subscribe,
+		name = "chain_subscribeNewHead",
+		alias("subscribe_newHead")
+	)]
 	fn subscribe_new_head(&self, Self::Metadata, typed::Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
-	#[pubsub(subscription = "chain_newHead", unsubscribe, name = "chain_unsubscribeNewHead", alias("unsubscribe_newHead"))]
+	#[pubsub(
+		subscription = "chain_newHead",
+		unsubscribe,
+		name = "chain_unsubscribeNewHead",
+		alias("unsubscribe_newHead")
+	)]
 	fn unsubscribe_new_head(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
 
 	/// New head subscription
-	#[pubsub(subscription = "chain_finalisedHead", subscribe, name = "chain_subscribeFinalisedHeads")]
+	#[pubsub(
+		subscription = "chain_finalisedHead",
+		subscribe,
+		name = "chain_subscribeFinalisedHeads"
+	)]
 	fn subscribe_finalised_heads(&self, Self::Metadata, typed::Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
-	#[pubsub(subscription = "chain_finalisedHead", unsubscribe, name = "chain_unsubscribeFinalisedHeads")]
+	#[pubsub(
+		subscription = "chain_finalisedHead",
+		unsubscribe,
+		name = "chain_unsubscribeFinalisedHeads"
+	)]
 	fn unsubscribe_finalised_heads(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
 }
 
