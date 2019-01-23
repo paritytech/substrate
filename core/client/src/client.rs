@@ -1106,7 +1106,6 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-
 impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
@@ -1178,19 +1177,6 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			"origin" => ?origin
 		);
 		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
-	}
-
-	/// Import a block justification and finalize the block. The justification
-	/// isn't interpreted by the client and is assumed to have been validated
-	/// previously. The block is finalized unconditionally.
-	fn import_justification(
-		&self,
-		hash: Block::Hash,
-		_number: NumberFor<Block>,
-		justification: Justification,
-	) -> Result<(), Self::Error> {
-		self.finalize_block(BlockId::Hash(hash), Some(justification), true)
-			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
 	}
 }
 
