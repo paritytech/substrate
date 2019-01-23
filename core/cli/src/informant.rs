@@ -25,6 +25,9 @@ use tokio::timer::Interval;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
 use client::{backend::Backend, BlockchainEvents};
+use substrate_telemetry::telemetry;
+use log::{debug, info, warn};
+use slog::slog_info;
 
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};

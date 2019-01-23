@@ -20,6 +20,8 @@
 
 use std::{sync::Arc, self};
 
+use log::{info, trace};
+
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
 	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{Core, ApiExt}

@@ -17,7 +17,7 @@
 #[doc(hidden)]
 pub use rstd::vec::Vec;
 #[doc(hidden)]
-pub use runtime_primitives::traits::Block as BlockT;
+pub use runtime_primitives::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
 pub use inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
 
@@ -74,7 +74,7 @@ macro_rules! impl_outer_inherent {
 
 				let mut result = $crate::inherent::CheckInherentsResult::new();
 				for xt in block.extrinsics() {
-					if xt.is_signed().unwrap_or(false) {
+					if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
 						break;
 					}
 
