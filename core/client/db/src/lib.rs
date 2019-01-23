@@ -574,7 +574,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				let number = header.number().clone();
 				transaction.put(
 					columns::JUSTIFICATION,
-					&::utils::number_and_hash_to_lookup_key(number, hash.clone()),
+					&utils::number_and_hash_to_lookup_key(number, hash.clone()),
 					&justification.encode(),
 				);
 			}

@@ -740,7 +740,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		// TODO: correct path logic for when to execute this function
 		// https://github.com/paritytech/substrate/issues/1232
-		let (storage_update,changes_update,storage_changes) = self.block_execution(&transaction.op, &import_headers, origin, hash, body.clone())?;
+		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
 
 		// TODO: non longest-chain rule.
 		let is_new_best = finalized || match fork_choice {
