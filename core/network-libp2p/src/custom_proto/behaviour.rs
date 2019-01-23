@@ -115,6 +115,8 @@ pub enum CustomProtosOut {
 		peer_id: PeerId,
 		/// Protocol which has a problem.
 		protocol_id: ProtocolId,
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
 	},
 }
 
@@ -445,12 +447,13 @@ where
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
-			CustomProtosHandlerOut::Clogged { protocol_id } => {
+			CustomProtosHandlerOut::Clogged { protocol_id, messages } => {
 				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} (protocol: {:?}) is \
 					pretty large", source, protocol_id);
 				self.events.push(NetworkBehaviourAction::GenerateEvent(CustomProtosOut::Clogged {
 					peer_id: source,
 					protocol_id,
+					messages,
 				}));
 			}
 		}
