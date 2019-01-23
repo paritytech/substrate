@@ -421,21 +421,21 @@ macro_rules! __impl_outer_event_json_metadata {
 					])
 				}
 			}
-
 			#[allow(dead_code)]
-			pub fn module_events(mod_name: &'static str) -> $crate::event::FnEncode<&'static [$crate::event::EventMetadata]> {
-				if mod_name == "system" {
-					return $crate::event::FnEncode(system::Event::metadata)
-				}
-				$(
-				if mod_name == stringify!($module_name) {
-					return $crate::event::FnEncode(
-						$module_name::Event $( ::<$generic_param> )* ::metadata
-					)
-				}
-				)*
-				return $crate::event::FnEncode(||&[])
+			pub fn __module_events_system() -> $crate::event::FnEncode<&'static [$crate::event::EventMetadata]> {
+				return $crate::event::FnEncode(system::Event::metadata)
 			}
+	
+			$(
+				#[allow(dead_code)]
+				$crate::paste::item!{
+					pub fn [< __module_events_ $module_name >] () -> $crate::event::FnEncode<&'static [$crate::event::EventMetadata]> {
+						return $crate::event::FnEncode(
+							$module_name::Event $( ::<$generic_param> )* ::metadata
+						)
+					}
+				}
+			)*
 		}
 	}
 }

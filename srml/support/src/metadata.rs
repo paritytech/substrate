@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use srml_metadata::{
-	DecodeDifferent, FnEncode, FnEncodeModule, RuntimeMetadata,
+	DecodeDifferent, FnEncode, RuntimeMetadata,
 	RuntimeModuleMetadata, RuntimeMetadataV1,
 	DefaultByteGetter,
 };
@@ -65,10 +65,14 @@ macro_rules! __runtime_modules_to_metadata {
 					$crate::metadata::FnEncode($mod::$module::<$runtime>::call_module)
 				),
 				outer_dispatch: $crate::metadata::DecodeDifferent::Encode(
-					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_dispatch)
+					$crate::paste::expr!{
+						$crate::metadata::FnEncode( $runtime:: [< __module_dispatch_ $mod >])
+					}
 				),
 				event: $crate::metadata::DecodeDifferent::Encode(
-					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_events)
+					$crate::paste::expr!{
+						$crate::metadata::FnEncode( $runtime:: [< __module_events_ $mod >])
+					}
 				),
 			};
 			$( $rest )*
@@ -92,10 +96,14 @@ macro_rules! __runtime_modules_to_metadata {
 					$crate::metadata::FnEncode($mod::$module::<$runtime>::call_module)
 				),
 				outer_dispatch: $crate::metadata::DecodeDifferent::Encode(
-					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_dispatch)
+					$crate::paste::expr!{
+						$crate::metadata::FnEncode( $runtime:: [< __module_dispatch_ $mod >])
+					}
 				),
 				event: $crate::metadata::DecodeDifferent::Encode(
-					$crate::metadata::FnEncodeModule(stringify!($mod), $runtime::module_events)
+					$crate::paste::expr!{
+						$crate::metadata::FnEncode( $runtime:: [< __module_events_ $mod >])
+					}
 				),
 			};
 			$( $rest )*
@@ -277,10 +285,10 @@ mod tests {
 						]),
 				})),
 				outer_dispatch: DecodeDifferent::Encode(
-					FnEncodeModule("system", |_| None)
+					FnEncode(|| None)
 				),
 				event: DecodeDifferent::Encode(
-					FnEncodeModule("event_module", |_|
+					FnEncode(||
 				 		FnEncode(||&[
 							EventMetadata {
 								name: DecodeDifferent::Encode("SystemEvent"),
@@ -310,7 +318,7 @@ mod tests {
 						]),
 				})),
 				outer_dispatch: DecodeDifferent::Encode(
-					FnEncodeModule("event_module", |_|
+					FnEncode(||
 						Some(OuterDispatchCall {
 							name: DecodeDifferent::Encode("EventModule"),
 							prefix: DecodeDifferent::Encode("event_module"),
@@ -319,7 +327,7 @@ mod tests {
 					)
 				),
 				event: DecodeDifferent::Encode(
-					FnEncodeModule("event_module", |_|
+					FnEncode(||
 				 		FnEncode(||&[
 							EventMetadata {
 								name: DecodeDifferent::Encode("TestEvent"),
@@ -359,7 +367,7 @@ mod tests {
 					}
 				)),
 				outer_dispatch: DecodeDifferent::Encode(
-					FnEncodeModule("event_module2", |_|
+					FnEncode(||
 						Some(OuterDispatchCall {
 							name: DecodeDifferent::Encode("EventModule2"),
 							prefix: DecodeDifferent::Encode("event_module2"),
@@ -368,7 +376,7 @@ mod tests {
 					)
 				),
 				event: DecodeDifferent::Encode(
-					FnEncodeModule("event_module2", |_|
+					FnEncode(||
 				 		FnEncode(||&[
 							EventMetadata {
 								name: DecodeDifferent::Encode("TestEvent"),

@@ -194,46 +194,6 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 	}
 }
 
-/// Newtype wrapper for accessing function
-#[derive(Clone,Eq)]
-pub struct FnEncodeModule<E>(pub &'static str, pub fn(&'static str) -> E) 
-	where E: Encode + 'static;
-
-impl<E: Encode> FnEncodeModule<E> {
-	fn exec(&self) -> E {
-		self.1(self.0)
-	}
-}
-
-impl<E: Encode> Encode for FnEncodeModule<E> {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
-		self.exec().encode_to(dest);
-	}
-}
-
-impl<E: Encode + PartialEq> PartialEq for FnEncodeModule<E> {
-	fn eq(&self, other: &Self) -> bool {
-		self.exec().eq(&other.exec())
-	}
-}
-
-#[cfg(feature = "std")]
-impl<E: Encode + ::std::fmt::Debug> std::fmt::Debug for FnEncodeModule<E> {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.exec().fmt(f)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<E: Encode + serde::Serialize> serde::Serialize for FnEncodeModule<E> {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-				S: serde::Serializer,
-	{
-		self.exec().serialize(serializer)
-	}
-}
-
 type DFn<T> = DecodeDifferent<FnEncode<T>, T>;
 
 /// All the metadata about an outer event.
@@ -381,8 +341,8 @@ pub struct RuntimeModuleMetadata {
 	pub prefix: DecodeDifferentStr,
 	pub storage: Option<DFn<StorageMetadata>>,
 	pub call: DFn<CallMetadata>,
-	pub outer_dispatch: DecodeDifferent<FnEncodeModule<Option<OuterDispatchCall>>, Option<OuterDispatchCall>>,
-	pub event: DecodeDifferent<FnEncodeModule<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
+	pub outer_dispatch: DecodeDifferent<FnEncode<Option<OuterDispatchCall>>, Option<OuterDispatchCall>>,
+	pub event: DecodeDifferent<FnEncode<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
 }
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {

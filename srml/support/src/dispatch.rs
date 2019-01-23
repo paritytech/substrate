@@ -807,39 +807,38 @@ macro_rules! __impl_outer_dispatch_metadata {
 		$( $module:ident::$call:ident, )*
 	) => {
 		impl $runtime {
-			pub fn module_dispatch(mod_name: &'static str) -> Option<$crate::dispatch::OuterDispatchCall> {
-				__impl_outer_dispatch_metadata!(@filter mod_name; 0; ; $( $module::$call, )*);
+			pub fn __module_dispatch_system() -> Option<$crate::dispatch::OuterDispatchCall> {
 				None
 			}
+			__impl_outer_dispatch_metadata!(@filter 0; $( $module::$call, )*; );
 		}
 	};
 	(@filter
-		$mod_name:ident;
 		$index:expr;
-		$( $encoded_call:expr )*;
 		$module:ident::$call:ident,
-		$( $rest_module:ident::$rest:ident, )*
+		$( $rest_module:ident::$rest:ident, )*;
+		$( $encoded_call:tt )*
 	) => {
 		__impl_outer_dispatch_metadata!(
 			@filter
-			$mod_name;
 			$index + 1;
+			$( $rest_module::$rest, )* ;
 			$( $encoded_call )*
-			if $mod_name == stringify!($module) {
-				return Some($crate::dispatch::OuterDispatchCall {
-					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
-					prefix: $crate::dispatch::DecodeDifferent::Encode(stringify!($module)),
-					index: $index,
-				})
+			$crate::paste::item!{
+				pub fn [< __module_dispatch_ $module >] () -> Option<$crate::dispatch::OuterDispatchCall> {
+					return Some($crate::dispatch::OuterDispatchCall {
+						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
+						prefix: $crate::dispatch::DecodeDifferent::Encode(stringify!($module)),
+						index: $index,
+					})
+				}
 			}
-			;
-			$( $rest_module::$rest, )*
-		)
+		);
 	};
 	(@filter
-		$mod_name:ident;
 		$index:expr;
-		$( $encoded_call:expr )*;
+		;
+		$( $encoded_call:tt )*
 	) => {
 		$( $encoded_call )*
 	};
