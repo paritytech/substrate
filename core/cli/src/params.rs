@@ -48,14 +48,21 @@ pub trait AugmentClap {
 
 /// Macro for implementing the `AugmentClap` trait.
 /// This requires that the given type uses `derive(StructOpt)`!
+#[macro_export]
 macro_rules! impl_augment_clap {
 	( $type:ident ) => {
-		impl AugmentClap for $type {
-			fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
+		impl $crate::AugmentClap for $type {
+			fn augment_clap<'a, 'b>(app: $crate::App<'a, 'b>) -> $crate::App<'a, 'b> {
 				$type::augment_clap(app)
 			}
 		}
 	}
+}
+
+/// Returns the log filter given by the user as commandline argument.
+pub trait GetLogFilter {
+	/// Returns the set log filter.
+	fn get_log_filter(&self) -> Option<String>;
 }
 
 /// Shared parameters used by all `CoreParams`.
@@ -76,6 +83,23 @@ pub struct SharedParams {
 	///Sets a custom logging filter
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
+}
+
+impl GetLogFilter for SharedParams {
+	fn get_log_filter(&self) -> Option<String> {
+		self.log.clone()
+	}
+}
+
+/// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
+macro_rules! impl_get_log_filter {
+	( $type:ident ) => {
+		impl GetLogFilter for $type {
+			fn get_log_filter(&self) -> Option<String> {
+				self.shared_params.get_log_filter()
+			}
+		}
+	}
 }
 
 /// Parameters used to create the network configuration.
@@ -187,6 +211,7 @@ pub struct RunCmd {
 }
 
 impl_augment_clap!(RunCmd);
+impl_get_log_filter!(RunCmd);
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -203,6 +228,8 @@ pub struct BuildSpecCmd {
 	#[structopt(long = "node-key", value_name = "KEY")]
 	pub node_key: Option<String>,
 }
+
+impl_get_log_filter!(BuildSpecCmd);
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -227,6 +254,8 @@ pub struct ExportBlocksCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
+
+impl_get_log_filter!(ExportBlocksCmd);
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -268,6 +297,8 @@ pub struct ImportBlocksCmd {
 	pub shared_params: SharedParams,
 }
 
+impl_get_log_filter!(ImportBlocksCmd);
+
 /// The `revert` command used revert the chain to a previos state.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RevertCmd {
@@ -280,6 +311,8 @@ pub struct RevertCmd {
 	pub shared_params: SharedParams,
 }
 
+impl_get_log_filter!(RevertCmd);
+
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
 pub struct PurgeChainCmd {
@@ -288,9 +321,15 @@ pub struct PurgeChainCmd {
 	pub shared_params: SharedParams,
 }
 
-/// Subcommands provided by Default
+impl_get_log_filter!(PurgeChainCmd);
+
+/// All core commands that are provided by default.
+///
+/// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
+/// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
+/// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone)]
-pub enum CoreCommands<CC, RP> {
+pub enum CoreParams<CC, RP> {
 	/// Run a node.
 	Run(MergeParameters<RunCmd, RP>),
 
@@ -313,46 +352,64 @@ pub enum CoreCommands<CC, RP> {
 	Custom(CC),
 }
 
-impl<CC, RP> StructOpt for CoreCommands<CC, RP> where CC: StructOpt, RP: StructOpt {
+impl<CC, RP> StructOpt for CoreParams<CC, RP> where
+	CC: StructOpt + GetLogFilter,
+	RP: StructOpt + AugmentClap
+{
 	fn clap<'a, 'b>() -> App<'a, 'b> {
-		CC::clap()
-			.subcommand(
-				BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
-					.about("Build a spec.json file, outputing to stdout.")
+		RP::augment_clap(
+			RunCmd::augment_clap(
+				CC::clap().unset_setting(AppSettings::SubcommandRequiredElseHelp)
 			)
-			.subcommand(
-				ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
-					.about("Export blocks to a file.")
-			)
-			.subcommand(
-				ImportBlocksCmd::augment_clap(SubCommand::with_name("import-blocks"))
-					.about("Import blocks from file.")
-			)
-			.subcommand(
-				RevertCmd::augment_clap(SubCommand::with_name("revert"))
-					.about("Revert chain to the previous state.")
-			)
-			.subcommand(
-				PurgeChainCmd::augment_clap(SubCommand::with_name("purge-chain"))
-					.about("Remove the whole chain data.")
-			)
-			.setting(AppSettings::SubcommandRequiredElseHelp)
-			.setting(AppSettings::ArgsNegateSubcommands)
+		).subcommand(
+			BuildSpecCmd::augment_clap(SubCommand::with_name("build-spec"))
+				.about("Build a spec.json file, outputing to stdout.")
+		)
+		.subcommand(
+			ExportBlocksCmd::augment_clap(SubCommand::with_name("export-blocks"))
+				.about("Export blocks to a file.")
+		)
+		.subcommand(
+			ImportBlocksCmd::augment_clap(SubCommand::with_name("import-blocks"))
+				.about("Import blocks from file.")
+		)
+		.subcommand(
+			RevertCmd::augment_clap(SubCommand::with_name("revert"))
+				.about("Revert chain to the previous state.")
+		)
+		.subcommand(
+			PurgeChainCmd::augment_clap(SubCommand::with_name("purge-chain"))
+				.about("Remove the whole chain data.")
+		)
 	}
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
 		match matches.subcommand() {
 			("build-spec", Some(matches)) =>
-				CoreCommands::BuildSpec(BuildSpecCmd::from_clap(matches)),
+				CoreParams::BuildSpec(BuildSpecCmd::from_clap(matches)),
 			("export-blocks", Some(matches)) =>
-				CoreCommands::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
+				CoreParams::ExportBlocks(ExportBlocksCmd::from_clap(matches)),
 			("import-blocks", Some(matches)) =>
-				CoreCommands::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
-			("revert", Some(matches)) => CoreCommands::Revert(RevertCmd::from_clap(matches)),
+				CoreParams::ImportBlocks(ImportBlocksCmd::from_clap(matches)),
+			("revert", Some(matches)) => CoreParams::Revert(RevertCmd::from_clap(matches)),
 			("purge-chain", Some(matches)) =>
-				CoreCommands::PurgeChain(PurgeChainCmd::from_clap(matches)),
-			(_, None) => CoreCommands::Run(MergeParameters::from_clap(matches)),
-			_ => CoreCommands::Custom(CC::from_clap(matches)),
+				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
+			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
+			_ => CoreParams::Custom(CC::from_clap(matches)),
+		}
+	}
+}
+
+impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
+	fn get_log_filter(&self) -> Option<String> {
+		match self {
+			CoreParams::Run(c) => c.left.get_log_filter(),
+			CoreParams::BuildSpec(c) => c.get_log_filter(),
+			CoreParams::ExportBlocks(c) => c.get_log_filter(),
+			CoreParams::ImportBlocks(c) => c.get_log_filter(),
+			CoreParams::PurgeChain(c) => c.get_log_filter(),
+			CoreParams::Revert(c) => c.get_log_filter(),
+			CoreParams::Custom(c) => c.get_log_filter(),
 		}
 	}
 }
@@ -375,6 +432,12 @@ impl StructOpt for NoCustom {
 impl AugmentClap for NoCustom {
 	fn augment_clap<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> {
 		app
+	}
+}
+
+impl GetLogFilter for NoCustom {
+	fn get_log_filter(&self) -> Option<String> {
+		None
 	}
 }
 

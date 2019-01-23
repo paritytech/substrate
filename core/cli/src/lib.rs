@@ -76,14 +76,13 @@ use std::{
 use names::{Generator, Name};
 use regex::Regex;
 use structopt::{StructOpt, clap::AppSettings};
+#[doc(hidden)]
+pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
 	NetworkConfigurationParams, SharedParams, MergeParameters
 };
-
-/// The core cli parameters.
-pub type CoreParams<CC, RP> = MergeParameters<RunCmd, params::CoreCommands<CC, RP>>;
-pub use params::NoCustom;
+pub use params::{NoCustom, GetLogFilter, CoreParams, AugmentClap};
 use app_dirs::{AppInfo, AppDataType};
 
 use futures::Future;
@@ -196,8 +195,8 @@ pub fn parse_and_execute<'a, F, CC, RP, S, RS, E, I, T>(
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
-	CC: StructOpt + Clone,
-	RP: StructOpt + Clone,
+	CC: StructOpt + Clone + GetLogFilter,
+	RP: StructOpt + Clone + AugmentClap,
 	E: IntoExit,
 	RS: FnOnce(E, RP, FactoryFullConfiguration<F>) -> Result<(), String>,
 	I: IntoIterator<Item = T>,
@@ -216,28 +215,29 @@ where
 		.about(version.description)
 		.version(&(full_version + "\n")[..])
 		.setting(AppSettings::GlobalVersion)
+		.setting(AppSettings::ArgsNegateSubcommands)
+		.setting(AppSettings::SubcommandsNegateReqs)
 		.get_matches_from(args);
 	let cli_args = CoreParams::<CC, RP>::from_clap(&matches);
 
-	//init_logger(cli_args.left.log.as_ref().map(|v| v.as_ref()).unwrap_or(""));
-	init_logger("");
+	init_logger(cli_args.get_log_filter().as_ref().map(|v| v.as_ref()).unwrap_or(""));
 	fdlimit::raise_fd_limit();
 
-	match cli_args.right {
-		params::CoreCommands::Run(params) => run_node::<F, _, _, _, _>(
+	match cli_args {
+		params::CoreParams::Run(params) => run_node::<F, _, _, _, _>(
 			params, spec_factory, exit, run_service, impl_name, version,
 		).map(|_| None),
-		params::CoreCommands::BuildSpec(params) =>
+		params::CoreParams::BuildSpec(params) =>
 			build_spec::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreCommands::ExportBlocks(params) =>
+		params::CoreParams::ExportBlocks(params) =>
 			export_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
-		params::CoreCommands::ImportBlocks(params) =>
+		params::CoreParams::ImportBlocks(params) =>
 			import_blocks::<F, _, _>(params, spec_factory, exit, version).map(|_| None),
-		params::CoreCommands::PurgeChain(params) =>
+		params::CoreParams::PurgeChain(params) =>
 			purge_chain::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreCommands::Revert(params) =>
+		params::CoreParams::Revert(params) =>
 			revert_chain::<F, _>(params, spec_factory, version).map(|_| None),
-		params::CoreCommands::Custom(params) => Ok(Some(params)),
+		params::CoreParams::Custom(params) => Ok(Some(params)),
 	}
 }
 
