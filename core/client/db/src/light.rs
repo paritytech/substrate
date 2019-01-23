@@ -554,7 +554,7 @@ pub(crate) mod tests {
 	#[test]
 	fn does_not_return_unknown_header() {
 		let db = LightStorage::<Block>::new_test();
-		assert!(db.header(BlockId::Hash(1.into())).unwrap().is_none());
+		assert!(db.header(BlockId::Hash(Hash::from_low_u64_be(1))).unwrap().is_none());
 		assert!(db.header(BlockId::Number(0)).unwrap().is_none());
 	}
 
@@ -579,7 +579,7 @@ pub(crate) mod tests {
 		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.status(BlockId::Hash(genesis_hash)).unwrap(), BlockStatus::InChain);
 		assert_eq!(db.status(BlockId::Number(0)).unwrap(), BlockStatus::InChain);
-		assert_eq!(db.status(BlockId::Hash(1.into())).unwrap(), BlockStatus::Unknown);
+		assert_eq!(db.status(BlockId::Hash(Hash::from_low_u64_be(1))).unwrap(), BlockStatus::Unknown);
 		assert_eq!(db.status(BlockId::Number(1)).unwrap(), BlockStatus::Unknown);
 	}
 

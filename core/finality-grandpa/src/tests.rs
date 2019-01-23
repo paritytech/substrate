@@ -667,18 +667,18 @@ fn consensus_changes_works() {
 	let mut changes = ConsensusChanges::<H256, u64>::empty();
 
 	// pending changes are not finalized
-	changes.note_change((10, 1.into()));
-	assert_eq!(changes.finalize((5, 5.into()), |_| Ok(None)).unwrap(), (false, false));
+	changes.note_change((10, H256::from_low_u64_be(1)));
+	assert_eq!(changes.finalize((5, H256::from_low_u64_be(5)), |_| Ok(None)).unwrap(), (false, false));
 
 	// no change is selected from competing pending changes
-	changes.note_change((1, 1.into()));
-	changes.note_change((1, 101.into()));
-	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1001.into()))).unwrap(), (true, false));
+	changes.note_change((1, H256::from_low_u64_be(1)));
+	changes.note_change((1, H256::from_low_u64_be(101)));
+	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1001)))).unwrap(), (true, false));
 
 	// change is selected from competing pending changes
-	changes.note_change((1, 1.into()));
-	changes.note_change((1, 101.into()));
-	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1.into()))).unwrap(), (true, true));
+	changes.note_change((1, H256::from_low_u64_be(1)));
+	changes.note_change((1, H256::from_low_u64_be(101)));
+	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1)))).unwrap(), (true, true));
 }
 
 #[test]
