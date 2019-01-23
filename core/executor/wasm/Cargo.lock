@@ -177,8 +177,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "substrate-metadata"
 version = "0.1.0"
 dependencies = [
- "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
 ]
@@ -205,6 +206,8 @@ dependencies = [
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -264,5 +267,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)" = "84257ccd054dc351472528c8587b4de2dbf0dc0fe2e634030c1a90bfdacebaa9"
 "checksum static_assertions 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "c19be23126415861cb3a23e501d34a708f7f9b2183c5252d690941c2e69199d5"
 "checksum syn 0.14.9 (registry+https://github.com/rust-lang/crates.io-index)" = "261ae9ecaa397c42b960649561949d69311f08eeaea86a65696e6e46517cf741"
+"checksum syn 0.15.23 (registry+https://github.com/rust-lang/crates.io-index)" = "9545a6a093a3f0bd59adb472700acc08cad3776f860f16a897dfce8c88721cbc"
 "checksum uint 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "082df6964410f6aa929a61ddfafc997e4f32c62c22490e439ac351cec827f436"
 "checksum unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fc72304796d0818e357ead4e000d19c9c174ab23dc11093ac919054d20a6a7fc"

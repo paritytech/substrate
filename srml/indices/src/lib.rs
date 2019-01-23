@@ -27,6 +27,7 @@
 #[macro_use]
 extern crate srml_support as runtime_support;
 
+#[macro_use]
 extern crate sr_std as rstd;
 
 #[macro_use]
