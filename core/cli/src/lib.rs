@@ -338,7 +338,7 @@ where
 
 	config.database_path =
 		db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
-	config.database_cache_size = config.database_cache_size;
+	config.database_cache_size = cli.database_cache_size;
 	config.pruning = match cli.pruning {
 		Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 		None => PruningMode::default(),
