@@ -351,6 +351,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
+	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
+	/// our messaging rate fast enough.
+	pub fn on_clogged_peer(&self, io: &mut SyncIo, who: NodeIndex) {
+		// We don't do anything but print some diagnostics for now.
+		if let Some(peer) = self.context_data.peers.read().get(&who) {
+			debug!(target: "sync", "Clogged peer {} (protocol_version: {:?}; roles: {:?}; \
+				known_extrinsics: {:?}; known_blocks: {:?}; best_hash: {:?}; best_number: {:?})",
+				who, peer.protocol_version, peer.roles, peer.known_extrinsics, peer.known_blocks,
+				peer.best_hash, peer.best_number);
+		}
+	}
+
 	fn on_block_request(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockRequest<B>) {
 		trace!(target: "sync", "BlockRequest {} from {} with fields {:?}: from {:?} to {:?} max {:?}",
 			request.id,
