@@ -161,33 +161,37 @@ impl<B: ChainApi> Pool<B> {
 	pub fn prune(&self, at: &BlockId<B::Block>, parent: &BlockId<B::Block>, extrinsics: &[ExtrinsicFor<B>]) -> Result<(), B::Error> {
 		let mut tags = Vec::with_capacity(extrinsics.len());
 		// Get details of all extrinsics that are already in the pool
-		let in_pool = self.pool.read().by_hash(extrinsics.iter().map(|extrinsic| self.api.hash(extrinsic)));
-		// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<TransactionDetails>)`)
-		let all = extrinsics.iter().zip(in_pool.clone());
+		let hashes = extrinsics.iter().map(|extrinsic| self.api.hash(extrinsic)).collect::<Vec<_>>();
+		let in_pool = self.pool.read().by_hash(&hashes);
+		{
+			// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<TransactionDetails>)`)
+			let all = extrinsics.iter().zip(in_pool.iter());
 
-		for (extrinsic, existing_in_pool) in all {
-			match existing_in_pool {
-				// reuse the tags for extrinsis that were found in the pool
-				Some(transaction) => {
-					tags.extend(transaction.provides.iter().cloned());
-				},
-				// if it's not found in the pool query the runtime at parent block
-				// to get validity info and tags that the extrinsic provides.
-				None => {
-					let validity = self.api.validate_transaction(parent, extrinsic.clone());
-					match validity {
-						Ok(TransactionValidity::Valid { mut provides, .. }) => {
-							tags.append(&mut provides);
-						},
-						// silently ignore invalid extrinsics,
-						// cause they might just be inherent
-						_ => {}
-					}
-				},
+			for (extrinsic, existing_in_pool) in all {
+				match *existing_in_pool {
+					// reuse the tags for extrinsis that were found in the pool
+					Some(ref transaction) => {
+						tags.extend(transaction.provides.iter().cloned());
+					},
+					// if it's not found in the pool query the runtime at parent block
+					// to get validity info and tags that the extrinsic provides.
+					None => {
+						let validity = self.api.validate_transaction(parent, extrinsic.clone());
+						match validity {
+							Ok(TransactionValidity::Valid { mut provides, .. }) => {
+								tags.append(&mut provides);
+							},
+							// silently ignore invalid extrinsics,
+							// cause they might just be inherent
+							_ => {}
+						}
+					},
+				}
 			}
 		}
 
 		self.prune_tags(at, tags, in_pool.into_iter().filter_map(|x| x).map(|x| x.hash.clone()))?;
+
 		Ok(())
 	}
 

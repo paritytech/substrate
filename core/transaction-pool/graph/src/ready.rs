@@ -208,10 +208,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	}
 
 	/// Retrieve transaction by hash
-	pub fn by_hash(&self, hash: impl IntoIterator<Item=Hash>) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
 		let ready = self.ready.read();
-		hash.into_iter().map(|hash| {
-			ready.get(&hash).map(|x| x.transaction.transaction.clone())
+		hashes.iter().map(|hash| {
+			ready.get(hash).map(|x| x.transaction.transaction.clone())
 		}).collect()
 	}
 
