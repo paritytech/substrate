@@ -72,6 +72,7 @@ impl Decode for NodeHeader {
 
 			BRANCH_NODE_NO_VALUE => NodeHeader::Branch(false),		// 254
 			BRANCH_NODE_WITH_VALUE => NodeHeader::Branch(true),		// 255
+			_ => unreachable!(),
 		})
 	}
 }

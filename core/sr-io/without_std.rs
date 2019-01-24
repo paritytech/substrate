@@ -58,12 +58,6 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 /// (most importantly, storage) or perform heavy hash calculations.
 /// See also "ext_" functions in sr-sandbox and sr-std
 extern "C" {
-	/// Most of the functions below return fixed-size arrays (e.g. hashes) by writing them into
-	/// memory regions that should be preallocated by module.
-	/// Functions that return variable-sized data use host-side allocations. These should be
-	/// manually freed by the module.
-	pub fn ext_free(addr: *mut u8);
-
 	/// Printing, useful for debugging
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
