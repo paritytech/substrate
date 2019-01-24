@@ -111,6 +111,23 @@ fn sync_after_fork_works() {
 }
 
 #[test]
+fn syncs_all_forks() {
+	::env_logger::init().ok();
+	let mut net = TestNet::new(4);
+	net.sync_step();
+	net.peer(0).push_blocks(2, false);
+	net.peer(1).push_blocks(2, false);
+
+	net.peer(0).push_blocks(2, true);
+	net.peer(1).push_blocks(4, false);
+
+	net.sync();
+	// Check that all peers have all of the blocks.
+	assert_eq!(9, net.peer(0).client.backend().blockchain().blocks_count());
+	assert_eq!(9, net.peer(1).client.backend().blockchain().blocks_count());
+}
+
+#[test]
 fn own_blocks_are_announced() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);

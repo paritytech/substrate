@@ -222,6 +222,11 @@ impl<Block: BlockT> Blockchain<Block> {
 		Ok(())
 	}
 
+	/// Get total number of blocks.
+	pub fn blocks_count(&self) -> usize {
+		self.storage.read().blocks.len()
+	}
+
 	/// Compare this blockchain with another in-mem blockchain
 	pub fn equals_to(&self, other: &Self) -> bool {
 		self.canon_equals_to(other) && self.storage.read().blocks == other.storage.read().blocks
