@@ -43,7 +43,7 @@ use rstd::vec::Vec;
 type StringBuf = String;
 
 /// Curent version of metadata
-pub const META_VERSION: u32 = 0x6d657461;
+pub const META_VERSION: u32 = 0x6174656d; // 'meta' warn endianness
 
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
 /// So, if someone tries to decode this stuff on `no_std`, they will get a compilation error.
