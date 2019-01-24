@@ -223,17 +223,10 @@ impl<
 	///
 	/// Changes made to the storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
+		// Note errors > 0 are from ApplyError
 		const UNKNOWN_ERROR: i8 = -127;
-		// bad signature
-		const BAD_SIGNATURE: i8 = 0;
-		// Index errors
-		const INVALID_INDEX: i8 = 10;
-		const OLD_INDEX: i8 = 11;
-		const FUTURE_INDEX: i8 = 12;
-		const MISSING_INDEX: i8 = 13;
-		// other errors
-		const INSUFFICIENT_FUNDS: i8 = 20;
-		const MISSING_SENDER: i8 = 30;
+		const MISSING_SENDER: i8 = -20;
+		const INVALID_INDEX: i8 = -10;
 
 		let encoded_len = uxt.encode().len();
 
@@ -244,23 +237,23 @@ impl<
 			Err("invalid account index") => return TransactionValidity::Unknown(INVALID_INDEX),
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err("bad signature") => return TransactionValidity::Invalid(BAD_SIGNATURE),
+			Err("bad signature") => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
 			if Payment::make_payment(sender, encoded_len).is_err() {
-				return TransactionValidity::Invalid(INSUFFICIENT_FUNDS)
+				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 
 			// check index
 			let mut expected_index = <system::Module<System>>::account_nonce(sender);
 			if index < &expected_index {
-				return TransactionValidity::Invalid(OLD_INDEX)
+				return TransactionValidity::Invalid(ApplyError::Stale as i8)
 			}
 			if *index > expected_index + As::sa(256) {
-				return TransactionValidity::Unknown(FUTURE_INDEX)
+				return TransactionValidity::Unknown(ApplyError::Future as i8)
 			}
 
 			let mut deps = Vec::new();
@@ -279,7 +272,7 @@ impl<
 			return TransactionValidity::Invalid(if xt.sender().is_none() {
 				MISSING_SENDER
 			} else {
-				MISSING_INDEX
+				INVALID_INDEX
 			})
 		}
 	}
