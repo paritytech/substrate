@@ -93,9 +93,11 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		with Call 
 		$(with $kws:ident)*
 	) => {
-		$crate::paste::expr!{
-			$crate::metadata::FnEncode($runtime:: [< __module_dispatch_ $mod >])
-		}
+		$crate::metadata::FnEncode(
+			$crate::paste::expr!{
+				$runtime:: [< __module_dispatch_ $mod >]
+			}
+		)
 	};
 	(
 		$mod: ident,
@@ -126,9 +128,11 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		with Event 
 		$(with $kws:ident)*
 	) => {
-		$crate::paste::expr!{
-			$crate::metadata::FnEncode($runtime:: [< __module_events_ $mod >])
-		}
+		$crate::metadata::FnEncode(
+			$crate::paste::expr!{
+				$runtime:: [< __module_events_ $mod >]
+			}
+		)
 	};
 	(
 		$mod: ident,

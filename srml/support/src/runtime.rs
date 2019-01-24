@@ -791,12 +791,10 @@ macro_rules! __decl_runtime_metadata {
   // end of decl
 	(
 		$runtime:ident;
-		//$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } )*;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 	) => {
 		impl_runtime_metadata!(
 			for $runtime with modules
-				//$( $parsed_modules::Module $(with $parsed_storage)* $(with $parsed_event)* $(with $parsed_call)* )*,
 				$( $parsed_modules::Module with $( $withs )* , )*
 		);
 	}
