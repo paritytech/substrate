@@ -152,9 +152,77 @@ impl<B: ChainApi> Pool<B> {
 		Ok(watcher)
 	}
 
+	/// Prunes ready transactions.
+	///
+	/// Used to clear the pool from transactions that were part of recently imported block.
+	/// To perform pruning we need the tags that each extrinsic provides and to avoid calling
+	/// into runtime too often we first lookup all extrinsics that are in the pool and get
+	/// their provided tags from there. Otherwise we query the runtime at the `parent` block.
+	pub fn prune(&self, at: &BlockId<B::Block>, parent: &BlockId<B::Block>, extrinsics: &[ExtrinsicFor<B>]) -> Result<(), B::Error> {
+		let mut tags = Vec::with_capacity(extrinsics.len());
+		// Get details of all extrinsics that are already in the pool
+		let hashes = extrinsics.iter().map(|extrinsic| self.api.hash(extrinsic)).collect::<Vec<_>>();
+		let in_pool = self.pool.read().by_hash(&hashes);
+		{
+			// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<TransactionDetails>)`)
+			let all = extrinsics.iter().zip(in_pool.iter());
+
+			for (extrinsic, existing_in_pool) in all {
+				match *existing_in_pool {
+					// reuse the tags for extrinsis that were found in the pool
+					Some(ref transaction) => {
+						tags.extend(transaction.provides.iter().cloned());
+					},
+					// if it's not found in the pool query the runtime at parent block
+					// to get validity info and tags that the extrinsic provides.
+					None => {
+						let validity = self.api.validate_transaction(parent, extrinsic.clone());
+						match validity {
+							Ok(TransactionValidity::Valid { mut provides, .. }) => {
+								tags.append(&mut provides);
+							},
+							// silently ignore invalid extrinsics,
+							// cause they might just be inherent
+							_ => {}
+						}
+					},
+				}
+			}
+		}
+
+		self.prune_tags(at, tags, in_pool.into_iter().filter_map(|x| x).map(|x| x.hash.clone()))?;
+
+		Ok(())
+	}
+
 	/// Prunes ready transactions that provide given list of tags.
-	pub fn prune_tags(&self, at: &BlockId<B::Block>, tags: impl IntoIterator<Item=Tag>) -> Result<(), B::Error> {
+	///
+	/// Given tags are assumed to be always provided now, so all transactions
+	/// in the Future Queue that require that particular tag (and have other
+	/// requirements satisfied) are promoted to Ready Queue.
+	///
+	/// Moreover for each provided tag we remove transactions in the pool that:
+	/// 1. Provide that tag directly
+	/// 2. Are a dependency of pruned transaction.
+	///
+	/// By removing predecessor transactions as well we might actually end up
+	/// pruning too much, so all removed transactions are reverified against
+	/// the runtime (`validate_transaction`) to make sure they are invalid.
+	///
+	/// However we avoid revalidating transactions that are contained within
+	/// the second parameter of `known_imported_hashes`. These transactions
+	/// (if pruned) are not revalidated and become temporarily banned to
+	/// prevent importing them in the (near) future.
+	pub fn prune_tags(
+		&self,
+		at: &BlockId<B::Block>,
+		tags: impl IntoIterator<Item=Tag>,
+		known_imported_hashes: impl IntoIterator<Item=ExHash<B>> + Clone,
+	) -> Result<(), B::Error> {
+		// Perform tag-based pruning in the base pool
 		let status = self.pool.write().prune_tags(tags);
+		// Notify event listeners of all transactions
+		// that were promoted to `Ready` or were dropped.
 		{
 			let mut listener = self.listener.write();
 			for promoted in &status.promoted {
@@ -164,10 +232,17 @@ impl<B: ChainApi> Pool<B> {
 				listener.dropped(f, None);
 			}
 		}
+		// make sure that we don't revalidate extrinsics that were part of the recently
+		// imported block. This is especially important for UTXO-like chains cause the
+		// inputs are pruned so such transaction would go to future again.
+		self.rotator.ban(&std::time::Instant::now(), known_imported_hashes.clone().into_iter());
+
 		// try to re-submit pruned transactions since some of them might be still valid.
+		// note that `known_imported_hashes` will be rejected here due to temporary ban.
 		let hashes = status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
 		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.clone()))?;
-		// Fire mined event for transactions that became invalid.
+
+		// Collect the hashes of transactions that now became invalid (meaning that they are succesfuly pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
 			Err(Ok(err)) => match err.kind() {
 				error::ErrorKind::InvalidTransaction => Some(hashes[idx].clone()),
@@ -175,15 +250,19 @@ impl<B: ChainApi> Pool<B> {
 			},
 			_ => None,
 		});
+		// Fire `pruned` notifications for collected hashes and make sure to include
+		// `known_imported_hashes` since they were just imported as part of the block.
+		let hashes = hashes.chain(known_imported_hashes.into_iter());
 		{
 			let header_hash = self.api.block_id_to_hash(at)?
 				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
 			let mut listener = self.listener.write();
 			for h in hashes {
-				listener.pruned(header_hash, &h)
+				listener.pruned(header_hash, &h);
 			}
 		}
-		// clear old transactions
+		// perform regular cleanup of old transactions in the pool
+		// and update temporary bans.
 		self.clear_stale(at)?;
 		Ok(())
 	}
@@ -256,7 +335,7 @@ impl<B: ChainApi> Pool<B> {
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
 		// temporarily ban invalid transactions
 		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
-		self.rotator.ban(&time::Instant::now(), hashes);
+		self.rotator.ban(&time::Instant::now(), hashes.iter().cloned());
 
 		let invalid = self.pool.write().remove_invalid(hashes);
 
@@ -401,7 +480,7 @@ mod tests {
 		});
 
 		// when
-		pool.rotator.ban(&time::Instant::now(), &[pool.hash_of(&uxt)]);
+		pool.rotator.ban(&time::Instant::now(), vec![pool.hash_of(&uxt)]);
 		let res = pool.submit_one(&BlockId::Number(0), uxt);
 		assert_eq!(pool.status().ready, 0);
 		assert_eq!(pool.status().future, 0);
@@ -486,6 +565,24 @@ mod tests {
 		assert!(pool.rotator.is_banned(&hash3));
 	}
 
+	#[test]
+	fn should_ban_mined_transactions() {
+		// given
+		let pool = pool();
+		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: 1.into(),
+			to: 2.into(),
+			amount: 5,
+			nonce: 0,
+		})).unwrap();
+
+		// when
+		pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()]).unwrap();
+
+		// then
+		assert!(pool.rotator.is_banned(&hash1));
+	}
+
 	mod listener {
 		use super::*;
 
@@ -503,7 +600,32 @@ mod tests {
 			assert_eq!(pool.status().future, 0);
 
 			// when
-			pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]]).unwrap();
+			pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![]).unwrap();
+			assert_eq!(pool.status().ready, 0);
+			assert_eq!(pool.status().future, 0);
+
+			// then
+			let mut stream = watcher.into_stream().wait();
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(2.into()))));
+			assert_eq!(stream.next(), None);
+		}
+
+		#[test]
+		fn should_trigger_ready_and_finalised_when_pruning_via_hash() {
+			// given
+			let pool = pool();
+			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 0,
+			})).unwrap();
+			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.status().future, 0);
+
+			// when
+			pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![2u64]).unwrap();
 			assert_eq!(pool.status().ready, 0);
 			assert_eq!(pool.status().future, 0);
 
