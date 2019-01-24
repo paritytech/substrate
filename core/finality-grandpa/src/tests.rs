@@ -683,7 +683,7 @@ fn consensus_changes_works() {
 
 #[test]
 fn sync_justifications_on_change_blocks() {
-	::env_logger::init();
+	let _ = ::env_logger::try_init();
 
 	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let peers_b = &[Keyring::Alice, Keyring::Bob];

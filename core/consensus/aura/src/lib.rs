@@ -807,7 +807,7 @@ mod tests {
 
 	#[test]
 	fn authoring_blocks() {
-		::env_logger::init();
+		let _ = ::env_logger::try_init();
 		let mut net = AuraTestNet::new(3);
 
 		net.start();
