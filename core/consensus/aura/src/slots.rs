@@ -21,6 +21,7 @@
 use std::time::{Instant, Duration};
 use tokio::timer::Delay;
 use futures::prelude::*;
+use futures::try_ready;
 
 use inherents::{InherentDataProviders, InherentData};
 
@@ -86,7 +87,7 @@ impl Stream for Slots {
 		self.inner_delay = match self.inner_delay.take() {
 			None => {
 				// schedule wait.
-				let wait_until = match ::duration_now() {
+				let wait_until = match crate::duration_now() {
 					None => return Ok(Async::Ready(None)),
 					Some(now) => Instant::now() + time_until_next(now, slot_duration),
 				};
@@ -103,8 +104,8 @@ impl Stream for Slots {
 		// timeout has fired.
 
 		let inherent_data = self.inherent_data_providers.create_inherent_data()
-			.map_err(::inherent_to_common_error)?;
-		let (timestamp, slot_num) = ::extract_timestamp_and_slot(&inherent_data)?;
+			.map_err(crate::inherent_to_common_error)?;
+		let (timestamp, slot_num) = crate::extract_timestamp_and_slot(&inherent_data)?;
 
 		// reschedule delay for next slot.
 		let ends_at = Instant::now() + time_until_next(Duration::from_secs(timestamp), slot_duration);
