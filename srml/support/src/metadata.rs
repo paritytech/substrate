@@ -17,7 +17,7 @@
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
 	RuntimeModuleMetadata, RuntimeMetadataV1,
-	DefaultByteGetter,
+	DefaultByteGetter, META_VERSION,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -36,7 +36,8 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
-				$crate::metadata::RuntimeMetadata::V1 (
+				$crate::metadata::RuntimeMetadata (
+					$crate::metadata::META_VERSION,
 					$crate::metadata::RuntimeMetadataV1 {
 						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
@@ -331,7 +332,8 @@ mod tests {
 			event_module2::Module with Event with Storage with Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1 (
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata (
+		META_VERSION,
 		RuntimeMetadataV1 {
 		modules: DecodeDifferent::Encode(&[
 			RuntimeModuleMetadata {
