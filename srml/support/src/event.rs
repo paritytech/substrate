@@ -425,7 +425,10 @@ macro_rules! __impl_outer_event_json_metadata {
 			pub fn __module_events_system() -> $crate::event::FnEncode<&'static [$crate::event::EventMetadata]> {
 				return $crate::event::FnEncode(system::Event::metadata)
 			}
-	
+			#[allow(dead_code)]
+			pub fn __module_events___default() -> $crate::event::FnEncode<&'static [$crate::event::EventMetadata]> {
+				return $crate::event::FnEncode(||&[])
+			}
 			$(
 				#[allow(dead_code)]
 				$crate::paste::item!{

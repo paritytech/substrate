@@ -52,7 +52,7 @@ macro_rules! __runtime_modules_to_metadata {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
-		$mod:ident::$module:ident,
+		$mod:ident::$module:ident $(with $kw:ident)*,
 		$( $rest:tt )*
 	) => {
 		__runtime_modules_to_metadata!(
@@ -60,50 +60,15 @@ macro_rules! __runtime_modules_to_metadata {
 			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($module)),
 				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
-				storage: None,
+				storage: __runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
 				call: $crate::metadata::DecodeDifferent::Encode(
 					$crate::metadata::FnEncode($mod::$module::<$runtime>::call_module)
 				),
 				outer_dispatch: $crate::metadata::DecodeDifferent::Encode(
-					$crate::paste::expr!{
-						$crate::metadata::FnEncode( $runtime:: [< __module_dispatch_ $mod >])
-					}
+					__runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*)
 				),
 				event: $crate::metadata::DecodeDifferent::Encode(
-					$crate::paste::expr!{
-						$crate::metadata::FnEncode( $runtime:: [< __module_events_ $mod >])
-					}
-				),
-			};
-			$( $rest )*
-		)
-	};
-	(
-		$runtime: ident;
-		$( $metadata:expr ),*;
-		$mod:ident::$module:ident with Storage,
-		$( $rest:tt )*
-	) => {
-		__runtime_modules_to_metadata!(
-			$runtime;
-			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
-				name: $crate::metadata::DecodeDifferent::Encode(stringify!($module)),
-				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
-				storage: Some($crate::metadata::DecodeDifferent::Encode(
-					$crate::metadata::FnEncode($mod::$module::<$runtime>::store_metadata)
-				)),
-				call: $crate::metadata::DecodeDifferent::Encode(
-					$crate::metadata::FnEncode($mod::$module::<$runtime>::call_module)
-				),
-				outer_dispatch: $crate::metadata::DecodeDifferent::Encode(
-					$crate::paste::expr!{
-						$crate::metadata::FnEncode( $runtime:: [< __module_dispatch_ $mod >])
-					}
-				),
-				event: $crate::metadata::DecodeDifferent::Encode(
-					$crate::paste::expr!{
-						$crate::metadata::FnEncode( $runtime:: [< __module_events_ $mod >])
-					}
+					__runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*)
 				),
 			};
 			$( $rest )*
@@ -117,6 +82,102 @@ macro_rules! __runtime_modules_to_metadata {
 	};
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __runtime_modules_to_metadata_calls_call {
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with Call 
+		$(with $kws:ident)*
+	) => {
+		$crate::paste::expr!{
+			$crate::metadata::FnEncode($runtime:: [< __module_dispatch_ $mod >])
+		}
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with $_:ident 
+		$(with $kws:ident)*
+	) => {
+		__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+	) => {
+		$crate::metadata::FnEncode($runtime::__module_dispatch___default)
+	};
+}
+
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __runtime_modules_to_metadata_calls_event {
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with Event 
+		$(with $kws:ident)*
+	) => {
+		$crate::paste::expr!{
+			$crate::metadata::FnEncode($runtime:: [< __module_events_ $mod >])
+		}
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with $_:ident 
+		$(with $kws:ident)*
+	) => {
+		__runtime_modules_to_metadata_calls_event!( $mod, $module, $runtime, $(with $kws)* );
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+	) => {
+		$crate::metadata::FnEncode($runtime::__module_events___default)
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __runtime_modules_to_metadata_calls_storage {
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with Storage 
+		$(with $kws:ident)*
+	) => {
+		Some($crate::metadata::DecodeDifferent::Encode(
+			$crate::metadata::FnEncode($mod::$module::<$runtime>::store_metadata)
+		))
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with $_:ident 
+		$(with $kws:ident)*
+	) => {
+		__runtime_modules_to_metadata_calls_storage!( $mod, $module, $runtime, $(with $kws)* );
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+	) => {
+		None
+	};
+}
 
 
 #[cfg(test)]
@@ -265,9 +326,9 @@ mod tests {
 
 	impl_runtime_metadata!(
 		for TestRuntime with modules
-			system::Module,
-			event_module::Module,
-			event_module2::Module with Storage,
+			system::Module with Event,
+			event_module::Module with Event with Call,
+			event_module2::Module with Event with Storage with Call,
 	);
 
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1 (

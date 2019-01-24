@@ -810,6 +810,9 @@ macro_rules! __impl_outer_dispatch_metadata {
 			pub fn __module_dispatch_system() -> Option<$crate::dispatch::OuterDispatchCall> {
 				None
 			}
+			pub fn __module_dispatch___default() -> Option<$crate::dispatch::OuterDispatchCall> {
+				None
+			}
 			__impl_outer_dispatch_metadata!(@filter 0; $( $module::$call, )*; );
 		}
 	};
