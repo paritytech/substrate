@@ -330,13 +330,13 @@ mod tests {
 			let nonce = uxt.transfer().nonce;
 
 			if nonce < block_number {
-				Ok(TransactionValidity::Invalid)
+				Ok(TransactionValidity::Invalid(0))
 			} else {
 				Ok(TransactionValidity::Valid {
-					priority: 4,
+					priority: 4.into(),
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					provides: vec![vec![nonce as u8]],
-					longevity: 3,
+					longevity: 3.into(),
 				})
 			}
 		}

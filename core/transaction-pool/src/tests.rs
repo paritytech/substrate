@@ -50,10 +50,10 @@ impl txpool::ChainApi for TestApi {
 		let provides = vec![vec![uxt.transfer().nonce as u8]];
 
 		Ok(TransactionValidity::Valid {
-			priority: 1,
+			priority: 1.into(),
 			requires,
 			provides,
-			longevity: 64
+			longevity: 64.into()
 		})
 	}
 
