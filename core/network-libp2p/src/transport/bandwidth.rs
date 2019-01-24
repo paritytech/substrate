@@ -97,10 +97,12 @@ where TInner: Stream<Item = (TConn, Multiaddr)>,
 			None => return Ok(Async::Ready(None))
 		};
 
-		Ok(Async::Ready(Some((BandwidthFuture {
+		let fut = BandwidthFuture {
 			inner,
 			sinks: self.sinks.clone(),
-		}, addr))))
+		};
+
+		Ok(Async::Ready(Some((fut, addr))))
 	}
 }
 
@@ -112,7 +114,7 @@ pub struct BandwidthFuture<TInner> {
 }
 
 impl<TInner> Future for BandwidthFuture<TInner>
-where TInner: Future,
+	where TInner: Future,
 {
 	type Item = BandwidthConnecLogging<TInner::Item>;
 	type Error = TInner::Error;
@@ -153,7 +155,7 @@ pub struct BandwidthConnecLogging<TInner> {
 }
 
 impl<TInner> Read for BandwidthConnecLogging<TInner>
-where TInner: Read
+	where TInner: Read
 {
 	#[inline]
 	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -164,12 +166,12 @@ where TInner: Read
 }
 
 impl<TInner> tokio_io::AsyncRead for BandwidthConnecLogging<TInner>
-where TInner: tokio_io::AsyncRead
+	where TInner: tokio_io::AsyncRead
 {
 }
 
 impl<TInner> Write for BandwidthConnecLogging<TInner>
-where TInner: Write
+	where TInner: Write
 {
 	#[inline]
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -185,7 +187,7 @@ where TInner: Write
 }
 
 impl<TInner> tokio_io::AsyncWrite for BandwidthConnecLogging<TInner>
-where TInner: tokio_io::AsyncWrite
+	where TInner: tokio_io::AsyncWrite
 {
 	#[inline]
 	fn shutdown(&mut self) -> Poll<(), io::Error> {
