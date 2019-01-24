@@ -23,10 +23,11 @@ use kvdb::{KeyValueDB, DBTransaction};
 
 use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
+use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, AuthorityIdFor};
-use utils::{self, COLUMN_META};
+use crate::utils::{self, COLUMN_META};
 
 use self::list_cache::ListCache;
 

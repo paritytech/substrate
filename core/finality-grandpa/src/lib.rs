@@ -91,7 +91,7 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
+use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
@@ -528,10 +528,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			self.voters.clone(),
 		);
 
+		let local_key = self.config.local_key.as_ref()
+			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+
 		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
-			self.config.local_key.clone(),
+			local_key.cloned(),
 			self.voters.clone(),
 			self.network.clone(),
 		);
@@ -992,7 +995,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	api: Arc<PRA>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -1031,6 +1034,29 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			}
 		}
 	}
+
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.import_justification(hash, number, justification, false)
+	}
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		DigestFor<Block>: Encode,
+		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		RA: Send + Sync,
+		PRA: ProvideRuntimeApi,
+		PRA::Api: GrandpaApi<Block>,
+{
+	type Error = ConsensusError;
 
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
@@ -1160,15 +1186,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		Ok(import_result)
 	}
-
-	fn import_justification(
-		&self,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-		justification: Justification,
-	) -> Result<(), Self::Error> {
-		self.import_justification(hash, number, justification, false)
-	}
 }
 
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
@@ -1273,32 +1290,6 @@ fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	}
 
 	Ok(Some(current.hash()))
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBlockImport<B, E, Block, RA, PRA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
-{
-
-	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<Ed25519AuthorityId>, Self::Error> {
-		self.inner.authorities_at(at)
-	}
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> ProvideRuntimeApi for GrandpaBlockImport<B, E, Block, RA, PRA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	PRA: ProvideRuntimeApi,
-{
-	type Api = PRA::Api;
-
-	fn runtime_api<'a>(&'a self) -> ::runtime_primitives::traits::ApiRef<'a, Self::Api> {
-		self.api.runtime_api()
-	}
 }
 
 /// Half of a link between a block-import worker and a the background voter.
@@ -1419,6 +1410,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 }
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
 	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
 	client: &Arc<Client<B, E, Block, RA>>,
@@ -1454,9 +1446,14 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		commit_in,
 	);
 
+	let is_voter = local_key
+		.map(|pair| voters.contains_key(&pair.public().into()))
+		.unwrap_or(false);
+
 	let commit_out = ::communication::CommitsOut::<Block, _>::new(
 		network.clone(),
 		set_id,
+		is_voter,
 	);
 
 	let commit_in = commit_in.map_err(Into::into);
@@ -1536,6 +1533,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		);
 
 		let committer_data = committer_communication(
+			config.local_key.clone(),
 			env.set_id,
 			&env.voters,
 			&client,

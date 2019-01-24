@@ -175,6 +175,16 @@ pub enum ServiceEvent {
 		/// Data that has been received.
 		data: Bytes,
 	},
+
+	/// The substream with a node is clogged. We should avoid sending data to it if possible.
+	Clogged {
+		/// Index of the node.
+		node_index: NodeIndex,
+		/// Protocol which generated the message.
+		protocol_id: ProtocolId,
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
+	},
 }
 
 /// Network service. Must be polled regularly in order for the networking to work.
@@ -368,6 +378,14 @@ impl Service {
 						node_index,
 						protocol_id,
 						data,
+					})))
+				}
+				Ok(Async::Ready(Some(BehaviourOut::Clogged { protocol_id, peer_id, messages }))) => {
+					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
+					break Ok(Async::Ready(Some(ServiceEvent::Clogged {
+						node_index,
+						protocol_id,
+						messages,
 					})))
 				}
 				Ok(Async::Ready(Some(BehaviourOut::Identified { peer_id, info }))) => {

@@ -395,14 +395,16 @@ pub(crate) struct CommitsOut<Block, N> {
 	network: N,
 	set_id: u64,
 	_marker: ::std::marker::PhantomData<Block>,
+	is_voter: bool,
 }
 
 impl<Block, N> CommitsOut<Block, N> {
 	/// Create a new commit output stream.
-	pub(crate) fn new(network: N, set_id: u64) -> Self {
+	pub(crate) fn new(network: N, set_id: u64, is_voter: bool) -> Self {
 		CommitsOut {
 			network,
 			set_id,
+			is_voter,
 			_marker: Default::default(),
 		}
 	}
@@ -413,6 +415,10 @@ impl<Block: BlockT, N: Network> Sink for CommitsOut<Block, N> {
 	type SinkError = Error;
 
 	fn start_send(&mut self, input: (u64, Commit<Block>)) -> StartSend<Self::SinkItem, Error> {
+		if !self.is_voter {
+			return Ok(AsyncSink::Ready);
+		}
+
 		let (round, commit) = input;
 		let (precommits, auth_data) = commit.precommits.into_iter()
 			.map(|signed| (signed.precommit, (signed.signature, signed.id)))

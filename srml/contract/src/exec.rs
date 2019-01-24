@@ -653,7 +653,7 @@ mod tests {
 
 		fn insert(&mut self, f: impl Fn(MockCtx) -> VmExecResult + 'a) -> CodeHash<Test> {
 			// Generate code hashes as monotonically increasing values.
-			let code_hash = self.counter.into();
+			let code_hash = <Test as system::Trait>::Hash::from_low_u64_be(self.counter);
 
 			self.counter += 1;
 			self.map.insert(code_hash, MockExecutable::new(f));
