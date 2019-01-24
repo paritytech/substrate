@@ -144,15 +144,20 @@ impl<Block: BlockT> ImportBlock<Block> {
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
-	/// Called by the import queue when it is started.
-	fn on_start(&self, _link: &::import_queue::Link<B>) { }
-
 	/// Import a Block alongside the new authorities valid from this block forward
 	fn import_block(
 		&self,
 		block: ImportBlock<B>,
 		new_authorities: Option<Vec<AuthorityIdFor<B>>>,
 	) -> Result<ImportResult, Self::Error>;
+}
+
+/// Justification import trait
+pub trait JustificationImport<B: BlockT> {
+	type Error: ::std::error::Error + Send + 'static;
+
+	/// Called by the import queue when it is started.
+	fn on_start(&self, _link: &::import_queue::Link<B>) { }
 
 	/// Import a Block justification and finalize the given block.
 	fn import_justification(

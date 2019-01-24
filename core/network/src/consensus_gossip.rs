@@ -41,7 +41,6 @@ struct MessageEntry<B: BlockT> {
 	message_hash: B::Hash,
 	message: ConsensusMessage,
 	broadcast: bool,
-	instant: Instant,
 }
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
@@ -50,6 +49,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	live_message_sinks: HashMap<B::Hash, Vec<mpsc::UnboundedSender<ConsensusMessage>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: HashSet<(B::Hash, B::Hash)>,
+	message_times: HashMap<(B::Hash, B::Hash), Instant>,
 	session_start: Option<B::Hash>,
 }
 
@@ -61,6 +61,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			live_message_sinks: HashMap::new(),
 			messages: Default::default(),
 			known_messages: Default::default(),
+			message_times: Default::default(),
 			session_start: None
 		}
 	}
@@ -155,9 +156,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 				topic,
 				message_hash,
 				broadcast,
-				instant: Instant::now(),
 				message: get_message(),
 			});
+
+			self.message_times.insert((topic, message_hash), Instant::now());
 		}
 	}
 
@@ -174,20 +176,33 @@ impl<B: BlockT> ConsensusGossip<B> {
 			!sinks.is_empty()
 		});
 
-		let hashes = &mut self.known_messages;
+		let message_times = &mut self.message_times;
+		let known_messages = &mut self.known_messages;
 		let before = self.messages.len();
 		let now = Instant::now();
+
 		self.messages.retain(|entry| {
-			if entry.instant + MESSAGE_LIFETIME >= now && predicate(&entry.topic) {
-				true
-			} else {
-				hashes.remove(&(entry.topic, entry.message_hash));
-				false
-			}
+			message_times.get(&(entry.topic, entry.message_hash))
+				.map(|instant| *instant + MESSAGE_LIFETIME >= now && predicate(&entry.topic))
+				.unwrap_or(false)
 		});
-		trace!(target:"gossip", "Cleaned up {} stale messages, {} left", before - self.messages.len(), self.messages.len());
+
+		known_messages.retain(|(topic, message_hash)| {
+			message_times.get(&(*topic, *message_hash))
+				.map(|instant| *instant + (2 * MESSAGE_LIFETIME) >= now && predicate(topic))
+				.unwrap_or(false)
+		});
+
+		trace!(target:"gossip", "Cleaned up {} stale messages, {} left ({} known)",
+			before - self.messages.len(),
+			self.messages.len(),
+			known_messages.len(),
+		);
+
+		message_times.retain(|h, _| known_messages.contains(h));
+
 		for (_, ref mut peer) in self.peers.iter_mut() {
-			peer.known_messages.retain(|h| hashes.contains(h));
+			peer.known_messages.retain(|h| known_messages.contains(h));
 		}
 	}
 
@@ -318,10 +333,10 @@ mod tests {
 				consensus.messages.push(MessageEntry {
 					topic: $topic,
 					message_hash: $hash,
-					instant: $now,
 					message: $m,
 					broadcast: false,
-				})
+				});
+				consensus.message_times.insert(($topic, $hash), $now);
 			}
 		}
 
@@ -346,9 +361,15 @@ mod tests {
 		assert_eq!(consensus.known_messages.len(), 1);
 		assert!(consensus.known_messages.contains(&(best_hash, m2_hash)));
 
-		// make timestamp expired
+		// make timestamp expired, but the message is still kept as known
 		consensus.messages.clear();
-		push_msg!(best_hash, m2_hash, now - MESSAGE_LIFETIME, m2);
+		push_msg!(best_hash, m2_hash, now - MESSAGE_LIFETIME, m2.clone());
+		consensus.collect_garbage(|_topic| true);
+		assert!(consensus.messages.is_empty());
+		assert_eq!(consensus.known_messages.len(), 1);
+
+		// make timestamp expired past the known message lifetime
+		push_msg!(best_hash, m2_hash, now - (2 * MESSAGE_LIFETIME), m2);
 		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert!(consensus.known_messages.is_empty());

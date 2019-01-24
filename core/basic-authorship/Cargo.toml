@@ -2,14 +2,15 @@
 name = "substrate-basic-authorship"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 log = "0.4"
-parity-codec = "2.2"
-sr-primitives = { path = "../sr-primitives" }
-substrate-client = { path = "../client" }
-substrate-consensus-aura-primitives = { path = "../consensus/aura/primitives" }
-substrate-consensus-common = { path = "../consensus/common" }
-substrate-primitives = { path = "../primitives" }
-substrate-inherents = { path = "../inherents" }
-substrate-transaction-pool = { path = "../transaction-pool" }
+codec = { package = "parity-codec", version = "2.2" }
+runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+client = { package = "substrate-client", path = "../../core/client" }
+aura_primitives = { package = "substrate-consensus-aura-primitives", path = "../../core/consensus/aura/primitives" }
+consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+inherents = { package = "substrate-inherents", path = "../inherents" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }

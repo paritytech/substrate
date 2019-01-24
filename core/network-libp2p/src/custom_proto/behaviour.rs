@@ -107,6 +107,17 @@ pub enum CustomProtosOut {
 		/// Data that has been received.
 		data: Bytes,
 	},
+
+	/// The substream used by the protocol is pretty large. We should print avoid sending more
+	/// data on it if possible.
+	Clogged {
+		/// Id of the peer which is clogged.
+		peer_id: PeerId,
+		/// Protocol which has a problem.
+		protocol_id: ProtocolId,
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
+	},
 }
 
 impl<TSubstream> CustomProtos<TSubstream> {
@@ -435,6 +446,15 @@ where
 				};
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+			}
+			CustomProtosHandlerOut::Clogged { protocol_id, messages } => {
+				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} (protocol: {:?}) is \
+					pretty large", source, protocol_id);
+				self.events.push(NetworkBehaviourAction::GenerateEvent(CustomProtosOut::Clogged {
+					peer_id: source,
+					protocol_id,
+					messages,
+				}));
 			}
 		}
 	}

@@ -63,9 +63,9 @@ use std::{sync::{Arc, mpsc}, time::Duration, thread};
 
 use codec::Encode;
 use consensus_common::{
-	Authorities, BlockImport, Environment, Error as ConsensusError, Proposer, ForkChoiceStrategy
+	Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy
 };
-use consensus_common::import_queue::{Verifier, BasicQueue};
+use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
@@ -542,7 +542,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
-	C: Authorities<B> + BlockImport<B> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
@@ -681,12 +681,14 @@ fn register_aura_inherent_data_provider(
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, E>(
 	slot_duration: SlotDuration,
+	block_import: SharedBlockImport<B>,
+	justification_import: Option<SharedJustificationImport<B>>,
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B, C, E>, consensus_common::Error> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B, Error=ConsensusError> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
@@ -696,7 +698,7 @@ pub fn import_queue<B, C, E>(
 	let verifier = Arc::new(
 		AuraVerifier { client: client.clone(), extra, inherent_data_providers }
 	);
-	Ok(BasicQueue::new(verifier, client))
+	Ok(BasicQueue::new(verifier, block_import, justification_import))
 }
 
 #[cfg(test)]

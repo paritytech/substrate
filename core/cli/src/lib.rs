@@ -19,39 +19,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-extern crate app_dirs;
-extern crate env_logger;
-extern crate atty;
-extern crate ansi_term;
-extern crate regex;
-extern crate time;
-extern crate fdlimit;
-extern crate futures;
-extern crate tokio;
-extern crate names;
-extern crate backtrace;
-extern crate sysinfo;
-
-extern crate substrate_client as client;
-extern crate substrate_network as network;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_service as service;
-extern crate substrate_primitives as primitives;
-#[macro_use]
-extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
-#[macro_use]
-extern crate substrate_telemetry;
-extern crate exit_future;
-
-#[macro_use]
-extern crate lazy_static;
-extern crate clap;
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate log;
-extern crate structopt;
-
 mod params;
 pub mod error;
 pub mod informant;
@@ -80,6 +47,9 @@ use regex::Regex;
 use structopt::StructOpt;
 pub use params::{CoreParams, CoreCommands, ExecutionStrategy};
 use app_dirs::{AppInfo, AppDataType};
+use error_chain::bail;
+use log::info;
+use lazy_static::lazy_static;
 
 use futures::Future;
 
