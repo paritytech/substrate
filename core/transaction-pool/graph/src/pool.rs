@@ -314,7 +314,7 @@ fn fire_events<H, H2, Ex>(
 mod tests {
 	use super::*;
 	use futures::Stream;
-	use test_runtime::{Block, Extrinsic, Transfer};
+	use test_runtime::{Block, Extrinsic, Transfer, H256};
 
 	#[derive(Debug, Default)]
 	struct TestApi;
@@ -352,7 +352,7 @@ mod tests {
 		/// Returns a block hash given the block id.
 		fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error> {
 			Ok(match at {
-				BlockId::Number(num) => Some((*num).into()),
+				BlockId::Number(num) => Some(H256::from_low_u64_be(*num)),
 				BlockId::Hash(_) => None,
 			})
 		}
@@ -379,8 +379,8 @@ mod tests {
 
 		// when
 		let hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: 1.into(),
-			to: 2.into(),
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
 			amount: 5,
 			nonce: 0,
 		})).unwrap();
@@ -394,8 +394,8 @@ mod tests {
 		// given
 		let pool = pool();
 		let uxt = uxt(Transfer {
-			from: 1.into(),
-			to: 2.into(),
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
 			amount: 5,
 			nonce: 0,
 		});
@@ -419,21 +419,21 @@ mod tests {
 
 			// when
 			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
 			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 1,
 			})).unwrap();
 			// future doesn't count
 			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 3,
 			})).unwrap();
@@ -455,20 +455,20 @@ mod tests {
 		// given
 		let pool = pool();
 		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: 1.into(),
-			to: 2.into(),
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
 			amount: 5,
 			nonce: 0,
 		})).unwrap();
 		let hash2 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: 1.into(),
-			to: 2.into(),
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
 			amount: 5,
 			nonce: 1,
 		})).unwrap();
 		let hash3 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: 1.into(),
-			to: 2.into(),
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
 			amount: 5,
 			nonce: 3,
 		})).unwrap();
@@ -494,8 +494,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
@@ -510,7 +510,7 @@ mod tests {
 			// then
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(2.into()))));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(H256::from_low_u64_be(2)))));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -519,8 +519,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 1,
 			})).unwrap();
@@ -529,8 +529,8 @@ mod tests {
 
 			// when
 			pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
@@ -547,8 +547,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 0,
 			});
@@ -571,8 +571,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let uxt = uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 0,
 			});

@@ -68,7 +68,7 @@ fn sync_no_common_longer_chain_fails() {
 #[test]
 fn sync_justifications() {
 	::env_logger::init().ok();
-	let mut net = TestNet::new(3);
+	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
 	net.sync();
 
