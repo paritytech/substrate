@@ -148,7 +148,6 @@ error_chain! {
 	}
 }
 
-// TODO [ToDr] Temporary, state_machine::Error should be a regular error not Box.
 impl From<Box<state_machine::Error>> for Error {
 	fn from(e: Box<state_machine::Error>) -> Self {
 		ErrorKind::Execution(e).into()
