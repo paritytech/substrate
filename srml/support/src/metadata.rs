@@ -53,7 +53,7 @@ macro_rules! __runtime_modules_to_metadata {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
-		$mod:ident::$module:ident $(with $kw:ident)*,
+		$mod:ident::$module:ident $(with)+ $($kw:ident)*,
 		$( $rest:tt )*
 	) => {
 		__runtime_modules_to_metadata!(
@@ -328,8 +328,8 @@ mod tests {
 	impl_runtime_metadata!(
 		for TestRuntime with modules
 			system::Module with Event,
-			event_module::Module with Event with Call,
-			event_module2::Module with Event with Storage with Call,
+			event_module::Module with Event Call,
+			event_module2::Module with Event Storage Call,
 	);
 
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata (

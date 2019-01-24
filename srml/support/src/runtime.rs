@@ -322,10 +322,9 @@ macro_rules! construct_runtime {
 		__decl_runtime_metadata!(
 			$runtime;
 			;
-			;
 			$(
-				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			),*;
+				$name: $module::{ $( $modules $( <$modules_generic> )* )* }
+			)*
 		);
 		__decl_outer_log!(
 			$runtime;
@@ -714,186 +713,95 @@ macro_rules! __decl_outer_dispatch {
 		);
 	};
 }
-
+//runtime
+//empty
+//empty
+//$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_runtime_metadata {
+  // contain a module
 	(
 		$runtime:ident;
-		;
-		$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )*} ),*;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
-			Module $(, $modules:ident $( <$modules_generic:ident> )* )*
+			Module $( $modules:ident $( <$modules_generic:ident> )* )*
 		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		$( $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* )*
+		})*
 	) => {
 
-		__decl_runtime_metadata!(
+		__decl_runtime_metadata!(@Module
 			$runtime;
-			$module { Module, };
-			$( $parsed_modules { $( with_st $parsed_storage )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
-			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
+			$( $parsed_modules { $( $withs )* } )*;
+			$name: $module::{ $( $modules $( <$modules_generic> )* )* }
 			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			)*;
+			  $rest_name: $rest_module::{
+			    $( $rest_modules $( <$rest_modules_generic> )* )*
+			  }
+			)*
 		);
 	};
+  // do not contain Module : skip
 	(
 		$runtime:ident;
-		$current_module:ident { Module, };
-		$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
-			$($modules:ident $( <$modules_generic:ident> )*, )*
+			$( $modules:ident $( <$modules_generic:ident> )* )*
 		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		$( $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* )*
+		})*
 	) => {
 		__decl_runtime_metadata!(
 			$runtime;
-			;
-			$( $parsed_modules { $( with_st $parsed_storage )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* }, )*
+			$( $parsed_modules { $( $withs )* } )*;
+			$(
+			  $rest_name: $rest_module::{
+			    $( $rest_modules $( <$rest_modules_generic> )* )*
+			  }
+			)*
+		);
+	};
+  // process module
+	(@Module
+		$runtime:ident;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
+		$name:ident: $module:ident::{
+			$($modules:ident $( <$modules_generic:ident> )* )*
+		}
+		$($rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* )*
+		})*
+	) => {
+		__decl_runtime_metadata!(
+			$runtime;
+			$( $parsed_modules { $( $withs )* } )*
 			$module {
-				$(
-					__find_storage!($modules:ident)
-				)*
-				$(
-					__find_event!($modules:ident)
-				)*
-				$(
-					__find_call!($modules:ident)
-				)*
+        $($modules)*
 			};
 			$(
 				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
+					$( $rest_modules $( <$rest_modules_generic> )* )*
 				}
-			),*;
+			)*
 		);
 	};
+  // end of decl
 	(
 		$runtime:ident;
-		$( $current_module:ident { $( $current_module_storage:tt )* } )*;
-		$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
-		$name:ident: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-				$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-			})*;
-	) => {
-		__decl_runtime_metadata!(
-			$runtime;
-			$( $current_module { $( $current_module_storage )* } )*;
-			$( $parsed_modules { $( with_st $parsed_storage )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
-			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			)*;
-		);
-	};
-	(
-		$runtime:ident;
-		$current_module:ident { Module, };
-		$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
-		$name:ident: $module:ident::{}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		__decl_runtime_metadata!(
-			$runtime;
-			;
-			$( $parsed_modules { $( with_st $parsed_storage )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* }, )* $module { };
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
-		);
-	};
-	(
-		$runtime:ident;
-		$( $current_module:ident { $( $ignore:tt )* } )*;
-		$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
-		$name:ident: $module:ident::{}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		__decl_runtime_metadata!(
-			$runtime;
-			;
-			$( $parsed_modules { $( with_st $parsed_storage )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
-		);
-	};
-	(
-		$runtime:ident;
-		;
-		$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } ),*;
-		;
+		//$( $parsed_modules:ident { $( with_st $parsed_storage:ident )* $( with_ev $parsed_event:ident )* $( with_ca $parsed_call:ident )* } )*;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 	) => {
 		impl_runtime_metadata!(
 			for $runtime with modules
-				$( $parsed_modules::Module $(with $parsed_storage)* $(with $parsed_event)* $(with $parsed_call)*, )*
+				//$( $parsed_modules::Module $(with $parsed_storage)* $(with $parsed_event)* $(with $parsed_call)* )*,
+				$( $parsed_modules::Module with $( $withs )* , )*
 		);
 	}
+
 }
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __find_storage {
-	(
-		Storage
-	) => {
-		with_str Storage
-	};
-	(
-		$modules:ident
-	) => {
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __find_event {
-	(
-		Event
-	) => {
-		with_ev Event
-	};
-	(
-		$modules:ident
-	) => {
-	};
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __find_call {
-	(
-		Call
-	) => {
-		with_ca Call
-	};
-	(
-		$modules:ident
-	) => {
-	};
-}
-
-
 
 #[macro_export]
 #[doc(hidden)]
