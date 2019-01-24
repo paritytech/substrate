@@ -266,21 +266,12 @@ pub struct ImportBlocksCmd {
 	)]
 	pub execution: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime. Can be either wasm, native or both.
-	#[structopt(
-		long = "api-execution",
-		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Both""#
-		)
-	)]
-	pub api_execution: ExecutionStrategy,
-
-	/// The default number of 64KB pages to allocate for Wasm execution. Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
-	pub default_heap_pages: Option<u32>,
+	/// The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
+	#[structopt(long = "max-heap-pages", value_name = "COUNT")]
+	pub max_heap_pages: Option<u32>,
+	/// The means of execution used when calling into the runtime. Can be either wasm, native, nativeElseWasm or both.
+	#[structopt(long = "execution", value_name = "STRATEGY")]
+	execution: Option<ExecutionStrategy>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -309,6 +300,19 @@ pub struct PurgeChainCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+}
+
+/// How to execute blocks
+#[derive(Debug, StructOpt)]
+pub enum ExecutionStrategy {
+	/// Execute native only
+	Native,
+	/// Execute wasm only
+	Wasm,
+	/// Execute natively when possible, wasm otherwise
+	Both,
+	/// First native, then if that fails or is not possible, wasm.
+	NativeElseWasm,
 }
 
 impl_get_log_filter!(PurgeChainCmd);
@@ -372,6 +376,31 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				.about("Remove the whole chain data.")
 		)
 	}
+}
+
+impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
+	fn get_log_filter(&self) -> Option<String> {
+		match self {
+			CoreParams::Run(c) => c.left.get_log_filter(),
+			CoreParams::BuildSpec(c) => c.get_log_filter(),
+			CoreParams::ExportBlocks(c) => c.get_log_filter(),
+			CoreParams::ImportBlocks(c) => c.get_log_filter(),
+			CoreParams::PurgeChain(c) => c.get_log_filter(),
+			CoreParams::Revert(c) => c.get_log_filter(),
+			CoreParams::Custom(c) => c.get_log_filter(),
+		}
+	}
+}
+
+impl std::str::FromStr for ExecutionStrategy {
+	type Err = String;
+	fn from_str(input: &str) -> Result<Self, Self::Err> {
+		match input {
+			"native" => Ok(ExecutionStrategy::Native),
+			"wasm" | "webassembly" => Ok(ExecutionStrategy::Wasm),
+			"both" => Ok(ExecutionStrategy::Both),
+			"nativeElseWasm" => Ok(ExecutionStrategy::NativeElseWasm),
+			_ => Err("Please specify either 'native', 'wasm', 'nativeElseWasm' or 'both".to_owned())
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
 		match matches.subcommand() {
@@ -386,20 +415,6 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
 			_ => CoreParams::Custom(CC::from_clap(matches)),
-		}
-	}
-}
-
-impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
-	fn get_log_filter(&self) -> Option<String> {
-		match self {
-			CoreParams::Run(c) => c.left.get_log_filter(),
-			CoreParams::BuildSpec(c) => c.get_log_filter(),
-			CoreParams::ExportBlocks(c) => c.get_log_filter(),
-			CoreParams::ImportBlocks(c) => c.get_log_filter(),
-			CoreParams::PurgeChain(c) => c.get_log_filter(),
-			CoreParams::Revert(c) => c.get_log_filter(),
-			CoreParams::Custom(c) => c.get_log_filter(),
 		}
 	}
 }

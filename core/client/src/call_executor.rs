@@ -19,7 +19,7 @@ use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, native_when_possible
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, native_else_wasm
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
@@ -176,7 +176,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			native_when_possible(),
+			native_else_wasm(),
 			false,
 			None,
 		)

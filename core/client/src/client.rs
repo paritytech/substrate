@@ -236,7 +236,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeElseWasm, ExecutionStrategy::NativeElseWasm)
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -809,9 +809,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					"Core_execute_block",
 					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
-						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
-							ExecutionManager::NativeWhenPossible,
+						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeElseWasm) =>
+							ExecutionManager::NativeElseWasm,
 						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
+						(_, ExecutionStrategy::NativeWhenPossible) => ExecutionManager::NativeWhenPossible,
 						_ => ExecutionManager::Both(|wasm_result, native_result| {
 							let header = import_headers.post();
 							warn!("Consensus error between wasm and native block execution at block {}", hash);
@@ -1257,6 +1258,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		let execution_manager = match self.api_execution_strategy {
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
 			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
 				warn!("   Function {:?}", function);

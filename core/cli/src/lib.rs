@@ -350,18 +350,26 @@ where
 	};
 
 	let role =
-		if cli.light {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+		if matches.is_present("light") {
+			config.block_execution_strategy = service::ExecutionStrategy::NativeElseWasm;
 			service::Roles::LIGHT
 		} else if cli.validator || cli.shared_params.dev {
 			config.block_execution_strategy = service::ExecutionStrategy::Both;
 			service::Roles::AUTHORITY
 		} else {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeElseWasm;
 			service::Roles::FULL
 		};
 
-	config.block_execution_strategy = cli.execution.into();
+	if let Some(s) = matches.value_of("execution") {
+		config.block_execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
+			_ => bail!(create_input_err("Invalid execution mode specified")),
+		};
+	}
 
 	config.roles = role;
 	let client_id = config.client_id();
@@ -536,10 +544,28 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path.to_string();
 
-	config.block_execution_strategy = cli.execution.into();
-	config.api_execution_strategy = cli.api_execution.into();
+	if let Some(s) = matches.value_of("execution") {
+		config.block_execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid block execution mode specified".to_owned()).into()),
+		};
+	}
+
+	if let Some(s) = matches.value_of("api-execution") {
+		config.api_execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid API execution mode specified".to_owned()).into()),
+		};
+	}
 
 	let file: Box<Read> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
