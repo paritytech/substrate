@@ -50,6 +50,7 @@ pub use runtime_primitives::RuntimeString;
 pub type InherentIdentifier = [u8; 8];
 
 /// Inherent data to include in a block.
+#[derive(Clone, Default)]
 pub struct InherentData {
 	/// All inherent data encoded with parity-codec and an identifier.
 	data: BTreeMap<InherentIdentifier, Vec<u8>>
@@ -152,7 +153,7 @@ impl codec::Decode for InherentData {
 ///
 /// When a fatal error occurres, all other errors are removed and the implementation needs to
 /// abbort checking inherents.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Clone, Default)]
 pub struct CheckInherentsResult {
 	/// Did the check succeed?
 	okay: bool,
@@ -243,7 +244,7 @@ impl PartialEq for CheckInherentsResult {
 
 /// All `InherentData` providers.
 #[cfg(feature = "std")]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct InherentDataProviders {
 	providers: Arc<RwLock<Vec<Box<dyn ProvideInherentData + Send + Sync>>>>,
 }
@@ -252,9 +253,7 @@ pub struct InherentDataProviders {
 impl InherentDataProviders {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		Self {
-			providers: Default::default(),
-		}
+		Self::default()
 	}
 
 	/// Register an `InherentData` provider.
