@@ -413,7 +413,8 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
-	aux: Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 }
 
 impl<Block, H> backend::BlockImportOperation<Block, H> for BlockImportOperation<Block, H>
@@ -485,14 +486,19 @@ where
 		Ok(root)
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux = Some(ops.into_iter().collect());
+		self.aux.append(&mut ops.into_iter().collect());
 		Ok(())
 	}
 
 	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()> {
+		Ok(())
+	}
+
+	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
 }
@@ -557,23 +563,31 @@ where
 	type State = InMemory<H>;
 	type ChangesTrieStorage = ChangesTrieStorage<H>;
 
-	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
-		let state = match block {
-			BlockId::Hash(ref h) if h.clone() == Default::default() => Self::State::default(),
-			_ => self.state_at(block)?,
-		};
-
+	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation> {
+		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
 		Ok(BlockImportOperation {
 			pending_block: None,
 			pending_authorities: None,
-			old_state: state,
+			old_state,
 			new_state: None,
 			changes_trie_update: None,
-			aux: None,
+			aux: Default::default(),
+			finalized_blocks: Default::default(),
 		})
 	}
 
+	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()> {
+		operation.old_state = self.state_at(block)?;
+		Ok(())
+	}
+
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
+		if !operation.finalized_blocks.is_empty() {
+			for (block, justification) in operation.finalized_blocks {
+				self.blockchain.finalize_header(block, justification)?;
+			}
+		}
+
 		if let Some(pending_block) = operation.pending_block {
 			let old_state = &operation.old_state;
 			let (header, body, justification) = pending_block.block.into_inner();
@@ -598,9 +612,10 @@ where
 			}
 		}
 
-		if let Some(ops) = operation.aux {
-			self.blockchain.write_aux(ops);
+		if !operation.aux.is_empty() {
+			self.blockchain.write_aux(operation.aux);
 		}
+
 		Ok(())
 	}
 
@@ -617,6 +632,13 @@ where
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
+		match block {
+			BlockId::Hash(h) if h == Default::default() => {
+				return Ok(Self::State::default());
+			},
+			_ => {},
+		}
+
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
 			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
