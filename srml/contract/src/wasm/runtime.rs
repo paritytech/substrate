@@ -16,7 +16,7 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash};
+use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee};
 use crate::exec::{Ext, BalanceOf, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
 use crate::gas::{GasMeter, Token, GasMeterResult};
 use sandbox;
@@ -95,7 +95,7 @@ pub(crate) fn to_execution_result<E: Ext>(
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
-pub enum RuntimeToken {
+pub enum RuntimeToken<Gas> {
 	/// Explicit call to the `gas` function. Charge the gas meter
 	/// with the value provided.
 	Explicit(u32),
@@ -106,9 +106,11 @@ pub enum RuntimeToken {
 	/// The given number of bytes is read from the sandbox memory and
 	/// is returned as the return data buffer of the call.
 	ReturnData(u32),
+	/// Dispatch fee calculated by `T::ComputeDispatchFee`.
+	ComputedDispatchFee(Gas),
 }
 
-impl<T: Trait> Token<T> for RuntimeToken {
+impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 	type Metadata = Schedule<T::Gas>;
 
 	fn calculate_amount(&self, metadata: &Schedule<T::Gas>) -> T::Gas {
@@ -124,6 +126,7 @@ impl<T: Trait> Token<T> for RuntimeToken {
 			ReturnData(byte_count) => metadata
 				.return_data_per_byte_cost
 				.checked_mul(&<T::Gas as As<u32>>::sa(byte_count)),
+			ComputedDispatchFee(gas) => Some(gas),
 		};
 
 		value.unwrap_or_else(|| Bounded::max_value())
@@ -200,6 +203,9 @@ fn write_sandbox_memory<T: Trait>(
 define_env!(Env, <E: Ext>,
 
 	// Account for used gas. Traps if gas used is greater than gas limit.
+	//
+	// NOTE: This is a implementation defined call and is NOT a part of the public API.
+	// This call is supposed to be called only by instrumentation injected code.
 	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
@@ -475,6 +481,30 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_value_transferred(ctx) => {
 		ctx.scratch_buf = ctx.ext.value_transferred().encode();
+		Ok(())
+	},
+
+	// Decodes the given buffer as a `T::Call` and adds it to the list
+	// of to-be-dispatched calls.
+	//
+	// All calls made it to the top-level context will be dispatched before
+	// finishing the execution of the calling extrinsic.
+	ext_dispatch_call(ctx, call_ptr: u32, call_len: u32) => {
+		let call = {
+			let call_buf = read_sandbox_memory(ctx, call_ptr, call_len)?;
+			<<<E as Ext>::T as Trait>::Call>::decode(&mut &call_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+
+		// Charge gas for dispatching this call.
+		let fee = {
+			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
+			approx_gas_for_balance::<<E as Ext>::T>(ctx.gas_meter.gas_price(), balance_fee)
+		};
+		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
+
+		ctx.ext.note_dispatch_call(call);
+
 		Ok(())
 	},
 

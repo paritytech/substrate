@@ -37,6 +37,12 @@ error_chain! {
 			display("Timer error: {}", e),
 		}
 
+		/// Error while working with inherent data.
+		InherentData(e: String) {
+			description("InherentData error"),
+			display("InherentData error: {}", e),
+		}
+
 		/// Unable to propose a block.
 		CannotPropose {
 			description("Unable to create block proposal."),

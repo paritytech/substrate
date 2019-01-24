@@ -16,7 +16,6 @@
 
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
-use std::marker::PhantomData;
 use codec::Encode;
 use crate::blockchain::HeaderBackend;
 use runtime_primitives::traits::{
@@ -30,19 +29,18 @@ use runtime_primitives::ApplyOutcome;
 
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block, InherentData, A: ProvideRuntimeApi> where Block: BlockT {
+pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
-	_marker: PhantomData<InherentData>,
 }
 
-impl<'a, Block, A, InherentData> BlockBuilder<'a, Block, InherentData, A>
+impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT<Hash=H256>,
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
-	A::Api: BlockBuilderApi<Block, InherentData>,
+	A::Api: BlockBuilderApi<Block>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
@@ -75,7 +73,6 @@ where
 			extrinsics: Vec::new(),
 			api,
 			block_id: *block_id,
-			_marker: PhantomData,
 		})
 	}
 

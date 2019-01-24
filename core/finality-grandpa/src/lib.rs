@@ -91,7 +91,7 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
+use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
@@ -238,7 +238,7 @@ pub trait Network: Clone {
 	fn commit_messages(&self, set_id: u64) -> Self::In;
 
 	/// Send message over the commit channel.
-	fn send_commit(&self, set_id: u64, message: Vec<u8>);
+	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
@@ -289,7 +289,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 		self.service.consensus_gossip().write().messages_for(commit_topic::<B>(set_id))
 	}
 
-	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
 		self.service.gossip_consensus_message(topic, message, true);
 	}
@@ -528,10 +528,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			self.voters.clone(),
 		);
 
+		let local_key = self.config.local_key.as_ref()
+			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+
 		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
-			self.config.local_key.clone(),
+			local_key.cloned(),
 			self.voters.clone(),
 			self.network.clone(),
 		);
@@ -992,7 +995,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	api: Arc<PRA>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -1031,6 +1034,29 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			}
 		}
 	}
+
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.import_justification(hash, number, justification, false)
+	}
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		DigestFor<Block>: Encode,
+		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		RA: Send + Sync,
+		PRA: ProvideRuntimeApi,
+		PRA::Api: GrandpaApi<Block>,
+{
+	type Error = ConsensusError;
 
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
@@ -1104,18 +1130,27 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		// we don't want to finalize on `inner.import_block`
 		let justification = block.justification.take();
 		let enacts_consensus_change = new_authorities.is_some();
-		let import_result = self.inner.import_block(block, new_authorities).map_err(|e| {
-			if let Some((old_set, mut authorities)) = just_in_case {
-				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
-				*authorities = old_set;
-			}
-			e
-		});
+		let import_result = self.inner.import_block(block, new_authorities);
 
-		let import_result = match import_result {
-			Ok(ImportResult::Queued) => ImportResult::Queued,
-			Ok(r) => return Ok(r),
-			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+		let import_result = {
+			// we scope this so that `just_in_case` is dropped eagerly and releases the authorities lock
+			let revert_authorities = || if let Some((old_set, mut authorities)) = just_in_case {
+				*authorities = old_set;
+			};
+
+			match import_result {
+				Ok(ImportResult::Queued) => ImportResult::Queued,
+				Ok(r) => {
+					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
+					revert_authorities();
+					return Ok(r);
+				},
+				Err(e) => {
+					debug!(target: "afg", "Restoring old authority set after block import error: {:?}", e);
+					revert_authorities();
+					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+				},
+			}
 		};
 
 		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
@@ -1150,15 +1185,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		}
 
 		Ok(import_result)
-	}
-
-	fn import_justification(
-		&self,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-		justification: Justification,
-	) -> Result<(), Self::Error> {
-		self.import_justification(hash, number, justification, false)
 	}
 }
 
@@ -1264,32 +1290,6 @@ fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	}
 
 	Ok(Some(current.hash()))
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBlockImport<B, E, Block, RA, PRA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
-{
-
-	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<Ed25519AuthorityId>, Self::Error> {
-		self.inner.authorities_at(at)
-	}
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> ProvideRuntimeApi for GrandpaBlockImport<B, E, Block, RA, PRA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	PRA: ProvideRuntimeApi,
-{
-	type Api = PRA::Api;
-
-	fn runtime_api<'a>(&'a self) -> ::runtime_primitives::traits::ApiRef<'a, Self::Api> {
-		self.api.runtime_api()
-	}
 }
 
 /// Half of a link between a block-import worker and a the background voter.
@@ -1410,6 +1410,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 }
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
 	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
 	client: &Arc<Client<B, E, Block, RA>>,
@@ -1445,9 +1446,14 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		commit_in,
 	);
 
+	let is_voter = local_key
+		.map(|pair| voters.contains_key(&pair.public().into()))
+		.unwrap_or(false);
+
 	let commit_out = ::communication::CommitsOut::<Block, _>::new(
 		network.clone(),
 		set_id,
+		is_voter,
 	);
 
 	let commit_in = commit_in.map_err(Into::into);
@@ -1487,6 +1493,10 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
 
+	// we shadow network with the wrapping/rebroadcasting network to avoid
+	// accidental reuse.
+	let (broadcast_worker, network) = communication::rebroadcasting_network(network);
+
 	let (last_round_number, last_state) = match Backend::get_aux(&**client.backend(), LAST_COMPLETED_KEY)? {
 		None => (0, RoundState::genesis((genesis_hash, <NumberFor<Block>>::zero()))),
 		Some(raw) => LastCompleted::decode(&mut &raw[..])
@@ -1523,6 +1533,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		);
 
 		let committer_data = committer_communication(
+			config.local_key.clone(),
 			env.set_id,
 			&env.voters,
 			&client,
@@ -1592,7 +1603,12 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 				trigger_authority_set_change(new, authority_set_change)
 			},
 		}))
-	}).map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
+	});
+
+	let voter_work = voter_work
+		.join(broadcast_worker)
+		.map(|((), ())| ())
+		.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
 
 	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }

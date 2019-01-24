@@ -43,11 +43,13 @@ use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
-	key_changes, key_changes_proof, OverlayedChanges
+	key_changes, key_changes_proof, OverlayedChanges,
 };
 
 use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
-use crate::blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
+use crate::blockchain::{
+	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend
+};
 use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use crate::notifications::{StorageNotifications, StorageEventStream};
@@ -70,6 +72,9 @@ pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotific
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
 
+type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
+type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
+
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
@@ -78,7 +83,8 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
+	// holds the block hash currently being imported. TODO: replace this with block queue
+	importing_block: RwLock<Option<Block::Hash>>,
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
@@ -557,25 +563,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block<InherentData>(
+	pub fn new_block(
 		&self
-	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block, InherentData>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at<InherentData>(
+	pub fn new_block_at(
 		&self, parent: &BlockId<Block>
-	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
 		RA: Send + Sync,
 		Self: ProvideRuntimeApi,
-		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block, InherentData>
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
@@ -620,40 +626,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
-			Some(transaction_state) => {
-				let mut overlay = Default::default();
-				let r = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
-					transaction_state,
-					&mut overlay,
-					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
-					match (origin, self.block_execution_strategy) {
-						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
-							ExecutionManager::NativeWhenPossible,
-						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
-						_ => ExecutionManager::Both(|wasm_result, native_result| {
-							let header = import_headers.post();
-							warn!("Consensus error between wasm and native block execution at block {}", hash);
-							warn!("   Header {:?}", header);
-							warn!("   Native result {:?}", native_result);
-							warn!("   Wasm result {:?}", wasm_result);
-							telemetry!("block.execute.consensus_failure";
-								"hash" => ?hash,
-								"origin" => ?origin,
-								"header" => ?header
-							);
-							wasm_result
-						}),
-					},
-					None,
-				);
-				let (_, storage_update, changes_update) = r?;
-				overlay.commit_prospective();
-				(Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect()))
-			},
-			None => (None, None, None)
-		};
+
+		// TODO: correct path logic for when to execute this function
+		// https://github.com/paritytech/substrate/issues/1232
+		let (storage_update,changes_update,storage_changes) = self.block_execution(&import_headers, origin, hash, body.clone(), &transaction)?;
 
 		// TODO: non longest-chain rule.
 		let is_new_best = finalized || match fork_choice {
@@ -722,6 +698,58 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		Ok(ImportResult::Queued)
+	}
+
+	fn block_execution(
+		&self,
+		import_headers: &PrePostHeader<Block::Header>,
+		origin: BlockOrigin,
+		hash: Block::Hash,
+		body: Option<Vec<Block::Extrinsic>>,
+		transaction: &B::BlockImportOperation,
+	) -> error::Result<(
+		Option<StorageUpdate<B, Block>>, 
+		Option<Option<ChangesUpdate>>, 
+		Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	)> 
+		where
+			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	{
+		match transaction.state()? {
+			Some(transaction_state) => {
+				let mut overlay = Default::default();
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
+					transaction_state,
+					&mut overlay,
+					"Core_execute_block",
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+					match (origin, self.block_execution_strategy) {
+						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
+							ExecutionManager::NativeWhenPossible,
+						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
+						_ => ExecutionManager::Both(|wasm_result, native_result| {
+							let header = import_headers.post();
+							warn!("Consensus error between wasm and native block execution at block {}", hash);
+							warn!("   Header {:?}", header);
+							warn!("   Native result {:?}", native_result);
+							warn!("   Wasm result {:?}", wasm_result);
+							telemetry!("block.execute.consensus_failure";
+								"hash" => ?hash,
+								"origin" => ?origin,
+								"header" => ?header
+							);
+							wasm_result
+						}),
+					},
+					None,
+				)?;
+
+				overlay.commit_prospective();
+
+				Ok((Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect())))
+			},
+			None => Ok((None, None, None))
+		}
 	}
 
 	/// Finalizes all blocks up to given. If a justification is provided it is
@@ -1078,7 +1106,6 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	}
 }
 
-
 impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
@@ -1150,19 +1177,6 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			"origin" => ?origin
 		);
 		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
-	}
-
-	/// Import a block justification and finalize the block. The justification
-	/// isn't interpreted by the client and is assumed to have been validated
-	/// previously. The block is finalized unconditionally.
-	fn import_justification(
-		&self,
-		hash: Block::Hash,
-		_number: NumberFor<Block>,
-		justification: Justification,
-	) -> Result<(), Self::Error> {
-		self.finalize_block(BlockId::Hash(hash), Some(justification), true)
-			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
 	}
 }
 

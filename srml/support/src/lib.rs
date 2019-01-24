@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(feature = "std")]
-extern crate serde;
+pub extern crate serde;
 
 #[doc(hidden)]
 pub extern crate sr_std as rstd;
@@ -32,6 +32,7 @@ extern crate srml_metadata;
 extern crate mashup;
 #[cfg_attr(test, macro_use)]
 extern crate srml_support_procedural;
+extern crate substrate_inherents as inherents;
 
 #[cfg(test)]
 #[macro_use]
