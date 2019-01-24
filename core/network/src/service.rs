@@ -80,6 +80,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::BlockImportedSync(hash.clone(), number));
 	}
 
+	fn justification_imported(&self, who: NodeIndex, hash: &B::Hash, number: NumberFor<B>, success: bool) {
+		let _ = self.protocol_sender.send(ProtocolMsg::JustificationImportResut(hash.clone(), number, success));
+		if !success {
+			let reason = Severity::Bad(format!("Invalid justification provided for #{}", hash).to_string());
+			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who, reason));
+		}
+	}
+
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
