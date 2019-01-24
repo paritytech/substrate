@@ -15,9 +15,10 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::Runtime;
-use exec::Ext;
-use parity_wasm::elements::{FunctionType, ValueType};
+use crate::exec::Ext;
+
 use sandbox::{self, TypedValue};
+use parity_wasm::elements::{FunctionType, ValueType};
 
 #[macro_use]
 pub(crate) mod macros;
@@ -26,7 +27,7 @@ pub trait ConvertibleToWasm: Sized {
 	const VALUE_TYPE: ValueType;
 	type NativeType;
 	fn to_typed_value(self) -> TypedValue;
-	fn from_typed_value(TypedValue) -> Option<Self>;
+	fn from_typed_value(_: TypedValue) -> Option<Self>;
 }
 impl ConvertibleToWasm for i32 {
 	type NativeType = i32;
