@@ -36,7 +36,9 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
-				$crate::metadata::RuntimeMetadata::V1 (
+				$crate::metadata::RuntimeMetadata (
+					['m' as u8, 'e' as u8, 't' as u8, 'a' as u8],
+					1,
 					$crate::metadata::RuntimeMetadataV1 {
 						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
@@ -262,7 +264,9 @@ mod tests {
 			event_module2::Module with Storage,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1 (
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata (
+		['m' as u8, 'e' as u8, 't' as u8, 'a' as u8],
+		1,
 		RuntimeMetadataV1 {
 		modules: DecodeDifferent::Encode(&[
 			RuntimeModuleMetadata {

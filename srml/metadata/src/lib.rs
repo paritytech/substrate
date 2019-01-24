@@ -357,14 +357,11 @@ pub struct OuterDispatchCall {
 }
 
 /// The metadata of a runtime.
-/// It is prefixed by a version ID encoded/decoded through
+/// It is prefixed by 'meta' and a version ID encoded/decoded through
 /// the enum nature of `RuntimeMetadata`.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub enum RuntimeMetadata {
-	None,
-	V1(RuntimeMetadataV1),
-}
+pub struct RuntimeMetadata(pub [u8;4], pub u32, pub RuntimeMetadataV1);
 
 /// The metadata of a runtime version 1.
 #[derive(Eq, Encode, PartialEq)]
