@@ -32,12 +32,33 @@ pub type TransactionTag = Vec<u8>;
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
+	/// Transaction is invalid. Details are described by the error code.
 	Invalid,
+	/// Transaction is valid.
 	Valid {
+		/// Priority of the transaction.
+		///
+		/// Priority determines the ordering of two transactions that have all
+		/// their dependencies (required tags) satisfied.
 		priority: TransactionPriority,
+		/// Transaction dependencies
+		///
+		/// A non-empty list signifies that some other transactions which provide
+		/// given tags are required to be included before that one.
 		requires: Vec<TransactionTag>,
+		/// Provided tags
+		///
+		/// A list of tags this transaction provides. Successfuly importing the transaction
+		/// will enable other transactions that depend on (require) those tags to be included as well.
+		/// Provided and requried tags allow Substrate to build a dependency graph of transactions
+		/// and import them in the right (linear) order.
 		provides: Vec<TransactionTag>,
-		longevity: TransactionLongevity
+		/// Transaction longevity
+		///
+		/// Longevity describes minimum number of blocks the validity is correct.
+		/// After this period transaction should be removed from the pool or revalidated.
+		longevity: TransactionLongevity,
 	},
+	/// Transaction validity can't be determined.
 	Unknown,
 }
