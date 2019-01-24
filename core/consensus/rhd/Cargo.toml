@@ -3,28 +3,28 @@ name = "substrate-consensus-rhd"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Rhododendron Round-Based consensus-algorithm for substrate"
+edition = "2018"
 
 [dependencies]
 futures = "0.1.17"
 parity-codec = { version = "2.2" }
 parity-codec-derive = { version = "2.0" }
-substrate-primitives = { path = "../../primitives" }
-substrate-consensus-common = { path = "../common" }
-substrate-client = { path = "../../client" }
-substrate-transaction-pool = { path = "../../transaction-pool" }
-srml-support = { path = "../../../srml/support" }
+primitives = { package = "substrate-primitives", path = "../../primitives" }
+consensus = { package = "substrate-consensus-common", path = "../common" }
+client = { package = "substrate-client", path = "../../client" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
+runtime_support = { package = "srml-support", path = "../../../srml/support" }
 srml-system = { path = "../../../srml/system" }
 srml-consensus = { path = "../../../srml/consensus" }
-sr-primitives = { path = "../../sr-primitives" }
-sr-version = { path = "../../sr-version" }
-sr-io = { path = "../../sr-io" }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+runtime_version = { package = "sr-version", path = "../../sr-version" }
+runtime_io = { package = "sr-io", path = "../../sr-io" }
 tokio = "0.1.7"
 parking_lot = "0.7.1"
 error-chain = "0.12"
 log = "0.4"
 rhododendron = { version = "0.4.0", features = ["codec"] }
 exit-future = "0.1"
-
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
@@ -33,8 +33,8 @@ substrate-executor = { path = "../../executor" }
 [features]
 default = ["std"]
 std = [
-	"substrate-primitives/std",
-	"srml-support/std",
-	"sr-primitives/std",
-	"sr-version/std",
+	"primitives/std",
+	"runtime_support/std",
+	"runtime_primitives/std",
+	"runtime_version/std",
 ]
