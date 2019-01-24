@@ -11,6 +11,9 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
+//! Macros that define an Event types. Events can be used to easily report changes or conditions
+//! in your runtime to external entities like users, chain explorers, or dApps.
+
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -265,8 +268,14 @@ macro_rules! __events_to_metadata {
 	}
 }
 
+/// Constructs an Event type for a runtime. This is usually called automatically by the 
+/// construct_runtime macro. See also __create_decl_macro.
 #[macro_export]
 macro_rules! impl_outer_event {
+
+	// Macro transformations (to convert invocations with incomplete parameters to the canonical
+	// form)
+
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident {
@@ -354,6 +363,9 @@ macro_rules! impl_outer_event {
 			$( $module_name::Event $( <$generic_param> )*, )* $module::Event,;
 		);
 	};
+
+	// The main macro expansion that actually renders the Event enum code.
+
 	(
 		$(#[$attr:meta])*;
 		$name:ident;

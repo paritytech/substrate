@@ -42,6 +42,9 @@ use rstd::vec::Vec;
 #[cfg(feature = "std")]
 type StringBuf = String;
 
+/// Curent version of metadata
+pub const META_VERSION: u32 = 0x6d657461;
+
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
 /// So, if someone tries to decode this stuff on `no_std`, they will get a compilation error.
 #[cfg(not(feature = "std"))]
@@ -357,11 +360,11 @@ pub struct OuterDispatchCall {
 }
 
 /// The metadata of a runtime.
-/// It is prefixed by 'meta' and a version ID encoded/decoded through
+/// It is prefixed by a version ID encoded/decoded through
 /// the enum nature of `RuntimeMetadata`.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadata(pub [u8;4], pub u32, pub RuntimeMetadataV1);
+pub struct RuntimeMetadata(pub u32, pub RuntimeMetadataV1);
 
 /// The metadata of a runtime version 1.
 #[derive(Eq, Encode, PartialEq)]

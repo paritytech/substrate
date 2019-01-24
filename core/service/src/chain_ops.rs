@@ -32,7 +32,14 @@ use error;
 use chain_spec::ChainSpec;
 
 /// Export a range of blocks to a binary stream.
-pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut output: W, from: FactoryBlockNumber<F>, to: Option<FactoryBlockNumber<F>>, json: bool) -> error::Result<()>
+pub fn export_blocks<F, E, W>(
+	config: FactoryFullConfiguration<F>,
+	exit: E,
+	mut output: W,
+	from: FactoryBlockNumber<F>,
+	to: Option<FactoryBlockNumber<F>>,
+	json: bool
+) -> error::Result<()>
 	where
 	F: ServiceFactory,
 	E: Future<Item=(),Error=()> + Send + 'static,
@@ -68,7 +75,8 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 		match client.block(&BlockId::number(block))? {
 			Some(block) => {
 				if json {
-					serde_json::to_writer(&mut output, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
+					serde_json::to_writer(&mut output, &block)
+						.map_err(|e| format!("Eror writing JSON: {}", e))?;
 				} else {
 					output.write(&block.encode())?;
 				}
@@ -87,7 +95,11 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 }
 
 /// Import blocks from a binary stream.
-pub fn import_blocks<F, E, R>(mut config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
+pub fn import_blocks<F, E, R>(
+	mut config: FactoryFullConfiguration<F>,
+	exit: E,
+	mut input: R
+) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
 	struct DummyLink;
@@ -148,7 +160,10 @@ pub fn import_blocks<F, E, R>(mut config: FactoryFullConfiguration<F>, exit: E, 
 }
 
 /// Revert the chain.
-pub fn revert_chain<F>(config: FactoryFullConfiguration<F>, blocks: FactoryBlockNumber<F>) -> error::Result<()>
+pub fn revert_chain<F>(
+	config: FactoryFullConfiguration<F>,
+	blocks: FactoryBlockNumber<F>
+) -> error::Result<()>
 	where F: ServiceFactory,
 {
 	let client = new_client::<F>(&config)?;

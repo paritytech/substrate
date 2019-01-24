@@ -22,13 +22,14 @@ use std::io;
 
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use log::debug;
 
 use client;
-use codec::Decode;
+use parity_codec::Decode;
 use trie::DBValue;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Zero};
-use DatabaseSettings;
+use crate::DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.

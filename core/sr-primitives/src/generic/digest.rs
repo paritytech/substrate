@@ -227,7 +227,7 @@ mod tests {
 			logs: vec![
 				DigestItem::AuthoritiesChange(vec![1]),
 				DigestItem::ChangesTrieRoot(4),
-				DigestItem::Seal(1, 15.into()),
+				DigestItem::Seal(1, Signature::from_low_u64_be(15)),
 				DigestItem::Other(vec![1, 2, 3]),
 			],
 		};

@@ -334,8 +334,13 @@ macro_rules! __impl_outer_config_types {
 	($concrete:ident) => ()
 }
 
+/// Implement the output "meta" module configuration struct,
+/// which is basically:
+/// pub struct GenesisConfig {
+/// 	rust_module_one: Option<ModuleOneConfig>,
+/// 	...
+/// }
 #[macro_export]
-/// Implement the output "meta" module configuration struct.
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
@@ -504,57 +509,6 @@ macro_rules! impl_outer_log {
 			}
 		)*
 	};
-}
-
-//TODO: https://github.com/paritytech/substrate/issues/1022
-/// Basic Inherent data to include in a block; used by simple runtimes.
-#[derive(Encode, Decode)]
-pub struct BasicInherentData {
-	/// Current timestamp.
-	pub timestamp: u64,
-	/// Blank report.
-	pub consensus: (),
-	/// Aura expected slot. Can take any value during block construction.
-	pub aura_expected_slot: u64,
-}
-
-impl BasicInherentData {
-	/// Create a new `BasicInherentData` instance.
-	pub fn new(timestamp: u64, expected_slot: u64) -> Self {
-		Self {
-			timestamp,
-			consensus: (),
-			aura_expected_slot: expected_slot,
-		}
-	}
-}
-
-//TODO: https://github.com/paritytech/substrate/issues/1022
-/// Error type used while checking inherents.
-#[derive(Encode, PartialEq)]
-#[cfg_attr(feature = "std", derive(Decode))]
-pub enum CheckInherentError {
-	/// The inherents are generally valid but a delay until the given timestamp
-	/// is required.
-	ValidAtTimestamp(u64),
-	/// Some other error has occurred.
-	Other(RuntimeString),
-}
-
-impl CheckInherentError {
-	/// Combine two results, taking the "worse" of the two.
-	pub fn combine_results<F: FnOnce() -> Result<(), Self>>(this: Result<(), Self>, other: F) -> Result<(), Self> {
-		match this {
-			Ok(()) => other(),
-			Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
-			Err(CheckInherentError::ValidAtTimestamp(x)) => match other() {
-				Ok(()) => Err(CheckInherentError::ValidAtTimestamp(x)),
-				Err(CheckInherentError::ValidAtTimestamp(y))
-					=> Err(CheckInherentError::ValidAtTimestamp(rstd::cmp::max(x, y))),
-				Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
-			}
-		}
-	}
 }
 
 /// Simple blob to hold an extrinsic without commiting to its format and ensure it is serialized

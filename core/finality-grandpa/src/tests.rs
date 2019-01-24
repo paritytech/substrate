@@ -30,7 +30,8 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
-use consensus_common::{BlockOrigin, Error as ConsensusError};
+use consensus_common::BlockOrigin;
+use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::{collections::HashSet, result};
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
 use runtime_primitives::generic::BlockId;
@@ -100,13 +101,14 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ConsensusError> + Send + Sync>, PeerData)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, PeerData)
 	{
 		let (import, link) = block_import(
 			client,
 			Arc::new(self.test_config.clone())
 		).expect("Could not create block import for fresh peer.");
-		(Arc::new(import), Mutex::new(Some(link)))
+		let shared_import = Arc::new(import);
+		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
 	}
 
 	fn peer(&self, i: usize) -> &GrandpaPeer {
@@ -222,7 +224,7 @@ impl Network for MessageRouting {
 		Box::new(messages)
 	}
 
-	fn send_commit(&self, set_id: u64, message: Vec<u8>) {
+	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
 		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
 		inner.route_until_complete();
@@ -665,18 +667,18 @@ fn consensus_changes_works() {
 	let mut changes = ConsensusChanges::<H256, u64>::empty();
 
 	// pending changes are not finalized
-	changes.note_change((10, 1.into()));
-	assert_eq!(changes.finalize((5, 5.into()), |_| Ok(None)).unwrap(), (false, false));
+	changes.note_change((10, H256::from_low_u64_be(1)));
+	assert_eq!(changes.finalize((5, H256::from_low_u64_be(5)), |_| Ok(None)).unwrap(), (false, false));
 
 	// no change is selected from competing pending changes
-	changes.note_change((1, 1.into()));
-	changes.note_change((1, 101.into()));
-	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1001.into()))).unwrap(), (true, false));
+	changes.note_change((1, H256::from_low_u64_be(1)));
+	changes.note_change((1, H256::from_low_u64_be(101)));
+	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1001)))).unwrap(), (true, false));
 
 	// change is selected from competing pending changes
-	changes.note_change((1, 1.into()));
-	changes.note_change((1, 101.into()));
-	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1.into()))).unwrap(), (true, true));
+	changes.note_change((1, H256::from_low_u64_be(1)));
+	changes.note_change((1, H256::from_low_u64_be(101)));
+	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1)))).unwrap(), (true, true));
 }
 
 #[test]
