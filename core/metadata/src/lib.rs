@@ -94,19 +94,21 @@ pub enum TypeMetadata {
 	Struct(Vec<FieldMetadata>),
 	Enum(Vec<EnumVariantMetadata>),
 	Tuple(Vec<Metadata>),
-	Compact(Box<Metadata>),
+	Compact,
 }
 
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct Metadata {
-	pub kind: TypeMetadata
+	pub kind: TypeMetadata,
+	pub name: Vec<StringBuf>,
 }
 
 pub trait EncodeMetadata {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			kind: TypeMetadata::Primative(PrimativeMetadata::Unknown)
+			kind: TypeMetadata::Primative(PrimativeMetadata::Unknown),
+			name: vec!["@Unknown@".into()],
 		}
 	}
 }
@@ -116,7 +118,8 @@ macro_rules! impl_primatives {
 		impl EncodeMetadata for $t {
 			fn type_metadata() -> Metadata {
 				Metadata {
-					kind: TypeMetadata::Primative(stringify!($t).into())
+					kind: TypeMetadata::Primative(stringify!($t).into()),
+					name: vec![stringify!($t).into()],
 				}
 			}
 		}
@@ -130,8 +133,12 @@ macro_rules! impl_array {
 	( $( $n:expr )* ) => { $(
 		impl<T: EncodeMetadata> EncodeMetadata for [T; $n] {
 			fn type_metadata() -> Metadata {
+				let m = T::type_metadata();
+				let mut name: Vec<StringBuf> = vec!["Array".into(), stringify!($n).into()];
+				name.extend(m.name.clone());
 				Metadata {
-					kind: TypeMetadata::Array($n, Box::new(T::type_metadata()))
+					kind: TypeMetadata::Array($n, Box::new(m)),
+					name,
 				}
 			}
 		}
@@ -143,14 +150,21 @@ impl_array!(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26
 
 impl<T: EncodeMetadata> EncodeMetadata for Vec<T> {
 	fn type_metadata() -> Metadata {
+		let m = T::type_metadata();
+		let mut name: Vec<StringBuf> = vec!["Vec".into()];
+		name.extend(m.name.clone());
 		Metadata {
-			kind: TypeMetadata::Vector(Box::new(T::type_metadata()))
+			kind: TypeMetadata::Vector(Box::new(m)),
+			name,
 		}
 	}
 }
 
 impl<T: EncodeMetadata> EncodeMetadata for Option<T> {
 	fn type_metadata() -> Metadata {
+		let m = T::type_metadata();
+		let mut name: Vec<StringBuf> = vec!["Option".into()];
+		name.extend(m.name.clone());
 		Metadata {
 			kind: TypeMetadata::Enum(vec![
 				EnumVariantMetadata {
@@ -164,17 +178,23 @@ impl<T: EncodeMetadata> EncodeMetadata for Option<T> {
 					fields: vec![
 						FieldMetadata {
 							name: FieldName::Unnamed(0),
-							ty: T::type_metadata()
+							ty: m
 						},
 					],
 				},
-			])
+			]),
+			name,
 		}
 	}
 }
 
 impl<T: EncodeMetadata, E: EncodeMetadata> EncodeMetadata for Result<T, E> {
 	fn type_metadata() -> Metadata {
+		let mt = T::type_metadata();
+		let me = E::type_metadata();
+		let mut name: Vec<StringBuf> = vec!["Result".into()];
+		name.extend(mt.name.clone());
+		name.extend(me.name.clone());
 		Metadata {
 			kind: TypeMetadata::Enum(vec![
 				EnumVariantMetadata {
@@ -197,7 +217,8 @@ impl<T: EncodeMetadata, E: EncodeMetadata> EncodeMetadata for Result<T, E> {
 						},
 					],
 				},
-			])
+			]),
+			name,
 		}
 	}
 }
@@ -223,7 +244,8 @@ impl<T: EncodeMetadata> EncodeMetadata for [T] {
 impl<T: EncodeMetadata> EncodeMetadata for parity_codec::Compact<T> {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			kind: TypeMetadata::Compact(Box::new(T::type_metadata())),
+			kind: TypeMetadata::Compact,
+			name: vec!["Compact".into()],
 		}
 	}
 }
@@ -232,10 +254,14 @@ macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<$one: EncodeMetadata> EncodeMetadata for ($one,) {
 			fn type_metadata() -> Metadata {
+				let m = <$one>::type_metadata();
+				let mut name: Vec<StringBuf> = vec!["Tuple".into()];
+				name.extend(m.name.clone());
 				Metadata {
 					kind: TypeMetadata::Tuple(vec![
-						<$one>::type_metadata(),
+						m,
 					]),
+					name,
 				}
 			}
 		}
@@ -245,11 +271,15 @@ macro_rules! tuple_impl {
 		EncodeMetadata for
 		($first, $($rest),+) {
 			fn type_metadata() -> Metadata {
+				let ms = vec![
+					<$first>::type_metadata(),
+					$( <$rest>::type_metadata(), )+
+				];
+				let mut name: Vec<StringBuf> = vec!["Tuple".into()];
+				name.extend(ms.iter().flat_map(|m| m.name.clone()));
 				Metadata {
-					kind: TypeMetadata::Tuple(vec![
-						<$first>::type_metadata(),
-						$( <$rest>::type_metadata(), )+
-					]),
+					kind: TypeMetadata::Tuple(ms),
+					name,
 				}
 			}
 		}
@@ -263,7 +293,8 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 impl<T: EncodeMetadata> EncodeMetadata for ::rstd::marker::PhantomData<T> {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			kind: TypeMetadata::Primative(PrimativeMetadata::PhantomData)
+			kind: TypeMetadata::Primative(PrimativeMetadata::PhantomData),
+			name: vec!["PhantomData".into()],
 		}
 	}
 }
@@ -271,7 +302,8 @@ impl<T: EncodeMetadata> EncodeMetadata for ::rstd::marker::PhantomData<T> {
 impl EncodeMetadata for () {
 	fn type_metadata() -> Metadata {
 		Metadata {
-			kind: TypeMetadata::Primative(PrimativeMetadata::Unit)
+			kind: TypeMetadata::Primative(PrimativeMetadata::Unit),
+			name: vec!["Unit".into()],
 		}
 	}
 }
