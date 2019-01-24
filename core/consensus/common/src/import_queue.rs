@@ -24,16 +24,17 @@
 //! The `BasicQueue` and `BasicVerifier` traits allow serial queues to be
 //! instantiated simply.
 
-use block_import::{ImportBlock, BlockImport, JustificationImport, ImportResult, BlockOrigin};
+use crate::block_import::{ImportBlock, BlockImport, JustificationImport, ImportResult, BlockOrigin};
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
+use log::{trace, debug};
 
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
-use error::Error as ConsensusError;
+use crate::error::Error as ConsensusError;
 
 /// Shared block import struct used by the queue.
 pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error=ConsensusError> + Send + Sync>;
