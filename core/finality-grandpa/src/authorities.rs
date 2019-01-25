@@ -140,7 +140,12 @@ where
 			))
 			.unwrap_or_else(|i| i);
 
+		debug!(target: "afg", "Inserting potential set change at block {:?}.",
+			(&pending.canon_height, &pending.canon_hash));
+
 		self.pending_changes.insert(idx, pending);
+
+		debug!(target: "afg", "There are now {} pending changes.", self.pending_changes.len());
 
 		Ok(())
 	}
