@@ -16,6 +16,7 @@ substrate-inherents = { path = "../../core/inherents", default-features = false 
 srml-support-procedural = { path = "./procedural" }
 mashup = "0.1.7"
 once_cell = { version = "0.1.6", default-features = false, optional = true }
+paste = "0.1"
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
