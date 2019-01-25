@@ -1,4 +1,4 @@
-use super::{TypeMetadata, TypeMetadataKind, StringBuf};
+use super::{TypeMetadata, TypeMetadataKind, PrimativeMetadata, StringBuf};
 
 use rstd::prelude::*;
 
@@ -22,10 +22,13 @@ impl MetadataRegistry {
 			return;
 		}
 		let m = TypeMetadata {
-			kind: f(self),
+			kind: TypeMetadataKind::Primative(PrimativeMetadata::Unknown),
 			name: name.clone(),
 		};
 		self.list.push(m);
+		let idx = self.list.len();
+		// needs to be called after self type is registered incase it reference self type again
+		self.list[idx - 1].kind = f(self);
 	}
 
 	pub fn get(&self, name: &Vec<StringBuf>) -> Option<TypeMetadata> {
