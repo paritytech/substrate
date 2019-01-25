@@ -18,36 +18,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// The ApiIds for Aura authorship API.
-pub mod id {
-	use substrate_client::runtime_api::ApiId;
+use substrate_client::decl_runtime_apis;
 
-	/// ApiId for the AuraApi trait.
-	pub const AURA_API: ApiId = *b"aura_api";
-}
-
-/// Aura consensus environmental data. Useful for block-proposing code.
-pub struct AuraConsensusData {
-	/// The timestamp the block should be authored with.
-	pub timestamp: u64,
-	/// The slot number.
-	pub slot: u64,
-	/// The duration of the slot, in seconds.
-	pub slot_duration: u64,
-}
-
-/// Runtime-APIs
-pub mod api {
-	use substrate_client::decl_runtime_apis;
-	decl_runtime_apis! {
-		/// API necessary for block authorship with aura.
-		pub trait AuraApi {
-			/// Return the slot duration in seconds for Aura.
-			/// Currently, only the value provided by this type at genesis
-			/// will be used.
-			///
-			/// Dynamic slot duration may be supported in the future.
-			fn slot_duration() -> u64;
-		}
+decl_runtime_apis! {
+	/// API necessary for block authorship with aura.
+	pub trait AuraApi {
+		/// Return the slot duration in seconds for Aura.
+		/// Currently, only the value provided by this type at genesis
+		/// will be used.
+		///
+		/// Dynamic slot duration may be supported in the future.
+		fn slot_duration() -> u64;
 	}
 }
