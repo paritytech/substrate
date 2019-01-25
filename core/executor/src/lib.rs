@@ -57,8 +57,6 @@ extern crate wabt;
 #[macro_use]
 extern crate hex_literal;
 
-#[macro_use]
-mod wasm_utils;
 mod wasm_executor;
 #[macro_use]
 mod native_executor;

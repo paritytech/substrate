@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
-use wasm_utils::UserError;
+use wasm_executor::UserError;
 use wasmi;
 use wasmi::memory_units::Pages;
 use wasmi::{
