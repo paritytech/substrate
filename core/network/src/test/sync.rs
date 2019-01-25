@@ -68,12 +68,14 @@ fn sync_no_common_longer_chain_fails() {
 #[test]
 fn sync_justifications() {
 	let _ = ::env_logger::try_init();
-	let mut net = TestNet::new(3);
+	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
 	net.sync();
 
 	// there's currently no justification for block #10
 	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
+
 	// we finalize block #10 for peer 0 with a justification
 	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
 
