@@ -1066,9 +1066,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get the most recent block hash of the best (longest) chains
 	/// that contain block with the given `target_hash`.
+	///
+	/// The search space is always limited to blocks which are in the finalized
+	/// chain or descendents of it.
+	///
 	/// If `maybe_max_block_number` is `Some(max_block_number)`
 	/// the search is limited to block `numbers <= max_block_number`.
 	/// in other words as if there were no blocks greater `max_block_number`.
+	///
 	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
 	/// TODO [snd] write down time complexity
@@ -1110,7 +1115,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				}
 
 				return Ok(Some(info.best_hash));
+			} else if info.finalized_number >= *target_header.number() {
+				// header is on a dead fork.
+				return Ok(None);
 			}
+
 			(self.backend.blockchain().leaves()?, info.best_hash)
 		};
 
@@ -1164,7 +1173,19 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		unreachable!("this is a bug. `target_hash` is in blockchain but wasn't found following all leaves backwards");
+		// header may be on a dead fork -- the only leaves that are considered are
+		// those which can still be finalized.
+		//
+		// TODO: only issue this warning when not on a dead fork
+		// part of https://github.com/paritytech/substrate/issues/1558
+		warn!(
+			"Block {:?} exists in chain but not found when following all \
+			leaves backwards. Number limit = {:?}",
+			target_hash,
+			maybe_max_number,
+		);
+
+		Ok(None)
 	}
 
 	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
