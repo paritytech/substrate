@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key, transport};
+use crate::{
+	behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key_from_config,
+	transport
+};
 use crate::custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use crate::topology::NetTopology;
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
@@ -51,7 +54,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	}
 
 	// Private and public keys configuration.
-	let local_private_key = obtain_private_key(&config)?;
+	let local_private_key = obtain_private_key_from_config(&config)?;
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
 
