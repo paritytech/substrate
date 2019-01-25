@@ -17,7 +17,7 @@
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
 	RuntimeModuleMetadata, RuntimeMetadataV1,
-	DefaultByteGetter, META_VERSION,
+	DefaultByteGetter, META_RESERVED, RuntimeMetadataPrefixed,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -32,15 +32,17 @@ pub use srml_metadata::{
 macro_rules! impl_runtime_metadata {
 	(
 		for $runtime:ident with modules
-		$( $rest:tt )*
+			$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
-				$crate::metadata::RuntimeMetadata (
-					$crate::metadata::META_VERSION,
-					$crate::metadata::RuntimeMetadataV1 {
-						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
-					}
+			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
+				$crate::metadata::RuntimeMetadataPrefixed (
+					$crate::metadata::META_RESERVED,
+					$crate::metadata::RuntimeMetadata::V1 (
+						$crate::metadata::RuntimeMetadataV1 {
+							modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+						}
+					)
 				)
 			}
 		}
@@ -194,7 +196,7 @@ mod tests {
 		EventMetadata, CallMetadata,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageMetadata, StorageFunctionMetadata, OuterDispatchCall,
-		RuntimeModuleMetadata,
+		RuntimeModuleMetadata, RuntimeMetadataPrefixed,
 	};
 	use codec::{Decode, Encode};
 
@@ -336,8 +338,9 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata (
-		META_VERSION,
+	const EXPECTED_METADATA: RuntimeMetadataPrefixed = RuntimeMetadataPrefixed (
+		META_RESERVED,
+		RuntimeMetadata::V1(
 		RuntimeMetadataV1 {
 		modules: DecodeDifferent::Encode(&[
 			RuntimeModuleMetadata {
@@ -454,13 +457,13 @@ mod tests {
 					)
 				),
 			},
-		])},
+		])}),
 	);
 
 	#[test]
 	fn runtime_metadata() {
 		let metadata_encoded = TestRuntime::metadata().encode();
-		let metadata_decoded = RuntimeMetadata::decode(&mut &metadata_encoded[..]);
+		let metadata_decoded = RuntimeMetadataPrefixed::decode(&mut &metadata_encoded[..]);
 
 		assert_eq!(EXPECTED_METADATA, metadata_decoded.unwrap());
 	}

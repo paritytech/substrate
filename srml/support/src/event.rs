@@ -438,6 +438,7 @@ macro_rules! __impl_outer_event_json_metadata {
 				return $crate::event::FnEncode(system::Event::metadata)
 			}
 			#[allow(dead_code)]
+			#[allow(non_snake_case)]
 			pub fn __module_events___default() -> $crate::event::FnEncode<&'static [$crate::event::EventMetadata]> {
 				return $crate::event::FnEncode(||&[])
 			}

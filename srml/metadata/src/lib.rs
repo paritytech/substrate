@@ -43,7 +43,7 @@ use rstd::vec::Vec;
 type StringBuf = String;
 
 /// Curent version of metadata
-pub const META_VERSION: u32 = 0x6174656d; // 'meta' warn endianness
+pub const META_RESERVED: u32 = 0x6174656d; // 'meta' warn endianness
 
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
 /// So, if someone tries to decode this stuff on `no_std`, they will get a compilation error.
@@ -319,12 +319,21 @@ pub struct OuterDispatchCall {
 	pub index: u16,
 }
 
+#[derive(Eq, Encode, PartialEq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+/// Metadata prefixed by a u32 for reserved usage
+pub struct RuntimeMetadataPrefixed(pub u32, pub RuntimeMetadata);
+
 /// The metadata of a runtime.
-/// It is prefixed by a version ID encoded/decoded through
+/// and a version ID encoded/decoded through
 /// the enum nature of `RuntimeMetadata`.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadata(pub u32, pub RuntimeMetadataV1);
+pub enum RuntimeMetadata {
+	None,
+	V1(RuntimeMetadataV1),
+}
+
 
 /// The metadata of a runtime version 1.
 #[derive(Eq, Encode, PartialEq)]
@@ -345,7 +354,7 @@ pub struct RuntimeModuleMetadata {
 	pub event: DecodeDifferent<FnEncode<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
 }
 
-impl Into<primitives::OpaqueMetadata> for RuntimeMetadata {
+impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {
 		primitives::OpaqueMetadata::new(self.encode())
 	}

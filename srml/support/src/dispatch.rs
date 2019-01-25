@@ -865,6 +865,7 @@ macro_rules! __impl_outer_dispatch_metadata {
 			pub fn __module_dispatch_system() -> Option<$crate::dispatch::OuterDispatchCall> {
 				None
 			}
+			#[allow(non_snake_case)]
 			pub fn __module_dispatch___default() -> Option<$crate::dispatch::OuterDispatchCall> {
 				None
 			}
