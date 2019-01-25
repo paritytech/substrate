@@ -17,6 +17,8 @@
 //! Rust implementation of Substrate contracts.
 
 use std::collections::HashMap;
+use tiny_keccak;
+use secp256k1;
 
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
@@ -461,6 +463,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
 		Ok(())
 	},
+	ext_keccak_256(data: *const u8, len: u32, out: *mut u8) => {
+		let result = if len == 0 {
+			tiny_keccak::keccak256(&[0u8; 0])
+		} else {
+			tiny_keccak::keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
+		};
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
+		Ok(())
+	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_ed25519_verify"))?;
@@ -473,6 +484,31 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else {
 			5
 		})
+	},
+	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
+		let mut sig = [0u8; 65];
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_secp256k1_ecdsa_recover"))?;
+		let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
+			Ok(rs) => rs,
+			_ => return Ok(1),
+		};
+		let v = match secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8) {
+			Ok(v) => v,
+			_ => return Ok(2),
+		};
+
+
+		let mut msg = [0u8; 32];
+		this.memory.get_into(msg_data, &mut msg[..]).map_err(|_| UserError("Invalid attempt to get message in ext_secp256k1_ecdsa_recover"))?;
+
+		let pubkey = match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
+			Ok(pk) => pk,
+			_ => return Ok(3),
+		};
+
+		this.memory.set(pubkey_data, &pubkey.serialize()[1..65]).map_err(|_| UserError("Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover"))?;
+
+		Ok(0)
 	},
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,
