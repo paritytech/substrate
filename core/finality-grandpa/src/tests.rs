@@ -550,6 +550,7 @@ fn transition_3_voters_twice_1_observer() {
 							block
 						});
 						net.lock().peer(0).push_blocks(9, false);
+						net.lock().sync();
 					},
 					_ => {},
 				}
@@ -616,7 +617,7 @@ fn transition_3_voters_twice_1_observer() {
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().sync();
+			net.lock().sync_steps(1);
 			Ok(())
 		})
 		.map(|_| ())
