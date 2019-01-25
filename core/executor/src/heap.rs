@@ -389,11 +389,12 @@ mod tests {
 	fn should_allocate_exactly_entire_tree() {
 		let blocks = 16;
 		let heap_size = BLOCK_SIZE * blocks;
-		let mut heap = super::Heap::new(0, heap_size);
+		let offset = 8;
+		let mut heap = super::Heap::new(offset, heap_size);
 
 		for i in 0..16 {
 			let ptr = heap.allocate(BLOCK_SIZE);
-			assert_eq!(ptr, i * BLOCK_SIZE);
+			assert_eq!(ptr, i * BLOCK_SIZE + offset);
 			assert_eq!(heap.total_size, (i+1) * BLOCK_SIZE);
 		}
 
@@ -405,15 +406,16 @@ mod tests {
 	fn should_deallocate_entire_tree_exactly() {
 		let blocks = 12;
 		let heap_size = BLOCK_SIZE * blocks;
-		let mut heap = super::Heap::new(0, heap_size);
+		let offset = 8;
+		let mut heap = super::Heap::new(offset, heap_size);
 		for i in 0..blocks {
 			let ptr = heap.allocate(BLOCK_SIZE);
-			assert_eq!(ptr, i * BLOCK_SIZE);
+			assert_eq!(ptr, i * BLOCK_SIZE + offset);
 			assert_eq!(heap.total_size, (i+1) * BLOCK_SIZE);
 		}
 
 		for i in 0..blocks {
-			let ptr = i * BLOCK_SIZE;
+			let ptr = i * BLOCK_SIZE + offset;
 			heap.deallocate(ptr);
 			assert_eq!(heap.total_size, blocks * BLOCK_SIZE - (i+1) * BLOCK_SIZE);
 		}
@@ -423,28 +425,30 @@ mod tests {
 
 	#[test]
 	fn should_allocate_pointers_with_odd_blocks_properly() {
+		let offset = 8;
 		let blocks = 6;
 		let heap_size = BLOCK_SIZE * blocks;
-		let mut heap = super::Heap::new(0, heap_size);
+		let mut heap = super::Heap::new(offset, heap_size);
 
 		let ptr = heap.allocate(3 * BLOCK_SIZE);
-		assert_eq!(ptr, 0);
+		assert_eq!(ptr, offset);
 
 		let ptr = heap.allocate(BLOCK_SIZE);
-		assert_eq!(ptr, 4 * BLOCK_SIZE);
+		assert_eq!(ptr, 4 * BLOCK_SIZE + offset);
 	}
 
 	#[test]
 	fn should_handle_odd_blocks_properly() {
+		let offset = 8;
 		let blocks = 8;
 		let heap_size = BLOCK_SIZE * blocks;
-		let mut heap = super::Heap::new(0, heap_size);
+		let mut heap = super::Heap::new(offset, heap_size);
 
 		let ptr = heap.allocate(3 * BLOCK_SIZE);
-		assert_eq!(ptr, 0);
+		assert_eq!(ptr, offset);
 
 		let ptr = heap.allocate(3 * BLOCK_SIZE);
-		assert_eq!(ptr, 4 * BLOCK_SIZE);
+		assert_eq!(ptr, 4 * BLOCK_SIZE + offset);
 	}
 
 	#[test]
