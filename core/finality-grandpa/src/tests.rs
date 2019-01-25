@@ -631,7 +631,6 @@ fn transition_3_voters_twice_1_observer() {
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().sync();
 			Ok(())
 		})
 		.map(|_| ())
