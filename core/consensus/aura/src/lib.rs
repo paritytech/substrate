@@ -26,42 +26,11 @@
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
 
-extern crate parity_codec as codec;
-extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
-extern crate srml_support as runtime_support;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_consensus_aura_primitives as aura_primitives;
-extern crate srml_aura;
-extern crate substrate_inherents as inherents;
-
-extern crate substrate_consensus_common as consensus_common;
-extern crate tokio;
-extern crate sr_version as runtime_version;
-extern crate parking_lot;
-
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate futures;
-
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-#[cfg(test)]
-extern crate substrate_network as network;
-#[cfg(test)]
-extern crate substrate_service as service;
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-#[cfg(test)]
-extern crate env_logger;
-
 mod slots;
 
 use std::{sync::{Arc, mpsc}, time::Duration, thread};
 
-use codec::Encode;
+use parity_codec::Encode;
 use consensus_common::{
 	Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy
 };
@@ -80,6 +49,7 @@ use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
 use api::AuraApi;
 use slots::Slots;
+use ::log::{warn, debug, log, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -635,7 +605,7 @@ impl SlotDuration {
 		C: ProvideRuntimeApi,
 		C::Api: AuraApi<B>,
 	{
-		use codec::Decode;
+		use parity_codec::Decode;
 		const SLOT_KEY: &[u8] = b"aura_slot_duration";
 
 		match client.get_aux(SLOT_KEY)? {

@@ -17,6 +17,8 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
+#![warn(missing_docs)]
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
@@ -60,6 +62,7 @@ pub mod traits;
 pub mod generic;
 pub mod transaction_validity;
 
+/// Justification type.
 pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
@@ -96,11 +99,15 @@ pub type ChildrenStorageMap = HashMap<Vec<u8>, StorageMap>;
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
+	/// Hash given slice.
+	///
+	/// Default to xx128 hashing.
 	fn hash(data: &[u8]) -> [u8; 16] {
 		let r = runtime_io::twox_128(data);
 		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
 		r
 	}
+	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String>;
 }
 
@@ -118,15 +125,19 @@ pub struct Permill(u32);
 
 // TODO: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
+	/// Multiplication.
 	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
 		// TODO: handle overflows
 		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
 	}
 
+	/// Wraps the argument into `Permill` type.
 	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
 
+	/// Converts percents into `Permill`.
 	pub fn from_percent(x: u32) -> Permill { Permill(x * 10_000) }
 
+	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
 }

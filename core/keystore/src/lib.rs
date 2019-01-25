@@ -16,6 +16,10 @@
 
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+// https://github.com/paritytech/substrate/issues/1547
+#![allow(deprecated)]
+
 extern crate substrate_primitives;
 extern crate parity_crypto as crypto;
 extern crate subtle;

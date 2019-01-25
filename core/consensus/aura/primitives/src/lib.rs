@@ -18,16 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate parity_codec as codec;
-extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
-extern crate srml_support as runtime_support;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as runtime_primitives;
-
 /// The ApiIds for Aura authorship API.
 pub mod id {
-	use client::runtime_api::ApiId;
+	use substrate_client::runtime_api::ApiId;
 
 	/// ApiId for the AuraApi trait.
 	pub const AURA_API: ApiId = *b"aura_api";
@@ -45,7 +38,7 @@ pub struct AuraConsensusData {
 
 /// Runtime-APIs
 pub mod api {
-	use client::decl_runtime_apis;
+	use substrate_client::decl_runtime_apis;
 	decl_runtime_apis! {
 		/// API necessary for block authorship with aura.
 		pub trait AuraApi {
