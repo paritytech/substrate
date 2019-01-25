@@ -206,7 +206,7 @@ pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 
 /// Verify and recover a SECP256k1 ECDSA signature.
 /// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-/// - returns `None` if the signatue is bad, the 64-byte pubkey (doesn't include the 0x04 prefix).
+/// - returns `Err` if the signatue is bad, otherwise the 64-byte pubkey (doesn't include the 0x04 prefix).
 pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
 	let rs = secp256k1::Signature::parse_slice(&sig[0..64]).map_err(|_| EcdsaVerifyError::BadRS)?;
 	let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8).map_err(|_| EcdsaVerifyError::BadV)?;
