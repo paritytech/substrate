@@ -30,7 +30,8 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
-use consensus_common::{BlockOrigin, Error as ConsensusError};
+use consensus_common::BlockOrigin;
+use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::{collections::HashSet, result};
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
 use runtime_primitives::generic::BlockId;
@@ -100,13 +101,14 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ConsensusError> + Send + Sync>, PeerData)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, PeerData)
 	{
 		let (import, link) = block_import(
 			client,
 			Arc::new(self.test_config.clone())
 		).expect("Could not create block import for fresh peer.");
-		(Arc::new(import), Mutex::new(Some(link)))
+		let shared_import = Arc::new(import);
+		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
 	}
 
 	fn peer(&self, i: usize) -> &GrandpaPeer {
@@ -327,11 +329,16 @@ fn make_ids(keys: &[Keyring]) -> Vec<(Ed25519AuthorityId, u64)> {
 		.collect()
 }
 
-fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) {
+fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) -> u64 {
+	use parking_lot::RwLock;
+
 	let mut finality_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
+	let highest_finalized = Arc::new(RwLock::new(0));
+
 	for (peer_id, key) in peers.iter().enumerate() {
+		let highest_finalized = highest_finalized.clone();
 		let (client, link) = {
 			let mut net = net.lock();
 			// temporary needed for some reason
@@ -343,7 +350,13 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 		};
 		finality_notifications.push(
 			client.finality_notification_stream()
-				.take_while(|n| Ok(n.header.number() < &blocks))
+				.take_while(move |n| {
+					let mut highest_finalized = highest_finalized.write();
+					if *n.header.number() > *highest_finalized {
+						*highest_finalized = *n.header.number();
+					}
+					Ok(n.header.number() < &blocks)
+				})
 				.for_each(|_| Ok(()))
 		);
 		fn assert_send<T: Send>(_: &T) { }
@@ -376,6 +389,10 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 		.map_err(|_| ());
 
 	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+
+	let highest_finalized = *highest_finalized.read();
+
+	highest_finalized
 }
 
 #[test]
@@ -614,7 +631,6 @@ fn transition_3_voters_twice_1_observer() {
 		.for_each(move |_| {
 			net.lock().send_import_notifications();
 			net.lock().send_finality_notifications();
-			net.lock().sync();
 			Ok(())
 		})
 		.map(|_| ())
@@ -665,24 +681,22 @@ fn consensus_changes_works() {
 	let mut changes = ConsensusChanges::<H256, u64>::empty();
 
 	// pending changes are not finalized
-	changes.note_change((10, 1.into()));
-	assert_eq!(changes.finalize((5, 5.into()), |_| Ok(None)).unwrap(), (false, false));
+	changes.note_change((10, H256::from_low_u64_be(1)));
+	assert_eq!(changes.finalize((5, H256::from_low_u64_be(5)), |_| Ok(None)).unwrap(), (false, false));
 
 	// no change is selected from competing pending changes
-	changes.note_change((1, 1.into()));
-	changes.note_change((1, 101.into()));
-	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1001.into()))).unwrap(), (true, false));
+	changes.note_change((1, H256::from_low_u64_be(1)));
+	changes.note_change((1, H256::from_low_u64_be(101)));
+	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1001)))).unwrap(), (true, false));
 
 	// change is selected from competing pending changes
-	changes.note_change((1, 1.into()));
-	changes.note_change((1, 101.into()));
-	assert_eq!(changes.finalize((10, 10.into()), |_| Ok(Some(1.into()))).unwrap(), (true, true));
+	changes.note_change((1, H256::from_low_u64_be(1)));
+	changes.note_change((1, H256::from_low_u64_be(101)));
+	assert_eq!(changes.finalize((10, H256::from_low_u64_be(10)), |_| Ok(Some(H256::from_low_u64_be(1)))).unwrap(), (true, true));
 }
 
 #[test]
 fn sync_justifications_on_change_blocks() {
-	::env_logger::init();
-
 	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let peers_b = &[Keyring::Alice, Keyring::Bob];
 	let voters = make_ids(peers_b);
@@ -728,4 +742,29 @@ fn sync_justifications_on_change_blocks() {
 	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
 		net.lock().sync_steps(100);
 	}
+}
+
+#[test]
+fn doesnt_vote_on_the_tip_of_the_chain() {
+	::env_logger::init();
+
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let voters = make_ids(peers_a);
+	let api = TestApi::new(voters);
+	let mut net = GrandpaTestNet::new(api, 3);
+
+	// add 100 blocks
+	net.peer(0).push_blocks(100, false);
+	net.sync();
+
+	for i in 0..3 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 100,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	let highest = run_to_completion(75, net.clone(), peers_a);
+
+	// the highest block to be finalized will be 3/4 deep in the unfinalized chain
+	assert_eq!(highest, 75);
 }

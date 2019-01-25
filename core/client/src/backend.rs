@@ -76,9 +76,11 @@ pub trait BlockImportOperation<Block, H> where
 	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
-	/// Update auxiliary keys. Values are `None` if should be deleted.
-	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+	/// Insert auxiliary keys. Values are `None` if should be deleted.
+	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
+	/// Mark a block as finalized.
+	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
 }
 
 /// Provides access to an auxiliary database.
@@ -108,7 +110,7 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 	H: Hasher<Out=Block::Hash>,
 {
 	/// Associated block insertion operation type.
-	type BlockImportOperation: BlockImportOperation<Block, H>;
+	type BlockImportOperation: BlockImportOperation<Block, H, State=Self::State>;
 	/// Associated blockchain backend type.
 	type Blockchain: crate::blockchain::Backend<Block>;
 	/// Associated state backend type.
@@ -118,7 +120,9 @@ pub trait Backend<Block, H>: AuxStore + Send + Sync where
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
-	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation>;
+	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation>;
+	/// Note an operation to contain state transition.
+	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()>;
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Finalize block with given Id. This should only be called if the parent of the given

@@ -173,6 +173,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		Ok(service)
 	}
 
+	/// Returns the downloaded bytes per second averaged over the past few seconds.
+	#[inline]
+	pub fn average_download_per_sec(&self) -> u64 {
+		self.network.lock().average_download_per_sec()
+	}
+
+	/// Returns the uploaded bytes per second averaged over the past few seconds.
+	#[inline]
+	pub fn average_upload_per_sec(&self) -> u64 {
+		self.network.lock().average_upload_per_sec()
+	}
+
 	/// Called when a new block is imported by the client.
 	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
 		self.handler.on_block_imported(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
@@ -401,8 +413,9 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			NetworkServiceEvent::CustomMessage { node_index, data, .. } => {
 				protocol.handle_packet(&mut net_sync, node_index, &data);
 			}
-			NetworkServiceEvent::Clogged { node_index, .. } => {
-				protocol.on_clogged_peer(&mut net_sync, node_index);
+			NetworkServiceEvent::Clogged { node_index, messages, .. } => {
+				protocol.on_clogged_peer(&mut net_sync, node_index,
+					messages.iter().map(|d| d.as_ref()));
 			}
 		};
 

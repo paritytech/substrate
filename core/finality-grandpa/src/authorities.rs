@@ -228,12 +228,14 @@ where
 		for change in self.pending_changes.iter() {
 			if change.effective_number() > just_finalized { break };
 
-			// check if the block that signalled the change is canonical in
-			// our chain.
-			match canonical(change.canon_height.clone())? {
-				Some(ref canonical_hash) if *canonical_hash == change.canon_hash =>
-					return Ok(true),
-				_ => (),
+			if change.effective_number() == just_finalized {
+				// check if the block that signalled the change is canonical in
+				// our chain.
+				match canonical(change.canon_height.clone())? {
+					Some(ref canonical_hash) if *canonical_hash == change.canon_hash =>
+						return Ok(true),
+					_ => (),
+				}
 			}
 		}
 
@@ -429,5 +431,38 @@ mod tests {
 			change_b.clone(),
 			|base| is_equal_or_descendent_of(base, change_b.canon_hash),
 		).unwrap();
+	}
+
+	#[test]
+	fn enacts_change_works() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_changes: Vec::new(),
+		};
+
+		let set_a = vec![([1; 32].into(), 5)];
+
+		let change_a = PendingChange {
+			next_authorities: set_a.clone(),
+			finalization_depth: 10,
+			canon_height: 5,
+			canon_hash: "hash_a",
+		};
+
+		authorities.add_pending_change(change_a.clone(), |_| Err(())).unwrap();
+
+		let canonical = |n| match n {
+			5 => Ok(Some("hash_a")),
+			15 => Ok(Some("hash_a15")),
+			_ => Err(()),
+		};
+
+		// there's an effective change triggered at block 15
+		assert!(authorities.enacts_change(15, canonical).unwrap());
+
+		// block 16 is already past the change, we assume 15 will be finalized
+		// first and enact the change
+		assert!(!authorities.enacts_change(16, canonical).unwrap());
 	}
 }

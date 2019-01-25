@@ -199,36 +199,17 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 	Executor: client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
-	use runtime_primitives::transaction_validity::TransactionValidity;
-
 	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
 	if transaction_pool.status().is_empty() {
 		return Ok(())
 	}
 
-	let block = client.block(id)?;
-	let tags = match block {
-		None => return Ok(()),
-		Some(block) => {
-			let parent_id = BlockId::hash(*block.block.header().parent_hash());
-			let mut tags = vec![];
-			for tx in block.block.extrinsics() {
-				let tx = client.runtime_api().validate_transaction(&parent_id, tx.clone())?;
-				match tx {
-					TransactionValidity::Valid { mut provides, .. } => {
-						tags.append(&mut provides);
-					},
-					// silently ignore invalid extrinsics,
-					// cause they might just be inherent
-					_ => {}
-				}
+	if let Some(block) = client.block(id)? {
+		let parent_id = BlockId::hash(*block.block.header().parent_hash());
+		let extrinsics = block.block.extrinsics();
+		transaction_pool.prune(id, &parent_id, extrinsics).map_err(|e| format!("{:?}", e))?;
+	}
 
-			}
-			tags
-		}
-	};
-
-	transaction_pool.prune_tags(id, tags).map_err(|e| format!("{:?}", e))?;
 	Ok(())
 }
 

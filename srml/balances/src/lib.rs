@@ -135,39 +135,8 @@ decl_module! {
 			#[compact] value: T::Balance
 		) {
 			let transactor = ensure_signed(origin)?;
-
 			let dest = T::Lookup::lookup(dest)?;
-			let from_balance = Self::free_balance(&transactor);
-			let to_balance = Self::free_balance(&dest);
-			let would_create = to_balance.is_zero();
-			let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-			let liability = match value.checked_add(&fee) {
-				Some(l) => l,
-				None => return Err("got overflow after adding a fee to value"),
-			};
-
-			let new_from_balance = match from_balance.checked_sub(&liability) {
-				Some(b) => b,
-				None => return Err("balance too low to send value"),
-			};
-			if would_create && value < Self::existential_deposit() {
-				return Err("value too low to create account");
-			}
-			T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
-
-			// NOTE: total stake being stored in the same type means that this could never overflow
-			// but better to be safe than sorry.
-			let new_to_balance = match to_balance.checked_add(&value) {
-				Some(b) => b,
-				None => return Err("destination balance too high to receive value"),
-			};
-
-			if transactor != dest {
-				Self::set_free_balance(&transactor, new_from_balance);
-				Self::decrease_total_stake_by(fee);
-				Self::set_free_balance_creating(&dest, new_to_balance);
-				Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
-			}
+			Self::make_transfer(&transactor, &dest, value)?;
 		}
 
 		/// Set the balances of a given account.
@@ -438,6 +407,43 @@ impl<T: Trait> Module<T> {
 		} else {
 			Some(value - actual)
 		}
+	}
+
+	/// Transfer some liquid free balance to another staker.
+	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
+		let from_balance = Self::free_balance(transactor);
+		let to_balance = Self::free_balance(dest);
+		let would_create = to_balance.is_zero();
+		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+		let liability = match value.checked_add(&fee) {
+			Some(l) => l,
+			None => return Err("got overflow after adding a fee to value"),
+		};
+
+		let new_from_balance = match from_balance.checked_sub(&liability) {
+			Some(b) => b,
+			None => return Err("balance too low to send value"),
+		};
+		if would_create && value < Self::existential_deposit() {
+			return Err("value too low to create account");
+		}
+		T::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
+
+		// NOTE: total stake being stored in the same type means that this could never overflow
+		// but better to be safe than sorry.
+		let new_to_balance = match to_balance.checked_add(&value) {
+			Some(b) => b,
+			None => return Err("destination balance too high to receive value"),
+		};
+
+		if transactor != dest {
+			Self::set_free_balance(transactor, new_from_balance);
+			Self::decrease_total_stake_by(fee);
+			Self::set_free_balance_creating(dest, new_to_balance);
+			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
+		}
+
+		Ok(())
 	}
 
 	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.

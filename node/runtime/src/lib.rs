@@ -71,7 +71,7 @@ use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, Extrinsic, StaticLookup,
+	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -80,7 +80,6 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-use consensus_aura::api as aura_api;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -335,7 +334,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl aura_api::AuraApi<Block> for Runtime {
+	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

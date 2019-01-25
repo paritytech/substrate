@@ -45,4 +45,9 @@ pub mod prelude {
 	pub use ::boxed::Box;
 	pub use ::cmp::{Eq, PartialEq};
 	pub use ::clone::Clone;
+
+	// Re-export `vec!` macro here, but not in `std` mode, since
+	// std's prelude already brings `vec!` into the scope.
+	#[cfg(not(feature = "std"))]
+	pub use ::vec;
 }

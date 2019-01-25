@@ -36,6 +36,9 @@ use rstd::ops::{
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
+	/// Get a reference to the underlying value.
+	///
+	/// This will compute the value if the function is invoked for the first time.
 	fn get(&mut self) -> &T;
 }
 
@@ -53,7 +56,9 @@ pub trait Verify {
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
+	/// A return type.
 	type Success;
+	/// Perform the origin check.
 	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, &'static str>;
 }
 
@@ -79,6 +84,7 @@ pub trait StaticLookup {
 	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
 }
 
+/// A lookup implementation returning the input value.
 #[derive(Default)]
 pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<T> {
@@ -162,6 +168,7 @@ macro_rules! impl_numerics {
 
 impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
+/// A structure that performs identity conversion.
 pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
@@ -170,13 +177,7 @@ impl<T> Convert<T, ()> for () {
 	fn convert(_: T) -> () { () }
 }
 
-pub trait RefInto<T> {
-	fn ref_into(&self) -> &T;
-}
-impl<T> RefInto<T> for T {
-	fn ref_into(&self) -> &T { &self }
-}
-
+/// A meta trait for arithmetic.
 pub trait SimpleArithmetic:
 	Zero + One + IntegerSquareRoot + As<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
@@ -227,6 +228,7 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 	fn clear() -> Self { Default::default() }
 }
 
+/// A meta trait for all bit ops.
 pub trait SimpleBitOps:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
@@ -348,6 +350,7 @@ impl Hash for BlakeTwo256 {
 
 /// Something that can be checked for equality and printed out to a debug channel if bad.
 pub trait CheckEqual {
+	/// Perform the equality check.
 	fn check_equal(&self, other: &Self);
 }
 
@@ -388,76 +391,79 @@ impl<I> CheckEqual for I where I: DigestItem {
 	}
 }
 
+/// A type that implements Serialize and Debug when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + Debug> MaybeSerializeDebugButNotDeserialize for T {}
 
+/// A type that implements Serialize and Debug when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerializeDebugButNotDeserialize {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebugButNotDeserialize for T {}
 
+/// A type that implements Serialize when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeSerialize: Serialize {}
 #[cfg(feature = "std")]
 impl<T: Serialize> MaybeSerialize for T {}
 
+/// A type that implements Serialize when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerialize {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerialize for T {}
 
+/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
 
+/// A type that implements Serialize, DeserializeOwned and Debug when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeSerializeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeSerializeDebug for T {}
 
+/// A type that implements Debug when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeDebug: Debug {}
 #[cfg(feature = "std")]
 impl<T: Debug> MaybeDebug for T {}
 
+/// A type that implements Debug when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeDebug {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDebug for T {}
 
+/// A type that implements Display when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeDisplay: Display {}
 #[cfg(feature = "std")]
 impl<T: Display> MaybeDisplay for T {}
 
+/// A type that implements Display when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
+/// A type that implements Hash when in std environment.
 #[cfg(feature = "std")]
 pub trait MaybeHash: ::rstd::hash::Hash {}
 #[cfg(feature = "std")]
 impl<T: ::rstd::hash::Hash> MaybeHash for T {}
 
+/// A type that implements Hash when in std environment.
 #[cfg(not(feature = "std"))]
 pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
 
-#[cfg(feature = "std")]
-pub trait MaybeDecode: ::codec::Decode {}
-#[cfg(feature = "std")]
-impl<T: ::codec::Decode> MaybeDecode for T {}
-
-#[cfg(not(feature = "std"))]
-pub trait MaybeDecode {}
-#[cfg(not(feature = "std"))]
-impl<T> MaybeDecode for T {}
-
+/// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
@@ -467,11 +473,16 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 ///
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+	/// Header number.
 	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	/// Header hash type
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
+	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
+	/// Digest type
 	type Digest: Digest<Hash = Self::Hash> + Codec;
 
+	/// Creates new header.
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
@@ -480,23 +491,34 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 		digest: Self::Digest
 	) -> Self;
 
+	/// Returns a reference to the header number.
 	fn number(&self) -> &Self::Number;
+	/// Sets the header number.
 	fn set_number(&mut self, Self::Number);
 
+	/// Returns a reference to the extrinsics root.
 	fn extrinsics_root(&self) -> &Self::Hash;
+	/// Sets the extrinsic root.
 	fn set_extrinsics_root(&mut self, Self::Hash);
 
+	/// Returns a reference to the state root.
 	fn state_root(&self) -> &Self::Hash;
+	/// Sets the state root.
 	fn set_state_root(&mut self, Self::Hash);
 
+	/// Returns a reference to the parent hash.
 	fn parent_hash(&self) -> &Self::Hash;
+	/// Sets the parent hash.
 	fn set_parent_hash(&mut self, Self::Hash);
 
+	/// Returns a reference to the digest.
 	fn digest(&self) -> &Self::Digest;
 	/// Get a mutable reference to the digest.
 	fn digest_mut(&mut self) -> &mut Self::Digest;
+	/// Sets the digest.
 	fn set_digest(&mut self, Self::Digest);
 
+	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
 		<Self::Hashing as Hash>::hash_of(self)
 	}
@@ -507,14 +529,22 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+	/// Type of extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+	/// Header type.
 	type Header: Header<Hash=Self::Hash>;
+	/// Block hash type.
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
+	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
+	/// Returns a reference to the list of extrinsics.
 	fn extrinsics(&self) -> &[Self::Extrinsic];
+	/// Split the block into header and list of extrinsics.
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
+	/// Creates new block from header and extrinsics.
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
+	/// Returns the hash of the block.
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
@@ -571,24 +601,32 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
-/// enact a piece of extrinsic information by marshalling and dispatching to a named functioon
+/// enact a piece of extrinsic information by marshalling and dispatching to a named function
 /// call.
 ///
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
+	/// Id of the account that is responsible for this piece of information (sender).
 	type AccountId: Member + MaybeDisplay;
+	/// Index allowing to disambiguate other `Applyable`s from the same `AccountId`.
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
+	/// Function call.
 	type Call: Member;
+	/// Returns a reference to the index if any.
 	fn index(&self) -> Option<&Self::Index>;
+	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
+	/// Deconstructs into function call and sender.
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
 }
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
 pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
+	/// Hash of the items.
 	type Hash: Member;
+	/// Digest item type.
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
@@ -611,7 +649,9 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
+	/// `ChangesTrieRoot` payload.
 	type Hash: Member;
+	/// `AuthorityChange` payload.
 	type AuthorityId: Member + MaybeHash + codec::Encode + codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
