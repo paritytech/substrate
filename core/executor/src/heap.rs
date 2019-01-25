@@ -32,7 +32,7 @@ const ALIGNMENT: u32 = 8;
 // always fulfills the alignment. In buddy allocation a pointer always
 // points to the start of a block, which with a fitting block size
 // will then be a multiple of the alignment requirement.
-const BLOCK_SIZE: u32 = 8192; // 2^13 bytes
+const BLOCK_SIZE: u32 = 1024; // bytes
 
 #[allow(path_statements)]
 fn _assert_block_size_aligned() {
