@@ -1115,7 +1115,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				}
 
 				return Ok(Some(info.best_hash));
-			} else if info.finalized_number >= target_header.number() {
+			} else if info.finalized_number >= *target_header.number() {
 				// header is on a dead fork.
 				return Ok(None);
 			}
