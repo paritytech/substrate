@@ -17,13 +17,14 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use codec::Compact;
-use exec::{Ext, EmptyOutputBuf, VmExecResult};
-use gas::GasMeter;
+use crate::{CodeHash, Schedule, Trait};
+use crate::wasm::env_def::FunctionImplProvider;
+use crate::exec::{Ext, EmptyOutputBuf, VmExecResult};
+use crate::gas::GasMeter;
+
 use rstd::prelude::*;
 use sandbox;
-use wasm::env_def::FunctionImplProvider;
-use {CodeHash, Schedule, Trait};
+
 
 #[macro_use]
 mod env_def;
@@ -72,7 +73,7 @@ impl<'a, T: Trait> WasmLoader<'a, T> {
 	}
 }
 
-impl<'a, T: Trait> ::exec::Loader<T> for WasmLoader<'a, T> {
+impl<'a, T: Trait> crate::exec::Loader<T> for WasmLoader<'a, T> {
 	type Executable = WasmExecutable;
 
 	fn load_init(&self, code_hash: &CodeHash<T>) -> Result<WasmExecutable, &'static str> {
@@ -102,7 +103,7 @@ impl<'a, T: Trait> WasmVm<'a, T> {
 	}
 }
 
-impl<'a, T: Trait> ::exec::Vm<T> for WasmVm<'a, T> {
+impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 	type Executable = WasmExecutable;
 
 	fn execute<E: Ext<T = T>>(
@@ -173,13 +174,12 @@ mod tests {
 	use super::*;
 	use std::collections::HashMap;
 	use substrate_primitives::H256;
-	use exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
-	use balances;
-	use gas::GasMeter;
-	use tests::{Test, Call};
+	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
+	use crate::gas::GasMeter;
+	use crate::tests::{Test, Call};
 	use wabt;
-	use wasm::prepare::prepare_contract;
-	use CodeHash;
+	use crate::wasm::prepare::prepare_contract;
+	use crate::CodeHash;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -276,10 +276,10 @@ mod tests {
 		ext: &mut E,
 		gas_meter: &mut GasMeter<E::T>,
 	) -> Result<(), &'static str> {
-		use exec::Vm;
+		use crate::exec::Vm;
 
 		let wasm = wabt::wat2wasm(wat).unwrap();
-		let schedule = ::Schedule::<u64>::default();
+		let schedule = crate::Schedule::<u64>::default();
 		let prefab_module =
 			prepare_contract::<Test, super::runtime::Env>(&wasm, &schedule).unwrap();
 

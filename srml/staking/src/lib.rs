@@ -46,7 +46,7 @@ extern crate sr_io as runtime_io;
 extern crate srml_timestamp as timestamp;
 
 use rstd::{prelude::*, cmp};
-use codec::{HasCompact, Compact};
+use codec::HasCompact;
 use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
 use session::OnSessionChange;
 use primitives::{Perbill, traits::{Zero, One, Bounded, As, StaticLookup}};

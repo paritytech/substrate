@@ -15,8 +15,8 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
-use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use gas::{GasMeter, Token, approx_gas_for_balance};
+use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
+use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use balances::{self, EnsureAccountLiquid};
 use rstd::prelude::*;
@@ -285,8 +285,10 @@ where
 		let mut output_data = Vec::new();
 
 		let (change_set, events, calls) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay);
-			let mut nested = self.nested(overlay, dest.clone());
+			let mut nested = self.nested(
+				OverlayAccountDb::new(&self.overlay),
+				dest.clone()
+			);
 
 			if value > T::Balance::zero() {
 				transfer(
@@ -608,15 +610,16 @@ mod tests {
 		ExecFeeToken, ExecutionContext, Ext, Loader, EmptyOutputBuf, TransferFeeKind, TransferFeeToken,
 		Vm, VmExecResult, InstantiateReceipt, RawEvent,
 	};
-	use account_db::AccountDb;
-	use gas::GasMeter;
+	use crate::account_db::AccountDb;
+	use crate::gas::GasMeter;
+	use crate::tests::{ExtBuilder, Test};
+	use crate::{CodeHash, Config};
 	use runtime_io::with_externalities;
 	use std::cell::RefCell;
 	use std::collections::HashMap;
 	use std::marker::PhantomData;
 	use std::rc::Rc;
-	use tests::{ExtBuilder, Test};
-	use {CodeHash, Config};
+	use assert_matches::assert_matches;
 
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;

@@ -17,7 +17,7 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use ansi_term::Colour;
-use std::time::{Duration, Instant};
+use std::{fmt, time::{Duration, Instant}};
 use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
@@ -64,9 +64,11 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			last_number = Some(best_number);
 			let txpool_status = txpool.status();
 			let finalized_number: u64 = info.chain.finalized_number.as_();
+			let bandwidth_download = network.average_download_per_sec();
+			let bandwidth_upload = network.average_upload_per_sec();
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({}), finalized #{} ({})",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⭳ {} ⭱ {}",
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", sync_status.num_peers)),
@@ -74,6 +76,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				best_hash,
 				Colour::White.paint(format!("{}", finalized_number)),
 				info.chain.finalized_hash,
+				TransferRateFormat(bandwidth_download),
+				TransferRateFormat(bandwidth_upload),
 			);
 
 			// get cpu usage and memory usage of this process
@@ -93,6 +97,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"memory" => memory,
 				"finalized_height" => finalized_number,
 				"finalized_hash" => ?info.chain.finalized_hash,
+				"bandwidth_download" => bandwidth_download,
+				"bandwidth_upload" => bandwidth_upload,
 			);
 		} else {
 			warn!("Error getting best block information");
@@ -157,5 +163,29 @@ fn speed(best_number: u64, last_number: Option<u64>) -> String {
 		"".into()
 	} else {
 		format!(" {:4.1} bps", speed / 10.0)
+	}
+}
+
+/// Contains a number of bytes per second. Implements `fmt::Display` and shows this number of bytes
+/// per second in a nice way.
+struct TransferRateFormat(u64);
+impl fmt::Display for TransferRateFormat {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		// Special case 0.
+		if self.0 == 0 {
+			return write!(f, "0")
+		}
+
+		// Under 0.1 kiB, display plain bytes.
+		if self.0 < 100 {
+			return write!(f, "{} B/s", self.0)
+		}
+
+		// Under 1.0 MiB/sec, display the value in kiB/sec.
+		if self.0 < 1024 * 1024 {
+			return write!(f, "{:.1}kiB/s", self.0 as f64 / 1024.0)
+		}
+
+		write!(f, "{:.1}MiB/s", self.0 as f64 / (1024.0 * 1024.0))
 	}
 }

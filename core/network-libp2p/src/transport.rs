@@ -17,12 +17,19 @@
 use futures::prelude::*;
 use libp2p::{InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport, mplex, secio, yamux, tcp, dns, websocket};
 use libp2p::core::{self, transport::boxed::Boxed, muxing::StreamMuxerBox};
-use std::{io, time::Duration, usize};
+use std::{io, sync::Arc, time::Duration, usize};
+
+pub use self::bandwidth::BandwidthSinks;
+
+mod bandwidth;
 
 /// Builds the transport that serves as a common ground for all connections.
+///
+/// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
+/// the connections spawned with this transport.
 pub fn build_transport(
 	local_private_key: secio::SecioKeyPair
-) -> Boxed<(PeerId, StreamMuxerBox), io::Error> {
+) -> (Boxed<(PeerId, StreamMuxerBox), io::Error>, Arc<bandwidth::BandwidthSinks>) {
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
@@ -30,9 +37,10 @@ pub fn build_transport(
 	let transport = tcp::TcpConfig::new();
 	let transport = websocket::WsConfig::new(transport.clone()).or_transport(transport);
 	let transport = dns::DnsConfig::new(transport);
+	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, 5);
 
 	// TODO: rework the transport creation (https://github.com/libp2p/rust-libp2p/issues/783)
-	transport
+	let transport = transport
 		.with_upgrade(secio::SecioConfig::new(local_private_key))
 		.and_then(move |out, endpoint| {
 			let peer_id = out.remote_key.into_peer_id();
@@ -46,5 +54,7 @@ pub fn build_transport(
 		})
 		.with_timeout(Duration::from_secs(20))
 		.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-		.boxed()
+		.boxed();
+
+	(transport, sinks)
 }

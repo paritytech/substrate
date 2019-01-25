@@ -48,7 +48,7 @@ Other examples include the parachain-heads extrinsic in Polkadot and the "note-m
 
 === Runtime and API
 
-Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implementation of the Substrate client to be able to author blocks. 
+Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implementation of the Substrate client to be able to author blocks.
 
 If you want to develop a chain with Substrate, you will need to implement the `Core` trait. This `Core` trait generates an API with the minimum necessary functionality to interact with your runtime. A special macro is provided called `impl_runtime_apis!` that help you implement runtime API traits. All runtime API trait implementations need to be done in one call of the `impl_runtime_apis!` macro. All parameters and return values need to implement https://crates.io/crates/parity-codec[`parity-codec`] to be encodable and decodable.
 
@@ -148,7 +148,7 @@ Now with this new chainspec file, you can build a "raw" chain definition for you
 
 [source, shell]
 ----
-substrate --chain ~/chainspec.json build-spec --raw > ~/mychain.json
+substrate build-spec --chain ~/chainspec.json --raw > ~/mychain.json
 ----
 
 This can be fed into Substrate:
@@ -243,7 +243,7 @@ cargo test --all
 You can start a development chain with:
 
 [source, shell]
-cargo run -- --dev
+cargo run \-- --dev
 
 Detailed logs may be shown by running the node with the following environment variables set: `RUST_LOG=debug RUST_BACKTRACE=1 cargo run \-- --dev`.
 
@@ -252,7 +252,7 @@ If you want to see the multi-node consensus algorithm in action locally, then yo
 We'll start Alice's substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN`, which is generated from the `--node-key` value that we specify below:
 
 [source, shell]
-cargo run -- \
+cargo run --release \-- \
   --base-path /tmp/alice \
   --chain=local \
   --key Alice \
@@ -264,7 +264,7 @@ cargo run -- \
 In the second terminal, we'll run the following to start Bob's substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's Bootnode ID on TCP port 30333:
 
 [source, shell]
-cargo run -- \
+cargo run --release \-- \
   --base-path /tmp/bob \
   --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN \
   --chain=local \
@@ -294,19 +294,19 @@ cargo test --all
 Start your node:
 
 [source, shell]
-cargo run --release
+cargo run --release \--
 
 To see a list of command line options, enter:
 
 [source, shell]
-cargo run --release -- --help
+cargo run --release \-- --help
 
 For example, you can choose a custom node name:
 
 [source, shell]
-cargo run --release -- --name my_custom_name
+cargo run --release \-- --name my_custom_name
 
-If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Charred%20Cherry 
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Charred%20Cherry
 
 
 == Documentation
@@ -373,18 +373,18 @@ Example (generic):
 /// ```rust
 /// // insert example 1 code here
 /// ```
-/// 
+///
 ```
 
 * Important notes:
 ** Documentation comments must use annotations with a triple slash `///`
-** Modules are documented using `//!` 
+** Modules are documented using `//!`
 ```
 //! Summary (of module)
 //!
 //! Description (of module)
 ```
-* Special section header is indicated with a hash `#`. 
+* Special section header is indicated with a hash `#`.
 ** `Panics` section requires an explanation if the function triggers a panic
 ** `Errors` section is for describing conditions under which a function of method returns `Err(E)` if it returns a `Result<T, E>`
 ** `Safety` section requires an explanation if the function is `unsafe`
@@ -392,7 +392,7 @@ Example (generic):
 * Code block annotations for examples are included between triple graves, as shown above.
 Instead of including the programming language to use for syntax highlighting as the annotation
 after the triple graves, alternative annotations include the `ignore`, `text`, `should_panic`, or `no_run`.
-* Summary sentence is a short high level sinngle sentence of its functionality
+* Summary sentence is a short high level single sentence of its functionality
 * Description paragraph is for details additional to the summary sentence
 * Missing documentation annotations may be used to identify where to generate warnings with `#![warn(missing_docs)]`
 or errors `#![deny(missing_docs)]`
@@ -404,7 +404,7 @@ The code block annotations in the `# Example` section may be used as https://doc
 
 * Important notes:
 ** Rustdoc will automatically add a `main()` wrapper around the code block to test it
-** https://doc.rust-lang.org/1.9.0/book/documentation.html#documenting-macros[Documentating macros].
+** https://doc.rust-lang.org/1.9.0/book/documentation.html#documenting-macros[Documenting macros].
 ** Documentation as tests examples are included when running `cargo test`
 
 == Contributing

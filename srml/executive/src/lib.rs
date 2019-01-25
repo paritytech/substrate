@@ -25,7 +25,6 @@ extern crate parity_codec_derive;
 #[cfg_attr(test, macro_use)]
 extern crate srml_support as runtime_support;
 
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;

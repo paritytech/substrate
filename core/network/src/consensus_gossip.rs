@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
-use rand::{self, Rng};
+use rand::{self, seq::SliceRandom};
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
@@ -125,7 +125,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&(topic, message_hash)) { Some(*id) } else { None })
 			.collect();
 
-		rand::thread_rng().shuffle(&mut non_authorities);
+		non_authorities.shuffle(&mut rand::thread_rng());
 		let non_authorities: HashSet<_> = if non_authorities.is_empty() {
 			HashSet::new()
 		} else {
