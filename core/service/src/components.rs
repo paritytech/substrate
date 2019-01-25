@@ -217,7 +217,6 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
 {
-	// FIXME [ToDr] Optimize and re-use tags from the pool.
 	fn on_block_imported(
 		id: &BlockId<ComponentBlock<C>>,
 		client: &ComponentClient<C>,

@@ -324,7 +324,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
-		// FIXME: Post Poc-2 return an error if version is missing
 		self.executor.runtime_version(id)
 	}
 
@@ -741,7 +740,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// https://github.com/paritytech/substrate/issues/1232
 		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
 
-		// FIXME: non longest-chain rule.
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
 			ForkChoiceStrategy::Custom(v) => v,

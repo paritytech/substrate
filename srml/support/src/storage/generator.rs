@@ -194,7 +194,7 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Storage>(key: &K, f: F, storage: &S) -> R;
 }
 
-// FIXME: Remove this in favour of `decl_storage` macro.
+// FIXME #1568 Remove this in favour of `decl_storage` macro.
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 #[macro_export]
 macro_rules! storage_items {
@@ -445,7 +445,6 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Get the key used to put the length field.
-			// FIXME: concat macro should accept byte literals.
 			fn len_key() -> $crate::rstd::vec::Vec<u8> {
 				let mut key = $prefix.to_vec();
 				key.extend(b"len");

@@ -31,7 +31,7 @@
 //! set for this block height.
 
 #![cfg(feature="rhd")]
-// FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020
+// FIXME #1020 doesn't compile
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

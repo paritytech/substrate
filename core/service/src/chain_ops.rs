@@ -106,7 +106,7 @@ pub fn import_blocks<F, E, R>(
 	impl<B: Block> Link<B> for DummyLink { }
 
 	let client = new_client::<F>(&config)?;
-	// FIXME: this shouldn't need a mutable config. https://github.com/paritytech/substrate/issues/1134
+	// FIXME #1134 this shouldn't need a mutable config.
 	let queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone())?;
 	queue.start(DummyLink)?;
 

@@ -123,11 +123,11 @@ impl BuildStorage for StorageMap {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
-// FIXME: impl Mul<Permill> for N where N: As<usize>
+// FIXME #1577 Permill needs improvements
 impl Permill {
 	/// Multiplication.
 	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// FIXME: handle overflows
+		// FIXME #1577 handle overflows
 		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
 	}
 
@@ -178,11 +178,11 @@ impl From<codec::Compact<Permill>> for Permill {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Perbill(u32);
 
-// FIXME: impl Mul<Perbill> for N where N: As<usize>
+// FIXME #1577 impl Mul<Perbill> for N where N: As<usize>
 impl Perbill {
 	/// Attenuate `b` by self.
 	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// FIXME: handle overflows
+		// FIXME #1577 handle overflows
 		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
 	}
 
@@ -573,7 +573,6 @@ mod tests {
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 
-	// FIXME try to avoid redundant brackets: a(AuthoritiesChange), b
 	impl_outer_log! {
 		pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
 			a(AuthoritiesChange), b()
