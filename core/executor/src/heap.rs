@@ -56,6 +56,7 @@ pub struct Heap {
 	ptr_offset: u32,
 	tree: vec::Vec<Node>,
 	total_size: u32,
+	max_heap_size: u32,
 }
 
 impl Heap {
@@ -88,11 +89,16 @@ impl Heap {
 			ptr_offset,
 			tree: vec![Node::Free; node_count],
 			total_size: 0,
+			max_heap_size: leaves * BLOCK_SIZE,
 		}
 	}
 
 	/// Gets requested number of bytes to allocate and returns a pointer.
 	pub fn allocate(&mut self, size: u32) -> u32 {
+		if (size + self.total_size > self.max_heap_size) {
+			return 0;
+		}
+
 		// Get the requested level from number of blocks requested
 		let blocks_needed = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 		let block_offset = match self.allocate_block_in_tree(blocks_needed) {
