@@ -77,7 +77,7 @@ struct EncryptedKey {
 
 impl EncryptedKey {
 	fn encrypt(plain: &[u8; PKCS_LEN], password: &str, iterations: u32) -> Self {
-		use rand::{Rng, OsRng};
+		use rand::{Rng, rngs::OsRng};
 
 		let mut rng = OsRng::new().expect("OS Randomness available on all supported platforms; qed");
 

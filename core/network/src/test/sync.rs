@@ -23,7 +23,7 @@ use super::*;
 
 #[test]
 fn sync_from_two_peers_works() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
@@ -35,7 +35,7 @@ fn sync_from_two_peers_works() {
 
 #[test]
 fn sync_from_two_peers_with_ancestry_search_works() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(10, true);
 	net.peer(1).push_blocks(100, false);
@@ -57,7 +57,7 @@ fn sync_long_chain_works() {
 
 #[test]
 fn sync_no_common_longer_chain_fails() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
@@ -67,13 +67,15 @@ fn sync_no_common_longer_chain_fails() {
 
 #[test]
 fn sync_justifications() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = JustificationTestNet::new(3);
 	net.peer(0).push_blocks(20, false);
 	net.sync();
 
 	// there's currently no justification for block #10
 	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
+
 	// we finalize block #10 for peer 0 with a justification
 	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
 
@@ -88,7 +90,7 @@ fn sync_justifications() {
 
 #[test]
 fn sync_after_fork_works() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 	net.sync_step();
 	net.peer(0).push_blocks(30, false);
@@ -112,7 +114,7 @@ fn sync_after_fork_works() {
 
 #[test]
 fn syncs_all_forks() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(4);
 	net.sync_step();
 	net.peer(0).push_blocks(2, false);
@@ -129,7 +131,7 @@ fn syncs_all_forks() {
 
 #[test]
 fn own_blocks_are_announced() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
 	net.sync(); // connect'em
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
@@ -146,7 +148,7 @@ fn own_blocks_are_announced() {
 
 #[test]
 fn blocks_are_not_announced_by_light_nodes() {
-	::env_logger::init().ok();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(0);
 
 	// full peer0 is connected to light peer
