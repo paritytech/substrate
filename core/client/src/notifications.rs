@@ -213,10 +213,10 @@ mod tests {
 			(vec![2], Some(vec![3])),
 			(vec![3], None),
 		];
-		notifications.trigger(&1.into(), changeset.into_iter());
+		notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter());
 
 		// then
-		assert_eq!(recv.next().unwrap(), Ok((1.into(), vec![
+		assert_eq!(recv.next().unwrap(), Ok((Hash::from_low_u64_be(1), vec![
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 			(StorageKey(vec![3]), None),
 		].into())));
@@ -234,13 +234,13 @@ mod tests {
 			(vec![2], Some(vec![3])),
 			(vec![1], None),
 		];
-		notifications.trigger(&1.into(), changeset.into_iter());
+		notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter());
 
 		// then
-		assert_eq!(recv1.next().unwrap(), Ok((1.into(), vec![
+		assert_eq!(recv1.next().unwrap(), Ok((Hash::from_low_u64_be(1), vec![
 			(StorageKey(vec![1]), None),
 		].into())));
-		assert_eq!(recv2.next().unwrap(), Ok((1.into(), vec![
+		assert_eq!(recv2.next().unwrap(), Ok((Hash::from_low_u64_be(1), vec![
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 		].into())));
 	}
@@ -262,7 +262,7 @@ mod tests {
 			(vec![2], Some(vec![3])),
 			(vec![1], None),
 		];
-		notifications.trigger(&1.into(), changeset.into_iter());
+		notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter());
 
 		// then
 		assert_eq!(notifications.listeners.len(), 0);
@@ -278,7 +278,7 @@ mod tests {
 
 			// when
 			let changeset = vec![];
-			notifications.trigger(&1.into(), changeset.into_iter());
+			notifications.trigger(&Hash::from_low_u64_be(1), changeset.into_iter());
 			recv
 		};
 

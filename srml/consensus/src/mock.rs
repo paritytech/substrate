@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, testing::{Digest, DigestItem, Header, UintAuthorityId}};
+use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use {GenesisConfig, Trait, Module, system};
@@ -31,7 +31,6 @@ impl_outer_origin!{
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
 impl Trait for Test {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
 	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ::InstantFinalityReportVec<()>;
@@ -44,6 +43,7 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;

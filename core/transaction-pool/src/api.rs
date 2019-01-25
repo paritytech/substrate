@@ -63,7 +63,7 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 	type Hash = H256;
 	type Error = error::Error;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
 		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
 	}
 

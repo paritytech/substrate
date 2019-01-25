@@ -21,14 +21,14 @@ use std::sync::Arc;
 use kvdb::{KeyValueDB, DBTransaction};
 
 use client::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use utils::{self, db_err, meta_keys};
+use crate::utils::{self, db_err, meta_keys};
 
-use cache::{CacheItemT, ComplexBlockId};
-use cache::list_cache::{CommitOperation, Fork};
-use cache::list_entry::{Entry, StorageEntry};
+use crate::cache::{CacheItemT, ComplexBlockId};
+use crate::cache::list_cache::{CommitOperation, Fork};
+use crate::cache::list_entry::{Entry, StorageEntry};
 
 /// Single list-cache metadata.
 #[derive(Debug)]

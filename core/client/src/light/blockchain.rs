@@ -24,12 +24,12 @@ use parking_lot::Mutex;
 use runtime_primitives::{Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero, AuthorityIdFor};
 
-use backend::{AuxStore, NewBlockState};
-use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
+use crate::backend::{AuxStore, NewBlockState};
+use crate::blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
-use cht;
-use error::{ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::fetcher::{Fetcher, RemoteHeaderRequest};
+use crate::cht;
+use crate::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
@@ -166,8 +166,8 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 pub mod tests {
 	use std::collections::HashMap;
 	use test_client::runtime::{Hash, Block, Header};
-	use blockchain::Info;
-	use light::fetcher::tests::OkCallFetcher;
+	use crate::blockchain::Info;
+	use crate::light::fetcher::tests::OkCallFetcher;
 	use super::*;
 
 	pub type DummyBlockchain = Blockchain<DummyStorage, OkCallFetcher>;

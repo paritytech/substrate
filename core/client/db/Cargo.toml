@@ -2,6 +2,7 @@
 name = "substrate-client-db"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 parking_lot = "0.7.1"
@@ -9,19 +10,19 @@ log = "0.4"
 kvdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 # FIXME replace with release as soon as our rocksdb changes are released upstream https://github.com/paritytech/parity-common/issues/88
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
-lru-cache = "0.1"
-hash-db = { git = "https://github.com/paritytech/trie" }
-substrate-primitives = { path = "../../primitives" }
-sr-primitives = { path = "../../sr-primitives" }
-substrate-client = { path = "../../client" }
-substrate-state-machine = { path = "../../state-machine" }
-parity-codec = "2.1"
+lru-cache = "0.1.1"
+hash-db = { version = "0.9" }
+primitives = { package = "substrate-primitives", path = "../../primitives" }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+client = { package = "substrate-client", path = "../../client" }
+state-machine = { package = "substrate-state-machine", path = "../../state-machine" }
+parity-codec = "2.2"
 parity-codec-derive = "2.1"
-substrate-executor = { path = "../../executor" }
-substrate-state-db = { path = "../../state-db" }
-substrate-trie = { path = "../../trie" }
+executor = { package = "substrate-executor", path = "../../executor" }
+state_db = { package = "substrate-state-db", path = "../../state-db" }
+trie = { package = "substrate-trie", path = "../../trie" }
 
 [dev-dependencies]
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 substrate-keyring = { path = "../../keyring" }
-substrate-test-client = { path = "../../test-client" }
+test-client = { package = "substrate-test-client", path = "../../test-client" }

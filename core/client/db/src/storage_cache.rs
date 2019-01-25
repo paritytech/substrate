@@ -23,6 +23,7 @@ use lru_cache::LruCache;
 use hash_db::Hasher;
 use runtime_primitives::traits::{Block, Header};
 use state_machine::{backend::Backend as StateBackend, TrieBackend};
+use log::trace;
 
 const STATE_CACHE_BLOCKS: usize = 12;
 

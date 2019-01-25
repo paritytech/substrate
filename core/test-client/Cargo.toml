@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 substrate-client = { path = "../client" }
-parity-codec = "2.1"
+parity-codec = "2.2"
 substrate-executor = { path = "../executor" }
 substrate-consensus-common = { path = "../consensus/common" }
 substrate-keyring = { path = "../../core/keyring" }

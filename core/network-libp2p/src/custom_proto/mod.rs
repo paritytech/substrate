@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,12 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use cli::CoreParams;
+pub use self::behaviour::{CustomProtos, CustomProtosOut};
+pub use self::upgrade::{RegisteredProtocol, RegisteredProtocols};
 
-/// Extend params for Node
-#[derive(Debug, StructOpt)]
-pub struct Params {
-	#[structopt(flatten)]
-	core: CoreParams
-}
+mod behaviour;
+mod handler;
+mod upgrade;

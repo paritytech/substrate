@@ -18,8 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[allow(unused_imports)]
-#[macro_use]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -37,24 +35,31 @@ extern crate substrate_primitives;
 #[cfg(test)]
 extern crate sr_io as runtime_io;
 
+extern crate substrate_inherents as inherents;
+
 use rstd::prelude::*;
-use rstd::result;
 use parity_codec::Encode;
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::CheckInherentError;
-use primitives::traits::{
-	MaybeSerializeDebug, Member, ProvideInherent, Block as BlockT
-};
+use primitives::traits::{MaybeSerializeDebug, Member};
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
+use inherents::{
+	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
+};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::Ed25519AuthorityId;
 
 mod mock;
 mod tests;
+
+/// The identifier for consensus inherents.
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"offlrep0";
+
+/// The error type used by this inherent.
+pub type InherentError = RuntimeString;
 
 struct AuthorityStorageVec<S: codec::Codec + Default>(rstd::marker::PhantomData<S>);
 impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
@@ -158,9 +163,6 @@ impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<Ed2551
 }
 
 pub trait Trait: system::Trait {
-	/// The allowed extrinsic position for `note_offline` inherent.
-	const NOTE_OFFLINE_POSITION: u32;
-
 	/// Type for all log entries of this module.
 	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 
@@ -205,12 +207,6 @@ decl_module! {
 		/// Note the previous block's validator missed their opportunity to propose a block.
 		fn note_offline(origin, offline: <T::InherentOfflineReport as InherentOfflineReport>::Inherent) {
 			ensure_inherent(origin)?;
-
-			assert!(
-				<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
-				"note_offline extrinsic must be at position {} in the block",
-				T::NOTE_OFFLINE_POSITION
-			);
 
 			T::InherentOfflineReport::handle_report(offline);
 		}
@@ -292,34 +288,38 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> ProvideInherent for Module<T> {
-	type Inherent = <T::InherentOfflineReport as InherentOfflineReport>::Inherent;
 	type Call = Call<T>;
+	type Error = MakeFatalError<RuntimeString>;
+	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		if <T::InherentOfflineReport as InherentOfflineReport>::is_empty(&data) {
-			vec![]
+	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+		if let Ok(Some(data)) =
+			data.get_data::<<T::InherentOfflineReport as InherentOfflineReport>::Inherent>(
+				&INHERENT_IDENTIFIER
+			)
+		{
+			if <T::InherentOfflineReport as InherentOfflineReport>::is_empty(&data) {
+				None
+			} else {
+				Some(Call::note_offline(data))
+			}
 		} else {
-			vec![(T::NOTE_OFFLINE_POSITION, Call::note_offline(data))]
+			None
 		}
 	}
 
-	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
-		block: &Block, expected: Self::Inherent, extract_function: &F
-	) -> result::Result<(), CheckInherentError> {
-		let noted_offline = block
-			.extrinsics()
-			.get(T::NOTE_OFFLINE_POSITION as usize)
-			.and_then(|xt| match extract_function(&xt) {
-				Some(Call::note_offline(ref x)) => Some(x),
-				_ => None,
-			});
+	fn check_inherent(call: &Self::Call, data: &InherentData) -> Result<(), Self::Error> {
+		let offline = match call {
+			Call::note_offline(ref offline) => offline,
+			_ => return Ok(()),
+		};
 
-		// REVIEW: perhaps we should be passing a `None` to check_inherent.
-		if let Some(noted_offline) = noted_offline {
-			<T::InherentOfflineReport as InherentOfflineReport>::check_inherent(&noted_offline, &expected)
-				.map_err(|e| CheckInherentError::Other(e.into()))?;
-		}
+		let expected = data
+			.get_data::<<T::InherentOfflineReport as InherentOfflineReport>::Inherent>(&INHERENT_IDENTIFIER)?
+			.ok_or(RuntimeString::from("No `offline_report` found in the inherent data!"))?;
 
-		Ok(())
+		<T::InherentOfflineReport as InherentOfflineReport>::check_inherent(
+			&offline, &expected
+		).map_err(|e| RuntimeString::from(e).into())
 	}
 }

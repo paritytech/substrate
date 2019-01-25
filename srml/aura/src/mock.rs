@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{BuildStorage, testing::{Digest, DigestItem, Header, UintAuthorityId}};
+use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use {Trait, Module, consensus, system, timestamp};
@@ -32,7 +32,6 @@ impl_outer_origin!{
 pub struct Test;
 
 impl consensus::Trait for Test {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
 	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ();
@@ -46,14 +45,13 @@ impl system::Trait for Test {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
 }
 
 impl timestamp::Trait for Test {
-	const TIMESTAMP_SET_POSITION: u32 = 0;
-
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 }

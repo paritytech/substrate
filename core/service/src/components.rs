@@ -27,7 +27,9 @@ use consensus_common::import_queue::ImportQueue;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId};
+use runtime_primitives::{
+	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
+};
 use config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
@@ -135,7 +137,8 @@ pub trait StartRPC<C: Components> {
 }
 
 impl<C: Components> StartRPC<Self> for C where
-	C::RuntimeApi: Metadata<ComponentBlock<C>>,
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: Metadata<ComponentBlock<C>>,
 {
 	type ServersHandle = (Option<rpc::HttpServer>, Option<Mutex<rpc::WsServer>>);
 
@@ -189,49 +192,30 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 	client: &Client<Backend, Executor, Block, Api>,
 	transaction_pool: &TransactionPool<PoolApi>,
 ) -> error::Result<()> where
-	Api: TaggedTransactionQueue<Block>,
 	Block: BlockT<Hash = <Blake2Hasher as ::primitives::Hasher>::Out>,
 	Backend: client::backend::Backend<Block, Blake2Hasher>,
-	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi<Api = Api>,
+	Client<Backend, Executor, Block, Api>: ProvideRuntimeApi,
+	<Client<Backend, Executor, Block, Api> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<Block>,
 	Executor: client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
-	use runtime_primitives::transaction_validity::TransactionValidity;
-
 	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
 	if transaction_pool.status().is_empty() {
 		return Ok(())
 	}
 
-	let block = client.block(id)?;
-	let tags = match block {
-		None => return Ok(()),
-		Some(block) => {
-			let parent_id = BlockId::hash(*block.block.header().parent_hash());
-			let mut tags = vec![];
-			for tx in block.block.extrinsics() {
-				let tx = client.runtime_api().validate_transaction(&parent_id, &tx)?;
-				match tx {
-					TransactionValidity::Valid { mut provides, .. } => {
-						tags.append(&mut provides);
-					},
-					// silently ignore invalid extrinsics,
-					// cause they might just be inherent
-					_ => {}
-				}
+	if let Some(block) = client.block(id)? {
+		let parent_id = BlockId::hash(*block.block.header().parent_hash());
+		let extrinsics = block.block.extrinsics();
+		transaction_pool.prune(id, &parent_id, extrinsics).map_err(|e| format!("{:?}", e))?;
+	}
 
-			}
-			tags
-		}
-	};
-
-	transaction_pool.prune_tags(id, tags).map_err(|e| format!("{:?}", e))?;
 	Ok(())
 }
 
 impl<C: Components> MaintainTransactionPool<Self> for C where
-	ComponentClient<C>: ProvideRuntimeApi<Api = C::RuntimeApi>,
-	C::RuntimeApi: TaggedTransactionQueue<ComponentBlock<C>>,
+	ComponentClient<C>: ProvideRuntimeApi,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
 {
 	// FIXME [ToDr] Optimize and re-use tags from the pool.
 	fn on_block_imported(

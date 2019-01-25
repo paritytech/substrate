@@ -22,7 +22,7 @@ use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 };
 use wasmi::RuntimeValue::{I32, I64};
-use wasmi::memory_units::Pages;
+use wasmi::memory_units::{Bytes, Pages};
 use state_machine::Externalities;
 use error::{Error, ErrorKind, Result};
 use wasm_utils::UserError;
@@ -32,35 +32,7 @@ use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
 use trie::ordered_trie_root;
 use sandbox;
-
-
-struct Heap {
-	end: u32,
-}
-
-impl Heap {
-	/// Construct new `Heap` struct.
-	///
-	/// Returns `Err` if the heap couldn't allocate required
-	/// number of pages.
-	///
-	/// This could mean that wasm binary specifies memory
-	/// limit and we are trying to allocate beyond that limit.
-	fn new(memory: &MemoryRef) -> Self {
-		Heap {
-			end: memory.used_size().0 as u32,
-		}
-	}
-
-	fn allocate(&mut self, size: u32) -> u32 {
-		let r = self.end;
-		self.end += size;
-		r
-	}
-
-	fn deallocate(&mut self, _offset: u32) {
-	}
-}
+use heap;
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -73,7 +45,7 @@ macro_rules! debug_trace {
 
 struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 	sandbox_store: sandbox::Store,
-	heap: Heap,
+	heap: heap::Heap,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	ext: &'e mut E,
@@ -82,9 +54,14 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
+		let current_size: Bytes = m.current_size().into();
+		let current_size = current_size.0 as u32;
+		let used_size = m.used_size().0 as u32;
+		let heap_size = current_size - used_size;
+
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: Heap::new(&m),
+			heap: heap::Heap::new(used_size, heap_size),
 			memory: m,
 			table: t,
 			ext: e,

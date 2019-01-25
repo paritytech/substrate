@@ -40,7 +40,7 @@ impl txpool::ChainApi for TestApi {
 	type Hash = Hash;
 	type Error = error::Error;
 
-	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
 		let expected = index(at);
 		let requires = if expected == uxt.transfer().nonce {
 			vec![]
@@ -151,7 +151,7 @@ fn prune_tags_should_work() {
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 
-	pool.prune_tags(&BlockId::number(1), vec![vec![209]]).unwrap();
+	pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![]).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![210]);

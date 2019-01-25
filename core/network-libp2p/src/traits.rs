@@ -52,8 +52,10 @@ pub struct NetworkConfiguration {
 	pub reserved_nodes: Vec<String>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
-	/// Client identifier
+	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
+	/// Name of the node. Sent over the wire for debugging purposes.
+	pub node_name: String,
 }
 
 impl Default for NetworkConfiguration {
@@ -80,7 +82,8 @@ impl NetworkConfiguration {
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			client_version: "Parity-network".into(),		// TODO: meh
+			client_version: "unknown".into(),
+			node_name: "unknown".into(),
 		}
 	}
 

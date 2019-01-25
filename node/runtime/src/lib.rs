@@ -45,6 +45,7 @@ extern crate srml_council as council;
 extern crate srml_democracy as democracy;
 extern crate srml_executive as executive;
 extern crate srml_grandpa as grandpa;
+extern crate srml_indices as indices;
 extern crate srml_session as session;
 extern crate srml_staking as staking;
 extern crate srml_sudo as sudo;
@@ -63,13 +64,14 @@ use node_primitives::{
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
-	block_builder::api as block_builder_api, runtime_api as client_api
+	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
+	runtime_api as client_api,
 };
-use runtime_primitives::{ApplyResult, CheckInherentError, BasicInherentData};
+use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, ProvideInherent
+	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -78,7 +80,6 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-use consensus_aura::api as aura_api;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -88,16 +89,13 @@ pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use srml_support::{StorageValue, RuntimeMetadata};
 
-const TIMESTAMP_SET_POSITION: u32 = 0;
-const NOTE_OFFLINE_POSITION: u32 = 1;
-
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 15,
-	impl_version: 15,
+	spec_version: 16,
+	impl_version: 16,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -118,6 +116,7 @@ impl system::Trait for Runtime {
 	type Hashing = BlakeTwo256;
 	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
+	type Lookup = Indices;
 	type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 	type Event = Event;
 	type Log = Log;
@@ -127,16 +126,22 @@ impl aura::Trait for Runtime {
 	type HandleReport = aura::StakingSlasher<Runtime>;
 }
 
+impl indices::Trait for Runtime {
+	type AccountIndex = AccountIndex;
+	type IsDeadAccount = Balances;
+	type ResolveHint = indices::SimpleResolveHint<Self::AccountId, Self::AccountIndex>;
+	type Event = Event;
+}
+
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type AccountIndex = AccountIndex;
 	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type OnNewAccount = Indices;
 	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
 }
 
 impl consensus::Trait for Runtime {
-	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type Log = Log;
 	type SessionKey = SessionKey;
 
@@ -146,7 +151,6 @@ impl consensus::Trait for Runtime {
 }
 
 impl timestamp::Trait for Runtime {
-	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 	type Moment = u64;
 	type OnTimestampSet = Aura;
 }
@@ -196,9 +200,11 @@ impl treasury::Trait for Runtime {
 }
 
 impl contract::Trait for Runtime {
+	type Call = Call;
+	type Event = Event;
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
-	type Event = Event;
+	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
 }
 
 impl sudo::Trait for Runtime {
@@ -216,12 +222,13 @@ construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
-		InherentData = BasicInherentData
+		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Aura: aura::{Module},
+		Aura: aura::{Module, Inherent(Timestamp)},
 		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
+		Indices: indices,
 		Balances: balances,
 		Session: session,
 		Staking: staking,
@@ -238,10 +245,7 @@ construct_runtime!(
 );
 
 /// The address format for describing accounts.
-pub use balances::address::Address as RawAddress;
-
-/// The address format for describing accounts.
-pub type Address = balances::Address<Runtime>;
+pub type Address = <Indices as StaticLookup>::Source;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 /// Block type as expected by this runtime.
@@ -255,7 +259,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Balances, AllModules>;
 
 impl_runtime_apis! {
 	impl client_api::Core<Block> for Runtime {
@@ -271,8 +275,8 @@ impl_runtime_apis! {
 			Executive::execute_block(block)
 		}
 
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			Executive::initialise_block(&header)
+		fn initialise_block(header: &<Block as BlockT>::Header) {
+			Executive::initialise_block(header)
 		}
 	}
 
@@ -282,7 +286,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl block_builder_api::BlockBuilder<Block, BasicInherentData> for Runtime {
+	impl block_builder_api::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			Executive::apply_extrinsic(extrinsic)
 		}
@@ -291,46 +295,12 @@ impl_runtime_apis! {
 			Executive::finalise_block()
 		}
 
-		fn inherent_extrinsics(data: BasicInherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-			let mut inherent = Vec::new();
-
-			inherent.extend(
-				Timestamp::create_inherent_extrinsics(data.timestamp)
-					.into_iter()
-					.map(|v| (v.0, UncheckedExtrinsic::new_unsigned(Call::Timestamp(v.1))))
-			);
-
-			inherent.extend(
-				Consensus::create_inherent_extrinsics(data.consensus)
-					.into_iter()
-					.map(|v| (v.0, UncheckedExtrinsic::new_unsigned(Call::Consensus(v.1))))
-			);
-
-			inherent.as_mut_slice().sort_unstable_by_key(|v| v.0);
-			inherent.into_iter().map(|v| v.1).collect()
+		fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+			data.create_extrinsics()
 		}
 
-		fn check_inherents(block: Block, data: BasicInherentData) -> Result<(), CheckInherentError> {
-			let expected_slot = data.aura_expected_slot;
-
-			// draw timestamp out from extrinsics.
-			let set_timestamp = block.extrinsics()
-				.get(TIMESTAMP_SET_POSITION as usize)
-				.and_then(|xt: &UncheckedExtrinsic| match xt.function {
-					Call::Timestamp(TimestampCall::set(ref t)) => Some(t.clone()),
-					_ => None,
-				})
-				.ok_or_else(|| CheckInherentError::Other("No valid timestamp in block.".into()))?;
-
-			// take the "worse" result of normal verification and the timestamp vs. seal
-			// check.
-			CheckInherentError::combine_results(
-				Runtime::check_inherents(block, data),
-				|| {
-					Aura::verify_inherent(set_timestamp.into(), expected_slot)
-						.map_err(|s| CheckInherentError::Other(s.into()))
-				},
-			)
+		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult {
+			data.check_extrinsics(&block)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
@@ -345,7 +315,7 @@ impl_runtime_apis! {
 	}
 
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
-		fn grandpa_pending_change(digest: DigestFor<Block>)
+		fn grandpa_pending_change(digest: &DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
@@ -364,7 +334,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl aura_api::AuraApi<Block> for Runtime {
+	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

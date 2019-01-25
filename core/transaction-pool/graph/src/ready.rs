@@ -33,7 +33,7 @@ use future::WaitingTransaction;
 use base_pool::Transaction;
 
 #[derive(Debug)]
-pub struct TransactionRef<Hash, Ex> {
+struct TransactionRef<Hash, Ex> {
 	pub transaction: Arc<Transaction<Hash, Ex>>,
 	pub insertion_id: u64,
 }
@@ -160,14 +160,14 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		self.insertion_id += 1;
 		let insertion_id = self.insertion_id;
 		let hash = tx.transaction.hash.clone();
-		let tx = tx.transaction;
+		let transaction = tx.transaction;
 
-		let replaced = self.replace_previous(&tx)?;
+		let replaced = self.replace_previous(&transaction)?;
 
 		let mut goes_to_best = true;
 		let mut ready = self.ready.write();
 		// Add links to transactions that unlock the current one
-		for tag in &tx.requires {
+		for tag in &transaction.requires {
 			// Check if the transaction that satisfies the tag is still in the queue.
 			if let Some(other) = self.provided_tags.get(tag) {
 				let mut tx = ready.get_mut(other).expect(HASH_READY);
@@ -178,13 +178,13 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	 	}
 
 		// update provided_tags
-		for tag in tx.provides.clone() {
-			self.provided_tags.insert(tag, hash.clone());
+		for tag in &transaction.provides {
+			self.provided_tags.insert(tag.clone(), hash.clone());
 		}
 
 		let transaction = TransactionRef {
 			insertion_id,
-			transaction: Arc::new(tx),
+			transaction
 		};
 
 		// insert to best if it doesn't require any other transaction to be included before it
@@ -205,6 +205,14 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// Returns true if given hash is part of the queue.
 	pub fn contains(&self, hash: &Hash) -> bool {
 		self.ready.read().contains_key(hash)
+	}
+
+	/// Retrieve transaction by hash
+	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+		let ready = self.ready.read();
+		hashes.iter().map(|hash| {
+			ready.get(hash).map(|x| x.transaction.transaction.clone())
+		}).collect()
 	}
 
 	/// Removes invalid transactions from the ready pool.

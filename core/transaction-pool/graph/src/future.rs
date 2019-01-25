@@ -17,6 +17,7 @@
 use std::{
 	collections::{HashMap, HashSet},
 	hash,
+	sync::Arc,
 };
 
 use sr_primitives::transaction_validity::{
@@ -29,7 +30,7 @@ use base_pool::Transaction;
 #[derive(Debug)]
 pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
-	pub transaction: Transaction<Hash, Ex>,
+	pub transaction: Arc<Transaction<Hash, Ex>>,
 	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
 }
@@ -47,7 +48,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 			.collect();
 
 		WaitingTransaction {
-			transaction,
+			transaction: Arc::new(transaction),
 			missing_tags,
 		}
 	}
@@ -117,6 +118,11 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 		self.waiting.contains_key(hash)
 	}
 
+	/// Returns a list of known transactions
+	pub fn by_hash(&self, hashes: &[Hash]) -> Vec<Option<Arc<Transaction<Hash, Ex>>>> {
+		hashes.iter().map(|h| self.waiting.get(h).map(|x| x.transaction.clone())).collect()
+	}
+
 	/// Satisfies provided tags in transactions that are waiting for them.
 	///
 	/// Returns (and removes) transactions that became ready after their last tag got
@@ -148,7 +154,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Removes transactions for given list of hashes.
 	///
 	/// Returns a list of actually removed transactions.
-	pub fn remove(&mut self, hashes: &[Hash]) -> Vec<Transaction<Hash, Ex>> {
+	pub fn remove(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
 		for hash in hashes {
 			if let Some(waiting_tx) = self.waiting.remove(hash) {
@@ -171,7 +177,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 
 	/// Returns iterator over all future transactions
 	pub fn all(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
-		self.waiting.values().map(|waiting| &waiting.transaction)
+		self.waiting.values().map(|waiting| &*waiting.transaction)
 	}
 
 	/// Returns number of transactions in the Future queue.

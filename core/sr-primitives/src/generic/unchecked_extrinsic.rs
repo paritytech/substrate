@@ -152,7 +152,7 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> 
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
 {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+		self.using_encoded(|bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
@@ -185,5 +185,15 @@ mod test {
 		assert_eq!(decoded, ex);
 		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
 		assert_eq!(as_vec.encode(), encoded);
+	}
+
+
+	#[test]
+	#[cfg(feature = "std")]
+	fn serialization_of_unchecked_extrinsics() {
+		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32>;
+		let ex = Extrinsic::new_unsigned(42);
+
+		assert_eq!(serde_json::to_string(&ex).unwrap(), "\"0x14002a000000\"");
 	}
 }

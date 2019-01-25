@@ -31,15 +31,16 @@ use trie_backend_essence::{TrieBackendEssence};
 
 /// Return changes of given key at given blocks range.
 /// `max` is the number of best known block.
-pub fn key_changes<S: Storage<H>, H: Hasher>(
-	config: &Configuration,
-	storage: &S,
+/// Changes are returned in descending order (i.e. last block comes first).
+pub fn key_changes<'a, S: Storage<H>, H: Hasher>(
+	config: &'a Configuration,
+	storage: &'a S,
 	begin: u64,
-	end: &AnchorBlockId<H::Out>,
+	end: &'a AnchorBlockId<H::Out>,
 	max: u64,
-	key: &[u8],
-) -> Result<Vec<(u64, u32)>, String> where H::Out: HeapSizeOf {
-	DrilldownIterator {
+	key: &'a [u8],
+) -> Result<DrilldownIterator<'a, S, S, H>, String> where H::Out: HeapSizeOf {
+	Ok(DrilldownIterator {
 		essence: DrilldownIteratorEssence {
 			key,
 			roots_storage: storage,
@@ -53,7 +54,7 @@ pub fn key_changes<S: Storage<H>, H: Hasher>(
 
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
-	}.collect()
+	})
 }
 
 /// Returns proof of changes of given key at given blocks range.
@@ -93,6 +94,7 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher>(
 
 /// Check key changes proog and return changes of the key at given blocks range.
 /// `max` is the number of best known block.
+/// Changes are returned in descending order (i.e. last block comes first).
 pub fn key_changes_proof_check<S: RootsStorage<H>, H: Hasher>(
 	config: &Configuration,
 	roots_storage: &S,
@@ -261,7 +263,7 @@ impl<'a, RS: 'a + RootsStorage<H>, S: Storage<H>, H: Hasher> DrilldownIteratorEs
 }
 
 /// Exploring drilldown operator.
-struct DrilldownIterator<'a, RS: 'a + RootsStorage<H>, S: 'a + Storage<H>, H: Hasher> where H::Out: 'a {
+pub struct DrilldownIterator<'a, RS: 'a + RootsStorage<H>, S: 'a + Storage<H>, H: Hasher> where H::Out: 'a {
 	essence: DrilldownIteratorEssence<'a, RS, S, H>,
 }
 
@@ -379,6 +381,7 @@ fn lower_bound_max_digest(
 
 #[cfg(test)]
 mod tests {
+	use std::iter::FromIterator;
 	use primitives::Blake2Hasher;
 	use changes_trie::input::InputPair;
 	use changes_trie::storage::InMemoryStorage;
@@ -427,23 +430,28 @@ mod tests {
 	fn drilldown_iterator_works() {
 		let (config, storage) = prepare_for_drilldown();
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42]);
+			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 16 }, 16, &[42])
+			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 2 }, 4, &[42]);
+			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 2 }, 4, &[42])
+			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 3 }, 4, &[42]);
+			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 3 }, 4, &[42])
+			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(3, 0)]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
-			&config, &storage, 7, &AnchorBlockId { hash: Default::default(), number: 8 }, 8, &[42]);
+			&config, &storage, 7, &AnchorBlockId { hash: Default::default(), number: 8 }, 8, &[42])
+			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1)]));
 
 		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
-			&config, &storage, 5, &AnchorBlockId { hash: Default::default(), number: 7 }, 8, &[42]);
+			&config, &storage, 5, &AnchorBlockId { hash: Default::default(), number: 7 }, 8, &[42])
+			.and_then(Result::from_iter);
 		assert_eq!(drilldown_result, Ok(vec![(6, 3)]));
 	}
 
@@ -453,7 +461,8 @@ mod tests {
 		storage.clear_storage();
 
 		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
-			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 1000, &[42]).is_err());
+			&config, &storage, 0, &AnchorBlockId { hash: Default::default(), number: 100 }, 1000, &[42])
+			.and_then(|i| i.collect::<Result<Vec<_>, _>>()).is_err());
 	}
 
 	#[test]

@@ -16,6 +16,10 @@
 
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+// https://github.com/paritytech/substrate/issues/1547
+#![allow(deprecated)]
+
 extern crate substrate_primitives;
 extern crate parity_crypto as crypto;
 extern crate subtle;
@@ -73,7 +77,7 @@ struct EncryptedKey {
 
 impl EncryptedKey {
 	fn encrypt(plain: &[u8; PKCS_LEN], password: &str, iterations: u32) -> Self {
-		use rand::{Rng, OsRng};
+		use rand::{Rng, rngs::OsRng};
 
 		let mut rng = OsRng::new().expect("OS Randomness available on all supported platforms; qed");
 

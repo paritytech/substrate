@@ -16,45 +16,65 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc};
-use error::Error;
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe};
+use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
+use primitives::NativeOrEncoded;
 use runtime_primitives::{
 	Justification,
 	generic::{BlockId, SignedBlock},
 };
-use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, BlockOrigin, ForkChoiceStrategy};
+use consensus::{
+	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
+	BlockOrigin, ForkChoiceStrategy
+};
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
 use runtime_primitives::BuildStorage;
-use runtime_api::{Core as CoreAPI, CallRuntimeAt, ConstructRuntimeApi};
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
+use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
+use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::Decode;
+use codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
-	key_changes, key_changes_proof, OverlayedChanges
+	key_changes, key_changes_proof, OverlayedChanges,
 };
+use hash_db::Hasher;
 
-use backend::{self, BlockImportOperation};
-use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
-use call_executor::{CallExecutor, LocalCallExecutor};
+use crate::backend::{self, BlockImportOperation, PrunableStateChangesTrieStorage};
+use crate::blockchain::{
+	self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend
+};
+use crate::call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
-use notifications::{StorageNotifications, StorageEventStream};
-use light::{call_executor::prove_execution, fetcher::ChangesProof};
-use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
+use crate::notifications::{StorageNotifications, StorageEventStream};
+use crate::light::{call_executor::prove_execution, fetcher::ChangesProof};
+use crate::cht;
+use crate::error;
+use crate::in_mem;
+use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
+use crate::genesis;
+use consensus;
+use substrate_telemetry::telemetry;
+
+use slog::slog_info;
+use log::{info, trace, warn};
+use error_chain::bail;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
+
+type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
+type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
@@ -64,10 +84,18 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	import_lock: Mutex<()>,
-	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. FIXME #1439 : should be replaced with a queue
+	// holds the block hash currently being imported. TODO: replace this with block queue
+	importing_block: RwLock<Option<Block::Hash>>,
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 	_phantom: PhantomData<RA>,
+}
+
+/// Client import operation, a wrapper for the backend.
+pub struct ClientImportOperation<Block: BlockT, H: Hasher<Out=Block::Hash>, B: backend::Backend<Block, H>> {
+	op: B::BlockImportOperation,
+	notify_imported: Option<(Block::Hash, BlockOrigin, Block::Header, bool, Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>)>,
+	notify_finalized: Vec<Block::Hash>,
 }
 
 /// A source of blockchain events.
@@ -227,7 +255,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
-			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
+			let mut op = backend.begin_operation()?;
+			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
 			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
@@ -235,7 +264,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				genesis_block.deconstruct().0,
 				Some(vec![]),
 				None,
-				::backend::NewBlockState::Final
+				crate::backend::NewBlockState::Final
 			)?;
 			backend.commit_operation(op)?;
 		}
@@ -344,35 +373,54 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok((header, proof))
 	}
 
+	/// Get longest range within [first; last] that is possible to use in `key_changes`
+	/// and `key_changes_proof` calls.
+	/// Range could be shortened from the beginning if some changes tries have been pruned.
+	/// Returns Ok(None) if changes trues are not supported.
+	pub fn max_key_changes_range(
+		&self,
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+	) -> error::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
+		let (config, storage) = match self.require_changes_trie().ok() {
+			Some((config, storage)) => (config, storage),
+			None => return Ok(None),
+		};
+ 		let first = first.as_();
+		let last_num = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
+		if first > last_num {
+			return Err(error::ErrorKind::ChangesTrieAccessFailed("Invalid changes trie range".into()).into());
+		}
+ 		let finalized_number = self.backend.blockchain().info()?.finalized_number;
+		let oldest = storage.oldest_changes_trie_block(&config, finalized_number.as_());
+		let first = As::sa(::std::cmp::max(first, oldest));
+		Ok(Some((first, last)))
+	}
+
 	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
 	/// Works only for runtimes that are supporting changes tries.
 	pub fn key_changes(
 		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		key: &[u8]
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+		key: &StorageKey
 	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
-		let config = self.changes_trie_config()?;
-		let storage = self.backend.changes_trie_storage();
-		let (config, storage) = match (config, storage) {
-			(Some(config), Some(storage)) => (config, storage),
-			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
-		};
+		let (config, storage) = self.require_changes_trie()?;
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?.as_();
+		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
 
-		let first_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(first))?.as_();
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(last))?.as_();
 		key_changes::<_, Blake2Hasher>(
 			&config,
-			storage,
-			first_number,
+			&*storage,
+			first.as_(),
 			&ChangesTrieAnchorBlockId {
-				hash: convert_hash(&last),
+				hash: convert_hash(&last_hash),
 				number: last_number,
 			},
 			self.backend.blockchain().info()?.best_number.as_(),
-			key)
+			&key.0)
+		.and_then(|r| r.map(|r| r.map(|(block, tx)| (As::sa(block), tx))).collect::<Result<_, _>>())
 		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
-		.map(|r| r.into_iter().map(|(b, e)| (As::sa(b), e)).collect())
 	}
 
 	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
@@ -387,7 +435,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &[u8]
+		key: &StorageKey
 	) -> error::Result<ChangesProof<Block::Header>> {
 		self.key_changes_proof_with_cht_size(
 			first,
@@ -406,7 +454,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		key: &[u8],
+		key: &StorageKey,
 		cht_size: u64,
 	) -> error::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
@@ -436,14 +484,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		let config = self.changes_trie_config()?;
-		let storage = self.backend.changes_trie_storage();
-		let (config, storage) = match (config, storage) {
-			(Some(config), Some(storage)) => (config, storage),
-			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
-		};
-
+		let (config, storage) = self.require_changes_trie()?;
 		let min_number = self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(min))?;
+
 		let recording_storage = AccessedRootsRecorder::<Block> {
 			storage,
 			min: min_number.as_(),
@@ -467,7 +510,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				number: last_number,
 			},
 			max_number.as_(),
-			key
+			&key.0
 		)
 		.map_err(|err| error::Error::from(error::ErrorKind::ChangesTrieAccessFailed(err)))?;
 
@@ -517,28 +560,144 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(proof)
 	}
 
+	/// Returns changes trie configuration and storage or an error if it is not supported.
+	fn require_changes_trie(&self) -> error::Result<(ChangesTrieConfiguration, &B::ChangesTrieStorage)> {
+		let config = self.changes_trie_config()?;
+		let storage = self.backend.changes_trie_storage();
+		match (config, storage) {
+			(Some(config), Some(storage)) => Ok((config, storage)),
+			_ => Err(error::ErrorKind::ChangesTriesNotSupported.into()),
+		}
+	}
+
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block<InherentData>(
+	pub fn new_block(
 		&self
-	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block, InherentData>
+		RA: Send + Sync,
+		Self: ProvideRuntimeApi,
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at<InherentData>(
+	pub fn new_block_at(
 		&self, parent: &BlockId<Block>
-	) -> error::Result<block_builder::BlockBuilder<Block, InherentData, Self>> where
+	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block, InherentData>
+		RA: Send + Sync,
+		Self: ProvideRuntimeApi,
+		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
+	/// Lock the import lock, and run operations inside.
+	pub fn lock_import_and_run<R, F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> error::Result<R>>(
+		&self, f: F
+	) -> error::Result<R> {
+		let inner = || {
+			let _import_lock = self.import_lock.lock();
+
+			let mut op = ClientImportOperation {
+				op: self.backend.begin_operation()?,
+				notify_imported: None,
+				notify_finalized: Vec::new(),
+			};
+
+			let r = f(&mut op)?;
+
+			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
+			self.backend.commit_operation(op)?;
+			self.notify_finalized(notify_finalized)?;
+
+			if let Some(notify_imported) = notify_imported {
+				self.notify_imported(notify_imported)?;
+			}
+
+			Ok(r)
+		};
+
+		let result = inner();
+		*self.importing_block.write() = None;
+
+		result
+	}
+
+	/// Apply a checked and validated block to an operation. If a justification is provided
+	/// then `finalized` *must* be true.
+	pub fn apply_block(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		import_block: ImportBlock<Block>,
+		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
+	) -> error::Result<ImportResult> where
+		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	{
+		use runtime_primitives::traits::Digest;
+
+		let ImportBlock {
+			origin,
+			header,
+			justification,
+			post_digests,
+			body,
+			finalized,
+			auxiliary,
+			fork_choice,
+		} = import_block;
+
+		assert!(justification.is_some() && finalized || justification.is_none());
+
+		let parent_hash = header.parent_hash().clone();
+
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+
+		let import_headers = if post_digests.is_empty() {
+			PrePostHeader::Same(header)
+		} else {
+			let mut post_header = header.clone();
+			for item in post_digests {
+				post_header.digest_mut().push(item);
+			}
+			PrePostHeader::Different(header, post_header)
+		};
+
+		let hash = import_headers.post().hash();
+		let height: u64 = import_headers.post().number().as_();
+
+		*self.importing_block.write() = Some(hash);
+
+		let result = self.execute_and_import_block(
+			operation,
+			origin,
+			hash,
+			import_headers,
+			justification,
+			body,
+			new_authorities,
+			finalized,
+			auxiliary,
+			fork_choice,
+		);
+
+		telemetry!("block.import";
+			"height" => height,
+			"best" => ?hash,
+			"origin" => ?origin
+		);
+
+		result
+	}
+
 	fn execute_and_import_block(
 		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		import_headers: PrePostHeader<Block::Header>,
@@ -570,21 +729,89 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::File => false,
 		};
 
+		self.backend.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+
 		// ensure parent block is finalized to maintain invariant that
 		// finality is called sequentially.
 		if finalized {
-			self.apply_finality(parent_hash, None, last_best, make_notifications)?;
+			self.apply_finality_with_block_hash(operation, parent_hash, None, last_best, make_notifications)?;
 		}
 
-		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
+		// TODO: correct path logic for when to execute this function
+		// https://github.com/paritytech/substrate/issues/1232
+		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
+
+		// FIXME: non longest-chain rule.
+		let is_new_best = finalized || match fork_choice {
+			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
+			ForkChoiceStrategy::Custom(v) => v,
+		};
+		let leaf_state = if finalized {
+			crate::backend::NewBlockState::Final
+		} else if is_new_best {
+			crate::backend::NewBlockState::Best
+		} else {
+			crate::backend::NewBlockState::Normal
+		};
+
+		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
+
+		operation.op.set_block_data(
+			import_headers.post().clone(),
+			body,
+			justification,
+			leaf_state,
+		)?;
+
+		if let Some(authorities) = authorities {
+			operation.op.update_authorities(authorities);
+		}
+		if let Some(storage_update) = storage_update {
+			operation.op.update_db_storage(storage_update)?;
+		}
+		if let Some(storage_changes) = storage_changes.clone() {
+			operation.op.update_storage(storage_changes)?;
+		}
+		if let Some(Some(changes_update)) = changes_update {
+			operation.op.update_changes_trie(changes_update)?;
+		}
+
+		operation.op.insert_aux(aux)?;
+
+		if make_notifications {
+			if finalized {
+				operation.notify_finalized.push(hash);
+			}
+
+			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
+		}
+
+		Ok(ImportResult::Queued)
+	}
+
+	fn block_execution(
+		&self,
+		transaction: &B::BlockImportOperation,
+		import_headers: &PrePostHeader<Block::Header>,
+		origin: BlockOrigin,
+		hash: Block::Hash,
+		body: Option<Vec<Block::Extrinsic>>,
+	) -> error::Result<(
+		Option<StorageUpdate<B, Block>>,
+		Option<Option<ChangesUpdate>>,
+		Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	)>
+		where
+			E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	{
+		match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let mut r = self.executor.call_at_state(
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
 							ExecutionManager::NativeWhenPossible,
@@ -603,88 +830,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							wasm_result
 						}),
 					},
-				);
-				let (_, storage_update, changes_update) = r?;
+					None,
+				)?;
+
 				overlay.commit_prospective();
-				(Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect()))
+
+				Ok((Some(storage_update), Some(changes_update), Some(overlay.into_committed().collect())))
 			},
-			None => (None, None, None)
-		};
-
-		// FIXME: non longest-chain rule.
-		let is_new_best = finalized || match fork_choice {
-			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
-			ForkChoiceStrategy::Custom(v) => v,
-		};
-		let leaf_state = if finalized {
-			::backend::NewBlockState::Final
-		} else if is_new_best {
-			::backend::NewBlockState::Best
-		} else {
-			::backend::NewBlockState::Normal
-		};
-
-		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
-
-		transaction.set_block_data(
-			import_headers.post().clone(),
-			body,
-			justification,
-			leaf_state,
-		)?;
-
-		if let Some(authorities) = authorities {
-			transaction.update_authorities(authorities);
+			None => Ok((None, None, None))
 		}
-		if let Some(storage_update) = storage_update {
-			transaction.update_db_storage(storage_update)?;
-		}
-		if let Some(storage_changes) = storage_changes.clone() {
-			transaction.update_storage(storage_changes)?;
-		}
-		if let Some(Some(changes_update)) = changes_update {
-			transaction.update_changes_trie(changes_update)?;
-		}
-
-		transaction.set_aux(aux)?;
-		self.backend.commit_operation(transaction)?;
-
-		if make_notifications {
-			if let Some(storage_changes) = storage_changes {
-				// FIXME [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-				self.storage_notifications.lock()
-					.trigger(&hash, storage_changes.into_iter());
-			}
-
-			if finalized {
-				let notification = FinalityNotification::<Block> {
-					hash,
-					header: import_headers.post().clone(),
-				};
-
-				self.finality_notification_sinks.lock()
-					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-			}
-
-			let notification = BlockImportNotification::<Block> {
-				hash,
-				origin,
-				header: import_headers.into_post(),
-				is_new_best,
-			};
-
-			self.import_notification_sinks.lock()
-				.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-		}
-
-		Ok(ImportResult::Queued)
 	}
 
-	/// Finalizes all blocks up to given. If a justification is provided it is
-	/// stored with the given finalized block (any other finalized blocks are
-	/// left unjustified).
-	fn apply_finality(
+	fn apply_finality_with_block_hash(
 		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
 		block: Block::Hash,
 		justification: Option<Justification>,
 		best_block: Block::Hash,
@@ -693,8 +852,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// find tree route from last finalized to given block.
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 
-		if block == last_finalized { return Ok(()) }
-		let route_from_finalized = ::blockchain::tree_route(
+		if block == last_finalized {
+			warn!("Possible safety violation: attempted to re-finalize last finalized block {:?} ", last_finalized);
+			return Ok(());
+		}
+
+		let route_from_finalized = crate::blockchain::tree_route(
 			self.backend.blockchain(),
 			BlockId::Hash(last_finalized),
 			BlockId::Hash(block),
@@ -707,7 +870,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			bail!(error::ErrorKind::NotInFinalizedChain);
 		}
 
-		let route_from_best = ::blockchain::tree_route(
+		let route_from_best = crate::blockchain::tree_route(
 			self.backend.blockchain(),
 			BlockId::Hash(best_block),
 			BlockId::Hash(block),
@@ -723,11 +886,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let enacted = route_from_finalized.enacted();
 		assert!(enacted.len() > 0);
 		for finalize_new in &enacted[..enacted.len() - 1] {
-			self.backend.finalize_block(BlockId::Hash(finalize_new.hash), None)?;
+			operation.op.mark_finalized(BlockId::Hash(finalize_new.hash), None)?;
 		}
 
 		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
-		self.backend.finalize_block(BlockId::Hash(block), justification)?;
+		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
 			// sometimes when syncing, tons of blocks can be finalized at once.
@@ -735,20 +898,93 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			const MAX_TO_NOTIFY: usize = 256;
 			let enacted = route_from_finalized.enacted();
 			let start = enacted.len() - ::std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
-			let mut sinks = self.finality_notification_sinks.lock();
 			for finalized in &enacted[start..] {
-				let header = self.header(&BlockId::Hash(finalized.hash))?
-					.expect("header already known to exist in DB because it is indicated in the tree route; qed");
-				let notification = FinalityNotification {
-					header,
-					hash: finalized.hash,
-				};
-
-				sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+				operation.notify_finalized.push(finalized.hash);
 			}
 		}
 
 		Ok(())
+	}
+
+	fn notify_finalized(
+		&self,
+		notify_finalized: Vec<Block::Hash>,
+	) -> error::Result<()> {
+		let mut sinks = self.finality_notification_sinks.lock();
+
+		for finalized_hash in notify_finalized {
+			let header = self.header(&BlockId::Hash(finalized_hash))?
+				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
+
+			let notification = FinalityNotification {
+				header,
+				hash: finalized_hash,
+			};
+
+			sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+		}
+
+		Ok(())
+	}
+
+	fn notify_imported(
+		&self,
+		notify_import: (Block::Hash, BlockOrigin, Block::Header, bool, Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>),
+	) -> error::Result<()> {
+		let (hash, origin, header, is_new_best, storage_changes) = notify_import;
+
+		if let Some(storage_changes) = storage_changes {
+			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+			self.storage_notifications.lock()
+				.trigger(&hash, storage_changes.into_iter());
+		}
+
+		let notification = BlockImportNotification::<Block> {
+			hash,
+			origin,
+			header,
+			is_new_best,
+		};
+
+		self.import_notification_sinks.lock()
+			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+		Ok(())
+	}
+
+	/// Apply auxiliary data insertion into an operation.
+	pub fn apply_aux<
+		'a,
+		'b: 'a,
+		'c: 'a,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+	>(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		insert: I,
+		delete: D
+	) -> error::Result<()> {
+		operation.op.insert_aux(
+			insert.into_iter()
+				.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+		)
+	}
+
+	/// Mark all blocks up to given as finalized in operation. If a
+	/// justification is provided it is stored with the given finalized
+	/// block (any other finalized blocks are left unjustified).
+	pub fn apply_finality(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+		justification: Option<Justification>,
+		notify: bool,
+	) -> error::Result<()> {
+		let last_best = self.backend.blockchain().info()?.best_hash;
+		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
+		self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
 	}
 
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
@@ -758,9 +994,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// This is usually tied to some synchronization state, where we don't send notifications
 	/// while performing major synchronization work.
 	pub fn finalize_block(&self, id: BlockId<Block>, justification: Option<Justification>, notify: bool) -> error::Result<()> {
-		let last_best = self.backend.blockchain().info()?.best_hash;
-		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.apply_finality(to_finalize_hash, justification, last_best, notify)
+		self.lock_import_and_run(|operation| {
+			let last_best = self.backend.blockchain().info()?.best_hash;
+			let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
+			self.apply_finality_with_block_hash(operation, to_finalize_hash, justification, last_best, notify)
+		})
 	}
 
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
@@ -976,30 +1214,29 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: CoreAPI<Block>
+	RA: ConstructRuntimeApi<Block, Self>
 {
-	type Api = RA;
+	type Api = <RA as ConstructRuntimeApi<Block, Self>>::RuntimeApi;
 
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
-		Self::Api::construct_runtime_api(self)
+		RA::construct_runtime_api(self)
 	}
 }
 
 impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
-	Block: BlockT<Hash=H256>,
-	RA: CoreAPI<Block>, // not strictly necessary at the moment
-						// but we want to bound to make sure the API is actually available.
+	Block: BlockT<Hash=H256>
 {
-	fn call_api_at(
+	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
-	) -> error::Result<Vec<u8>> {
+		native_call: Option<NC>,
+	) -> error::Result<NativeOrEncoded<R>> {
 		let execution_manager = match self.api_execution_strategy {
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
@@ -1012,15 +1249,22 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			}),
 		};
 
-		self.executor.contextual_call(at, function, &args, changes, initialised_block,
-			|| self.prepare_environment_block(at), execution_manager)
+		self.executor.contextual_call(
+			at,
+			function,
+			&args,
+			changes,
+			initialised_block,
+			|| self.prepare_environment_block(at),
+			execution_manager,
+			native_call,
+		)
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		self.runtime_version_at(at)
 	}
 }
-
 
 impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
@@ -1036,63 +1280,9 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		import_block: ImportBlock<Block>,
 		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	) -> Result<ImportResult, Self::Error> {
-		use runtime_primitives::traits::Digest;
-
-		let ImportBlock {
-			origin,
-			header,
-			justification,
-			post_digests,
-			body,
-			finalized,
-			auxiliary,
-			fork_choice,
-		} = import_block;
-
-		assert!(justification.is_some() && finalized || justification.is_none());
-
-		let parent_hash = header.parent_hash().clone();
-
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash)) {
-			Ok(blockchain::BlockStatus::InChain) => {},
-			Ok(blockchain::BlockStatus::Unknown) => return Ok(ImportResult::UnknownParent),
-            Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
-		}
-
-		let import_headers = if post_digests.is_empty() {
-			PrePostHeader::Same(header)
-		} else {
-			let mut post_header = header.clone();
-			for item in post_digests {
-				post_header.digest_mut().push(item);
-			}
-			PrePostHeader::Different(header, post_header)
-		};
-
-		let hash = import_headers.post().hash();
-		let _import_lock = self.import_lock.lock();
-		let height: u64 = import_headers.post().number().as_();
-		*self.importing_block.write() = Some(hash);
-
-		let result = self.execute_and_import_block(
-			origin,
-			hash,
-			import_headers,
-			justification,
-			body,
-			new_authorities,
-			finalized,
-			auxiliary,
-			fork_choice,
-		);
-
-		*self.importing_block.write() = None;
-		telemetry!("block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
-		result.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+		self.lock_import_and_run(|operation| {
+			self.apply_block(operation, import_block, new_authorities)
+		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
 }
 
@@ -1195,11 +1385,17 @@ impl<B, E, Block, RA> backend::AuxStore for Client<B, E, Block, RA>
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
 	>(&self, insert: I, delete: D) -> error::Result<()> {
-		::backend::AuxStore::insert_aux(&*self.backend, insert, delete)
+		// Import is locked here because we may have other block import
+		// operations that tries to set aux data. Note that for consensus
+		// layer, one can always use atomic operations to make sure
+		// import is only locked once.
+		self.lock_import_and_run(|operation| {
+			self.apply_aux(operation, insert, delete)
+		})
 	}
 	/// Query auxiliary data from key-value store.
 	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
-		::backend::AuxStore::get_aux(&*self.backend, key)
+		crate::backend::AuxStore::get_aux(&*self.backend, key)
 	}
 }
 #[cfg(test)]
@@ -1214,7 +1410,7 @@ pub(crate) mod tests {
 	use consensus::BlockOrigin;
 	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
 	use test_client::BlockBuilderExt;
-	use test_client::runtime::{self, Block, Transfer, RuntimeApi, test_api::TestAPI};
+	use test_client::runtime::{self, Block, Transfer, RuntimeApi, TestAPI};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -1296,14 +1492,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Alice.to_raw_public().into()
+				Keyring::Alice.to_raw_public().into()
 			).unwrap(),
 			1000
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Ferdie.to_raw_public().into()
+				Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
 		);
@@ -1363,14 +1559,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Alice.to_raw_public().into()
+				Keyring::Alice.to_raw_public().into()
 			).unwrap(),
 			958
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				&Keyring::Ferdie.to_raw_public().into()
+				Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			42
 		);
@@ -1700,9 +1896,8 @@ pub(crate) mod tests {
 		let (client, _, test_cases) = prepare_client_with_key_changes();
 
 		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
-			let begin = client.block_hash(begin).unwrap().unwrap();
 			let end = client.block_hash(end).unwrap().unwrap();
-			let actual_result = client.key_changes(begin, end, &key).unwrap();
+			let actual_result = client.key_changes(begin, BlockId::Hash(end), &StorageKey(key)).unwrap();
 			match actual_result == expected_result {
 				true => (),
 				false => panic!(format!("Failed test {}: actual = {:?}, expected = {:?}",
