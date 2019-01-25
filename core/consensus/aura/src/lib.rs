@@ -47,7 +47,6 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
-use api::AuraApi;
 use slots::Slots;
 use ::log::{warn, debug, log, info, trace};
 
@@ -631,6 +630,11 @@ impl SlotDuration {
 				Ok(SlotDuration(genesis_slot_duration))
 			}
 		}
+	}
+
+	/// Returns slot duration value.
+	pub fn get(&self) -> u64 {
+		self.0
 	}
 }
 
