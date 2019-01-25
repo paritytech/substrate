@@ -93,10 +93,10 @@ impl<B: BlockT> PendingJustifications<B> {
 
 		let mut available_peers = peers.iter().filter_map(|(peer, sync)| {
 			// don't request to any peers that already have pending requests
-			if let PeerSyncState::Available = sync.state {
-				Some((*peer, sync.best_number))
-			} else {
+			if self.peer_requests.contains_key(&peer) {
 				None
+			} else {
+				Some((*peer, sync.best_number))
 			}
 		}).collect::<VecDeque<_>>();
 
