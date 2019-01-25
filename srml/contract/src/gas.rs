@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+use crate::{GasSpent, Module, Trait};
 use balances;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
 use runtime_support::StorageValue;
-use {GasSpent, Module, Trait};
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -295,7 +295,7 @@ macro_rules! match_tokens {
 #[cfg(test)]
 mod tests {
 	use super::{GasMeter, Token};
-	use tests::Test;
+	use crate::tests::Test;
 
 	/// A trivial token that charges 1 unit of gas.
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]

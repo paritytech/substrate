@@ -18,14 +18,15 @@
 //! wasm module before execution. It also extracts some essential information
 //! from a module.
 
+use crate::wasm::env_def::ImportSatisfyCheck;
+use crate::wasm::PrefabWasmModule;
+use crate::{Schedule, Trait};
+
 use parity_wasm::elements::{self, Internal, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use runtime_primitives::traits::As;
-use wasm::env_def::ImportSatisfyCheck;
-use wasm::PrefabWasmModule;
-use {Schedule, Trait};
 
 struct ContractModule<'a, Gas: 'a> {
 	// An `Option` is used here for loaning (`take()`-ing) the module.
@@ -316,10 +317,11 @@ pub fn prepare_contract<T: Trait, C: ImportSatisfyCheck>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::tests::Test;
+	use crate::exec::Ext;
 	use std::fmt;
-	use tests::Test;
-	use exec::Ext;
 	use wabt;
+	use assert_matches::assert_matches;
 
 	impl fmt::Debug for PrefabWasmModule {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
