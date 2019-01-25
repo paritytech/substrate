@@ -467,7 +467,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let result = if len == 0 {
 			tiny_keccak::keccak256(&[0u8; 0])
 		} else {
-			tiny_keccak::keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
+			tiny_keccak::keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
 		Ok(())
