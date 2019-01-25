@@ -71,7 +71,7 @@ use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, Extrinsic, StaticLookup,
+	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};

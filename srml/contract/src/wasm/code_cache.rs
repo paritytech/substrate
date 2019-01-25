@@ -25,12 +25,12 @@
 //! this guarantees that every instrumented contract code in cache cannot have the version equal to the current one.
 //! Thus, before executing a contract it should be reinstrument with new schedule.
 
-use gas::{GasMeter, Token};
+use crate::gas::{GasMeter, Token};
+use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
+use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash, Bounded};
 use runtime_support::StorageMap;
-use wasm::{prepare, runtime::Env, PrefabWasmModule};
-use {CodeHash, CodeStorage, PristineCode, Schedule, Trait};
 
 /// Gas metering token that used for charging storing code into the code storage.
 ///

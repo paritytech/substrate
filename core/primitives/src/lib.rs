@@ -47,7 +47,6 @@ extern crate untrusted;
 extern crate hex_literal;
 
 #[cfg(feature = "std")]
-#[macro_use]
 extern crate impl_serde;
 
 #[cfg(feature = "std")]

@@ -3,17 +3,18 @@ name = "substrate-consensus-aura"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
+edition = "2018"
 
 [dependencies]
 parity-codec = "2.2"
-substrate-client = { path = "../../client" }
-substrate-primitives = { path = "../../primitives" }
-srml-support = { path = "../../../srml/support" }
-sr-primitives = { path = "../../sr-primitives" }
-sr-version = { path = "../../sr-version" }
-sr-io = { path = "../../sr-io" }
-substrate-consensus-aura-primitives = { path = "primitives" }
-substrate-inherents = { path = "../../inherents" }
+client = { package = "substrate-client", path = "../../client" }
+primitives = { package = "substrate-primitives", path = "../../primitives" }
+runtime_support = { package = "srml-support", path = "../../../srml/support" }
+runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
+runtime_version = { package = "sr-version", path = "../../sr-version" }
+runtime_io = { package = "sr-io", path = "../../sr-io" }
+aura_primitives = { package = "substrate-consensus-aura-primitives", path = "primitives" }
+inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-consensus = { path = "../../../srml/consensus" }
 srml-aura = { path = "../../../srml/aura" }
 futures = "0.1.17"
@@ -21,12 +22,12 @@ tokio = "0.1.7"
 parking_lot = "0.7.1"
 error-chain = "0.12"
 log = "0.3"
-substrate-consensus-common = { path = "../common" }
+consensus_common = { package = "substrate-consensus-common", path = "../common" }
 
 [dev-dependencies]
-substrate-keyring = { path = "../../keyring" }
+keyring = { package = "substrate-keyring", path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
-substrate-network = { path = "../../network", features = ["test-helpers"]}
-substrate-service = { path = "../../service" }
-substrate-test-client = { path = "../../test-client" }
+network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
+service = { package = "substrate-service", path = "../../service" }
+test_client = { package = "substrate-test-client", path = "../../test-client" }
 env_logger = "0.4"

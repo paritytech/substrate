@@ -18,8 +18,10 @@
 
 use super::MAX_TRANSACTIONS_SIZE;
 
-use codec::Encode;
+use parity_codec::Encode;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
+use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+	impl_extract_backtrace, impl_error_chain_kind, bail};
 
 type BlockNumber = u64;
 
