@@ -243,7 +243,7 @@ pub trait DefaultByte {
 }
 
 pub trait GetMetadata {
-	fn type_metadata(&self) -> substrate_metadata::Metadata;
+	fn type_metadata(&self) -> substrate_metadata::MetadataRegistry;
 }
 
 /// Wrapper over dyn pointer for accessing a cached once byet value.
@@ -256,7 +256,7 @@ pub struct MetadataGetter(pub &'static dyn GetMetadata);
 /// Decode different for static lazy initiated byte value.
 pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
 
-pub type DecodeDifferentMetadataGetter = DecodeDifferent<MetadataGetter, substrate_metadata::Metadata>;
+pub type DecodeDifferentMetadataGetter = DecodeDifferent<MetadataGetter, substrate_metadata::MetadataRegistry>;
 
 impl Encode for DefaultByteGetter {
 	fn encode_to<W: Output>(&self, dest: &mut W) {

@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use syn::{
-	Data, Field, Fields, Ident, Type,
+	Data, Field, Fields, Type,
 	Meta, NestedMeta, Lit, Attribute, Variant,
 	punctuated::Punctuated,
 	spanned::Spanned,
@@ -11,6 +11,7 @@ type FieldsList = Punctuated<Field, Comma>;
 
 fn encode_fields(
 	fields: &FieldsList,
+	registry: &TokenStream
 ) -> TokenStream
 {
 	let recurse = fields.iter().enumerate().map(|(i, f)| {
@@ -22,31 +23,37 @@ fn encode_fields(
 		});
 		let ty = &f.ty;
 		quote_spanned! { f.span() =>
-			_substrate_metadata::FieldMetadata {
-				name: #name,
-				ty: <#ty as _substrate_metadata::EncodeMetadata>::type_metadata()
+			{
+				let type_name = <#ty as _substrate_metadata::EncodeMetadata>::type_name();
+				#registry.register(&type_name, <#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind);
+				_substrate_metadata::FieldMetadata {
+					name: #name,
+					ty: type_name
+				}
 			}
 		}
 	});
 
 	quote! {
-		_substrate_metadata::TypeMetadata::Struct(vec![#( #recurse, )*])
+		_substrate_metadata::TypeMetadataKind::Struct(vec![#( #recurse, )*])
 	}
 }
 
-pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
+pub fn quote(data: &Data, registry: &TokenStream) -> TokenStream {
 	let call_site = Span::call_site();
 	let res = match *data {
 		Data::Struct(ref data) => {
 			match data.fields {
 				Fields::Named(ref fields) => encode_fields(
 					&fields.named,
+					registry
 				),
 				Fields::Unnamed(ref fields) => encode_fields(
 					&fields.unnamed,
+					registry
 				),
 				Fields::Unit => quote_spanned! { call_site =>
-					_substrate_metadata::TypeMetadata::Struct(vec![])
+					_substrate_metadata::TypeMetadataKind::Struct(vec![])
 				},
 			}
 		},
@@ -65,9 +72,16 @@ pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
 								let ty = field_name(&f.ty);
 								let name = &f.ident;
 								quote_spanned! { f.span() =>
-									_substrate_metadata::FieldMetadata {
-										name: _substrate_metadata::FieldName::Named(stringify!(#name).into()),
-										ty: <#ty as _substrate_metadata::EncodeMetadata>::type_metadata()
+									{
+										let type_name = <#ty as _substrate_metadata::EncodeMetadata>::type_name();
+										#registry.register(
+											&type_name,
+											<#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind
+										);
+										_substrate_metadata::FieldMetadata {
+											name: _substrate_metadata::FieldName::Named(stringify!(#name).into()),
+											ty: type_name
+										}
 									}
 								}
 							});
@@ -90,9 +104,16 @@ pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
 							.map(|(i, f)| {
 								let ty = field_name(&f.ty);
 								quote! {
-									_substrate_metadata::FieldMetadata {
-										name: _substrate_metadata::FieldName::Unnamed(#i as u32),
-										ty: <#ty as _substrate_metadata::EncodeMetadata>::type_metadata()
+									{
+										let type_name = <#ty as _substrate_metadata::EncodeMetadata>::type_name();
+										#registry.register(
+											&type_name,
+											<#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind
+										);
+										_substrate_metadata::FieldMetadata {
+											name: _substrate_metadata::FieldName::Unnamed(#i as u32),
+											ty: type_name
+										}
 									}
 								}
 							});
@@ -118,16 +139,12 @@ pub fn quote(data: &Data, type_name: &Ident) -> TokenStream {
 			});
 
 			quote! {
-				_substrate_metadata::TypeMetadata::Enum(vec![#( #recurse, )*])
+				_substrate_metadata::TypeMetadataKind::Enum(vec![#( #recurse, )*])
 			}
 		},
 		Data::Union(_) => panic!("Union types are not supported."),
 	};
-	quote! {
-		_substrate_metadata::Metadata {
-			kind: #res
-		}
-	}
+	res
 }
 
 fn find_meta_item<'a, F, R, I>(itr: I, pred: F) -> Option<R> where

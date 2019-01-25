@@ -21,15 +21,15 @@ use primitive_types::{H160, H256, H512};
 
 use rstd::prelude::*;
 
-use registry::MetadataRegistry;
+pub use registry::MetadataRegistry;
 
 #[cfg(feature = "std")]
-type StringBuf = String;
+pub type StringBuf = String;
 
 #[cfg(not(feature = "std"))]
-type StringBuf = &'static str;
+pub type StringBuf = &'static str;
 
-type MetadataName = Vec<StringBuf>;
+pub type MetadataName = Vec<StringBuf>;
 
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -182,7 +182,7 @@ impl<T: EncodeMetadata> EncodeMetadata for Vec<T> {
 }
 
 impl<T: EncodeMetadata> EncodeMetadata for Option<T> {
-		fn type_name() -> MetadataName {
+	fn type_name() -> MetadataName {
 		let mut name: MetadataName = vec!["Option".into()];
 		name.extend(T::type_name());
 		name

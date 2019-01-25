@@ -20,6 +20,7 @@ use codec::{Decode, Encode, Codec, Input, Output, HasCompact};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
 use generic::Digest;
+use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind, PrimativeMetadata};
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
@@ -81,17 +82,18 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 	}
 }
 
-impl<Number, Hash, DigestItem> substrate_metadata::EncodeMetadata for Header<Number, Hash, DigestItem> where
+impl<Number, Hash, DigestItem> EncodeMetadata for Header<Number, Hash, DigestItem> where
 	Number: HasCompact + Copy + Into<u128>,
 	Hash: HashT,
 	Hash::Output: Encode,
 	DigestItem: DigestItemT + Encode,
 {
-	fn type_metadata() -> substrate_metadata::Metadata {
+	fn type_name() -> MetadataName {
+		vec!["Header".into()]
+	}
+	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		// TODO: implement this
-		substrate_metadata::Metadata {
-			kind: substrate_metadata::TypeMetadata::Primative(substrate_metadata::PrimativeMetadata::Unknown)
-		}
+		TypeMetadataKind::Primative(PrimativeMetadata::Unknown)
 	}
 }
 

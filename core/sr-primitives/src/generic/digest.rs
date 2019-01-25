@@ -19,10 +19,10 @@
 use rstd::prelude::*;
 
 use codec::{Decode, Encode, Codec, Input};
-use substrate_metadata::EncodeMetadata;
 use traits::{self, Member, DigestItem as DigestItemT, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
+use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind, PrimativeMetadata};
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
@@ -219,11 +219,12 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 }
 
 impl<'a, Hash: EncodeMetadata, AuthorityId: EncodeMetadata> EncodeMetadata for DigestItemRef<'a, Hash, AuthorityId> {
-	fn type_metadata() -> substrate_metadata::Metadata {
+	fn type_name() -> MetadataName {
+		vec!["DigestItem".into()]
+	}
+	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		// TODO: implement this
-		substrate_metadata::Metadata {
-			kind: substrate_metadata::TypeMetadata::Primative(substrate_metadata::PrimativeMetadata::Unknown)
-		}
+		TypeMetadataKind::Primative(PrimativeMetadata::Unknown)
 	}
 }
 

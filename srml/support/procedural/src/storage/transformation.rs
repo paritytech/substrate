@@ -707,10 +707,10 @@ fn store_functions_to_metadata (
 		let type_metadata_get = quote! {
 			pub struct #type_metadata_struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
-			static #type_metadata_cache_name: #scrate::once_cell::sync::OnceCell<#scrate::substrate_metadata::Metadata> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #type_metadata_cache_name: #scrate::once_cell::sync::OnceCell<#scrate::substrate_metadata::MetadataRegistry> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::GetMetadata for #type_metadata_struct_name<#traitinstance> {
-				fn type_metadata(&self) -> #scrate::substrate_metadata::Metadata {
+				fn type_metadata(&self) -> #scrate::substrate_metadata::MetadataRegistry {
 					#type_metadata_cache_name.get_or_init(|| {
 						<#typ as #scrate::substrate_metadata::EncodeMetadata>::type_metadata()
 					}).clone()
@@ -718,7 +718,7 @@ fn store_functions_to_metadata (
 			}
 			#[cfg(not(feature = "std"))]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::GetMetadata for #type_metadata_struct_name<#traitinstance> {
-				fn type_metadata(&self) -> #scrate::substrate_metadata::Metadata {
+				fn type_metadata(&self) -> #scrate::substrate_metadata::MetadataRegistry {
 					<#typ as #scrate::substrate_metadata::EncodeMetadata>::type_metadata()
 				}
 			}

@@ -23,12 +23,19 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 	let generics = add_trait_bounds(input.generics, parse_quote!(_substrate_metadata::EncodeMetadata));
 	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-	let metadata = encode::quote(&input.data, name);
+	let registry = quote!(registry);
+
+	let metadata_kind = encode::quote(&input.data, &registry);
 
 	let impl_block = quote! {
 		impl #impl_generics _substrate_metadata::EncodeMetadata for #name #ty_generics #where_clause {
-			fn type_metadata() -> _substrate_metadata::Metadata {
-				#metadata
+			fn type_name() -> _substrate_metadata::MetadataName {
+				// TODO: use module_path!() to get fully qualified name?
+				vec![module_path!().into(), stringify!(#name).into()]
+			}
+
+			fn type_metadata_kind(registry: &mut _substrate_metadata::MetadataRegistry) -> _substrate_metadata::TypeMetadataKind {
+				#metadata_kind
 			}
 		}
 	};

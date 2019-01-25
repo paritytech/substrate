@@ -1,6 +1,8 @@
 use super::{TypeMetadata, TypeMetadataKind, StringBuf};
 
-#[derive(Encode, Clone)]
+use rstd::prelude::*;
+
+#[derive(Encode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct MetadataRegistry {
 	list: Vec<TypeMetadata>,
