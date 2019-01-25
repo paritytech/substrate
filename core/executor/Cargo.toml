@@ -2,16 +2,17 @@
 name = "substrate-executor"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
 parity-codec = "3.0"
-sr-io = { path = "../sr-io" }
-substrate-primitives = { path = "../primitives" }
-substrate-trie = { path = "../trie" }
-substrate-serializer = { path = "../serializer" }
-substrate-state-machine = { path = "../state-machine"  }
-sr-version = { path = "../sr-version" }
+runtime_io = { package = "sr-io", path = "../sr-io" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+trie = { package = "substrate-trie", path = "../trie" }
+serializer = { package = "substrate-serializer", path = "../serializer" }
+state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
+runtime_version = { package = "sr-version", path = "../sr-version" }
 serde = "1.0"
 serde_derive = "1.0"
 wasmi = { version = "0.4.3" }
