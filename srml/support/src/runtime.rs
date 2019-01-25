@@ -800,7 +800,7 @@ macro_rules! __decl_runtime_metadata {
 		$runtime:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
-			$($modules:ident $( <$modules_generic:ident> )* )*
+			$( $modules:ident $( <$modules_generic:ident> )* )*
 		}
 		$($rest_name:ident : $rest_module:ident::{
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* )*
