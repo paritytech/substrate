@@ -422,7 +422,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(this.ext.chain_id())
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 16] = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
 			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
@@ -446,7 +446,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 32] = if len == 0 {
 			twox_256(&[0u8; 0])
 		} else {
 			twox_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?)
@@ -455,7 +455,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 32] = if len == 0 {
 			blake2_256(&[0u8; 0])
 		} else {
 			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
@@ -464,7 +464,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_keccak_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 32] = if len == 0 {
 			tiny_keccak::keccak256(&[0u8; 0])
 		} else {
 			tiny_keccak::keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak_256"))?)
