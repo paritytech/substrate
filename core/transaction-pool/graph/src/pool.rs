@@ -570,8 +570,8 @@ mod tests {
 		// given
 		let pool = pool();
 		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
-			from: 1.into(),
-			to: 2.into(),
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
 			amount: 5,
 			nonce: 0,
 		})).unwrap();
@@ -607,7 +607,7 @@ mod tests {
 			// then
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(2.into()))));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(H256::from_low_u64_be(2)))));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -616,8 +616,8 @@ mod tests {
 			// given
 			let pool = pool();
 			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
-				from: 1.into(),
-				to: 2.into(),
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
 				amount: 5,
 				nonce: 0,
 			})).unwrap();
