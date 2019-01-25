@@ -59,9 +59,7 @@ pub struct InherentData {
 impl InherentData {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		Self {
-			data: Default::default(),
-		}
+		Self::default()
 	}
 
 	/// Put data for an inherent into the internal storage.
@@ -153,7 +151,7 @@ impl codec::Decode for InherentData {
 ///
 /// When a fatal error occurres, all other errors are removed and the implementation needs to
 /// abbort checking inherents.
-#[derive(Encode, Decode, Clone, Default)]
+#[derive(Encode, Decode, Clone)]
 pub struct CheckInherentsResult {
 	/// Did the check succeed?
 	okay: bool,
@@ -163,14 +161,20 @@ pub struct CheckInherentsResult {
 	errors: InherentData,
 }
 
-impl CheckInherentsResult {
-	/// Create a new instance.
-	pub fn new() -> Self {
+impl Default for CheckInherentsResult {
+	fn default() -> Self {
 		Self {
 			okay: true,
 			errors: InherentData::new(),
 			fatal_error: false,
 		}
+	}
+}
+
+impl CheckInherentsResult {
+	/// Create a new instance.
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	/// Put an error into the result.
