@@ -124,7 +124,7 @@ To get going as fast as possible, there is a simple script that installs all req
 curl https://getsubstrate.io -sSf | bash
 ----
 
-You can start a local Substrate development chain with running `substrate run --dev`.
+You can start a local Substrate development chain with running `substrate --dev`.
 
 To create your own global network/cryptocurrency, you'll need to make a new Substrate Node chain specification file ("chainspec").
 
@@ -155,14 +155,14 @@ This can be fed into Substrate:
 
 [source, shell]
 ----
-substrate run --chain ~/mychain.json
+substrate --chain ~/mychain.json
 ----
 
 It won't do much until you start producing blocks though, so to do that you'll need to use the `--validator` option together with passing the seed for the account(s) that is configured to be the initial authorities:
 
 [source, shell]
 ----
-substrate run --chain ~/mychain.json --validator --key ...
+substrate --chain ~/mychain.json --validator --key ...
 ----
 
 You can distribute `mychain.json` so that everyone can synchronise and (depending on your authorities list) validate on your chain.
