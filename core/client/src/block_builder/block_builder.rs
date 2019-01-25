@@ -67,7 +67,7 @@ where
 
 		let api = api.runtime_api();
 		api.initialise_block(block_id, &header)?;
-
+		
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),

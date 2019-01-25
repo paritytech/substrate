@@ -75,6 +75,24 @@ pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotifica
 type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
 
+/// Execution strategies settings.
+#[derive(Debug, Clone)]
+pub struct ExecutionStrategies {
+	pub syncing: ExecutionStrategy,
+	pub importing: ExecutionStrategy,
+	pub block_construction: ExecutionStrategy,
+}
+
+impl Default for ExecutionStrategies {
+	fn default() -> ExecutionStrategies {
+		ExecutionStrategies {
+			syncing: ExecutionStrategy::NativeElseWasm,
+			importing: ExecutionStrategy::NativeElseWasm,
+			block_construction: ExecutionStrategy::AlwaysWasm,
+		}
+	}
+}
+
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
@@ -85,8 +103,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	import_lock: Mutex<()>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
-	block_execution_strategy: ExecutionStrategy,
-	api_execution_strategy: ExecutionStrategy,
+	execution_strategies: ExecutionStrategies,
 	_phantom: PhantomData<RA>,
 }
 
@@ -236,7 +253,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeElseWasm, ExecutionStrategy::NativeElseWasm)
+	Client::new(backend, call_executor, build_genesis_storage, Default::default())
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -249,8 +266,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
-		block_execution_strategy: ExecutionStrategy,
-		api_execution_strategy: ExecutionStrategy,
+		execution_strategies: ExecutionStrategies
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
@@ -276,8 +292,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finality_notification_sinks: Default::default(),
 			import_lock: Default::default(),
 			importing_block: Default::default(),
-			block_execution_strategy,
-			api_execution_strategy,
+			execution_strategies,
 			_phantom: Default::default(),
 		})
 	}
@@ -577,6 +592,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
+		println!("client.new_block -----> execution_strategies {:?}", self.execution_strategies);
 		block_builder::BlockBuilder::new(self)
 	}
 
@@ -589,6 +605,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
+		println!("client.new_block_at -----> execution_strategies {:?}", self.execution_strategies);
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
@@ -803,17 +820,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
-					transaction_state,
-					&mut overlay,
-					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
-					match (origin, self.block_execution_strategy) {
-						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeElseWasm) =>
-							ExecutionManager::NativeElseWasm,
-						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
-						(_, ExecutionStrategy::NativeWhenPossible) => ExecutionManager::NativeWhenPossible,
-						_ => ExecutionManager::Both(|wasm_result, native_result| {
+				let get_execution_manager = |execution_strategy: ExecutionStrategy| {
+					match execution_strategy {
+						ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
+						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+						ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+						ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 							let header = import_headers.post();
 							warn!("Consensus error between wasm and native block execution at block {}", hash);
 							warn!("   Header {:?}", header);
@@ -826,6 +838,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							);
 							wasm_result
 						}),
+					}
+				};
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
+					transaction_state,
+					&mut overlay,
+					"Core_execute_block",
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+					match origin {
+						BlockOrigin::NetworkInitialSync => get_execution_manager(self.execution_strategies.syncing),
+						_ => get_execution_manager(self.execution_strategies.importing),
 					},
 					None,
 				)?;
@@ -1255,27 +1277,14 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		initialised_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
 	) -> error::Result<NativeOrEncoded<R>> {
-		let execution_manager = match self.api_execution_strategy {
-			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-				warn!("   Function {:?}", function);
-				warn!("   Native result {:?}", native_result);
-				warn!("   Wasm result {:?}", wasm_result);
-				wasm_result
-			}),
-		};
-
-		self.executor.contextual_call(
+		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			at,
 			function,
 			&args,
 			changes,
 			initialised_block,
 			|| self.prepare_environment_block(at),
-			execution_manager,
+			ExecutionManager::NativeElseWasm,
 			native_call,
 		)
 	}

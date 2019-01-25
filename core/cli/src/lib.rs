@@ -25,6 +25,7 @@ mod params;
 pub mod error;
 pub mod informant;
 
+use client::ExecutionStrategies;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -52,6 +53,7 @@ use params::{
 };
 pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
+pub use params::{CoreParams, CoreCommands};
 use app_dirs::{AppInfo, AppDataType};
 use error_chain::bail;
 use log::info;
@@ -301,9 +303,37 @@ fn fill_network_configuration(
 	Ok(())
 }
 
-fn create_run_node_config<F, S>(
-	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
-) -> error::Result<FactoryFullConfiguration<F>>
+fn parse_execution_strategies(matches: &clap::ArgMatches) -> error::Result<ExecutionStrategies> {
+	let mut execution_strategies: ExecutionStrategies = Default::default();
+	let parse_execution_strategy = |s: &str| -> error::Result<service::ExecutionStrategy> {
+		match s {
+			"both" => Ok(service::ExecutionStrategy::Both),
+			"native" => Ok(service::ExecutionStrategy::NativeWhenPossible),
+			"wasm" => Ok(service::ExecutionStrategy::AlwaysWasm),
+			"native-else-wasm" => Ok(service::ExecutionStrategy::NativeElseWasm),
+			_ => bail!(create_input_err("Invalid execution mode specified")),
+		}
+	};
+	
+	if let Some(s) = matches.value_of("syncing-execution") {
+		execution_strategies.syncing = parse_execution_strategy(s)?; 
+	}
+	if let Some(s) = matches.value_of("importing-execution") {
+		execution_strategies.importing = parse_execution_strategy(s)?; 
+	}
+	if let Some(s) = matches.value_of("block-construction-execution") {
+		execution_strategies.block_construction = parse_execution_strategy(s)?; 
+	}
+	Ok(execution_strategies)
+}
+
+/// Parse clap::Matches into config and chain specification
+pub fn parse_matches<'a, F, S>(
+	spec_factory: S,
+	version: &VersionInfo,
+	impl_name: &'static str,
+	matches: &clap::ArgMatches<'a>,
+) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
@@ -351,26 +381,15 @@ where
 
 	let role =
 		if matches.is_present("light") {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeElseWasm;
 			service::Roles::LIGHT
-		} else if cli.validator || cli.shared_params.dev {
-			config.block_execution_strategy = service::ExecutionStrategy::Both;
+		} else if matches.is_present("validator") || matches.is_present("dev") {
 			service::Roles::AUTHORITY
 		} else {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeElseWasm;
 			service::Roles::FULL
 		};
 
-	if let Some(s) = matches.value_of("execution") {
-		config.block_execution_strategy = match s {
-			"both" => service::ExecutionStrategy::Both,
-			"native" => service::ExecutionStrategy::NativeWhenPossible,
-			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
-			_ => bail!(create_input_err("Invalid execution mode specified")),
-		};
-	}
-
+	config.execution_strategies = parse_execution_strategies(matches)?;
+	
 	config.roles = role;
 	let client_id = config.client_id();
 	fill_network_configuration(
@@ -546,28 +565,9 @@ where
 {
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path.to_string();
-
-	if let Some(s) = matches.value_of("execution") {
-		config.block_execution_strategy = match s {
-			"both" => service::ExecutionStrategy::Both,
-			"native" => service::ExecutionStrategy::NativeWhenPossible,
-			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
-			_ => return Err(error::ErrorKind::Input("Invalid block execution mode specified".to_owned()).into()),
-		};
-	}
-
-	if let Some(s) = matches.value_of("api-execution") {
-		config.api_execution_strategy = match s {
-			"both" => service::ExecutionStrategy::Both,
-			"native" => service::ExecutionStrategy::NativeWhenPossible,
-			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			"nativeElseWasm" => service::ExecutionStrategy::NativeElseWasm,
-			_ => return Err(error::ErrorKind::Input("Invalid API execution mode specified".to_owned()).into()),
-		};
-	}
-
-	let file: Box<Read> = match cli.input {
+	config.execution_strategies = parse_execution_strategies(matches)?;
+	
+	let file: Box<Read> = match matches.value_of("input") {
 		Some(filename) => Box::new(File::open(filename)?),
 		None => Box::new(stdin()),
 	};
