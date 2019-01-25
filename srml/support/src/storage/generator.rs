@@ -194,7 +194,7 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Storage>(key: &K, f: F, storage: &S) -> R;
 }
 
-// FIXME #1568 Remove this in favour of `decl_storage` macro.
+// FIXME #1466 Remove this in favour of `decl_storage` macro.
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 #[macro_export]
 macro_rules! storage_items {

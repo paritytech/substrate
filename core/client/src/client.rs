@@ -736,8 +736,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.apply_finality_with_block_hash(operation, parent_hash, None, last_best, make_notifications)?;
 		}
 
-		// TODO: correct path logic for when to execute this function
-		// https://github.com/paritytech/substrate/issues/1232
+		// FIXME #1232: correct path logic for when to execute this function
 		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
 
 		let is_new_best = finalized || match fork_choice {
@@ -1170,8 +1169,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// header may be on a dead fork -- the only leaves that are considered are
 		// those which can still be finalized.
 		//
-		// TODO: only issue this warning when not on a dead fork
-		// part of https://github.com/paritytech/substrate/issues/1558
+		// FIXME #1558 only issue this warning when not on a dead fork
 		warn!(
 			"Block {:?} exists in chain but not found when following all \
 			leaves backwards. Number limit = {:?}",
