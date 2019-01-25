@@ -329,11 +329,16 @@ fn make_ids(keys: &[Keyring]) -> Vec<(Ed25519AuthorityId, u64)> {
 		.collect()
 }
 
-fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) {
+fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) -> u64 {
+	use parking_lot::RwLock;
+
 	let mut finality_notifications = Vec::new();
 	let mut runtime = current_thread::Runtime::new().unwrap();
 
+	let highest_finalized = Arc::new(RwLock::new(0));
+
 	for (peer_id, key) in peers.iter().enumerate() {
+		let highest_finalized = highest_finalized.clone();
 		let (client, link) = {
 			let mut net = net.lock();
 			// temporary needed for some reason
@@ -345,7 +350,13 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 		};
 		finality_notifications.push(
 			client.finality_notification_stream()
-				.take_while(|n| Ok(n.header.number() < &blocks))
+				.take_while(move |n| {
+					let mut highest_finalized = highest_finalized.write();
+					if *n.header.number() > *highest_finalized {
+						*highest_finalized = *n.header.number();
+					}
+					Ok(n.header.number() < &blocks)
+				})
 				.for_each(|_| Ok(()))
 		);
 		fn assert_send<T: Send>(_: &T) { }
@@ -378,6 +389,10 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 		.map_err(|_| ());
 
 	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+
+	let highest_finalized = *highest_finalized.read();
+
+	highest_finalized
 }
 
 #[test]
@@ -683,8 +698,6 @@ fn consensus_changes_works() {
 
 #[test]
 fn sync_justifications_on_change_blocks() {
-	::env_logger::init();
-
 	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let peers_b = &[Keyring::Alice, Keyring::Bob];
 	let voters = make_ids(peers_b);
@@ -730,4 +743,29 @@ fn sync_justifications_on_change_blocks() {
 	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
 		net.lock().sync_steps(100);
 	}
+}
+
+#[test]
+fn doesnt_vote_on_the_tip_of_the_chain() {
+	::env_logger::init();
+
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let voters = make_ids(peers_a);
+	let api = TestApi::new(voters);
+	let mut net = GrandpaTestNet::new(api, 3);
+
+	// add 100 blocks
+	net.peer(0).push_blocks(100, false);
+	net.sync();
+
+	for i in 0..3 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 100,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	let highest = run_to_completion(75, net.clone(), peers_a);
+
+	// the highest block to be finalized will be 3/4 deep in the unfinalized chain
+	assert_eq!(highest, 75);
 }
