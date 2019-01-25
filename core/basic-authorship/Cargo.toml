@@ -14,3 +14,6 @@ consensus_common = { package = "substrate-consensus-common", path = "../../core/
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 inherents = { package = "substrate-inherents", path = "../inherents" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+
+[dev-dependencies]
+test-client = { package = "substrate-test-client", path = "../../core/test-client" }

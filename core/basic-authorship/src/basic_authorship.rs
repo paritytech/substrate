@@ -156,7 +156,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	now: Box<fn() -> time::Instant>,
+	now: Box<Fn() -> time::Instant>,
 }
 
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
@@ -243,4 +243,61 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 		Ok(substrate_block)
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use codec::Encode;
+	use std::cell::RefCell;
+	use consensus_common::{Environment, Proposer};
+	use test_client::keyring::Keyring;
+	use test_client::{self, runtime::{Extrinsic, Transfer}};
+
+	fn extrinsic(nonce: u64) -> Extrinsic {
+		let tx = Transfer {
+			amount: Default::default(),
+			nonce,
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Default::default(),
+		};
+		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		Extrinsic::Transfer(tx, signature)
+	}
+
+	#[test]
+	fn should_cease_building_block_when_deadline_is_reached() {
+		// given
+		let client = Arc::new(test_client::new());
+		let chain_api = transaction_pool::ChainApi::new(client.clone());
+		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+
+		txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)]).unwrap();
+
+		let proposer_factory = ProposerFactory {
+			client: client.clone(),
+			transaction_pool: txpool.clone(),
+		};
+
+		let mut proposer = proposer_factory.init(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&[]
+		).unwrap();
+
+		// when
+		let cell = RefCell::new(time::Instant::now());
+		proposer.now = Box::new(move || {
+			let new = *cell.borrow() + time::Duration::from_secs(2);
+			cell.replace(new)
+		});
+		let deadline = time::Duration::from_secs(3);
+		let block = proposer.propose(Default::default(), deadline).unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert_eq!(block.extrinsics().len(), 1);
+		assert_eq!(txpool.ready().count(), 2);
+	}
+
 }
