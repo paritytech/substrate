@@ -152,7 +152,13 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		self.heap.deallocate(addr);
 		debug_trace!(target: "sr-io", "free {}", addr);
 	}
-	fn ext_set_storage(&mut self, key_data: u32, key_len: u32, value_data: u32, value_len: u32) -> Result<(), UserError> {
+	fn ext_set_storage(
+		&mut self,
+		key_data: u32,
+		key_len: u32,
+		value_data: u32,
+		value_len: u32
+	) -> Result<(), UserError> {
 		let key = self.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
 		let value = self.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
 		if let Some(_preimage) = self.hash_lookup.get(&key) {
@@ -163,7 +169,15 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		self.ext.set_storage(key, value);
 		Ok(())
 	}
-	fn ext_set_child_storage(&mut self, storage_key_data: u32, storage_key_len: u32, key_data: u32, key_len: u32, value_data: u32, value_len: u32) -> Result<(), UserError> {
+	fn ext_set_child_storage(
+		&mut self,
+		storage_key_data: u32,
+		storage_key_len: u32,
+		key_data: u32,
+		key_len: u32,
+		value_data: u32,
+		value_len: u32
+	) -> Result<(), UserError> {
 		let storage_key = self.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_set_child_storage"))?;
 		let key = self.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_child_storage"))?;
 		let value = self.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_child_storage"))?;
@@ -187,7 +201,13 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		self.ext.set_child_storage(storage_key, key, value);
 		Ok(())
 	}
-	fn ext_clear_child_storage(&mut self, storage_key_data: u32, storage_key_len: u32, key_data: u32, key_len: u32) -> Result<(), UserError> {
+	fn ext_clear_child_storage(
+		&mut self,
+		storage_key_data: u32,
+		storage_key_len: u32,
+		key_data: u32,
+		key_len: u32
+	) -> Result<(), UserError> {
 		let storage_key = self.memory.get(
 			storage_key_data,
 			storage_key_len as usize
@@ -203,7 +223,11 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		self.ext.clear_child_storage(&storage_key, &key);
 		Ok(())
 	}
-	fn ext_clear_storage(&mut self, key_data: u32, key_len: u32) -> Result<(), UserError> {
+	fn ext_clear_storage(
+		&mut self,
+		key_data: u32,
+		key_len: u32
+	) -> Result<(), UserError> {
 		let key = self.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
 		debug_trace!(target: "wasm-trace", "*** Clearing storage: {}   [k={}]",
 			if let Some(_preimage) = self.hash_lookup.get(&key) {
@@ -214,11 +238,21 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		self.ext.clear_storage(&key);
 		Ok(())
 	}
-	fn ext_exists_storage(&self, key_data: u32, key_len: u32) -> Result<u32, UserError> {
+	fn ext_exists_storage(
+		&self,
+		key_data: u32,
+		key_len: u32
+	) -> Result<u32, UserError> {
 		let key = self.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_storage"))?;
 		Ok(if self.ext.exists_storage(&key) { 1 } else { 0 })
 	}
-	fn ext_exists_child_storage(&self, storage_key_data: u32, storage_key_len: u32, key_data: u32, key_len: u32) -> Result<u32, UserError> {
+	fn ext_exists_child_storage(
+		&self,
+		storage_key_data: u32,
+		storage_key_len: u32,
+		key_data: u32,
+		key_len: u32
+	) -> Result<u32, UserError> {
 		let storage_key = self.memory.get(
 			storage_key_data,
 			storage_key_len as usize
@@ -226,12 +260,20 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		let key = self.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
 		Ok(if self.ext.exists_child_storage(&storage_key, &key) { 1 } else { 0 })
 	}
-	fn ext_clear_prefix(&mut self, prefix_data: u32, prefix_len: u32) -> Result<(), UserError> {
+	fn ext_clear_prefix(
+		&mut self,
+		prefix_data: u32,
+		prefix_len: u32
+	) -> Result<(), UserError> {
 		let prefix = self.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
 		self.ext.clear_prefix(&prefix);
 		Ok(())
 	}
-	fn ext_kill_child_storage(&mut self, storage_key_data: u32, storage_key_len: u32) -> Result<(), UserError> {
+	fn ext_kill_child_storage(
+		&mut self,
+		storage_key_data: u32,
+		storage_key_len: u32
+	) -> Result<(), UserError> {
 		let storage_key = self.memory.get(
 			storage_key_data,
 			storage_key_len as usize
@@ -240,7 +282,12 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		Ok(())
 	}
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
-	fn ext_get_allocated_storage(&mut self, key_data: u32, key_len: u32, written_out: u32) -> Result<u32, UserError> {
+	fn ext_get_allocated_storage(
+		&mut self,
+		key_data: u32,
+		key_len: u32,
+		written_out: u32
+	) -> Result<u32, UserError> {
 		let key = self.memory.get(
 			key_data,
 			key_len as usize
@@ -274,7 +321,14 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		}
 	}
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
-	fn ext_get_allocated_child_storage(&mut self, storage_key_data: u32, storage_key_len: u32, key_data: u32, key_len: u32, written_out: u32) -> Result<u32, UserError> {
+	fn ext_get_allocated_child_storage(
+		&mut self,
+		storage_key_data: u32,
+		storage_key_len: u32,
+		key_data: u32,
+		key_len: u32,
+		written_out: u32
+	) -> Result<u32, UserError> {
 		let storage_key = self.memory.get(
 			storage_key_data,
 			storage_key_len as usize
@@ -313,7 +367,14 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		}
 	}
 	// return u32::max_value() if no value exists for the key.
-	fn ext_get_storage_into(&mut self, key_data: u32, key_len: u32, value_data: u32, value_len: u32, value_offset: u32) -> Result<u32, UserError> {
+	fn ext_get_storage_into(
+		&mut self,
+		key_data: u32,
+		key_len: u32,
+		value_data: u32,
+		value_len: u32,
+		value_offset: u32
+	) -> Result<u32, UserError> {
 		let key = self.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_get_storage_into"))?;
 		let maybe_value = self.ext.storage(&key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]",
@@ -340,7 +401,16 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		}
 	}
 	// return u32::max_value() if no value exists for the key.
-	fn ext_get_child_storage_into(&mut self, storage_key_data: u32, storage_key_len: u32, key_data: u32, key_len: u32, value_data: u32, value_len: u32, value_offset: u32) -> Result<u32, UserError> {
+	fn ext_get_child_storage_into(
+		&mut self,
+		storage_key_data: u32,
+		storage_key_len: u32,
+		key_data: u32,
+		key_len: u32,
+		value_data: u32,
+		value_len: u32,
+		value_offset: u32
+	) -> Result<u32, UserError> {
 		let storage_key = self.memory.get(
 			storage_key_data,
 			storage_key_len as usize
@@ -374,12 +444,20 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 			Ok(u32::max_value())
 		}
 	}
-	fn ext_storage_root(&mut self, result: u32) -> Result<(), UserError> {
+	fn ext_storage_root(
+		&mut self,
+		result: u32
+	) -> Result<(), UserError> {
 		let r = self.ext.storage_root();
 		self.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	}
-	fn ext_child_storage_root(&mut self, storage_key_data: u32, storage_key_len: u32, written_out: u32) -> Result<u32, UserError> {
+	fn ext_child_storage_root(
+		&mut self,
+		storage_key_data: u32,
+		storage_key_len: u32,
+		written_out: u32
+	) -> Result<u32, UserError> {
 		let storage_key = self.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let r = self.ext.child_storage_root(&storage_key);
 		if let Some(value) = r {
@@ -394,7 +472,13 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 			Ok(0)
 		}
 	}
-	fn ext_storage_changes_root(&mut self, parent_hash_data: u32, parent_hash_len: u32, parent_number: u64, result: u32) -> Result<u32, UserError> {
+	fn ext_storage_changes_root(
+		&mut self,
+		parent_hash_data: u32,
+		parent_hash_len: u32,
+		parent_number: u64,
+		result: u32
+	) -> Result<u32, UserError> {
 		let mut parent_hash = H256::default();
 		if parent_hash_len != parent_hash.as_ref().len() as u32 {
 			return Err(UserError("Invalid parent_hash_len in ext_storage_changes_root").into());
@@ -408,7 +492,13 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		}
 		Ok(if r.is_some() { 1u32 } else { 0u32 })
 	}
-	fn ext_blake2_256_enumerated_trie_root(&mut self, values_data: u32, lens_data: u32, lens_len: u32, result: u32) -> Result<(), UserError> {
+	fn ext_blake2_256_enumerated_trie_root(
+		&mut self,
+		values_data: u32,
+		lens_data: u32,
+		lens_len: u32,
+		result: u32
+	) -> Result<(), UserError> {
 		let values = (0..lens_len)
 			.map(|i| self.memory.read_primitive(lens_data + i * 4))
 			.collect::<Result<Vec<u32>, UserError>>()?
@@ -426,7 +516,12 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 	fn ext_chain_id(&self) -> Result<u64, UserError> {
 		Ok(self.ext.chain_id())
 	}
-	fn ext_twox_128(&mut self, data: u32, len: u32, out: u32) -> Result<(), UserError> {
+	fn ext_twox_128(
+		&mut self,
+		data: u32,
+		len: u32,
+		out: u32
+	) -> Result<(), UserError> {
 		let result = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
 			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
@@ -518,7 +613,17 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		self.sandbox_store.instance_teardown(instance_idx)?;
 		Ok(())
 	}
-	fn ext_sandbox_invoke(&mut self, instance_idx: u32, export_ptr: u32, export_len: u32, args_ptr: u32, args_len: u32, return_val_ptr: u32, return_val_len: u32, state: u32) -> Result<u32, UserError> {
+	fn ext_sandbox_invoke(
+		&mut self,
+		instance_idx: u32,
+		export_ptr: u32,
+		export_len: u32,
+		args_ptr: u32,
+		args_len: u32,
+		return_val_ptr: u32,
+		return_val_len: u32,
+		state: u32
+	) -> Result<u32, UserError> {
 		use codec::{Decode, Encode};
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
@@ -562,7 +667,13 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 		let mem_idx = self.sandbox_store.new_memory(initial, maximum)?;
 		Ok(mem_idx)
 	}
-	fn ext_sandbox_memory_get(&mut self, memory_idx: u32, offset: u32, buf_ptr: u32, buf_len: u32) -> Result<u32, UserError> {
+	fn ext_sandbox_memory_get(
+		&mut self,
+		memory_idx: u32,
+		offset: u32,
+		buf_ptr: u32,
+		buf_len: u32
+	) -> Result<u32, UserError> {
 		let sandboxed_memory = self.sandbox_store.memory(memory_idx)?;
 
 		match MemoryInstance::transfer(
@@ -576,7 +687,13 @@ impl<'e, E: Externalities<Blake2Hasher> + 'e> FunctionExecutor<'e, E> {
 			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 		}
 	}
-	fn ext_sandbox_memory_set(&mut self, memory_idx: u32, offset: u32, val_ptr: u32, val_len: u32) -> Result<u32, UserError> {
+	fn ext_sandbox_memory_set(
+		&mut self,
+		memory_idx: u32,
+		offset: u32,
+		val_ptr: u32,
+		val_len: u32
+	) -> Result<u32, UserError> {
 		let sandboxed_memory = self.sandbox_store.memory(memory_idx)?;
 
 		match MemoryInstance::transfer(
