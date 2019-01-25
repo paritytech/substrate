@@ -283,6 +283,14 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
+	/// Gets a total length of all executed extrinsics.
+	pub fn extrinsics_len() -> u32 {
+		let index = Self::extrinsic_index().unwrap_or_default();
+		(0..index).fold(0u32, |acc, idx| {
+			acc + <ExtrinsicData<T>>::get(idx).len() as u32
+		})
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.

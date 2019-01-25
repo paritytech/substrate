@@ -291,6 +291,8 @@ pub enum ApplyError {
 	Future = 2,
 	/// Sending account had too low a balance.
 	CantPay = 3,
+	/// Block is full, no more extrinsics can be applied.
+	FullBlock = 255,
 }
 
 impl codec::Encode for ApplyError {

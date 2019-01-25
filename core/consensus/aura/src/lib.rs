@@ -322,10 +322,9 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 						};
 
 						let remaining_duration = slot_info.remaining_duration();
-						// deadline our production to approx. the end of the
-						// slot
+						// deadline our production to approx. the end of the slot
 						Timeout::new(
-							proposer.propose(slot_info.inherent_data).into_future(),
+							proposer.propose(slot_info.inherent_data, remaining_duration).into_future(),
 							remaining_duration,
 						)
 					} else {

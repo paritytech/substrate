@@ -54,11 +54,14 @@ use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
 
 mod internal {
+	pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
+
 	pub enum ApplyError {
 		BadSignature(&'static str),
 		Stale,
 		Future,
 		CantPay,
+		FullBlock,
 	}
 
 	pub enum ApplyOutcome {
@@ -152,6 +155,7 @@ impl<
 			Err(internal::ApplyError::BadSignature(_)) => Err(ApplyError::BadSignature),
 			Err(internal::ApplyError::Stale) => Err(ApplyError::Stale),
 			Err(internal::ApplyError::Future) => Err(ApplyError::Future),
+			Err(internal::ApplyError::FullBlock) => Err(ApplyError::FullBlock),
 		}
 	}
 
@@ -164,6 +168,7 @@ impl<
 			Err(internal::ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
 			Err(internal::ApplyError::BadSignature(_)) => panic!("All extrinsics should be properly signed"),
 			Err(internal::ApplyError::Stale) | Err(internal::ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
+			Err(internal::ApplyError::FullBlock) => panic!("Extrinsics should not exceed block limit"),
 		}
 	}
 
@@ -171,6 +176,11 @@ impl<
 	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
+
+		// Check the size of the block if that extrinsic is applied.
+		if <system::Module<System>>::extrinsics_len() + encoded_len as u32 > internal::MAX_TRANSACTIONS_SIZE {
+			return Err(internal::ApplyError::FullBlock);
+		}
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
