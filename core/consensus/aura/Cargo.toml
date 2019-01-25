@@ -21,7 +21,7 @@ futures = "0.1.17"
 tokio = "0.1.7"
 parking_lot = "0.7.1"
 error-chain = "0.12"
-log = "0.3"
+log = "0.4"
 consensus_common = { package = "substrate-consensus-common", path = "../common" }
 
 [dev-dependencies]
@@ -30,4 +30,4 @@ substrate-executor = { path = "../../executor" }
 network = { package = "substrate-network", path = "../../network", features = ["test-helpers"]}
 service = { package = "substrate-service", path = "../../service" }
 test_client = { package = "substrate-test-client", path = "../../test-client" }
-env_logger = "0.4"
+env_logger = "0.6"

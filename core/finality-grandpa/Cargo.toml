@@ -27,7 +27,7 @@ features = ["derive-codec"]
 substrate-network = { path = "../network", features = ["test-helpers"] }
 substrate-keyring = { path = "../keyring" }
 substrate-test-client = { path = "../test-client"}
-env_logger = "0.5"
+env_logger = "0.6"
 
 [features]
 default = ["service-integration"]

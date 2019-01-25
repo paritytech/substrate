@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 clap = "~2.32"
 backtrace = "0.3"
-env_logger = "0.5"
+env_logger = "0.6"
 error-chain = "0.12"
 log = "0.4"
 atty = "0.2"
