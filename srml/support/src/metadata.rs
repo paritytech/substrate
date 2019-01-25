@@ -391,7 +391,6 @@ mod tests {
 					FnEncode(||
 						Some(OuterDispatchCall {
 							name: DecodeDifferent::Encode("EventModule"),
-							prefix: DecodeDifferent::Encode("event_module"),
 							index: 0,
 						})
 					)
@@ -440,7 +439,6 @@ mod tests {
 					FnEncode(||
 						Some(OuterDispatchCall {
 							name: DecodeDifferent::Encode("EventModule2"),
-							prefix: DecodeDifferent::Encode("event_module2"),
 							index: 1,
 						})
 					)

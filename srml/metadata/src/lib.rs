@@ -315,7 +315,6 @@ pub struct OuterDispatchMetadata {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct OuterDispatchCall {
 	pub name: DecodeDifferentStr,
-	pub prefix: DecodeDifferentStr,
 	pub index: u16,
 }
 

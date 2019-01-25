@@ -887,7 +887,6 @@ macro_rules! __impl_outer_dispatch_metadata {
 				pub fn [< __module_dispatch_ $module >] () -> Option<$crate::dispatch::OuterDispatchCall> {
 					return Some($crate::dispatch::OuterDispatchCall {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
-						prefix: $crate::dispatch::DecodeDifferent::Encode(stringify!($module)),
 						index: $index,
 					})
 				}
