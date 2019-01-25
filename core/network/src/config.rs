@@ -16,7 +16,7 @@
 
 //! Configuration for the networking layer of Substrate.
 
-pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration};
+pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, Secret};
 
 use chain::Client;
 use codec;

@@ -67,7 +67,6 @@ pub use primitives::hash::H256;
 use primitives::{Ed25519AuthorityId, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
-use consensus_aura::api as aura_api;
 use inherents::{CheckInherentsResult, InherentData};
 
 /// Test runtime version.
@@ -278,7 +277,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl aura_api::AuraApi<Block> for Runtime {
+	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 { 1 }
 	}
 }

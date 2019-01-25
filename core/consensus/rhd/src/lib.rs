@@ -33,40 +33,12 @@
 #![cfg(feature="rhd")]
 // FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020
 
-extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate substrate_client as client;
-extern crate substrate_consensus_common as consensus;
-extern crate substrate_transaction_pool as transaction_pool;
-extern crate srml_system;
-extern crate srml_support as runtime_support;
-extern crate sr_primitives as runtime_primitives;
-extern crate sr_version as runtime_version;
-extern crate sr_io as runtime_io;
-
-extern crate parking_lot;
-extern crate rhododendron;
-extern crate futures;
-extern crate exit_future;
-extern crate tokio;
-
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate error_chain;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-#[cfg(test)]
-extern crate substrate_keyring;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{self, Instant, Duration};
 
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
+use parity_codec_derive::{Decode, Encode};
 use consensus::offline_tracker::OfflineTracker;
 use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};

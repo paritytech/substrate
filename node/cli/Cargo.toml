@@ -28,7 +28,6 @@ substrate-consensus-aura = { path = "../../core/consensus/aura" }
 substrate-finality-grandpa = { path = "../../core/finality-grandpa" }
 sr-primitives = { path = "../../core/sr-primitives" }
 node-executor = { path = "../executor" }
-structopt = "0.2.13"
 substrate-keystore = { path = "../../core/keystore" }
 
 [dev-dependencies]
@@ -36,5 +35,4 @@ substrate-service-test = { path = "../../core/service/test" }
 
 [build-dependencies]
 substrate-cli = { path = "../../core/cli" }
-structopt = "0.2.13"
-clap = "~2.32"
+structopt = "0.2"

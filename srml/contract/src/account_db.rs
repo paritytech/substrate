@@ -17,11 +17,11 @@
 //! Auxilliaries to help with managing partial changes to accounts state.
 
 use super::{CodeHash, CodeHashOf, StorageOf, Trait};
+use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_support::{StorageMap, StorageDoubleMap};
-use {balances, system};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,

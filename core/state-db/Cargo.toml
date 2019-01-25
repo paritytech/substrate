@@ -11,4 +11,4 @@ parity-codec = "2.2"
 parity-codec-derive = "2.1"
 
 [dev-dependencies]
-env_logger = "0.4"
+env_logger = "0.6"

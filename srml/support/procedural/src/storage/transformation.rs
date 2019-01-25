@@ -283,15 +283,14 @@ fn decl_store_extra_genesis(
 	}
 
 
-	let serde_bug_bound = if serde_complete_bound.len() > 0 {
-
+	let serde_bug_bound = if !serde_complete_bound.is_empty() {
 		let mut b_ser = String::new();
 		let mut b_dser = String::new();
-		for bound in serde_complete_bound {
+		serde_complete_bound.into_iter().for_each(|bound| {
 			let stype = quote!(#bound);
-			b_ser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::Serialize, ");
-			b_dser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::de::DeserializeOwned, ");
-		}
+			b_ser.push_str(&format!("{} : {}::serde::Serialize, ", stype, scrate));
+			b_dser.push_str(&format!("{} : {}::serde::de::DeserializeOwned, ", stype, scrate));
+		});
 
 		quote! {
 			#[serde(bound(serialize = #b_ser))]
@@ -336,7 +335,7 @@ fn decl_store_extra_genesis(
 		};
 		quote!{
 
-			#[derive(Serialize, Deserialize)]
+			#[derive(#scrate::Serialize, #scrate::Deserialize)]
 			#[cfg(feature = "std")]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
@@ -730,4 +729,3 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 		map_key,
 	}
 }
-
