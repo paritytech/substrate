@@ -600,10 +600,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Self: ProvideRuntimeApi,
 		<Self as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>
 	{
-		println!("client.new_block -----> start execution_strategies {:?}", self.execution_strategies());
-		let b = block_builder::BlockBuilder::new(self);
-		println!("client.new_block -----> end execution_strategies {:?}", self.execution_strategies());
-		b
+		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
