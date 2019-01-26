@@ -101,7 +101,6 @@ pub fn execute_block(block: Block) {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
-
 }
 
 /// Execute a transaction outside of the block execution function.
@@ -174,7 +173,7 @@ pub fn finalise_block() -> Header {
 	if let Some(new_authorities) = <NewAuthorities>::take() {
 		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
-	
+
 	Header {
 		number,
 		extrinsics_root,
