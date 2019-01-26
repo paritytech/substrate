@@ -36,7 +36,6 @@ pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
 	block_id: BlockId<Block>,
 }
 
-
 impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT<Hash=H256>,
@@ -58,7 +57,6 @@ where
 
 		let parent_hash = api.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
-		
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
@@ -66,10 +64,8 @@ where
 			parent_hash,
 			Default::default()
 		);
-		
 		let api = api.runtime_api();
 		api.initialise_block(block_id, &header)?;
-		
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
@@ -108,6 +104,7 @@ where
 			self.header.extrinsics_root().clone(),
 			HashFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Encode::encode)),
 		);
+
 		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
 	}
 }
