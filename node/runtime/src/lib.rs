@@ -239,7 +239,7 @@ construct_runtime!(
 		CouncilSeats: council_seats::{Config<T>},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Config<T>, Event<T>},
+		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
 	}
 );
