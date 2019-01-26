@@ -314,14 +314,13 @@ fn parse_execution_strategies(matches: &clap::ArgMatches) -> error::Result<Execu
 			_ => bail!(create_input_err("Invalid execution mode specified")),
 		}
 	};
-	
-	if let Some(s) = matches.value_of("syncing-execution") {
+	if let Some(s) = matches.value_of("syncing_execution") {
 		execution_strategies.syncing = parse_execution_strategy(s)?; 
 	}
-	if let Some(s) = matches.value_of("importing-execution") {
+	if let Some(s) = matches.value_of("importing_execution") {
 		execution_strategies.importing = parse_execution_strategy(s)?; 
 	}
-	if let Some(s) = matches.value_of("block-construction-execution") {
+	if let Some(s) = matches.value_of("block_construction_execution") {
 		execution_strategies.block_construction = parse_execution_strategy(s)?; 
 	}
 	Ok(execution_strategies)
@@ -389,7 +388,6 @@ where
 		};
 
 	config.execution_strategies = parse_execution_strategies(matches)?;
-	
 	config.roles = role;
 	let client_id = config.client_id();
 	fill_network_configuration(
@@ -566,7 +564,7 @@ where
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path.to_string();
 	config.execution_strategies = parse_execution_strategies(matches)?;
-	
+
 	let file: Box<Read> = match matches.value_of("input") {
 		Some(filename) => Box::new(File::open(filename)?),
 		None => Box::new(stdin()),

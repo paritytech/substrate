@@ -33,9 +33,11 @@ use crate::blockchain::Backend as ChainBackend;
 use crate::call_executor::CallExecutor;
 use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use crate::light::fetcher::{Fetcher, RemoteCallRequest};
+use crate::ExecutionStrategies;
 use executor::{RuntimeVersion, NativeVersion};
 use heapsize::HeapSizeOf;
 use trie::MemoryDB;
+
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -109,7 +111,7 @@ where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		_prepare_environment_block: PB,
-		_manager: ExecutionManager<EM>,
+		_execution_strategies: ExecutionStrategies,
 		_native_call: Option<NC>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty

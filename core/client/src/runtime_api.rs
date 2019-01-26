@@ -18,7 +18,7 @@
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use state_machine::OverlayedChanges;
+pub use state_machine::{OverlayedChanges, ExecutionStrategy};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::NativeOrEncoded;

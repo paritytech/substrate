@@ -207,6 +207,30 @@ impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 	}
 }
 
+impl ExecutionStrategy {
+	/// Gets the corresponding manager for the execution strategy.
+	pub fn get_manager<E: std::fmt::Debug, R: Decode + Encode>(self) -> 
+		ExecutionManager<fn(
+			Result<NativeOrEncoded<R>, E>,
+			Result<NativeOrEncoded<R>, E>
+		) -> Result<NativeOrEncoded<R>, E>> 
+		{
+		match self {
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!(
+					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
+					wasm_result,
+					native_result
+				);
+				wasm_result
+			}),
+		}
+	}
+}
+
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
 pub fn native_when_possible<E, R: Decode>() ->
 	ExecutionManager<
@@ -276,19 +300,7 @@ where
 		exec,
 		method,
 		call_data,
-		match strategy {
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!(
-					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
-					wasm_result,
-					native_result
-				);
-				wasm_result
-			}),
-		},
+		strategy.get_manager(),
 		true,
 		None,
 	)
@@ -441,7 +453,7 @@ where
 	) -> Result<NativeOrEncoded<R>, Exec::Error>
 {
 	let strategy: ExecutionStrategy = (&manager).into();
-	println!("running execute using consensus failure handler ----------------------------->>>>>>> {:?}", strategy);
+	println!(">>> {:?} {}", strategy, method);
 	// read changes trie configuration. The reason why we're doing it here instead of the
 	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
 	// proof-of-execution on light clients. And the proof is recorded by the backend which
@@ -530,6 +542,7 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
+	println!(">>> {:?} (native_else_wasm)", method);
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let (result, _, _) = execute_using_consensus_failure_handler::
 		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> _>
@@ -579,6 +592,7 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
+	println!(">>> {:?} (native_else_wasm)", method);
 	execute_using_consensus_failure_handler::
 		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> _>
 	(

@@ -28,6 +28,7 @@ use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
 
 use crate::backend;
 use crate::error;
+use crate::ExecutionStrategies;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -70,7 +71,7 @@ where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<B>>,
 		prepare_environment_block: PB,
-		manager: ExecutionManager<EM>,
+		execution_strategies: ExecutionStrategies,
 		native_call: Option<NC>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -201,9 +202,11 @@ where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		prepare_environment_block: PB,
-		manager: ExecutionManager<EM>,
+		execution_strategies: ExecutionStrategies,
 		native_call: Option<NC>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
+
+		let manager = execution_strategies.block_construction.get_manager();
 		let state = self.backend.state_at(*at)?;
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
