@@ -1136,6 +1136,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
 				let error = || {
+					debug!(target: "afg", "rejecting change: {} is in the same chain as {}", hash, base);
 					Err(ConsensusErrorKind::ClientImport("Incorrect base hash".to_string()).into())
 				};
 
