@@ -46,7 +46,7 @@ extern crate sr_primitives as primitives;
 extern crate srml_system as system;
 
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use primitives::traits::{Member, SimpleArithmetic, Zero};
+use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {
@@ -66,7 +66,7 @@ decl_module! {
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
-		fn issue(origin, total: T::Balance) {
+		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
 			let id = Self::next_asset_id();
@@ -79,10 +79,15 @@ decl_module! {
 		}
 
 		/// Move some assets from one holder to another.
-		fn transfer(origin, id: AssetId, target: T::AccountId, amount: T::Balance) {
+		fn transfer(origin,
+			#[compact] id: AssetId,
+			target: <T::Lookup as StaticLookup>::Source,
+			#[compact] amount: T::Balance
+		) {
 			let origin = ensure_signed(origin)?;
 			let origin_account = (id, origin.clone());
 			let origin_balance = <Balances<T>>::get(&origin_account);
+			let target = T::Lookup::lookup(target)?;
 			ensure!(!amount.is_zero(), "transfer amount should be non-zero");
 			ensure!(origin_balance >= amount, "origin account balance must be greater than or equal to the transfer amount");
 
@@ -92,7 +97,7 @@ decl_module! {
 		}
 
 		/// Destroy any assets of `id` owned by `origin`.
-		fn destroy(origin, id: AssetId) {
+		fn destroy(origin, #[compact] id: AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, origin.clone()));
 			ensure!(!balance.is_zero(), "origin balance should be non-zero");
@@ -151,7 +156,11 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
-	use primitives::{BuildStorage, traits::{BlakeTwo256}, testing::{Digest, DigestItem, Header}};
+	use primitives::{
+		BuildStorage,
+		traits::{BlakeTwo256, IdentityLookup},
+		testing::{Digest, DigestItem, Header}
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -170,6 +179,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
+		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;

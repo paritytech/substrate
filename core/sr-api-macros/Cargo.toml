@@ -18,3 +18,8 @@ substrate-test-client = { path = "../test-client" }
 sr-primitives = { path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
 substrate-primitives = { path = "../primitives" }
+criterion = "0.2"
+
+[[bench]]
+name = "bench"
+harness = false

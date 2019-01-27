@@ -19,13 +19,15 @@
 use rstd::prelude::*;
 
 use codec::{Decode, Encode, Codec, Input};
-use traits::{self, Member, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeHash};
+use traits::{self, Member, DigestItem as DigestItemT, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
 
+/// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 pub struct Digest<Item> {
+	/// A list of logs in the digest.
 	pub logs: Vec<Item>,
 }
 
@@ -57,7 +59,7 @@ impl<Item> traits::Digest for Digest<Item> where
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum DigestItem<Hash, AuthorityId> {
 	/// System digest item announcing that authorities set has been changed
 	/// in the block. Contains the new set of authorities.
@@ -70,6 +72,15 @@ pub enum DigestItem<Hash, AuthorityId> {
 	Seal(u64, Signature),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(Vec<u8>),
+}
+
+#[cfg(feature = "std")]
+impl<Hash: Encode, AuthorityId: Encode> ::serde::Serialize for DigestItem<Hash, AuthorityId> {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| {
+			::substrate_primitives::bytes::serialize(bytes, seq)
+		})
+	}
 }
 
 
@@ -123,8 +134,8 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 }
 
 impl<
-	Hash: Codec + Member + MaybeSerializeDebug,
-	AuthorityId: Codec + Member + MaybeSerializeDebug + MaybeHash
+	Hash: Codec + Member,
+	AuthorityId: Codec + Member + MaybeHash,
 > traits::DigestItem for DigestItem<Hash, AuthorityId> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;
@@ -166,6 +177,7 @@ impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId>
 }
 
 impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member> DigestItemRef<'a, Hash, AuthorityId> {
+	/// Cast this digest item into `AuthoritiesChange`.
 	pub fn as_authorities_change(&self) -> Option<&'a [AuthorityId]> {
 		match *self {
 			DigestItemRef::AuthoritiesChange(ref authorities) => Some(authorities),
@@ -173,6 +185,7 @@ impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member> DigestItemRef<'a, Ha
 		}
 	}
 
+	/// Cast this digest item into `ChangesTrieRoot`.
 	pub fn as_changes_trie_root(&self) -> Option<&'a Hash> {
 		match *self {
 			DigestItemRef::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
@@ -205,5 +218,27 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 		}
 
 		v
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_serialize_digest() {
+		let digest = Digest {
+			logs: vec![
+				DigestItem::AuthoritiesChange(vec![1]),
+				DigestItem::ChangesTrieRoot(4),
+				DigestItem::Seal(1, Signature::from_low_u64_be(15)),
+				DigestItem::Other(vec![1, 2, 3]),
+			],
+		};
+
+		assert_eq!(
+			::serde_json::to_string(&digest).unwrap(),
+			r#"{"logs":["0x010401000000","0x0204000000","0x0301000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f","0x000c010203"]}"#
+		);
 	}
 }

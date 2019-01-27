@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::testing::{Digest, DigestItem, Header};
+use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, system};
@@ -39,14 +39,15 @@ impl system::Trait for Runtime {
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
 	type AccountId = u64;
+	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
 	type Log = DigestItem;
 }
 impl Trait for Runtime {
 	type Balance = u64;
-	type AccountIndex = u64;
 	type OnFreeBalanceZero = ();
+	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();
 	type Event = ();
 }
@@ -103,7 +104,6 @@ impl ExtBuilder {
 			existential_deposit: self.existential_deposit,
 			transfer_fee: self.transfer_fee,
 			creation_fee: self.creation_fee,
-			reclaim_rebate: 0,
 		}.build_storage().unwrap().0);
 		t.into()
 	}

@@ -28,6 +28,8 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
+extern crate tiny_keccak;
+extern crate secp256k1;
 extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;
 #[cfg_attr(test, macro_use)]
@@ -63,6 +65,7 @@ mod wasm_executor;
 #[macro_use]
 mod native_executor;
 mod sandbox;
+mod heap;
 
 pub mod error;
 pub use wasm_executor::WasmExecutor;

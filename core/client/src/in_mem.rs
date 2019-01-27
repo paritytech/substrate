@@ -19,20 +19,20 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use error;
-use backend::{self, NewBlockState};
-use light;
-use primitives::storage::well_known_keys;
+use crate::error;
+use crate::backend::{self, NewBlockState};
+use crate::light;
+use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
 use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
-use blockchain::{self, BlockStatus, HeaderBackend};
+use crate::blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
-use state_machine::InMemoryChangesTrieStorage;
+use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use leaves::LeafSet;
+use crate::leaves::LeafSet;
 use trie::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
@@ -166,7 +166,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) -> ::error::Result<()> {
+	) -> crate::error::Result<()> {
 		let number = header.number().clone();
 		let best_tree_route = match new_state.is_best() {
 			false => None,
@@ -175,7 +175,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				if &best_hash == header.parent_hash() {
 					None
 				} else {
-					let route = ::blockchain::tree_route(
+					let route = crate::blockchain::tree_route(
 						self,
 						BlockId::Hash(best_hash),
 						BlockId::Hash(*header.parent_hash()),
@@ -220,6 +220,11 @@ impl<Block: BlockT> Blockchain<Block> {
 		}
 
 		Ok(())
+	}
+
+	/// Get total number of blocks.
+	pub fn blocks_count(&self) -> usize {
+		self.storage.read().blocks.len()
 	}
 
 	/// Compare this blockchain with another in-mem blockchain
@@ -413,7 +418,8 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: InMemory<H>,
 	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
-	aux: Option<Vec<(Vec<u8>, Option<Vec<u8>>)>>,
+	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 }
 
 impl<Block, H> backend::BlockImportOperation<Block, H> for BlockImportOperation<Block, H>
@@ -485,14 +491,19 @@ where
 		Ok(root)
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+	fn insert_aux<I>(&mut self, ops: I) -> error::Result<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux = Some(ops.into_iter().collect());
+		self.aux.append(&mut ops.into_iter().collect());
 		Ok(())
 	}
 
 	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()> {
+		Ok(())
+	}
+
+	fn mark_finalized(&mut self, block: BlockId<Block>, justification: Option<Justification>) -> error::Result<()> {
+		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
 }
@@ -505,7 +516,7 @@ where
 	H::Out: HeapSizeOf + Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
-	changes_trie_storage: InMemoryChangesTrieStorage<H>,
+	changes_trie_storage: ChangesTrieStorage<H>,
 	blockchain: Blockchain<Block>,
 }
 
@@ -519,7 +530,7 @@ where
 	pub fn new() -> Backend<Block, H> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
-			changes_trie_storage: InMemoryChangesTrieStorage::new(),
+			changes_trie_storage: ChangesTrieStorage(InMemoryChangesTrieStorage::new()),
 			blockchain: Blockchain::new(),
 		}
 	}
@@ -555,25 +566,33 @@ where
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory<H>;
-	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
+	type ChangesTrieStorage = ChangesTrieStorage<H>;
 
-	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
-		let state = match block {
-			BlockId::Hash(ref h) if h.clone() == Default::default() => Self::State::default(),
-			_ => self.state_at(block)?,
-		};
-
+	fn begin_operation(&self) -> error::Result<Self::BlockImportOperation> {
+		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
 		Ok(BlockImportOperation {
 			pending_block: None,
 			pending_authorities: None,
-			old_state: state,
+			old_state,
 			new_state: None,
 			changes_trie_update: None,
-			aux: None,
+			aux: Default::default(),
+			finalized_blocks: Default::default(),
 		})
 	}
 
+	fn begin_state_operation(&self, operation: &mut Self::BlockImportOperation, block: BlockId<Block>) -> error::Result<()> {
+		operation.old_state = self.state_at(block)?;
+		Ok(())
+	}
+
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> error::Result<()> {
+		if !operation.finalized_blocks.is_empty() {
+			for (block, justification) in operation.finalized_blocks {
+				self.blockchain.finalize_header(block, justification)?;
+			}
+		}
+
 		if let Some(pending_block) = operation.pending_block {
 			let old_state = &operation.old_state;
 			let (header, body, justification) = pending_block.block.into_inner();
@@ -587,7 +606,7 @@ where
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();
-					self.changes_trie_storage.insert(header.number().as_(), changes_trie_root, changes_trie_update);
+					self.changes_trie_storage.0.insert(header.number().as_(), changes_trie_root, changes_trie_update);
 				}
 			}
 
@@ -598,9 +617,10 @@ where
 			}
 		}
 
-		if let Some(ops) = operation.aux {
-			self.blockchain.write_aux(ops);
+		if !operation.aux.is_empty() {
+			self.blockchain.write_aux(operation.aux);
 		}
+
 		Ok(())
 	}
 
@@ -617,6 +637,13 @@ where
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
+		match block {
+			BlockId::Hash(h) if h == Default::default() => {
+				return Ok(Self::State::default());
+			},
+			_ => {},
+		}
+
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
 			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
@@ -649,6 +676,26 @@ impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
 		};
 
 		self.authorities_at.read().get(&hash).cloned().unwrap_or(None)
+	}
+}
+
+/// Prunable in-memory changes trie storage.
+pub struct ChangesTrieStorage<H: Hasher>(InMemoryChangesTrieStorage<H>) where H::Out: HeapSizeOf;
+impl<H: Hasher> backend::PrunableStateChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn oldest_changes_trie_block(&self, _config: &ChangesTrieConfiguration, _best_finalized: u64) -> u64 {
+		0
+	}
+}
+
+impl<H: Hasher> state_machine::ChangesTrieRootsStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn root(&self, anchor: &ChangesTrieAnchorBlockId<H::Out>, block: u64) -> Result<Option<H::Out>, String> {
+		self.0.root(anchor, block)
+	}
+}
+
+impl<H: Hasher> state_machine::ChangesTrieStorage<H> for ChangesTrieStorage<H> where H::Out: HeapSizeOf {
+	fn get(&self, key: &H::Out) -> Result<Option<state_machine::DBValue>, String> {
+		self.0.get(key)
 	}
 }
 

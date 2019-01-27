@@ -140,13 +140,17 @@ where
 			))
 			.unwrap_or_else(|i| i);
 
+		debug!(target: "afg", "Inserting potential set change at block {:?}.",
+			(&pending.canon_height, &pending.canon_hash));
+
 		self.pending_changes.insert(idx, pending);
+
+		debug!(target: "afg", "There are now {} pending changes.", self.pending_changes.len());
 
 		Ok(())
 	}
 
 	/// Inspect pending changes.
-	#[cfg(test)]
 	pub(crate) fn pending_changes(&self) -> &[PendingChange<H, N>] {
 		&self.pending_changes
 	}
@@ -229,12 +233,14 @@ where
 		for change in self.pending_changes.iter() {
 			if change.effective_number() > just_finalized { break };
 
-			// check if the block that signalled the change is canonical in
-			// our chain.
-			match canonical(change.canon_height.clone())? {
-				Some(ref canonical_hash) if *canonical_hash == change.canon_hash =>
-					return Ok(true),
-				_ => (),
+			if change.effective_number() == just_finalized {
+				// check if the block that signalled the change is canonical in
+				// our chain.
+				match canonical(change.canon_height.clone())? {
+					Some(ref canonical_hash) if *canonical_hash == change.canon_hash =>
+						return Ok(true),
+					_ => (),
+				}
 			}
 		}
 
@@ -261,7 +267,7 @@ pub(crate) struct PendingChange<H, N> {
 
 impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	/// Returns the effective number this change will be applied at.
-	fn effective_number(&self) -> N {
+	pub fn effective_number(&self) -> N {
 		self.canon_height.clone() + self.finalization_depth.clone()
 	}
 }
@@ -430,5 +436,38 @@ mod tests {
 			change_b.clone(),
 			|base| is_equal_or_descendent_of(base, change_b.canon_hash),
 		).unwrap();
+	}
+
+	#[test]
+	fn enacts_change_works() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_changes: Vec::new(),
+		};
+
+		let set_a = vec![([1; 32].into(), 5)];
+
+		let change_a = PendingChange {
+			next_authorities: set_a.clone(),
+			finalization_depth: 10,
+			canon_height: 5,
+			canon_hash: "hash_a",
+		};
+
+		authorities.add_pending_change(change_a.clone(), |_| Err(())).unwrap();
+
+		let canonical = |n| match n {
+			5 => Ok(Some("hash_a")),
+			15 => Ok(Some("hash_a15")),
+			_ => Err(()),
+		};
+
+		// there's an effective change triggered at block 15
+		assert!(authorities.enacts_change(15, canonical).unwrap());
+
+		// block 16 is already past the change, we assume 15 will be finalized
+		// first and enact the change
+		assert!(!authorities.enacts_change(16, canonical).unwrap());
 	}
 }

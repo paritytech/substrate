@@ -14,27 +14,34 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::NetworkConfiguration;
 use libp2p::secio;
-use rand::{self, Rng};
-use std::fs;
+use log::{trace, warn};
+use rand::Rng;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
-use std::path::Path;
-use NetworkConfiguration;
+use std::{fs, path::Path};
 
 // File where the private key is stored.
 const SECRET_FILE: &str = "secret";
 
 /// Obtains or generates the local private key using the configuration.
-pub fn obtain_private_key(
+pub fn obtain_private_key_from_config(
 	config: &NetworkConfiguration
 ) -> Result<secio::SecioKeyPair, IoError> {
-	if let Some(ref secret) = config.use_secret {
+	obtain_private_key(&config.use_secret, &config.net_config_path)
+}
+
+/// Obtains or generates the local private key using the configuration.
+pub fn obtain_private_key(
+	secret: &Option<[u8; 32]>,
+	net_config_path: &Option<String>,
+) -> Result<secio::SecioKeyPair, IoError> {
+	if let Some(ref secret) = secret {
 		// Key was specified in the configuration.
 		secio::SecioKeyPair::secp256k1_raw_key(&secret[..])
 			.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
-
 	} else {
-		if let Some(ref path) = config.net_config_path {
+		if let Some(ref path) = net_config_path {
 			// Try fetch the key from a the file containing the secret.
 			let secret_path = Path::new(path).join(SECRET_FILE);
 			match load_private_key_from_file(&secret_path) {

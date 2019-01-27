@@ -25,6 +25,7 @@ use generic::DigestItem as GenDigestItem;
 pub use substrate_primitives::{H256, Ed25519AuthorityId};
 use substrate_primitives::U256;
 
+/// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Decode, Encode, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UintAuthorityId(pub u64);
@@ -35,17 +36,20 @@ impl Into<Ed25519AuthorityId> for UintAuthorityId {
 	}
 }
 
+/// Converter between u64 and the AuthorityId wrapper type.
 pub struct ConvertUintAuthorityId;
 impl Convert<u64, UintAuthorityId> for ConvertUintAuthorityId {
 	fn convert(a: u64) -> UintAuthorityId {
 		UintAuthorityId(a)
 	}
 }
-
+/// Digest item
 pub type DigestItem = GenDigestItem<H256, Ed25519AuthorityId>;
 
+/// Header Digest
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Digest {
+	/// Generated logs
 	pub logs: Vec<DigestItem>,
 }
 
@@ -66,14 +70,20 @@ impl traits::Digest for Digest {
 	}
 }
 
+/// Block Header
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
+	/// Parent hash
 	pub parent_hash: H256,
+	/// Block Number
 	pub number: u64,
+	/// Post-execution state trie root
 	pub state_root: H256,
+	/// Merkle root of block's extrinsics
 	pub extrinsics_root: H256,
+	/// Digest items
 	pub digest: Digest,
 }
 
@@ -123,6 +133,7 @@ impl<'a> Deserialize<'a> for Header {
 	}
 }
 
+/// An opaque extrinsic wrapper type.
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
@@ -153,9 +164,12 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 	}
 }
 
+/// Testing block
 #[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
 pub struct Block<Xt> {
+	/// Block header
 	pub header: Header,
+	/// List of extrinsics
 	pub extrinsics: Vec<Xt>,
 }
 
@@ -185,6 +199,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
+/// Test transaction
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 

@@ -22,15 +22,14 @@ use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
+use state_machine::{Backend as StateBackend, TrieBackend};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor};
-
-use in_mem;
-use backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
-use blockchain::HeaderBackend as BlockchainHeaderBackend;
-use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
-use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::fetcher::{Fetcher, RemoteReadRequest};
+use crate::in_mem;
+use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
+use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
+use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
+use crate::light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
@@ -46,6 +45,7 @@ pub struct ImportOperation<Block: BlockT, S, F> {
 	authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	finalized_blocks: Vec<BlockId<Block>>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -95,26 +95,44 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, S, F>;
-	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
+	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
 
-	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
+	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
 			header: None,
 			authorities: None,
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
+			finalized_blocks: Vec::new(),
 			_phantom: Default::default(),
 		})
 	}
 
+	fn begin_state_operation(
+		&self,
+		_operation: &mut Self::BlockImportOperation,
+		_block: BlockId<Block>
+	) -> ClientResult<()> {
+		Ok(())
+	}
+
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
-		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.storage().import_header(
-			header,
-			operation.authorities,
-			operation.leaf_state,
-			operation.aux_ops,
-		)
+		if !operation.finalized_blocks.is_empty() {
+			for block in operation.finalized_blocks {
+				self.blockchain.storage().finalize_header(block)?;
+			}
+		}
+
+		if let Some(header) = operation.header {
+			self.blockchain.storage().import_header(
+				header,
+				operation.authorities,
+				operation.leaf_state,
+				operation.aux_ops,
+			)?;
+		}
+
+		Ok(())
 	}
 
 	fn finalize_block(&self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
@@ -200,19 +218,24 @@ where
 
 	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> ClientResult<H::Out> {
 		let in_mem = in_mem::Backend::<Block, H>::new();
-		let mut op = in_mem.begin_operation(BlockId::Hash(Default::default()))?;
+		let mut op = in_mem.begin_operation()?;
 		op.reset_storage(top, children)
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> ClientResult<()>
+	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux_ops = ops.into_iter().collect();
+		self.aux_ops.append(&mut ops.into_iter().collect());
 		Ok(())
 	}
 
 	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
+		Ok(())
+	}
+
+	fn mark_finalized(&mut self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
+		self.finalized_blocks.push(block);
 		Ok(())
 	}
 }

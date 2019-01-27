@@ -24,10 +24,14 @@ extern crate substrate_state_machine;
 extern crate substrate_trie as trie;
 extern crate hash_db;
 
+extern crate tiny_keccak;
+extern crate secp256k1;
+
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
+pub use tiny_keccak::keccak256 as keccak_256;
 
 pub use primitives::{Blake2Hasher};
 // Switch to this after PoC-3
@@ -198,6 +202,18 @@ where
 /// Verify a ed25519 signature.
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	ed25519::verify(sig, msg, pubkey)
+}
+
+/// Verify and recover a SECP256k1 ECDSA signature.
+/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+/// - returns `Err` if the signatue is bad, otherwise the 64-byte pubkey (doesn't include the 0x04 prefix).
+pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
+	let rs = secp256k1::Signature::parse_slice(&sig[0..64]).map_err(|_| EcdsaVerifyError::BadRS)?;
+	let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8).map_err(|_| EcdsaVerifyError::BadV)?;
+	let pubkey = secp256k1::recover(&secp256k1::Message::parse(msg), &rs, &v).map_err(|_| EcdsaVerifyError::BadSignature)?;
+	let mut res = [0u8; 64];
+	res.copy_from_slice(&pubkey.serialize()[1..65]);
+	Ok(res)
 }
 
 /// Execute the given closure with global function available whose functionality routes into the

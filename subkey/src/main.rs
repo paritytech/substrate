@@ -23,7 +23,7 @@ extern crate rand;
 #[macro_use]
 extern crate clap;
 
-use rand::{OsRng, Rng};
+use rand::{RngCore, rngs::OsRng};
 use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 
 mod vanity;

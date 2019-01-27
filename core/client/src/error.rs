@@ -16,12 +16,16 @@
 
 //! Substrate client possible errors.
 
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+// https://github.com/paritytech/substrate/issues/1547
+#![allow(deprecated)]
 #![allow(missing_docs)]
 
 use std;
 use state_machine;
 use runtime_primitives::ApplyError;
 use consensus;
+use error_chain::*;
 
 error_chain! {
 	links {
@@ -144,7 +148,6 @@ error_chain! {
 	}
 }
 
-// TODO [ToDr] Temporary, state_machine::Error should be a regular error not Box.
 impl From<Box<state_machine::Error>> for Error {
 	fn from(e: Box<state_machine::Error>) -> Self {
 		ErrorKind::Execution(e).into()
