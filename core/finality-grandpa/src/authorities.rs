@@ -146,6 +146,7 @@ where
 		self.pending_changes.insert(idx, pending);
 
 		debug!(target: "afg", "There are now {} pending changes.", self.pending_changes.len());
+		trace!(target: "afg", "Pending changes: {:?}", self.pending_changes);
 
 		Ok(())
 	}
