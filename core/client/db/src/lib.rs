@@ -357,11 +357,11 @@ where Block: BlockT<Hash=H256>,
 		Ok(())
 	}
 
-	// fn mark_head(&mut self, block: BlockId<Block>) -> Result<(), client::error::Error> {
-	// 	assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
-	// 	self.set_head = Some(block);
-	// 	Ok(())
-	// }
+	fn mark_head(&mut self, block: BlockId<Block>) -> Result<(), client::error::Error> {
+		assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
+		self.set_head = Some(block);
+		Ok(())
+	}
 }
 
 struct StorageDb<Block: BlockT> {
