@@ -710,7 +710,7 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData) -> Result<TestBlock, Error> {
+		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}

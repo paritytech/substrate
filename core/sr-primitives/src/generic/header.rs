@@ -16,7 +16,7 @@
 
 //! Generic implementation of a block header.
 
-use codec::{Decode, Encode, Codec, Input, Output, HasCompact};
+use codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
 use generic::Digest;
@@ -74,7 +74,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
-		dest.push(&<<Number as HasCompact>::Type>::from(self.number));
+		dest.push(&<<<Number as HasCompact>::Type as EncodeAsRef<_>>::RefType>::from(&self.number));
 		dest.push(&self.state_root);
 		dest.push(&self.extrinsics_root);
 		dest.push(&self.digest);
