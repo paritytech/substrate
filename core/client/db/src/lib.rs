@@ -256,6 +256,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
+	set_head: Option<BlockId<Block>>,
 }
 
 impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
@@ -355,6 +356,12 @@ where Block: BlockT<Hash=H256>,
 		self.finalized_blocks.push((block, justification));
 		Ok(())
 	}
+
+	// fn mark_head(&mut self, block: BlockId<Block>) -> Result<(), client::error::Error> {
+	// 	assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
+	// 	self.set_head = Some(block);
+	// 	Ok(())
+	// }
 }
 
 struct StorageDb<Block: BlockT> {
@@ -776,6 +783,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			changes_trie_updates: MemoryDB::default(),
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
+			set_head: None,
 		})
 	}
 
@@ -790,19 +798,17 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		let mut transaction = DBTransaction::new();
 		operation.apply_aux(&mut transaction);
 
+		let mut meta_updates = Vec::new();
+
 		if operation.finalized_blocks.len() > 0 {
 			let mut meta_updates = Vec::new();
 
 			for (block, justification) in operation.finalized_blocks {
 				meta_updates.push(self.finalize_block_with_transaction(&mut transaction, block, justification)?);
 			}
-
-			for (hash, number, is_best, is_finalized) in meta_updates {
-				self.blockchain.update_meta(hash, number, is_best, is_finalized);
-			}
 		}
 
-		if let Some(pending_block) = operation.pending_block {
+		let imported = if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
@@ -866,39 +872,60 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let is_best = pending_block.leaf_state.is_best();
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, is_best);
 
-			{
+			let displaced_leaf = {
 				let mut leaves = self.blockchain.leaves.write();
 				let displaced_leaf = leaves.import(hash, number, parent_hash);
 				leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 
-				let write_result = self.storage.db.write(transaction).map_err(db_err);
-				if let Err(e) = write_result {
-					// revert leaves set update, if there was one.
-					if let Some(displaced_leaf) = displaced_leaf {
-						leaves.undo(displaced_leaf);
-					}
-					return Err(e);
+				displaced_leaf
+			};
+
+			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
+
+			Some((number, hash, enacted, retracted, displaced_leaf, is_best))
+		} else {
+			None
+		};
+
+		if let Some(set_head) = operation.set_head {
+			if let Some(header) = ::client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
+				let number = header.number();
+				let hash = header.hash();
+
+				self.set_head_with_transaction(
+					&mut transaction,
+					hash.clone(),
+					(number.clone(), hash.clone())
+				)?;
+			} else {
+				return Err(client::error::ErrorKind::UnknownBlock(format!("Cannot set head {:?}", set_head)).into())
+			}
+		}
+
+		let write_result = self.storage.db.write(transaction).map_err(db_err);
+
+		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best)) = imported {
+			if let Err(e) = write_result {
+				if let Some(displaced_leaf) = displaced_leaf {
+					self.blockchain.leaves.write().undo(displaced_leaf);
 				}
-				drop(leaves);
+				return Err(e)
 			}
 
-			self.blockchain.update_meta(
-				hash.clone(),
-				number.clone(),
-				pending_block.leaf_state.is_best(),
-				finalized,
-			);
-
-			// sync canonical state cache
 			operation.old_state.sync_cache(
 				&enacted,
 				&retracted,
 				operation.storage_updates,
 				Some(hash),
 				Some(number),
-				|| is_best
+				|| is_best,
 			);
 		}
+
+		for (hash, number, is_best, is_finalized) in meta_updates {
+			self.blockchain.update_meta(hash, number, is_best, is_finalized);
+		}
+
 		Ok(())
 	}
 
