@@ -17,6 +17,7 @@
 //! Incoming message streams that verify signatures, and outgoing message streams
 //! that sign or re-shape.
 
+use std::collections::HashMap;
 use grandpa::VoterSet;
 use futures::prelude::*;
 use futures::sync::mpsc;

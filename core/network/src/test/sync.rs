@@ -181,7 +181,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 
 #[test]
 fn can_sync_small_non_best_forks() {
-	::env_logger::init();
+	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(2);
 	net.sync_step();
 	net.peer(0).push_blocks(30, false);
