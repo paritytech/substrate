@@ -20,14 +20,17 @@
 extern crate srml_support;
 
 use substrate_inherents::{
-	RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError,
+	RuntimeString, InherentIdentifier, ProvideInherent,
 	InherentData, MakeFatalError,
 };
 use srml_support::StorageValue;
-use sr_primitives::traits::{As, SimpleArithmetic, Zero};
-use sr_std::{result, ops::{Mul, Div}, cmp};
+use sr_primitives::traits::{As, One, Zero};
+use sr_std::{result, cmp};
 use parity_codec::{Decode, Encode};
 use srml_system::{ensure_inherent, Trait as SystemTrait};
+
+const DEFAULT_WINDOW_SIZE: u64 = 101;
+const DEFAULT_DELAY: u64 = 1000;
 
 /// The identifier for the `finalnum` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"finalnum";
@@ -87,11 +90,20 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Recent hints.
 		RecentHints get(recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
-		// /// The minimum (and advised) period between blocks.
-		// pub BlockPeriod get(block_period) config(period): T::Moment = T::Moment::sa(5);
+		/// Ordered recent hints.
+		OrderedHints get(ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
+		/// The median.
+		Median build(|_| T::BlockNumber::zero()): T::BlockNumber;
+		/// The number of recent samples to keep from this chain. Default is n-100
+		pub WindowSize get(window_size) config(window_size): T::BlockNumber = T::BlockNumber::sa(DEFAULT_WINDOW_SIZE);
+		/// The delay after which point things become suspicious.
+		pub ReportLatency get(report_latency) config(report_latency): T::BlockNumber = T::BlockNumber::sa(DEFAULT_DELAY);
 
 		/// Final hint to apply in the block. `None` means "same as parent".
 		Update: Option<T::BlockNumber>;
+
+		// when initialized through config this is set in the beginning.
+		Initialized get(initialized) build(|_| ()): Option<()>;
 	}
 }
 
@@ -110,6 +122,16 @@ decl_module! {
 		}
 
 		fn on_finalise() {
+			if Self::initialized().is_none() {
+				<Self as Store>::RecentHints::put(vec![T::BlockNumber::zero()]);
+				<Self as Store>::OrderedHints::put(vec![T::BlockNumber::zero()]);
+				<Self as Store>::Median::put(T::BlockNumber::zero());
+				<Self as Store>::WindowSize::put(T::BlockNumber::sa(DEFAULT_WINDOW_SIZE));
+				<Self as Store>::ReportLatency::put(T::BlockNumber::sa(DEFAULT_DELAY));
+
+				<Self as Store>::Initialized::put(());
+			}
+
 			Self::update_hint(<Self as Store>::Update::take())
 		}
 	}
@@ -117,7 +139,68 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	fn update_hint(hint: Option<T::BlockNumber>) {
+		let mut recent = Self::recent_hints();
+		let mut ordered = Self::ordered_hints();
+		let window_size = cmp::max(T::BlockNumber::one(), Self::window_size());
 
+		let hint = hint.unwrap_or_else(|| recent.last()
+			.expect("always at least one recent sample; qed").clone()
+		);
+
+		// prune off the front of the list -- typically 1 except for when
+		// the sample size has just been shrunk.
+		{
+			// take into account the item we haven't pushed yet.
+			let to_prune = (recent.len() + 1).saturating_sub(window_size.as_() as usize);
+
+			for drained in recent.drain(..to_prune) {
+				let idx = ordered.binary_search(&drained)
+					.expect("recent and ordered contain the same items; qed");
+
+				ordered.remove(idx);
+			}
+		}
+
+		// find the position in the ordered list where the new item goes.
+		let ordered_idx = ordered.binary_search(&hint)
+			.unwrap_or_else(|idx| idx);
+
+		ordered.insert(ordered_idx, hint);
+		recent.push(hint);
+
+		let two = T::BlockNumber::one() + T::BlockNumber::one();
+
+		let median = {
+			let len = ordered.len();
+			assert!(len > 0, "pruning dictated by window_size which is always saturated at 1; qed");
+
+			if len % 2 == 0 {
+				let a = ordered[len / 2];
+				let b = ordered[(len / 2) - 1];
+
+				// compute average.
+				(a + b) / two
+			} else {
+				ordered[len / 2]
+			}
+		};
+
+		let our_window_size = recent.len();
+
+		<Self as Store>::RecentHints::put(recent);
+		<Self as Store>::OrderedHints::put(ordered);
+		<Self as Store>::Median::put(median);
+
+		if T::BlockNumber::sa(our_window_size as u64) == window_size {
+			let now = srml_system::Module::<T>::block_number();
+			let latency = Self::report_latency();
+
+			// the delay is the latency plus half the window size.
+			let delay = latency + (window_size / two);
+			if now - median > delay {
+				T::OnFinalizationStalled::on_stalled(now);
+			}
+		}
 	}
 }
 
