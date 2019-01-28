@@ -175,7 +175,7 @@ fn make_commit_topic(set_id: u64) -> Hash {
 	hash
 }
 
-impl Network for MessageRouting {
+impl Network<Block> for MessageRouting {
 	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
