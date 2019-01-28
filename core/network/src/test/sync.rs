@@ -181,7 +181,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 
 #[test]
 fn can_sync_small_non_best_forks() {
-	::env_logger::init().ok();
+	::env_logger::init();
 	let mut net = TestNet::new(2);
 	net.sync_step();
 	net.peer(0).push_blocks(30, false);
@@ -197,11 +197,22 @@ fn can_sync_small_non_best_forks() {
 	net.peer(1).push_blocks(10, false);
 	assert_eq!(net.peer(1).client().info().unwrap().chain.best_number, 40);
 
-
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none());
 
 	net.sync();
+
+	// synchronization: 0 synced to longer chain and 1 didn't sync to small chain.
+
+	assert_eq!(net.peer(0).client().info().unwrap().chain.best_number, 40);
+
+	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+	assert!(!net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
+
+	net.peer(0).announce_block(small_hash);
+	net.sync();
+
+	// after announcing, peer 1 downloads the block.
 
 	assert!(net.peer(0).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());
 	assert!(net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_some());

@@ -399,6 +399,11 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
 	}
 
+	/// Announce a block to peers.
+	pub fn announce_block(&self, block: Hash) {
+		self.sync.announce_block(&mut TestIo::new(&self.queue, None), block);
+	}
+
 	/// Request a justification for the given block.
 	#[cfg(test)]
 	fn request_justification(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
