@@ -17,7 +17,7 @@
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
 	RuntimeModuleMetadata, RuntimeMetadataV1,
-	DefaultByteGetter, META_RESERVED, RuntimeMetadataPrefixed,
+	DefaultByteGetter, RuntimeMetadataPrefixed,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -36,14 +36,11 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
-				$crate::metadata::RuntimeMetadataPrefixed (
-					$crate::metadata::META_RESERVED,
-					$crate::metadata::RuntimeMetadata::V1 (
-						$crate::metadata::RuntimeMetadataV1 {
-							modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
-						}
-					)
-				)
+				$crate::metadata::RuntimeMetadata::V1 (
+					$crate::metadata::RuntimeMetadataV1 {
+						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+					}
+				).into()
 			}
 		}
 	}
@@ -196,7 +193,7 @@ mod tests {
 		EventMetadata, CallMetadata,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageMetadata, StorageFunctionMetadata, OuterDispatchCall,
-		RuntimeModuleMetadata, RuntimeMetadataPrefixed,
+		RuntimeModuleMetadata, RuntimeMetadataPrefixed
 	};
 	use codec::{Decode, Encode};
 
@@ -338,9 +335,7 @@ mod tests {
 			event_module2::Module with Event Storage Call,
 	);
 
-	const EXPECTED_METADATA: RuntimeMetadataPrefixed = RuntimeMetadataPrefixed (
-		META_RESERVED,
-		RuntimeMetadata::V1(
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1(
 		RuntimeMetadataV1 {
 		modules: DecodeDifferent::Encode(&[
 			RuntimeModuleMetadata {
@@ -455,14 +450,15 @@ mod tests {
 					)
 				),
 			},
-		])}),
+		])}
 	);
 
 	#[test]
 	fn runtime_metadata() {
 		let metadata_encoded = TestRuntime::metadata().encode();
 		let metadata_decoded = RuntimeMetadataPrefixed::decode(&mut &metadata_encoded[..]);
+		let expected_metadata: RuntimeMetadataPrefixed = EXPECTED_METADATA.into();
 
-		assert_eq!(EXPECTED_METADATA, metadata_decoded.unwrap());
+		assert_eq!(expected_metadata, metadata_decoded.unwrap());
 	}
 }

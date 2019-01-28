@@ -42,7 +42,7 @@ use rstd::vec::Vec;
 #[cfg(feature = "std")]
 type StringBuf = String;
 
-/// Curent version of metadata
+/// Curent prefix of metadata
 pub const META_RESERVED: u32 = 0x6174656d; // 'meta' warn endianness
 
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
@@ -324,15 +324,33 @@ pub struct OuterDispatchCall {
 pub struct RuntimeMetadataPrefixed(pub u32, pub RuntimeMetadata);
 
 /// The metadata of a runtime.
-/// and a version ID encoded/decoded through
+/// The version ID encoded/decoded through
 /// the enum nature of `RuntimeMetadata`.
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum RuntimeMetadata {
-	None,
+	/// Unused; enum filler.
+	V0(RuntimeMetadataDeprecated),
+	/// Version 1 for runtime metadata.
 	V1(RuntimeMetadataV1),
 }
 
+/// Enum that should fail.
+#[derive(Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+pub enum RuntimeMetadataDeprecated { }
+
+impl Encode for RuntimeMetadataDeprecated {
+	fn encode_to<W: Output>(&self, _dest: &mut W) {
+	}
+}
+
+#[cfg(feature = "std")]
+impl Decode for RuntimeMetadataDeprecated {
+	fn decode<I: Input>(_input: &mut I) -> Option<Self> {
+		None
+	}
+}
 
 /// The metadata of a runtime version 1.
 #[derive(Eq, Encode, PartialEq)]
@@ -356,5 +374,11 @@ pub struct RuntimeModuleMetadata {
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {
 		primitives::OpaqueMetadata::new(self.encode())
+	}
+}
+
+impl Into<RuntimeMetadataPrefixed> for RuntimeMetadata {
+	fn into(self) -> RuntimeMetadataPrefixed {
+		RuntimeMetadataPrefixed(META_RESERVED, self)
 	}
 }
