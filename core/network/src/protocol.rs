@@ -468,6 +468,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			let number = header.number().clone();
 			let hash = header.hash();
+			let parent_hash = header.parent_hash().clone();
 			let justification = if get_justification { self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None };
 			let block_data = message::generic::BlockData {
 				hash: hash,
@@ -484,7 +485,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					if number == As::sa(0) {
 						break;
 					}
-					id = BlockId::Number(number - As::sa(1))
+					id = BlockId::Hash(parent_hash)
 				}
 			}
 		}
@@ -705,12 +706,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let mut peers = self.context_data.peers.write();
 		let hash = header.hash();
 		for (who, ref mut peer) in peers.iter_mut() {
-			if peer.known_blocks.insert(hash.clone()) {
-				trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
-				self.send_message(io, *who, GenericMessage::BlockAnnounce(message::BlockAnnounce {
-					header: header.clone()
-				}));
-			}
+			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
+			peer.known_blocks.insert(hash);
+			self.send_message(io, *who, GenericMessage::BlockAnnounce(message::BlockAnnounce {
+				header: header.clone()
+			}));
 		}
 	}
 
