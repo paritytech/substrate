@@ -20,7 +20,7 @@
 use futures::prelude::*;
 use futures::sync::mpsc;
 use codec::{Encode, Decode};
-use substrate_primitives::{ed25519, H256, Ed25519AuthorityId};
+use substrate_primitives::{ed25519, Ed25519AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
@@ -32,18 +32,18 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 	(message, round, set_id).encode()
 }
 
-enum Broadcast {
+enum Broadcast<Block: BlockT> {
 	// set_id, round, encoded commit.
 	Commit(u64, u64, Vec<u8>),
 	// set_id, round, encoded signed message.
 	Message(u64, u64, Vec<u8>),
 	// set_id, round, announcement of block hash that should be downloaded
-	Announcement(u64, u64, H256),
+	Announcement(u64, u64, Block::Hash),
 	// set_id, round being dropped.
 	DropRound(u64, u64),
 }
 
-impl Broadcast {
+impl<Block: BlockT> Broadcast<Block> {
 	fn set_id(&self) -> u64 {
 		match *self {
 			Broadcast::Commit(s, _, _) => s,
@@ -56,7 +56,7 @@ impl Broadcast {
 
 /// Produces a future that should be run in the background and proxies
 /// and rebroadcasts messages.
-pub(crate) fn rebroadcasting_network<N: Network>(network: N) -> (BroadcastWorker<N>, BroadcastHandle<N>) {
+pub(crate) fn rebroadcasting_network<B: BlockT, N: Network<B>>(network: N) -> (BroadcastWorker<B, N>, BroadcastHandle<B, N>) {
 	use std::time::Duration;
 	const REBROADCAST_PERIOD: Duration = Duration::from_secs(60);
 
@@ -82,24 +82,24 @@ pub(crate) fn rebroadcasting_network<N: Network>(network: N) -> (BroadcastWorker
 // A worker which broadcasts messages to the background, potentially
 // rebroadcasting.
 #[must_use = "network rebroadcast future must be driven to completion"]
-pub(crate) struct BroadcastWorker<N: Network> {
+pub(crate) struct BroadcastWorker<B: BlockT, N: Network<B>> {
 	interval: Interval,
 	set_id: u64,
 	last_commit: Option<(u64, Vec<u8>)>,
 	round_messages: (u64, Vec<Vec<u8>>),
-	announcements: HashMap<H256, u64>,
+	announcements: HashMap<B::Hash, u64>,
 	network: N,
-	incoming_broadcast: mpsc::UnboundedReceiver<Broadcast>,
+	incoming_broadcast: mpsc::UnboundedReceiver<Broadcast<B>>,
 }
 
 /// A handle used by communication work to broadcast to network.
 #[derive(Clone)]
-pub(crate) struct BroadcastHandle<N> {
-	relay: mpsc::UnboundedSender<Broadcast>,
+pub(crate) struct BroadcastHandle<B: BlockT, N> {
+	relay: mpsc::UnboundedSender<Broadcast<B>>,
 	network: N,
 }
 
-impl<N: Network> Future for BroadcastWorker<N> {
+impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 	type Item = ();
 	type Error = Error;
 
@@ -187,7 +187,7 @@ impl<N: Network> Future for BroadcastWorker<N> {
 	}
 }
 
-impl<N: Network> Network for BroadcastHandle<N> {
+impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 	type In = N::In;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
@@ -210,7 +210,7 @@ impl<N: Network> Network for BroadcastHandle<N> {
 		let _ = self.relay.unbounded_send(Broadcast::Commit(round, set_id, message));
 	}
 
-	fn announce(&self, round: u64, set_id: u64, block: H256) {
+	fn announce(&self, round: u64, set_id: u64, block: B::Hash) {
 		let _ = self.relay.unbounded_send(Broadcast::Announcement(round, set_id, block));
 	}
 }
@@ -273,7 +273,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-pub(crate) struct OutgoingMessages<Block: BlockT, N: Network> {
+pub(crate) struct OutgoingMessages<Block: BlockT, N: Network<Block>> {
 	round: u64,
 	set_id: u64,
 	locals: Option<(Arc<ed25519::Pair>, Ed25519AuthorityId)>,
@@ -281,8 +281,7 @@ pub(crate) struct OutgoingMessages<Block: BlockT, N: Network> {
 	network: N,
 }
 
-impl<Block: BlockT, N: Network> Sink for OutgoingMessages<Block, N>
-	where Block: BlockT<Hash=H256>
+impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 {
 	type SinkItem = Message<Block>;
 	type SinkError = Error;
@@ -320,7 +319,7 @@ impl<Block: BlockT, N: Network> Sink for OutgoingMessages<Block, N>
 	}
 }
 
-impl<Block: BlockT, N: Network> Drop for OutgoingMessages<Block, N> {
+impl<Block: BlockT, N: Network<Block>> Drop for OutgoingMessages<Block, N> {
 	fn drop(&mut self) {
 		self.network.drop_messages(self.round, self.set_id);
 	}
@@ -331,7 +330,7 @@ impl<Block: BlockT, N: Network> Drop for OutgoingMessages<Block, N> {
 ///
 /// A future can push unsigned messages into the sink. They will be automatically
 /// broadcast to the network. The returned stream should be combined with other input.
-pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
+pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 	round: u64,
 	set_id: u64,
 	local_key: Option<Arc<ed25519::Pair>>,
@@ -448,7 +447,7 @@ impl<Block, N> CommitsOut<Block, N> {
 	}
 }
 
-impl<Block: BlockT, N: Network> Sink for CommitsOut<Block, N> {
+impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 	type SinkItem = (u64, Commit<Block>);
 	type SinkError = Error;
 

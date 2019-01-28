@@ -200,6 +200,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));
 	}
 
+	/// Called by the finality gadget to make sure important blocks are propagated.
+	pub fn announce_block(&self, hash: B::Hash) {
+		self.handler.announce_block(&mut NetSyncIo::new(&self.network, self.protocol_id), hash);
+	}
+
 	/// Send a consensus message through the gossip
 	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
 		self.handler.gossip_consensus_message(

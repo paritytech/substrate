@@ -219,7 +219,7 @@ impl From<ClientError> for Error {
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network: Clone {
+pub trait Network<Block: BlockT>: Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
@@ -241,7 +241,7 @@ pub trait Network: Clone {
 	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
 
 	/// Inform peers that a block with given hash should be downloaded.
-	fn announce(&self, round: u64, set_id: u64, block: H256);
+	fn announce(&self, round: u64, set_id: u64, block: Block::Hash);
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
@@ -272,7 +272,7 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network<B> for NetworkBridge<B, S, H> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
 		self.service.consensus_gossip().write().messages_for(message_topic::<B>(round, set_id))
@@ -297,9 +297,8 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 		self.service.gossip_consensus_message(topic, message, true);
 	}
 
-	fn announce(&self, round: u64, set_id: u64, block: H256) {
-		#[cfg(not(test))]
-		compile_error!("implement block announcement");
+	fn announce(&self, _round: u64, _set_id: u64, block: B::Hash) {
+		self.service.announce_block(block)
 	}
 }
 
@@ -376,7 +375,7 @@ impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 type SharedConsensusChanges<H, N> = Arc<parking_lot::Mutex<ConsensusChanges<H, N>>>;
 
 /// The environment we run GRANDPA in.
-struct Environment<B, E, Block: BlockT, N: Network, RA> {
+struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
 	config: Config,
@@ -390,7 +389,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	N: Network + 'static,
+	N: Network<Block> + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -548,7 +547,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network + 'static + Send,
+	N: Network<Block> + 'static + Send,
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
@@ -1485,7 +1484,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 ) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	N: Network,
+	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
@@ -1531,7 +1530,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network + Send + Sync + 'static,
+	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
