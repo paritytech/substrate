@@ -70,12 +70,12 @@ pub enum LockStatus<BlockNumber: Parameter> {
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise
+pub struct ValidatorPrefs<Balance: HasCompact> {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	#[codec(compact)]
 	pub unstake_threshold: u32,
 	// Reward that validator takes up-front; only the rest is split between themselves and nominators.
-	#[codec(encoded_as = "<Balance as HasCompact>::Type")]
+	#[codec(compact)]
 	pub validator_payment: Balance,
 }
 

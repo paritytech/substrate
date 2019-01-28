@@ -103,7 +103,7 @@ use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
+use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps, VoterSet};
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
@@ -370,7 +370,7 @@ type SharedConsensusChanges<H, N> = Arc<parking_lot::Mutex<ConsensusChanges<H, N
 /// The environment we run GRANDPA in.
 struct Environment<B, E, Block: BlockT, N: Network, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
-	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -736,7 +736,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
-		voters: &HashMap<Ed25519AuthorityId, u64>,
+		voters: &VoterSet<Ed25519AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -747,7 +747,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
-	fn verify(&self, set_id: u64, voters: &HashMap<Ed25519AuthorityId, u64>) -> Result<(), ClientError>
+	fn verify(&self, set_id: u64, voters: &VoterSet<Ed25519AuthorityId>) -> Result<(), ClientError>
 	where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -758,7 +758,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		match grandpa::validate_commit(
 			&self.commit,
 			voters,
-			None,
 			&ancestry_chain,
 		) {
 			Ok(Some(_)) => {},
@@ -1462,7 +1461,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
-	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: &Arc<VoterSet<Ed25519AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &N,
 ) -> (

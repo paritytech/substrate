@@ -17,6 +17,7 @@
 //! Incoming message streams that verify signatures, and outgoing message streams
 //! that sign or re-shape.
 
+use grandpa::VoterSet;
 use futures::prelude::*;
 use futures::sync::mpsc;
 use codec::{Encode, Decode};
@@ -25,7 +26,6 @@ use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
@@ -209,7 +209,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 	round: u64,
 	set_id: u64,
 	inner: S,
-	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 )
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
@@ -297,7 +297,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
 	round: u64,
 	set_id: u64,
 	local_key: Option<Arc<ed25519::Pair>>,
-	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 	network: N,
 ) -> (
 	impl Stream<Item=SignedMessage<Block>,Error=Error>,
@@ -331,7 +331,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
 
 fn check_compact_commit<Block: BlockT>(
 	msg: CompactCommit<Block>,
-	voters: &HashMap<Ed25519AuthorityId, u64>,
+	voters: &VoterSet<Ed25519AuthorityId>,
 	round: u64,
 	set_id: u64,
 ) -> Option<CompactCommit<Block>> {
@@ -370,7 +370,7 @@ fn check_compact_commit<Block: BlockT>(
 pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	set_id: u64,
 	inner: S,
-	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 )
 	-> impl Stream<Item=(u64, CompactCommit<Block>),Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
