@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 substrate-primitives = { version = "*", path = "../core/primitives" }
-rand = "0.4"
+rand = "0.6"
 clap = { version = "~2.32", features = ["yaml"] }
 
 [features]

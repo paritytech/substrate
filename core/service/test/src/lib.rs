@@ -140,7 +140,7 @@ fn node_config<F: ServiceFactory> (
 
 impl<F: ServiceFactory> TestNet<F> {
 	fn new(temp: &TempDir, spec: FactoryChainSpec<F>, full: u32, light: u32, authorities: Vec<String>, base_port: u16) -> TestNet<F> {
-		::env_logger::init().ok();
+		let _ = ::env_logger::try_init();
 		::fdlimit::raise_fd_limit();
 		let runtime = Runtime::new().expect("Error creating tokio runtime");
 		let mut net = TestNet {

@@ -25,7 +25,6 @@ use crate::gas::GasMeter;
 use rstd::prelude::*;
 use sandbox;
 
-
 #[macro_use]
 mod env_def;
 mod code_cache;

@@ -1569,6 +1569,28 @@ mod tests {
 	}
 
 	#[test]
+	fn tree_route_child() {
+		let backend = Backend::<Block>::new_test(1000, 100);
+
+		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
+		let block1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				backend.blockchain(),
+				BlockId::Hash(block0),
+				BlockId::Hash(block1),
+			).unwrap();
+
+			println!("{:?}", tree_route);
+
+			assert_eq!(tree_route.common_block().hash, block0);
+			assert!(tree_route.retracted().is_empty());
+			assert_eq!(tree_route.enacted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![block1]);
+		}
+	}
+
+	#[test]
 	fn test_leaves_with_complex_block_tree() {
 		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
 		test_client::trait_tests::test_leaves_for_backend(backend);

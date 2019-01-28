@@ -92,11 +92,11 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 
 		let mut available_peers = peers.iter().filter_map(|(peer, sync)| {
-			// don't request to any peers that already have pending requests
-			if let PeerSyncState::Available = sync.state {
-				Some((*peer, sync.best_number))
-			} else {
+			// don't request to any peers that already have pending requests or are unavailable
+			if sync.state != PeerSyncState::Available || self.peer_requests.contains_key(&peer) {
 				None
+			} else {
+				Some((*peer, sync.best_number))
 			}
 		}).collect::<VecDeque<_>>();
 
@@ -152,6 +152,7 @@ impl<B: BlockT> PendingJustifications<B> {
 				.expect("peer was is taken from available_peers; available_peers is a subset of peers; qed")
 				.state = PeerSyncState::DownloadingJustification(request.0);
 
+			trace!(target: "sync", "Requesting justification for block #{} from {}", request.0, peer);
 			let request = message::generic::BlockRequest {
 				id: 0,
 				fields: message::BlockAttributes::JUSTIFICATION,

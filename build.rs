@@ -16,16 +16,11 @@
 
 extern crate vergen;
 
-use vergen::{ConstantsFlags, Vergen};
+use vergen::{ConstantsFlags, generate_cargo_keys};
 
 const ERROR_MSG: &'static str = "Failed to generate metadata files";
 
 fn main() {
-	let vergen = Vergen::new(ConstantsFlags::all()).expect(ERROR_MSG);
-
-	for (k, v) in vergen.build_info() {
-		println!("cargo:rustc-env={}={}", k.name(), v);
-	}
-
+	generate_cargo_keys(ConstantsFlags::all()).expect(ERROR_MSG);
 	println!("cargo:rerun-if-changed=.git/HEAD");
 }

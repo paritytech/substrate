@@ -47,7 +47,6 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
-use api::AuraApi;
 use slots::Slots;
 use ::log::{warn, debug, log, info, trace};
 
@@ -632,6 +631,11 @@ impl SlotDuration {
 			}
 		}
 	}
+
+	/// Returns slot duration value.
+	pub fn get(&self) -> u64 {
+		self.0
+	}
 }
 
 /// Register the aura inherent data provider, if not registered already.
@@ -777,7 +781,7 @@ mod tests {
 
 	#[test]
 	fn authoring_blocks() {
-		::env_logger::init().ok();
+		let _ = ::env_logger::try_init();
 		let mut net = AuraTestNet::new(3);
 
 		net.start();
