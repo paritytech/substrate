@@ -10,7 +10,7 @@ jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git" }
 log = "0.4"
 parking_lot = "0.7.1"
-parity-codec = "2.2"
+parity-codec = "3.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
