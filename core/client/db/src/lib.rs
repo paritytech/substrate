@@ -563,6 +563,69 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		})
 	}
 
+	/// Handle setting head within a transaction. `route_to` should be the last
+	/// block that existed in the database. `best_to` should be the best block
+	/// to be set.
+	///
+	/// In the case where the new best block is a block to be imported, `route_to`
+	/// should be the parent of `best_to`. In the case where we set an existing block
+	/// to be best, `route_to` should equal to `best_to`.
+	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(Vec<Block::Hash>, Vec<Block::Hash>), client::error::Error> {
+		let mut enacted = Vec::default();
+		let mut retracted = Vec::default();
+
+		let meta = self.blockchain.meta.read();
+
+		// cannot find tree route with empty DB.
+		if meta.best_hash != Default::default() {
+			let tree_route = ::client::blockchain::tree_route(
+				&self.blockchain,
+				BlockId::Hash(meta.best_hash),
+				BlockId::Hash(route_to),
+			)?;
+
+			// uncanonicalize: check safety violations and ensure the numbers no longer
+			// point to these block hashes in the key mapping.
+			for r in tree_route.retracted() {
+				retracted.push(r.hash.clone());
+				if r.hash == meta.finalized_hash {
+					warn!("Potential safety failure: reverting finalized block {:?}",
+						  (&r.number, &r.hash));
+
+					return Err(::client::error::ErrorKind::NotInFinalizedChain.into());
+				}
+
+				utils::remove_number_to_key_mapping(
+					transaction,
+					columns::KEY_LOOKUP,
+					r.number
+				);
+			}
+
+			// canonicalize: set the number lookup to map to this block's hash.
+			for e in tree_route.enacted() {
+				enacted.push(e.hash.clone());
+				utils::insert_number_to_key_mapping(
+					transaction,
+					columns::KEY_LOOKUP,
+					e.number,
+					e.hash
+				);
+			}
+
+			let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, best_to.1);
+			transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
+			utils::insert_number_to_key_mapping(
+				transaction,
+				columns::KEY_LOOKUP,
+				best_to.0,
+				best_to.1,
+			);
+		}
+
+		Ok((enacted, retracted))
+	}
+
 	fn finalize_block_with_transaction(&self, transaction: &mut DBTransaction, block: BlockId<Block>, justification: Option<Justification>) -> Result<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool), client::error::Error> {
 		use runtime_primitives::traits::Header;
 
@@ -747,58 +810,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash);
 
-			let mut enacted = Vec::default();
-			let mut retracted = Vec::default();
-
-			if pending_block.leaf_state.is_best() {
-				let meta = self.blockchain.meta.read();
-
-				// cannot find tree route with empty DB.
-				if meta.best_hash != Default::default() {
-					let tree_route = ::client::blockchain::tree_route(
-						&self.blockchain,
-						BlockId::Hash(meta.best_hash),
-						BlockId::Hash(parent_hash),
-					)?;
-
-					// uncanonicalize: check safety violations and ensure the numbers no longer
-					// point to these block hashes in the key mapping.
-					for r in tree_route.retracted() {
-						retracted.push(r.hash.clone());
-						if r.hash == meta.finalized_hash {
-							warn!("Potential safety failure: reverting finalized block {:?}",
-								(&r.number, &r.hash));
-
-							return Err(::client::error::ErrorKind::NotInFinalizedChain.into());
-						}
-
-						utils::remove_number_to_key_mapping(
-							&mut transaction,
-							columns::KEY_LOOKUP,
-							r.number
-						);
-					}
-
-					// canonicalize: set the number lookup to map to this block's hash.
-					for e in tree_route.enacted() {
-						enacted.push(e.hash.clone());
-						utils::insert_number_to_key_mapping(
-							&mut transaction,
-							columns::KEY_LOOKUP,
-							e.number,
-							e.hash
-						);
-					}
-				}
-
-				transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
-				utils::insert_number_to_key_mapping(
-					&mut transaction,
-					columns::KEY_LOOKUP,
-					number,
-					hash,
-				);
-			}
+			let (enacted, retracted) = if pending_block.leaf_state.is_best() {
+				self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?
+			} else {
+				(Default::default(), Default::default())
+			};
 
 			utils::insert_hash_to_key_mapping(
 				&mut transaction,
