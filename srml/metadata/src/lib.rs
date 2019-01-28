@@ -348,7 +348,7 @@ impl Encode for RuntimeMetadataDeprecated {
 #[cfg(feature = "std")]
 impl Decode for RuntimeMetadataDeprecated {
 	fn decode<I: Input>(_input: &mut I) -> Option<Self> {
-		None
+		unimplemented!()
 	}
 }
 
