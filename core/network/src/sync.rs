@@ -40,6 +40,9 @@ const MAJOR_SYNC_BLOCKS: usize = 5;
 const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 // Number of recently announced blocks to track for each peer.
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
+// Max number of blocks to download for unknown forks.
+// TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
+const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
 
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
@@ -385,16 +388,20 @@ impl<B: BlockT> ChainSync<B> {
 		&mut self,
 		protocol: &mut Context<B>,
 		who: NodeIndex,
-		_request: message::BlockRequest<B>,
+		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>
 	) -> Option<(BlockOrigin, Vec<IncomingBlock<B>>)> {
 		let new_blocks: Vec<IncomingBlock<B>> = if let Some(ref mut peer) = self.peers.get_mut(&who) {
+			let mut blocks = response.blocks;
+			if request.direction == message::Direction::Descending {
+				trace!(target: "sync", "Reversing incoming block list");
+				blocks.reverse();
+			}
 			match peer.state {
 				PeerSyncState::DownloadingNew(start_block) => {
 					self.blocks.clear_peer_download(who);
 					peer.state = PeerSyncState::Available;
-
-					self.blocks.insert(start_block, response.blocks, who);
+					self.blocks.insert(start_block, blocks, who);
 					self.blocks
 						.drain(self.best_queued_number + As::sa(1))
 						.into_iter()
@@ -410,7 +417,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				PeerSyncState::DownloadingStale(_) => {
 					peer.state = PeerSyncState::Available;
-					response.blocks.into_iter().map(|b| {
+					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
 							header: b.header,
@@ -421,7 +428,7 @@ impl<B: BlockT> ChainSync<B> {
 					}).collect()
 				},
 				PeerSyncState::AncestorSearch(n) => {
-					match response.blocks.get(0) {
+					match blocks.get(0) {
 						Some(ref block) => {
 							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", n, block.hash, who);
 							match protocol.client().block_hash(n) {
@@ -621,7 +628,8 @@ impl<B: BlockT> ChainSync<B> {
 			let stale = number <= self.best_queued_number;
 			if stale {
 				if !(known_parent || self.is_already_downloading(header.parent_hash())) {
-					trace!(target: "sync", "Ignoring unknown stale block announce from {}: {} {:?}", who, hash, header);
+					trace!(target: "sync", "Considering new unknown stale block announced from {}: {} {:?}", who, hash, header);
+					self.download_unknown_stale(protocol, who, &hash);
 				} else {
 					trace!(target: "sync", "Considering new stale block announced from {}: {} {:?}", who, hash, header);
 					self.download_stale(protocol, who, &hash);
@@ -679,7 +687,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.clear();
 	}
 
-	// Download old block.
+	// Download old block with known parent.
 	fn download_stale(&mut self, protocol: &mut Context<B>, who: NodeIndex, hash: &B::Hash) {
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			match peer.state {
@@ -691,6 +699,27 @@ impl<B: BlockT> ChainSync<B> {
 						to: None,
 						direction: message::Direction::Ascending,
 						max: Some(1),
+					};
+					peer.state = PeerSyncState::DownloadingStale(*hash);
+					protocol.send_message(who, GenericMessage::BlockRequest(request));
+				},
+				_ => (),
+			}
+		}
+	}
+
+	// Download old block with unknown parent.
+	fn download_unknown_stale(&mut self, protocol: &mut Context<B>, who: NodeIndex, hash: &B::Hash) {
+		if let Some(ref mut peer) = self.peers.get_mut(&who) {
+			match peer.state {
+				PeerSyncState::Available => {
+					let request = message::generic::BlockRequest {
+						id: 0,
+						fields: self.required_block_attributes.clone(),
+						from: message::FromBlock::Hash(*hash),
+						to: None,
+						direction: message::Direction::Descending,
+						max: Some(MAX_UNKNOWN_FORK_DOWNLOAD_LEN),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
 					protocol.send_message(who, GenericMessage::BlockRequest(request));
