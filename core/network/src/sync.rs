@@ -38,12 +38,15 @@ const MAX_IMPORTING_BLOCKS: usize = 2048;
 const MAJOR_SYNC_BLOCKS: usize = 5;
 // Time to wait before trying to get a justification from the same peer.
 const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
+// Number of recently announced blocks to track for each peer.
+const ANNOUNCE_HISTORY_SIZE: usize = 64;
 
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
 	pub best_hash: B::Hash,
 	pub best_number: NumberFor<B>,
 	pub state: PeerSyncState<B>,
+	pub recently_announced: VecDeque<B::Hash>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -334,6 +337,7 @@ impl<B: BlockT> ChainSync<B> {
 						best_hash: info.best_hash,
 						best_number: info.best_number,
 						state: PeerSyncState::Available,
+						recently_announced: Default::default(),
 					});
 				}
 				(Ok(BlockStatus::Unknown), _) => {
@@ -346,6 +350,7 @@ impl<B: BlockT> ChainSync<B> {
 							best_hash: info.best_hash,
 							best_number: info.best_number,
 							state: PeerSyncState::AncestorSearch(common_best),
+							recently_announced: Default::default(),
 						});
 						Self::request_ancestry(protocol, who, common_best)
 					} else {
@@ -356,6 +361,7 @@ impl<B: BlockT> ChainSync<B> {
 							best_hash: info.best_hash,
 							best_number: info.best_number,
 							state: PeerSyncState::Available,
+							recently_announced: Default::default(),
 						});
 						self.download_new(protocol, who)
 					}
@@ -367,6 +373,7 @@ impl<B: BlockT> ChainSync<B> {
 						best_hash: info.best_hash,
 						best_number: info.best_number,
 						state: PeerSyncState::Available,
+						recently_announced: Default::default(),
 					});
 				}
 			}
@@ -457,13 +464,16 @@ impl<B: BlockT> ChainSync<B> {
 			Vec::new()
 		};
 
-		let best_seen = self.best_seen_block();
-		let is_best = new_blocks.first().and_then(|b| b.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
-		let origin = if is_best.unwrap_or_default() { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
+		let is_recent = new_blocks
+			.first()
+			.map(|block| self.peers.iter().any(|(_, peer)| peer.recently_announced.contains(&block.hash)))
+			.unwrap_or(false);
+		let origin = if is_recent { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
 
 		if let Some((hash, number)) = new_blocks.last()
 			.and_then(|b| b.header.as_ref().map(|h| (b.hash.clone(), *h.number())))
 		{
+			trace!(target:"sync", "Accepted {} blocks ({:?}) with origin {:?}", new_blocks.len(), hash, origin);
 			self.block_queued(&hash, number);
 		}
 		self.maintain_sync(protocol);
@@ -586,6 +596,10 @@ impl<B: BlockT> ChainSync<B> {
 		let known_parent = self.is_known(protocol, &header.parent_hash());
 		let known = self.is_known(protocol, &hash);
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
+			while peer.recently_announced.len() >= ANNOUNCE_HISTORY_SIZE {
+				peer.recently_announced.pop_front();
+			}
+			peer.recently_announced.push_back(hash.clone());
 			if number > peer.best_number {
 				// update their best block
 				peer.best_number = number;
