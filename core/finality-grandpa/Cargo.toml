@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1"
-parity-codec = "2.2"
-parity-codec-derive = "2.0"
+parity-codec = "3.0"
+parity-codec-derive = "3.0"
 sr-primitives = { path = "../sr-primitives" }
 substrate-consensus-common = { path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
@@ -20,7 +20,7 @@ substrate-finality-grandpa-primitives = { path = "primitives" }
 rand = "0.6"
 
 [dependencies.finality-grandpa]
-version = "0.5.1"
+version = "0.6.0"
 features = ["derive-codec"]
 
 [dev-dependencies]
