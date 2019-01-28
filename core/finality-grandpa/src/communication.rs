@@ -20,7 +20,7 @@
 use futures::prelude::*;
 use futures::sync::mpsc;
 use codec::{Encode, Decode};
-use substrate_primitives::{ed25519, Ed25519AuthorityId};
+use substrate_primitives::{ed25519, H256, Ed25519AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
@@ -37,6 +37,10 @@ enum Broadcast {
 	Commit(u64, u64, Vec<u8>),
 	// set_id, round, encoded signed message.
 	Message(u64, u64, Vec<u8>),
+	// set_id, round, announcement of block hash that should be downloaded
+	Announcement(u64, u64, H256),
+	// set_id, round being dropped.
+	DropRound(u64, u64),
 }
 
 impl Broadcast {
@@ -44,6 +48,8 @@ impl Broadcast {
 		match *self {
 			Broadcast::Commit(s, _, _) => s,
 			Broadcast::Message(s, _, _) => s,
+			Broadcast::Announcement(s, _, _) => s,
+			Broadcast::DropRound(s, _) => s,
 		}
 	}
 }
@@ -62,6 +68,7 @@ pub(crate) fn rebroadcasting_network<N: Network>(network: N) -> (BroadcastWorker
 			set_id: 0, // will be overwritten on first item to broadcast.
 			last_commit: None,
 			round_messages: (0, Vec::new()),
+			announcements: HashMap::new(),
 			network: network.clone(),
 			incoming_broadcast: rx,
 		},
@@ -80,6 +87,7 @@ pub(crate) struct BroadcastWorker<N: Network> {
 	set_id: u64,
 	last_commit: Option<(u64, Vec<u8>)>,
 	round_messages: (u64, Vec<Vec<u8>>),
+	announcements: HashMap<H256, u64>,
 	network: N,
 	incoming_broadcast: mpsc::UnboundedReceiver<Broadcast>,
 }
@@ -114,6 +122,10 @@ impl<N: Network> Future for BroadcastWorker<N> {
 				for message in self.round_messages.1.iter().cloned() {
 					self.network.send_message(round, self.set_id, message);
 				}
+
+				for (&announce_hash, &round) in &self.announcements {
+					self.network.announce(round, self.set_id, announce_hash);
+				}
 			}
 		}
 		loop {
@@ -127,6 +139,7 @@ impl<N: Network> Future for BroadcastWorker<N> {
 						self.set_id = item.set_id();
 						self.last_commit = None;
 						self.round_messages = (0, Vec::new());
+						self.announcements.clear();
 					}
 
 					match item {
@@ -154,6 +167,19 @@ impl<N: Network> Future for BroadcastWorker<N> {
 							// always send out to network.
 							self.network.send_message(round, set_id, message);
 						}
+						Broadcast::Announcement(set_id, round, hash) => {
+							if self.set_id == set_id {
+								self.announcements.insert(hash, round);
+							}
+
+							// always send out.
+							self.network.announce(round, set_id, hash);
+						}
+						Broadcast::DropRound(set_id, round) => {
+							// stop making announcements for any dead rounds.
+							self.announcements.retain(|_, &mut r| r > round);
+							self.network.drop_messages(round, set_id);
+						}
 					}
 				}
 			}
@@ -173,7 +199,7 @@ impl<N: Network> Network for BroadcastHandle<N> {
 	}
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
-		self.network.drop_messages(round, set_id);
+		let _ = self.relay.unbounded_send(Broadcast::DropRound(set_id, round));
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
@@ -182,6 +208,10 @@ impl<N: Network> Network for BroadcastHandle<N> {
 
 	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let _ = self.relay.unbounded_send(Broadcast::Commit(round, set_id, message));
+	}
+
+	fn announce(&self, round: u64, set_id: u64, block: H256) {
+		let _ = self.relay.unbounded_send(Broadcast::Announcement(round, set_id, block));
 	}
 }
 
@@ -243,7 +273,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
 
-struct OutgoingMessages<Block: BlockT, N: Network> {
+pub(crate) struct OutgoingMessages<Block: BlockT, N: Network> {
 	round: u64,
 	set_id: u64,
 	locals: Option<(Arc<ed25519::Pair>, Ed25519AuthorityId)>,
@@ -251,7 +281,9 @@ struct OutgoingMessages<Block: BlockT, N: Network> {
 	network: N,
 }
 
-impl<Block: BlockT, N: Network> Sink for OutgoingMessages<Block, N> {
+impl<Block: BlockT, N: Network> Sink for OutgoingMessages<Block, N>
+	where Block: BlockT<Hash=H256>
+{
 	type SinkItem = Message<Block>;
 	type SinkError = Error;
 
@@ -260,14 +292,20 @@ impl<Block: BlockT, N: Network> Sink for OutgoingMessages<Block, N> {
 		if let Some((ref pair, local_id)) = self.locals {
 			let encoded = localized_payload(self.round, self.set_id, &msg);
 			let signature = pair.sign(&encoded[..]);
+
+			let target_hash = msg.target().0.clone();
 			let signed = SignedMessage::<Block> {
 				message: msg,
 				signature,
 				id: local_id,
 			};
 
-			// forward to network and to inner sender.
+			// announce our block hash to peers and propagate the
+			// message.
+			self.network.announce(self.round, self.set_id, target_hash);
 			self.network.send_message(self.round, self.set_id, signed.encode());
+
+			// forward the message to the inner sender.
 			let _ = self.sender.unbounded_send(signed);
 		}
 
@@ -301,7 +339,7 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network>(
 	network: N,
 ) -> (
 	impl Stream<Item=SignedMessage<Block>,Error=Error>,
-	impl Sink<SinkItem=Message<Block>,SinkError=Error>,
+	OutgoingMessages<Block, N>,
 ) {
 	let locals = local_key.and_then(|pair| {
 		let public = pair.public();

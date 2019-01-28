@@ -239,6 +239,9 @@ pub trait Network: Clone {
 
 	/// Send message over the commit channel.
 	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
+
+	/// Inform peers that a block with given hash should be downloaded.
+	fn announce(&self, round: u64, set_id: u64, block: H256);
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
@@ -292,6 +295,11 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
 		self.service.gossip_consensus_message(topic, message, true);
+	}
+
+	fn announce(&self, round: u64, set_id: u64, block: H256) {
+		#[cfg(not(test))]
+		compile_error!("implement block announcement");
 	}
 }
 

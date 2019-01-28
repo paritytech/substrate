@@ -229,6 +229,10 @@ impl Network for MessageRouting {
 		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
 		inner.route_until_complete();
 	}
+
+	fn announce(&self, _round: u64, _set_id: u64, block: H256) {
+
+	}
 }
 
 #[derive(Default, Clone)]
