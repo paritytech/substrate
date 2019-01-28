@@ -16,16 +16,15 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use super::{Schedule};
-use exec::{Ext, BalanceOf, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
+use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee};
+use crate::exec::{Ext, BalanceOf, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
+use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
+use sandbox;
+use system;
 use rstd::prelude::*;
 use rstd::mem;
 use codec::{Decode, Encode};
-use gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
 use runtime_primitives::traits::{As, CheckedMul, Bounded};
-use sandbox;
-use system;
-use {Trait, CodeHash, ComputeDispatchFee};
 
 /// Enumerates all possible *special* trap conditions.
 ///

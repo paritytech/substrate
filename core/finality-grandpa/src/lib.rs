@@ -95,7 +95,7 @@ use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
-	DigestItemFor, DigestItem, As, Zero,
+	DigestItemFor, DigestItem, As, One, Zero,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
@@ -103,7 +103,7 @@ use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
+use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps, VoterSet};
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
@@ -370,7 +370,7 @@ type SharedConsensusChanges<H, N> = Arc<parking_lot::Mutex<ConsensusChanges<H, N
 /// The environment we run GRANDPA in.
 struct Environment<B, E, Block: BlockT, N: Network, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
-	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -415,6 +415,14 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	}
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
+		// NOTE: when we finalize an authority set change through the sync protocol the voter is
+		//       signalled asynchronously. therefore the voter could still vote in the next round
+		//       before activating the new set. the `authority_set` is updated immediately thus we
+		//       restrict the voter based on that.
+		if self.set_id != self.authority_set.inner().read().current().0 {
+			return None;
+		}
+
 		// we refuse to vote beyond the current limit number where transitions are scheduled to
 		// occur.
 		// once blocks are finalized that make that transition irrelevant or activate it,
@@ -422,16 +430,57 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 		let limit = self.authority_set.current_limit();
 		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
-		match self.inner.best_containing(block, limit) {
-			Ok(Some(hash)) => {
-				let header = self.inner.header(&BlockId::Hash(hash)).ok()?
+		match self.inner.best_containing(block, None) {
+			Ok(Some(mut best_hash)) => {
+				let base_header = self.inner.header(&BlockId::Hash(block)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
-				Some((hash, header.number().clone()))
+				if let Some(limit) = limit {
+					// this is a rare case which might cause issues,
+					// might be better to return the header itself.
+					if *base_header.number() > limit {
+						debug!(target: "afg", "Encountered error finding best chain containing {:?} with limit {:?}: target block is after limit",
+							block,
+							limit,
+						);
+						return None;
+					}
+				}
+
+				let mut best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
+					.expect("Header known to exist after `best_containing` call; qed");
+
+				// we target a vote towards 3/4 of the unfinalized chain (rounding up)
+				let target = {
+					let two = NumberFor::<Block>::one() + One::one();
+					let three = two + One::one();
+					let four = three + One::one();
+
+					let diff = *best_header.number() - *base_header.number();
+					let diff = ((diff * three) + two) / four;
+
+					*base_header.number() + diff
+				};
+
+				// unless our vote is currently being limited due to a pending change
+				let target = limit.map(|limit| limit.min(target)).unwrap_or(target);
+
+				// walk backwards until we find the target block
+				loop {
+					if *best_header.number() < target { unreachable!(); }
+					if *best_header.number() == target {
+						return Some((best_hash, *best_header.number()));
+					}
+
+					best_hash = *best_header.parent_hash();
+					best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
+						.expect("Header known to exist after `best_containing` call; qed");
+				}
+			},
+			Ok(None) => {
+				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
+				None
 			}
-			// Ok(None) can be returned when `block` is after `limit`. That might cause issues.
-			// might be better to return the header itself in this (rare) case.
-			Ok(None) => None,
 			Err(e) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
 				None
@@ -687,7 +736,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
-		voters: &HashMap<Ed25519AuthorityId, u64>,
+		voters: &VoterSet<Ed25519AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -698,7 +747,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
-	fn verify(&self, set_id: u64, voters: &HashMap<Ed25519AuthorityId, u64>) -> Result<(), ClientError>
+	fn verify(&self, set_id: u64, voters: &VoterSet<Ed25519AuthorityId>) -> Result<(), ClientError>
 	where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -709,7 +758,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		match grandpa::validate_commit(
 			&self.commit,
 			voters,
-			None,
 			&ancestry_chain,
 		) {
 			Ok(Some(_)) => {},
@@ -1087,6 +1135,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
 				let error = || {
+					debug!(target: "afg", "rejecting change: {} is in the same chain as {}", hash, base);
 					Err(ConsensusErrorKind::ClientImport("Incorrect base hash".to_string()).into())
 				};
 
@@ -1412,7 +1461,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
-	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: &Arc<VoterSet<Ed25519AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &N,
 ) -> (

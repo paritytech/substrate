@@ -268,7 +268,7 @@ macro_rules! __events_to_metadata {
 	}
 }
 
-/// Constructs an Event type for a runtime. This is usually called automatically by the 
+/// Constructs an Event type for a runtime. This is usually called automatically by the
 /// construct_runtime macro. See also __create_decl_macro.
 #[macro_export]
 macro_rules! impl_outer_event {
@@ -441,6 +441,7 @@ macro_rules! __impl_outer_event_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
+	use serde_derive::Serialize;
 
 	mod system {
 		pub trait Trait {

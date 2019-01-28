@@ -29,13 +29,13 @@ macro_rules! convert_args {
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
 		{
-			$crate::parity_wasm::elements::FunctionType::new(convert_args!($($params),*), None)
+			parity_wasm::elements::FunctionType::new(convert_args!($($params),*), None)
 		}
 	);
 
 	( ( $( $params: ty ),* ) -> $returns: ty ) => (
 		{
-			$crate::parity_wasm::elements::FunctionType::new(convert_args!($($params),*), Some({
+			parity_wasm::elements::FunctionType::new(convert_args!($($params),*), Some({
 				use $crate::wasm::env_def::ConvertibleToWasm; <$returns>::VALUE_TYPE
 			}))
 		}
@@ -96,7 +96,7 @@ macro_rules! unmarshall_then_body {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, ::sandbox::HostError>,
+	F: FnOnce() -> Result<R, sandbox::HostError>,
 {
 	f
 }
@@ -110,14 +110,14 @@ macro_rules! unmarshall_then_body_then_marshall {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		let r = body()?;
-		return Ok($crate::sandbox::ReturnValue::Value({ use $crate::wasm::env_def::ConvertibleToWasm; r.to_typed_value() }))
+		return Ok(sandbox::ReturnValue::Value({ use $crate::wasm::env_def::ConvertibleToWasm; r.to_typed_value() }))
 	});
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		let body = $crate::wasm::env_def::macros::constrain_closure::<(), _>(|| {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		body()?;
-		return Ok($crate::sandbox::ReturnValue::Unit)
+		return Ok(sandbox::ReturnValue::Unit)
 	})
 }
 
@@ -126,7 +126,7 @@ macro_rules! define_func {
 	( < E: $ext_ty:tt > $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
 		fn $name< E: $ext_ty >(
 			$ctx: &mut $crate::wasm::Runtime<E>,
-			args: &[$crate::sandbox::TypedValue],
+			args: &[sandbox::TypedValue],
 		) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 			#[allow(unused)]
 			let mut args = args.iter();
@@ -176,7 +176,7 @@ macro_rules! define_env {
 		pub struct $init_name;
 
 		impl $crate::wasm::env_def::ImportSatisfyCheck for $init_name {
-			fn can_satisfy(name: &[u8], func_type: &$crate::parity_wasm::elements::FunctionType) -> bool {
+			fn can_satisfy(name: &[u8], func_type: &parity_wasm::elements::FunctionType) -> bool {
 				gen_signature_dispatch!( name, func_type ; $( $name ( $ctx $(, $names : $params )* ) $( -> $returns )* , )* );
 
 				return false;
@@ -197,10 +197,10 @@ mod tests {
 	use parity_wasm::elements::ValueType;
 	use runtime_primitives::traits::{As, Zero};
 	use sandbox::{self, ReturnValue, TypedValue};
-	use wasm::tests::MockExt;
-	use wasm::Runtime;
-	use exec::Ext;
-	use Trait;
+	use crate::wasm::tests::MockExt;
+	use crate::wasm::Runtime;
+	use crate::exec::Ext;
+	use crate::Trait;
 
 	#[test]
 	fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
@@ -304,7 +304,7 @@ mod tests {
 
 	#[test]
 	fn macro_define_env() {
-		use wasm::env_def::ImportSatisfyCheck;
+		use crate::wasm::env_def::ImportSatisfyCheck;
 
 		define_env!(Env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {

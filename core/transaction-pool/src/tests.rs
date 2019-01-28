@@ -151,7 +151,7 @@ fn prune_tags_should_work() {
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 
-	pool.prune_tags(&BlockId::number(1), vec![vec![209]]).unwrap();
+	pool.prune_tags(&BlockId::number(1), vec![vec![209]], vec![]).unwrap();
 
 	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer().nonce).collect();
 	assert_eq!(pending, vec![210]);

@@ -28,6 +28,8 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
+extern crate tiny_keccak;
+extern crate secp256k1;
 extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;
 #[cfg_attr(test, macro_use)]
