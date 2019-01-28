@@ -131,7 +131,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
-	children: RwLock<ChildrenMap<Block::Hash, NumberFor<Block>>>,
+	children: RwLock<ChildrenMap<Block::Hash, Block::Hash>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {

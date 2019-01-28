@@ -24,47 +24,20 @@ use crate::error;
 use std::hash::Hash;
 use std::fmt::Debug;
 
-#[derive(Debug, Clone)]
-struct ChildItem<H, N> {
-	hash: H,
-	number: N,
-}
-
-impl<H, N> Ord for ChildItem<H, N> where N: Ord {
-	fn cmp(&self, other: &Self) -> Ordering {
-		// reverse (descending) order
-		other.number.cmp(&self.number)
-	}
-}
-
-impl<H, N> PartialOrd for ChildItem<H, N> where N: PartialOrd {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		// reverse (descending) order
-		other.number.partial_cmp(&self.number)
-	}
-}
-
-impl<H, N> PartialEq for ChildItem<H, N> where N: PartialEq {
-	fn eq(&self, other: &ChildItem<H, N>) -> bool {
-		self.number == other.number
-	}
-}
-
-impl<H, N> Eq for ChildItem<H, N> where N: PartialEq {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChildrenMap<H, N> where 
-    H: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
-    N: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
+pub struct ChildrenMap<K, V> where 
+    K: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
+    V: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
 {
-    storage: BTreeMap<ChildItem<H, N>, Vec<H>>,
-    pending_added: Vec<(H, ChildItem<H, N>)>,
-    pending_removed: Vec<(H, ChildItem<H, N>)>,
+    storage: BTreeMap<K, Vec<V>>,
+    pending_added: Vec<(K, V)>,
+    pending_removed: Vec<(K, V)>,
 }
 
-impl<H, N> ChildrenMap<H, N> where
-    H: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
-    N: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
+impl<K, V> ChildrenMap<K, V> where
+    K: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
+    V: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
 {
     pub fn new() -> Self {
         Self {
@@ -75,7 +48,7 @@ impl<H, N> ChildrenMap<H, N> where
     }
 
     pub fn read_from_db(db: &KeyValueDB, column: Option<u32>, prefix: &[u8]) -> error::Result<Self> {
-        let mut storage: BTreeMap<H, ChildItem<H, N>> = BTreeMap::new();
+        let mut storage: BTreeMap<K, Vec<V>> = BTreeMap::new();
         for (key, value) in db.iter_from_prefix(column, prefix) {
             if !key.starts_with(prefix) { break }
             let raw_hash = &mut &key[prefix.len()..];
@@ -97,7 +70,7 @@ impl<H, N> ChildrenMap<H, N> where
                     storage.insert(parent_hash, vec![child]);
                 }
             };
-		}
+        }
 		Ok(Self {
 			storage,
 			pending_added: Vec::new(),
@@ -106,7 +79,7 @@ impl<H, N> ChildrenMap<H, N> where
     }
 
     /// Update the children list on import.
-	pub fn import(&mut self, parent_hash: H, hash: H) {
+	pub fn import(&mut self, parent_hash: K, hash: V) {
 		match self.storage.get_mut(&parent_hash) {
             Some(children) => {
                 children.push(hash.clone());
