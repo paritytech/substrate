@@ -149,16 +149,19 @@ construct_service_factory! {
 			NothingExtra,
 		>
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
-					import_queue(
-						SlotDuration::get_or_compute(&*client)?,
-						client.clone(),
-						None,
-						client,
-						NothingExtra,
-						config.custom.inherent_data_providers.clone(),
-					).map_err(Into::into)
-				}
-			},
+				let block_import = Arc::new(grandpa::light_block_import::<_, _, _, RuntimeApi, LightClient<Self>>(
+					client.clone(), client.clone()
+				)?);
+
+				import_queue(
+					SlotDuration::get_or_compute(&*client)?,
+					block_import.clone(),
+					Some(block_import),
+					client,
+					NothingExtra,
+					config.custom.inherent_data_providers.clone(),
+				).map_err(Into::into)
+			}},
 	}
 }
 

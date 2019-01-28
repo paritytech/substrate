@@ -80,7 +80,13 @@ error_chain! {
 			display("Genesis config provided is invalid"),
 		}
 
-		/// Bad justification for header.
+		/// Justification for the header has invalid encoding.
+		JustificationDecode {
+			description("Error decoding justification for header"),
+			display("Error decoding justification header"),
+		}
+
+		/// Justification for the header is properly encoded, but invalid.
 		BadJustification(h: String) {
 			description("bad justification for header"),
 			display("bad justification for header: {}", &*h),

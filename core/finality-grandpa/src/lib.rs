@@ -120,14 +120,16 @@ pub use fg_primitives::ScheduledChange;
 mod authorities;
 mod communication;
 mod finality_proof;
+mod light_import;
 mod until_imported;
 
 #[cfg(feature="service-integration")]
 mod service_integration;
 #[cfg(feature="service-integration")]
-pub use service_integration::{LinkHalfForService, BlockImportForService};
+pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 
 pub use finality_proof::{prove_finality, check_finality_proof};
+pub use light_import::light_block_import;
 
 #[cfg(test)]
 mod tests;
@@ -325,6 +327,11 @@ impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 	/// Create empty consensus changes.
 	pub fn empty() -> Self {
 		ConsensusChanges { pending_changes: Vec::new(), }
+	}
+
+	/// Returns reference to all pending changes.
+	pub fn pending_changes(&self) -> &[(N, H)] {
+		&self.pending_changes
 	}
 
 	/// Note unfinalized change of consensus-related data.
@@ -734,16 +741,15 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	/// Decode a GRANDPA justification and validate the commit and the votes'
 	/// ancestry proofs.
 	fn decode_and_verify(
-		encoded: Vec<u8>,
+		encoded: &[u8],
 		set_id: u64,
 		voters: &HashMap<Ed25519AuthorityId, u64>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
-		GrandpaJustification::<Block>::decode(&mut &*encoded).ok_or_else(|| {
-			let msg = "failed to decode grandpa justification".to_string();
-			ClientErrorKind::BadJustification(msg).into()
-		}).and_then(|just| just.verify(set_id, voters).map(|_| just))
+		GrandpaJustification::<Block>::decode(&mut &*encoded).ok_or_else(||
+			ClientErrorKind::JustificationDecode.into()
+		).and_then(|just| just.verify(set_id, voters).map(|_| just))
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
@@ -1258,7 +1264,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
 		enacts_change: bool,
 	) -> Result<(), ConsensusError> {
 		let justification = GrandpaJustification::decode_and_verify(
-			justification,
+			&justification,
 			self.authority_set.set_id(),
 			&self.authority_set.current_authorities(),
 		);
@@ -1393,11 +1399,31 @@ impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryCh
 	}
 }
 
+/// Load consensus changes from aux store OR create default if it is missing.
+pub(crate) fn load_consensus_changes<B, E, Block: BlockT<Hash=H256>, RA>(
+	client: &Client<B, E, Block, RA>,
+	key: &[u8],
+) -> Result<ConsensusChanges<Block::Hash, NumberFor<Block>>, ClientError>
+	where
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		RA: Send + Sync,
+{
+	let consensus_changes = Backend::get_aux(&**client.backend(), key)?;
+	match consensus_changes {
+		Some(raw) => ConsensusChanges::decode(&mut &raw[..])
+			.ok_or_else(|| ::client::error::ErrorKind::Backend(
+				format!("GRANDPA consensus changes kept in invalid format")
+			).into()),
+		None => Ok(ConsensusChanges::empty()),
+	}
+}
+
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
 pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
-	api: Arc<PRA>
+	api: Arc<PRA>,
 ) -> Result<(GrandpaBlockImport<B, E, Block, RA, PRA>, LinkHalf<B, E, Block, RA>), ClientError>
 	where
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -1431,14 +1457,9 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			.into(),
 	};
 
-	let consensus_changes = Backend::get_aux(&**client.backend(), CONSENSUS_CHANGES_KEY)?;
-	let consensus_changes = Arc::new(parking_lot::Mutex::new(match consensus_changes {
-		Some(raw) => ConsensusChanges::decode(&mut &raw[..])
-			.ok_or_else(|| ::client::error::ErrorKind::Backend(
-				format!("GRANDPA consensus changes kept in invalid format")
-			))?,
-		None => ConsensusChanges::empty(),
-	}));
+	let consensus_changes = Arc::new(parking_lot::Mutex::new(
+		load_consensus_changes(&*client, CONSENSUS_CHANGES_KEY)?,
+	));
 
 	let (authority_set_change_tx, authority_set_change_rx) = mpsc::unbounded();
 
