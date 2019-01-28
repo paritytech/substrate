@@ -42,7 +42,7 @@ const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // Max number of blocks to download for unknown forks.
 // TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
-const MAX_UNKOWN_FORK_DOWNLOAD_LEN: u32 = 32;
+const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
 
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
@@ -719,7 +719,7 @@ impl<B: BlockT> ChainSync<B> {
 						from: message::FromBlock::Hash(*hash),
 						to: None,
 						direction: message::Direction::Descending,
-						max: Some(MAX_UNKOWN_FORK_DOWNLOAD_LEN),
+						max: Some(MAX_UNKNOWN_FORK_DOWNLOAD_LEN),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
 					protocol.send_message(who, GenericMessage::BlockRequest(request));
