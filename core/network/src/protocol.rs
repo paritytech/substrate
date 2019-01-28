@@ -706,8 +706,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let mut peers = self.context_data.peers.write();
 		let hash = header.hash();
 		for (who, ref mut peer) in peers.iter_mut() {
-			peer.known_blocks.insert(hash.clone());
 			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
+			peer.known_blocks.insert(hash);
 			self.send_message(io, *who, GenericMessage::BlockAnnounce(message::BlockAnnounce {
 				header: header.clone()
 			}));
