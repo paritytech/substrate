@@ -11,7 +11,7 @@ tokio = "0.1.7"
 futures = "0.1"
 exit-future = "0.1"
 substrate-cli = { path = "../../core/cli" }
-parity-codec = { version = "2.2" }
+parity-codec = { version = "3.0" }
 slog = "^2"
 sr-io = { path = "../../core/sr-io" }
 substrate-client = { path = "../../core/client" }
