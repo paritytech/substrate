@@ -35,6 +35,7 @@ use std::path::PathBuf;
 use std::io;
 
 use client::backend::NewBlockState;
+use client::blockchain::HeaderBackend;
 use parity_codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
@@ -563,25 +564,40 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		})
 	}
 
-	fn finalize_block_with_transaction(&self, transaction: &mut DBTransaction, block: BlockId<Block>, justification: Option<Justification>) -> Result<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool), client::error::Error> {
-		use runtime_primitives::traits::Header;
-
-		if let Some(header) = ::client::blockchain::HeaderBackend::header(&self.blockchain, block)? {
-			// TODO: ensure best chain contains this block.
-			let hash = header.hash();
-			self.note_finalized(transaction, &header, hash.clone())?;
-			if let Some(justification) = justification {
-				let number = header.number().clone();
-				transaction.put(
-					columns::JUSTIFICATION,
-					&utils::number_and_hash_to_lookup_key(number, hash.clone()),
-					&justification.encode(),
-				);
-			}
-			Ok((hash, header.number().clone(), false, true))
-		} else {
-			Err(client::error::ErrorKind::UnknownBlock(format!("Cannot finalize block {:?}", block)).into())
+	fn ensure_sequential_finalization(
+		&self,
+		header: &Block::Header,
+		last_finalized: Option<Block::Hash>,
+	) -> Result<(), client::error::Error> {
+		let last_finalized = last_finalized.unwrap_or_else(|| self.blockchain.meta.read().finalized_hash);
+		if *header.parent_hash() != last_finalized {
+			return Err(::client::error::ErrorKind::NonSequentialFinalization(
+				format!("Last finalized {:?} not parent of {:?}", last_finalized, header.hash()),
+			).into());
 		}
+		Ok(())
+	}
+
+	fn finalize_block_with_transaction(
+		&self,
+		transaction: &mut DBTransaction,
+		hash: &Block::Hash,
+		header: &Block::Header,
+		last_finalized: Option<Block::Hash>,
+		justification: Option<Justification>,
+	) -> Result<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool), client::error::Error> {
+		// TODO: ensure best chain contains this block.
+		let number = *header.number();
+		self.ensure_sequential_finalization(header, last_finalized)?;
+		self.note_finalized(transaction, header, *hash)?;
+		if let Some(justification) = justification {
+			transaction.put(
+				columns::JUSTIFICATION,
+				&utils::number_and_hash_to_lookup_key(number, *hash),
+				&justification.encode(),
+			);
+		}
+		Ok((*hash, number, false, true))
 	}
 
 	// performs forced canonicaliziation with a delay after importning a non-finalized block.
@@ -628,17 +644,10 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	) -> Result<(), client::error::Error> where
 		Block: BlockT<Hash=H256>,
 	{
-		let meta = self.blockchain.meta.read();
 		let f_num = f_header.number().clone();
 
 		if f_num.as_() > self.storage.state_db.best_canonical() {
 			let parent_hash = f_header.parent_hash().clone();
-			if meta.finalized_hash != parent_hash {
-				return Err(::client::error::ErrorKind::NonSequentialFinalization(
-					format!("Last finalized {:?} not parent of {:?}",
-						meta.finalized_hash, f_hash),
-				).into())
-			}
 
 			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
@@ -727,11 +736,22 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		let mut transaction = DBTransaction::new();
 		operation.apply_aux(&mut transaction);
 
-		if operation.finalized_blocks.len() > 0 {
+		if !operation.finalized_blocks.is_empty() {
 			let mut meta_updates = Vec::new();
 
+			let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 			for (block, justification) in operation.finalized_blocks {
-				meta_updates.push(self.finalize_block_with_transaction(&mut transaction, block, justification)?);
+				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
+				let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
+
+				meta_updates.push(self.finalize_block_with_transaction(
+					&mut transaction,
+					&block_hash,
+					&block_header,
+					Some(last_finalized_hash),
+					justification,
+				)?);
+				last_finalized_hash = block_hash;
 			}
 
 			for (hash, number, is_best, is_finalized) in meta_updates {
@@ -841,6 +861,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 			if finalized {
 				// TODO: ensure best chain contains this block.
+				self.ensure_sequential_finalization(&pending_block.header, None)?;
 				self.note_finalized(&mut transaction, &pending_block.header, hash)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
@@ -890,7 +911,15 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		-> Result<(), client::error::Error>
 	{
 		let mut transaction = DBTransaction::new();
-		let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(&mut transaction, block, justification)?;
+		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
+		let header = self.blockchain.expect_header(block)?;
+		let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
+			&mut transaction,
+			&hash,
+			&header,
+			None,
+			justification,
+		)?;
 		self.storage.db.write(transaction).map_err(db_err)?;
 		self.blockchain.update_meta(hash, number, is_best, is_finalized);
 		Ok(())
@@ -987,6 +1016,7 @@ mod tests {
 	use client::backend::BlockImportOperation as Op;
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
+	use runtime_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use test_client;
 
@@ -1027,7 +1057,7 @@ mod tests {
 		let header = Header {
 			number,
 			parent_hash,
-			state_root: Default::default(),
+			state_root: BlakeTwo256::trie_root::<_, &[u8], &[u8]>(Vec::new()),
 			digest,
 			extrinsics_root,
 		};
@@ -1616,35 +1646,48 @@ mod tests {
 	fn test_finalize_block_with_justification() {
 		use client::blockchain::{Backend as BlockChainBackend};
 
-		let backend = Backend::<Block>::new_test(0, 0);
+		let backend = Backend::<Block>::new_test(10, 10);
 
-		{
-			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
-			let header = Header {
-				number: 0,
-				parent_hash: Default::default(),
-				state_root: Default::default(),
-				digest: Default::default(),
-				extrinsics_root: Default::default(),
-			};
-
-			op.set_block_data(
-				header,
-				Some(vec![]),
-				None,
-				NewBlockState::Best,
-			).unwrap();
-
-			backend.commit_operation(op).unwrap();
-		}
+		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
+		let _ = insert_header(&backend, 1, block0, Default::default(), Default::default());
 
 		let justification = Some(vec![1, 2, 3]);
-		backend.finalize_block(BlockId::Number(0), justification.clone()).unwrap();
+		backend.finalize_block(BlockId::Number(1), justification.clone()).unwrap();
 
 		assert_eq!(
-			backend.blockchain().justification(BlockId::Number(0)).unwrap(),
+			backend.blockchain().justification(BlockId::Number(1)).unwrap(),
 			justification,
 		);
+	}
+
+	#[test]
+	fn test_finalize_multiple_blocks_in_single_op() {
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
+		let block1 = insert_header(&backend, 1, block0, Default::default(), Default::default());
+		let block2 = insert_header(&backend, 2, block1, Default::default(), Default::default());
+		{
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
+			op.mark_finalized(BlockId::Hash(block1), None).unwrap();
+			op.mark_finalized(BlockId::Hash(block2), None).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+	}
+
+	#[test]
+	fn test_finalize_non_sequential() {
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
+		let block1 = insert_header(&backend, 1, block0, Default::default(), Default::default());
+		let block2 = insert_header(&backend, 2, block1, Default::default(), Default::default());
+		{
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
+			op.mark_finalized(BlockId::Hash(block2), None).unwrap();
+			backend.commit_operation(op).unwrap_err();
+		}
 	}
 }
