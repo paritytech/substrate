@@ -20,8 +20,8 @@ substrate-primitives = { path = "../../core/primitives" }
 substrate-consensus-common = { path = "../../core/consensus/common" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }
-parity-codec = "2.2"
-parity-codec-derive = "2.1"
+parity-codec = "3.0"
+parity-codec-derive = "3.0"
 substrate-network-libp2p = { path = "../../core/network-libp2p" }
 tokio = "0.1.11"
 

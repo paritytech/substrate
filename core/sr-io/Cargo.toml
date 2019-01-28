@@ -10,7 +10,7 @@ rustc_version = "0.2"
 [dependencies]
 sr-std = { path = "../sr-std", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
-parity-codec = { version = "2.2", default-features = false }
+parity-codec = { version = "3.0", default-features = false }
 hash-db = { version = "0.9", default-features = false }
 libsecp256k1 = { version = "0.2.1", optional = true }
 tiny-keccak = { version = "1.4.2", optional = true }

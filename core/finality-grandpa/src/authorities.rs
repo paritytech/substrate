@@ -18,9 +18,9 @@
 
 use parking_lot::RwLock;
 use substrate_primitives::Ed25519AuthorityId;
+use grandpa::VoterSet;
 
 use std::cmp::Ord;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
@@ -66,7 +66,7 @@ where
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub(crate) fn current_authorities(&self) -> HashMap<Ed25519AuthorityId, u64> {
+	pub(crate) fn current_authorities(&self) -> VoterSet<Ed25519AuthorityId> {
 		self.inner.read().current_authorities.iter().cloned().collect()
 	}
 }
