@@ -94,14 +94,16 @@ fn get_chain_key(cli: &SharedParams) -> String {
 }
 
 fn generate_node_name() -> String {
-	let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
-	let cnt = node_name.chars().count();
+	let result = loop {
+		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
+		let count = node_name.chars().count();
 
-	if cnt >= MAX_NODE_NAME_LENGTH {
-		generate_node_name()
-	} else {
-		node_name
-	}
+		if count < MAX_NODE_NAME_LENGTH {
+			break node_name
+		}
+	};
+	
+	result
 }
 
 fn load_spec<F, G>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G>>
