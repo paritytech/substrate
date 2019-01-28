@@ -698,7 +698,7 @@ impl<B: BlockT> ChainSync<B> {
 						from: message::FromBlock::Hash(*hash),
 						to: None,
 						direction: message::Direction::Ascending,
-						max: Some(MAX_UNKOWN_FORK_DOWNLOAD_LEN),
+						max: Some(1),
 					};
 					peer.state = PeerSyncState::DownloadingStale(*hash);
 					protocol.send_message(who, GenericMessage::BlockRequest(request));
