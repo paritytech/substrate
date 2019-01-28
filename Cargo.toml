@@ -63,6 +63,7 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
+	"srml/finality-tracker",
 	"srml/grandpa",
 	"srml/indices",
 	"srml/metadata",
