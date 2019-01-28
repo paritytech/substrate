@@ -48,7 +48,7 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
 use slots::Slots;
-use ::log::{warn, debug, log, info, trace};
+use ::log::{warn, debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -566,6 +566,10 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 
 				extra_verification.into_future().wait()?;
 
+				let new_authorities = pre_header.digest()
+					.log(DigestItem::as_authorities_change)
+					.map(|digest| digest.to_vec());
+
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
@@ -577,8 +581,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
-				Ok((import_block, None))
+				Ok((import_block, new_authorities))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
@@ -797,7 +800,7 @@ mod tests {
 
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
-			let mut client = net.lock().peer(*peer_id).client().clone();
+			let client = net.lock().peer(*peer_id).client().clone();
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
