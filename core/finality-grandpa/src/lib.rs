@@ -297,7 +297,8 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 		self.service.gossip_consensus_message(topic, message, true);
 	}
 
-	fn announce(&self, _round: u64, _set_id: u64, block: B::Hash) {
+	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
+		debug!(target: "afg", "Announcing block {} to peers which we voted on in round {}", block, round);
 		self.service.announce_block(block)
 	}
 }

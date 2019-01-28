@@ -230,7 +230,7 @@ impl Network<Block> for MessageRouting {
 		inner.route_until_complete();
 	}
 
-	fn announce(&self, _round: u64, _set_id: u64, block: H256) {
+	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
 
 	}
 }

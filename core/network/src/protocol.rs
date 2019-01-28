@@ -686,7 +686,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.transaction_pool.on_broadcasted(propagated_to);
 	}
 
-	/// Called by the finality gadget to make sure important blocks are propagated.
+	/// Make sure an important block is propagated to peers.
+	///
+	/// In chain-based consensus, we often need to make sure non-best forks are
+	/// at least temporarily synced.
 	pub fn announce_block(&self, io: &mut SyncIo, hash: B::Hash) {
 		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
