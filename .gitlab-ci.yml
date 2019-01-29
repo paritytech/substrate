@@ -39,7 +39,7 @@ cache:
 
 test:runtime:
   stage:                           test
-  image:                           alpine/git:latest
+  # image:                         alpine/git:latest
   tags:
     - linux-docker
   only:
