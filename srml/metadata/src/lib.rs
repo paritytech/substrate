@@ -135,7 +135,6 @@ type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct CallMetadata {
-	pub outer_dispatch: DFn<OuterDispatchCall>,
 	pub functions: DFn<DecodeDifferentArray<FunctionMetadata>>,
 }
 
@@ -362,20 +361,11 @@ pub struct ModuleMetadata {
 	pub event: Option<DecodeDifferent<FnEncode<&'static [EventMetadata]>, Vec<EventMetadata>>>,
 }
 
-#[cfg(feature="std")]
-impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
-	fn into(self) -> primitives::OpaqueMetadata {
-		println!("{:?}", &self);
-		primitives::OpaqueMetadata::new(self.encode())
-	}
-}
-#[cfg(not(feature="std"))]
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {
 		primitives::OpaqueMetadata::new(self.encode())
 	}
 }
-
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadata {
 	fn into(self) -> RuntimeMetadataPrefixed {
