@@ -494,8 +494,8 @@ impl<T: Trait> Module<T> {
 		<session::Module<T>>::set_validators(vals);
 
 		// Update the balances for slashing/rewarding according to the stakes.
-		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
-		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
+		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * stake_range.1);
+		<CurrentSessionReward<T>>::put(Self::session_reward() * stake_range.1);
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the
