@@ -878,10 +878,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			apply_state_commit(&mut transaction, commit);
 			self.changes_tries_storage.commit(&mut transaction, operation.changes_trie_updates);
 
-			let finalized = match pending_block.leaf_state {
-				NewBlockState::Final => true,
-				_ => false,
-			};
+			let finalized = pending_block.leaf_state.is_final();
 
 			if finalized {
 				// TODO: ensure best chain contains this block.

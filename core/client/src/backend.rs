@@ -44,6 +44,14 @@ impl NewBlockState {
 			NewBlockState::Normal => false,
 		}
 	}
+
+	/// Whether this block is considered final.
+	pub fn is_final(self) -> bool {
+		match self {
+			NewBlockState::Final => true,
+			NewBlockState::Best | NewBlockState::Normal => false,
+		}
+	}
 }
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
