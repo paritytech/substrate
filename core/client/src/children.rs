@@ -128,6 +128,19 @@ mod tests {
     }
 
     #[test]
+    fn children_hashes() {
+        let mut children = ChildrenMap::new();
+
+		children.import(0u32, 0u32);
+        children.import(1_1, 1_3);
+        children.import(1_2, 1_4);
+        children.import(1_2, 1_5);
+
+        assert_eq!(children.hashes(1_1), vec![1_3]);
+        assert_eq!(children.hashes(1_2), vec![1_4, 1_5]);
+    }
+
+    #[test]
     fn children_flush() {
         const PREFIX: &[u8] = b"a";
 		let db = ::kvdb_memorydb::create(0);
