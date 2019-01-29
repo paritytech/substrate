@@ -827,7 +827,6 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		)*
-		__impl_outer_dispatch_metadata!($runtime; $call_type; $( $module::$camelcase, )*);
 	}
 }
 
@@ -852,50 +851,6 @@ macro_rules! __impl_outer_dispatch_common {
 		}
 	}
 }
-/// Implement metadata for outer dispatch.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_outer_dispatch_metadata {
-	(
-		$runtime:ident;
-		$outer_name:ident;
-		$( $module:ident::$call:ident, )*
-	) => {
-		impl $runtime {
-			__impl_outer_dispatch_metadata!(@filter 0; $( $module::$call, )*; );
-		}
-	};
-	(@filter
-		$index:expr;
-		$module:ident::$call:ident,
-		$( $rest_module:ident::$rest:ident, )*;
-		$( $encoded_call:tt )*
-	) => {
-		__impl_outer_dispatch_metadata!(
-			@filter
-			$index + 1;
-			$( $rest_module::$rest, )* ;
-			$( $encoded_call )*
-			$crate::paste::item!{
-				pub fn [< __module_dispatch_ $module >] () -> $crate::dispatch::OuterDispatchCall {
-					return $crate::dispatch::OuterDispatchCall {
-						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
-						index: $index,
-					}
-				}
-			}
-		);
-	};
-	(@filter
-		$index:expr;
-		;
-		$( $encoded_call:tt )*
-	) => {
-		$( $encoded_call )*
-	};
-
-}
-
 
 /// Implement metadata for dispatch.
 #[macro_export]
