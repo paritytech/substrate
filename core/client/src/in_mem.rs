@@ -465,17 +465,11 @@ where
 	}
 
 	fn reset_storage(&mut self, mut top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out> {
-		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-			return Err(error::ErrorKind::GenesisInvalid.into());
-		}
+		check_genesis_storage(&top, &children)?;
 
 		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
 
 		for (child_key, child_map) in children {
-			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(error::ErrorKind::GenesisInvalid.into());
-			}
-
 			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
 			transaction.consolidate(update);
 
@@ -706,6 +700,19 @@ pub fn cache_authorities_at<Block: BlockT>(
 	authorities: Option<Vec<AuthorityIdFor<Block>>>
 ) {
 	blockchain.cache.insert(at, authorities);
+}
+
+/// Check that genesis storage is valid.
+pub fn check_genesis_storage(top: &StorageMap, children: &ChildrenStorageMap) -> error::Result<()> {
+	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+		return Err(error::ErrorKind::GenesisInvalid.into());
+	}
+
+	if children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
+		return Err(error::ErrorKind::GenesisInvalid.into());
+	}
+
+	Ok(())
 }
 
 #[cfg(test)]
