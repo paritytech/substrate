@@ -20,12 +20,13 @@ use bytes::Bytes;
 use futures::prelude::*;
 use libp2p::core::{
 	Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
+	protocols_handler::KeepAlive,
 	protocols_handler::ProtocolsHandlerUpgrErr,
 	upgrade::{InboundUpgrade, OutboundUpgrade}
 };
 use log::{trace, warn};
 use smallvec::SmallVec;
-use std::{fmt, io};
+use std::{fmt, io, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use void::Void;
 
@@ -41,6 +42,9 @@ pub struct CustomProtosHandler<TSubstream> {
 
 	/// See the documentation of `State`.
 	state: State,
+
+	/// Value to be returned by `connection_keep_alive()`.
+	keep_alive: KeepAlive,
 
 	/// The active substreams. There should always ever be only one substream per protocol.
 	substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
@@ -130,6 +134,8 @@ where
 	pub fn new(protocols: RegisteredProtocols) -> Self {
 		CustomProtosHandler {
 			protocols,
+			// We keep the connection alive for at least 5 seconds, waiting for what happens.
+			keep_alive: KeepAlive::Until(Instant::now() + Duration::from_secs(5)),
 			state: State::Disabled,
 			substreams: SmallVec::new(),
 			events_queue: SmallVec::new(),
@@ -203,6 +209,7 @@ where
 					State::Disabled | State::ShuttingDown => (),
 				}
 
+				self.keep_alive = KeepAlive::Now;
 				for substream in self.substreams.iter_mut() {
 					substream.shutdown();
 				}
@@ -212,6 +219,8 @@ where
 					State::Disabled => self.state = State::Normal,
 					State::Normal | State::ShuttingDown => (),
 				}
+
+				self.keep_alive = KeepAlive::Forever;
 
 				// Try open one substream for each registered protocol.
 				if let CustomProtosHandlerIn::EnableActive = message {
@@ -253,14 +262,16 @@ where
 	#[inline]
 	fn inject_dial_upgrade_error(&mut self, _: Self::OutboundOpenInfo, err: ProtocolsHandlerUpgrErr<io::Error>) {
 		warn!(target: "sub-libp2p", "Error while opening custom protocol: {:?}", err);
-	}
 
-	#[inline]
-	fn connection_keep_alive(&self) -> bool {
 		// Right now if the remote doesn't support one of the custom protocols, we shut down the
 		// entire connection. This is a hack-ish solution to the problem where we connect to nodes
 		// that support libp2p but not the testnet that we want.
-		self.substreams.len() == self.protocols.len()
+		self.shutdown();
+	}
+
+	#[inline]
+	fn connection_keep_alive(&self) -> KeepAlive {
+		self.keep_alive
 	}
 
 	fn shutdown(&mut self) {

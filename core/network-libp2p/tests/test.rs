@@ -124,7 +124,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	});
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+	tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
 }
 
 #[test]

@@ -15,19 +15,23 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::custom_proto::handler::{CustomProtosHandler, CustomProtosHandlerOut, CustomProtosHandlerIn};
+use crate::custom_proto::topology::NetTopology;
 use crate::custom_proto::upgrade::RegisteredProtocols;
-use crate::{NetworkConfiguration, NonReservedPeerMode, ProtocolId, topology::NetTopology};
+use crate::{NetworkConfiguration, NonReservedPeerMode, ProtocolId};
+use crate::parse_str_addr;
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::prelude::*;
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::core::{protocols_handler::ProtocolsHandler, PeerId};
+use libp2p::core::{protocols_handler::ProtocolsHandler, Multiaddr, PeerId};
 use log::{debug, trace, warn};
 use smallvec::SmallVec;
-use std::{io, marker::PhantomData, time::Duration, time::Instant};
+use std::{error, io, marker::PhantomData, path::Path, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::Delay;
 
+// File where the network topology is stored.
+const NODES_FILE: &str = "nodes.json";
 // Duration during which a peer is disabled.
 const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 
@@ -35,6 +39,9 @@ const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 pub struct CustomProtos<TSubstream> {
 	/// List of protocols to open with peers. Never modified.
 	registered_protocols: RegisteredProtocols,
+
+	/// Topology of the network.
+	topology: NetTopology,
 
 	/// List of custom protocols that we have open with remotes.
 	open_protocols: Vec<(PeerId, ProtocolId)>,
@@ -122,7 +129,27 @@ pub enum CustomProtosOut {
 
 impl<TSubstream> CustomProtos<TSubstream> {
 	/// Creates a `CustomProtos`.
-	pub fn new(config: &NetworkConfiguration, registered_protocols: RegisteredProtocols) -> Self {
+	pub fn new(config: &NetworkConfiguration, local_peer_id: &PeerId, registered_protocols: RegisteredProtocols) -> Self {
+		// Initialize the topology of the network.
+		let mut topology = if let Some(ref path) = config.net_config_path {
+			let path = Path::new(path).join(NODES_FILE);
+			debug!(target: "sub-libp2p", "Initializing peer store for JSON file {:?}", path);
+			NetTopology::from_file(local_peer_id.clone(), path)
+		} else {
+			debug!(target: "sub-libp2p", "No peers file configured ; peers won't be saved");
+			NetTopology::memory(local_peer_id.clone())
+		};
+
+		// Register the external addresses provided by the user as our own.
+		topology.add_external_addrs(config.public_addresses.clone().into_iter());
+
+		// Add the bootstrap nodes to the topology.
+		for bootnode in config.boot_nodes.iter() {
+			if let Ok((peer_id, addr)) = parse_str_addr(bootnode) {
+				topology.add_bootstrap_addr(&peer_id, addr.clone());
+			}
+		}
+
 		let max_incoming_connections = config.in_peers as usize;
 		let max_outgoing_connections = config.out_peers as usize;
 
@@ -136,6 +163,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 
 		CustomProtos {
 			registered_protocols,
+			topology,
 			max_incoming_connections,
 			max_outgoing_connections,
 			reserved_only: config.non_reserved_mode == NonReservedPeerMode::Deny,
@@ -150,7 +178,8 @@ impl<TSubstream> CustomProtos<TSubstream> {
 	}
 
 	/// Adds a reserved peer.
-	pub fn add_reserved_peer(&mut self, peer_id: PeerId) {
+	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
+		self.topology.add_bootstrap_addr(&peer_id, addr);
 		self.reserved_peers.insert(peer_id);
 
 		// Trigger a `connect_to_nodes` round.
@@ -240,11 +269,40 @@ impl<TSubstream> CustomProtos<TSubstream> {
 		});
 	}
 
+	/// Indicates to the topology that we have discovered new addresses for a given node.
+	pub fn add_discovered_addrs<I>(
+		&mut self,
+		peer_id: &PeerId,
+		addrs: I,
+	) where I: Iterator<Item = (Multiaddr, bool)> {
+		if self.topology.add_discovered_addrs(peer_id, addrs) {
+			// Trigger a `connect_to_nodes` round.
+			self.next_connect_to_nodes = Delay::new(Instant::now());
+		}
+	}
+
+	/// Returns the number of peers in the topology.
+	pub fn num_topology_peers(&self) -> usize {
+		self.topology.num_peers()
+	}
+
+	/// Flushes the topology to the disk.
+	pub fn flush_topology(&mut self) -> Result<(), io::Error> {
+		self.topology.flush_to_disk()
+	}
+
+	/// Perform a cleanup pass, removing all obsolete addresses and peers.
+	///
+	/// This should be done from time to time.
+	pub fn cleanup(&mut self) {
+		self.topology.cleanup();
+	}
+
 	/// Updates the attempted connections to nodes.
 	///
 	/// Also updates `next_connect_to_nodes` with the earliest known moment when we need to
 	/// update connections again.
-	fn connect_to_nodes(&mut self, params: &mut PollParameters<NetTopology>) {
+	fn connect_to_nodes(&mut self, params: &mut PollParameters) {
 		// Make sure we are connected or connecting to all the reserved nodes.
 		for reserved in self.reserved_peers.iter() {
 			// TODO: don't generate an event if we're already in a pending connection (https://github.com/libp2p/rust-libp2p/issues/697)
@@ -272,7 +330,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 			num_to_open);
 
 		let local_peer_id = params.local_peer_id().clone();
-		let (to_try, will_change) = params.topology().addrs_to_attempt();
+		let (to_try, will_change) = self.topology.addrs_to_attempt();
 		for (peer_id, _) in to_try {
 			if num_to_open == 0 {
 				break
@@ -297,7 +355,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 	}
 }
 
-impl<TSubstream> NetworkBehaviour<NetTopology> for CustomProtos<TSubstream>
+impl<TSubstream> NetworkBehaviour for CustomProtos<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
 {
@@ -306,6 +364,10 @@ where
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		CustomProtosHandler::new(self.registered_protocols.clone())
+	}
+
+	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
+		self.topology.addresses_of_peer(peer_id)
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
@@ -374,10 +436,13 @@ where
 			});
 		}
 
+		self.topology.set_connected(&peer_id, &endpoint);
 		self.enabled_peers.insert(peer_id, endpoint);
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, _: ConnectedPoint) {
+	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+		self.topology.set_disconnected(peer_id, &endpoint);
+
 		while let Some(pos) = self.open_protocols.iter().position(|(p, _)| p == peer_id) {
 			let (_, protocol_id) = self.open_protocols.remove(pos);
 
@@ -394,6 +459,13 @@ where
 		}
 
 		self.enabled_peers.remove(peer_id);
+	}
+
+	fn inject_dial_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn error::Error) {
+		debug!(target: "sub-libp2p", "Failed to reach peer {:?} through {} => {:?}", peer_id, addr, error);
+		self.topology.set_unreachable(addr);
+		// Trigger a `connect_to_nodes` round.
+		self.next_connect_to_nodes = Delay::new(Instant::now());
 	}
 
 	fn inject_node_event(
@@ -461,7 +533,7 @@ where
 
 	fn poll(
 		&mut self,
-		params: &mut PollParameters<NetTopology>,
+		params: &mut PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
 			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,

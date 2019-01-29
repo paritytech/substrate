@@ -15,12 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 use fnv::FnvHashMap;
-use libp2p::{Multiaddr, PeerId, identify::IdentifyTopology, multihash::Multihash};
-use libp2p::core::{PublicKey, swarm::ConnectedPoint, topology::DisconnectReason, topology::Topology};
-use libp2p::kad::{KBucketsPeerId, KadConnectionType, KademliaTopology};
+use libp2p::{core::swarm::ConnectedPoint, Multiaddr, PeerId};
 use log::{debug, info, trace, warn};
 use serde_derive::{Serialize, Deserialize};
-use std::{cmp, fs, iter, vec};
+use std::{cmp, fs};
 use std::io::{Read, Cursor, Error as IoError, ErrorKind as IoErrorKind, Write, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -58,8 +56,6 @@ const FAIL_BACKOFF_MULTIPLIER: u32 = 2;
 /// We need a maximum value for the backoff, overwise we risk an overflow.
 const MAX_BACKOFF: Duration = Duration::from_secs(30 * 60);
 
-// TODO: should be merged with the Kademlia k-buckets
-
 /// Stores information about the topology of the network.
 #[derive(Debug)]
 pub struct NetTopology {
@@ -67,9 +63,7 @@ pub struct NetTopology {
 	store: FnvHashMap<PeerId, PeerInfo>,
 	/// Optional path to the file that caches the serialized version of `store`.
 	cache_path: Option<PathBuf>,
-	/// Public key of the local node.
-	local_public_key: PublicKey,
-	/// PeerId of the local node. Derived from `local_public_key`.
+	/// PeerId of the local node.
 	local_peer_id: PeerId,
 	/// Known addresses for the local node to report to the network.
 	external_addresses: Vec<Multiaddr>,
@@ -80,13 +74,11 @@ impl NetTopology {
 	///
 	/// `flush_to_disk()` will be a no-op.
 	#[inline]
-	pub fn memory(local_public_key: PublicKey) -> NetTopology {
-		let local_peer_id = local_public_key.clone().into_peer_id();
+	pub fn memory(local_peer_id: PeerId) -> NetTopology {
 		NetTopology {
 			store: Default::default(),
 			cache_path: None,
 			local_peer_id,
-			local_public_key,
 			external_addresses: Vec::new(),
 		}
 	}
@@ -97,16 +89,14 @@ impl NetTopology {
 	/// or contains garbage data, the execution still continues.
 	///
 	/// Calling `flush_to_disk()` in the future writes to the given path.
-	pub fn from_file<P: AsRef<Path>>(local_public_key: PublicKey, path: P) -> NetTopology {
+	pub fn from_file<P: AsRef<Path>>(local_peer_id: PeerId, path: P) -> NetTopology {
 		let path = path.as_ref();
-		let local_peer_id = local_public_key.clone().into_peer_id();
 		debug!(target: "sub-libp2p", "Initializing peer store for JSON file {:?}", path);
 		let store = try_load(path, &local_peer_id);
 		NetTopology {
 			store,
 			cache_path: Some(path.to_owned()),
 			local_peer_id,
-			local_public_key,
 			external_addresses: Vec::new(),
 		}
 	}
@@ -235,10 +225,11 @@ impl NetTopology {
 		}
 	}
 
-	/// Inner implementaiton of the `add_*_discovered_addrs` methods.
+	/// Indicates the topology that we have discovered new addresses for a given node.
+	///
 	/// Returns `true` if the topology has changed in some way. Returns `false` if calling this
 	/// method was a no-op.
-	fn add_discovered_addrs<I>(
+	pub fn add_discovered_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
 		addrs: I,
@@ -308,54 +299,10 @@ impl NetTopology {
 
 		anything_changed
 	}
-}
 
-impl KademliaTopology for NetTopology {
-	type ClosestPeersIter = vec::IntoIter<PeerId>;
-	type GetProvidersIter = iter::Empty<PeerId>;
-
-	fn add_kad_discovered_address(&mut self, peer: PeerId, addr: Multiaddr, ty: KadConnectionType) {
-		self.add_discovered_addrs(&peer, iter::once((addr, ty == KadConnectionType::Connected)));
-	}
-
-	fn closest_peers(&mut self, target: &Multihash, _max: usize) -> Self::ClosestPeersIter {
-		// TODO: very inefficient
-		let mut peers = self.store.keys().cloned().collect::<Vec<_>>();
-		peers.push(self.local_peer_id.clone());
-		peers.sort_by(|a, b| {
-			b.as_ref().distance_with(target).cmp(&a.as_ref().distance_with(target))
-		});
-		peers.into_iter()
-	}
-
-	fn add_provider(&mut self, _: Multihash, _: PeerId) {
-		// We don't implement ADD_PROVIDER/GET_PROVIDERS
-	}
-
-	fn get_providers(&mut self, _: &Multihash) -> Self::GetProvidersIter {
-		// We don't implement ADD_PROVIDER/GET_PROVIDERS
-		iter::empty()
-	}
-}
-
-impl IdentifyTopology for NetTopology {
+	/// Returns the addresses stored for a specific peer.
 	#[inline]
-	fn add_identify_discovered_addrs<TIter>(&mut self, peer: &PeerId, addrs: TIter)
-	where
-		TIter: Iterator<Item = Multiaddr>
-	{
-		// These are addresses that peers indicate for themselves.
-		// The typical use case is:
-		// - A peer connects to one of our listening points.
-		// - We send an identify request to it, and it answers with a list of addresses.
-		// - If later it disconnects, we can try to dial it back through one of these addresses.
-		self.add_discovered_addrs(peer, addrs.map(move |a| (a, true)));
-	}
-}
-
-impl Topology for NetTopology {
-	#[inline]
-	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
+	pub fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
 		if peer == &self.local_peer_id {
 			return self.external_addresses.clone()
 		}
@@ -382,20 +329,8 @@ impl Topology for NetTopology {
 		list.into_iter().map(|(_, addr)| addr.clone()).collect::<Vec<_>>()
 	}
 
-	fn add_local_external_addrs<TIter>(&mut self, addrs: TIter)
-	where TIter: Iterator<Item = Multiaddr> {
-		self.add_external_addrs(addrs)
-	}
-
-	fn local_peer_id(&self) -> &PeerId {
-		&self.local_peer_id
-	}
-
-	fn local_public_key(&self) -> &PublicKey {
-		&self.local_public_key
-	}
-
-	fn set_connected(&mut self, peer: &PeerId, endpoint: &ConnectedPoint) {
+	/// Marks the given peer as connected through the given endpoint.
+	pub fn set_connected(&mut self, peer: &PeerId, endpoint: &ConnectedPoint) {
 		let addr = match endpoint {
 			ConnectedPoint::Dialer { address } => address,
 			ConnectedPoint::Listener { .. } => return
@@ -438,17 +373,16 @@ impl Topology for NetTopology {
 		}
 	}
 
-	fn set_disconnected(&mut self, _: &PeerId, endpoint: &ConnectedPoint, reason: DisconnectReason) {
+	/// Marks the given peer as disconnected. The endpoint is the one we were connected to.
+	pub fn set_disconnected(&mut self, _: &PeerId, endpoint: &ConnectedPoint) {
 		let addr = match endpoint {
 			ConnectedPoint::Dialer { address } => address,
 			ConnectedPoint::Listener { .. } => return
 		};
 
-		let score_diff = match reason {
-			DisconnectReason::Replaced => -3,
-			DisconnectReason::Graceful => -1,
-			DisconnectReason::Error => -5,
-		};
+		// Note that we used to have different score values here in the past, but there really
+		// isn't much point in doing so in practice.
+		let score_diff = -3;
 
 		for info in self.store.values_mut() {
 			for a in info.addrs.iter_mut() {
@@ -466,7 +400,8 @@ impl Topology for NetTopology {
 		}
 	}
 
-	fn set_unreachable(&mut self, addr: &Multiaddr) {
+	/// Indicates to the topology that we failed to reach a node when dialing the given address.
+	pub fn set_unreachable(&mut self, addr: &Multiaddr) {
 		for info in self.store.values_mut() {
 			for a in info.addrs.iter_mut() {
 				if &a.addr != addr {
