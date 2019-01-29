@@ -14,9 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate substrate_cli as cli;
-extern crate structopt;
-
 use cli::{NoCustom, CoreParams};
 
 use std::{fs, env, path::Path};
