@@ -24,7 +24,7 @@ use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 };
 use wasmi::RuntimeValue::{I32, I64};
-use wasmi::memory_units::{Bytes, Pages};
+use wasmi::memory_units::Pages;
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
@@ -57,14 +57,9 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
-		let current_size: Bytes = m.current_size().into();
-		let current_size = current_size.0 as u32;
-		let used_size = m.used_size().0 as u32;
-		let heap_size = current_size - used_size;
-
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: heap::Heap::new(used_size, heap_size),
+			heap: heap::Heap::new(m.used_size().0 as u32),
 			memory: m,
 			table: t,
 			ext: e,
