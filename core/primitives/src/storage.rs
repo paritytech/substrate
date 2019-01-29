@@ -71,6 +71,12 @@ pub mod well_known_keys {
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
 
+	/// Current extrinsic length (u32) is stored under this key.
+	pub const EXTRINSIC_LEN: &'static [u8] = b":extrinsic_len";
+
+	/// Sum of all lengths of executed extrinsics (u32).
+	pub const ALL_EXTRINSICS_LEN: &'static [u8] = b":all_extrinsics_len";
+
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 

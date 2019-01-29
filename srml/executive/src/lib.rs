@@ -177,7 +177,7 @@ impl<
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
 		// Check the size of the block if that extrinsic is applied.
-		if <system::Module<System>>::extrinsics_len() + encoded_len as u32 > internal::MAX_TRANSACTIONS_SIZE {
+		if <system::Module<System>>::all_extrinsics_len() + encoded_len as u32 > internal::MAX_TRANSACTIONS_SIZE {
 			return Err(internal::ApplyError::FullBlock);
 		}
 
