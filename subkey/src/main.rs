@@ -17,12 +17,8 @@
 #![cfg_attr(feature = "bench", feature(test))]
 #[cfg(feature = "bench")]
 extern crate test;
-extern crate substrate_primitives;
-extern crate rand;
 
-#[macro_use]
-extern crate clap;
-
+use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
 use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 
