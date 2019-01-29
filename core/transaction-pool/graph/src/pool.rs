@@ -110,10 +110,10 @@ impl<B: ChainApi> Pool<B> {
 						Ok(base::Transaction {
 							data: xt,
 							hash,
-							priority: priority.into(),
+							priority,
 							requires,
 							provides,
-							valid_till: block_number.as_().saturating_add(longevity.0),
+							valid_till: block_number.as_().saturating_add(longevity),
 						})
 					},
 					TransactionValidity::Invalid(e) => {
@@ -412,10 +412,10 @@ mod tests {
 				Ok(TransactionValidity::Invalid(0))
 			} else {
 				Ok(TransactionValidity::Valid {
-					priority: 4.into(),
+					priority: 4,
 					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					provides: vec![vec![nonce as u8]],
-					longevity: 3.into(),
+					longevity: 3,
 				})
 			}
 		}

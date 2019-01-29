@@ -263,10 +263,10 @@ impl<
 			}
 
 			TransactionValidity::Valid {
-				priority: (encoded_len as TransactionPriority).into(),
+				priority: encoded_len as TransactionPriority,
 				requires: deps,
 				provides: vec![(sender, *index).encode()],
-				longevity: TransactionLongevity::max_value().into(),
+				longevity: TransactionLongevity::max_value(),
 			}
 		} else {
 			return TransactionValidity::Invalid(if xt.sender().is_none() {

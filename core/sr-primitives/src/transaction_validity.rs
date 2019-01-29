@@ -16,7 +16,6 @@
 
 //! Transaction validity interface.
 
-use codec::Compact;
 use rstd::prelude::*;
 
 /// Priority for a transaction. Additive. Higher is better.
@@ -41,7 +40,7 @@ pub enum TransactionValidity {
 		///
 		/// Priority determines the ordering of two transactions that have all
 		/// their dependencies (required tags) satisfied.
-		priority: Compact<TransactionPriority>,
+		priority: TransactionPriority,
 		/// Transaction dependencies
 		///
 		/// A non-empty list signifies that some other transactions which provide
@@ -58,7 +57,7 @@ pub enum TransactionValidity {
 		///
 		/// Longevity describes minimum number of blocks the validity is correct.
 		/// After this period transaction should be removed from the pool or revalidated.
-		longevity: Compact<TransactionLongevity>,
+		longevity: TransactionLongevity,
 	},
 	/// Transaction validity can't be determined.
 	Unknown(i8),

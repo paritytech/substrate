@@ -136,10 +136,10 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	};
 
 	TransactionValidity::Valid {
-		priority: tx.amount.into(),
+		priority: tx.amount,
 		requires,
 		provides,
-		longevity: 64.into(),
+		longevity: 64,
 	}
 }
 
