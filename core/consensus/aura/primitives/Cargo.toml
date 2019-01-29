@@ -6,7 +6,7 @@ description = "Primitives for Aura consensus"
 edition = "2018"
 
 [dependencies]
-parity-codec = { version = "2.2", default-features = false }
+parity-codec = { version = "3.0", default-features = false }
 substrate-client = { path = "../../../client", default-features = false }
 primitives = { package = "substrate-primitives", path = "../../../primitives", default-features = false }
 runtime_support = { package = "srml-support", path = "../../../../srml/support", default-features = false }
