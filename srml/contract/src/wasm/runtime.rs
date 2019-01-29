@@ -187,6 +187,7 @@ fn write_sandbox_memory<T: Trait>(
 ) -> Result<(), sandbox::HostError> {
 	charge_gas(gas_meter, schedule, RuntimeToken::WriteMemory(buf.len() as u32))?;
 
+	panic!("memory.set not allowed!");
 	memory.set(ptr, buf)?;
 
 	Ok(())
@@ -423,6 +424,7 @@ define_env!(Env, <E: Ext>,
 			data_len as usize,
 			|slice_mut| {
 				// Read the memory at the specified pointer to the provided slice.
+				panic!("memory.get not allowed!");
 				ctx.memory.get(data_ptr, slice_mut)
 			}
 		)?;

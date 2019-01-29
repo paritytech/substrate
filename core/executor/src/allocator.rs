@@ -22,6 +22,7 @@ use log::trace;
 use wasmi::Error;
 use wasmi::MemoryRef;
 use wasmi::memory_units::Bytes;
+use crate::wasm_executor::{memory_set, memory_get, memory_get_into};
 
 // The pointers need to be aligned to 8 bytes.
 const ALIGNMENT: u32 = 8;
@@ -40,7 +41,6 @@ pub const REQUESTED_SIZE_TOO_LARGE: &str = "Requested size to allocate is too la
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],
-	heap: MemoryRef,
 	max_heap_size: u32,
 	ptr_offset: u32,
 	total_size: u32,
@@ -63,12 +63,7 @@ impl FreeingBumpHeapAllocator {
 	/// * `heap` - A `MemoryRef` to the available `MemoryInstance` which is
 	///   used as the heap.
 	///
-	pub fn new(mem: MemoryRef) -> Self {
-		let current_size: Bytes = mem.current_size().into();
-		let current_size = current_size.0 as u32;
-		let used_size = mem.used_size().0 as u32;
-		let heap_size = current_size - used_size;
-
+	pub fn new(used_size: u32, heap_size: u32) -> Self {
 		let mut ptr_offset = used_size;
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
@@ -78,7 +73,6 @@ impl FreeingBumpHeapAllocator {
 		FreeingBumpHeapAllocator {
 			bumper: 0,
 			heads: [0; N],
-			heap: mem,
 			max_heap_size: heap_size,
 			ptr_offset: ptr_offset,
 			total_size: 0,
@@ -179,22 +173,26 @@ impl FreeingBumpHeapAllocator {
 
 	fn get_heap_4bytes(&mut self, ptr: u32) -> Result<[u8; 4], Error> {
 		let mut arr = [0u8; 4];
-		self.heap.get_into(self.ptr_offset + ptr, &mut arr)?;
+		memory_get_into(self.ptr_offset + ptr, &mut arr)
+			.map_err(|e| wasmi::Error::Memory(e.to_string()))?;
 		Ok(arr)
 	}
 
 	fn get_heap_byte(&mut self, ptr: u32) -> Result<u8, Error> {
 		let mut arr = [0u8; 1];
-		self.heap.get_into(self.ptr_offset + ptr, &mut arr)?;
+		memory_get_into(self.ptr_offset + ptr, &mut arr)
+			.map_err(|e| wasmi::Error::Memory(e.to_string()))?;
 		Ok(arr[0])
 	}
 
 	fn set_heap(&mut self, ptr: u32, value: u8) -> Result<(), Error> {
-		self.heap.set(self.ptr_offset + ptr, &[value])
+		memory_set(self.ptr_offset + ptr, &[value])
+			.map_err(|e| wasmi::Error::Memory(e.to_string()))
 	}
 
 	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) -> Result<(), Error> {
-		self.heap.set(self.ptr_offset + ptr, &value)
+		memory_set(self.ptr_offset + ptr, &value)
+			.map_err(|e| wasmi::Error::Memory(e.to_string()))
 	}
 
 }
