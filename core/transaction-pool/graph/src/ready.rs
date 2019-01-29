@@ -399,6 +399,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		self.ready.read().len()
 	}
 
+	/// Returns sum of encoding lengths of all transactions in this queue.
+	pub fn bytes(&self) -> usize {
+		self.ready.read().values().fold(0, |acc, tx| acc + tx.transaction.transaction.bytes)
+	}
 }
 
 pub struct BestIterator<Hash, Ex> {
@@ -474,6 +478,7 @@ mod tests {
 	fn tx(id: u8) -> Transaction<u64, Vec<u8>> {
 		Transaction {
 			data: vec![id],
+			bytes: 1,
 			hash: id as u64,
 			priority: 1,
 			valid_till: 2,
@@ -532,6 +537,7 @@ mod tests {
 		tx4.provides = vec![];
 		let tx5 = Transaction {
 			data: vec![5],
+			bytes: 1,
 			hash: 5,
 			priority: 1,
 			valid_till: u64::max_value(),	// use the max_value() here for testing.

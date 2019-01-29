@@ -16,6 +16,7 @@
 
 //! Transaction pool errors.
 
+use std::fmt::Debug;
 use sr_primitives::transaction_validity::TransactionPriority as Priority;
 
 error_chain! {
@@ -36,9 +37,9 @@ error_chain! {
 			display("Temporarily Banned"),
 		}
 		/// The transaction is already in the pool.
-		AlreadyImported {
-			description("Transaction is already in the pool."),
-			display("Already imported"),
+		AlreadyImported(hash: Box<Debug + Send>) {
+			description("Transaction is already in the pool"),
+			display("[{:?}] Already imported", hash),
 		}
 		/// The transaction cannot be imported cause it's a replacement and has too low priority.
 		TooLowPriority(old: Priority, new: Priority) {

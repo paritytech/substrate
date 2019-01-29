@@ -68,17 +68,47 @@ pub trait ChainApi: Send + Sync {
 	/// Returns a block hash given the block id.
 	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error>;
 
-	/// Hash the extrinsic.
-	fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash;
+	/// Returns hash and encoding length of the extrinsic.
+	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
+}
+
+/// Queue limits
+#[derive(Debug, Clone)]
+pub struct Limit {
+	/// Maximal number of transactions in the queue.
+	pub count: usize,
+	/// Maximal size of encodings of all transactions in the queue.
+	pub total_bytes: usize,
 }
 
 /// Pool configuration options.
-#[derive(Debug, Clone, Default)]
-pub struct Options;
+#[derive(Debug, Clone)]
+pub struct Options {
+	/// Ready queue limits.
+	pub ready: Limit,
+	/// Future queue limits.
+	pub future: Limit,
+}
+
+impl Default for Options {
+	fn default() -> Self {
+		Options {
+			ready: Limit {
+				count: 2048,
+				total_bytes: 4 * 1024 * 1024,
+			},
+			future: Limit {
+				count: 128,
+				total_bytes: 1 * 1024 * 1024,
+			},
+		}
+	}
+}
 
 /// Extrinsics pool.
 pub struct Pool<B: ChainApi> {
 	api: B,
+	options: Options,
 	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
@@ -100,7 +130,7 @@ impl<B: ChainApi> Pool<B> {
 		Ok(xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
-				let hash = self.api.hash(&xt);
+				let (hash, bytes) = self.api.hash_and_length(&xt);
 				if self.rotator.is_banned(&hash) {
 					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
@@ -109,6 +139,7 @@ impl<B: ChainApi> Pool<B> {
 					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
 							data: xt,
+							bytes,
 							hash,
 							priority,
 							requires,
@@ -146,7 +177,7 @@ impl<B: ChainApi> Pool<B> {
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
 	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error> {
-		let hash = self.api.hash(&xt);
+		let hash = self.api.hash_and_length(&xt).0;
 		let watcher = self.listener.write().create_watcher(hash);
 		self.submit_one(at, xt)?;
 		Ok(watcher)
@@ -161,7 +192,7 @@ impl<B: ChainApi> Pool<B> {
 	pub fn prune(&self, at: &BlockId<B::Block>, parent: &BlockId<B::Block>, extrinsics: &[ExtrinsicFor<B>]) -> Result<(), B::Error> {
 		let mut tags = Vec::with_capacity(extrinsics.len());
 		// Get details of all extrinsics that are already in the pool
-		let hashes = extrinsics.iter().map(|extrinsic| self.api.hash(extrinsic)).collect::<Vec<_>>();
+		let hashes = extrinsics.iter().map(|extrinsic| self.api.hash_and_length(extrinsic).0).collect::<Vec<_>>();
 		let in_pool = self.pool.read().by_hash(&hashes);
 		{
 			// Zip the ones from the pool with the full list (we get pairs `(Extrinsic, Option<TransactionDetails>)`)
@@ -305,10 +336,10 @@ impl<B: ChainApi> Pool<B> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
-	/// TODO [ToDr] Options
-	pub fn new(_options: Options, api: B) -> Self {
+	pub fn new(options: Options, api: B) -> Self {
 		Pool {
 			api,
+			options,
 			listener: Default::default(),
 			pool: Default::default(),
 			import_notification_sinks: Default::default(),
@@ -358,8 +389,9 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Returns transaction hash
-	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
-		self.api.hash(xt)
+	#[cfg(test)]
+	fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
+		self.api.hash_and_length(xt).0
 	}
 }
 
@@ -437,8 +469,12 @@ mod tests {
 		}
 
 		/// Hash the extrinsic.
-		fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash {
-			(uxt.transfer().from.to_low_u64_be() << 5) + uxt.transfer().nonce
+		fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+			let len = uxt.encode().len();
+			(
+				(uxt.transfer().from.to_low_u64_be() << 5) + uxt.transfer().nonce,
+				len
+			)
 		}
 	}
 

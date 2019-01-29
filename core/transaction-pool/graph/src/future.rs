@@ -184,4 +184,9 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	pub fn len(&self) -> usize {
 		self.waiting.len()
 	}
+
+	/// Returns sum of encoding lengths of all transactions in this queue.
+	pub fn bytes(&self) -> usize {
+		self.waiting.values().fold(0, |acc, tx| acc + tx.transaction.bytes)
+	}
 }

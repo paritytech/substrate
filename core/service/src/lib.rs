@@ -453,12 +453,14 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		let encoded = transaction.encode();
 		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
 			let best_block_id = self.best_block_id()?;
-			let hash = self.pool.hash_of(&uxt);
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
 					Ok(e) => match e.kind() {
-						txpool::error::ErrorKind::AlreadyImported => Some(hash),
+						txpool::error::ErrorKind::AlreadyImported(hash) => {
+							// TODO [ToDr] Check/assert?
+							hash.downcast::<ComponentExHash<C>>().ok()
+						},
 						_ => {
 							debug!("Error adding transaction to the pool: {:?}", e);
 							None
