@@ -123,14 +123,7 @@ impl BuildStorage for StorageMap {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
-// TODO: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
-	/// Multiplication.
-	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// TODO: handle overflows
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
-	}
-
 	/// Wraps the argument into `Permill` type.
 	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
 
@@ -140,6 +133,16 @@ impl Permill {
 	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
+}
+
+impl<N> ::rstd::ops::Mul<N> for Permill
+where
+	N: traits::As<u64>
+{
+	type Output = N;
+	fn mul(self, b: N) -> Self::Output {
+		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -178,14 +181,7 @@ impl From<codec::Compact<Permill>> for Permill {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Perbill(u32);
 
-// TODO: impl Mul<Perbill> for N where N: As<usize>
 impl Perbill {
-	/// Attenuate `b` by self.
-	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// TODO: handle overflows
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
-	}
-
 	/// Nothing.
 	pub fn zero() -> Perbill { Perbill(0) }
 
@@ -211,6 +207,16 @@ impl Perbill {
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
 	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+}
+
+impl<N> ::rstd::ops::Mul<N> for Perbill
+where
+	N: traits::As<u64>
+{
+	type Output = N;
+	fn mul(self, b: N) -> Self::Output {
+		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000_000)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -658,5 +664,11 @@ mod tests {
 		let data = WithCompact { data: super::Perbill(1) };
 		let encoded = data.encode();
 		assert_eq!(data, WithCompact::<super::Perbill>::decode(&mut &encoded[..]).unwrap());
+	}
+
+	#[test]
+	fn saturating_mul() {
+		assert_eq!(super::Perbill::one() * std::u64::MAX, std::u64::MAX/1_000_000_000);
+		assert_eq!(super::Permill::from_percent(100) * std::u64::MAX, std::u64::MAX/1_000_000);
 	}
 }

@@ -20,26 +20,14 @@
 // https://github.com/paritytech/substrate/issues/1547
 #![allow(deprecated)]
 
-extern crate substrate_primitives;
-extern crate parity_crypto as crypto;
-extern crate subtle;
-extern crate rand;
-extern crate serde_json;
-extern crate hex;
-
-#[macro_use]
-extern crate serde_derive;
-
-#[macro_use]
-extern crate error_chain;
-
-#[cfg(test)]
-extern crate tempdir;
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
+
+use serde_derive::{Serialize, Deserialize};
+use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+	impl_extract_backtrace, impl_error_chain_kind};
 
 use substrate_primitives::{hashing::blake2_256, ed25519::{Pair, Public, PKCS_LEN}};
 
