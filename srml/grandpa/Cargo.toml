@@ -17,6 +17,7 @@ sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-system = { path = "../system", default-features = false }
 srml-session = { path = "../session", default-features = false }
+srml-finality-tracker = { path = "../finality-tracker", default-features = false }
 
 [features]
 default = ["std"]
@@ -32,4 +33,5 @@ std = [
 	"sr-primitives/std",
 	"srml-system/std",
 	"srml-session/std",
+	"srml-finality-tracker/std,"
 ]

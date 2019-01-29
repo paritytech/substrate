@@ -46,6 +46,7 @@ extern crate sr_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate srml_system as system;
 extern crate srml_session as session;
+extern crate srml_finality_tracker as finality_tracker;
 extern crate substrate_primitives;
 
 #[cfg(test)]
@@ -64,6 +65,7 @@ use primitives::traits::{CurrentHeight, Convert};
 use substrate_primitives::Ed25519AuthorityId;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
+use codec::Decode;
 
 mod mock;
 mod tests;
@@ -91,8 +93,11 @@ pub trait GrandpaChangeSignal<N> {
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<N, SessionKey> {
 	/// Authorities set change has been signalled. Contains the new set of authorities
-	/// and the delay in blocks before applying.
+	/// and the delay in blocks _to finalize_ before applying.
 	AuthoritiesChangeSignal(N, Vec<(SessionKey, u64)>),
+	/// A forced authorities set change. Contains the new set of authorities and the
+	/// delay in blocks _to import_ before applying.
+	ForcedAuthoritiesChangeSignal(N, Vec<(SessionKey, u64)>),
 }
 
 impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
@@ -129,8 +134,19 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-/// A stored pending change.
+/// A stored pending change, old format.
 #[derive(Encode, Decode)]
+pub struct OldStoredPendingChange<N, SessionKey> {
+	/// The block number this was scheduled at.
+	pub scheduled_at: N,
+	/// The delay in blocks until it will be applied.
+	pub delay: N,
+	/// The next authority set.
+	pub next_authorities: Vec<(SessionKey, u64)>,
+}
+
+/// A stored pending change.
+#[derive(Encode)]
 pub struct StoredPendingChange<N, SessionKey> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
@@ -138,6 +154,22 @@ pub struct StoredPendingChange<N, SessionKey> {
 	pub delay: N,
 	/// The next authority set.
 	pub next_authorities: Vec<(SessionKey, u64)>,
+	/// Whether the change was forced.
+	pub forced: bool,
+}
+
+impl<N: Decode, SessionKey: Decode> Decode for StoredPendingChange<N, SessionKey> {
+	fn decode<I: codec::Input>(value: &mut I) -> Option<Self> {
+		let old = OldStoredPendingChange::decode(value)?;
+		let forced = bool::decode(value).unwrap_or(false);
+
+		StoredPendingChange {
+			scheduled_at; old.scheduled_at,
+			delay; old.delay,
+			next_authorities; old.next_authorities,
+			forced,
+		}
+	}
 }
 
 /// GRANDPA events.
@@ -187,10 +219,17 @@ decl_module! {
 		fn on_finalise(block_number: T::BlockNumber) {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				if block_number == pending_change.scheduled_at {
-					Self::deposit_log(RawLog::AuthoritiesChangeSignal(
-						pending_change.delay,
-						pending_change.next_authorities.clone(),
-					));
+					if !pending_change.forced {
+						Self::deposit_log(RawLog::AuthoritiesChangeSignal(
+							pending_change.delay,
+							pending_change.next_authorities.clone(),
+						));
+					} else {
+						Self::deposit_log(RawLog::ForcedAuthoritiesChangeSignal(
+							pending_change.delay,
+							pending_change.next_authorities.clone(),
+						));
+					}
 				}
 
 				if block_number == pending_change.scheduled_at + pending_change.delay {
@@ -217,11 +256,16 @@ impl<T: Trait> Module<T> {
 	/// `in_blocks` after the current block. This value may be 0, in which
 	/// case the change is applied at the end of the current block.
 	///
+	/// If the `forced` flag is set to true, this indicates that the current
+	/// set has been synchronously determined to be offline and that after
+	/// `in_blocks`
+	///
 	/// No change should be signalled while any change is pending. Returns
 	/// an error if a change is already pending.
 	pub fn schedule_change(
 		next_authorities: Vec<(T::SessionKey, u64)>,
 		in_blocks: T::BlockNumber,
+		forced: bool,
 	) -> Result {
 		if Self::pending_change().is_none() {
 			let scheduled_at = system::ChainContext::<T>::default().current_height();
@@ -229,6 +273,7 @@ impl<T: Trait> Module<T> {
 				delay: in_blocks,
 				scheduled_at,
 				next_authorities,
+				forced,
 			});
 
 			Ok(())
@@ -236,6 +281,10 @@ impl<T: Trait> Module<T> {
 			Err("Attempt to signal GRANDPA change with one already pending.")
 		}
 	}
+
+	/// Force a change in the authorities.
+	///
+	/// The change will be applied immediately
 
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: Log<T>) {
@@ -287,6 +336,32 @@ impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 		let last_authorities = <Module<T>>::grandpa_authorities();
 		if next_authorities != last_authorities {
 			let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero());
+		}
+	}
+}
+
+impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthorities<T> where
+	T: Trait,
+	T: session::Trait,
+	T: finality_tracker::Trait,
+	<T as session::Trait>::ConvertAccountIdToSessionKey: Convert<
+		<T as system::Trait>::AccountId,
+		<T as Trait>::SessionKey,
+	>,
+{
+	fn on_stalled(window_size: N) {
+		use primitives::traits::Zero;
+
+		let next_authorities = <session::Module<T>>::validators()
+			.into_iter()
+			.map(T::ConvertAccountIdToSessionKey::convert)
+			.map(|key| (key, 1)) // evenly-weighted.
+			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
+
+		// schedule a change for `window_size` blocks.
+		let last_authorities = <Module<T>>::grandpa_authorities();
+		if next_authorities != last_authorities {
+			let _ = <Module<T>>::schedule_change(next_authorities, window_size);
 		}
 	}
 }

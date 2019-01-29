@@ -198,7 +198,7 @@ impl<T: Trait> Module<T> {
 			// the delay is the latency plus half the window size.
 			let delay = latency + (window_size / two);
 			if now - median > delay {
-				T::OnFinalizationStalled::on_stalled(now);
+				T::OnFinalizationStalled::on_stalled(window_size);
 			}
 		}
 	}
@@ -206,7 +206,7 @@ impl<T: Trait> Module<T> {
 
 /// Called when finalization stalled at a given number.
 pub trait OnFinalizationStalled<N> {
-	fn on_stalled(at: N);
+	fn on_stalled(window_size: N);
 }
 
 macro_rules! impl_on_stalled {
@@ -218,8 +218,8 @@ macro_rules! impl_on_stalled {
 
 	( $($t:ident)* ) => {
 		impl<NUM: Clone, $($t: OnFinalizationStalled<NUM>),*> OnFinalizationStalled<NUM> for ($($t,)*) {
-			fn on_stalled(at: NUM) {
-				$($t::on_stalled(at.clone());)*
+			fn on_stalled(window_size: NUM) {
+				$($t::on_stalled(window_size.clone());)*
 			}
 		}
 	}

@@ -23,7 +23,8 @@ use primitives::traits::Header;
 use runtime_io::with_externalities;
 use mock::{Grandpa, System, new_test_ext};
 use system::{EventRecord, Phase};
-use {RawLog, RawEvent};
+use codec::{Decode, Encode};
+use super::*;
 
 #[test]
 fn authorities_change_logged() {
@@ -105,4 +106,20 @@ fn cannot_schedule_change_when_one_pending() {
 		Grandpa::on_finalise(3);
 		let _header = System::finalise();
 	});
+}
+
+#[test]
+fn new_decodes_from_old() {
+	let old = OldStoredPendingChange {
+		scheduled_at: 5u32,
+		delay: 100u32,
+		next_authorities: vec![(1u64, 5), (2u64, 10), (3u64, 2)],
+	};
+
+	let encoded = old.encode();
+	let new = StoredPendingChange::decode(&mut &encoded[..]).unwrap();
+	assert!(!new.forced);
+	assert_eq!(new.scheduled_at, old.scheduled_at);
+	assert_eq!(new.delay, old.delay);
+	assert_eq!(new.next_authorities, old.next_authorities);
 }
