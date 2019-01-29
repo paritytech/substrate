@@ -71,6 +71,86 @@ struct PendingJustifications<B: BlockT> {
 	pending_requests: VecDeque<PendingJustification<B>>,
 	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
 	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
+	changes: RootChanges<B::Hash, NumberFor<B>>,
+}
+
+#[derive(Debug)]
+struct RootChanges<H, N> {
+	roots: Vec<Changes<H, N>>,
+}
+
+impl<H, N> RootChanges<H, N> where
+	H: Clone + PartialEq,
+	N: Clone + Ord
+{
+	fn empty() -> RootChanges<H, N> {
+		RootChanges { roots: Vec::new() }
+	}
+
+	// FIXME: don't import <= `best_finalized`
+	fn import<F, E>(&mut self, hash: &H, number: &N, is_descendent_of: &F) -> Result<(), E>
+		where F: Fn(&H, &H) -> Result<bool, E>,
+	{
+		for root in self.roots.iter_mut() {
+			if root.import(hash, number, is_descendent_of)? {
+				return Ok(());
+			}
+		}
+
+		self.roots.push(Changes {
+			hash: hash.clone(),
+			number: number.clone(),
+			children:  Vec::new(),
+		});
+
+		Ok(())
+	}
+
+	fn next(&self) -> impl Iterator<Item=(&H, &N)> {
+		self.roots.iter().map(|change| (&change.hash, &change.number))
+	}
+
+	fn apply(&mut self, hash: &H) {
+		if let Some(position) = self.roots.iter().position(|change| change.hash == *hash) {
+			let changes = self.roots.swap_remove(position);
+			self.roots = changes.children;
+		}
+	}
+}
+
+#[derive(Debug)]
+struct Changes<H, N> {
+	hash: H,
+	number: N,
+	children: Vec<Changes<H, N>>,
+}
+
+impl<H, N> Changes<H, N> where
+	H: Clone,
+	N: Clone + Ord
+{
+	fn import<F, E>(&mut self, hash: &H, number: &N, is_descendent_of: &F) -> Result<bool, E>
+		where F: Fn(&H, &H) -> Result<bool, E>,
+	{
+		if *number <= self.number { return Ok(false); }
+
+		for change in self.children.iter_mut() {
+			if change.import(hash, number, is_descendent_of)? {
+				return Ok(true);
+			}
+		}
+
+		if is_descendent_of(&self.hash, hash)? {
+			self.children.push(Changes {
+				hash: hash.clone(),
+				number: number.clone(),
+				children: Vec::new(),
+			});
+			Ok(true)
+		} else {
+			Ok(false)
+		}
+	}
 }
 
 impl<B: BlockT> PendingJustifications<B> {
@@ -80,6 +160,7 @@ impl<B: BlockT> PendingJustifications<B> {
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),
+			changes: RootChanges::empty(),
 		}
 	}
 
@@ -807,4 +888,109 @@ fn block_status<B: BlockT>(
 	}
 
 	chain.block_status(&BlockId::Hash(hash))
+}
+
+mod test {
+	use super::RootChanges;
+
+	fn test_root_changes<'a>() -> RootChanges<&'a str, u64> {
+		let mut root = RootChanges::empty();
+
+		//
+		//     - B - C - D - E
+		//    /
+		//   /   - G
+		//  /   /
+		// A - F - H - I
+		//  \
+		//   — J - K
+		//
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, ()> {
+			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+			match (*base, *block) {
+				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
+				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
+				("C", b) => Ok(b == "D" || b == "E"),
+				("D", b) => Ok(b == "E"),
+				("E", _) => Ok(false),
+				("F", b) => Ok(b == "G" || b == "H" || b == "I"),
+				("G", _) => Ok(false),
+				("H", b) => Ok(b == "I"),
+				("I", _) => Ok(false),
+				("J", b) => Ok(b == "K"),
+				("K", _) => Ok(false),
+				_ => unreachable!(),
+			}
+		};
+
+		root.import(&"A", &1, &is_descendent_of).unwrap();
+
+		root.import(&"B", &2, &is_descendent_of).unwrap();
+		root.import(&"C", &3, &is_descendent_of).unwrap();
+		root.import(&"D", &4, &is_descendent_of).unwrap();
+		root.import(&"E", &5, &is_descendent_of).unwrap();
+
+		root.import(&"F", &2, &is_descendent_of).unwrap();
+		root.import(&"G", &3, &is_descendent_of).unwrap();
+
+		root.import(&"H", &3, &is_descendent_of).unwrap();
+		root.import(&"I", &4, &is_descendent_of).unwrap();
+
+		root.import(&"J", &2, &is_descendent_of).unwrap();
+		root.import(&"K", &3, &is_descendent_of).unwrap();
+
+		root
+	}
+
+	#[test]
+	fn root_changes() {
+		let apply_a = || {
+			let mut root = test_root_changes();
+
+			assert_eq!(
+				root.next().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("A", 1)],
+			);
+
+			// applying "A" opens up three possible forks
+			root.apply(&"A");
+
+			assert_eq!(
+				root.next().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("B", 2), ("F", 2), ("J", 2)],
+			);
+
+			root
+		};
+
+		{
+			let mut root = apply_a();
+
+			// applying "B" will progress on its fork and remove any other competing forks
+			root.apply(&"B");
+
+			assert_eq!(
+				root.next().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("C", 3)],
+			);
+
+			// all the other forks have been pruned
+			assert!(root.roots.len() == 1);
+		}
+
+		{
+			let mut root = apply_a();
+
+			// applying "J" will progress on its fork and remove any other competing forks
+			root.apply(&"J");
+
+			assert_eq!(
+				root.next().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("K", 3)],
+			);
+
+			// all the other forks have been pruned
+			assert!(root.roots.len() == 1);
+		}
+	}
 }
