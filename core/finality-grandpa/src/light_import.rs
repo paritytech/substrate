@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
 
@@ -9,6 +8,7 @@ use client::{
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
+use grandpa::VoterSet;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi,
@@ -46,8 +46,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			// no authority set on disk: fetch authorities from genesis state.
 			// if genesis state is not available, we may be a light client, but these
 			// are unsupported for following GRANDPA directly.
-			let genesis_authorities = api.runtime_api()
-				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
+			let genesis_authorities = api.runtime_api().grandpa_authorities(&BlockId::number(Zero::zero()))?;
 
 			let authority_set = LightAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.encode();
@@ -289,7 +288,7 @@ impl LightAuthoritySet {
 	}
 
 	/// Get latest authorities set.
-	pub fn authorities(&self) -> HashMap<Ed25519AuthorityId, u64> {
+	pub fn authorities(&self) -> VoterSet<Ed25519AuthorityId> {
 		self.authorities.iter().cloned().collect()
 	}
 
