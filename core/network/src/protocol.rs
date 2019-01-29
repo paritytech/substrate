@@ -468,6 +468,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			let number = header.number().clone();
 			let hash = header.hash();
+			let parent_hash = header.parent_hash().clone();
 			let justification = if get_justification { self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None };
 			let block_data = message::generic::BlockData {
 				hash: hash,
@@ -484,7 +485,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					if number == As::sa(0) {
 						break;
 					}
-					id = BlockId::Number(number - As::sa(1))
+					id = BlockId::Hash(parent_hash)
 				}
 			}
 		}
@@ -684,6 +685,33 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		self.transaction_pool.on_broadcasted(propagated_to);
+	}
+
+	/// Make sure an important block is propagated to peers.
+	///
+	/// In chain-based consensus, we often need to make sure non-best forks are
+	/// at least temporarily synced.
+	pub fn announce_block(&self, io: &mut SyncIo, hash: B::Hash) {
+		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
+			Ok(Some(header)) => header,
+			Ok(None) => {
+				warn!("Trying to announce unknown block: {}", hash);
+				return;
+			}
+			Err(e) => {
+				warn!("Error reading block header {}: {:?}", hash, e);
+				return;
+			}
+		};
+		let mut peers = self.context_data.peers.write();
+		let hash = header.hash();
+		for (who, ref mut peer) in peers.iter_mut() {
+			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
+			peer.known_blocks.insert(hash);
+			self.send_message(io, *who, GenericMessage::BlockAnnounce(message::BlockAnnounce {
+				header: header.clone()
+			}));
+		}
 	}
 
 	/// Send Status message

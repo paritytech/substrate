@@ -103,7 +103,7 @@ use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
+use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps, VoterSet};
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
@@ -221,7 +221,7 @@ impl From<ClientError> for Error {
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network: Clone {
+pub trait Network<Block: BlockT>: Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
@@ -241,6 +241,9 @@ pub trait Network: Clone {
 
 	/// Send message over the commit channel.
 	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
+
+	/// Inform peers that a block with given hash should be downloaded.
+	fn announce(&self, round: u64, set_id: u64, block: Block::Hash);
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
@@ -271,7 +274,7 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network<B> for NetworkBridge<B, S, H> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
 		self.service.consensus_gossip().write().messages_for(message_topic::<B>(round, set_id))
@@ -294,6 +297,11 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
 		self.service.gossip_consensus_message(topic, message, true);
+	}
+
+	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
+		debug!(target: "afg", "Announcing block {} to peers which we voted on in round {}", block, round);
+		self.service.announce_block(block)
 	}
 }
 
@@ -375,9 +383,9 @@ impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 type SharedConsensusChanges<H, N> = Arc<parking_lot::Mutex<ConsensusChanges<H, N>>>;
 
 /// The environment we run GRANDPA in.
-struct Environment<B, E, Block: BlockT, N: Network, RA> {
+struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
-	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -389,7 +397,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	N: Network + 'static,
+	N: Network<Block> + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -547,7 +555,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network + 'static + Send,
+	N: Network<Block> + 'static + Send,
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
@@ -743,7 +751,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	fn decode_and_verify(
 		encoded: &[u8],
 		set_id: u64,
-		voters: &HashMap<Ed25519AuthorityId, u64>,
+		voters: &VoterSet<Ed25519AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -753,7 +761,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
-	fn verify(&self, set_id: u64, voters: &HashMap<Ed25519AuthorityId, u64>) -> Result<(), ClientError>
+	fn verify(&self, set_id: u64, voters: &VoterSet<Ed25519AuthorityId>) -> Result<(), ClientError>
 	where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -764,7 +772,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		match grandpa::validate_commit(
 			&self.commit,
 			voters,
-			None,
 			&ancestry_chain,
 		) {
 			Ok(Some(_)) => {},
@@ -1483,7 +1490,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
-	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: &Arc<VoterSet<Ed25519AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &N,
 ) -> (
@@ -1498,7 +1505,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 ) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	N: Network,
+	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
@@ -1544,7 +1551,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network + Send + Sync + 'static,
+	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
