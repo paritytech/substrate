@@ -23,7 +23,7 @@ pub use std::fmt;
 pub use rstd::result;
 pub use codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
-	ModuleMetadata, FunctionMetadata, DecodeDifferent,
+	ModuleMetadata, FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
 	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };
 
@@ -862,13 +862,6 @@ macro_rules! __impl_outer_dispatch_metadata {
 		$( $module:ident::$call:ident, )*
 	) => {
 		impl $runtime {
-			pub fn __module_dispatch_system() -> Option<$crate::dispatch::OuterDispatchCall> {
-				None
-			}
-			#[allow(non_snake_case)]
-			pub fn __module_dispatch___default() -> Option<$crate::dispatch::OuterDispatchCall> {
-				None
-			}
 			__impl_outer_dispatch_metadata!(@filter 0; $( $module::$call, )*; );
 		}
 	};
@@ -884,11 +877,11 @@ macro_rules! __impl_outer_dispatch_metadata {
 			$( $rest_module::$rest, )* ;
 			$( $encoded_call )*
 			$crate::paste::item!{
-				pub fn [< __module_dispatch_ $module >] () -> Option<$crate::dispatch::OuterDispatchCall> {
-					return Some($crate::dispatch::OuterDispatchCall {
+				pub fn [< __module_dispatch_ $module >] () -> $crate::dispatch::OuterDispatchCall {
+					return $crate::dispatch::OuterDispatchCall {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
 						index: $index,
-					})
+					}
 				}
 			}
 		);
@@ -916,6 +909,10 @@ macro_rules! __dispatch_impl_metadata {
 			pub fn call_module() -> $crate::dispatch::CallMetadata {
 				__call_to_metadata!($($rest)*)
 			}
+			pub fn call_functions() -> $crate::dispatch::DecodeDifferentArray<$crate::dispatch::FunctionMetadata> {
+				__call_to_functions!($($rest)*)
+			}
+
 			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
 				$crate::dispatch::ModuleMetadata {
 					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($mod_type)),
@@ -950,6 +947,29 @@ macro_rules! __call_to_metadata {
 		}
 	};
 }
+
+/// Convert the list of calls into their JSON representation, joined by ",".
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __call_to_functions {
+	(
+		$call_type:ident $origin_type:ty
+			{$(
+				$(#[doc = $doc_attr:tt])*
+				fn $fn_name:ident($from:ident
+					$(
+						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
+					)*
+				);
+			)*}
+	) => {
+		__functions_to_metadata!(0; $origin_type;; $(
+			fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
+			$( $doc_attr ),*;
+		)*)
+	};
+}
+
 
 /// Convert a list of functions into a list of `FunctionMetadata` items.
 #[macro_export]

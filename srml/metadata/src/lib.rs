@@ -146,6 +146,15 @@ pub struct CallMetadata {
 	pub functions: DecodeDifferentArray<FunctionMetadata>,
 }
 
+/// All the metadata about a call.
+/// With additional information from construct_runtime
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct CallMetadataConstruct {
+	pub outer_dispatch: DFn<OuterDispatchCall>,
+	pub functions: DFn<DecodeDifferentArray<FunctionMetadata>>,
+}
+
 /// All the metadata about a function.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -366,16 +375,24 @@ pub struct RuntimeModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferentStr,
 	pub storage: Option<DFn<StorageMetadata>>,
-	pub call: DFn<CallMetadata>,
-	pub outer_dispatch: DecodeDifferent<FnEncode<Option<OuterDispatchCall>>, Option<OuterDispatchCall>>,
+	pub calls: Option<DFn<CallMetadataConstruct>>,
 	pub event: DecodeDifferent<FnEncode<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
 }
 
+#[cfg(feature="std")]
+impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
+	fn into(self) -> primitives::OpaqueMetadata {
+		println!("{:?}", &self);
+		primitives::OpaqueMetadata::new(self.encode())
+	}
+}
+#[cfg(not(feature="std"))]
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {
 		primitives::OpaqueMetadata::new(self.encode())
 	}
 }
+
 
 impl Into<RuntimeMetadataPrefixed> for RuntimeMetadata {
 	fn into(self) -> RuntimeMetadataPrefixed {

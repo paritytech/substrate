@@ -751,7 +751,7 @@ macro_rules! __decl_outer_dispatch {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_runtime_metadata {
-  // contain a module
+	// contain a module
 	(
 		$runtime:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
@@ -768,13 +768,13 @@ macro_rules! __decl_runtime_metadata {
 			$( $parsed_modules { $( $withs )* } )*;
 			$name: $module::{ $( $modules $( <$modules_generic> )* )* }
 			$(
-			  $rest_name: $rest_module::{
-			    $( $rest_modules $( <$rest_modules_generic> )* )*
-			  }
+				$rest_name: $rest_module::{
+					$( $rest_modules $( <$rest_modules_generic> )* )*
+				}
 			)*
 		);
 	};
-  // do not contain Module : skip
+	// do not contain Module : skip
 	(
 		$runtime:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
@@ -789,13 +789,13 @@ macro_rules! __decl_runtime_metadata {
 			$runtime;
 			$( $parsed_modules { $( $withs )* } )*;
 			$(
-			  $rest_name: $rest_module::{
-			    $( $rest_modules $( <$rest_modules_generic> )* )*
-			  }
+				$rest_name: $rest_module::{
+					$( $rest_modules $( <$rest_modules_generic> )* )*
+				}
 			)*
 		);
 	};
-  // process module
+	// process module
 	(@Module
 		$runtime:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
@@ -810,7 +810,7 @@ macro_rules! __decl_runtime_metadata {
 			$runtime;
 			$( $parsed_modules { $( $withs )* } )*
 			$module {
-        $($modules)*
+				$($modules)*
 			};
 			$(
 				$rest_name: $rest_module::{
@@ -819,7 +819,7 @@ macro_rules! __decl_runtime_metadata {
 			)*
 		);
 	};
-  // end of decl
+	// end of decl
 	(
 		$runtime:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
