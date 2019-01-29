@@ -250,7 +250,7 @@ where
 }
 
 /// Kinds of delays for pending changes.
-#[derive(Debug, CLone, Encode, Decode, PartialEq)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) enum DelayKind {
 	/// Depth in finalized chain.
 	Finalized,
@@ -317,7 +317,6 @@ mod tests {
 			current_authorities: Vec::new(),
 			set_id: 0,
 			pending_changes: Vec::new(),
-			delay_kind: DelayKind::Finalized,
 		};
 
 		let change_a = PendingChange {
@@ -524,15 +523,15 @@ mod tests {
 			canon_hash: H,
 		}
 
-		let old_change: OldPendingChange<&'static str, u32> = OldPendingChange {
+		let old_change: OldPendingChange<Vec<u8>, u32> = OldPendingChange {
 			next_authorities: vec![([1; 32].into(), 5), ([2; 32].into(), 100)],
 			delay: 1000,
 			canon_height: 123,
-			canon_hash: "hash_a",
+			canon_hash: b"hash_a".to_vec(),
 		};
 
 		let encoded = old_change.encode();
-		let mut new_change: PendingChange<&'static str, u32>
+		let mut new_change: PendingChange<Vec<u8>, u32>
 			= PendingChange::decode(&mut &encoded[..]).unwrap();
 
 		assert_eq!(new_change.delay_kind, DelayKind::Finalized);
@@ -544,7 +543,7 @@ mod tests {
 
 		new_change.delay_kind = DelayKind::Best;
 		let encoded = new_change.encode();
-		let decoded: PendingChange<&'static str, u32> = Decode::decode(&mut &encoded[..]).unwrap();
+		let decoded: PendingChange<Vec<u8>, u32> = Decode::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(new_change, decoded);
 	}
 }

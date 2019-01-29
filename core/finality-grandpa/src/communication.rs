@@ -17,7 +17,6 @@
 //! Incoming message streams that verify signatures, and outgoing message streams
 //! that sign or re-shape.
 
-use std::collections::HashMap;
 use grandpa::VoterSet;
 use futures::prelude::*;
 use futures::sync::mpsc;
@@ -27,6 +26,7 @@ use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {

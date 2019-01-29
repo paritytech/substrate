@@ -135,6 +135,8 @@ pub trait Trait: system::Trait {
 }
 
 /// A stored pending change, old format.
+// TODO: remove shim
+// https://github.com/paritytech/substrate/issues/1614
 #[derive(Encode, Decode)]
 pub struct OldStoredPendingChange<N, SessionKey> {
 	/// The block number this was scheduled at.

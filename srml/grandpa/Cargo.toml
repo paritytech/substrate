@@ -33,5 +33,5 @@ std = [
 	"sr-primitives/std",
 	"srml-system/std",
 	"srml-session/std",
-	"srml-finality-tracker/std,"
+	"srml-finality-tracker/std",
 ]

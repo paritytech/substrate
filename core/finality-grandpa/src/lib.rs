@@ -90,6 +90,7 @@ use client::{
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
 };
 use client::blockchain::HeaderBackend;
+use client::runtime_api::Core as CoreApi;
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
 use runtime_primitives::Justification;
@@ -112,7 +113,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 
-use authorities::SharedAuthoritySet;
+use authorities::{PendingChange, DelayKind, SharedAuthoritySet};
 use until_imported::{UntilCommitBlocksImported, UntilVoteTargetImported};
 
 pub use fg_primitives::ScheduledChange;
@@ -1051,6 +1052,77 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	api: Arc<PRA>,
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA, PRA> where
+	NumberFor<Block>: grandpa::BlockNumberOps,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+	DigestFor<Block>: Encode,
+	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+	RA: Send + Sync,
+	PRA: ProvideRuntimeApi,
+	PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
+{
+	fn maybe_change(&self, header: &Block::Header, hash: Block::Hash)
+		-> Result<Option<PendingChange<Block::Hash, NumberFor<Block>>>, ConsensusError>
+	{
+		let at = BlockId::hash(*header.parent_hash());
+		let digest = header.digest();
+
+		let api = self.api.runtime_api();
+		// check normal scheduled change.
+		{
+			let maybe_change = api.grandpa_pending_change(
+				&at,
+				digest,
+			);
+
+			match maybe_change {
+				Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+				Ok(Some(change)) => return Ok(Some(PendingChange {
+					next_authorities: change.next_authorities,
+					delay: change.delay,
+					canon_height: *header.number(),
+					canon_hash: hash,
+					delay_kind: DelayKind::Finalized,
+				})),
+				_ => {}
+			}
+		};
+
+		// check for forced change.
+		{
+			let maybe_change = api.grandpa_forced_change(
+				&at,
+				digest,
+			);
+
+			match maybe_change {
+				Err(e) => match api.version(&at) {
+					Err(e) => Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+					Ok(version) => if version.has_api_with::<GrandpaApi<Block>, _>(|v| v >= 2) {
+						// API version is high enough to support forced changes
+						// but got error, so it is legitimate.
+						Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
+					} else {
+						// this might be ignoring some legitimate client
+						// errors but odds are those would have popped up
+						// in the previous API call.
+						Ok(None)
+					}
+				}
+				Ok(None) => Ok(None),
+				Ok(Some(change)) => Ok(Some(PendingChange {
+					next_authorities: change.next_authorities,
+					delay: change.delay,
+					canon_height: *header.number(),
+					canon_hash: hash,
+					delay_kind: DelayKind::Best,
+				})),
+			}
+		}
+	}
+}
+
 impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
@@ -1060,7 +1132,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>,
+		PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
 {
 	type Error = ConsensusError;
 
@@ -1110,27 +1182,20 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>,
+		PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
 {
 	type Error = ConsensusError;
 
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
-		use authorities::PendingChange;
-
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
-		let maybe_change = self.api.runtime_api().grandpa_pending_change(
-			&BlockId::hash(*block.header.parent_hash()),
-			&block.header.digest().clone(),
-		);
-
-		let maybe_change = match maybe_change {
-			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-			Ok(maybe) => maybe,
-		};
+		let maybe_change = self.maybe_change(
+			&block.header,
+			hash,
+		)?;
 
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
@@ -1169,12 +1234,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			};
 
 			authorities.add_pending_change(
-				PendingChange {
-					next_authorities: change.next_authorities,
-					finalization_depth: change.delay,
-					canon_height: number,
-					canon_hash: hash,
-				},
+				change,
 				is_equal_or_descendent_of,
 			)?;
 
@@ -1411,7 +1471,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block>
+		PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
 {
 	use runtime_primitives::traits::Zero;
 	let authority_set = match Backend::get_aux(&**client.backend(), AUTHORITY_SET_KEY)? {

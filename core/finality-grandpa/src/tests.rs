@@ -321,6 +321,12 @@ impl GrandpaApi<Block> for RuntimeApi {
 		// extrinsics.
 		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone()))
 	}
+
+	fn grandpa_forced_change(&self, _at: &BlockId<Block>, _: &DigestFor<Block>)
+		-> Result<Option<ScheduledChange<NumberFor<Block>>>>
+	{
+		Ok(None)
+	}
 }
 
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
