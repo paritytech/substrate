@@ -595,14 +595,16 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			// uncanonicalize: check safety violations and ensure the numbers no longer
 			// point to these block hashes in the key mapping.
 			for r in tree_route.retracted() {
-				retracted.push(r.hash.clone());
 				if r.hash == meta.finalized_hash {
-					warn!("Potential safety failure: reverting finalized block {:?}",
-						  (&r.number, &r.hash));
+					warn!(
+						"Potential safety failure: reverting finalized block {:?}",
+						(&r.number, &r.hash)
+					);
 
 					return Err(::client::error::ErrorKind::NotInFinalizedChain.into());
 				}
 
+				retracted.push(r.hash.clone());
 				utils::remove_number_to_key_mapping(
 					transaction,
 					columns::KEY_LOOKUP,
@@ -621,7 +623,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				);
 			}
 
-			let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, best_to.1);
+			let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
 			utils::insert_number_to_key_mapping(
 				transaction,
@@ -663,7 +665,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		if let Some(justification) = justification {
 			transaction.put(
 				columns::JUSTIFICATION,
-				&utils::number_and_hash_to_lookup_key(number, *hash),
+				&utils::number_and_hash_to_lookup_key(number, hash),
 				&justification.encode(),
 			);
 		}
@@ -719,7 +721,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		if f_num.as_() > self.storage.state_db.best_canonical() {
 			let parent_hash = f_header.parent_hash().clone();
 
-			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone());
+			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, &f_hash);
 			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash);
@@ -996,7 +998,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					let hash = self.blockchain.hash(best)?.ok_or_else(
 						|| client::error::ErrorKind::UnknownBlock(
 							format!("Error reverting to {}. Block hash not found.", best)))?;
-					let key = utils::number_and_hash_to_lookup_key(best.clone(), hash.clone());
+					let key = utils::number_and_hash_to_lookup_key(best.clone(), &hash);
 					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 					transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
 					self.storage.db.write(transaction).map_err(db_err)?;
