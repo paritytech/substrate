@@ -19,21 +19,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-extern crate parity_codec;
-extern crate sr_primitives;
-extern crate substrate_client as client;
-extern crate substrate_primitives;
-
-pub extern crate substrate_transaction_graph as txpool;
-
-#[macro_use]
-extern crate error_chain;
-
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-
 mod api;
 #[cfg(test)]
 mod tests;
@@ -41,3 +26,4 @@ mod tests;
 pub mod error;
 
 pub use api::ChainApi;
+pub use txpool;
