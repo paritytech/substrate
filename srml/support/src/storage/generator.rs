@@ -653,7 +653,6 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		prefix: DecodeDifferent::Encode("TestStorage"),
 		functions: DecodeDifferent::Encode(&[
 			StorageFunctionMetadata {
 				name: DecodeDifferent::Encode("U32"),

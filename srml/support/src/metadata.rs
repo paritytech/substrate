@@ -63,9 +63,7 @@ macro_rules! __runtime_modules_to_metadata {
 				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
 				storage: __runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
 				calls: __runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
-				event: $crate::metadata::DecodeDifferent::Encode(
-					__runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*)
-				),
+				event: __runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
 			};
 			$( $rest )*
 		)
@@ -81,7 +79,7 @@ macro_rules! __runtime_modules_to_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __runtime_modules_to_metadata_calls_call {
-  // skip system
+	// skip system
 	(
 		system,
 		$skip_module: ident,
@@ -142,11 +140,13 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		with Event 
 		$(with $kws:ident)*
 	) => {
-		$crate::metadata::FnEncode(
-			$crate::paste::expr!{
-				$runtime:: [< __module_events_ $mod >]
-			}
-		)
+		Some($crate::metadata::DecodeDifferent::Encode(
+			$crate::metadata::FnEncode(
+				$crate::paste::expr!{
+					$runtime:: [< __module_events_ $mod >]
+				}
+			)
+		))
 	};
 	(
 		$mod: ident,
@@ -162,7 +162,7 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		$module: ident,
 		$runtime: ident,
 	) => {
-		$crate::metadata::FnEncode($runtime::__module_events___default)
+		None
 	};
 }
 
@@ -358,25 +358,22 @@ mod tests {
 				prefix: DecodeDifferent::Encode("system"),
 				storage: None,
 				calls: None,
-				event: DecodeDifferent::Encode(
-					FnEncode(||
-				 		FnEncode(||&[
-							EventMetadata {
-								name: DecodeDifferent::Encode("SystemEvent"),
-								arguments: DecodeDifferent::Encode(&[]),
-								documentation: DecodeDifferent::Encode(&[])
-							}
-				 		])
-					)
-				),
+				event: Some(DecodeDifferent::Encode(
+			 		FnEncode(||&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("SystemEvent"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[])
+						}
+			 		])
+				)),
 			},
-	
 			ModuleMetadata {
 				prefix: DecodeDifferent::Encode("event_module"),
 				name: DecodeDifferent::Encode("Module"),
 				storage: None,
 				calls: Some(DecodeDifferent::Encode(FnEncode(||
-          CallMetadata {
+					CallMetadata {
 						outer_dispatch: DecodeDifferent::Encode(
 							FnEncode(|| OuterDispatchCall {
 								name: DecodeDifferent::Encode("EventModule"),
@@ -392,24 +389,21 @@ mod tests {
 							}
 						]))),
 				}))),
-				event: DecodeDifferent::Encode(
-					FnEncode(||
-				 		FnEncode(||&[
-							EventMetadata {
-								name: DecodeDifferent::Encode("TestEvent"),
-								arguments: DecodeDifferent::Encode(&["Balance"]),
-								documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
-							}
-				 		])
-					)
-				),
+				event: Some(DecodeDifferent::Encode(
+			 		FnEncode(||&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance"]),
+							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
+						}
+			 		])
+				)),
 			},
 			ModuleMetadata {
 				prefix: DecodeDifferent::Encode("event_module2"),
 				name: DecodeDifferent::Encode("Module"),
 				storage: Some(DecodeDifferent::Encode(FnEncode(||
 					StorageMetadata {
-						prefix: DecodeDifferent::Encode("TestStorage"),
 						functions: DecodeDifferent::Encode(&[
 							StorageFunctionMetadata {
 								name: DecodeDifferent::Encode("StorageMethod"),
@@ -435,17 +429,15 @@ mod tests {
 					functions: DecodeDifferent::Encode(FnEncode(||DecodeDifferent::Encode(&[
 					]))),
 				}))),
-				event: DecodeDifferent::Encode(
-					FnEncode(||
-				 		FnEncode(||&[
-							EventMetadata {
-								name: DecodeDifferent::Encode("TestEvent"),
-								arguments: DecodeDifferent::Encode(&["Balance"]),
-								documentation: DecodeDifferent::Encode(&[])
-							}
-				 		])
-					)
-				),
+				event: Some(DecodeDifferent::Encode(
+			 		FnEncode(||&[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance"]),
+							documentation: DecodeDifferent::Encode(&[])
+						}
+			 		])
+				)),
 			},
 		])}
 	);

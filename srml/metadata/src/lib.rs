@@ -216,7 +216,6 @@ pub struct EventMetadata {
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct StorageMetadata {
-	pub prefix: DecodeDifferentStr,
 	pub functions: DecodeDifferentArray<StorageFunctionMetadata>,
 }
 
@@ -360,7 +359,7 @@ pub struct ModuleMetadata {
 	pub prefix: DecodeDifferentStr,
 	pub storage: Option<DFn<StorageMetadata>>,
 	pub calls: Option<DFn<CallMetadata>>,
-	pub event: DecodeDifferent<FnEncode<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
+	pub event: Option<DecodeDifferent<FnEncode<&'static [EventMetadata]>, Vec<EventMetadata>>>,
 }
 
 #[cfg(feature="std")]
