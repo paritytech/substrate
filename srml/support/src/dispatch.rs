@@ -607,13 +607,13 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name> $crate::dispatch::Decode for $call_type<$trait_instance> {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				let _input_id = input.read_byte()?;
-				__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*)
+				$crate::__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*)
 			}
 		}
 
 		impl<$trait_instance: $trait_name> $crate::dispatch::Encode for $call_type<$trait_instance> {
 			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
-				__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
+				$crate::__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
 				if let $call_type::__PhantomItem(_) = *self { unreachable!() }
 				if let $call_type::__OtherPhantomItem(_) = *self { unreachable!() }
 			}
@@ -627,7 +627,7 @@ macro_rules! decl_module {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
-							decl_module!(
+							$crate::decl_module!(
 								@call
 								$from
 								$mod_type $trait_instance $fn_name _origin $system [ $( $param_name ),* ]
@@ -672,7 +672,7 @@ macro_rules! __impl_decode {
 		{
 			if $input_id == ($fn_id) {
 				$(
-					__impl_decode!(@decode
+					$crate::__impl_decode!(@decode
 						$(#[$codec_attr on type $param])*
 						$param_name;
 						$input;
@@ -681,7 +681,7 @@ macro_rules! __impl_decode {
 				return Some($call_type:: $fn_name( $( $param_name ),* ));
 			}
 
-			__impl_decode!($input; $input_id; $fn_id + 1; $call_type; $($rest)*)
+			$crate::__impl_decode!($input; $input_id; $fn_id + 1; $call_type; $($rest)*)
 		}
 	};
 	(
@@ -739,7 +739,7 @@ macro_rules! __impl_encode {
 			) = $self {
 				$dest.push_byte(($fn_id) as u8);
 				$(
-					__impl_encode!(@encode_as
+					$crate::__impl_encode!(@encode_as
 						$(#[$codec_attr on type $param])*
 						$param_name;
 						$dest;
@@ -747,7 +747,7 @@ macro_rules! __impl_encode {
 				)*
 			}
 
-			__impl_encode!($dest; $self; $fn_id + 1; $call_type; $($rest)*)
+			$crate::__impl_encode!($dest; $self; $fn_id + 1; $call_type; $($rest)*)
 		}
 	};
 	(
@@ -804,7 +804,7 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
-		__impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
+		$crate::__impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
@@ -827,7 +827,7 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		)*
-		__impl_outer_dispatch_metadata!($runtime; $call_type; $( $module::$camelcase, )*);
+		$crate::__impl_outer_dispatch_metadata!($runtime; $call_type; $( $module::$camelcase, )*);
 	}
 }
 
@@ -841,13 +841,13 @@ macro_rules! __impl_outer_dispatch_common {
 		impl $crate::dispatch::Decode for $call_type {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				let input_id = input.read_byte()?;
-				__impl_decode!(input; input_id; 0; $call_type; $( fn $camelcase ( outer_dispatch_param ); )*)
+				$crate::__impl_decode!(input; input_id; 0; $call_type; $( fn $camelcase ( outer_dispatch_param ); )*)
 			}
 		}
 
 		impl $crate::dispatch::Encode for $call_type {
 			fn encode_to<W: $crate::dispatch::Output>(&self, dest: &mut W) {
-				__impl_encode!(dest; *self; 0; $call_type; $( fn $camelcase( outer_dispatch_param ); )*)
+				$crate::__impl_encode!(dest; *self; 0; $call_type; $( fn $camelcase( outer_dispatch_param ); )*)
 			}
 		}
 	}
@@ -866,7 +866,7 @@ macro_rules! __impl_outer_dispatch_metadata {
 			pub fn outer_dispatch_metadata() -> $crate::dispatch::OuterDispatchMetadata {
 				$crate::dispatch::OuterDispatchMetadata {
 					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($outer_name)),
-					calls: __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*),
+					calls: $crate::__impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*),
 				}
 			}
 		}
@@ -877,7 +877,7 @@ macro_rules! __impl_outer_dispatch_metadata {
 		$module:ident::$call:ident,
 		$( $rest_module:ident::$rest:ident, )*
 	) => {
-		__impl_outer_dispatch_metadata!(
+		$crate::__impl_outer_dispatch_metadata!(
 			@encode_calls
 			$index + 1;
 			$( $encoded_call, )*
@@ -909,7 +909,7 @@ macro_rules! __dispatch_impl_metadata {
 			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
 				$crate::dispatch::ModuleMetadata {
 					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($mod_type)),
-					call: __call_to_metadata!($($rest)*),
+					call: $crate::__call_to_metadata!($($rest)*),
 				}
 			}
 		}
@@ -933,7 +933,7 @@ macro_rules! __call_to_metadata {
 	) => {
 		$crate::dispatch::CallMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
-			functions: __functions_to_metadata!(0; $origin_type;; $(
+			functions: $crate::__functions_to_metadata!(0; $origin_type;; $(
 				fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
 				$( $doc_attr ),*;
 			)*),
@@ -957,9 +957,9 @@ macro_rules! __functions_to_metadata{
 		$( $fn_doc:expr ),*;
 		$( $rest:tt )*
 	) => {
-		__functions_to_metadata!(
+		$crate::__functions_to_metadata!(
 			$fn_id + 1; $origin_type;
-			$( $function_metadata, )* __function_to_metadata!(
+			$( $function_metadata, )* $crate::__function_to_metadata!(
 				fn $fn_name($( $(#[$codec_attr])* $param_name : $param ),*); $( $fn_doc ),*; $fn_id;
 			);
 			$($rest)*
@@ -993,7 +993,7 @@ macro_rules! __function_to_metadata {
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
 						ty: $crate::dispatch::DecodeDifferent::Encode(
-							__function_to_metadata!(@stringify_expand_attr
+							$crate::__function_to_metadata!(@stringify_expand_attr
 								$(#[$codec_attr])* $param_name: $param
 							)
 						),

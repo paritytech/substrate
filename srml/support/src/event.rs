@@ -282,7 +282,7 @@ macro_rules! impl_outer_event {
 			$( $rest:tt $( <$t:ident> )*, )*
 		}
 	) => {
-		impl_outer_event!(
+		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -298,7 +298,7 @@ macro_rules! impl_outer_event {
 			$( $rest:tt $( <$t:ident> )*, )*
 		}
 	) => {
-		impl_outer_event!(
+		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -314,7 +314,7 @@ macro_rules! impl_outer_event {
 			$( $rest:tt $( <$t:ident> )*, )*
 		}
 	) => {
-		impl_outer_event!(
+		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -334,7 +334,7 @@ macro_rules! impl_outer_event {
 		};
 		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
-		impl_outer_event!(
+		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -354,7 +354,7 @@ macro_rules! impl_outer_event {
 		};
 		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
-		impl_outer_event!(
+		$crate::impl_outer_event!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -397,7 +397,7 @@ macro_rules! impl_outer_event {
 				}
 			}
 		)*
-		__impl_outer_event_json_metadata!(
+		$crate::__impl_outer_event_json_metadata!(
 			$runtime;
 			$name;
 			$system;

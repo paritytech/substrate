@@ -29,7 +29,8 @@ extern crate sr_io as runtime_io;
 pub extern crate sr_primitives as runtime_primitives;
 extern crate srml_metadata;
 
-extern crate mashup;
+#[doc(hidden)]
+pub extern crate paste;
 #[cfg_attr(test, macro_use)]
 extern crate srml_support_procedural;
 extern crate substrate_inherents as inherents;
@@ -129,9 +130,6 @@ macro_rules! assert_ok {
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Void {}
-
-#[doc(hidden)]
-pub use mashup::*;
 
 #[cfg(feature = "std")]
 #[doc(hidden)]

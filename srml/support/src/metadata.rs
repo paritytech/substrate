@@ -37,7 +37,7 @@ macro_rules! impl_runtime_metadata {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
 				$crate::metadata::RuntimeMetadata {
 					outer_event: Self::outer_event_metadata(),
-					modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+					modules: $crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					outer_dispatch: Self::outer_dispatch_metadata(),
 				}
 			}
@@ -54,7 +54,7 @@ macro_rules! __runtime_modules_to_metadata {
 		$mod:ident::$module:ident,
 		$( $rest:tt )*
 	) => {
-		__runtime_modules_to_metadata!(
+		$crate::__runtime_modules_to_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
 				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
@@ -72,7 +72,7 @@ macro_rules! __runtime_modules_to_metadata {
 		$mod:ident::$module:ident with Storage,
 		$( $rest:tt )*
 	) => {
-		__runtime_modules_to_metadata!(
+		$crate::__runtime_modules_to_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
 				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
