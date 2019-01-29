@@ -622,16 +622,16 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					e.hash
 				);
 			}
-
-			let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
-			transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
-			utils::insert_number_to_key_mapping(
-				transaction,
-				columns::KEY_LOOKUP,
-				best_to.0,
-				best_to.1,
-			);
 		}
+
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
+		transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
+		utils::insert_number_to_key_mapping(
+			transaction,
+			columns::KEY_LOOKUP,
+			best_to.0,
+			best_to.1,
+		);
 
 		Ok((enacted, retracted))
 	}
@@ -1036,7 +1036,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 				Ok(CachingState::new(state, self.shared_cache.clone(), Some(hdr.hash())))
 			},
 			Err(e) => Err(e),
-			_ => Err(client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()),
+			_ => Err(client::error::ErrorKind::UnknownBlock(format!("Unknown state for block {:?}", block)).into()),
 		}
 	}
 
@@ -1059,7 +1059,6 @@ mod tests {
 	use crate::columns;
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
-	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use runtime_primitives::traits::{Hash, BlakeTwo256};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
