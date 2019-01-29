@@ -20,6 +20,7 @@ use futures::{
 	Stream,
 	sync::mpsc,
 };
+use serde_derive::{Serialize, Deserialize};
 
 /// Possible extrinsic status events
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

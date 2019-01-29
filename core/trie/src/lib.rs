@@ -18,20 +18,6 @@
 
 // TODO: no_std
 
-extern crate trie_root;
-extern crate parity_codec as codec;
-extern crate trie_db;
-extern crate hash_db;
-extern crate memory_db;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate trie_standardmap;
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
 mod error;
 mod node_header;
 mod node_codec;
@@ -281,6 +267,7 @@ mod tests {
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
+	use hex_literal::{hex, hex_impl};
 
 	fn check_equivalent(input: &Vec<(&[u8], &[u8])>) {
 		{
