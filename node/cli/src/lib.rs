@@ -19,32 +19,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-extern crate tokio;
-
-extern crate substrate_cli as cli;
-extern crate substrate_primitives as primitives;
-extern crate node_runtime;
-extern crate exit_future;
-#[macro_use]
-extern crate hex_literal;
-#[cfg(test)]
-extern crate substrate_service_test as service_test;
-extern crate substrate_transaction_pool as transaction_pool;
-#[macro_use]
-extern crate substrate_network as network;
-extern crate substrate_consensus_aura as consensus;
-extern crate substrate_client as client;
-extern crate substrate_finality_grandpa as grandpa;
-extern crate node_primitives;
-#[macro_use]
-extern crate substrate_service;
-extern crate node_executor;
-extern crate substrate_keystore;
-extern crate substrate_inherents as inherents;
-
-#[macro_use]
-extern crate log;
-
 pub use cli::error;
 pub mod chain_spec;
 mod service;
@@ -54,6 +28,7 @@ use tokio::runtime::Runtime;
 pub use cli::{VersionInfo, IntoExit, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
+use log::info;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
