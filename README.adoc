@@ -151,7 +151,7 @@ Now with this new chainspec file, you can build a "raw" chain definition for you
 
 [source, shell]
 ----
-substrate build-spec --chain ~/chainspec.json --raw > ~/mychain.json
+substrate --chain ~/chainspec.json build-spec --raw > ~/mychain.json
 ----
 
 This can be fed into Substrate:
@@ -319,18 +319,18 @@ Example (generic):
 /// ```rust
 /// // insert example 1 code here
 /// ```
-/// 
+///
 ```
 
 * Important notes:
 ** Documentation comments must use annotations with a triple slash `///`
-** Modules are documented using `//!` 
+** Modules are documented using `//!`
 ```
 //! Summary (of module)
 //!
 //! Description (of module)
 ```
-* Special section header is indicated with a hash `#`. 
+* Special section header is indicated with a hash `#`.
 ** `Panics` section requires an explanation if the function triggers a panic
 ** `Errors` section is for describing conditions under which a function of method returns `Err(E)` if it returns a `Result<T, E>`
 ** `Safety` section requires an explanation if the function is `unsafe`
