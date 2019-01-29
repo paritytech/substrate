@@ -84,6 +84,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// in other words, that have no children, are chain heads.
 	/// Results must be ordered best (longest, heighest) chain first.
 	fn leaves(&self) -> Result<Vec<Block::Hash>>;
+	fn children(&self, parent_hash: Block::Hash) -> Vec<Block::Hash>;
 }
 
 /// Blockchain optional data cache.

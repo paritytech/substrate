@@ -622,6 +622,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn lock_import_and_run<R, F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> error::Result<R>>(
 		&self, f: F
 	) -> error::Result<R> {
+		println!("in lock_import_and_run ------------------------------------------------");
 		let inner = || {
 			let _import_lock = self.import_lock.lock();
 

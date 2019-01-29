@@ -91,7 +91,7 @@ impl<K, V> ChildrenMap<K, V> where
         self.pending_added.push((parent_hash, hash));
 	}
 
-    /// Write the leaf list to the database transaction.
+    /// Write the children list to the database transaction.
 	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
 		let mut buf = prefix.to_vec();
 		for (parent, child) in self.pending_added.drain(..) {
@@ -100,6 +100,13 @@ impl<K, V> ChildrenMap<K, V> where
 			buf.truncate(prefix.len()); // reuse allocation.
 		}
 	}
+
+    pub fn hashes(&self, parent_hash: K) -> Vec<V> {
+        match self.storage.get(&parent_hash) {
+            Some(children) => children.clone(),
+            None => vec![],
+        }
+    }
 }
 
 #[cfg(test)]
@@ -122,7 +129,7 @@ mod tests {
 
     #[test]
     fn children_flush() {
-        const PREFIX: &[u8] = b"marcio";
+        const PREFIX: &[u8] = b"a";
 		let db = ::kvdb_memorydb::create(0);
 
         let mut children = ChildrenMap::new();
