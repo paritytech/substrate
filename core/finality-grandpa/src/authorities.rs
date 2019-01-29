@@ -19,6 +19,7 @@
 use parking_lot::RwLock;
 use substrate_primitives::Ed25519AuthorityId;
 use grandpa::VoterSet;
+use codec::Decode;
 
 use std::cmp::Ord;
 use std::fmt::Debug;
@@ -248,27 +249,57 @@ where
 	}
 }
 
+/// Kinds of delays for pending changes.
+#[derive(Debug, CLone, Encode, Decode, PartialEq)]
+pub(crate) enum DelayKind {
+	/// Depth in finalized chain.
+	Finalized,
+	/// Depth in best chain.
+	Best,
+}
+
 /// A pending change to the authority set.
 ///
 /// This will be applied when the announcing block is at some depth within
-/// the finalized chain.
-#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+/// the finalized or unfinalized chain.
+#[derive(Debug, Clone, Encode, PartialEq)]
 pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
 	pub(crate) next_authorities: Vec<(Ed25519AuthorityId, u64)>,
-	/// How deep in the finalized chain the announcing block must be
+	/// How deep in the chain the announcing block must be
 	/// before the change is applied.
-	pub(crate) finalization_depth: N,
+	pub(crate) delay: N,
 	/// The announcing block's height.
 	pub(crate) canon_height: N,
 	/// The announcing block's hash.
 	pub(crate) canon_hash: H,
+	/// The delay kind.
+	pub(crate) delay_kind: DelayKind,
+}
+
+impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
+	fn decode<I: ::codec::Input>(value: &mut I) -> Option<Self> {
+		let next_authorities = Decode::decode(value)?;
+		let delay = Decode::decode(value)?;
+		let canon_height = Decode::decode(value)?;
+		let canon_hash = Decode::decode(value)?;
+
+		let delay_kind = DelayKind::decode(value).unwrap_or(DelayKind::Finalized);
+
+		Some(PendingChange {
+			next_authorities,
+			delay,
+			canon_height,
+			canon_hash,
+			delay_kind,
+		})
+	}
 }
 
 impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	/// Returns the effective number this change will be applied at.
 	pub fn effective_number(&self) -> N {
-		self.canon_height.clone() + self.finalization_depth.clone()
+		self.canon_height.clone() + self.delay.clone()
 	}
 }
 
@@ -286,27 +317,31 @@ mod tests {
 			current_authorities: Vec::new(),
 			set_id: 0,
 			pending_changes: Vec::new(),
+			delay_kind: DelayKind::Finalized,
 		};
 
 		let change_a = PendingChange {
 			next_authorities: Vec::new(),
-			finalization_depth: 10,
+			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_a",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		let change_b = PendingChange {
 			next_authorities: Vec::new(),
-			finalization_depth: 0,
+			delay: 0,
 			canon_height: 16,
 			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		let change_c = PendingChange {
 			next_authorities: Vec::new(),
-			finalization_depth: 5,
+			delay: 5,
 			canon_height: 10,
 			canon_hash: "hash_c",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		authorities.add_pending_change(change_a.clone(), ignore_existing_changes).unwrap();
@@ -329,16 +364,18 @@ mod tests {
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
-			finalization_depth: 10,
+			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_a",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		let change_b = PendingChange {
 			next_authorities: set_b.clone(),
-			finalization_depth: 10,
+			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		authorities.add_pending_change(change_a.clone(), ignore_existing_changes).unwrap();
@@ -372,23 +409,26 @@ mod tests {
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
-			finalization_depth: 10,
+			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_a",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		let change_b = PendingChange {
 			next_authorities: set_b.clone(),
-			finalization_depth: 10,
+			delay: 10,
 			canon_height: 16,
 			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		let change_c = PendingChange {
 			next_authorities: set_c.clone(),
-			finalization_depth: 10,
+			delay: 10,
 			canon_height: 16,
 			canon_hash: "hash_c",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		let is_equal_or_descendent_of = |base, block| -> Result<(), ()> {
@@ -450,9 +490,10 @@ mod tests {
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
-			finalization_depth: 10,
+			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_a",
+			delay_kind: DelayKind::Finalized,
 		};
 
 		authorities.add_pending_change(change_a.clone(), |_| Err(())).unwrap();
@@ -469,5 +510,41 @@ mod tests {
 		// block 16 is already past the change, we assume 15 will be finalized
 		// first and enact the change
 		assert!(!authorities.enacts_change(16, canonical).unwrap());
+	}
+
+	#[test]
+	fn old_delay_kind_migrates() {
+		use codec::Encode;
+
+		#[derive(Debug, Clone, Encode, Decode, PartialEq)]
+		struct OldPendingChange<H, N> {
+			next_authorities: Vec<(Ed25519AuthorityId, u64)>,
+			delay: N,
+			canon_height: N,
+			canon_hash: H,
+		}
+
+		let old_change: OldPendingChange<&'static str, u32> = OldPendingChange {
+			next_authorities: vec![([1; 32].into(), 5), ([2; 32].into(), 100)],
+			delay: 1000,
+			canon_height: 123,
+			canon_hash: "hash_a",
+		};
+
+		let encoded = old_change.encode();
+		let mut new_change: PendingChange<&'static str, u32>
+			= PendingChange::decode(&mut &encoded[..]).unwrap();
+
+		assert_eq!(new_change.delay_kind, DelayKind::Finalized);
+
+		assert_eq!(new_change.next_authorities, old_change.next_authorities);
+		assert_eq!(new_change.delay, old_change.delay);
+		assert_eq!(new_change.canon_height, old_change.canon_height);
+		assert_eq!(new_change.canon_hash, old_change.canon_hash);
+
+		new_change.delay_kind = DelayKind::Best;
+		let encoded = new_change.encode();
+		let decoded: PendingChange<&'static str, u32> = Decode::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(new_change, decoded);
 	}
 }
