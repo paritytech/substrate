@@ -197,7 +197,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// should be the parent of `best_to`. In the case where we set an existing block
 	/// to be best, `route_to` should equal to `best_to`.
 	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(), client::error::Error> {
-		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, best_to.1);
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
 
 		// handle reorg.
 		let meta = self.meta.read();
@@ -380,7 +380,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 
 		// blocks are keyed by number + hash.
-		let lookup_key = utils::number_and_hash_to_lookup_key(number, hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(number, &hash);
 
 		if leaf_state.is_best() {
 			self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?;
