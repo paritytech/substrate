@@ -130,14 +130,6 @@ type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[cfg(not(feature = "std"))]
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 
-/// All the metadata about a call.
-/// With additional information from construct_runtime
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct CallMetadata {
-	pub functions: DFn<DecodeDifferentArray<FunctionMetadata>>,
-}
-
 /// All the metadata about a function.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -357,7 +349,7 @@ pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferentStr,
 	pub storage: Option<DFn<StorageMetadata>>,
-	pub calls: Option<DFn<CallMetadata>>,
+	pub calls: Option<DecodeDifferent<FnEncode<&'static [FunctionMetadata]>, Vec<FunctionMetadata>>>,
 	pub event: Option<DecodeDifferent<FnEncode<&'static [EventMetadata]>, Vec<EventMetadata>>>,
 }
 

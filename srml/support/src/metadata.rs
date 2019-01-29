@@ -18,7 +18,6 @@ pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
 	ModuleMetadata, RuntimeMetadataV1,
 	DefaultByteGetter, RuntimeMetadataPrefixed,
-	CallMetadata,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -97,13 +96,9 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
-			$crate::metadata::FnEncode(||{
-				$crate::metadata::CallMetadata {
-					functions: $crate::metadata::DecodeDifferent::Encode($crate::metadata::FnEncode(
-						$mod::$module::<$runtime>::call_functions
-					)),
-				}
-			})
+			$crate::metadata::FnEncode(
+				$mod::$module::<$runtime>::call_functions
+			)
 		))
 	};
 	(
@@ -200,7 +195,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 mod tests {
 	use super::*;
 	use srml_metadata::{
-		EventMetadata, CallMetadata,
+		EventMetadata,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageMetadata, StorageFunctionMetadata,
 		ModuleMetadata, RuntimeMetadataPrefixed
@@ -367,17 +362,15 @@ mod tests {
 				prefix: DecodeDifferent::Encode("event_module"),
 				name: DecodeDifferent::Encode("Module"),
 				storage: None,
-				calls: Some(DecodeDifferent::Encode(FnEncode(||
-					CallMetadata {
-						functions: DecodeDifferent::Encode(FnEncode(||DecodeDifferent::Encode(&[
-					 		FunctionMetadata {
-						 		id: 0,
-								name: DecodeDifferent::Encode("aux_0"),
-								arguments: DecodeDifferent::Encode(&[]),
-								documentation: DecodeDifferent::Encode(&[]),
-							}
-						]))),
-				}))),
+				calls: Some(
+					DecodeDifferent::Encode(FnEncode(||&[
+						FunctionMetadata {
+					 		id: 0,
+							name: DecodeDifferent::Encode("aux_0"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						}
+					]))),
 				event: Some(DecodeDifferent::Encode(
 			 		FnEncode(||&[
 						EventMetadata {
@@ -408,10 +401,7 @@ mod tests {
 						])
 					}
 				))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(||CallMetadata {
-					functions: DecodeDifferent::Encode(FnEncode(||DecodeDifferent::Encode(&[
-					]))),
-				}))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(||&[	]))),
 				event: Some(DecodeDifferent::Encode(
 			 		FnEncode(||&[
 						EventMetadata {

@@ -861,7 +861,7 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn call_functions() -> $crate::dispatch::DecodeDifferentArray<$crate::dispatch::FunctionMetadata> {
+			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				__call_to_functions!($($rest)*)
 			}
 		}
@@ -920,7 +920,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		$crate::dispatch::DecodeDifferent::Encode(&[ $( $function_metadata ),* ])
+		&[ $( $function_metadata ),* ]
 	}
 }
 
@@ -998,8 +998,7 @@ mod tests {
 		}
 	}
 
-	const EXPECTED_METADATA: DecodeDifferentArray<FunctionMetadata> = 
-			DecodeDifferent::Encode(&[
+	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
 				FunctionMetadata {
 					id: 0,
 					name: DecodeDifferent::Encode("aux_0"),
@@ -1051,7 +1050,7 @@ mod tests {
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
 				}
-			]);
+			];
 
 	struct TraitImpl {}
 
