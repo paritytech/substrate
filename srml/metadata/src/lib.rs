@@ -181,8 +181,6 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 	}
 }
 
-type DFn<T> = DecodeDifferent<FnEncode<T>, T>;
-
 /// All the metadata about an outer event.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -348,10 +346,12 @@ pub struct RuntimeMetadataV1 {
 pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferentStr,
-	pub storage: Option<DFn<StorageMetadata>>,
-	pub calls: Option<DecodeDifferent<FnEncode<&'static [FunctionMetadata]>, Vec<FunctionMetadata>>>,
-	pub event: Option<DecodeDifferent<FnEncode<&'static [EventMetadata]>, Vec<EventMetadata>>>,
+	pub storage: ODFnA<StorageFunctionMetadata>,
+	pub calls: ODFnA<FunctionMetadata>,
+	pub event: ODFnA<EventMetadata>,
 }
+
+type ODFnA<T> = Option<DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>>;
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {

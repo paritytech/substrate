@@ -167,7 +167,9 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
-			$crate::metadata::FnEncode($mod::$module::<$runtime>::store_metadata)
+			$crate::metadata::FnEncode(
+        $mod::$module::<$runtime>::store_metadata_functions
+			)
 		))
 	};
 	(
@@ -197,7 +199,7 @@ mod tests {
 	use srml_metadata::{
 		EventMetadata,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
-		StorageMetadata, StorageFunctionMetadata,
+		StorageFunctionMetadata,
 		ModuleMetadata, RuntimeMetadataPrefixed
 	};
 	use codec::{Decode, Encode};
@@ -384,23 +386,21 @@ mod tests {
 			ModuleMetadata {
 				prefix: DecodeDifferent::Encode("event_module2"),
 				name: DecodeDifferent::Encode("Module"),
-				storage: Some(DecodeDifferent::Encode(FnEncode(||
-					StorageMetadata {
-						functions: DecodeDifferent::Encode(&[
-							StorageFunctionMetadata {
-								name: DecodeDifferent::Encode("StorageMethod"),
-								modifier: StorageFunctionModifier::Optional,
-								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
-								default: DecodeDifferent::Encode(
-									DefaultByteGetter(
-										&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
-									)
-								),
-								documentation: DecodeDifferent::Encode(&[]),
-							}
-						])
-					}
-				))),
+      	storage: Some(DecodeDifferent::Encode(
+			 		FnEncode(||&[
+						StorageFunctionMetadata {
+							name: DecodeDifferent::Encode("StorageMethod"),
+							modifier: StorageFunctionModifier::Optional,
+							ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+							default: DecodeDifferent::Encode(
+								DefaultByteGetter(
+									&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
+								)
+							),
+							documentation: DecodeDifferent::Encode(&[]),
+						}
+			 		])
+				)),
 				calls: Some(DecodeDifferent::Encode(FnEncode(||&[	]))),
 				event: Some(DecodeDifferent::Encode(
 			 		FnEncode(||&[

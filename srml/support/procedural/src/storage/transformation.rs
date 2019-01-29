@@ -131,8 +131,11 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			#impl_store_fns
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
-					functions: #store_functions_to_metadata ,
+					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
+			}
+			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
+				#store_functions_to_metadata
 			}
 		}
 
@@ -698,9 +701,9 @@ fn store_functions_to_metadata (
 	}
 	(default_getter_struct_def, quote!{
 		{
-			#scrate::storage::generator::DecodeDifferent::Encode(&[
+			&[
 				#items
-			])
+			]
 		}
 	})
 }
