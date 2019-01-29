@@ -130,27 +130,11 @@ type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[cfg(not(feature = "std"))]
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 
-/// All the metadata about a module.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct ModuleMetadata {
-	pub name: DecodeDifferentStr,
-	pub call: CallMetadata,
-}
-
-/// All the metadata about a call.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct CallMetadata {
-	pub name: DecodeDifferentStr,
-	pub functions: DecodeDifferentArray<FunctionMetadata>,
-}
-
 /// All the metadata about a call.
 /// With additional information from construct_runtime
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct CallMetadataConstruct {
+pub struct CallMetadata {
 	pub outer_dispatch: DFn<OuterDispatchCall>,
 	pub functions: DFn<DecodeDifferentArray<FunctionMetadata>>,
 }
@@ -365,17 +349,17 @@ impl Decode for RuntimeMetadataDeprecated {
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV1 {
-	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
+	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeModuleMetadata {
+pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferentStr,
 	pub storage: Option<DFn<StorageMetadata>>,
-	pub calls: Option<DFn<CallMetadataConstruct>>,
+	pub calls: Option<DFn<CallMetadata>>,
 	pub event: DecodeDifferent<FnEncode<FnEncode<&'static [EventMetadata]>>, Vec<EventMetadata>>,
 }
 

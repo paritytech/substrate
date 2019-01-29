@@ -23,8 +23,8 @@ pub use std::fmt;
 pub use rstd::result;
 pub use codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
-	ModuleMetadata, FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
-	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
+	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
+	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };
 
 /// Result of a module function call; either nothing (functions are only called for "side efeects")
@@ -906,46 +906,11 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn call_module() -> $crate::dispatch::CallMetadata {
-				__call_to_metadata!($($rest)*)
-			}
 			pub fn call_functions() -> $crate::dispatch::DecodeDifferentArray<$crate::dispatch::FunctionMetadata> {
 				__call_to_functions!($($rest)*)
 			}
-
-			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
-				$crate::dispatch::ModuleMetadata {
-					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($mod_type)),
-					call: Self::call_module(),
-				}
-			}
 		}
 	}
-}
-
-/// Convert the list of calls into their JSON representation, joined by ",".
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __call_to_metadata {
-	(
-		$call_type:ident $origin_type:ty
-			{$(
-				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident($from:ident
-					$(
-						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
-					)*
-				);
-			)*}
-	) => {
-		$crate::dispatch::CallMetadata {
-			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
-			functions: __functions_to_metadata!(0; $origin_type;; $(
-				fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
-				$( $doc_attr ),*;
-			)*),
-		}
-	};
 }
 
 /// Convert the list of calls into their JSON representation, joined by ",".
@@ -1078,11 +1043,8 @@ mod tests {
 		}
 	}
 
-	const EXPECTED_METADATA: ModuleMetadata = ModuleMetadata {
-		name: DecodeDifferent::Encode("Module"),
-		call: CallMetadata {
-			name: DecodeDifferent::Encode("Call"),
-			functions: DecodeDifferent::Encode(&[
+	const EXPECTED_METADATA: DecodeDifferentArray<FunctionMetadata> = 
+			DecodeDifferent::Encode(&[
 				FunctionMetadata {
 					id: 0,
 					name: DecodeDifferent::Encode("aux_0"),
@@ -1134,9 +1096,7 @@ mod tests {
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
 				}
-			]),
-		},
-	};
+			]);
 
 	struct TraitImpl {}
 
@@ -1147,7 +1107,7 @@ mod tests {
 
 	#[test]
 	fn module_json_metadata() {
-		let metadata = Module::<TraitImpl>::metadata();
+		let metadata = Module::<TraitImpl>::call_functions();
 		assert_eq!(EXPECTED_METADATA, metadata);
 	}
 

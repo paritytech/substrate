@@ -16,9 +16,9 @@
 
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
-	RuntimeModuleMetadata, RuntimeMetadataV1,
+	ModuleMetadata, RuntimeMetadataV1,
 	DefaultByteGetter, RuntimeMetadataPrefixed,
-	CallMetadata, CallMetadataConstruct, OuterDispatchCall,
+	CallMetadata, OuterDispatchCall,
 };
 
 /// Implements the metadata support for the given runtime and all its modules.
@@ -58,7 +58,7 @@ macro_rules! __runtime_modules_to_metadata {
 	) => {
 		__runtime_modules_to_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
+			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($module)),
 				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
 				storage: __runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
@@ -100,7 +100,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(||{
-				$crate::metadata::CallMetadataConstruct {
+				$crate::metadata::CallMetadata {
 					outer_dispatch: $crate::metadata::DecodeDifferent::Encode($crate::metadata::FnEncode(
 						$crate::paste::expr!{
 							$runtime:: [< __module_dispatch_ $mod >] 
@@ -205,10 +205,10 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 mod tests {
 	use super::*;
 	use srml_metadata::{
-		EventMetadata, CallMetadataConstruct,
+		EventMetadata, CallMetadata,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageMetadata, StorageFunctionMetadata, OuterDispatchCall,
-		RuntimeModuleMetadata, RuntimeMetadataPrefixed
+		ModuleMetadata, RuntimeMetadataPrefixed
 	};
 	use codec::{Decode, Encode};
 
@@ -353,7 +353,7 @@ mod tests {
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata::V1(
 		RuntimeMetadataV1 {
 		modules: DecodeDifferent::Encode(&[
-			RuntimeModuleMetadata {
+			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module"),
 				prefix: DecodeDifferent::Encode("system"),
 				storage: None,
@@ -371,12 +371,12 @@ mod tests {
 				),
 			},
 	
-			RuntimeModuleMetadata {
+			ModuleMetadata {
 				prefix: DecodeDifferent::Encode("event_module"),
 				name: DecodeDifferent::Encode("Module"),
 				storage: None,
 				calls: Some(DecodeDifferent::Encode(FnEncode(||
-          CallMetadataConstruct {
+          CallMetadata {
 						outer_dispatch: DecodeDifferent::Encode(
 							FnEncode(|| OuterDispatchCall {
 								name: DecodeDifferent::Encode("EventModule"),
@@ -404,7 +404,7 @@ mod tests {
 					)
 				),
 			},
-			RuntimeModuleMetadata {
+			ModuleMetadata {
 				prefix: DecodeDifferent::Encode("event_module2"),
 				name: DecodeDifferent::Encode("Module"),
 				storage: Some(DecodeDifferent::Encode(FnEncode(||
@@ -425,7 +425,7 @@ mod tests {
 						])
 					}
 				))),
-				calls: Some(DecodeDifferent::Encode(FnEncode(||CallMetadataConstruct {
+				calls: Some(DecodeDifferent::Encode(FnEncode(||CallMetadata {
 					outer_dispatch: DecodeDifferent::Encode(
 						FnEncode(|| OuterDispatchCall {
 							name: DecodeDifferent::Encode("EventModule2"),
