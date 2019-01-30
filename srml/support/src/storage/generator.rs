@@ -348,7 +348,7 @@ macro_rules! __storage_items_internal {
 
 				let ret = f(&mut val);
 
-				__handle_wrap_internal!($wraptype {
+				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
 					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage)
 				} {
@@ -406,7 +406,7 @@ macro_rules! __storage_items_internal {
 
 				let ret = f(&mut val);
 
-				__handle_wrap_internal!($wraptype {
+				$crate::__handle_wrap_internal!($wraptype {
 					// raw type case
 					<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
 				} {
