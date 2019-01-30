@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use primitives::H256;
-use {DBValue, ChangeSet, CommitSet, MetaDb, HashDb};
+use crate::{DBValue, ChangeSet, CommitSet, MetaDb, HashDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {

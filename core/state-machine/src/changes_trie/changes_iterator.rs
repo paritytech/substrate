@@ -19,15 +19,15 @@
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use heapsize::HeapSizeOf;
-use substrate_trie::{Recorder, MemoryDB};
-use changes_trie::{AnchorBlockId, Configuration, RootsStorage, Storage};
-use changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
-use changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
-use proving_backend::ProvingBackendEssence;
-use trie_backend_essence::{TrieBackendEssence};
+use trie::{Recorder, MemoryDB};
+use crate::changes_trie::{AnchorBlockId, Configuration, RootsStorage, Storage};
+use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
+use crate::changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
+use crate::proving_backend::ProvingBackendEssence;
+use crate::trie_backend_essence::{TrieBackendEssence};
 
 /// Return changes of given key at given blocks range.
 /// `max` is the number of best known block.
@@ -383,8 +383,8 @@ fn lower_bound_max_digest(
 mod tests {
 	use std::iter::FromIterator;
 	use primitives::Blake2Hasher;
-	use changes_trie::input::InputPair;
-	use changes_trie::storage::InMemoryStorage;
+	use crate::changes_trie::input::InputPair;
+	use crate::changes_trie::storage::InMemoryStorage;
 	use super::*;
 
 	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<Blake2Hasher>) {

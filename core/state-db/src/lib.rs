@@ -29,23 +29,18 @@
 //! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until pruning
 //! constraints are satisfied.
 
-#[macro_use] extern crate log;
-#[macro_use] extern crate parity_codec_derive;
-extern crate parking_lot;
-extern crate parity_codec as codec;
-#[cfg(test)]
-extern crate substrate_primitives as primitives;
-
 mod noncanonical;
 mod pruning;
 #[cfg(test)] mod test;
 
 use std::fmt;
 use parking_lot::RwLock;
+use parity_codec as codec;
 use codec::Codec;
 use std::collections::HashSet;
 use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
+use log::trace;
 
 /// Database value type.
 pub type DBValue = Vec<u8>;
@@ -61,7 +56,6 @@ pub trait MetaDb {
 	/// Get meta value, such as the journal.
 	fn get_meta(&self, key: &[u8]) -> Result<Option<DBValue>, Self::Error>;
 }
-
 
 /// Backend database trait. Read-only.
 pub trait HashDb {
@@ -353,8 +347,8 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 mod tests {
 	use std::io;
 	use primitives::H256;
-	use {StateDb, PruningMode, Constraints};
-	use test::{make_db, make_changeset, TestDb};
+	use crate::{StateDb, PruningMode, Constraints};
+	use crate::test::{make_db, make_changeset, TestDb};
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);

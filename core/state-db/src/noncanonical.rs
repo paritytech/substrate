@@ -23,7 +23,9 @@
 use std::fmt;
 use std::collections::{HashMap, VecDeque};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
-use codec::{Decode, Encode};
+use crate::codec::{Decode, Encode};
+use parity_codec_derive::{Decode, Encode};
+use log::trace;
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
@@ -270,9 +272,9 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 mod tests {
 	use std::io;
 	use super::NonCanonicalOverlay;
-	use {ChangeSet};
+	use crate::ChangeSet;
 	use primitives::H256;
-	use test::{make_db, make_changeset};
+	use crate::test::{make_db, make_changeset};
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
 		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
