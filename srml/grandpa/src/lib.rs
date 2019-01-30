@@ -86,6 +86,8 @@ pub type Log<T> = RawLog<
 pub trait GrandpaChangeSignal<N> {
 	/// Try to cast the log entry as a contained signal.
 	fn as_signal(&self) -> Option<ScheduledChange<N>>;
+	/// Try to cast the log entry as a contained forced signal.
+	fn as_forced_signal(&self) -> Option<ScheduledChange<N>>;
 }
 
 /// A logs in this module.
@@ -105,6 +107,15 @@ impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
 	pub fn as_signal(&self) -> Option<(N, &[(SessionKey, u64)])> {
 		match *self {
 			RawLog::AuthoritiesChangeSignal(ref n, ref signal) => Some((n.clone(), signal)),
+			RawLog::ForcedAuthoritiesChangeSignal(_, _) => None,
+		}
+	}
+
+	/// Try to cast the log entry as a contained forced signal.
+	pub fn as_forced_signal(&self) -> Option<(N, &[(SessionKey, u64)])> {
+		match *self {
+			RawLog::ForcedAuthoritiesChangeSignal(ref n, ref signal) => Some((n.clone(), signal)),
+			RawLog::AuthoritiesChangeSignal(_, _) => None,
 		}
 	}
 }
@@ -114,6 +125,16 @@ impl<N, SessionKey> GrandpaChangeSignal<N> for RawLog<N, SessionKey>
 {
 	fn as_signal(&self) -> Option<ScheduledChange<N>> {
 		RawLog::as_signal(self).map(|(delay, next_authorities)| ScheduledChange {
+			delay,
+			next_authorities: next_authorities.iter()
+				.cloned()
+				.map(|(k, w)| (k.into(), w))
+				.collect(),
+		})
+	}
+
+	fn as_forced_signal(&self) -> Option<ScheduledChange<N>> {
+		RawLog::as_forced_signal(self).map(|(delay, next_authorities)| ScheduledChange {
 			delay,
 			next_authorities: next_authorities.iter()
 				.cloned()
@@ -165,12 +186,12 @@ impl<N: Decode, SessionKey: Decode> Decode for StoredPendingChange<N, SessionKey
 		let old = OldStoredPendingChange::decode(value)?;
 		let forced = bool::decode(value).unwrap_or(false);
 
-		StoredPendingChange {
-			scheduled_at; old.scheduled_at,
-			delay; old.delay,
-			next_authorities; old.next_authorities,
+		Some(StoredPendingChange {
+			scheduled_at: old.scheduled_at,
+			delay: old.delay,
+			next_authorities: old.next_authorities,
 			forced,
-		}
+		})
 	}
 }
 
@@ -186,6 +207,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		// Pending change: (signalled at, scheduled change).
 		PendingChange get(pending_change): Option<StoredPendingChange<T::BlockNumber, T::SessionKey>>;
+		// last block number where we forced a scheduled change.
+		LastForced get(last_forced): Option<T::BlockNumber>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(T::SessionKey, u64)>;
@@ -337,7 +360,7 @@ impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 		// instant changes
 		let last_authorities = <Module<T>>::grandpa_authorities();
 		if next_authorities != last_authorities {
-			let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero());
+			let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero(), false);
 		}
 	}
 }
@@ -351,8 +374,16 @@ impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthor
 		<T as Trait>::SessionKey,
 	>,
 {
-	fn on_stalled(window_size: N) {
-		use primitives::traits::Zero;
+	fn on_stalled(window_size: T::BlockNumber) {
+		use primitives::traits::As;
+
+		let now = system::ChainContext::<T>::default().current_height();
+
+		// only allow forced changes when twice the window has passed since the last
+		// one.
+		if <Module<T>>::last_forced().map_or(false, |l| l + window_size * T::BlockNumber::sa(2) <= now) {
+			return
+		}
 
 		let next_authorities = <session::Module<T>>::validators()
 			.into_iter()
@@ -363,7 +394,8 @@ impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthor
 		// schedule a change for `window_size` blocks.
 		let last_authorities = <Module<T>>::grandpa_authorities();
 		if next_authorities != last_authorities {
-			let _ = <Module<T>>::schedule_change(next_authorities, window_size);
+			let _ = <Module<T>>::schedule_change(next_authorities, window_size, true);
+			<Module<T> as Store>::LastForced::put(now);
 		}
 	}
 }

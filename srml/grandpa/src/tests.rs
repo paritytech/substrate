@@ -30,7 +30,7 @@ use super::*;
 fn authorities_change_logged() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 0).unwrap();
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 0, false).unwrap();
 
 		System::note_finished_extrinsics();
 		Grandpa::on_finalise(1);
@@ -55,7 +55,7 @@ fn authorities_change_logged() {
 fn authorities_change_logged_after_delay() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1).unwrap();
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, false).unwrap();
 		Grandpa::on_finalise(1);
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
@@ -85,23 +85,23 @@ fn authorities_change_logged_after_delay() {
 fn cannot_schedule_change_when_one_pending() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1).unwrap();
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, false).unwrap();
 		assert!(Grandpa::pending_change().is_some());
-		assert!(Grandpa::schedule_change(vec![(5, 1)], 1).is_err());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
 
 		Grandpa::on_finalise(1);
 		let header = System::finalise();
 
 		System::initialise(&2, &header.hash(), &Default::default());
 		assert!(Grandpa::pending_change().is_some());
-		assert!(Grandpa::schedule_change(vec![(5, 1)], 1).is_err());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
 
 		Grandpa::on_finalise(2);
 		let header = System::finalise();
 
 		System::initialise(&3, &header.hash(), &Default::default());
 		assert!(Grandpa::pending_change().is_none());
-		assert!(Grandpa::schedule_change(vec![(5, 1)], 1).is_ok());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_ok());
 
 		Grandpa::on_finalise(3);
 		let _header = System::finalise();
@@ -117,7 +117,7 @@ fn new_decodes_from_old() {
 	};
 
 	let encoded = old.encode();
-	let new = StoredPendingChange::decode(&mut &encoded[..]).unwrap();
+	let new = StoredPendingChange::<u32, u64>::decode(&mut &encoded[..]).unwrap();
 	assert!(!new.forced);
 	assert_eq!(new.scheduled_at, old.scheduled_at);
 	assert_eq!(new.delay, old.delay);
