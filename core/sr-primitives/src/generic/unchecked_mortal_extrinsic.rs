@@ -20,6 +20,7 @@
 use std::fmt;
 
 use rstd::prelude::*;
+use runtime_io::blake2_256;
 use codec::{Decode, Encode, Input};
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
@@ -84,7 +85,8 @@ where
 			Some((signed, signature, index, era)) => {
 				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.current_height().as_())))
 					.ok_or("transaction birth block ancient")?;
-				let payload = (index, self.function, era, h);
+				let raw_payload = (index, self.function, era, h);
+				let payload = raw_payload.using_encoded(blake2_256);
 				let signed = context.lookup(signed)?;
 				if !::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err("bad signature in extrinsic")
