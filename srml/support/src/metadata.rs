@@ -403,7 +403,6 @@ mod tests {
 				calls: Some(
 					DecodeDifferent::Encode(FnEncode(||&[
 						FunctionMetadata {
-					 		id: 0,
 							name: DecodeDifferent::Encode("aux_0"),
 							arguments: DecodeDifferent::Encode(&[]),
 							documentation: DecodeDifferent::Encode(&[]),

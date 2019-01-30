@@ -134,7 +134,6 @@ type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct FunctionMetadata {
-	pub id: u16,
 	pub name: DecodeDifferentStr,
 	pub arguments: DecodeDifferentArray<FunctionArgumentMetadata>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,

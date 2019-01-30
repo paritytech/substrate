@@ -936,7 +936,6 @@ macro_rules! __function_to_metadata {
 		$fn_id:expr;
 	) => {
 		$crate::dispatch::FunctionMetadata {
-			id: $fn_id,
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
 			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
 				$(
@@ -1000,7 +999,6 @@ mod tests {
 
 	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
 				FunctionMetadata {
-					id: 0,
 					name: DecodeDifferent::Encode("aux_0"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[
@@ -1008,7 +1006,6 @@ mod tests {
 					])
 				},
 				FunctionMetadata {
-					id: 1,
 					name: DecodeDifferent::Encode("aux_1"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
@@ -1019,7 +1016,6 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					id: 2,
 					name: DecodeDifferent::Encode("aux_2"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
@@ -1034,13 +1030,11 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					id: 3,
 					name: DecodeDifferent::Encode("aux_3"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					id: 4,
 					name: DecodeDifferent::Encode("aux_4"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
