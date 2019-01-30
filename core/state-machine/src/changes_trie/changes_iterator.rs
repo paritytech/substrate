@@ -104,7 +104,7 @@ pub fn key_changes_proof_check<S: RootsStorage<H>, H: Hasher>(
 	max: u64,
 	key: &[u8]
 ) -> Result<Vec<(u64, u32)>, String> where H::Out: HeapSizeOf {
-	let mut proof_db = MemoryDB::<H>::default();	// TODO: use new for correctness
+	let mut proof_db = MemoryDB::<H>::default();
 	for item in proof {
 		proof_db.insert(&item);
 	}

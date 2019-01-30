@@ -118,7 +118,7 @@ impl<H: Hasher> Consolidate for MemoryDB<H> {
 }
 
 /// Error impossible.
-// TODO: use `!` type when stabilized.
+// FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
 #[derive(Debug)]
 pub enum Void {}
 
@@ -291,7 +291,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
-		let mut mdb = MemoryDB::default();	// TODO: should be more correct and use ::new()
+		let mut mdb = MemoryDB::default();
 		let mut root = None;
 		for (storage_key, map) in self.inner {
 			if storage_key != None {

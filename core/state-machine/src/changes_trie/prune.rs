@@ -62,7 +62,7 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	};
 
 	// delete changes trie for every block in range
-	// TODO: limit `max_digest_interval` so that this cycle won't involve huge ranges
+	// FIXME: limit `max_digest_interval` so that this cycle won't involve huge ranges
 	for block in first..last+1 {
 		let root = match storage.root(current_block, block) {
 			Ok(Some(root)) => root,

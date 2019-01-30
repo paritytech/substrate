@@ -268,7 +268,6 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
-		// TODO: this is not so great – I think I should go back to have dispatch take a type param and modify this macro to accept a type param and then pass it in from the test-client instead
 		use primitives::Blake2Hasher as _Blake2Hasher;
 		impl $crate::NativeExecutionDispatch for $name {
 			fn native_equivalent() -> &'static [u8] {

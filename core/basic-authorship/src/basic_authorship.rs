@@ -16,8 +16,8 @@
 
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
-// FIXME: move this into substrate-consensus-common - https://github.com/paritytech/substrate/issues/1021
-
+// FIXME #1021 move this into substrate-consensus-common
+//
 use std::{self, time, sync::Arc};
 
 use log::{info, debug, trace};
