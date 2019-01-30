@@ -141,7 +141,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 
 impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: BlockT, S: Storage<Block>, F: Fetcher<Block> {
 	fn body(&self, _id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
-		// TODO [light]: fetch from remote node
+		// TODO: #1445 fetch from remote node
 		Ok(None)
 	}
 
@@ -174,12 +174,14 @@ pub mod tests {
 
 	pub struct DummyStorage {
 		pub changes_tries_cht_roots: HashMap<u64, Hash>,
+		pub aux_store: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
 	}
 
 	impl DummyStorage {
 		pub fn new() -> Self {
 			DummyStorage {
 				changes_tries_cht_roots: HashMap::new(),
+				aux_store: Mutex::new(HashMap::new()),
 			}
 		}
 	}
@@ -221,12 +223,15 @@ pub mod tests {
 			'c: 'a,
 			I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 			D: IntoIterator<Item=&'a &'b [u8]>,
-		>(&self, _insert: I, _delete: D) -> ClientResult<()> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		>(&self, insert: I, _delete: D) -> ClientResult<()> {
+			for (k, v) in insert.into_iter() {
+				self.aux_store.lock().insert(k.to_vec(), v.to_vec());
+			}
+			Ok(())
 		}
 
-		fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+			Ok(self.aux_store.lock().get(key).cloned())
 		}
 	}
 

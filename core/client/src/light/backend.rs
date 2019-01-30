@@ -153,6 +153,16 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 			if is_genesis_import {
 				*self.genesis_state.write() = operation.storage_update.take();
 			}
+		} else {
+			for (key, maybe_val) in operation.aux_ops {
+				match maybe_val {
+					Some(val) => self.blockchain.storage().insert_aux(
+						&[(&key[..], &val[..])],
+						::std::iter::empty(),
+					)?,
+					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
+				}
+			}
 		}
 
 		Ok(())
@@ -459,7 +469,7 @@ where
 #[cfg(test)]
 mod tests {
 	use primitives::Blake2Hasher;
-	use test_client;
+	use test_client::{self, runtime::Block};
 	use crate::backend::NewBlockState;
 	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
 	use super::*;
@@ -489,5 +499,14 @@ mod tests {
 			OnDemandOrGenesisState::OnDemand(_) => (),
 			_ => panic!("unexpected state"),
 		}
+	}
+
+	fn light_aux_store_is_updated_via_non_importing_op() {
+		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let mut op = ClientBackend::<Block, Blake2Hasher>::begin_operation(&backend).unwrap();
+		BlockImportOperation::<Block, Blake2Hasher>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
+		ClientBackend::<Block, Blake2Hasher>::commit_operation(&backend, op).unwrap();
+
+		assert_eq!(AuxStore::get_aux(&backend, &[1]).unwrap(), Some(vec![2]));
 	}
 }

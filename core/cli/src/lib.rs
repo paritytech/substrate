@@ -60,6 +60,8 @@ use lazy_static::lazy_static;
 
 use futures::Future;
 
+const MAX_NODE_NAME_LENGTH: usize = 32;
+
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
 	/// Implemtation name.
@@ -89,6 +91,19 @@ fn get_chain_key(cli: &SharedParams) -> String {
 		Some(ref chain) => chain.clone(),
 		None => if cli.dev { "dev".into() } else { "".into() }
 	}
+}
+
+fn generate_node_name() -> String {
+	let result = loop {
+		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
+		let count = node_name.chars().count();
+
+		if count < MAX_NODE_NAME_LENGTH {
+			break node_name
+		}
+	};
+	
+	result
 }
 
 fn load_spec<F, G>(cli: &SharedParams, factory: F) -> error::Result<ChainSpec<G>>
@@ -121,7 +136,6 @@ fn create_input_err<T: Into<String>>(msg: T) -> error::Error {
 
 /// Check whether a node name is considered as valid
 fn is_node_name_valid(_name: &str) -> Result<(), &str> {
-	const MAX_NODE_NAME_LENGTH: usize = 32;
 	let name = _name.to_string();
 	if name.chars().count() >= MAX_NODE_NAME_LENGTH {
 		return Err("Node name too long");
@@ -284,7 +298,7 @@ where
 	config.impl_version = version.version;
 
 	config.name = match cli.name {
-		None => Generator::with_naming(Name::Numbered).next().unwrap(),
+		None => generate_node_name(),
 		Some(name) => name,
 	};
 	match is_node_name_valid(&config.name) {

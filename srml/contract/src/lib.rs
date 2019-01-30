@@ -347,12 +347,8 @@ decl_storage! {
 	}
 }
 
-// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
-// code in contract itself and use that.
-
 /// The storage items associated with an account/key.
 ///
-/// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
 pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
 impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	const PREFIX: &'static [u8] = b"con:sto:";

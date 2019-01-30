@@ -302,7 +302,7 @@ where
 		);
 		let root_and_tx = root_and_tx.map(|(root, changes)| {
 			let mut calculated_root = Default::default();
-			let mut mdb = MemoryDB::default();	// TODO: use new for correctness
+			let mut mdb = MemoryDB::default();
 			{
 				let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut calculated_root);
 				for (key, value) in changes {
