@@ -218,6 +218,10 @@ impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
 
+impl finality_tracker::Trait for Runtime {
+	type OnFinalizationStalled = grandpa::SyncedAuthorities<Runtime>;
+}
+
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
@@ -237,6 +241,7 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
+		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},

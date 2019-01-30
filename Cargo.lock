@@ -1931,6 +1931,7 @@ dependencies = [
  "srml-council 0.1.0",
  "srml-democracy 0.1.0",
  "srml-executive 0.1.0",
+ "srml-finality-tracker 0.1.0",
  "srml-grandpa 0.1.0",
  "srml-indices 0.1.0",
  "srml-session 0.1.0",
