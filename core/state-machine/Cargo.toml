@@ -14,4 +14,4 @@ trie-db = "0.9"
 trie-root = "0.9"
 substrate-trie = { path = "../trie" }
 substrate-primitives = { path = "../primitives" }
-parity-codec = "2.2"
+parity-codec = "3.0"

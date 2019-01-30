@@ -76,7 +76,7 @@ pub fn export_blocks<F, E, W>(
 			Some(block) => {
 				if json {
 					serde_json::to_writer(&mut output, &block)
-						.map_err(|e| format!("Eror writing JSON: {}", e))?;
+						.map_err(|e| format!("Error writing JSON: {}", e))?;
 				} else {
 					output.write(&block.encode())?;
 				}
@@ -169,7 +169,7 @@ pub fn revert_chain<F>(
 	let client = new_client::<F>(&config)?;
 	let reverted = client.revert(blocks)?;
 	let info = client.info()?.chain;
-	
+
 	if reverted.as_() == 0 {
 		info!("There aren't any non-finalized blocks to revert.");
 	} else {

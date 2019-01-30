@@ -1,11 +1,4 @@
-#[macro_use]
-extern crate clap;
-
-use clap::App;
-
-extern crate node_cli;
-extern crate substrate_service;
-extern crate substrate_primitives;
+use clap::{App, load_yaml};
 
 use node_cli::chain_spec;
 use substrate_service::chain_ops::build_spec;

@@ -46,7 +46,7 @@ extern crate sr_io as runtime_io;
 extern crate srml_timestamp as timestamp;
 
 use rstd::{prelude::*, cmp};
-use codec::{HasCompact, Compact};
+use codec::HasCompact;
 use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
 use session::OnSessionChange;
 use primitives::{Perbill, traits::{Zero, One, Bounded, As, StaticLookup}};
@@ -75,7 +75,7 @@ pub struct ValidatorPrefs<Balance: HasCompact> {
 	#[codec(compact)]
 	pub unstake_threshold: u32,
 	// Reward that validator takes up-front; only the rest is split between themselves and nominators.
-	#[codec(encoded_as = "<Balance as HasCompact>::Type")]
+	#[codec(compact)]
 	pub validator_payment: Balance,
 }
 
@@ -494,8 +494,8 @@ impl<T: Trait> Module<T> {
 		<session::Module<T>>::set_validators(vals);
 
 		// Update the balances for slashing/rewarding according to the stakes.
-		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
-		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
+		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * stake_range.1);
+		<CurrentSessionReward<T>>::put(Self::session_reward() * stake_range.1);
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the

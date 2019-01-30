@@ -223,31 +223,37 @@ impl<
 	///
 	/// Changes made to the storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
+		// Note errors > 0 are from ApplyError
+		const UNKNOWN_ERROR: i8 = -127;
+		const MISSING_SENDER: i8 = -20;
+		const INVALID_INDEX: i8 = -10;
+
 		let encoded_len = uxt.encode().len();
 
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
 			// An unknown account index implies that the transaction may yet become valid.
-			Err("invalid account index") => return TransactionValidity::Unknown,
+			Err("invalid account index") => return TransactionValidity::Unknown(INVALID_INDEX),
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err(_) => return TransactionValidity::Invalid,
+			Err("bad signature") => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
 			if Payment::make_payment(sender, encoded_len).is_err() {
-				return TransactionValidity::Invalid
+				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 
 			// check index
 			let mut expected_index = <system::Module<System>>::account_nonce(sender);
 			if index < &expected_index {
-				return TransactionValidity::Invalid
+				return TransactionValidity::Invalid(ApplyError::Stale as i8)
 			}
 			if *index > expected_index + As::sa(256) {
-				return TransactionValidity::Unknown
+				return TransactionValidity::Unknown(ApplyError::Future as i8)
 			}
 
 			let mut deps = Vec::new();
@@ -263,7 +269,11 @@ impl<
 				longevity: TransactionLongevity::max_value(),
 			}
 		} else {
-			return TransactionValidity::Invalid
+			return TransactionValidity::Invalid(if xt.sender().is_none() {
+				MISSING_SENDER
+			} else {
+				INVALID_INDEX
+			})
 		}
 	}
 }

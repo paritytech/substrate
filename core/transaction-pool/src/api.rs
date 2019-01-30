@@ -34,7 +34,7 @@ use sr_primitives::{
 	transaction_validity::TransactionValidity,
 };
 
-use error;
+use crate::error;
 
 /// The transaction pool logic
 pub struct ChainApi<T, Block> {

@@ -16,16 +16,17 @@
 
 use std::borrow::BorrowMut;
 use std::cell::{RefMut, RefCell};
-use error::{Error, ErrorKind, Result};
+use crate::error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
-use wasm_executor::WasmExecutor;
+use crate::wasm_executor::WasmExecutor;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 use runtime_version::{NativeVersion, RuntimeVersion};
 use std::{collections::HashMap, panic::UnwindSafe};
-use codec::{Decode, Encode};
-use RuntimeInfo;
+use parity_codec::{Decode, Encode};
+use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 use primitives::storage::well_known_keys;
+use log::trace;
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;

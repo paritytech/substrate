@@ -23,6 +23,7 @@ use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, Dem
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
+use hex_literal::{hex, hex_impl};
 
 use substrate_keystore::pad_seed;
 
@@ -303,7 +304,7 @@ pub fn local_testnet_config() -> ChainSpec {
 mod tests {
 	use super::*;
 	use service_test;
-	use service::Factory;
+	use crate::service::Factory;
 
 	fn local_testnet_genesis_instant() -> GenesisConfig {
 		let mut genesis = local_testnet_genesis();

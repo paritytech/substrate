@@ -34,6 +34,9 @@ use substrate_service::{
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
+use network::construct_simple_protocol;
+use substrate_service::construct_service_factory;
+use log::info;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.

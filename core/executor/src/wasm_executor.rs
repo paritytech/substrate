@@ -17,6 +17,8 @@
 //! Rust implementation of Substrate contracts.
 
 use std::collections::HashMap;
+use tiny_keccak;
+use secp256k1;
 
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
@@ -24,15 +26,16 @@ use wasmi::{
 use wasmi::RuntimeValue::{I32, I64};
 use wasmi::memory_units::{Bytes, Pages};
 use state_machine::Externalities;
-use error::{Error, ErrorKind, Result};
-use wasm_utils::UserError;
+use crate::error::{Error, ErrorKind, Result};
+use crate::wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256, ed25519};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
 use trie::ordered_trie_root;
-use sandbox;
-use heap;
+use crate::sandbox;
+use crate::heap;
+use log::trace;
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -419,7 +422,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(this.ext.chain_id())
 	},
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 16] = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
 			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
@@ -443,7 +446,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_twox_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 32] = if len == 0 {
 			twox_256(&[0u8; 0])
 		} else {
 			twox_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_twox_256"))?)
@@ -452,12 +455,21 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_blake2_256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
+		let result: [u8; 32] = if len == 0 {
 			blake2_256(&[0u8; 0])
 		} else {
 			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
+		Ok(())
+	},
+	ext_keccak_256(data: *const u8, len: u32, out: *mut u8) => {
+		let result: [u8; 32] = if len == 0 {
+			tiny_keccak::keccak256(&[0u8; 0])
+		} else {
+			tiny_keccak::keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak_256"))?)
+		};
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_keccak_256"))?;
 		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
@@ -472,6 +484,31 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		} else {
 			5
 		})
+	},
+	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
+		let mut sig = [0u8; 65];
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_secp256k1_ecdsa_recover"))?;
+		let rs = match secp256k1::Signature::parse_slice(&sig[0..64]) {
+			Ok(rs) => rs,
+			_ => return Ok(1),
+		};
+		let v = match secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8) {
+			Ok(v) => v,
+			_ => return Ok(2),
+		};
+
+
+		let mut msg = [0u8; 32];
+		this.memory.get_into(msg_data, &mut msg[..]).map_err(|_| UserError("Invalid attempt to get message in ext_secp256k1_ecdsa_recover"))?;
+
+		let pubkey = match secp256k1::recover(&secp256k1::Message::parse(&msg), &rs, &v) {
+			Ok(pk) => pk,
+			_ => return Ok(3),
+		};
+
+		this.memory.set(pubkey_data, &pubkey.serialize()[1..65]).map_err(|_| UserError("Invalid attempt to set pubkey in ext_secp256k1_ecdsa_recover"))?;
+
+		Ok(0)
 	},
 	ext_sandbox_instantiate(
 		dispatch_thunk_idx: usize,
@@ -510,7 +547,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
-		use codec::{Decode, Encode};
+		use parity_codec::{Decode, Encode};
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -714,8 +751,10 @@ impl WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
+	use parity_codec::Encode;
 	use state_machine::TestExternalities;
+	use hex_literal::{hex, hex_impl};
+	use primitives::map;
 
 	#[test]
 	fn returning_should_work() {
