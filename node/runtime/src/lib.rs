@@ -22,48 +22,20 @@
 
 #[macro_use]
 extern crate srml_support;
-
 #[macro_use]
-extern crate sr_primitives as runtime_primitives;
-
-extern crate substrate_primitives;
-
-#[macro_use]
-extern crate substrate_client as client;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-
-extern crate sr_std as rstd;
-extern crate srml_aura as aura;
-extern crate srml_balances as balances;
-extern crate srml_consensus as consensus;
-extern crate srml_contract as contract;
-extern crate srml_council as council;
-extern crate srml_democracy as democracy;
-extern crate srml_executive as executive;
-extern crate srml_grandpa as grandpa;
-extern crate srml_indices as indices;
-extern crate srml_session as session;
-extern crate srml_staking as staking;
-extern crate srml_sudo as sudo;
-extern crate srml_system as system;
-extern crate srml_timestamp as timestamp;
-extern crate srml_treasury as treasury;
-#[macro_use]
-extern crate sr_version as version;
-extern crate node_primitives;
-extern crate substrate_consensus_aura_primitives as consensus_aura;
+extern crate runtime_primitives;
 
 use rstd::prelude::*;
+use parity_codec_derive::{Encode, Decode};
+#[cfg(feature = "std")]
+use srml_support::{Serialize, Deserialize};
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
-use client::{
+use substrate_client::impl_runtime_apis;
+use substrate_client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api,
 };

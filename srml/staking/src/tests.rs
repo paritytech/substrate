@@ -416,7 +416,6 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Balances::total_balance(&2), 20);		//not slashed
 		assert_eq!(Balances::total_balance(&3), 10);		//slashed
 		assert_eq!(Balances::total_balance(&4), 30);		//slashed
-		// TODO: change slash % to something sensible.
 	});
 }
 

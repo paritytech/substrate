@@ -485,7 +485,7 @@ macro_rules! decl_module {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
-		// TODO: switching based on std feature is because of an issue in
+		// FIXME: switching based on std feature is because of an issue in
 		// serde-derive for when we attempt to derive `Deserialize` on these types,
 		// in a situation where we've imported `srml_support` as another name.
 		#[cfg(feature = "std")]

@@ -21,10 +21,10 @@ use std::iter::FromIterator;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::trie_root;
-use backend::InMemory;
-use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
+use crate::backend::InMemory;
+use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
-use codec::Encode;
+use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
@@ -163,6 +163,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher, H256};
+	use hex_literal::{hex, hex_impl};
 
 	#[test]
 	fn commit_should_work() {

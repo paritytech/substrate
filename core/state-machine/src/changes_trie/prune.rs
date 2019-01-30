@@ -18,11 +18,12 @@
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use substrate_trie::Recorder;
-use proving_backend::ProvingBackendEssence;
-use trie_backend_essence::TrieBackendEssence;
-use changes_trie::{AnchorBlockId, Configuration, Storage};
-use changes_trie::storage::TrieBackendAdapter;
+use trie::Recorder;
+use log::warn;
+use crate::proving_backend::ProvingBackendEssence;
+use crate::trie_backend_essence::TrieBackendEssence;
+use crate::changes_trie::{AnchorBlockId, Configuration, Storage};
+use crate::changes_trie::storage::TrieBackendAdapter;
 
 /// Get number of oldest block for which changes trie is not pruned
 /// given changes trie configuration, pruning parameter and number of
@@ -62,7 +63,7 @@ pub fn prune<S: Storage<H>, H: Hasher, F: FnMut(H::Out)>(
 	};
 
 	// delete changes trie for every block in range
-	// TODO: limit `max_digest_interval` so that this cycle won't involve huge ranges
+	// FIXME: limit `max_digest_interval` so that this cycle won't involve huge ranges
 	for block in first..last+1 {
 		let root = match storage.root(current_block, block) {
 			Ok(Some(root)) => root,
@@ -152,8 +153,8 @@ mod tests {
 	use std::collections::HashSet;
 	use trie::MemoryDB;
 	use primitives::Blake2Hasher;
-	use backend::insert_into_memory_db;
-	use changes_trie::storage::InMemoryStorage;
+	use crate::backend::insert_into_memory_db;
+	use crate::changes_trie::storage::InMemoryStorage;
 	use super::*;
 
 	fn config(interval: u64, levels: u32) -> Configuration {

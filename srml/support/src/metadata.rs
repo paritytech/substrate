@@ -168,7 +168,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 	) => {
 		$crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(
-        $mod::$module::<$runtime>::store_metadata_name
+				$mod::$module::<$runtime>::store_metadata_name
 			)
 		)
 	};
@@ -186,7 +186,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 		$module: ident,
 		$runtime: ident,
 	) => {
-    $crate::metadata::DecodeDifferent::Encode(
+		$crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(|| "")
 		)
 	};
@@ -204,7 +204,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(
-        $mod::$module::<$runtime>::store_metadata_functions
+				$mod::$module::<$runtime>::store_metadata_functions
 			)
 		))
 	};
@@ -421,7 +421,7 @@ mod tests {
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("event_module2"),
 				prefix: DecodeDifferent::Encode(FnEncode(||"TestStorage")),
-      	storage: Some(DecodeDifferent::Encode(
+				storage: Some(DecodeDifferent::Encode(
 			 		FnEncode(||&[
 						StorageFunctionMetadata {
 							name: DecodeDifferent::Encode("StorageMethod"),

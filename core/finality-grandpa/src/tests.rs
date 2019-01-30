@@ -175,7 +175,7 @@ fn make_commit_topic(set_id: u64) -> Hash {
 	hash
 }
 
-impl Network for MessageRouting {
+impl Network<Block> for MessageRouting {
 	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
@@ -228,6 +228,10 @@ impl Network for MessageRouting {
 		let mut inner = self.inner.lock();
 		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
 		inner.route_until_complete();
+	}
+
+	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
+
 	}
 }
 

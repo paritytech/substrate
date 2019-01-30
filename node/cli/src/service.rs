@@ -34,6 +34,9 @@ use substrate_service::{
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
+use network::construct_simple_protocol;
+use substrate_service::construct_service_factory;
+use log::info;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -43,8 +46,7 @@ construct_simple_protocol! {
 /// Node specific configuration
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// grandpa connection to import block
-	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
-	// https://github.com/paritytech/substrate/issues/1134
+	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
 	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
 	inherent_data_providers: InherentDataProviders,
 }
@@ -103,7 +105,7 @@ construct_service_factory! {
 				executor.spawn(grandpa::run_grandpa(
 					grandpa::Config {
 						local_key,
-						// FIXME: make this available through chainspec?
+						// FIXME #1578 make this available through chainspec
 						gossip_duration: Duration::new(4, 0),
 						justification_period: 4096,
 						name: Some(service.config.name.clone())

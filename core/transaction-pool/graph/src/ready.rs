@@ -22,15 +22,17 @@ use std::{
 };
 
 use serde::Serialize;
+use log::debug;
+use error_chain::bail;
 use parking_lot::RwLock;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
 
-use error;
-use future::WaitingTransaction;
-use base_pool::Transaction;
+use crate::error;
+use crate::future::WaitingTransaction;
+use crate::base_pool::Transaction;
 
 #[derive(Debug)]
 struct TransactionRef<Hash, Ex> {
@@ -170,7 +172,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		for tag in &transaction.requires {
 			// Check if the transaction that satisfies the tag is still in the queue.
 			if let Some(other) = self.provided_tags.get(tag) {
-				let mut tx = ready.get_mut(other).expect(HASH_READY);
+				let tx = ready.get_mut(other).expect(HASH_READY);
 				tx.unlocks.push(hash.clone());
 				// this transaction depends on some other, so it doesn't go to best directly.
 				goes_to_best = false;

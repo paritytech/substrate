@@ -213,7 +213,7 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	B::Header: HeaderT,
 {
 	fn on_connect(&self, peer: NodeIndex, role: Roles, best_number: NumberFor<B>) {
-		if !role.intersects(Roles::FULL | Roles::AUTHORITY) { // TODO: correct?
+		if !role.intersects(Roles::FULL | Roles::AUTHORITY) {
 			return;
 		}
 

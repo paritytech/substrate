@@ -24,17 +24,18 @@ use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 };
 use wasmi::RuntimeValue::{I32, I64};
-use wasmi::memory_units::{Bytes, Pages};
+use wasmi::memory_units::Pages;
 use state_machine::Externalities;
-use error::{Error, ErrorKind, Result};
-use wasm_utils::UserError;
+use crate::error::{Error, ErrorKind, Result};
+use crate::wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256, ed25519};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
 use trie::ordered_trie_root;
-use sandbox;
-use heap;
+use crate::sandbox;
+use crate::heap;
+use log::trace;
 
 #[cfg(feature="wasm-extern-trace")]
 macro_rules! debug_trace {
@@ -56,14 +57,9 @@ struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 
 impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
-		let current_size: Bytes = m.current_size().into();
-		let current_size = current_size.0 as u32;
-		let used_size = m.used_size().0 as u32;
-		let heap_size = current_size - used_size;
-
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: heap::Heap::new(used_size, heap_size),
+			heap: heap::Heap::new(m.used_size().0 as u32),
 			memory: m,
 			table: t,
 			ext: e,
@@ -117,7 +113,6 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
-// TODO: this macro does not support `where` clauses and that seems somewhat tricky to add
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
@@ -547,7 +542,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
-		use codec::{Decode, Encode};
+		use parity_codec::{Decode, Encode};
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -751,8 +746,10 @@ impl WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
+	use parity_codec::Encode;
 	use state_machine::TestExternalities;
+	use hex_literal::{hex, hex_impl};
+	use primitives::map;
 
 	#[test]
 	fn returning_should_work() {
