@@ -577,7 +577,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		// TODO: dispatch this with `mpsc::spawn`.
 		let incoming = ::communication::checked_message_stream::<Block, _>(
 			round,
 			self.set_id,
@@ -857,7 +856,7 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
 
-	// TODO [andre]: clone only when changed (#1483)
+	// FIXME #1483: clone only when changed
 	let old_authority_set = authority_set.clone();
 	// needed in case there is an authority set change, used for reverting in
 	// case of error

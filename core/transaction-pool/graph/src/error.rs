@@ -24,14 +24,14 @@ use error_chain::{
 error_chain! {
 	errors {
 		/// Transaction is not verifiable yet, but might be in the future.
-		UnknownTransactionValidity {
+		UnknownTransactionValidity(e: i8) {
 			description("Runtime cannot determine validity of the transaction yet."),
-			display("Unkown Transaction Validity"),
+			display("Unkown Transaction Validity. Error code: {}", e),
 		}
 		/// Transaction is invalid
-		InvalidTransaction {
+		InvalidTransaction(e: i8) {
 			description("Runtime check for the transaction failed."),
-			display("Invalid Transaction"),
+			display("Invalid Transaction. Error Code: {}", e),
 		}
 		/// The transaction is temporarily baned
 		TemporarilyBanned {

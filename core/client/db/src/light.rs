@@ -465,7 +465,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
 			let mut transaction = DBTransaction::new();
-			// TODO: ensure best chain contains this block.
 			let hash = header.hash();
 			let number = *header.number();
 			self.note_finalized(&mut transaction, &header, hash.clone())?;

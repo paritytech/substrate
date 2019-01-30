@@ -176,7 +176,7 @@ impl<'a,
 	where H::Out: HeapSizeOf
 {
 	fn keys(&self) -> HashMap<H::Out, i32> {
-		self.overlay.keys() // TODO: iterate backing
+		self.overlay.keys()
 	}
 
 	fn get(&self, key: &H::Out) -> Option<DBValue> {

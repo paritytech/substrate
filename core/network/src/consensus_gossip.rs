@@ -76,7 +76,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 		if roles.intersects(Roles::AUTHORITY) {
 			trace!(target:"gossip", "Registering {:?} {}", roles, who);
 			// Send out all known messages to authorities.
-			// TODO: limit by size
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
 				known_messages.insert((entry.topic, entry.message_hash));

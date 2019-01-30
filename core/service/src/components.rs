@@ -217,7 +217,6 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
 {
-	// TODO [ToDr] Optimize and re-use tags from the pool.
 	fn on_block_imported(
 		id: &BlockId<ComponentBlock<C>>,
 		client: &ComponentClient<C>,
@@ -329,7 +328,7 @@ pub trait Components: Sized + 'static {
 	type RuntimeApi: Send + Sync;
 	/// A type that can start the RPC.
 	type RPC: StartRPC<Self>;
-	// TODO [ToDr] Traitify transaction pool and allow people to implement their own. (#1242)
+	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
 	/// A type that can maintain transaction pool.
 	type TransactionPool: MaintainTransactionPool<Self>;
 	/// Extrinsic pool type.

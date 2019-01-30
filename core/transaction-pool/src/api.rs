@@ -67,7 +67,6 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
 	}
 
-	// TODO [toDr] Use proper lbock number type
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
 		Ok(self.client.block_number_from_id(at)?)
 	}
