@@ -23,6 +23,7 @@
 extern crate alloc;
 
 extern crate substrate_primitives;
+// extern crate substrate_state_machine;
 extern crate sr_primitives;
 extern crate parity_codec;
 
@@ -37,6 +38,7 @@ extern crate sr_std as rstd;
 use substrate_primitives::Ed25519AuthorityId;
 use sr_primitives::traits::{DigestFor, NumberFor};
 use rstd::vec::Vec;
+use client::runtime_api::ExecutionContext;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]

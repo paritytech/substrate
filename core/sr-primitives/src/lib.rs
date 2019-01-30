@@ -266,6 +266,15 @@ impl From<H512> for Ed25519Signature {
 	}
 }
 
+/// Context for executing a call into the runtime.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ExecutionContext {
+	Importing,
+	Syncing,
+	BlockCreation,
+	Other,
+}
+
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]

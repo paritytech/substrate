@@ -156,8 +156,6 @@ fn generate_impl_calls(
 		for item in &impl_.items {
 			match item {
 				ImplItem::Method(method) => {
-					println!("\nmethod (sig.ident) -------------------> {:?}\n", method.sig.ident);
-					println!("\nmethod (sig.decl.inputs) -------------------> {:?}\n", method.sig.decl.inputs);
 					
 					let impl_call = generate_impl_call(
 						&method.sig,
@@ -650,7 +648,6 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: mut api_impls } = parse_macro_input!(input as RuntimeApiImpls);
-	generate_impl_with_context(&mut api_impls); 
 	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls));
 	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);

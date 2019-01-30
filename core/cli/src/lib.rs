@@ -58,6 +58,7 @@ use app_dirs::{AppInfo, AppDataType};
 use error_chain::bail;
 use log::info;
 use lazy_static::lazy_static;
+use state_machine::ExecutionStrategy;
 
 use futures::Future;
 
@@ -305,12 +306,12 @@ fn fill_network_configuration(
 
 fn parse_execution_strategies(matches: &clap::ArgMatches) -> error::Result<ExecutionStrategies> {
 	let mut execution_strategies: ExecutionStrategies = Default::default();
-	let parse_execution_strategy = |s: &str| -> error::Result<service::ExecutionStrategy> {
+	let parse_execution_strategy = |s: &str| -> error::Result<ExecutionStrategy> {
 		match s {
-			"both" => Ok(service::ExecutionStrategy::Both),
-			"native" => Ok(service::ExecutionStrategy::NativeWhenPossible),
-			"wasm" => Ok(service::ExecutionStrategy::AlwaysWasm),
-			"native-else-wasm" => Ok(service::ExecutionStrategy::NativeElseWasm),
+			"both" => Ok(ExecutionStrategy::Both),
+			"native" => Ok(ExecutionStrategy::NativeWhenPossible),
+			"wasm" => Ok(ExecutionStrategy::AlwaysWasm),
+			"native-else-wasm" => Ok(ExecutionStrategy::NativeElseWasm),
 			_ => bail!(create_input_err("Invalid execution mode specified")),
 		}
 	};

@@ -3573,6 +3573,7 @@ dependencies = [
  "substrate-panic-handler 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",
+ "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.3.0",
  "sysinfo 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",

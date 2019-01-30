@@ -713,17 +713,45 @@ fn check_trait_decls(decls: &[ItemTrait]) -> Option<TokenStream> {
 	}
 }
 
+fn generate_decl_with_context(decls: &mut [ItemTrait]) {
+	let pat = Pat::Ident(PatIdent { by_ref: None, mutability: None, ident: Ident::new("context", Span::call_site()), subpat: None });
+	let mut punctuated = syn::punctuated::Punctuated::new();
+	let punctuated_item = PathSegment { ident: Ident::new("ExecutionContext", Span::call_site()), arguments: PathArguments::None };
+	punctuated.push(punctuated_item); 
+	let ty = syn::Type::Path(syn::TypePath { qself: None, path: Path { leading_colon: None, segments: punctuated } });
+	let context_arg = Captured(ArgCaptured { pat, colon_token: syn::token::Colon(Span::call_site()), ty });
+	
+	for decl in decls {
+		let mut ctx_methods = vec![];
+	
+		for item in &decl.items {
+			match item {
+				TraitItem::Method(method) => {
+					let mut new_method = method.clone();
+					new_method.sig.ident = Ident::new(&format!("{}_with_context", &method.sig.ident), Span::call_site());
+					new_method.sig.decl.inputs.push(context_arg.clone());
+					ctx_methods.push(TraitItem::Method(new_method));
+				},
+				_ => {},
+			}
+		}
+		decl.items.extend(ctx_methods);
+	}
+}
+
+
 /// The implementation of the `decl_runtime_apis!` macro.
 pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all trait declarations
-	let RuntimeApiDecls { decls: api_decls } = parse_macro_input!(input as RuntimeApiDecls);
+	let RuntimeApiDecls { decls: mut api_decls } = parse_macro_input!(input as RuntimeApiDecls);
 
 	if let Some(errors) = check_trait_decls(&api_decls) {
 		return errors.into();
 	}
 
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
+	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);	
 	let runtime_decls = generate_runtime_decls(&api_decls);
+	generate_decl_with_context(&mut api_decls);
 	let client_side_decls = generate_client_side_decls(&api_decls);
 
 	quote!(
