@@ -401,7 +401,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			} else {
 				debug!(target: "sync", "Header {} was not provided ", block.hash);
 			}
-			return Err(BlockImportError::IncompleteHeader(peer)) //TODO: use persistent ID
+			return Err(BlockImportError::IncompleteHeader(peer))
 		},
 	};
 
@@ -441,7 +441,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 		},
 		Ok(ImportResult::KnownBad) => {
 			debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
-			Err(BlockImportError::BadBlock(peer)) //TODO: use persistent ID
+			Err(BlockImportError::BadBlock(peer))
 		},
 		Err(e) => {
 			debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);

@@ -58,7 +58,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // TODO change
+			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
 			authorities: initial_authorities.clone(),
 		}),
 		system: None,

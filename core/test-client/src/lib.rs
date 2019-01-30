@@ -49,7 +49,7 @@ use keyring::Keyring;
 mod local_executor {
 	#![allow(missing_docs)]
 	use super::runtime;
-	// TODO: change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
+	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
 	native_executor_instance!(
 		pub LocalExecutor,
 		runtime::api::dispatch,

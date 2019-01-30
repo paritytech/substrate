@@ -118,7 +118,6 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
-// TODO: this macro does not support `where` clauses and that seems somewhat tricky to add
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {

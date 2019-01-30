@@ -579,7 +579,6 @@ mod tests {
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 
-	// TODO try to avoid redundant brackets: a(AuthoritiesChange), b
 	impl_outer_log! {
 		pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
 			a(AuthoritiesChange), b()
