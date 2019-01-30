@@ -3,6 +3,7 @@ name = "substrate-telemetry"
 version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
+edition = "2018"
 
 [dependencies]
 parking_lot = "0.7.1"

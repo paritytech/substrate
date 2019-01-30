@@ -341,7 +341,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					// update block number to hash lookup entries.
 					for retracted in tree_route.retracted() {
 						if retracted.hash == meta.finalized_hash {
-							// TODO: can we recover here?
 							warn!("Safety failure: reverting finalized block {:?}",
 								(&retracted.number, &retracted.hash));
 						}
@@ -438,7 +437,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
 			let mut transaction = DBTransaction::new();
-			// TODO: ensure best chain contains this block.
 			let hash = header.hash();
 			let number = *header.number();
 			self.note_finalized(&mut transaction, &header, hash.clone())?;

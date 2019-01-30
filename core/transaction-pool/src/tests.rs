@@ -53,7 +53,7 @@ impl txpool::ChainApi for TestApi {
 			priority: 1,
 			requires,
 			provides,
-			longevity: 64
+			longevity: 64,
 		})
 	}
 

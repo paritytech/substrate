@@ -14,16 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate criterion;
-use criterion::Criterion;
+use criterion::{Criterion, criterion_group, criterion_main};
 criterion_group!(benches, benchmark);
 criterion_main!(benches);
-
-extern crate substrate_primitives;
-extern crate keccak_hasher;
-extern crate substrate_trie;
-extern crate trie_bench;
 
 fn benchmark(c: &mut Criterion) {
 	trie_bench::standard_benchmark::<

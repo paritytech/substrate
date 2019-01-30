@@ -74,7 +74,7 @@ struct AddExtraGenesisLine {
 	pub extra_field: ext::Parens<Ident>,
 	pub coldot_token: Token![:],
 	pub extra_type: syn::Type,
-	// TODO use a custom ext::Option instead (syn option on '=' fails)
+	// FIXME #1570: use a custom ext::Option instead (syn option on '=' fails)
 	pub default_value: ext::Seq<DeclStorageDefault>,
 }
 
@@ -91,7 +91,7 @@ struct DeclStorageLine {
 	pub build: Option<DeclStorageBuild>,
 	pub coldot_token: Token![:],
 	pub storage_type: DeclStorageType,
-	// TODO use a custom ext::Option instead (syn option on '=' fails)
+	// FIXME #1570: use a custom ext::Option instead (syn option on '=' fails)
 	pub default_value: ext::Seq<DeclStorageDefault>,
 }
 

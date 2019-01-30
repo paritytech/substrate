@@ -45,7 +45,7 @@ pub type SharedCache<B, H> = Arc<Mutex<Cache<B, H>>>;
 
 /// Create new shared cache instance with given max memory usage.
 pub fn new_shared_cache<B: Block, H: Hasher>(shared_cache_size: usize) -> SharedCache<B, H> {
-	let cache_items = shared_cache_size / 100; // Estimated average item size. TODO: more accurate tracking
+	let cache_items = shared_cache_size / 100; // Guestimate, potentially inaccurate
 	Arc::new(Mutex::new(Cache {
 		storage: LruCache::new(cache_items),
 		hashes: LruCache::new(cache_items),

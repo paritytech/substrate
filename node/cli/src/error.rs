@@ -17,6 +17,9 @@
 //! Initialization errors.
 
 use client;
+use error_chain::{
+	error_chain, error_chain_processing, impl_error_chain_processed
+};
 
 error_chain! {
 	foreign_links {

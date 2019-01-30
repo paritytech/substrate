@@ -2,6 +2,7 @@
 name = "substrate-transaction-pool"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
@@ -10,10 +11,10 @@ log = "0.4"
 parity-codec = "3.0"
 parking_lot = "0.7.1"
 sr-primitives = { path = "../sr-primitives" }
-substrate-client = { path = "../client" }
+client = { package = "substrate-client", path = "../client" }
 substrate-primitives = { path = "../primitives" }
-substrate-transaction-graph = { path = "./graph" }
+txpool = { package = "substrate-transaction-graph", path = "./graph" }
 
 [dev-dependencies]
-substrate-test-client = { path = "../../core/test-client" }
-substrate-keyring = { path = "../../core/keyring" }
+test_client = { package = "substrate-test-client", path = "../../core/test-client" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
