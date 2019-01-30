@@ -72,8 +72,12 @@ pub enum Error<E: fmt::Debug> {
 	Db(E),
 	/// `Codec` decoding error.
 	Decoding,
-	/// NonCanonical error.
-	NonCanonical,
+	/// Trying to canonicalize invalid block.
+	InvalidBlock,
+	/// Trying to insert block with invalid number.
+	InvalidBlockNumber,
+	/// Trying to insert block with unknown parent.
+	InvalidParent,
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
@@ -81,7 +85,9 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 		match self {
 			Error::Db(e) => e.fmt(f),
 			Error::Decoding => write!(f, "Error decoding slicable value"),
-			Error::NonCanonical => write!(f, "Error processing non-canonical data"),
+			Error::InvalidBlock => write!(f, "Trying to canonicalize invalid block"),
+			Error::InvalidBlockNumber => write!(f, "Trying to insert block with invalid number"),
+			Error::InvalidParent => write!(f, "Trying to insert block with unknown parent"),
 		}
 	}
 }
@@ -205,27 +211,25 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	pub fn canonicalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
-		// clear the temporary overlay from the previous canonicalization.
-		self.non_canonical.clear_overlay();
+	pub fn canonicalize_block<E: fmt::Debug>(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = match self.mode {
 			PruningMode::ArchiveAll => {
 				CommitSet::default()
 			},
 			PruningMode::ArchiveCanonical => {
-				let mut commit = self.non_canonical.canonicalize(hash);
+				let mut commit = self.non_canonical.canonicalize(hash)?;
 				commit.data.deleted.clear();
 				commit
 			},
 			PruningMode::Constrained(_) => {
-				self.non_canonical.canonicalize(hash)
+				self.non_canonical.canonicalize(hash)?
 			},
 		};
 		if let Some(ref mut pruning) = self.pruning {
 			pruning.note_canonical(hash, &mut commit);
 		}
 		self.prune(&mut commit);
-		commit
+		Ok(commit)
 	}
 
 	pub fn best_canonical(&self) -> u64 {
@@ -284,6 +288,20 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 		db.get(key).map_err(|e| Error::Db(e))
 	}
+
+	pub fn apply_pending(&mut self) {
+		self.non_canonical.apply_pending();
+		if let Some(pruning) = &mut self.pruning {
+			pruning.apply_pending();
+		}
+	}
+
+	pub fn revert_pending(&mut self) {
+		if let Some(pruning) = &mut self.pruning {
+			pruning.revert_pending();
+		}
+		self.non_canonical.revert_pending();
+	}
 }
 
 /// State DB maintenance. See module description.
@@ -306,7 +324,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Finalize a previously inserted block.
-	pub fn canonicalize_block(&self, hash: &BlockHash) -> CommitSet<Key> {
+	pub fn canonicalize_block<E: fmt::Debug>(&self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().canonicalize_block(hash)
 	}
 
@@ -340,6 +358,16 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	/// Check if block is pruned away.
 	pub fn is_pruned(&self, number: u64) -> bool {
 		return self.db.read().is_pruned(number)
+	}
+
+	/// Apply all pending changes
+	pub fn apply_pending(&self) {
+		self.db.write().apply_pending();
+	}
+
+	/// Revert all pending changes
+	pub fn revert_pending(&self) {
+		self.db.write().revert_pending();
 	}
 }
 
@@ -394,7 +422,9 @@ mod tests {
 				)
 				.unwrap(),
 		);
-		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(1)));
+		state_db.apply_pending();
+		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(1)).unwrap());
+		state_db.apply_pending();
 		db.commit(
 			&state_db
 				.insert_block::<io::Error>(
@@ -405,8 +435,11 @@ mod tests {
 				)
 				.unwrap(),
 		);
-		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(21)));
-		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(3)));
+		state_db.apply_pending();
+		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(21)).unwrap());
+		state_db.apply_pending();
+		db.commit(&state_db.canonicalize_block::<io::Error>(&H256::from_low_u64_be(3)).unwrap());
+		state_db.apply_pending();
 
 		(db, state_db)
 	}
