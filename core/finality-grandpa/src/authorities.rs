@@ -175,7 +175,7 @@ where
 		let mut new_set = None;
 
 		for change in self.pending_changes.iter()
-			.take_while(|ref c| c.effective_number() <= new_best) // to prevent iterating too far
+			.take_while(|c| c.effective_number() <= new_best) // to prevent iterating too far
 			.filter(|ref c| c.delay_kind == DelayKind::Best)
 			.filter(|ref c| c.effective_number() == new_best)
 		{
