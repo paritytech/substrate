@@ -202,7 +202,14 @@ where
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: HeapSizeOf + Ord,
-{}
+{
+	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
+		self.genesis_state.read().is_some()
+			&& self.blockchain.expect_block_number_from_id(block)
+				.map(|num| num.is_zero())
+				.unwrap_or(false)
+	}
+}
 
 impl<S, F, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, F, H>
 where
