@@ -319,10 +319,14 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> Module<T> where Ed25519AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
 	/// See if the digest contains any scheduled change.
-	pub fn scrape_digest_change(log: &Log<T>)
+	pub fn scrape_digest_change(log: &Log<T>, forced: bool)
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
-		<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_signal(log)
+		if forced {
+			<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_forced_signal(log)
+		} else {
+			<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_signal(log)
+		}
 	}
 }
 
