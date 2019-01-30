@@ -15,33 +15,44 @@ git log --graph --oneline --decorate=short -n 10
 RUNTIME="node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
 
 
+
 # check if the wasm sources changed
 if ! git diff --name-only master...${CI_COMMIT_SHA} \
-  | grep -q -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
+	| grep -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
 then
-  echo "no changes to the runtime source code detected"
-  exit 0
+	cat <<-EOT
+	
+	no changes to the runtime source code detected
+	EOT
+	exit 0
 fi
 
 # see if the version and the binary blob changed, too
 if git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
-  | grep -q 'spec_version:' && \
-  git diff --name-only master...${CI_COMMIT_SHA} \
-  | grep -q "${RUNTIME}"
+	| grep -q 'spec_version:' && \
+	git diff --name-only master...${CI_COMMIT_SHA} \
+	| grep -q "${RUNTIME}"
 then
-  echo "changes to the runtime sources may correspond to the changes in the 
-  spec version and updates wasm binary blob."
-  exit 0
+	cat <<-EOT
+	
+	changes to the runtime sources and changes in the spec version and wasm 
+	binary blob.
+	EOT
+	exit 0
 fi
 
 
-echo 
-echo "wasm source files changed but not the spec version or the runtime"
-echo "binary blob. This may break the api."
-echo
+cat <<-EOT
+
+wasm source files changed but not the spec version or the runtime"
+binary blob. This may break the api.
+
+EOT
+
 
 
 
 
 exit 1
 
+# vim: noexpandtab
