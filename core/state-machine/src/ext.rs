@@ -17,12 +17,13 @@
 //! Conrete externalities implementation.
 
 use std::{error, fmt, cmp::Ord};
-use backend::{Backend, Consolidate};
-use changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
-use {Externalities, OverlayedChanges};
+use log::warn;
+use crate::backend::{Backend, Consolidate};
+use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
+use crate::{Externalities, OverlayedChanges};
 use hash_db::Hasher;
 use primitives::storage::well_known_keys::is_child_storage_key;
-use substrate_trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root, is_child_trie_key_valid};
+use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root, is_child_trie_key_valid};
 use heapsize::HeapSizeOf;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &'static str = "Externalities not allowed to fail within runtime";
@@ -320,13 +321,14 @@ where
 
 #[cfg(test)]
 mod tests {
-	use codec::Encode;
+	use hex_literal::{hex, hex_impl};
+	use parity_codec::Encode;
 	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-	use backend::InMemory;
-	use changes_trie::{Configuration as ChangesTrieConfiguration,
+	use crate::backend::InMemory;
+	use crate::changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
-	use overlayed_changes::OverlayedValue;
+	use crate::overlayed_changes::OverlayedValue;
 	use super::*;
 
 	type TestBackend = InMemory<Blake2Hasher>;

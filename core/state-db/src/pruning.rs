@@ -23,8 +23,10 @@
 //! The changes are journaled in the DB.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use codec::{Encode, Decode};
-use {CommitSet, Error, MetaDb, to_meta_key, Hash};
+use crate::codec::{Encode, Decode};
+use parity_codec_derive::{Encode, Decode};
+use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
+use log::trace;
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -158,8 +160,8 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 mod tests {
 	use super::RefWindow;
 	use primitives::H256;
-	use {CommitSet};
-	use test::{make_db, make_commit, TestDb};
+	use crate::CommitSet;
+	use crate::test::{make_db, make_commit, TestDb};
 
 	fn check_journal(pruning: &RefWindow<H256, H256>, db: &TestDb) {
 		let restored: RefWindow<H256, H256> = RefWindow::new(db).unwrap();

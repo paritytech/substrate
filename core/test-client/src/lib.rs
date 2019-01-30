@@ -18,26 +18,19 @@
 
 #![warn(missing_docs)]
 
-extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate sr_primitives as runtime_primitives;
-#[macro_use] extern crate substrate_executor as executor;
-
-pub extern crate substrate_client as client;
-pub extern crate substrate_keyring as keyring;
-pub extern crate substrate_test_runtime as runtime;
-pub extern crate substrate_consensus_common as consensus;
-extern crate substrate_state_machine as state_machine;
-
 pub mod client_ext;
 pub mod trait_tests;
 mod block_builder_ext;
 
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
+pub use client;
 pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
+pub use keyring;
+pub use runtime;
+pub use consensus;
 
 use std::sync::Arc;
 use primitives::Blake2Hasher;
@@ -48,7 +41,8 @@ use keyring::Keyring;
 
 mod local_executor {
 	#![allow(missing_docs)]
-	use super::runtime;
+	use runtime;
+	use executor::native_executor_instance;
 	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
 	native_executor_instance!(
 		pub LocalExecutor,

@@ -16,11 +16,12 @@
 
 //! Trie-based state machine backend.
 
+use log::{warn, debug};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::{TrieDB, TrieError, Trie, MemoryDB, delta_trie_root, default_child_trie_root, child_delta_trie_root};
-use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
-use {Backend};
+use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
+use crate::Backend;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
