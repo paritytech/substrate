@@ -108,12 +108,13 @@ use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps, V
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
+use parking_lot::RwLockWriteGuard;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 
-use authorities::{PendingChange, DelayKind, SharedAuthoritySet};
+use authorities::{AuthoritySet, PendingChange, DelayKind, SharedAuthoritySet};
 use until_imported::{UntilCommitBlocksImported, UntilVoteTargetImported};
 
 pub use fg_primitives::ScheduledChange;
@@ -865,9 +866,11 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	let mut old_last_completed = None;
 
 	let mut consensus_changes = consensus_changes.lock();
-	let status = authority_set.apply_changes(number, |canon_number| {
-		canonical_at_height(client, (hash, number), canon_number)
-	})?;
+	let canon_at_height = |canon_number| {
+		// "true" because the block is finalized
+		canonical_at_height(client, (hash, number), true, canon_number)
+	};
+	let status = authority_set.apply_standard_changes(number, &canon_at_height)?;
 
 	if status.changed {
 		// write new authority set state to disk.
@@ -905,7 +908,7 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 	// check if this is this is the first finalization of some consensus changes
 	let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
-		.finalize((number, hash), |at_height| canonical_at_height(client, (hash, number), at_height))?;
+		.finalize((number, hash), &canon_at_height)?;
 
 	// holds the old consensus changes in case it is changed below, needed for
 	// reverting in case of failure
@@ -1035,6 +1038,23 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	}
 }
 
+struct PendingSetChanges<'a, Block: 'a + BlockT> {
+	just_in_case: Option<(
+		AuthoritySet<Block::Hash, NumberFor<Block>>,
+		RwLockWriteGuard<'a, AuthoritySet<Block::Hash, NumberFor<Block>>>,
+	)>,
+	needs_justification: bool,
+}
+
+impl<'a, Block: 'a + BlockT> PendingSetChanges<'a, Block> {
+	// revert the pending set change.
+	fn revert(self) {
+		if let Some((old_set, mut authorities)) = self.just_in_case {
+			*authorities = old_set;
+		}
+	}
+}
+
 /// A block-import handler for GRANDPA.
 ///
 /// This scans each imported block for signals of changing authority set.
@@ -1062,7 +1082,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	PRA: ProvideRuntimeApi,
 	PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
 {
-	fn maybe_change(&self, header: &Block::Header, hash: Block::Hash)
+	// check for a new authority set change.
+	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
 		-> Result<Option<PendingChange<Block::Hash, NumberFor<Block>>>, ConsensusError>
 	{
 		let at = BlockId::hash(*header.parent_hash());
@@ -1120,6 +1141,127 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 				})),
 			}
 		}
+	}
+
+	fn make_authorities_changes<'a>(&'a self, block: &mut ImportBlock<Block>, hash: Block::Hash)
+		-> Result<PendingSetChanges<'a, Block>, ConsensusError>
+	{
+		use consensus_common::ForkChoiceStrategy;
+
+		let number = block.header.number().clone();
+		let maybe_change = self.check_new_change(
+			&block.header,
+			hash,
+		)?;
+
+		// NOTE: this is valid because our underyling `BlockImport`
+		// is always a client -- if there were a lower level `BlockImport`
+		// it might change the fork choice strategy.
+		let new_is_best = match block.fork_choice {
+			ForkChoiceStrategy::Custom(v) => v,
+			ForkChoiceStrategy::LongestChain => {
+				let info = self.inner.info()
+					.map_err(|e: ClientError| ConsensusErrorKind::ClientImport(e.to_string()))
+					.map_err(ConsensusError::from)?;
+
+				block.header.number() > &info.chain.best_number
+			}
+		};
+
+		// tells us the hash that is canonical at a given height
+		// consistent with querying client directly after importing the block.
+		let canon_at_height = |canon_number| -> Result<_, ClientError> {
+			canonical_at_height(
+				&self.inner,
+				(hash, number),
+				new_is_best,
+				canon_number,
+			)
+		};
+
+		// when we update the authorities, we need to hold the lock
+		// until the block is written to prevent a race if we need to restore
+		// the old authority set on error.
+		let just_in_case = {
+			let mut authorities = self.authority_set.inner().write();
+			let forced_change_set = authorities.apply_forced_changes(number, &canon_at_height)
+				.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
+				.map_err(ConsensusError::from)?;
+
+			if let Some(new_set) = forced_change_set {
+				// forced changes take priority over other scheduled changes
+				// because they apply on import and not finality.
+				let old_set = ::std::mem::replace(&mut *authorities, new_set);
+				Some((old_set, authorities))
+			} else if let Some(change) = maybe_change {
+				let parent_hash = *block.header.parent_hash();
+
+				let old_set = authorities.clone();
+
+				let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
+					let error = || {
+						debug!(target: "afg", "rejecting change: {} is in the same chain as {}",
+							hash, base);
+						Err(ConsensusErrorKind::ClientImport(
+							format!("Incorrect base hash")
+						).into())
+					};
+
+					if *base == hash { return error(); }
+					if *base == parent_hash { return error(); }
+
+					let tree_route = ::client::blockchain::tree_route(
+						self.inner.backend().blockchain(),
+						BlockId::Hash(parent_hash),
+						BlockId::Hash(*base),
+					);
+
+					let tree_route = match tree_route {
+						Err(e) => return Err(
+							ConsensusErrorKind::ClientImport(e.to_string()).into()
+						),
+						Ok(route) => route,
+					};
+
+					if tree_route.common_block().hash == *base {
+						return error();
+					}
+
+					Ok(())
+				};
+
+				authorities.add_pending_change(
+					change,
+					is_equal_or_descendent_of,
+				)?;
+
+				Some((old_set, authorities))
+			} else {
+				None
+			}
+		};
+
+		let needs_justification = {
+			let read_lock;
+			let set_ref = match just_in_case {
+				None => {
+					read_lock = self.authority_set.inner().read();
+					&*read_lock
+				}
+				Some((_, ref authorities)) => &*authorities,
+			};
+
+			// note: if there has been a forced set change then
+			// pending changes have been wiped at this point.
+			set_ref.enacts_standard_change(number, &canon_at_height)
+				.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
+				.map_err(ConsensusError::from)?
+		};
+
+		if let Some((_, ref authorities)) = just_in_case {
+			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
+		}
+		Ok(PendingSetChanges { just_in_case, needs_justification })
 	}
 }
 
@@ -1192,57 +1334,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
-		let maybe_change = self.maybe_change(
-			&block.header,
-			hash,
-		)?;
-
-		// when we update the authorities, we need to hold the lock
-		// until the block is written to prevent a race if we need to restore
-		// the old authority set on error.
-		let just_in_case = if let Some(change) = maybe_change {
-			let parent_hash = *block.header.parent_hash();
-
-			let mut authorities = self.authority_set.inner().write();
-			let old_set = authorities.clone();
-
-			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
-				let error = || {
-					debug!(target: "afg", "rejecting change: {} is in the same chain as {}", hash, base);
-					Err(ConsensusErrorKind::ClientImport("Incorrect base hash".to_string()).into())
-				};
-
-				if *base == hash { return error(); }
-				if *base == parent_hash { return error(); }
-
-				let tree_route = ::client::blockchain::tree_route(
-					self.inner.backend().blockchain(),
-					BlockId::Hash(parent_hash),
-					BlockId::Hash(*base),
-				);
-
-				let tree_route = match tree_route {
-					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-					Ok(route) => route,
-				};
-
-				if tree_route.common_block().hash == *base {
-					return error();
-				}
-
-				Ok(())
-			};
-
-			authorities.add_pending_change(
-				change,
-				is_equal_or_descendent_of,
-			)?;
-
-			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
-			Some((old_set, authorities))
-		} else {
-			None
-		};
+		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 
 		// we don't want to finalize on `inner.import_block`
 		let justification = block.justification.take();
@@ -1250,40 +1342,33 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let import_result = self.inner.import_block(block, new_authorities);
 
 		let import_result = {
-			// we scope this so that `just_in_case` is dropped eagerly and releases the authorities lock
-			let revert_authorities = || if let Some((old_set, mut authorities)) = just_in_case {
-				*authorities = old_set;
-			};
-
 			match import_result {
 				Ok(ImportResult::Queued) => ImportResult::Queued,
 				Ok(r) => {
 					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
-					revert_authorities();
+					pending_changes.revert();
 					return Ok(r);
 				},
 				Err(e) => {
 					debug!(target: "afg", "Restoring old authority set after block import error: {:?}", e);
-					revert_authorities();
+					pending_changes.revert();
 					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
 				},
 			}
 		};
 
-		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
-			canonical_at_height(&self.inner, (hash, number), canon_number)
-		}).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
+		let needs_justification = pending_changes.needs_justification;
 
-		if !enacts_change && !enacts_consensus_change {
+		if !needs_justification && !enacts_consensus_change {
 			return Ok(import_result);
 		}
 
 		match justification {
 			Some(justification) => {
-				self.import_justification(hash, number, justification, enacts_change)?;
+				self.import_justification(hash, number, justification, needs_justification)?;
 			},
 			None => {
-				if enacts_change {
+				if needs_justification {
 					trace!(
 						target: "finality",
 						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
@@ -1375,6 +1460,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
 fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: &Client<B, E, Block, RA>,
 	base: (Block::Hash, NumberFor<Block>),
+	base_is_canonical: bool,
 	height: NumberFor<Block>,
 ) -> Result<Option<Block::Hash>, ClientError> where
 	B: Backend<Block, Blake2Hasher>,
@@ -1386,7 +1472,7 @@ fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 		return Ok(None);
 	}
 
-	if height == base.1 {
+	if height == base.1 && base_is_canonical {
 		return Ok(Some(base.0));
 	}
 

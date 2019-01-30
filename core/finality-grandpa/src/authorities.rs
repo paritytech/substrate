@@ -161,12 +161,57 @@ where
 		self.pending_changes.get(0).map(|change| change.effective_number().clone())
 	}
 
-	/// Apply or prune any pending transitions. Provide a closure that can be used to check for the
-	/// finalized block with given number.
+	/// Apply or prune any pending transitions based on a best-block trigger.
+	///
+	/// Returns `Ok(new_set)` when a forced change has occurred.
+	/// Only alters the internal state in this case.
+	///
+	/// These transitions are always forced and do not lead to justifications
+	/// which light clients can follow.
+	pub(crate) fn apply_forced_changes<F, E>(&self, new_best: N, mut canonical: F)
+		-> Result<Option<Self>, E>
+		where F: FnMut(N) -> Result<Option<H>, E>
+	{
+		let mut new_set = None;
+
+		for change in self.pending_changes.iter()
+			.take_while(|ref c| c.effective_number() <= new_best) // to prevent iterating too far
+			.filter(|ref c| c.delay_kind == DelayKind::Best)
+			.filter(|ref c| c.effective_number() == new_best)
+		{
+			// check if the block that signalled the change is canonical in
+			// our chain.
+			let canonical_hash = canonical(change.canon_height.clone())?;
+
+			if let Some(canonical_hash) = canonical_hash {
+				if canonical_hash == change.canon_hash {
+					// apply this change: make the set canonical
+					info!(target: "finality", "Applying authority set change forced at block #{:?}",
+						  change.canon_height);
+
+					new_set = Some(AuthoritySet {
+						current_authorities: change.next_authorities.clone(),
+						set_id: self.set_id + 1,
+						pending_changes: Vec::new(), // new set, new changes.
+					});
+
+					break;
+				}
+				// we don't wipe forced changes until another change is
+				// applied
+			}
+		}
+
+		Ok(new_set)
+	}
+
+	/// Apply or prune any pending transitions based on a finality trigger.
+	/// Provide a closure that can be used to check for the block in the best chain
+	/// with given number.
 	///
 	/// When the set has changed, the return value will be `Ok(Some((H, N)))` which is the canonical
 	/// block where the set last changed.
-	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
+	pub(crate) fn apply_standard_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
 		-> Result<Status<H, N>, E>
 		where F: FnMut(N) -> Result<Option<H>, E>
 	{
@@ -227,7 +272,7 @@ where
 	/// Check whether the given finalized block number enacts any authority set
 	/// change (without triggering it). Provide a closure that can be used to
 	/// check for the canonical block with a given number.
-	pub fn enacts_change<F, E>(&self, just_finalized: N, mut canonical: F)
+	pub fn enacts_standard_change<F, E>(&self, just_finalized: N, mut canonical: F)
 		-> Result<bool, E>
 		where F: FnMut(N) -> Result<Option<H>, E>
 	{
@@ -380,10 +425,10 @@ mod tests {
 		authorities.add_pending_change(change_a.clone(), ignore_existing_changes).unwrap();
 		authorities.add_pending_change(change_b.clone(), ignore_existing_changes).unwrap();
 
-		authorities.apply_changes(10, |_| Err(())).unwrap();
+		authorities.apply_standard_changes(10, |_| Err(())).unwrap();
 		assert!(authorities.current_authorities.is_empty());
 
-		authorities.apply_changes(15, |n| match n {
+		authorities.apply_standard_changes(15, |n| match n {
 			5 => Ok(Some("hash_a")),
 			15 => Ok(Some("hash_15_canon")),
 			_ => Err(()),
@@ -458,7 +503,7 @@ mod tests {
 			|base| is_equal_or_descendent_of(base, change_c.canon_hash)
 		).unwrap();
 
-		authorities.apply_changes(15, |n| match n {
+		authorities.apply_standard_changes(15, |n| match n {
 			5 => Ok(Some("hash_a")),
 			15 => Ok(Some("hash_a15")),
 			_ => Err(()),
@@ -504,11 +549,11 @@ mod tests {
 		};
 
 		// there's an effective change triggered at block 15
-		assert!(authorities.enacts_change(15, canonical).unwrap());
+		assert!(authorities.enacts_standard_change(15, canonical).unwrap());
 
 		// block 16 is already past the change, we assume 15 will be finalized
 		// first and enact the change
-		assert!(!authorities.enacts_change(16, canonical).unwrap());
+		assert!(!authorities.enacts_standard_change(16, canonical).unwrap());
 	}
 
 	#[test]
