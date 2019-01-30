@@ -21,6 +21,7 @@
 extern crate fnv;
 
 use std::vec;
+use log::trace;
 use self::fnv::FnvHashMap;
 
 // The pointers need to be aligned to 8 bytes.

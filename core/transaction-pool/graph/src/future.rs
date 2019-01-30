@@ -24,7 +24,7 @@ use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
 
-use base_pool::Transaction;
+use crate::base_pool::Transaction;
 
 /// Transaction with partially satisfied dependencies.
 #[derive(Debug)]
@@ -105,7 +105,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 
 		// Add all tags that are missing
 		for tag in &tx.missing_tags {
-			let mut entry = self.wanted_tags.entry(tag.clone()).or_insert_with(HashSet::new);
+			let entry = self.wanted_tags.entry(tag.clone()).or_insert_with(HashSet::new);
 			entry.insert(tx.transaction.hash.clone());
 		}
 
@@ -134,8 +134,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 			if let Some(hashes) = self.wanted_tags.remove(tag.as_ref()) {
 				for hash in hashes {
 					let is_ready = {
-						let mut tx = self.waiting.get_mut(&hash)
-							.expect(WAITING_PROOF);
+						let tx = self.waiting.get_mut(&hash).expect(WAITING_PROOF);
 						tx.satisfy_tag(tag.as_ref());
 						tx.is_ready()
 					};
@@ -160,7 +159,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 			if let Some(waiting_tx) = self.waiting.remove(hash) {
 				// remove from wanted_tags as well
 				for tag in waiting_tx.missing_tags {
-					let remove = if let Some(mut wanted) = self.wanted_tags.get_mut(&tag) {
+					let remove = if let Some(wanted) = self.wanted_tags.get_mut(&tag) {
 						wanted.remove(hash);
 						wanted.is_empty()
 					} else { false };

@@ -33,7 +33,7 @@ pub type TransactionTag = Vec<u8>;
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
 	/// Transaction is invalid. Details are described by the error code.
-	Invalid,
+	Invalid(i8),
 	/// Transaction is valid.
 	Valid {
 		/// Priority of the transaction.
@@ -60,5 +60,5 @@ pub enum TransactionValidity {
 		longevity: TransactionLongevity,
 	},
 	/// Transaction validity can't be determined.
-	Unknown,
+	Unknown(i8),
 }

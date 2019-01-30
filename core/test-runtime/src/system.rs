@@ -107,17 +107,17 @@ pub fn execute_block(block: Block) {
 /// This doesn't attempt to validate anything regarding the block.
 pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	if check_signature(&utx).is_err() {
-		return TransactionValidity::Invalid;
+		return TransactionValidity::Invalid(ApplyError::BadSignature as i8);
 	}
 
 	let tx = utx.transfer();
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
 	if tx.nonce < expected_nonce {
-		return TransactionValidity::Invalid;
+		return TransactionValidity::Invalid(ApplyError::Stale as i8);
 	}
 	if tx.nonce > expected_nonce + 64 {
-		return TransactionValidity::Unknown;
+		return TransactionValidity::Unknown(ApplyError::Future as i8);
 	}
 
 	let hash = |from: &AccountId, nonce: u64| {
@@ -139,7 +139,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		priority: tx.amount,
 		requires,
 		provides,
-		longevity: 64
+		longevity: 64,
 	}
 }
 
@@ -393,7 +393,7 @@ mod tests {
 			});
 		});
 	}
-	
+
 	#[test]
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
