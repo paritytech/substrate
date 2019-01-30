@@ -1080,7 +1080,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 	RA: Send + Sync,
 	PRA: ProvideRuntimeApi,
-	PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
+	PRA::Api: GrandpaApi<Block>,
 {
 	// check for a new authority set change.
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
@@ -1274,7 +1274,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
+		PRA::Api: GrandpaApi<Block>,
 {
 	type Error = ConsensusError;
 
@@ -1324,7 +1324,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
+		PRA::Api: GrandpaApi<Block>,
 {
 	type Error = ConsensusError;
 
@@ -1557,7 +1557,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 		PRA: ProvideRuntimeApi,
-		PRA::Api: GrandpaApi<Block> + CoreApi<Block>,
+		PRA::Api: GrandpaApi<Block>,
 {
 	use runtime_primitives::traits::Zero;
 	let authority_set = match Backend::get_aux(&**client.backend(), AUTHORITY_SET_KEY)? {
