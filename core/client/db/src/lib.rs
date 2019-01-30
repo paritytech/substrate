@@ -307,7 +307,6 @@ where Block: BlockT<Hash=H256>,
 	}
 
 	fn reset_storage(&mut self, mut top: StorageMap, children: ChildrenStorageMap) -> Result<H256, client::error::Error> {
-		// TODO: wipe out existing trie.
 
 		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 			return Err(client::error::ErrorKind::GenesisInvalid.into());
@@ -384,7 +383,7 @@ struct DbGenesisStorage(pub H256);
 impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to make it more correct
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();
 		state_machine::TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}
@@ -1024,7 +1023,7 @@ mod tests {
 
 	fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<Blake2Hasher>) {
 		let mut changes_root = H256::default();
-		let mut changes_trie_update = MemoryDB::<Blake2Hasher>::default();		// TODO: change to new() to make more correct
+		let mut changes_trie_update = MemoryDB::<Blake2Hasher>::default();
 		{
 			let mut trie = TrieDBMut::<Blake2Hasher>::new(
 				&mut changes_trie_update,

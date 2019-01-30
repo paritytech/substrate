@@ -58,7 +58,7 @@ pub struct InvalidPassword;
 struct EncryptedKey {
 	mac: [u8; 32],
 	salt: [u8; 32],
-	ciphertext: Vec<u8>, // TODO: switch to fixed-size when serde supports
+	ciphertext: Vec<u8>, // FIXME: switch to fixed-size when serde supports
 	iv: [u8; 16],
 	iterations: u32,
 }

@@ -392,7 +392,7 @@ enum CheckedHeader<H> {
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
-// FIXME: needs misbehavior types - https://github.com/paritytech/substrate/issues/1018
+// FIXME #1018 needs misbehavior types
 fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[Ed25519AuthorityId])
 	-> Result<CheckedHeader<B::Header>, String>
 	where DigestItemFor<B>: CompatibleDigestItem
@@ -537,8 +537,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		);
 
 		// we add one to allow for some small drift.
-		// FIXME: in the future, alter this queue to allow deferring of headers
-		// https://github.com/paritytech/substrate/issues/1019
+		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<B>(slot_now + 1, header, hash, &authorities[..])?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
@@ -577,7 +576,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
+				// FIXME #1019 extract authorities
 				Ok((import_block, None))
 			}
 			CheckedHeader::Deferred(a, b) => {
