@@ -656,6 +656,19 @@ where
 	H::Out: HeapSizeOf + Ord,
 {}
 
+impl<Block, H> backend::RemoteBackend<Block, H> for Backend<Block, H>
+where
+	Block: BlockT,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
+{
+	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
+		self.blockchain.expect_block_number_from_id(block)
+			.map(|num| num.is_zero())
+			.unwrap_or(false)
+	}
+}
+
 impl<Block: BlockT> Cache<Block> {
 	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityIdFor<Block>>>) {
 		self.authorities_at.write().insert(at, authorities);

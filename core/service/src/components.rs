@@ -71,8 +71,21 @@ pub type LightExecutor<F> = client::light::call_executor::RemoteOrLocalCallExecu
 		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
 		Blake2Hasher
 	>,
-	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
-	CodeExecutor<F>,
+	client::light::call_executor::RemoteCallExecutor<
+		client::light::blockchain::Blockchain<
+			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+			network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+		>,
+		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+	>,
+	client::LocalCallExecutor<
+		client::light::backend::Backend<
+			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+			network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+			Blake2Hasher
+		>,
+		CodeExecutor<F>
+	>
 >;
 
 /// Full client type for a factory.

@@ -59,7 +59,12 @@ pub fn new_light<B, S, F, GS, RA, E>(
 	fetcher: Arc<F>,
 	genesis_storage: GS,
 	code_executor: E,
-) -> ClientResult<Client<Backend<S, F, Blake2Hasher>, RemoteOrLocalCallExecutor<B, Backend<S, F, Blake2Hasher>, F, E>, B, RA>>
+) -> ClientResult<Client<Backend<S, F, Blake2Hasher>, RemoteOrLocalCallExecutor<
+	B,
+	Backend<S, F, Blake2Hasher>,
+	RemoteCallExecutor<Blockchain<S, F>, F>,
+	LocalCallExecutor<Backend<S, F, Blake2Hasher>, E>
+>, B, RA>>
 	where
 		B: BlockT<Hash=H256>,
 		S: BlockchainStorage<B>,
