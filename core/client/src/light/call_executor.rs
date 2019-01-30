@@ -52,7 +52,7 @@ pub struct RemoteOrLocalCallExecutor<Block: BlockT<Hash=H256>, B, R, L> {
 	backend: Arc<B>,
 	remote: R,
 	local: L,
-	_b: ::std::marker::PhantomData<Block>,
+	_block: ::std::marker::PhantomData<Block>,
 }
 
 impl<B, F> Clone for RemoteCallExecutor<B, F> {
@@ -172,7 +172,7 @@ impl<Block, B, R, L> Clone for RemoteOrLocalCallExecutor<Block, B, R, L>
 			backend: self.backend.clone(),
 			remote: self.remote.clone(),
 			local: self.local.clone(),
-			_b: Default::default(),
+			_block: Default::default(),
 		}
 	}
 }
@@ -186,7 +186,7 @@ impl<Block, B, Remote, Local> RemoteOrLocalCallExecutor<Block, B, Remote, Local>
 {
 	/// Creates new instance of remote/local call executor.
 	pub fn new(backend: Arc<B>, remote: Remote, local: Local) -> Self {
-		RemoteOrLocalCallExecutor { backend, remote, local, _b: Default::default(), }
+		RemoteOrLocalCallExecutor { backend, remote, local, _block: Default::default(), }
 	}
 }
 
@@ -226,6 +226,9 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
+		// there's no actual way/need to specify native/wasm execution strategy on light node
+		// => we can safely ignore passed values
+
 		match self.backend.is_local_state_available(at) {
 			true => CallExecutor::contextual_call::<
 				_,
@@ -246,7 +249,8 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 				ExecutionManager::NativeWhenPossible,
 				native_call,
 			).map_err(|e| ClientErrorKind::Execution(Box::new(e.to_string())).into()),
-			false => CallExecutor::contextual_call::<_,
+			false => CallExecutor::contextual_call::<
+				_,
 				fn(
 					Result<NativeOrEncoded<R>, Remote::Error>,
 					Result<NativeOrEncoded<R>, Remote::Error>,
@@ -290,6 +294,9 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 		_manager: ExecutionManager<FF>,
 		native_call: Option<NC>,
 	) -> ClientResult<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
+		// there's no actual way/need to specify native/wasm execution strategy on light node
+		// => we can safely ignore passed values
+
 		CallExecutor::call_at_state::<
 				_,
 				fn(

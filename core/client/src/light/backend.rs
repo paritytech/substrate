@@ -243,12 +243,12 @@ where
 	}
 
 	fn update_db_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
-		// we're not storing anything locally
+		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 
 	fn update_changes_trie(&mut self, _update: MemoryDB<H>) -> ClientResult<()> {
-		// we're not storing anything locally
+		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 
