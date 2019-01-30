@@ -414,30 +414,12 @@ pub fn check_execution_proof<Header, E, H>(
 #[cfg(test)]
 mod tests {
 	use consensus::BlockOrigin;
-	use state_machine::Externalities;
 	use test_client::{self, runtime::{Block, Header}, runtime::RuntimeApi, TestClient};
 	use executor::NativeExecutionDispatch;
 	use crate::backend::{Backend, NewBlockState};
 	use crate::in_mem::Backend as InMemBackend;
 	use crate::light::fetcher::tests::OkCallFetcher;
 	use super::*;
-
-	struct DummyCodeExecutor;
-
-	impl CodeExecutor<Blake2Hasher> for DummyCodeExecutor {
-		type Error = ClientError;
-
-		fn call<E: Externalities<Blake2Hasher>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
-			&self,
-			_: &mut E,
-			_: &str,
-			_: &[u8],
-			_: bool,
-			_: Option<NC>,
-		) -> (Result<NativeOrEncoded<R>, Self::Error>, bool) {
-			(Ok(NativeOrEncoded::Encoded(vec![1])), false)
-		}
-	}
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {

@@ -455,3 +455,39 @@ where
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use primitives::Blake2Hasher;
+	use test_client;
+	use crate::backend::NewBlockState;
+	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
+	use super::*;
+
+	#[test]
+	fn local_state_is_created_when_genesis_state_is_available() {
+		let def = Default::default();
+		let header0 = test_client::runtime::Header::new(0, def, def, def, Default::default());
+
+		let backend: Backend<_, _, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
+		op.reset_storage(Default::default(), Default::default()).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		match backend.state_at(BlockId::Number(0)).unwrap() {
+			OnDemandOrGenesisState::Genesis(_) => (),
+			_ => panic!("unexpected state"),
+		}
+	}
+
+	#[test]
+	fn remote_state_is_created_when_genesis_state_is_inavailable() {
+		let backend: Backend<_, _, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+
+		match backend.state_at(BlockId::Number(0)).unwrap() {
+			OnDemandOrGenesisState::OnDemand(_) => (),
+			_ => panic!("unexpected state"),
+		}
+	}
+}
