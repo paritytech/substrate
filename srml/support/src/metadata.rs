@@ -58,8 +58,8 @@ macro_rules! __runtime_modules_to_metadata {
 		__runtime_modules_to_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
-				name: $crate::metadata::DecodeDifferent::Encode(stringify!($module)),
-				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
+				name: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
+				prefix: __runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
 				storage: __runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
 				calls: __runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
 				event: __runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
@@ -153,6 +153,42 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		$runtime: ident,
 	) => {
 		None
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __runtime_modules_to_metadata_calls_storagename {
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with Storage 
+		$(with $kws:ident)*
+	) => {
+		$crate::metadata::DecodeDifferent::Encode(
+			$crate::metadata::FnEncode(
+        $mod::$module::<$runtime>::store_metadata_name
+			)
+		)
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+		with $_:ident 
+		$(with $kws:ident)*
+	) => {
+		__runtime_modules_to_metadata_calls_storagename!( $mod, $module, $runtime, $(with $kws)* );
+	};
+	(
+		$mod: ident,
+		$module: ident,
+		$runtime: ident,
+	) => {
+    $crate::metadata::DecodeDifferent::Encode(
+			$crate::metadata::FnEncode(|| "")
+		)
 	};
 }
 
@@ -346,8 +382,8 @@ mod tests {
 		RuntimeMetadataV1 {
 		modules: DecodeDifferent::Encode(&[
 			ModuleMetadata {
-				name: DecodeDifferent::Encode("Module"),
-				prefix: DecodeDifferent::Encode("system"),
+				name: DecodeDifferent::Encode("system"),
+				prefix: DecodeDifferent::Encode(FnEncode(||"")),
 				storage: None,
 				calls: None,
 				event: Some(DecodeDifferent::Encode(
@@ -361,8 +397,8 @@ mod tests {
 				)),
 			},
 			ModuleMetadata {
-				prefix: DecodeDifferent::Encode("event_module"),
-				name: DecodeDifferent::Encode("Module"),
+				name: DecodeDifferent::Encode("event_module"),
+				prefix: DecodeDifferent::Encode(FnEncode(||"")),
 				storage: None,
 				calls: Some(
 					DecodeDifferent::Encode(FnEncode(||&[
@@ -384,8 +420,8 @@ mod tests {
 				)),
 			},
 			ModuleMetadata {
-				prefix: DecodeDifferent::Encode("event_module2"),
-				name: DecodeDifferent::Encode("Module"),
+				name: DecodeDifferent::Encode("event_module2"),
+				prefix: DecodeDifferent::Encode(FnEncode(||"TestStorage")),
       	storage: Some(DecodeDifferent::Encode(
 			 		FnEncode(||&[
 						StorageFunctionMetadata {

@@ -345,7 +345,7 @@ pub struct RuntimeMetadataV1 {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
-	pub prefix: DecodeDifferentStr,
+	pub prefix: DecodeDifferent<FnEncode<&'static str>, StringBuf>,
 	pub storage: ODFnA<StorageFunctionMetadata>,
 	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,

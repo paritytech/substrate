@@ -137,6 +137,10 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
 				#store_functions_to_metadata
 			}
+			pub fn store_metadata_name() -> &'static str {
+				#cratename_string
+			}
+
 		}
 
 		#extra_genesis
