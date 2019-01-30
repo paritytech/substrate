@@ -146,8 +146,7 @@ impl<
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> result::Result<ApplyOutcome, ApplyError> {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		<system::Module<System>>::note_extrinsic(encoded);
-		match Self::apply_extrinsic_no_note_with_len(uxt, encoded_len) {
+		match Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded)) {
 			Ok(internal::ApplyOutcome::Success) => Ok(ApplyOutcome::Success),
 			Ok(internal::ApplyOutcome::Fail(_)) => Ok(ApplyOutcome::Fail),
 			Err(internal::ApplyError::CantPay) => Err(ApplyError::CantPay),
@@ -161,7 +160,7 @@ impl<
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
-		match Self::apply_extrinsic_no_note_with_len(uxt, l) {
+		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(internal::ApplyOutcome::Success) => (),
 			Ok(internal::ApplyOutcome::Fail(e)) => runtime_io::print(e),
 			Err(internal::ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
@@ -172,7 +171,7 @@ impl<
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
+	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
@@ -197,10 +196,16 @@ impl<
 			<system::Module<System>>::inc_account_nonce(sender);
 		}
 
+		// make sure to `note_extrinsic` only after we know it's going to be executed
+		// to prevent it from leaking in storage.
+		if let Some(encoded) = to_note {
+			<system::Module<System>>::note_extrinsic(encoded);
+		}
+
 		// decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
 		let r = f.dispatch(s.into());
-		<system::Module<System>>::note_applied_extrinsic(&r);
+		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}

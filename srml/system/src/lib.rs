@@ -228,7 +228,6 @@ decl_storage! {
 			use codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
-			storage.insert(well_known_keys::EXTRINSIC_LEN.to_vec(), 0u32.encode());
 			storage.insert(well_known_keys::ALL_EXTRINSICS_LEN.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
@@ -285,11 +284,6 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
-	/// Gets the index of extrinsic that is currenty executing.
-	fn extrinsic_len() -> u32 {
-		storage::unhashed::get(well_known_keys::EXTRINSIC_LEN).unwrap_or_default()
-	}
-
 	/// Gets a total length of all executed extrinsics.
 	pub fn all_extrinsics_len() -> u32 {
 		storage::unhashed::get(well_known_keys::ALL_EXTRINSICS_LEN).unwrap_or_default()
@@ -299,7 +293,6 @@ impl<T: Trait> Module<T> {
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
-		storage::unhashed::put(well_known_keys::EXTRINSIC_LEN, &0u32);
 		storage::unhashed::put(well_known_keys::ALL_EXTRINSICS_LEN, &0u32);
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
@@ -399,23 +392,24 @@ impl<T: Trait> Module<T> {
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
+	///
+	/// NOTE this function is called only when the block is being constructed locally.
+	/// `execute_block` doesn't note any extrinsics.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_LEN, &(encoded_xt.len() as u32));
 		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>) {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
-		let total_length = Self::extrinsic_len().saturating_add(Self::all_extrinsics_len());
+		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		storage::unhashed::put(well_known_keys::EXTRINSIC_LEN, &0);
 		storage::unhashed::put(well_known_keys::ALL_EXTRINSICS_LEN, &total_length);
 	}
 
@@ -519,8 +513,8 @@ mod tests {
 
 			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()));
-			System::note_applied_extrinsic(&Err(""));
+			System::note_applied_extrinsic(&Ok(()), 0);
+			System::note_applied_extrinsic(&Err(""), 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalise();
