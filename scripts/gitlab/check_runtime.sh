@@ -17,7 +17,7 @@ RUNTIME="node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.co
 
 
 # check if the wasm sources changed
-if ! git diff --name-only master...${CI_COMMIT_SHA} \
+if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
 	| grep -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
 then
 	cat <<-EOT
