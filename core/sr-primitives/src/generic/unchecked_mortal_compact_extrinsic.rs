@@ -93,8 +93,8 @@ where
 					return Err("bad signature in extrinsic")
 				}
 				CheckedExtrinsic {
-					signed: Some((signed, (payload.0).0)),
-					function: payload.1,
+					signed: Some((signed, (raw_payload.0).0)),
+					function: raw_payload.1,
 				}
 			}
 			None => CheckedExtrinsic {
