@@ -3063,8 +3063,10 @@ name = "srml-finality-tracker"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",

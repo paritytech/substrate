@@ -378,14 +378,14 @@ impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthor
 		<T as Trait>::SessionKey,
 	>,
 {
-	fn on_stalled(window_size: T::BlockNumber) {
+	fn on_stalled(further_wait: T::BlockNumber) {
 		use primitives::traits::As;
 
 		let now = system::ChainContext::<T>::default().current_height();
 
 		// only allow forced changes when twice the window has passed since the last
 		// one.
-		if <Module<T>>::last_forced().map_or(false, |l| l + window_size * T::BlockNumber::sa(2) <= now) {
+		if <Module<T>>::last_forced().map_or(false, |l| l + further_wait * T::BlockNumber::sa(2) <= now) {
 			return
 		}
 
@@ -395,10 +395,10 @@ impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthor
 			.map(|key| (key, 1)) // evenly-weighted.
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 
-		// schedule a change for `window_size` blocks.
+		// schedule a change for `further_wait` blocks.
 		let last_authorities = <Module<T>>::grandpa_authorities();
 		if next_authorities != last_authorities {
-			let _ = <Module<T>>::schedule_change(next_authorities, window_size, true);
+			let _ = <Module<T>>::schedule_change(next_authorities, further_wait, true);
 			<Module<T> as Store>::LastForced::put(now);
 		}
 	}

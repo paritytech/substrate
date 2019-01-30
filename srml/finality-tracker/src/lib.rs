@@ -93,7 +93,7 @@ decl_storage! {
 		/// Ordered recent hints.
 		OrderedHints get(ordered_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// The median.
-		Median build(|_| T::BlockNumber::zero()): T::BlockNumber;
+		Median get(median) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 		/// The number of recent samples to keep from this chain. Default is n-100
 		pub WindowSize get(window_size) config(window_size): T::BlockNumber = T::BlockNumber::sa(DEFAULT_WINDOW_SIZE);
 		/// The delay after which point things become suspicious.
@@ -122,16 +122,6 @@ decl_module! {
 		}
 
 		fn on_finalise() {
-			if Self::initialized().is_none() {
-				<Self as Store>::RecentHints::put(vec![T::BlockNumber::zero()]);
-				<Self as Store>::OrderedHints::put(vec![T::BlockNumber::zero()]);
-				<Self as Store>::Median::put(T::BlockNumber::zero());
-				<Self as Store>::WindowSize::put(T::BlockNumber::sa(DEFAULT_WINDOW_SIZE));
-				<Self as Store>::ReportLatency::put(T::BlockNumber::sa(DEFAULT_DELAY));
-
-				<Self as Store>::Initialized::put(());
-			}
-
 			Self::update_hint(<Self as Store>::Update::take())
 		}
 	}
@@ -139,6 +129,16 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	fn update_hint(hint: Option<T::BlockNumber>) {
+		if Self::initialized().is_none() {
+			<Self as Store>::RecentHints::put(vec![T::BlockNumber::zero()]);
+			<Self as Store>::OrderedHints::put(vec![T::BlockNumber::zero()]);
+			<Self as Store>::Median::put(T::BlockNumber::zero());
+			<Self as Store>::WindowSize::put(T::BlockNumber::sa(DEFAULT_WINDOW_SIZE));
+			<Self as Store>::ReportLatency::put(T::BlockNumber::sa(DEFAULT_DELAY));
+
+			<Self as Store>::Initialized::put(());
+		}
+
 		let mut recent = Self::recent_hints();
 		let mut ordered = Self::ordered_hints();
 		let window_size = cmp::max(T::BlockNumber::one(), Self::window_size());
@@ -197,8 +197,9 @@ impl<T: Trait> Module<T> {
 
 			// the delay is the latency plus half the window size.
 			let delay = latency + (window_size / two);
-			if now - median > delay {
-				T::OnFinalizationStalled::on_stalled(window_size);
+			// median may be at most n - delay
+			if median + delay <= now {
+				T::OnFinalizationStalled::on_stalled(window_size - T::BlockNumber::one());
 			}
 		}
 	}
@@ -206,7 +207,9 @@ impl<T: Trait> Module<T> {
 
 /// Called when finalization stalled at a given number.
 pub trait OnFinalizationStalled<N> {
-	fn on_stalled(window_size: N);
+	/// The parameter here is how many more blocks to wait before applying
+	/// changes triggered by finality stalling.
+	fn on_stalled(further_wait: N);
 }
 
 macro_rules! impl_on_stalled {
@@ -218,8 +221,8 @@ macro_rules! impl_on_stalled {
 
 	( $($t:ident)* ) => {
 		impl<NUM: Clone, $($t: OnFinalizationStalled<NUM>),*> OnFinalizationStalled<NUM> for ($($t,)*) {
-			fn on_stalled(window_size: NUM) {
-				$($t::on_stalled(window_size.clone());)*
+			fn on_stalled(further_wait: NUM) {
+				$($t::on_stalled(further_wait.clone());)*
 			}
 		}
 	}
@@ -251,5 +254,134 @@ impl<T: Trait> ProvideInherent for Module<T> {
 
 	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> result::Result<(), Self::Error> {
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use sr_io::{with_externalities, TestExternalities};
+	use substrate_primitives::H256;
+	use sr_primitives::BuildStorage;
+	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalise, Header as HeaderT};
+	use sr_primitives::testing::{Digest, DigestItem, Header};
+	use srml_support::impl_outer_origin;
+	use srml_system as system;
+	use lazy_static::lazy_static;
+	use parking_lot::Mutex;
+
+	#[derive(Clone, PartialEq, Debug)]
+	pub struct StallEvent {
+		at: u64,
+		further_wait: u64,
+	}
+
+	macro_rules! make_test_context {
+		() => {
+			#[derive(Clone, Eq, PartialEq)]
+			pub struct Test;
+
+			impl_outer_origin! {
+				pub enum Origin for Test {}
+			}
+
+			impl system::Trait for Test {
+				type Origin = Origin;
+				type Index = u64;
+				type BlockNumber = u64;
+				type Hash = H256;
+				type Hashing = BlakeTwo256;
+				type Digest = Digest;
+				type AccountId = u64;
+				type Lookup = IdentityLookup<u64>;
+				type Header = Header;
+				type Event = ();
+				type Log = DigestItem;
+			}
+
+			type System = system::Module<Test>;
+
+			lazy_static! {
+				static ref NOTIFICATIONS: Mutex<Vec<StallEvent>> = Mutex::new(Vec::new());
+			}
+
+			pub struct StallTracker;
+			impl OnFinalizationStalled<u64> for StallTracker {
+				fn on_stalled(further_wait: u64) {
+					let now = System::block_number();
+					NOTIFICATIONS.lock().push(StallEvent { at: now, further_wait });
+				}
+			}
+
+			impl Trait for Test {
+				type OnFinalizationStalled = StallTracker;
+			}
+
+			type FinalityTracker = Module<Test>;
+		}
+	}
+
+	#[test]
+	fn median_works() {
+		make_test_context!();
+		let t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+
+		with_externalities(&mut TestExternalities::new(t), || {
+			FinalityTracker::update_hint(Some(500));
+			assert_eq!(FinalityTracker::median(), 250);
+			assert!(NOTIFICATIONS.lock().is_empty());
+		});
+	}
+
+	#[test]
+	fn notifies_when_stalled() {
+		make_test_context!();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> {
+			window_size: 11,
+			report_latency: 100
+		}.build_storage().unwrap().0);
+
+		with_externalities(&mut TestExternalities::new(t), || {
+			let mut parent_hash = System::parent_hash();
+			for i in 2..106 {
+				System::initialise(&i, &parent_hash, &Default::default());
+				FinalityTracker::on_finalise(i);
+				let hdr = System::finalise();
+				parent_hash = hdr.hash();
+			}
+
+			assert_eq!(
+				NOTIFICATIONS.lock().to_vec(),
+				vec![StallEvent { at: 105, further_wait: 10 }]
+			)
+		});
+	}
+
+	#[test]
+	fn recent_notifications_prevent_stalling() {
+		make_test_context!();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> {
+			window_size: 11,
+			report_latency: 100
+		}.build_storage().unwrap().0);
+
+		with_externalities(&mut TestExternalities::new(t), || {
+			let mut parent_hash = System::parent_hash();
+			for i in 2..106 {
+				System::initialise(&i, &parent_hash, &Default::default());
+				assert_ok!(FinalityTracker::dispatch(
+					Call::final_hint(i-1),
+					Origin::INHERENT,
+				));
+				FinalityTracker::on_finalise(i);
+				let hdr = System::finalise();
+				parent_hash = hdr.hash();
+			}
+
+			assert!(NOTIFICATIONS.lock().is_empty());
+		});
 	}
 }
