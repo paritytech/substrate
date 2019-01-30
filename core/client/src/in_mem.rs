@@ -230,10 +230,10 @@ impl<Block: BlockT> Blockchain<Block> {
 		let hash = header.hash();
 		let number = header.number();
 
-		let mut storage = self.storage.write();
-
+		// Note: this may lock storage, so it must happen before obtaining storage
+		// write lock.
 		let best_tree_route = {
-			let best_hash = storage.best_hash;
+			let best_hash = self.storage.read().best_hash;
 			if &best_hash == header.parent_hash() {
 				None
 			} else {
@@ -245,6 +245,8 @@ impl<Block: BlockT> Blockchain<Block> {
 				Some(route)
 			}
 		};
+
+		let mut storage = self.storage.write();
 
 		if let Some(tree_route) = best_tree_route {
 			// apply retraction and enaction when reorganizing up to parent hash
