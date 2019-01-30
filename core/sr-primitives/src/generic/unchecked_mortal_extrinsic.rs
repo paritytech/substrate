@@ -182,6 +182,7 @@ impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalExtrinsic<Ad
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use runtime_io::blake2_256;
 
 	struct TestContext;
 	impl Lookup for TestContext {
@@ -223,7 +224,7 @@ mod tests {
 
 	#[test]
 	fn signed_codec_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::immortal(), 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()), Era::immortal());
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
@@ -244,35 +245,35 @@ mod tests {
 
 	#[test]
 	fn immortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::immortal(), 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::immortal(), 0u64).using_encoded(blake2_256)[..].to_owned()), Era::immortal());
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: DUMMY_FUNCTION }));
 	}
 
 	#[test]
 	fn mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 42), 42u64).encode()), Era::mortal(32, 42));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 42), 42u64).using_encoded(blake2_256)[..].to_owned()), Era::mortal(32, 42));
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: DUMMY_FUNCTION }));
 	}
 
 	#[test]
 	fn later_mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 11), 11u64).encode()), Era::mortal(32, 11));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 11), 11u64).using_encoded(blake2_256)[..].to_owned()), Era::mortal(32, 11));
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: DUMMY_FUNCTION }));
 	}
 
 	#[test]
 	fn too_late_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 10), 10u64).encode()), Era::mortal(32, 10));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 10), 10u64).using_encoded(blake2_256)[..].to_owned()), Era::mortal(32, 10));
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err("bad signature in extrinsic"));
 	}
 
 	#[test]
 	fn too_early_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 43), 43u64).using_encoded(blake2_256)[..].to_owned()), Era::mortal(32, 43));
 		assert!(ux.is_signed().unwrap_or(false));
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err("bad signature in extrinsic"));
 	}
