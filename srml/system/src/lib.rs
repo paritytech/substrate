@@ -210,6 +210,7 @@ decl_storage! {
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 
 		ExtrinsicCount: Option<u32>;
+		AllExtrinsicsLen: Option<u32>;
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), [69u8; 32])]): map T::BlockNumber => T::Hash;
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		RandomSeed get(random_seed) build(|_| [0u8; 32]): T::Hash;
@@ -228,7 +229,6 @@ decl_storage! {
 			use codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
-			storage.insert(well_known_keys::ALL_EXTRINSICS_LEN.to_vec(), 0u32.encode());
 
 			if let Some(ref changes_trie_config) = config.changes_trie_config {
 				storage.insert(
@@ -286,14 +286,13 @@ impl<T: Trait> Module<T> {
 
 	/// Gets a total length of all executed extrinsics.
 	pub fn all_extrinsics_len() -> u32 {
-		storage::unhashed::get(well_known_keys::ALL_EXTRINSICS_LEN).unwrap_or_default()
+		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
 	}
 
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
-		storage::unhashed::put(well_known_keys::ALL_EXTRINSICS_LEN, &0u32);
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
@@ -306,6 +305,7 @@ impl<T: Trait> Module<T> {
 	pub fn finalise() -> T::Header {
 		<RandomSeed<T>>::kill();
 		<ExtrinsicCount<T>>::kill();
+		<AllExtrinsicsLen<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -410,7 +410,7 @@ impl<T: Trait> Module<T> {
 		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
-		storage::unhashed::put(well_known_keys::ALL_EXTRINSICS_LEN, &total_length);
+		<AllExtrinsicsLen<T>>::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block

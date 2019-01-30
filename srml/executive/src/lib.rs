@@ -429,4 +429,35 @@ mod tests {
 			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
 		});
 	}
+
+	#[test]
+	fn block_size_limit_enforced() {
+		let run_test = |should_fail: bool| {
+			let mut t = new_test_ext();
+			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+			let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
+			let encoded = xt2.encode();
+			let len = if should_fail { (internal::MAX_TRANSACTIONS_SIZE - 1) as usize } else { encoded.len() };
+			with_externalities(&mut t, || {
+				Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+				assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
+
+				Executive::apply_extrinsic(xt).unwrap();
+				let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
+
+				if should_fail {
+					assert!(res.is_err());
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 28);
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
+				} else {
+					assert!(res.is_ok());
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 56);
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
+				}
+			});
+		};
+
+		run_test(false);
+		run_test(true);
+	}
 }
