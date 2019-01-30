@@ -177,7 +177,7 @@ where
 		for change in self.pending_changes.iter()
 			.take_while(|c| c.effective_number() <= new_best) // to prevent iterating too far
 			.filter(|c| c.delay_kind == DelayKind::Best)
-			.filter(|ref c| c.effective_number() == new_best)
+			.filter(|c| c.effective_number() == new_best)
 		{
 			// check if the block that signalled the change is canonical in
 			// our chain.
