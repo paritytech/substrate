@@ -18,27 +18,11 @@
 
 #![warn(missing_docs)]
 
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-#[macro_use]
-extern crate log;
-
-extern crate hash_db;
-extern crate substrate_trie;
-
-extern crate parking_lot;
-extern crate heapsize;
-#[cfg_attr(test, macro_use)]
-extern crate substrate_primitives as primitives;
-extern crate parity_codec as codec;
-extern crate substrate_trie as trie;
-
 use std::{fmt, panic::UnwindSafe};
+use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
 
 pub mod backend;
@@ -343,7 +327,7 @@ where
 	init_overlay(overlay, false)?;
 
 	let result = {
-		let mut orig_prospective = overlay.prospective.clone();
+		let orig_prospective = overlay.prospective.clone();
 
 		let (result, was_native, storage_delta, changes_delta) = {
 			let ((result, was_native), (storage_delta, changes_delta)) = {
@@ -616,7 +600,7 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use codec::Encode;
+	use parity_codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
@@ -625,7 +609,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::Blake2Hasher;
+	use primitives::{Blake2Hasher, map};
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,

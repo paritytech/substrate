@@ -19,34 +19,10 @@
 
 #![cfg_attr(feature = "benchmarks", feature(test))]
 
-extern crate node_runtime;
-#[macro_use] extern crate substrate_executor;
-#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
-
 #[cfg(feature = "benchmarks")] extern crate test;
 
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate sr_primitives as runtime_primitives;
-#[cfg(test)] extern crate srml_support as runtime_support;
-#[cfg(test)] extern crate srml_balances as balances;
-#[cfg(test)] extern crate srml_session as session;
-#[cfg(test)] extern crate srml_staking as staking;
-#[cfg(test)] extern crate srml_system as system;
-#[cfg(test)] extern crate srml_consensus as consensus;
-#[cfg(test)] extern crate srml_timestamp as timestamp;
-#[cfg(test)] extern crate srml_treasury as treasury;
-#[cfg(test)] extern crate srml_contract as contract;
-#[cfg(test)] extern crate srml_grandpa as grandpa;
-#[cfg(test)] extern crate srml_indices as indices;
-#[cfg(test)] extern crate node_primitives;
-#[cfg(test)] extern crate parity_codec as codec;
-#[cfg(test)] extern crate sr_io as runtime_io;
-#[cfg(test)] extern crate substrate_trie as trie;
-#[cfg(test)] extern crate substrate_state_machine as state_machine;
-#[cfg(test)] #[macro_use] extern crate hex_literal;
-#[cfg(test)] extern crate wabt;
-
 pub use substrate_executor::NativeExecutor;
+use substrate_executor::native_executor_instance;
 native_executor_instance!(pub Executor, node_runtime::api::dispatch, node_runtime::native_version, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"));
 
 #[cfg(test)]
@@ -54,7 +30,7 @@ mod tests {
 	use runtime_io;
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
-	use codec::{Encode, Decode, Joiner};
+	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
@@ -71,6 +47,8 @@ mod tests {
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
 		SystemConfig, GrandpaConfig, IndicesConfig, Event, Log};
 	use wabt;
+	use hex_literal::{hex, hex_impl};
+	use primitives::map;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");

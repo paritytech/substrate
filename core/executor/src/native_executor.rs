@@ -16,16 +16,17 @@
 
 use std::borrow::BorrowMut;
 use std::cell::{RefMut, RefCell};
-use error::{Error, ErrorKind, Result};
+use crate::error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
-use wasm_executor::WasmExecutor;
+use crate::wasm_executor::WasmExecutor;
 use wasmi::{Module as WasmModule, ModuleRef as WasmModuleInstanceRef};
 use runtime_version::{NativeVersion, RuntimeVersion};
 use std::{collections::HashMap, panic::UnwindSafe};
-use codec::{Decode, Encode};
-use RuntimeInfo;
+use parity_codec::{Decode, Encode};
+use crate::RuntimeInfo;
 use primitives::{Blake2Hasher, NativeOrEncoded};
 use primitives::storage::well_known_keys;
+use log::trace;
 
 /// Default num of pages for the heap
 const DEFAULT_HEAP_PAGES: u64 = 1024;
@@ -267,7 +268,6 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
-		// TODO: this is not so great – I think I should go back to have dispatch take a type param and modify this macro to accept a type param and then pass it in from the test-client instead
 		use primitives::Blake2Hasher as _Blake2Hasher;
 		impl $crate::NativeExecutionDispatch for $name {
 			fn native_equivalent() -> &'static [u8] {

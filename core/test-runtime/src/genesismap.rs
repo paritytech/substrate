@@ -18,8 +18,8 @@
 
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use codec::{Encode, KeyedVec, Joiner};
-use primitives::{Ed25519AuthorityId, ChangesTrieConfiguration};
+use parity_codec::{Encode, KeyedVec, Joiner};
+use primitives::{Ed25519AuthorityId, ChangesTrieConfiguration, map};
 use primitives::storage::well_known_keys;
 use runtime_primitives::traits::Block;
 
@@ -68,7 +68,7 @@ impl GenesisConfig {
 	}
 }
 
-pub fn additional_storage_with_genesis(genesis_block: &::Block) -> HashMap<Vec<u8>, Vec<u8>> {
+pub fn additional_storage_with_genesis(genesis_block: &crate::Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	map![
 		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()
 	]

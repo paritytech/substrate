@@ -238,16 +238,6 @@ impl Pair {
 		r.copy_from_slice(pk);
 		Public(r)
 	}
-
-	/// Derive a child key. Probably unsafe and broken.
-	// TODO: proper HD derivation https://cardanolaunch.com/assets/Ed25519_BIP.pdf
-	pub fn derive_child_probably_bad(&self, chain_data: &[u8]) -> Pair {
-		let sig = self.sign(chain_data);
-		let mut seed = [0u8; 32];
-		seed.copy_from_slice(&sig[..32]);
-
-		Pair::from_seed(&seed)
-	}
 }
 
 /// Verify a signature on a message. Returns true if the signature is good.
@@ -348,12 +338,6 @@ mod test {
 		let pair2 = Pair::from_pkcs8(&pkcs8).unwrap();
 
 		assert_eq!(pair1.public(), pair2.public());
-	}
-
-	#[test]
-	fn derive_child() {
-		let pair = Pair::generate();
-		let _pair2 = pair.derive_child_probably_bad(b"session_1234");
 	}
 
 	#[test]

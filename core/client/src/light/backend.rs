@@ -130,6 +130,16 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 				operation.leaf_state,
 				operation.aux_ops,
 			)?;
+		} else {
+			for (key, maybe_val) in operation.aux_ops {
+				match maybe_val {
+					Some(val) => self.blockchain.storage().insert_aux(
+						&[(&key[..], &val[..])],
+						::std::iter::empty(),
+					)?,
+					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
+				}
+			}
 		}
 
 		Ok(())
@@ -309,5 +319,23 @@ where
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		None
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use primitives::Blake2Hasher;
+	use test_client::runtime::Block;
+	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
+	use super::*;
+
+	#[test]
+	fn light_aux_store_is_updated_via_non_importing_op() {
+		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let mut op = ClientBackend::<Block, Blake2Hasher>::begin_operation(&backend).unwrap();
+		BlockImportOperation::<Block, Blake2Hasher>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
+		ClientBackend::<Block, Blake2Hasher>::commit_operation(&backend, op).unwrap();
+
+		assert_eq!(AuxStore::get_aux(&backend, &[1]).unwrap(), Some(vec![2]));
 	}
 }

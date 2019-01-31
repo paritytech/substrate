@@ -18,45 +18,22 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-extern crate sr_std as rstd;
-extern crate parity_codec as codec;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_inherents as inherents;
-extern crate substrate_consensus_aura_primitives as consensus_aura;
-
-#[macro_use]
-extern crate substrate_client as client;
-
 #[macro_use]
 extern crate srml_support as runtime_support;
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate sr_io as runtime_io;
-#[macro_use]
-extern crate sr_version as runtime_version;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-#[cfg_attr(any(feature = "std", test), macro_use)]
-extern crate substrate_primitives as primitives;
-
-#[cfg(test)] extern crate substrate_executor;
 
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
 use rstd::prelude::*;
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
+use parity_codec_derive::{Encode, Decode};
 
-use client::{runtime_api as client_api, block_builder::api as block_builder_api};
+use substrate_client::{runtime_api as client_api, block_builder::api as block_builder_api,
+	decl_runtime_apis, impl_runtime_apis,
+};
 use runtime_primitives::{
 	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
+	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType
