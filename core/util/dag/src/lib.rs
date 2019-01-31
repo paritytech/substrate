@@ -1,0 +1,223 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+#[derive(Debug)]
+pub struct Dag<H, N, V> {
+	roots: Vec<Node<H, N, V>>,
+}
+
+impl<H, N, V> Dag<H, N, V> where
+	H: Clone + PartialEq,
+	N: Clone + Ord
+{
+	pub fn empty() -> Dag<H, N, V> {
+		Dag { roots: Vec::new() }
+	}
+
+	// FIXME: don't import <= `best_finalized`
+	pub fn import<F, E>(
+		&mut self,
+		mut hash: H,
+		mut number: N,
+		mut data: V,
+		is_descendent_of: &F,
+	) -> Result<(), E>
+		where F: Fn(&H, &H) -> Result<bool, E>,
+	{
+		for root in self.roots.iter_mut() {
+			match root.import(hash, number, data, is_descendent_of)? {
+				Some((h, n, d)) => {
+					hash = h;
+					number = n;
+					data = d;
+				},
+				None => return Ok(()),
+			}
+		}
+
+		self.roots.push(Node {
+			data,
+			hash: hash,
+			number: number,
+			children:  Vec::new(),
+		});
+
+		Ok(())
+	}
+
+	pub fn roots(&self) -> impl Iterator<Item=(&H, &N)> {
+		self.roots.iter().map(|change| (&change.hash, &change.number))
+	}
+
+	pub fn apply(&mut self, hash: &H) {
+		if let Some(position) = self.roots.iter().position(|change| change.hash == *hash) {
+			let changes = self.roots.swap_remove(position);
+			self.roots = changes.children;
+		}
+	}
+}
+
+#[derive(Debug)]
+struct Node<H, N, V> {
+	hash: H,
+	number: N,
+	data: V,
+	children: Vec<Node<H, N, V>>,
+}
+
+impl<H, N: Ord, V> Node<H, N, V> {
+	fn import<F, E>(
+		&mut self,
+		mut hash: H,
+		mut number: N,
+		mut data: V,
+		is_descendent_of: &F,
+	) -> Result<Option<(H, N, V)>, E>
+		where F: Fn(&H, &H) -> Result<bool, E>,
+	{
+		if number <= self.number { return Ok(Some((hash, number, data))); }
+
+		for change in self.children.iter_mut() {
+			match change.import(hash, number, data, is_descendent_of)? {
+				Some((h, n, d)) => {
+					hash = h;
+					number = n;
+					data = d;
+				},
+				None => return Ok(None),
+			}
+		}
+
+		if is_descendent_of(&self.hash, &hash)? {
+			self.children.push(Node {
+				data,
+				hash: hash,
+				number: number,
+				children: Vec::new(),
+			});
+
+			Ok(None)
+		} else {
+			Ok(Some((hash, number, data)))
+		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::Dag;
+
+	fn test_dag<'a>() -> Dag<&'a str, u64, ()> {
+		let mut dag = Dag::empty();
+
+		//
+		//     - B - C - D - E
+		//    /
+		//   /   - G
+		//  /   /
+		// A - F - H - I
+		//  \
+		//   — J - K
+		//
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, ()> {
+			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+			match (*base, *block) {
+				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
+				("B", b) => Ok(b == "C" || b == "D" || b == "E"),
+				("C", b) => Ok(b == "D" || b == "E"),
+				("D", b) => Ok(b == "E"),
+				("E", _) => Ok(false),
+				("F", b) => Ok(b == "G" || b == "H" || b == "I"),
+				("G", _) => Ok(false),
+				("H", b) => Ok(b == "I"),
+				("I", _) => Ok(false),
+				("J", b) => Ok(b == "K"),
+				("K", _) => Ok(false),
+				_ => unreachable!(),
+			}
+		};
+
+		dag.import("A", 1, (), &is_descendent_of).unwrap();
+
+		dag.import("B", 2, (), &is_descendent_of).unwrap();
+		dag.import("C", 3, (), &is_descendent_of).unwrap();
+		dag.import("D", 4, (), &is_descendent_of).unwrap();
+		dag.import("E", 5, (), &is_descendent_of).unwrap();
+
+		dag.import("F", 2, (), &is_descendent_of).unwrap();
+		dag.import("G", 3, (), &is_descendent_of).unwrap();
+
+		dag.import("H", 3, (), &is_descendent_of).unwrap();
+		dag.import("I", 4, (), &is_descendent_of).unwrap();
+
+		dag.import("J", 2, (), &is_descendent_of).unwrap();
+		dag.import("K", 3, (), &is_descendent_of).unwrap();
+
+		dag
+	}
+
+	#[test]
+	fn it_works() {
+		let apply_a = || {
+			let mut dag = test_dag();
+
+			assert_eq!(
+				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("A", 1)],
+			);
+
+			// applying "A" opens up three possible forks
+			dag.apply(&"A");
+
+			assert_eq!(
+				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("B", 2), ("F", 2), ("J", 2)],
+			);
+
+			dag
+		};
+
+		{
+			let mut dag = apply_a();
+
+			// applying "B" will progress on its fork and remove any other competing forks
+			dag.apply(&"B");
+
+			assert_eq!(
+				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("C", 3)],
+			);
+
+			// all the other forks have been pruned
+			assert!(dag.roots.len() == 1);
+		}
+
+		{
+			let mut dag = apply_a();
+
+			// applying "J" will progress on its fork and remove any other competing forks
+			dag.apply(&"J");
+
+			assert_eq!(
+				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				vec![("K", 3)],
+			);
+
+			// all the other forks have been pruned
+			assert!(dag.roots.len() == 1);
+		}
+	}
+}
