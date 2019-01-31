@@ -33,7 +33,7 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
-use runtime_primitives::BuildStorage;
+use runtime_primitives::{BuildStorage, ExecutionContext};
 use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
 use primitives::storage::{StorageKey, StorageData};
@@ -1283,8 +1283,9 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
+		context: Option<ExecutionContext>
 	) -> error::Result<NativeOrEncoded<R>> {
-		println!("args ----------------------> {:?}", args);
+		println!("execution context ----> {:?}", context);
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			at,
 			function,

@@ -273,6 +273,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 	let (block, block_id) = generate_node_block_and_block_id_ty(runtime);
 
 	Ok(quote!(
+
 		pub struct RuntimeApi {}
 		/// Implements all runtime apis for the client side.
 		#[cfg(any(feature = "std", test))]
@@ -361,6 +362,47 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				res
 			}
 
+			fn call_api_at_with_context<
+				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
+				NC: FnOnce() -> R + ::std::panic::UnwindSafe,
+			>(
+				&self,
+				at: &#block_id,
+				function: &'static str,
+				args: Vec<u8>,
+				native_call: NC,
+				context: ExecutionContext
+			) -> #crate_::error::Result<R> {
+				let res = unsafe {
+					self.call.call_api_at(
+						at,
+						function,
+						args,
+						&mut *self.changes.borrow_mut(),
+						&mut *self.initialised_block.borrow_mut(),
+						Some(native_call),
+						Some(context)
+					).and_then(|r|
+						match r {
+							#crate_::runtime_api::NativeOrEncoded::Native(n) => {
+								Ok(n)
+							},
+							#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
+								R::decode(&mut &r[..])
+									.ok_or_else(||
+										#crate_::error::ErrorKind::CallResultDecode(
+											function
+										).into()
+									)
+							}
+						}
+					)
+				};
+
+				self.commit_on_ok(&res);
+				res
+			}
+			
 			fn commit_on_ok<R, E>(&self, res: &::std::result::Result<R, E>) {
 				if *self.commit_on_success.borrow() {
 					if res.is_err() {
@@ -450,9 +492,6 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			let fn_name = prefix_function_with_trait(self.impl_trait_ident, &input.sig.ident);
 			let native_call_generator_ident =
 				generate_native_call_generator_fn_name(&input.sig.ident);
-			if input.sig.ident.to_string().ends_with("with_context") {
-				arg_names2.pop();
-			}
 			let trait_generic_arguments = self.trait_generic_arguments;
 			let node_block = self.node_block;
 			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
@@ -652,7 +691,6 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: mut api_impls } = parse_macro_input!(input as RuntimeApiImpls);
 	
-	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls)); // NOPE
 	
 	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls)); // NOPE
 	
@@ -662,7 +700,8 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls)); // Good
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID); // Good
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls)); // Good
-
+	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls)); // NOPE
+	
 	generate_impl_with_context(&mut api_impls);
 	
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls)); // NOPE

@@ -273,7 +273,7 @@ impl From<H512> for Ed25519Signature {
 pub enum ExecutionContext {
 	Importing,
 	Syncing,
-	BlockCreation,
+	BlockConstruction,
 	Other,
 }
 

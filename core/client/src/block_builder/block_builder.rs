@@ -25,7 +25,7 @@ use primitives::H256;
 use runtime_primitives::generic::BlockId;
 use crate::runtime_api::Core;
 use crate::error;
-use runtime_primitives::ApplyOutcome;
+use runtime_primitives::{ApplyOutcome, ExecutionContext};
 
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
@@ -65,7 +65,7 @@ where
 			Default::default()
 		);
 		let api = api.runtime_api();
-		api.initialise_block(block_id, &header)?;
+		api.initialise_block_with_context(block_id, &header, ExecutionContext::BlockConstruction)?;
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
