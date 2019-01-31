@@ -17,13 +17,14 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
+use log::debug;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
 use trie::{Recorder, MemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
-use trie_backend::TrieBackend;
-use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
-use {Error, ExecutionError, Backend};
+use crate::trie_backend::TrieBackend;
+use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
+use crate::{Error, ExecutionError, Backend};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -204,8 +205,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use backend::{InMemory};
-	use trie_backend::tests::test_trie;
+	use crate::backend::{InMemory};
+	use crate::trie_backend::tests::test_trie;
 	use super::*;
 	use primitives::{Blake2Hasher};
 

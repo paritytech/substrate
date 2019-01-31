@@ -2,6 +2,7 @@
 name = "substrate-test-runtime"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 log = { version = "0.4", optional = true }
@@ -10,15 +11,15 @@ serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "3.0", default-features = false }
 parity-codec-derive = { version = "3.0", default-features = false }
-substrate-keyring = { path = "../keyring", optional = true }
+keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 substrate-client = { path = "../client", default-features = false }
-substrate-primitives = { path = "../primitives", default-features = false }
-substrate-inherents = { path = "../inherents", default-features = false }
-substrate-consensus-aura-primitives = { path = "../consensus/aura/primitives", default-features = false }
-sr-std = { path = "../sr-std", default-features = false }
-sr-io = { path = "../sr-io", default-features = false }
-sr-primitives = { path = "../sr-primitives", default-features = false }
-sr-version = { path = "../sr-version", default-features = false }
+primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
+inherents = { package = "substrate-inherents", path = "../inherents", default-features = false }
+consensus_aura = { package = "substrate-consensus-aura-primitives", path = "../consensus/aura/primitives", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
+runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
+runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }
 srml-support = { path = "../../srml/support", default-features = false }
 
 [dev-dependencies]
@@ -32,14 +33,14 @@ std = [
 	"serde",
 	"serde_derive",
 	"substrate-client/std",
-	"substrate-keyring",
+	"keyring",
 	"parity-codec/std",
-	"sr-std/std",
-	"sr-io/std",
+	"rstd/std",
+	"runtime_io/std",
 	"srml-support/std",
-	"substrate-primitives/std",
-	"substrate-inherents/std",
-	"sr-primitives/std",
-	"sr-version/std",
-	"substrate-consensus-aura-primitives/std",
+	"primitives/std",
+	"inherents/std",
+	"runtime_primitives/std",
+	"runtime_version/std",
+	"consensus_aura/std",
 ]

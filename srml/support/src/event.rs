@@ -433,6 +433,18 @@ macro_rules! __impl_outer_event_json_metadata {
 					])
 				}
 			}
+			#[allow(dead_code)]
+			pub fn __module_events_system() -> &'static [$crate::event::EventMetadata] {
+				system::Event::metadata()
+			}
+			$(
+				#[allow(dead_code)]
+				$crate::paste::item!{
+					pub fn [< __module_events_ $module_name >] () -> &'static [$crate::event::EventMetadata] {
+						$module_name::Event $( ::<$generic_param> )* ::metadata()
+					}
+				}
+			)*
 		}
 	}
 }
