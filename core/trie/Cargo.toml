@@ -20,7 +20,7 @@ memory-db = { version = "0.9", optional = true }
 
 [dev-dependencies]
 substrate-primitives = { path = "../primitives" }
-trie-bench = { version = "0.9" }
+trie-bench = { version = "0.10" }
 trie-standardmap = { version = "0.9" }
 keccak-hasher = { version = "0.2" }
 criterion = "0.2"
