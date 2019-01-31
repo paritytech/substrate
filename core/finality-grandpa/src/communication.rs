@@ -34,23 +34,23 @@ fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8>
 }
 
 enum Broadcast<Block: BlockT> {
-	// set_id, round, encoded commit.
+	// round, set id, encoded commit.
 	Commit(u64, u64, Vec<u8>),
-	// set_id, round, encoded signed message.
+	// round, set id, encoded signed message.
 	Message(u64, u64, Vec<u8>),
-	// set_id, round, announcement of block hash that should be downloaded
+	// round, set id, announcement of block hash that should be downloaded
 	Announcement(u64, u64, Block::Hash),
-	// set_id, round being dropped.
+	// round, set id being dropped.
 	DropRound(u64, u64),
 }
 
 impl<Block: BlockT> Broadcast<Block> {
 	fn set_id(&self) -> u64 {
 		match *self {
-			Broadcast::Commit(s, _, _) => s,
-			Broadcast::Message(s, _, _) => s,
-			Broadcast::Announcement(s, _, _) => s,
-			Broadcast::DropRound(s, _) => s,
+			Broadcast::Commit(_, s, _) => s,
+			Broadcast::Message(_, s, _) => s,
+			Broadcast::Announcement(_, s, _) => s,
+			Broadcast::DropRound(_, s) => s,
 		}
 	}
 }
@@ -144,7 +144,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 					}
 
 					match item {
-						Broadcast::Commit(set_id, round, commit) => {
+						Broadcast::Commit(round, set_id, commit) => {
 							if self.set_id == set_id {
 								if round >= self.last_commit.as_ref().map_or(0, |&(r, _)| r) {
 									self.last_commit = Some((round, commit.clone()));
@@ -154,7 +154,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							// always send out to network.
 							self.network.send_commit(round, self.set_id, commit);
 						}
-						Broadcast::Message(set_id, round, message) => {
+						Broadcast::Message(round, set_id, message) => {
 							if self.set_id == set_id {
 								if round > self.round_messages.0 {
 									self.round_messages = (round, vec![message.clone()]);
@@ -168,7 +168,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							// always send out to network.
 							self.network.send_message(round, set_id, message);
 						}
-						Broadcast::Announcement(set_id, round, hash) => {
+						Broadcast::Announcement(round, set_id, hash) => {
 							if self.set_id == set_id {
 								self.announcements.insert(hash, round);
 							}
@@ -176,7 +176,7 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 							// always send out.
 							self.network.announce(round, set_id, hash);
 						}
-						Broadcast::DropRound(set_id, round) => {
+						Broadcast::DropRound(round, set_id) => {
 							// stop making announcements for any dead rounds.
 							self.announcements.retain(|_, &mut r| r > round);
 							self.network.drop_messages(round, set_id);
@@ -196,11 +196,11 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 	}
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
-		let _ = self.relay.unbounded_send(Broadcast::Message(set_id, round, message));
+		let _ = self.relay.unbounded_send(Broadcast::Message(round, set_id, message));
 	}
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
-		let _ = self.relay.unbounded_send(Broadcast::DropRound(set_id, round));
+		let _ = self.relay.unbounded_send(Broadcast::DropRound(round, set_id));
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
