@@ -124,15 +124,63 @@ pub trait BlockNumberToHash {
 	}
 }
 
-/// Simple payment making trait, operating on a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
-	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return true iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
+/// Charge fee trait
+pub trait ChargeFee<AccountId> {
+	type Amount;
+
+	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
+	/// `encoded_len` bytes. Return Ok iff the payment was successful.
+	fn charge_base_bytes_fee(transactor: &AccountId, len: usize) -> Result<(), &'static str>;
+
+	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
+	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+
+	/// Refund `amount` of previous charged fees from `transactor`.
+	fn refund_fee(transactor: &AccountId, amount: Self::Amount);
 }
 
-impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+/// Transfer fungible asset trait
+pub trait TransferAsset<AccountId> {
+	type Amount;
+
+	/// Transfer asset from `from` account to `to` account with `amount` of asset
+	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+
+	/// Transfer asset from `who` account by deducing `amount` in the account balances
+	fn transfer_from(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+
+	/// Transfer asset to `who` account by incresing `amount` in the account balances
+	fn transfer_to(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+}
+
+impl<T> ChargeFee<T> for () {
+	type Amount = ();
+
+	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	fn refund_fee(_: &T, _: Self::Amount) {}
+}
+
+impl<T> TransferAsset<T> for () {
+	type Amount = ();
+
+	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	fn transfer_from(_: &T, _: Self::Amount) -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	fn transfer_to(_: &T, _: Self::Amount) -> Result<(), &'static str> {
+		Ok(())
+	}
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.

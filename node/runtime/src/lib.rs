@@ -113,6 +113,12 @@ impl balances::Trait for Runtime {
 	type Event = Event;
 }
 
+impl fees::Trait for Runtime {
+	type Event = Event;
+	type Amount = Balance;
+	type TransferAsset = Balances
+}
+
 impl consensus::Trait for Runtime {
 	type Log = Log;
 	type SessionKey = SessionKey;
@@ -231,7 +237,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Fees, AllModules>;
 
 impl_runtime_apis! {
 	impl client_api::Core<Block> for Runtime {

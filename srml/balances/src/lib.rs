@@ -46,7 +46,7 @@ use rstd::{cmp, result};
 use codec::Codec;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
+use primitives::traits::{Zero, SimpleArithmetic, TransferAsset,
 	As, StaticLookup, Member, CheckedAdd, CheckedSub};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
@@ -534,15 +534,27 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
-	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
-		if b < transaction_fee + Self::existential_deposit() {
-			return Err("not enough funds for transaction fee");
+impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
+	type Amount = T::Balance;
+
+	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
+		Self::make_transfer(from, to, amount)
+	}
+
+	fn transfer_from(who: &T::AccountId, value: T::Balance) -> Result {
+		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		let b = Self::free_balance(who);
+		if b < value {
+			return Err("account has too few funds")
 		}
-		Self::set_free_balance(transactor, b - transaction_fee);
-		Self::decrease_total_stake_by(transaction_fee);
+		Self::set_free_balance(who, b - value);
+		Self::decrease_total_stake_by(value);
+		Ok(())
+	}
+
+	fn transfer_to(who: &T::AccountId, value: T::Balance) -> Result {
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
+		Self::increase_total_stake_by(value);
 		Ok(())
 	}
 }

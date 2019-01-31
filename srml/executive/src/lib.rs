@@ -46,7 +46,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash, As, Digest};
+	ChargeFee, Hash, As, Digest};
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -79,7 +79,7 @@ impl<
 	Context: Default,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Payment: MakePayment<System::AccountId>,
+	Payment: ChargeFee<System::AccountId>,
 	Finalisation: OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, Finalisation> where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -180,7 +180,7 @@ impl<
 			) }
 
 			// pay any fees.
-			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
+			Payment::charge_base_bytes_fee(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -243,7 +243,7 @@ impl<
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
-			if Payment::make_payment(sender, encoded_len).is_err() {
+			if Payment::charge_base_bytes_fee(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 
