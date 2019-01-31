@@ -49,13 +49,8 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberF
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-<<<<<<< HEAD
 use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
 use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
-=======
-use state_machine::{CodeExecutor, DBValue};
-use utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
->>>>>>> feat: adds cmd line params for execution strategies
 use client::LeafSet;
 use state_db::StateDb;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};

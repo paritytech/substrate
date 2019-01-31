@@ -18,7 +18,7 @@
 
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use state_machine::{OverlayedChanges, ExecutionStrategy};
+pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use primitives::NativeOrEncoded;
@@ -41,7 +41,6 @@ use sr_api_macros::decl_runtime_apis;
 use primitives::OpaqueMetadata;
 #[cfg(feature = "std")]
 use std::panic::UnwindSafe;
-
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]

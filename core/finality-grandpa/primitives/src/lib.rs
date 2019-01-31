@@ -23,7 +23,6 @@
 extern crate alloc;
 
 extern crate substrate_primitives;
-// extern crate substrate_state_machine;
 extern crate sr_primitives;
 extern crate parity_codec;
 

@@ -73,7 +73,6 @@ fn generate_impl_call(
 	let ptypes = params.iter().map(|v| &v.1);
 	let pborrow = params.iter().map(|v| &v.2);
 
-
 	Ok(
 		quote!(
 			#(
@@ -156,7 +155,6 @@ fn generate_impl_calls(
 		for item in &impl_.items {
 			match item {
 				ImplItem::Method(method) => {
-					
 					let impl_call = generate_impl_call(
 						&method.sig,
 						&impl_.self_ty,
@@ -166,7 +164,7 @@ fn generate_impl_calls(
 
 					impl_calls.push(
 						(impl_trait_ident.clone(), method.sig.ident.clone(), impl_call)
-					);					
+					);
 				},
 				_ => {},
 			}
@@ -190,7 +188,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 			quote!( #name => Some({ #impl_ }), )
 		});
 
-	let ts = quote!(
+	Ok(quote!(
 		#[cfg(feature = "std")]
 		pub fn dispatch(method: &str, mut #data: &[u8]) -> Option<Vec<u8>> {
 			match method {
@@ -198,9 +196,7 @@ fn generate_dispatch_function(impls: &[ItemImpl]) -> Result<TokenStream> {
 				_ => None,
 			}
 		}
-	);
-	// println!("TOKENSTREAM\n\n{}\n\n", ts);
-	Ok(ts)
+	).into())
 }
 
 /// Generate the interface functions that are used to call into the runtime in wasm.
@@ -239,9 +235,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 			)
 		});
 
-	let ts = quote!( #( #impl_calls )* );
-	// println!("TOKENSTREAM WASM \n\n{}\n\n", ts);
-	Ok(ts)
+	Ok(quote!( #( #impl_calls )* ))
 }
 
 fn generate_block_and_block_id_ty(
@@ -273,7 +267,6 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 	let (block, block_id) = generate_node_block_and_block_id_ty(runtime);
 
 	Ok(quote!(
-
 		pub struct RuntimeApi {}
 		/// Implements all runtime apis for the client side.
 		#[cfg(any(feature = "std", test))]
@@ -402,7 +395,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				self.commit_on_ok(&res);
 				res
 			}
-			
+
 			fn commit_on_ok<R, E>(&self, res: &::std::result::Result<R, E>) {
 				if *self.commit_on_success.borrow() {
 					if res.is_err() {
@@ -449,8 +442,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impls_prepared.push(impl_);
 	}
-	let ts = quote!( #( #impls_prepared )* );
-	Ok(ts)
+	Ok(quote!( #( #impls_prepared )* ))
 }
 
 
@@ -575,12 +567,6 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 }
 
 fn generate_impl_with_context(impls: &mut [ItemImpl]) {
-	// let pat = Pat::Ident(PatIdent { by_ref: None, mutability: None, ident: Ident::new("context", Span::call_site()), subpat: None });
-	// let mut punctuated = syn::punctuated::Punctuated::new();
-	// let punctuated_item = PathSegment { ident: Ident::new("ExecutionContext", Span::call_site()), arguments: PathArguments::None };
-	// punctuated.push(punctuated_item); 
-	// let ty = syn::Type::Path(syn::TypePath { qself: None, path: Path { leading_colon: None, segments: punctuated } });
-	// let context_arg = Captured(ArgCaptured { pat, colon_token: syn::token::Colon(Span::call_site()), ty });
 	let context_arg: syn::FnArg = parse_quote!( context: ExecutionContext );
 	for impl_ in impls {
 		let mut ctx_methods = vec![];
@@ -635,9 +621,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
 	}
-	let ts = quote!( #( #result )* );
-	// println!("API IMPLEMENTATION FOR RUNTIME API \n\n{}\n\n", ts);
-	Ok(ts)
+	Ok(quote!( #( #result )* ))
 }
 
 /// Generates `RUNTIME_API_VERSIONS` that holds all version information about the implemented
@@ -687,23 +671,18 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: mut api_impls } = parse_macro_input!(input as RuntimeApiImpls);
 	
-	
-	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls)); // NOPE
-	
-	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls)); // NOPE ?
-
-	
-	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls)); // Good
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID); // Good
-	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls)); // Good
-	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls)); // NOPE
+	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls));
+	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
+	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
+	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
+	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
+	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
 	
 	generate_impl_with_context(&mut api_impls);
-	
-	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls)); // NOPE
-	
 
-	let x = quote!(
+	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
+
+	quote!(
 		#hidden_includes
 
 		#base_runtime_api
@@ -721,7 +700,5 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 
 			#wasm_interface
 		}
-	);
-	// println!("\n\n result={}\n\n", quote!( #api_impls_for_runtime_api));
-	x.into()
+	).into()
 }

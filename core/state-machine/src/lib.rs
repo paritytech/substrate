@@ -24,7 +24,6 @@ use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
 use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
-use overlayed_changes::OverlayedChangeSet;
 
 pub mod backend;
 mod changes_trie;
@@ -35,6 +34,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
+use overlayed_changes::OverlayedChangeSet;
 pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
 pub use ext::Ext;
@@ -452,8 +452,6 @@ where
 		Result<NativeOrEncoded<R>, Exec::Error>
 	) -> Result<NativeOrEncoded<R>, Exec::Error>
 {
-	let strategy: ExecutionStrategy = (&manager).into();
-	println!(">>> {:?} {}", strategy, method);
 	// read changes trie configuration. The reason why we're doing it here instead of the
 	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
 	// proof-of-execution on light clients. And the proof is recorded by the backend which
@@ -542,7 +540,6 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	println!(">>> {:?} (native_else_wasm)", method);
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let (result, _, _) = execute_using_consensus_failure_handler::
 		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> _>
@@ -592,7 +589,6 @@ where
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-	println!(">>> {:?} (native_else_wasm)", method);
 	execute_using_consensus_failure_handler::
 		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> _>
 	(

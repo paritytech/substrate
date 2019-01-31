@@ -28,7 +28,6 @@ use primitives::{H256, Blake2Hasher, NativeOrEncoded, NeverNativeValue};
 
 use crate::backend;
 use crate::error;
-use crate::ExecutionStrategies;
 
 /// Method call executor.
 pub trait CallExecutor<B, H>
@@ -205,7 +204,6 @@ where
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
-
 		let state = self.backend.state_at(*at)?;
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;

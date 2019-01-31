@@ -50,7 +50,6 @@ where
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
 	pub fn at_block(block_id: &BlockId<Block>, api: &'a A) -> error::Result<Self> {
-		
 		let number = api.block_number_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?
 			+ One::one();
@@ -79,7 +78,7 @@ where
 	/// This will ensure the extrinsic can be validly executed (by executing it);
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
 		use crate::runtime_api::ApiExt;
-		
+
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
