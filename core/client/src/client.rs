@@ -1315,7 +1315,7 @@ impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> 
 
 impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
@@ -1326,7 +1326,7 @@ impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> BlockNumberToHash for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
