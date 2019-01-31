@@ -239,6 +239,7 @@ impl Network<Block> for MessageRouting {
 struct TestApi {
 	genesis_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
+	forced_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
 }
 
 impl TestApi {
@@ -246,6 +247,7 @@ impl TestApi {
 		TestApi {
 			genesis_authorities,
 			scheduled_changes: Arc::new(Mutex::new(HashMap::new())),
+			forced_changes: Arc::new(Mutex::new(HashMap::new())),
 		}
 	}
 }
@@ -322,10 +324,17 @@ impl GrandpaApi<Block> for RuntimeApi {
 		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone()))
 	}
 
-	fn grandpa_forced_change(&self, _at: &BlockId<Block>, _: &DigestFor<Block>)
+	fn grandpa_forced_change(&self, at: &BlockId<Block>, _: &DigestFor<Block>)
 		-> Result<Option<ScheduledChange<NumberFor<Block>>>>
 	{
-		Ok(None)
+		let parent_hash = match at {
+			&BlockId::Hash(at) => at,
+			_ => panic!("not requested by block hash!!"),
+		};
+
+		// we take only scheduled changes at given block number where there are no
+		// extrinsics.
+		Ok(self.inner.forced_changes.lock().get(&parent_hash).map(|c| c.clone()))
 	}
 }
 
@@ -777,4 +786,52 @@ fn doesnt_vote_on_the_tip_of_the_chain() {
 
 	// the highest block to be finalized will be 3/4 deep in the unfinalized chain
 	assert_eq!(highest, 75);
+}
+
+#[test]
+fn force_change_to_new_set() {
+	// two of these guys are offline.
+	let genesis_authorities = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie, Keyring::One, Keyring::Two];
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let api = TestApi::new(make_ids(genesis_authorities));
+
+	let voters = make_ids(peers_a);
+	let normal_transitions = api.scheduled_changes.clone();
+	let forced_transitions = api.forced_changes.clone();
+	let net = GrandpaTestNet::new(api, 3);
+	let net = Arc::new(Mutex::new(net));
+
+	net.lock().peer(0).push_blocks(1, false);
+
+	{
+		// add a forced transition at block 12.
+		let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
+		forced_transitions.lock().insert(parent_hash, ScheduledChange {
+			next_authorities: voters.clone(),
+			delay: 10,
+		});
+
+		// add a normal transition too to ensure that forced changes take priority.
+		normal_transitions.lock().insert(parent_hash, ScheduledChange {
+			next_authorities: make_ids(genesis_authorities),
+			delay: 5,
+		});
+	}
+
+	net.lock().peer(0).push_blocks(25, false);
+	net.lock().sync();
+
+	for (i, peer) in net.lock().peers().iter().enumerate() {
+		assert_eq!(peer.client().info().unwrap().chain.best_number, 26,
+				   "Peer #{} failed to sync", i);
+
+		let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
+		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
+
+		assert_eq!(set.current(), (1, voters.as_slice()));
+		assert_eq!(set.pending_changes().len(), 0);
+	}
+
+	// it will only finalize if the forced transition happens.
+	run_to_completion(25, net, peers_a);
 }
