@@ -238,6 +238,10 @@ impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubs
 				// TODO: ideally we would delay the first identification to when we open the custom
 				//	protocol, so that we only report id info to the service about the nodes we
 				//	care about (https://github.com/libp2p/rust-libp2p/issues/876)
+				if info.listen_addrs.is_empty() {
+					warn!(target: "sub-libp2p", "Received identify response with empty list of \
+						addresses");
+				}
 				self.custom_protocols.add_discovered_addrs(
 					&peer_id,
 					info.listen_addrs.iter().map(|addr| (addr.clone(), true))
