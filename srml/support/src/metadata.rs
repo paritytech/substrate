@@ -59,10 +59,10 @@ macro_rules! __runtime_modules_to_metadata {
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
-				prefix: __runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
-				storage: __runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
-				calls: __runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
-				event: __runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
+				prefix: $crate::__runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
+				storage: $crate::__runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
+				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
+				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
 			};
 			$( $rest )*
 		)
