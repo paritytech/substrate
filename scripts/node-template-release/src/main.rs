@@ -21,6 +21,8 @@ use flate2::{write::GzEncoder, Compression};
 
 const SUBSTRATE_GIT_URL: &str = "https://github.com/paritytech/substrate.git";
 
+type CargoToml = HashMap<String, toml::Value>;
+
 #[derive(StructOpt)]
 struct Options {
 	/// The path to the `node-template` source.
@@ -74,52 +76,59 @@ fn get_git_commit_id(path: &Path) -> String {
 }
 
 /// Parse the given `Cargo.toml` into a `HashMap`
-fn parse_cargo_toml(file: &Path) -> HashMap<String, toml::Value> {
+fn parse_cargo_toml(file: &Path) -> CargoToml {
 	let mut content = String::new();
 	File::open(file).expect("Cargo.toml exists").read_to_string(&mut content).expect("Reads file");
 	toml::from_str(&content).expect("Cargo.toml is a valid toml file")
 }
 
 /// Replaces all substrate path dependencies with a git dependency.
-fn replace_path_dependencies_with_git(
-	cargo_toml_path: &Path,
-	commit_id: &str,
-	mut cargo_toml: HashMap<String, toml::Value>
-) -> HashMap<String, toml::Value> {
+fn replace_path_dependencies_with_git(cargo_toml_path: &Path, commit_id: &str, cargo_toml: &mut CargoToml) {
 	let mut cargo_toml_path = cargo_toml_path.to_path_buf();
 	// remove `Cargo.toml`
 	cargo_toml_path.pop();
 
-	if let Some(mut dependencies) =
-		cargo_toml.remove("dependencies").and_then(|v| v.try_into::<toml::value::Table>().ok()) {
+	let mut dependencies: toml::value::Table = match cargo_toml
+		.remove("dependencies")
+		.and_then(|v| v.try_into().ok()) {
+		Some(deps) => deps,
+		None => return,
+	};
 
-		let deps_rewritten = dependencies
-			.iter()
-			.filter_map(|(k, v)| v.clone().try_into::<toml::value::Table>().ok().map(move |v| (k, v)))
-			.filter(|t| t.1.contains_key("path"))
-			.filter(|t| {
-				// if the path does not exists, we need to add this as git dependency
-				t.1.get("path").unwrap().as_str().map(|path| !cargo_toml_path.join(path).exists()).unwrap_or(false)
-			})
-			.map(|(k, mut v)| {
-				// remove `path` and add `git` and `rev`
-				v.remove("path");
-				v.insert("git".to_string(), SUBSTRATE_GIT_URL.into());
-				v.insert("rev".to_string(), commit_id.into());
+	let deps_rewritten = dependencies
+		.iter()
+		.filter_map(|(k, v)| v.clone().try_into::<toml::value::Table>().ok().map(move |v| (k, v)))
+		.filter(|t| t.1.contains_key("path"))
+		.filter(|t| {
+			// if the path does not exists, we need to add this as git dependency
+			t.1.get("path").unwrap().as_str().map(|path| !cargo_toml_path.join(path).exists()).unwrap_or(false)
+		})
+		.map(|(k, mut v)| {
+			// remove `path` and add `git` and `rev`
+			v.remove("path");
+			v.insert("git".into(), SUBSTRATE_GIT_URL.into());
+			v.insert("rev".into(), commit_id.into());
 
-				(k.clone(), v.into())
-			}).collect::<HashMap<_, _>>();
+			(k.clone(), v.into())
+		}).collect::<HashMap<_, _>>();
 
-		dependencies.extend(deps_rewritten.into_iter());
+	dependencies.extend(deps_rewritten.into_iter());
 
-		cargo_toml.insert("dependencies".to_string(), dependencies.into());
-		cargo_toml
-	} else {
-		cargo_toml
-	}
+	cargo_toml.insert("dependencies".into(), dependencies.into());
 }
 
-fn write_cargo_toml(path: &Path, cargo_toml: HashMap<String, toml::Value>) {
+/// Add `profile.release` = `panic = unwind` to the given `Cargo.toml`
+fn cargo_toml_add_profile_release(cargo_toml: &mut CargoToml) {
+	let mut panic_unwind = toml::value::Table::new();
+	panic_unwind.insert("panic".into(), "unwind".into());
+
+	let mut profile = toml::value::Table::new();
+	profile.insert("release".into(), panic_unwind.into());
+
+	cargo_toml.insert("profile".into(), profile.into());
+}
+
+fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
 	let content = toml::to_string_pretty(&cargo_toml).expect("Creates `Cargo.toml`");
 	let mut file = File::create(path).expect(&format!("Creates `{}`.", path.display()));
 	write!(file, "{}", content).expect("Writes `Cargo.toml`");
@@ -153,17 +162,6 @@ fn main() {
 
 	let build_dir = tempfile::tempdir().expect("Creates temp build dir");
 
-	copy_node_template(&options.node_template, build_dir.path());
-	let cargo_tomls = find_cargo_tomls(build_dir.path().to_owned());
-
-	let commit_id = get_git_commit_id(&options.node_template);
-
-	cargo_tomls.iter().for_each(|t| {
-		let cargo_toml = parse_cargo_toml(&t);
-		let cargo_toml = replace_path_dependencies_with_git(&t, &commit_id, cargo_toml);
-		write_cargo_toml(&t, cargo_toml);
-	});
-
 	let node_template_folder = options
 		.node_template
 		.canonicalize()
@@ -171,7 +169,26 @@ fn main() {
 		.file_name()
 		.expect("Node template folder is last element of path")
 		.to_owned();
+
+	// The path to the node-template in the build dir.
 	let node_template_path = build_dir.path().join(node_template_folder);
+
+	copy_node_template(&options.node_template, build_dir.path());
+	let cargo_tomls = find_cargo_tomls(build_dir.path().to_owned());
+
+	let commit_id = get_git_commit_id(&options.node_template);
+
+	cargo_tomls.iter().for_each(|t| {
+		let mut cargo_toml = parse_cargo_toml(&t);
+		replace_path_dependencies_with_git(&t, &commit_id, &mut cargo_toml);
+
+		// If this is the top-level `Cargo.toml`, add `profile.release`
+		if &node_template_path.join("Cargo.toml") == t {
+			cargo_toml_add_profile_release(&mut cargo_toml);
+		}
+
+		write_cargo_toml(&t, cargo_toml);
+	});
 
 	build_and_test(&node_template_path, &cargo_tomls);
 

@@ -36,7 +36,3 @@ node-executor = { path = "../node/executor" }
 
 [build-dependencies]
 vergen = "3"
-
-[profile.release]
-# Substrate runtime requires unwinding.
-panic = "unwind"
