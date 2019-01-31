@@ -135,7 +135,7 @@ where
 		CustomProtosHandler {
 			protocols,
 			// We keep the connection alive for at least 5 seconds, waiting for what happens.
-			keep_alive: KeepAlive::Until(Instant::now() + Duration::from_secs(30)),
+			keep_alive: KeepAlive::Until(Instant::now() + Duration::from_secs(5)),
 			state: State::Disabled,
 			substreams: SmallVec::new(),
 			events_queue: SmallVec::new(),
