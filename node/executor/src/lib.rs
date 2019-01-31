@@ -72,7 +72,11 @@ mod tests {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
-				let signature = pair.sign(&payload.using_encoded(runtime_io::blake2_256)).into();
+				let signature = payload.using_encoded(|b| if b.len() > 256 {
+					pair.sign(&runtime_io::blake2_256(b))
+				} else {
+					pair.sign(b)
+				}).into();
 				UncheckedExtrinsic {
 					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
 					function: payload.1,
@@ -370,7 +374,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("0ea974bc1e6ae2ebf4076c3eb8210db80591b9460796fd605783629a630e6e21").into(),
+			hex!("45b6655508fb524467b5c24184a7509b9ae07db4f95e16052ed425af182f39a8").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
