@@ -28,7 +28,6 @@ use tokio::timer::Interval;
 use primitives::blake2_256;
 use service::{
 	ServiceFactory,
-	ExecutionStrategy,
 	Configuration,
 	FactoryFullConfiguration,
 	FactoryChainSpec,

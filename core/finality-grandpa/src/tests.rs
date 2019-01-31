@@ -298,6 +298,27 @@ impl Core<Block> for RuntimeApi {
 	) -> Result<NativeOrEncoded<()>> {
 		unimplemented!("Not required for testing!")
 	}
+
+	fn version_with_context(&self, _: &BlockId<Block>, _: ExecutionContext) -> Result<RuntimeVersion> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn authorities_with_context(&self, _: &BlockId<Block>, _: ExecutionContext) -> Result<Vec<Ed25519AuthorityId>> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn execute_block_with_context(&self, _: &BlockId<Block>, _: Block, _: ExecutionContext) -> Result<()> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn initialise_block_with_context(
+		&self,
+		_: &BlockId<Block>,
+		_: &<Block as BlockT>::Header,
+		_: ExecutionContext,
+	) -> Result<()> {
+		unimplemented!("Not required for testing!")
+	}
 }
 
 impl ApiExt<Block> for RuntimeApi {
@@ -341,6 +362,24 @@ impl GrandpaApi<Block> for RuntimeApi {
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
 		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
+	}
+
+	fn grandpa_authorities_with_context(
+		&self,
+		at: &BlockId<Block>,
+		_: ExecutionContext
+	) -> Result<Vec<(Ed25519AuthorityId, u64)>> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn grandpa_pending_change_with_context(
+		&self,
+		at: &BlockId<Block>, 
+		_: &DigestFor<Block>,
+		_: ExecutionContext)
+		-> Result<Option<ScheduledChange<NumberFor<Block>>>>
+	{
+		unimplemented!("Not required for testing!")
 	}
 }
 

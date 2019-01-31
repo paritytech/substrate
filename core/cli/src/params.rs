@@ -38,7 +38,7 @@ arg_enum! {
 		Native,
 		Wasm,
 		Both,
-		Native-Else-Wasm,
+		NativeElseWasm,
 	}
 }
 
@@ -177,7 +177,7 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL")]
 	pub telemetry_url: Option<String>,
 
-	/// The means of execution used when calling into the runtime. Can be either wasm, native, native-else-wasm or both.
+	/// The means of execution used when calling into the runtime. Can be either wasm, native, nativeelsewasm or both.
 	#[structopt(
 		long = "syncing-execution",
 		value_name = "STRATEGY",
@@ -189,7 +189,7 @@ pub struct RunCmd {
 	)]
 	pub syncing_execution: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime. Can be either wasm, native, native-else-wasm or both.
+	/// The means of execution used when calling into the runtime. Can be either wasm, native, nativeelsewasm or both.
 	#[structopt(
 		long = "importing-execution",
 		value_name = "STRATEGY",
@@ -201,7 +201,7 @@ pub struct RunCmd {
 	)]
 	pub importing_execution: ExecutionStrategy,
 
-	/// The means of execution used when calling into the runtime. Can be either wasm, native, native-else-wasm or both.
+	/// The means of execution used when calling into the runtime. Can be either wasm, native, nativeelsewasm or both.
 	#[structopt(
 		long = "block-construction-execution",
 		value_name = "STRATEGY",
