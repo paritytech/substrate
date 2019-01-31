@@ -71,7 +71,7 @@ where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<B>>,
 		prepare_environment_block: PB,
-		execution_strategies: ExecutionStrategies,
+		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
@@ -202,11 +202,10 @@ where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		prepare_environment_block: PB,
-		execution_strategies: ExecutionStrategies,
+		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 
-		let manager = execution_strategies.block_construction.get_manager();
 		let state = self.backend.state_at(*at)?;
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
@@ -219,7 +218,7 @@ where
 				&self.executor,
 				"Core_initialise_block",
 				&header.encode(),
-				manager.clone(),
+				execution_manager.clone(),
 				false,
 				None,
 			)?;
@@ -233,7 +232,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			manager,
+			execution_manager,
 			false,
 			native_call,
 		).map(|(result, _, _)| result)?;

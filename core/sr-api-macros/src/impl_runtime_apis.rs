@@ -381,7 +381,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 						&mut *self.changes.borrow_mut(),
 						&mut *self.initialised_block.borrow_mut(),
 						Some(native_call),
-						Some(context)
+						context
 					).and_then(|r|
 						match r {
 							#crate_::runtime_api::NativeOrEncoded::Native(n) => {
@@ -439,21 +439,17 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 /// Generates the implementations of the apis for the runtime.
 fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut impls_prepared = Vec::new();
-	// let ts_bef = quote!( #( #impls )* );
-	// println!("(before )API IMPL FOR RUNTIME\n{}\n\n", ts_bef);
-	
+
 	// We put `runtime` before each trait to get the trait that is intended for the runtime and
 	// we put the `RuntimeBlock` as first argument for the trait generics.
 	for impl_ in impls.iter() {
 		let mut impl_ = impl_.clone();
 		let trait_ = extract_impl_trait(&impl_)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
-		println!("\n\ntraits ---------------> \n{}\n\n", quote!( #trait_ ));
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impls_prepared.push(impl_);
 	}
 	let ts = quote!( #( #impls_prepared )* );
-	println!("API IMPL FOR RUNTIME\n{}\n\n", ts);
 	Ok(ts)
 }
 
@@ -579,13 +575,13 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 }
 
 fn generate_impl_with_context(impls: &mut [ItemImpl]) {
-	let pat = Pat::Ident(PatIdent { by_ref: None, mutability: None, ident: Ident::new("context", Span::call_site()), subpat: None });
-	let mut punctuated = syn::punctuated::Punctuated::new();
-	let punctuated_item = PathSegment { ident: Ident::new("ExecutionContext", Span::call_site()), arguments: PathArguments::None };
-	punctuated.push(punctuated_item); 
-	let ty = syn::Type::Path(syn::TypePath { qself: None, path: Path { leading_colon: None, segments: punctuated } });
-	let context_arg = Captured(ArgCaptured { pat, colon_token: syn::token::Colon(Span::call_site()), ty });
-		
+	// let pat = Pat::Ident(PatIdent { by_ref: None, mutability: None, ident: Ident::new("context", Span::call_site()), subpat: None });
+	// let mut punctuated = syn::punctuated::Punctuated::new();
+	// let punctuated_item = PathSegment { ident: Ident::new("ExecutionContext", Span::call_site()), arguments: PathArguments::None };
+	// punctuated.push(punctuated_item); 
+	// let ty = syn::Type::Path(syn::TypePath { qself: None, path: Path { leading_colon: None, segments: punctuated } });
+	// let context_arg = Captured(ArgCaptured { pat, colon_token: syn::token::Colon(Span::call_site()), ty });
+	let context_arg: syn::FnArg = parse_quote!( context: ExecutionContext );
 	for impl_ in impls {
 		let mut ctx_methods = vec![];
 		for item in &impl_.items {

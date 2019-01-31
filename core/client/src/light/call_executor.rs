@@ -111,7 +111,7 @@ where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		_prepare_environment_block: PB,
-		_execution_strategies: ExecutionStrategies,
+		_execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty

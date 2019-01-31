@@ -182,7 +182,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	for fn_ in fns {
 		let params = extract_parameter_names_types_and_borrows(&fn_.decl)?;
 		let trait_fn_name = &fn_.ident;
-		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
+		let fn_name = generate_native_call_generator_fn_name(&fn_.ident.to_string());
 		let output = return_type_replace_block_with_node_block(fn_.decl.output.clone());
 		let output_ty = return_type_extract_type(&output);
 		let output = quote!( ::std::result::Result<#output_ty, &'static str> );
@@ -754,9 +754,6 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let runtime_decls = generate_runtime_decls(&api_decls);
 	generate_decl_with_context(&mut api_decls);
 	let client_side_decls = generate_client_side_decls(&api_decls);
-
-	println!("runtime decls\n{}\n\n", quote!( #runtime_decls ));
-	println!("client decls\n{}\n\n", quote!( #client_side_decls ));
 
 	quote!(
 		#hidden_includes

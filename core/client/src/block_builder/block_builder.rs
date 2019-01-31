@@ -84,7 +84,7 @@ where
 		let extrinsics = &mut self.extrinsics;
 
 		self.api.map_api_result(|api| {
-			match api.apply_extrinsic(block_id, xt.clone())? {
+			match api.apply_extrinsic_with_context(block_id, xt.clone(), ExecutionContext::BlockConstruction)? {
 				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
 					extrinsics.push(xt);
 					Ok(())
@@ -98,7 +98,7 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.api.finalise_block(&self.block_id)?;
+		self.header = self.api.finalise_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),

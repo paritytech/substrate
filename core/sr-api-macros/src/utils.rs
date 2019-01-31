@@ -144,12 +144,6 @@ pub fn extract_parameter_names_types_and_borrows(fn_decl: &FnDecl)
 }
 
 /// Generates the name for the native call generator function.
-pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
-	let with_context_str = "_with_context";
-	let mut name = fn_name.to_string();
-	if name.ends_with(with_context_str) {
-		name = name.get(..(name.len()-with_context_str.len())).unwrap().to_string();	
-	}
-	println!("fn_name --------------------------------------> {}", name);
+pub fn generate_native_call_generator_fn_name(name: &String) -> Ident {
 	Ident::new(&format!("{}_native_call_generator", name), Span::call_site())
 }
