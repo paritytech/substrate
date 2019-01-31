@@ -56,7 +56,7 @@ pub use rstd::marker::PhantomData;
 pub use srml_metadata::{
 	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
 	StorageFunctionType, StorageFunctionModifier,
-	DefaultByte, DefaultByteGetter, GetMetadata, MetadataGetter
+	DefaultByte, DefaultByteGetter
 };
 
 /// Abstraction around storage.

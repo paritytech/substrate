@@ -27,7 +27,7 @@ extern crate runtime_primitives;
 
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
-use substrate_metadata_derive:EncodeMetadata;
+use substrate_metadata_derive::EncodeMetadata;
 #[cfg(feature = "std")]
 use srml_support::{Serialize, Deserialize};
 use substrate_primitives::u32_trait::{_2, _4};

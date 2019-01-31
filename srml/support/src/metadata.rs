@@ -83,7 +83,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		system,
 		$skip_module: ident,
 		$skip_runtime: ident,
-		with Call 
+		with Call
 		$(with $kws:ident)*
 	) => {
 		None
@@ -92,7 +92,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Call 
+		with Call
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
@@ -105,7 +105,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
  		__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
@@ -127,7 +127,7 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Event 
+		with Event
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
@@ -142,7 +142,7 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
 		__runtime_modules_to_metadata_calls_event!( $mod, $module, $runtime, $(with $kws)* );
@@ -163,7 +163,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Storage 
+		with Storage
 		$(with $kws:ident)*
 	) => {
 		$crate::metadata::DecodeDifferent::Encode(
@@ -176,7 +176,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
 		__runtime_modules_to_metadata_calls_storagename!( $mod, $module, $runtime, $(with $kws)* );
@@ -199,7 +199,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Storage 
+		with Storage
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
@@ -212,7 +212,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
 		__runtime_modules_to_metadata_calls_storage!( $mod, $module, $runtime, $(with $kws)* );

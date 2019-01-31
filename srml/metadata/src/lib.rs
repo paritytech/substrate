@@ -146,7 +146,6 @@ pub struct FunctionMetadata {
 pub struct FunctionArgumentMetadata {
 	pub name: DecodeDifferentStr,
 	pub ty: DecodeDifferentStr,
-	// pub type_metadata: DecodeDifferentMetadataGetter,
 }
 
 /// Newtype wrapper for support encoding functions (actual the result of the function).
@@ -200,7 +199,6 @@ pub struct EventMetadata {
 	pub name: DecodeDifferentStr,
 	pub arguments: DecodeDifferentArray<&'static str, StringBuf>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
-	// pub type_metadata: DecodeDifferentMetadataGetter,
 }
 
 /// All the metadata about a storage.
@@ -219,7 +217,6 @@ pub struct StorageFunctionMetadata {
 	pub ty: StorageFunctionType,
 	pub default: ByteGetter,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
-	pub type_metadata: DecodeDifferentMetadataGetter,
 }
 
 /// A technical trait to store lazy initiated vec value as static dyn pointer.
@@ -227,8 +224,8 @@ pub trait DefaultByte {
 	fn default_byte(&self) -> Vec<u8>;
 }
 
-pub trait GetMetadata {
-	fn type_metadata(&self) -> substrate_metadata::MetadataRegistry;
+pub trait TypeMetadataRegistry {
+	fn type_registry(&self) -> substrate_metadata::MetadataRegistry;
 }
 
 /// Wrapper over dyn pointer for accessing a cached once byet value.
@@ -236,12 +233,12 @@ pub trait GetMetadata {
 pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 
 #[derive(Clone)]
-pub struct MetadataGetter(pub &'static dyn GetMetadata);
+pub struct TypeMetadataRegistryGetter(pub &'static dyn TypeMetadataRegistry);
 
 /// Decode different for static lazy initiated byte value.
 pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
 
-pub type DecodeDifferentMetadataGetter = DecodeDifferent<MetadataGetter, substrate_metadata::MetadataRegistry>;
+pub type DecodeDifferentTypeRegistryGetter = DecodeDifferent<TypeMetadataRegistryGetter, substrate_metadata::MetadataRegistry>;
 
 impl Encode for DefaultByteGetter {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -276,36 +273,36 @@ impl std::fmt::Debug for DefaultByteGetter {
 	}
 }
 
-impl Encode for MetadataGetter {
+impl Encode for TypeMetadataRegistryGetter {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
-		self.0.type_metadata().encode_to(dest)
+		self.0.type_registry().encode_to(dest)
 	}
 }
 
-impl PartialEq<MetadataGetter> for MetadataGetter {
-	fn eq(&self, other: &MetadataGetter) -> bool {
-		let left = self.0.type_metadata();
-		let right = other.0.type_metadata();
+impl PartialEq<TypeMetadataRegistryGetter> for TypeMetadataRegistryGetter {
+	fn eq(&self, other: &TypeMetadataRegistryGetter) -> bool {
+		let left = self.0.type_registry();
+		let right = other.0.type_registry();
 		left.eq(&right)
 	}
 }
 
-impl Eq for MetadataGetter { }
+impl Eq for TypeMetadataRegistryGetter { }
 
 #[cfg(feature = "std")]
-impl serde::Serialize for MetadataGetter {
+impl serde::Serialize for TypeMetadataRegistryGetter {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where
 				S: serde::Serializer,
 	{
-		self.0.type_metadata().serialize(serializer)
+		self.0.type_registry().serialize(serializer)
 	}
 }
 
 #[cfg(feature = "std")]
-impl std::fmt::Debug for MetadataGetter {
+impl std::fmt::Debug for TypeMetadataRegistryGetter {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.0.type_metadata().fmt(f)
+		self.0.type_registry().fmt(f)
 	}
 }
 
@@ -383,6 +380,7 @@ impl Decode for RuntimeMetadataDeprecated {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV1 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
+	pub type_registry: DecodeDifferentTypeRegistryGetter,
 }
 
 /// All metadata about an runtime module.

@@ -661,10 +661,8 @@ fn store_functions_to_metadata (
 			}
 		}
 		let str_name = name.to_string();
-		let default_byte_struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
-		let default_byte_cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
-		let type_metadata_struct_name = proc_macro2::Ident::new(&("__TypeMetadataStruct".to_string() + &str_name), name.span());
-		let type_metadata_cache_name = proc_macro2::Ident::new(&("__CACHE_TYPE_METADATA_STRUCT_".to_string() + &str_name), name.span());
+		let struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
+		let cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
 		let item = quote! {
 			#scrate::storage::generator::StorageFunctionMetadata {
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
@@ -672,35 +670,30 @@ fn store_functions_to_metadata (
 				ty: #stype,
 				default: #scrate::storage::generator::DecodeDifferent::Encode(
 					#scrate::storage::generator::DefaultByteGetter(
-						&#default_byte_struct_name::<#traitinstance>(#scrate::rstd::marker::PhantomData)
+						&#struct_name::<#traitinstance>(#scrate::rstd::marker::PhantomData)
 					)
 				),
 				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
-				type_metadata: #scrate::storage::generator::DecodeDifferent::Encode(
-					#scrate::storage::generator::MetadataGetter(
-						&#type_metadata_struct_name::<#traitinstance>(#scrate::rstd::marker::PhantomData)
-					)
-				),
 			},
 		};
 		items.extend(item);
 		let def_get = quote! {
-			pub struct #default_byte_struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
+			pub struct #struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
-			static #default_byte_cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
+			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
-			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #default_byte_struct_name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
-					#default_byte_cache_name.get_or_init(|| {
+					#cache_name.get_or_init(|| {
 						let def_val: #gettype = #default;
 						<#gettype as Encode>::encode(&def_val)
 					}).clone()
 				}
 			}
 			#[cfg(not(feature = "std"))]
-			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #default_byte_struct_name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					let def_val: #gettype = #default;
@@ -709,28 +702,6 @@ fn store_functions_to_metadata (
 			}
 		};
 		default_getter_struct_def.extend(def_get);
-
-		let type_metadata_get = quote! {
-			pub struct #type_metadata_struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
-			#[cfg(feature = "std")]
-			#[allow(non_upper_case_globals)]
-			static #type_metadata_cache_name: #scrate::once_cell::sync::OnceCell<#scrate::substrate_metadata::MetadataRegistry> = #scrate::once_cell::sync::OnceCell::INIT;
-			#[cfg(feature = "std")]
-			impl<#traitinstance: #traittype> #scrate::storage::generator::GetMetadata for #type_metadata_struct_name<#traitinstance> {
-				fn type_metadata(&self) -> #scrate::substrate_metadata::MetadataRegistry {
-					#type_metadata_cache_name.get_or_init(|| {
-						<#typ as #scrate::substrate_metadata::EncodeMetadata>::type_metadata()
-					}).clone()
-				}
-			}
-			#[cfg(not(feature = "std"))]
-			impl<#traitinstance: #traittype> #scrate::storage::generator::GetMetadata for #type_metadata_struct_name<#traitinstance> {
-				fn type_metadata(&self) -> #scrate::substrate_metadata::MetadataRegistry {
-					<#typ as #scrate::substrate_metadata::EncodeMetadata>::type_metadata()
-				}
-			}
-		};
-		default_getter_struct_def.extend(type_metadata_get);
 	}
 	(default_getter_struct_def, quote!{
 		{

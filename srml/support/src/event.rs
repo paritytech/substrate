@@ -257,7 +257,6 @@ macro_rules! __events_to_metadata {
 				documentation: $crate::event::DecodeDifferent::Encode(&[
 					$( $doc_attr ),*
 				]),
-				// type_metadata: <Self as $crate::substrate_metadata::EncodeMetadata>::metadata(),
 			};
 			$( $rest )*
 		)

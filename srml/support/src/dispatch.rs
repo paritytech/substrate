@@ -948,7 +948,6 @@ macro_rules! __function_to_metadata {
 								$(#[$codec_attr])* $param_name: $param
 							)
 						),
-						// type_metadata: <$param as $crate::substrate_metadata::EncodeMetadata>::metadata(),
 					}
 				),*
 			]),
