@@ -35,6 +35,8 @@ use codec::Encode;
 
 /// A worker that should be invoked at every new slot.
 pub trait SlotWorker<B: Block> {
+	type OnSlot: IntoFuture<Item=(), Error=consensus_common::Error>;
+
 	/// Called when the proposer starts.
 	fn on_start(
 		&self,
@@ -47,7 +49,7 @@ pub trait SlotWorker<B: Block> {
 		&self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-	) -> Box<Future<Item=(), Error=consensus_common::Error>>;
+	) -> Self::OnSlot;
 }
 
 /// Slot compatible inherent data.

@@ -52,8 +52,9 @@ use srml_aura::{
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
 
-use aura_slots::{SlotDuration, CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
+use aura_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 
+pub use aura_slots::SlotDuration;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
 
@@ -153,7 +154,8 @@ pub fn start_aura_thread<B, C, E, I, SO, Error, OnExit>(
 	B: Block + 'static,
 	C: Authorities<B> + ChainHead<B> + Send + Sync + 'static,
 	E: Environment<B, Error=Error> + Send + Sync + 'static,
-	E::Proposer: Proposer<B, Error=Error> + 'static,
+	E::Proposer: Proposer<B, Error=Error> + Send + 'static,
+	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error> + 'static,
 	SO: SyncOracle + Send + Clone + 'static,
@@ -189,8 +191,9 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	B: Block,
 	C: Authorities<B> + ChainHead<B>,
 	E: Environment<B, Error=Error>,
-	E::Proposer: Proposer<B, Error=Error> + 'static,
-	I: BlockImport<B> + 'static,
+	E::Proposer: Proposer<B, Error=Error>,
+	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error>,
 	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
@@ -221,12 +224,15 @@ struct AuraWorker<C, E, I> {
 impl<B: Block, C, E, I, Error> SlotWorker<B> for AuraWorker<C, E, I> where
 	C: Authorities<B>,
 	E: Environment<B, Error=Error>,
-	E::Proposer: Proposer<B, Error=Error> + 'static,
-	I: BlockImport<B> + 'static,
+	E::Proposer: Proposer<B, Error=Error>,
+	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
+	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
+	type OnSlot = Box<Future<Item=(), Error=consensus_common::Error> + Send>;
+
 	fn on_start(
 		&self,
 		inherent_data_providers: &InherentDataProviders,
@@ -239,7 +245,7 @@ impl<B: Block, C, E, I, Error> SlotWorker<B> for AuraWorker<C, E, I> where
 		&self,
 		chain_head: B::Header,
 		slot_info: SlotInfo,
-	) -> Box<Future<Item=(), Error=consensus_common::Error>> {
+	) -> Self::OnSlot {
 		let pair = self.local_key.clone();
 		let public_key = self.local_key.public();
 		let client = self.client.clone();
