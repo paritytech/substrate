@@ -207,8 +207,8 @@ decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		// Pending change: (signalled at, scheduled change).
 		PendingChange get(pending_change): Option<StoredPendingChange<T::BlockNumber, T::SessionKey>>;
-		// last block number where we forced a scheduled change.
-		LastForced get(last_forced): Option<T::BlockNumber>;
+		// next block number where we can force a change.
+		NextForced get(next_forced): Option<T::BlockNumber>;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(T::SessionKey, u64)>;
@@ -292,8 +292,21 @@ impl<T: Trait> Module<T> {
 		in_blocks: T::BlockNumber,
 		forced: bool,
 	) -> Result {
+		use primitives::traits::As;
+
 		if Self::pending_change().is_none() {
 			let scheduled_at = system::ChainContext::<T>::default().current_height();
+
+			if forced {
+				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
+					return Err("Cannot signal forced change so soon after last.");
+				}
+
+				// only allow the next forced change when twice the window has passed since
+				// this one.
+				<NextForced<T>>::put(scheduled_at + in_blocks * T::BlockNumber::sa(2));
+			}
+
 			<PendingChange<T>>::put(StoredPendingChange {
 				delay: in_blocks,
 				scheduled_at,
@@ -379,15 +392,9 @@ impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthor
 	>,
 {
 	fn on_stalled(further_wait: T::BlockNumber) {
-		use primitives::traits::As;
-
-		let now = system::ChainContext::<T>::default().current_height();
-
-		// only allow forced changes when twice the window has passed since the last
-		// one.
-		if <Module<T>>::last_forced().map_or(false, |l| l + further_wait * T::BlockNumber::sa(2) <= now) {
-			return
-		}
+		// when we record old authority sets, we can use `finality_tracker::median`
+		// to figure out _who_ failed. until then, we can't meaningfully guard
+		// against `next == last` the way that normal session changes do.
 
 		let next_authorities = <session::Module<T>>::validators()
 			.into_iter()
@@ -396,10 +403,6 @@ impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthor
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 
 		// schedule a change for `further_wait` blocks.
-		let last_authorities = <Module<T>>::grandpa_authorities();
-		if next_authorities != last_authorities {
-			let _ = <Module<T>>::schedule_change(next_authorities, further_wait, true);
-			<Module<T> as Store>::LastForced::put(now);
-		}
+		let _ = <Module<T>>::schedule_change(next_authorities, further_wait, true);
 	}
 }

@@ -123,3 +123,74 @@ fn new_decodes_from_old() {
 	assert_eq!(new.delay, old.delay);
 	assert_eq!(new.next_authorities, old.next_authorities);
 }
+
+#[test]
+fn dispatch_forced_change() {
+	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
+		System::initialise(&1, &Default::default(), &Default::default());
+		Grandpa::schedule_change(
+			vec![(4, 1), (5, 1), (6, 1)],
+			5,
+			true,
+		).unwrap();
+
+		assert!(Grandpa::pending_change().is_some());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, true).is_err());
+
+		Grandpa::on_finalise(1);
+		let mut header = System::finalise();
+
+		for i in 2..7 {
+			System::initialise(&i, &header.hash(), &Default::default());
+			assert!(Grandpa::pending_change().unwrap().forced);
+			assert_eq!(Grandpa::next_forced(), Some(11));
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, true).is_err());
+
+			Grandpa::on_finalise(i);
+			header = System::finalise();
+		}
+
+		// change has been applied at the end of block 6.
+		// add a normal change.
+		{
+			System::initialise(&7, &header.hash(), &Default::default());
+			assert!(Grandpa::pending_change().is_none());
+			assert_eq!(Grandpa::grandpa_authorities(), vec![(4, 1), (5, 1), (6, 1)]);
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_ok());
+			Grandpa::on_finalise(7);
+			header = System::finalise();
+		}
+
+		// run the normal change.
+		{
+			System::initialise(&8, &header.hash(), &Default::default());
+			assert!(Grandpa::pending_change().is_some());
+			assert_eq!(Grandpa::grandpa_authorities(), vec![(4, 1), (5, 1), (6, 1)]);
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
+			Grandpa::on_finalise(8);
+			header = System::finalise();
+		}
+
+		// normal change applied. but we can't apply a new forced change for some
+		// time.
+		for i in 9..11 {
+			System::initialise(&i, &header.hash(), &Default::default());
+			assert!(Grandpa::pending_change().is_none());
+			assert_eq!(Grandpa::grandpa_authorities(), vec![(5, 1)]);
+			assert_eq!(Grandpa::next_forced(), Some(11));
+			assert!(Grandpa::schedule_change(vec![(5, 1), (6, 1)], 5, true).is_err());
+			Grandpa::on_finalise(i);
+			header = System::finalise();
+		}
+
+		{
+			System::initialise(&11, &header.hash(), &Default::default());
+			assert!(Grandpa::pending_change().is_none());
+			assert!(Grandpa::schedule_change(vec![(5, 1), (6, 1), (7, 1)], 5, true).is_ok());
+			assert_eq!(Grandpa::next_forced(), Some(21));
+			Grandpa::on_finalise(11);
+			header = System::finalise();
+		}
+	});
+}
