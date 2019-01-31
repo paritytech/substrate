@@ -88,7 +88,7 @@ pub(crate) struct Status<H, N> {
 }
 
 /// A set of authorities.
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
 	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	set_id: u64,
@@ -276,7 +276,9 @@ where
 		-> Result<bool, E>
 		where F: FnMut(N) -> Result<Option<H>, E>
 	{
-		for change in self.pending_changes.iter() {
+		for change in self.pending_changes.iter()
+			.filter(|c| c.delay_kind == DelayKind::Finalized)
+		{
 			if change.effective_number() > just_finalized { break };
 
 			if change.effective_number() == just_finalized {
@@ -590,5 +592,87 @@ mod tests {
 		let encoded = new_change.encode();
 		let decoded: PendingChange<Vec<u8>, u32> = Decode::decode(&mut &encoded[..]).unwrap();
 		assert_eq!(new_change, decoded);
+	}
+
+	#[test]
+	fn forced_changes() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_changes: Vec::new(),
+		};
+
+		let set_a = vec![([1; 32].into(), 5)];
+		let set_b = vec![([1; 32].into(), 5)];
+
+		let change_a = PendingChange {
+			next_authorities: set_a.clone(),
+			delay: 10,
+			canon_height: 5,
+			canon_hash: "hash_a",
+			delay_kind: DelayKind::Best,
+		};
+
+		let change_b = PendingChange {
+			next_authorities: set_b.clone(),
+			delay: 10,
+			canon_height: 5,
+			canon_hash: "hash_b",
+			delay_kind: DelayKind::Best,
+		};
+
+		authorities.add_pending_change(change_a, |_| -> Result<(), ()> { Ok(()) }).unwrap();
+		authorities.add_pending_change(change_b, |_| -> Result<(), ()> { Ok(()) }).unwrap();
+
+		let canonical = |n| match n {
+			5 => Ok(Some("hash_a")),
+			8 => Ok(Some("hash_a8")),
+			11 => Ok(Some("hash_a11")),
+			15 => Ok(Some("hash_a15")),
+			_ => Err(()),
+		};
+
+		// there's an effective change triggered at block 15 but not a standard one.
+		// so this should do nothing.
+		assert!(!authorities.enacts_standard_change(15, canonical).unwrap());
+
+		// throw a standard change into the mix to prove that it's discarded
+		// for being on the same fork.
+		//
+		// NOTE: when we allow multiple changes per fork
+		// after https://github.com/paritytech/substrate/issues/1497
+		// this should still be rejected based on the "span" rule -- it overlaps
+		// with another change on the same fork.
+		let change_c = PendingChange {
+			next_authorities: set_b.clone(),
+			delay: 3,
+			canon_height: 8,
+			canon_hash: "hash_a8",
+			delay_kind: DelayKind::Best,
+		};
+
+		assert!(authorities.add_pending_change(change_c, |other_hash| {
+			if other_hash.starts_with("hash_a") {
+				Err(())
+			} else {
+				Ok(())
+			}
+		}).is_err());
+
+		// too early.
+		assert!(authorities.apply_forced_changes(10, canonical).unwrap().is_none());
+
+		// too late.
+		assert!(authorities.apply_forced_changes(16, canonical).unwrap().is_none());
+
+		// on time -- chooses the right change.
+		assert_eq!(
+			authorities.apply_forced_changes(15, canonical).unwrap().unwrap(),
+			AuthoritySet {
+				current_authorities: set_a,
+				set_id: 1,
+				pending_changes: Vec::new(),
+			}
+		);
 	}
 }
