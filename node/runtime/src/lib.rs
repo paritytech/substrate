@@ -54,6 +54,7 @@ use substrate_primitives::OpaqueMetadata;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
+pub use runtime_primitives::ExecutionContext;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
