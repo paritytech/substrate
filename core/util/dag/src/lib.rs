@@ -14,6 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::fmt;
+
+#[derive(Clone, PartialEq)]
+pub enum Error<E> {
+	Duplicate,
+	Client(E),
+}
+
+impl<E: fmt::Debug> fmt::Debug for Error<E> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			Error::Duplicate => write!(f, "Hash already exists in DAG"),
+			Error::Client(ref err) => fmt::Debug::fmt(err, f),
+		}
+	}
+}
+
+impl<E: fmt::Debug> From<E> for Error<E> {
+	fn from(err: E) -> Error<E> {
+		Error::Client(err)
+	}
+}
+
 #[derive(Debug)]
 pub struct Dag<H, N, V> {
 	roots: Vec<Node<H, N, V>>,
@@ -34,17 +57,22 @@ impl<H, N, V> Dag<H, N, V> where
 		mut number: N,
 		mut data: V,
 		is_descendent_of: &F,
-	) -> Result<(), E>
-		where F: Fn(&H, &H) -> Result<bool, E>,
+	) -> Result<bool, Error<E>>
+		where E: fmt::Debug,
+			  F: Fn(&H, &H) -> Result<bool, E>,
 	{
 		for root in self.roots.iter_mut() {
+			if root.hash == hash {
+				return Err(Error::Duplicate);
+			}
+
 			match root.import(hash, number, data, is_descendent_of)? {
 				Some((h, n, d)) => {
 					hash = h;
 					number = n;
 					data = d;
 				},
-				None => return Ok(()),
+				None => return Ok(false),
 			}
 		}
 
@@ -55,18 +83,21 @@ impl<H, N, V> Dag<H, N, V> where
 			children:  Vec::new(),
 		});
 
-		Ok(())
+		Ok(true)
 	}
 
 	pub fn roots(&self) -> impl Iterator<Item=(&H, &N)> {
 		self.roots.iter().map(|change| (&change.hash, &change.number))
 	}
 
-	pub fn apply(&mut self, hash: &H) {
+	pub fn apply(&mut self, hash: &H) -> Option<V> {
 		if let Some(position) = self.roots.iter().position(|change| change.hash == *hash) {
 			let changes = self.roots.swap_remove(position);
 			self.roots = changes.children;
+			return Some(changes.data);
 		}
+
+		None
 	}
 }
 
@@ -78,15 +109,16 @@ struct Node<H, N, V> {
 	children: Vec<Node<H, N, V>>,
 }
 
-impl<H, N: Ord, V> Node<H, N, V> {
-	fn import<F, E>(
+impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
+	fn import<F, E: fmt::Debug>(
 		&mut self,
 		mut hash: H,
 		mut number: N,
 		mut data: V,
 		is_descendent_of: &F,
-	) -> Result<Option<(H, N, V)>, E>
-		where F: Fn(&H, &H) -> Result<bool, E>,
+	) -> Result<Option<(H, N, V)>, Error<E>>
+		where E: fmt::Debug,
+			  F: Fn(&H, &H) -> Result<bool, E>,
 	{
 		if number <= self.number { return Ok(Some((hash, number, data))); }
 
@@ -100,6 +132,10 @@ impl<H, N: Ord, V> Node<H, N, V> {
 				None => return Ok(None),
 			}
 		}
+
+		if self.hash == hash {
+			return Err(Error::Duplicate);
+		};
 
 		if is_descendent_of(&self.hash, &hash)? {
 			self.children.push(Node {
