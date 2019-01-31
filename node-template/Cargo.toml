@@ -31,7 +31,7 @@ substrate-network = { path = "../core/network" }
 substrate-consensus-aura = { path = "../core/consensus/aura" }
 substrate-client = {  path = "../core/client" }
 substrate-basic-authorship = { path = "../core/basic-authorship" }
-template-node-runtime = { path = "runtime" }
+node-template-runtime = { path = "runtime" }
 node-executor = { path = "../node/executor" }
 
 [build-dependencies]

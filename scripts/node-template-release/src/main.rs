@@ -1,6 +1,9 @@
 use structopt::StructOpt;
 
-use std::{path::{PathBuf, Path}, collections::HashMap, fs::File, io::{Read, Write}};
+use std::{
+	path::{PathBuf, Path}, collections::HashMap, fs::{File, self}, io::{Read, Write},
+	process::Command
+};
 
 use glob;
 
@@ -29,7 +32,7 @@ struct Options {
 }
 
 /// Find all `Cargo.toml` files in the given path.
-fn find_cargo_tomls(mut path: PathBuf) -> Vec<PathBuf> {
+fn find_cargo_tomls(path: PathBuf) -> Vec<PathBuf> {
 	let path = format!("{}/**/*.toml", path.display());
 
 	let glob = glob::glob(&path).expect("Generates globbing pattern");
@@ -37,7 +40,7 @@ fn find_cargo_tomls(mut path: PathBuf) -> Vec<PathBuf> {
 	let mut result = Vec::new();
 	glob.into_iter().for_each(|file| {
 		match file {
-			Ok(file) => result.push(dbg!(file)),
+			Ok(file) => result.push(file),
 			Err(e) => println!("{:?}", e),
 		}
 	});
@@ -79,12 +82,10 @@ fn parse_cargo_toml(file: &Path) -> HashMap<String, toml::Value> {
 
 /// Replaces all substrate path dependencies with a git dependency.
 fn replace_path_dependencies_with_git(
-	node_template_path: &Path,
 	cargo_toml_path: &Path,
 	commit_id: &str,
 	mut cargo_toml: HashMap<String, toml::Value>
 ) -> HashMap<String, toml::Value> {
-	let node_template_path = node_template_path.canonicalize().expect("Is absolute path");
 	let mut cargo_toml_path = cargo_toml_path.to_path_buf();
 	// remove `Cargo.toml`
 	cargo_toml_path.pop();
@@ -124,6 +125,29 @@ fn write_cargo_toml(path: &Path, cargo_toml: HashMap<String, toml::Value>) {
 	write!(file, "{}", content).expect("Writes `Cargo.toml`");
 }
 
+/// Build and test the generated node-template
+fn build_and_test(path: &Path, cargo_tomls: &[PathBuf]) {
+	// Build wasm
+	assert!(Command::new(path.join("build.sh")).current_dir(path).status().expect("Compiles wasm").success());
+
+	// Build node
+	assert!(Command::new("cargo").args(&["build", "--all"]).current_dir(path).status().expect("Compiles node").success());
+
+	// Test node
+	assert!(Command::new("cargo").args(&["test", "--all"]).current_dir(path).status().expect("Tests node").success());
+
+	// Remove all `target` directories
+	for toml in cargo_tomls {
+		let mut target_path = toml.clone();
+		target_path.pop();
+		target_path = target_path.join("target");
+
+		if target_path.exists() {
+			fs::remove_dir_all(&target_path).expect(&format!("Removes `{}`", target_path.display()));
+		}
+	}
+}
+
 fn main() {
 	let options = Options::from_args();
 
@@ -134,14 +158,9 @@ fn main() {
 
 	let commit_id = get_git_commit_id(&options.node_template);
 
-	cargo_tomls.into_iter().for_each(|t| {
+	cargo_tomls.iter().for_each(|t| {
 		let cargo_toml = parse_cargo_toml(&t);
-		let cargo_toml = replace_path_dependencies_with_git(
-			build_dir.path(),
-			&t,
-			&commit_id,
-			cargo_toml
-		);
+		let cargo_toml = replace_path_dependencies_with_git(&t, &commit_id, cargo_toml);
 		write_cargo_toml(&t, cargo_toml);
 	});
 
@@ -152,10 +171,13 @@ fn main() {
 		.file_name()
 		.expect("Node template folder is last element of path")
 		.to_owned();
+	let node_template_path = build_dir.path().join(node_template_folder);
+
+	build_and_test(&node_template_path, &cargo_tomls);
 
 	let output = GzEncoder::new(File::create(&options.output)
 		.expect("Creates output file"), Compression::default());
 	let mut tar = tar::Builder::new(output);
-	tar.append_dir_all("substrate-node-template", build_dir.path().join(node_template_folder))
+	tar.append_dir_all("substrate-node-template", node_template_path)
 		.expect("Writes substrate-node-template archive");
 }
