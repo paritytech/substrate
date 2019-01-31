@@ -19,45 +19,16 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-extern crate tokio;
-
-extern crate substrate_cli as cli;
-extern crate substrate_primitives as primitives;
-extern crate node_runtime;
-extern crate exit_future;
-#[macro_use]
-extern crate hex_literal;
-#[cfg(test)]
-extern crate substrate_service_test as service_test;
-extern crate substrate_transaction_pool as transaction_pool;
-#[macro_use]
-extern crate substrate_network as network;
-extern crate substrate_consensus_aura as consensus;
-extern crate substrate_client as client;
-extern crate substrate_finality_grandpa as grandpa;
-extern crate node_primitives;
-#[macro_use]
-extern crate substrate_service;
-extern crate node_executor;
-extern crate substrate_keystore;
-extern crate substrate_inherents as inherents;
-
-#[macro_use]
-extern crate log;
-extern crate structopt;
-
 pub use cli::error;
 pub mod chain_spec;
 mod service;
-mod params;
 
 use tokio::prelude::Future;
 use tokio::runtime::Runtime;
-pub use cli::{VersionInfo, IntoExit};
+pub use cli::{VersionInfo, IntoExit, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
-use params::{Params as NodeParams};
-use structopt::StructOpt;
 use std::ops::Deref;
+use log::info;
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -107,43 +78,31 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	let full_version = substrate_service::config::full_version_from_strs(
-		version.version,
-		version.commit
-	);
-
-	let matches = match NodeParams::clap()
-		.name(version.executable_name)
-		.author(version.author)
-		.about(version.description)
-		.version(&(full_version + "\n")[..])
-		.get_matches_from_safe(args) {
-			Ok(m) => m,
-			Err(e) => e.exit(),
-		};
-
-	let (spec, config) = cli::parse_matches::<service::Factory, _>(
-		load_spec, &version, "substrate-node", &matches
-	)?;
-
-	match cli::execute_default::<service::Factory, _>(spec, exit, &matches, &config)? {
-		cli::Action::ExecutedInternally => (),
-		cli::Action::RunService(exit) => {
+	cli::parse_and_execute::<service::Factory, NoCustom, NoCustom, _, _, _, _, _>(
+		load_spec, &version, "substrate-node", args, exit,
+		|exit, _custom_args, config| {
 			info!("{}", version.name);
 			info!("  version {}", config.full_version());
 			info!("  by {}, 2017, 2018", version.author);
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);
-			let mut runtime = Runtime::new()?;
+			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
 			let executor = runtime.executor();
-			match config.roles == ServiceRoles::LIGHT {
-				true => run_until_exit(runtime, service::Factory::new_light(config, executor)?, exit)?,
-				false => run_until_exit(runtime, service::Factory::new_full(config, executor)?, exit)?,
-			}
+			match config.roles {
+				ServiceRoles::LIGHT => run_until_exit(
+					runtime,
+					service::Factory::new_light(config, executor).map_err(|e| format!("{:?}", e))?,
+					exit
+				),
+				_ => run_until_exit(
+					runtime,
+					service::Factory::new_full(config, executor).map_err(|e| format!("{:?}", e))?,
+					exit
+				),
+			}.map_err(|e| format!("{:?}", e))
 		}
-	}
-	Ok(())
+	).map_err(Into::into).map(|_| ())
 }
 
 fn run_until_exit<T, C, E>(

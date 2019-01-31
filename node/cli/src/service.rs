@@ -34,6 +34,9 @@ use substrate_service::{
 };
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use inherents::InherentDataProviders;
+use network::construct_simple_protocol;
+use substrate_service::construct_service_factory;
+use log::info;
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
@@ -43,8 +46,7 @@ construct_simple_protocol! {
 /// Node specific configuration
 pub struct NodeConfig<F: substrate_service::ServiceFactory> {
 	/// grandpa connection to import block
-	// FIXME: rather than putting this on the config, let's have an actual intermediate setup state
-	// https://github.com/paritytech/substrate/issues/1134
+	// FIXME #1134 rather than putting this on the config, let's have an actual intermediate setup state
 	pub grandpa_import_setup: Option<(Arc<grandpa::BlockImportForService<F>>, grandpa::LinkHalfForService<F>)>,
 	inherent_data_providers: InherentDataProviders,
 }
@@ -103,7 +105,7 @@ construct_service_factory! {
 				executor.spawn(grandpa::run_grandpa(
 					grandpa::Config {
 						local_key,
-						// FIXME: make this available through chainspec?
+						// FIXME #1578 make this available through chainspec
 						gossip_duration: Duration::new(4, 0),
 						justification_period: 4096,
 						name: Some(service.config.name.clone())
@@ -120,23 +122,25 @@ construct_service_factory! {
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
-			grandpa::BlockImportForService<Self>,
+			FullClient<Self>,
 			NothingExtra,
 		>
-			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>| {
+			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<FullClient<Self>>| {
 				let slot_duration = SlotDuration::get_or_compute(&*client)?;
-
 				let (block_import, link_half) =
 					grandpa::block_import::<_, _, _, RuntimeApi, FullClient<Self>>(
-						client.clone(), client
+						client.clone(), client.clone()
 					)?;
 				let block_import = Arc::new(block_import);
+				let justification_import = block_import.clone();
 
 				config.custom.grandpa_import_setup = Some((block_import.clone(), link_half));
 
 				import_queue(
 					slot_duration,
 					block_import,
+					Some(justification_import),
+					client,
 					NothingExtra,
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
@@ -149,6 +153,8 @@ construct_service_factory! {
 			{ |config: &FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>| {
 					import_queue(
 						SlotDuration::get_or_compute(&*client)?,
+						client.clone(),
+						None,
 						client,
 						NothingExtra,
 						config.custom.inherent_data_providers.clone(),

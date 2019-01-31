@@ -23,11 +23,11 @@ use std::sync::Arc;
 use keyring::Keyring;
 use consensus::BlockOrigin;
 use primitives::Blake2Hasher;
-use ::TestClient;
+use crate::TestClient;
 use runtime_primitives::traits::Block as BlockT;
-use backend;
-use blockchain::{Backend as BlockChainBackendT, HeaderBackend};
-use ::BlockBuilderExt;
+use crate::backend;
+use crate::blockchain::{Backend as BlockChainBackendT, HeaderBackend};
+use crate::{BlockBuilderExt, new_with_backend};
 use runtime::{self, Transfer};
 use runtime_primitives::generic::BlockId;
 
@@ -41,7 +41,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 	//			  B2 -> C3
 	//		A1 -> D2
 
-	let client = ::new_with_backend(backend.clone(), false);
+	let client = new_with_backend(backend.clone(), false);
 
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
@@ -153,7 +153,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B: 'static>(backend: Arc<B
 	//		A1 -> B2 -> B3 -> B4
 	//			  B2 -> C3
 	//		A1 -> D2
-	let client = ::new_with_backend(backend, false);
+	let client = new_with_backend(backend, false);
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();

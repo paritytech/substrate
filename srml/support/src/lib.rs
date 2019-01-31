@@ -38,7 +38,6 @@ extern crate substrate_inherents as inherents;
 #[macro_use]
 extern crate pretty_assertions;
 #[cfg(feature = "std")]
-#[macro_use]
 extern crate serde_derive;
 #[cfg(test)]
 #[macro_use]
@@ -54,6 +53,8 @@ pub extern crate once_cell;
 pub extern crate substrate_metadata;
 #[macro_use]
 extern crate substrate_metadata_derive;
+
+pub extern crate paste;
 
 pub use self::storage::generator::Storage as GenericStorage;
 
@@ -77,7 +78,6 @@ mod double_map;
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
-pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
 pub use double_map::StorageDoubleMap;
 

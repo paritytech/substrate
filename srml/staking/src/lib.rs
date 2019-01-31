@@ -52,7 +52,7 @@ extern crate sr_io as runtime_io;
 extern crate srml_timestamp as timestamp;
 
 use rstd::{prelude::*, cmp};
-use codec::{HasCompact, Compact};
+use codec::HasCompact;
 use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
 use session::OnSessionChange;
 use primitives::{Perbill, traits::{Zero, One, Bounded, As, StaticLookup}};
@@ -76,12 +76,12 @@ pub enum LockStatus<BlockNumber: Parameter> {
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise
+pub struct ValidatorPrefs<Balance: HasCompact> {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	#[codec(compact)]
 	pub unstake_threshold: u32,
 	// Reward that validator takes up-front; only the rest is split between themselves and nominators.
-	#[codec(encoded_as = "<Balance as HasCompact>::Type")]
+	#[codec(compact)]
 	pub validator_payment: Balance,
 }
 
@@ -361,7 +361,7 @@ impl<T: Trait> Module<T> {
 			let noms = Self::current_nominators_for(v);
 			let total = noms.iter().map(<balances::Module<T>>::total_balance).fold(T::Balance::zero(), |acc, x| acc + x);
 			if !total.is_zero() {
-				let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
+				let safe_mul_rational = |b| b * rem / total;// FIXME #1572 avoid overflow
 				for n in noms.iter() {
 					let _ = <balances::Module<T>>::slash(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));	// best effort - not much that can be done on fail.
 				}
@@ -382,7 +382,7 @@ impl<T: Trait> Module<T> {
 				.map(<balances::Module<T>>::total_balance)
 				.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
 				.max(One::one());
-			let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
+			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for n in noms.iter() {
 				let _ = <balances::Module<T>>::reward(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));
 			}
@@ -460,7 +460,7 @@ impl<T: Trait> Module<T> {
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
 		// <ValidatorCount<T>>::get() of them.
-		// TODO: this is not sound. this should be moved to an off-chain solution mechanism.
+		// FIXME #1571 this is not sound. this should be moved to an off-chain solution mechanism.
 		let mut intentions = Self::intentions()
 			.into_iter()
 			.map(|v| (Self::slashable_balance(&v), v))
@@ -500,8 +500,8 @@ impl<T: Trait> Module<T> {
 		<session::Module<T>>::set_validators(vals);
 
 		// Update the balances for slashing/rewarding according to the stakes.
-		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
-		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
+		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * stake_range.1);
+		<CurrentSessionReward<T>>::put(Self::session_reward() * stake_range.1);
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the

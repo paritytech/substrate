@@ -27,7 +27,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
-use primitives::Ed25519AuthorityId;
+use primitives::{H256, Ed25519AuthorityId};
 use runtime_primitives::Justification;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor, Zero};
@@ -38,10 +38,9 @@ use service::{NetworkLink, TransactionPool};
 use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::Encode;
-use consensus::{BlockImport, BlockOrigin, ImportBlock, ForkChoiceStrategy};
-use consensus::Error as ConsensusError;
+use consensus::{BlockOrigin, ImportBlock, JustificationImport, ForkChoiceStrategy, Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
-use consensus::import_queue::{Link, SharedBlockImport, Verifier};
+use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use specialization::NetworkSpecialization;
 use consensus_gossip::ConsensusGossip;
 use service::ExecuteInContext;
@@ -121,17 +120,19 @@ pub struct SyncImportQueue<B: BlockT, V: Verifier<B>> {
 	verifier: Arc<V>,
 	link: ImportCB<B>,
 	block_import: SharedBlockImport<B>,
+	justification_import: Option<SharedJustificationImport<B>>,
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
 impl<B: 'static + BlockT, V: 'static + Verifier<B>> SyncImportQueue<B, V> {
 	/// Create a new SyncImportQueue wrapping the given Verifier and block import
 	/// handle.
-	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>) -> Self {
+	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>, justification_import: Option<SharedJustificationImport<B>>) -> Self {
 		let queue = SyncImportQueue {
 			verifier,
 			link: ImportCB::new(),
 			block_import,
+			justification_import,
 		};
 
 		let v = queue.verifier.clone();
@@ -197,7 +198,9 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 		number: NumberFor<B>,
 		justification: Justification,
 	) -> bool {
-		self.block_import.import_justification(hash, number, justification).is_ok()
+		self.justification_import.as_ref().map(|justification_import| {
+			justification_import.import_justification(hash, number, justification).is_ok()
+		}).unwrap_or(false)
 	}
 }
 
@@ -396,6 +399,11 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		self.sync.gossip_consensus_message(&mut TestIo::new(&self.queue, None), topic, data, broadcast);
 	}
 
+	/// Announce a block to peers.
+	pub fn announce_block(&self, block: Hash) {
+		self.sync.announce_block(&mut TestIo::new(&self.queue, None), block);
+	}
+
 	/// Request a justification for the given block.
 	#[cfg(test)]
 	fn request_justification(&self, hash: &::primitives::H256, number: NumberFor<Block>) {
@@ -405,15 +413,25 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
+	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F)
+		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
+	{
+		let best_hash = self.client.info().unwrap().chain.best_hash;
+		self.generate_blocks_at(BlockId::Hash(best_hash), count, origin, edit_block)
+	}
+
+	/// Add blocks to the peer -- edit the block before adding. The chain will
+	/// start at the given block iD.
+	pub fn generate_blocks_at<F>(&self, mut at: BlockId<Block>, count: usize, origin: BlockOrigin, mut edit_block: F)
 		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
 	{
 		for _  in 0..count {
-			let builder = self.client.new_block().unwrap();
+			let builder = self.client.new_block_at(&at).unwrap();
 			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!("Generating {}, (#{}, parent={})", hash, block.header.number, block.header.parent_hash);
 			let header = block.header.clone();
+			at = BlockId::Hash(hash);
 
 			// NOTE: if we use a non-synchronous queue in the test-net in the future,
 			// this may not work.
@@ -432,9 +450,16 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Push blocks to the peer (simplified: with or without a TX)
 	pub fn push_blocks(&self, count: usize, with_tx: bool) {
+		let best_hash = self.client.info().unwrap().chain.best_hash;
+		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx);
+	}
+
+	/// Push blocks to the peer (simplified: with or without a TX) starting from
+	/// given hash.
+	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) {
 		let mut nonce = 0;
 		if with_tx {
-			self.generate_blocks(count, BlockOrigin::File, |mut builder| {
+			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
 				let transfer = Transfer {
 					from: Keyring::Alice.to_raw_public().into(),
 					to: Keyring::Alice.to_raw_public().into(),
@@ -447,7 +472,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 				builder.bake().unwrap()
 			});
 		} else {
-			self.generate_blocks(count, BlockOrigin::File, |builder| builder.bake().unwrap());
+			self.generate_blocks_at(at, count, BlockOrigin::File, |builder| builder.bake().unwrap());
 		}
 	}
 
@@ -503,9 +528,9 @@ pub trait TestNetFactory: Sized {
 
 	/// Get custom block import handle for fresh client, along with peer data.
 	fn make_block_import(&self, client: Arc<PeersClient>)
-		-> (Arc<BlockImport<Block,Error=ConsensusError> + Send + Sync>, Self::PeerData)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Self::PeerData)
 	{
-		(client, Default::default())
+		(client, None, Default::default())
 	}
 
 	fn default_config() -> ProtocolConfig {
@@ -528,9 +553,9 @@ pub trait TestNetFactory: Sized {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(client.clone(), config);
-		let (block_import, data) = self.make_block_import(client.clone());
+		let (block_import, justification_import, data) = self.make_block_import(client.clone());
 
-		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import));
+		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import, justification_import));
 		let specialization = DummySpecialization { };
 		let sync = Protocol::new(
 			config.clone(),
@@ -705,5 +730,64 @@ impl TestNetFactory for TestNet {
 
 	fn set_started(&mut self, new: bool) {
 		self.started = new;
+	}
+}
+
+pub struct ForceFinalized(Arc<PeersClient>);
+
+impl JustificationImport<Block> for ForceFinalized {
+	type Error = ConsensusError;
+
+	fn import_justification(
+		&self,
+		hash: H256,
+		_number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.0.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.map_err(|_| ConsensusErrorKind::InvalidJustification.into())
+	}
+}
+
+pub struct JustificationTestNet(TestNet);
+
+impl TestNetFactory for JustificationTestNet {
+	type Verifier = PassThroughVerifier;
+	type PeerData = ();
+
+	fn from_config(config: &ProtocolConfig) -> Self {
+		JustificationTestNet(TestNet::from_config(config))
+	}
+
+	fn make_verifier(&self, client: Arc<PeersClient>, config: &ProtocolConfig)
+		-> Arc<Self::Verifier>
+	{
+		self.0.make_verifier(client, config)
+	}
+
+	fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
+		self.0.peer(i)
+	}
+
+	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
+		self.0.peers()
+	}
+
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F ) {
+		self.0.mut_peers(closure)
+	}
+
+	fn started(&self) -> bool {
+		self.0.started()
+	}
+
+	fn set_started(&mut self, new: bool) {
+		self.0.set_started(new)
+	}
+
+	fn make_block_import(&self, client: Arc<PeersClient>)
+		-> (SharedBlockImport<Block>, Option<SharedJustificationImport<Block>>, Self::PeerData)
+	{
+		(client.clone(), Some(Arc::new(ForceFinalized(client))), Default::default())
 	}
 }

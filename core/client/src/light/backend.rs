@@ -45,6 +45,7 @@ pub struct ImportOperation<Block: BlockT, S, F> {
 	authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+	finalized_blocks: Vec<BlockId<Block>>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -96,24 +97,52 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	type State = OnDemandState<Block, S, F>;
 	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
 
-	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
+	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
 			header: None,
 			authorities: None,
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
+			finalized_blocks: Vec::new(),
 			_phantom: Default::default(),
 		})
 	}
 
+	fn begin_state_operation(
+		&self,
+		_operation: &mut Self::BlockImportOperation,
+		_block: BlockId<Block>
+	) -> ClientResult<()> {
+		Ok(())
+	}
+
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
-		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.storage().import_header(
-			header,
-			operation.authorities,
-			operation.leaf_state,
-			operation.aux_ops,
-		)
+		if !operation.finalized_blocks.is_empty() {
+			for block in operation.finalized_blocks {
+				self.blockchain.storage().finalize_header(block)?;
+			}
+		}
+
+		if let Some(header) = operation.header {
+			self.blockchain.storage().import_header(
+				header,
+				operation.authorities,
+				operation.leaf_state,
+				operation.aux_ops,
+			)?;
+		} else {
+			for (key, maybe_val) in operation.aux_ops {
+				match maybe_val {
+					Some(val) => self.blockchain.storage().insert_aux(
+						&[(&key[..], &val[..])],
+						::std::iter::empty(),
+					)?,
+					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
+				}
+			}
+		}
+
+		Ok(())
 	}
 
 	fn finalize_block(&self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
@@ -199,19 +228,24 @@ where
 
 	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> ClientResult<H::Out> {
 		let in_mem = in_mem::Backend::<Block, H>::new();
-		let mut op = in_mem.begin_operation(BlockId::Hash(Default::default()))?;
+		let mut op = in_mem.begin_operation()?;
 		op.reset_storage(top, children)
 	}
 
-	fn set_aux<I>(&mut self, ops: I) -> ClientResult<()>
+	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.aux_ops = ops.into_iter().collect();
+		self.aux_ops.append(&mut ops.into_iter().collect());
 		Ok(())
 	}
 
 	fn update_storage(&mut self, _update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
+		Ok(())
+	}
+
+	fn mark_finalized(&mut self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
+		self.finalized_blocks.push(block);
 		Ok(())
 	}
 }
@@ -285,5 +319,23 @@ where
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		None
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use primitives::Blake2Hasher;
+	use test_client::runtime::Block;
+	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
+	use super::*;
+
+	#[test]
+	fn light_aux_store_is_updated_via_non_importing_op() {
+		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let mut op = ClientBackend::<Block, Blake2Hasher>::begin_operation(&backend).unwrap();
+		BlockImportOperation::<Block, Blake2Hasher>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
+		ClientBackend::<Block, Blake2Hasher>::commit_operation(&backend, op).unwrap();
+
+		assert_eq!(AuxStore::get_aux(&backend, &[1]).unwrap(), Some(vec![2]));
 	}
 }

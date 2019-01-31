@@ -347,10 +347,9 @@ macro_rules! construct_runtime {
 		__decl_runtime_metadata!(
 			$runtime;
 			;
-			;
 			$(
-				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			),*;
+				$name: $module::{ $( $modules $( <$modules_generic> )* )* }
+			)*
 		);
 		__decl_outer_log!(
 			$runtime;
@@ -752,170 +751,85 @@ macro_rules! __decl_outer_dispatch {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __decl_runtime_metadata {
+	// contain a module
 	(
 		$runtime:ident;
-		;
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
-			Module $(, $modules:ident $( <$modules_generic:ident> )* )*
+			Module $( $modules:ident $( <$modules_generic:ident> )* )*
 		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		$( $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* )*
+		})*
 	) => {
-		__decl_runtime_metadata!(
+
+		__decl_runtime_metadata!(@Module
 			$runtime;
-			$module { Module, };
-			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
-			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			)*;
-		);
-	};
-	(
-		$runtime:ident;
-		$current_module:ident { , Storage };
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
-		$name:ident: $module:ident::{
-			Module $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		__decl_runtime_metadata!(
-			$runtime;
-			;
-			$( $parsed_modules { Module $( with $parsed_storage )* }, )* $module { Module with Storage };
+			$( $parsed_modules { $( $withs )* } )*;
+			$name: $module::{ $( $modules $( <$modules_generic> )* )* }
 			$(
 				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
+					$( $rest_modules $( <$rest_modules_generic> )* )*
 				}
-			),*;
+			)*
 		);
 	};
+	// do not contain Module : skip
 	(
 		$runtime:ident;
-		;
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
-			Storage $(, $modules:ident $( <$modules_generic:ident> )* )*
+			$( $modules:ident $( <$modules_generic:ident> )* )*
 		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
+		$( $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* )*
+		})*
 	) => {
 		__decl_runtime_metadata!(
 			$runtime;
-			$module { , Storage };
-			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
-			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			)*;
-		);
-	};
-	(
-		$runtime:ident;
-		$current_module:ident { Module, };
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
-		$name:ident: $module:ident::{
-			Storage $(, $modules:ident $( <$modules_generic:ident> )* )*
-		}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		__decl_runtime_metadata!(
-			$runtime;
-			;
-			$( $parsed_modules { Module $( with $parsed_storage )* }, )* $module { Module with Storage };
+			$( $parsed_modules { $( $withs )* } )*;
 			$(
 				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
+					$( $rest_modules $( <$rest_modules_generic> )* )*
 				}
-			),*;
+			)*
 		);
 	};
-	(
+	// process module
+	(@Module
 		$runtime:ident;
-		$( $current_module:ident { $( $current_module_storage:tt )* } )*;
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
+			$( $modules:ident $( <$modules_generic:ident> )* )*
 		}
-		$(, $rest_name:ident : $rest_module:ident::{
-				$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-			})*;
+		$($rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* )*
+		})*
 	) => {
 		__decl_runtime_metadata!(
 			$runtime;
-			$( $current_module { $( $current_module_storage )* } )*;
-			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
-			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
-			$(
-				, $rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			)*;
-		);
-	};
-	(
-		$runtime:ident;
-		$current_module:ident { Module, };
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
-		$name:ident: $module:ident::{}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		__decl_runtime_metadata!(
-			$runtime;
-			;
-			$( $parsed_modules { Module $( with $parsed_storage )* }, )* $module { Module };
+			$( $parsed_modules { $( $withs )* } )*
+			$module {
+				$($modules)*
+			};
 			$(
 				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
+					$( $rest_modules $( <$rest_modules_generic> )* )*
 				}
-			),*;
+			)*
 		);
 	};
+	// end of decl
 	(
 		$runtime:ident;
-		$( $current_module:ident { $( $ignore:tt )* } )*;
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
-		$name:ident: $module:ident::{}
-		$(, $rest_name:ident : $rest_module:ident::{
-			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
-		})*;
-	) => {
-		__decl_runtime_metadata!(
-			$runtime;
-			;
-			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
-			$(
-				$rest_name: $rest_module::{
-					$( $rest_modules $( <$rest_modules_generic> )* ),*
-				}
-			),*;
-		);
-	};
-	(
-		$runtime:ident;
-		;
-		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
-		;
+		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 	) => {
 		impl_runtime_metadata!(
 			for $runtime with modules
-				$( $parsed_modules::Module $(with $parsed_storage)*, )*
+				$( $parsed_modules::Module with $( $withs )* , )*
 		);
 	}
+
 }
 
 /// A private macro that generates Log enum for the runtime. See impl_outer_log macro.

@@ -131,10 +131,16 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			#impl_store_fns
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
-					prefix: #scrate::storage::generator::DecodeDifferent::Encode(#cratename_string),
-					functions: #store_functions_to_metadata ,
+					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
 			}
+			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
+				#store_functions_to_metadata
+			}
+			pub fn store_metadata_name() -> &'static str {
+				#cratename_string
+			}
+
 		}
 
 		#extra_genesis
@@ -283,15 +289,14 @@ fn decl_store_extra_genesis(
 	}
 
 
-	let serde_bug_bound = if serde_complete_bound.len() > 0 {
-
+	let serde_bug_bound = if !serde_complete_bound.is_empty() {
 		let mut b_ser = String::new();
 		let mut b_dser = String::new();
-		for bound in serde_complete_bound {
+		serde_complete_bound.into_iter().for_each(|bound| {
 			let stype = quote!(#bound);
-			b_ser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::Serialize, ");
-			b_dser += &(stype.to_string() + " : " + &scrate.to_string() + "::serde::de::DeserializeOwned, ");
-		}
+			b_ser.push_str(&format!("{} : {}::serde::Serialize, ", stype, scrate));
+			b_dser.push_str(&format!("{} : {}::serde::de::DeserializeOwned, ", stype, scrate));
+		});
 
 		quote! {
 			#[serde(bound(serialize = #b_ser))]
@@ -336,7 +341,7 @@ fn decl_store_extra_genesis(
 		};
 		quote!{
 
-			#[derive(Serialize, Deserialize)]
+			#[derive(#scrate::Serialize, #scrate::Deserialize)]
 			#[cfg(feature = "std")]
 			#[serde(rename_all = "camelCase")]
 			#[serde(deny_unknown_fields)]
@@ -657,9 +662,9 @@ fn store_functions_to_metadata (
 		}
 		let str_name = name.to_string();
 		let default_byte_struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
-		let default_byte_cache_name = proc_macro2::Ident::new(&("__CacheGetByteStruct".to_string() + &str_name), name.span());
+		let default_byte_cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
 		let type_metadata_struct_name = proc_macro2::Ident::new(&("__TypeMetadataStruct".to_string() + &str_name), name.span());
-		let type_metadata_cache_name = proc_macro2::Ident::new(&("__CacheTypeMetadataStruct".to_string() + &str_name), name.span());
+		let type_metadata_cache_name = proc_macro2::Ident::new(&("__CACHE_TYPE_METADATA_STRUCT_".to_string() + &str_name), name.span());
 		let item = quote! {
 			#scrate::storage::generator::StorageFunctionMetadata {
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
@@ -682,6 +687,7 @@ fn store_functions_to_metadata (
 		let def_get = quote! {
 			pub struct #default_byte_struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
+			#[allow(non_upper_case_globals)]
 			static #default_byte_cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #default_byte_struct_name<#traitinstance> {
@@ -707,6 +713,7 @@ fn store_functions_to_metadata (
 		let type_metadata_get = quote! {
 			pub struct #type_metadata_struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
+			#[allow(non_upper_case_globals)]
 			static #type_metadata_cache_name: #scrate::once_cell::sync::OnceCell<#scrate::substrate_metadata::MetadataRegistry> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::GetMetadata for #type_metadata_struct_name<#traitinstance> {
@@ -727,9 +734,9 @@ fn store_functions_to_metadata (
 	}
 	(default_getter_struct_def, quote!{
 		{
-			#scrate::storage::generator::DecodeDifferent::Encode(&[
+			&[
 				#items
-			])
+			]
 		}
 	})
 }
@@ -758,4 +765,3 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 		map_key,
 	}
 }
-

@@ -26,46 +26,15 @@
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
 
-extern crate parity_codec as codec;
-extern crate substrate_client as client;
-extern crate substrate_primitives as primitives;
-extern crate srml_support as runtime_support;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_consensus_aura_primitives as aura_primitives;
-extern crate srml_aura;
-extern crate substrate_inherents as inherents;
-
-extern crate substrate_consensus_common as consensus_common;
-extern crate tokio;
-extern crate sr_version as runtime_version;
-extern crate parking_lot;
-
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate futures;
-
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-#[cfg(test)]
-extern crate substrate_network as network;
-#[cfg(test)]
-extern crate substrate_service as service;
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-#[cfg(test)]
-extern crate env_logger;
-
 mod slots;
 
 use std::{sync::{Arc, mpsc}, time::Duration, thread};
 
-use codec::Encode;
+use parity_codec::Encode;
 use consensus_common::{
-	Authorities, BlockImport, Environment, Error as ConsensusError, Proposer, ForkChoiceStrategy
+	Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy
 };
-use consensus_common::import_queue::{Verifier, BasicQueue};
+use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
@@ -78,8 +47,8 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
-use api::AuraApi;
 use slots::Slots;
+use ::log::{warn, debug, log, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -423,7 +392,7 @@ enum CheckedHeader<H> {
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
-// FIXME: needs misbehavior types - https://github.com/paritytech/substrate/issues/1018
+// FIXME #1018 needs misbehavior types
 fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[Ed25519AuthorityId])
 	-> Result<CheckedHeader<B::Header>, String>
 	where DigestItemFor<B>: CompatibleDigestItem
@@ -542,7 +511,7 @@ impl<B: Block> ExtraVerification<B> for NothingExtra {
 }
 
 impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
-	C: Authorities<B> + BlockImport<B> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
@@ -568,8 +537,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		);
 
 		// we add one to allow for some small drift.
-		// FIXME: in the future, alter this queue to allow deferring of headers
-		// https://github.com/paritytech/substrate/issues/1019
+		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<B>(slot_now + 1, header, hash, &authorities[..])?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
@@ -608,7 +576,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
+				// FIXME #1019 extract authorities
 				Ok((import_block, None))
 			}
 			CheckedHeader::Deferred(a, b) => {
@@ -635,7 +603,7 @@ impl SlotDuration {
 		C: ProvideRuntimeApi,
 		C::Api: AuraApi<B>,
 	{
-		use codec::Decode;
+		use parity_codec::Decode;
 		const SLOT_KEY: &[u8] = b"aura_slot_duration";
 
 		match client.get_aux(SLOT_KEY)? {
@@ -662,6 +630,11 @@ impl SlotDuration {
 			}
 		}
 	}
+
+	/// Returns slot duration value.
+	pub fn get(&self) -> u64 {
+		self.0
+	}
 }
 
 /// Register the aura inherent data provider, if not registered already.
@@ -681,12 +654,14 @@ fn register_aura_inherent_data_provider(
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C, E>(
 	slot_duration: SlotDuration,
+	block_import: SharedBlockImport<B>,
+	justification_import: Option<SharedJustificationImport<B>>,
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<AuraImportQueue<B, C, E>, consensus_common::Error> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B, Error=ConsensusError> + ProvideRuntimeApi + Send + Sync,
+	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	E: ExtraVerification<B>,
@@ -696,7 +671,7 @@ pub fn import_queue<B, C, E>(
 	let verifier = Arc::new(
 		AuraVerifier { client: client.clone(), extra, inherent_data_providers }
 	);
-	Ok(BasicQueue::new(verifier, client))
+	Ok(BasicQueue::new(verifier, block_import, justification_import))
 }
 
 #[cfg(test)]
@@ -805,7 +780,7 @@ mod tests {
 
 	#[test]
 	fn authoring_blocks() {
-		::env_logger::init().ok();
+		let _ = ::env_logger::try_init();
 		let mut net = AuraTestNet::new(3);
 
 		net.start();

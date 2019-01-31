@@ -2,6 +2,7 @@
 name = "substrate-transaction-graph"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
@@ -14,4 +15,4 @@ sr-primitives = { path = "../../sr-primitives" }
 
 [dev-dependencies]
 assert_matches = "1.1"
-substrate-test-runtime = { path = "../../test-runtime" }
+test_runtime = { package = "substrate-test-runtime", path = "../../test-runtime" }

@@ -20,27 +20,9 @@
 //! and their priority.
 //! The pool is able to return an iterator that traverses transaction
 //! graph in the correct order taking into account priorities and dependencies.
-//!
-//! TODO [ToDr]
-//! - [ ] Multi-threading (getting ready transactions should not block the pool)
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
-
-extern crate futures;
-extern crate parking_lot;
-extern crate sr_primitives;
-
-extern crate serde;
-#[macro_use] extern crate error_chain;
-#[macro_use] extern crate log;
-#[macro_use] extern crate serde_derive;
-
-#[cfg(test)]
-extern crate substrate_test_runtime as test_runtime;
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
 
 mod future;
 mod listener;

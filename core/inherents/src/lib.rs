@@ -32,8 +32,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate parity_codec as codec;
-
+use parity_codec as codec;
 use parity_codec_derive::{Encode, Decode};
 
 use rstd::{collections::btree_map::{BTreeMap, IntoIter, Entry}, vec::Vec};
@@ -50,6 +49,7 @@ pub use runtime_primitives::RuntimeString;
 pub type InherentIdentifier = [u8; 8];
 
 /// Inherent data to include in a block.
+#[derive(Clone, Default)]
 pub struct InherentData {
 	/// All inherent data encoded with parity-codec and an identifier.
 	data: BTreeMap<InherentIdentifier, Vec<u8>>
@@ -58,9 +58,7 @@ pub struct InherentData {
 impl InherentData {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		Self {
-			data: Default::default(),
-		}
+		Self::default()
 	}
 
 	/// Put data for an inherent into the internal storage.
@@ -152,7 +150,7 @@ impl codec::Decode for InherentData {
 ///
 /// When a fatal error occurres, all other errors are removed and the implementation needs to
 /// abbort checking inherents.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Clone)]
 pub struct CheckInherentsResult {
 	/// Did the check succeed?
 	okay: bool,
@@ -162,14 +160,20 @@ pub struct CheckInherentsResult {
 	errors: InherentData,
 }
 
-impl CheckInherentsResult {
-	/// Create a new instance.
-	pub fn new() -> Self {
+impl Default for CheckInherentsResult {
+	fn default() -> Self {
 		Self {
 			okay: true,
 			errors: InherentData::new(),
 			fatal_error: false,
 		}
+	}
+}
+
+impl CheckInherentsResult {
+	/// Create a new instance.
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	/// Put an error into the result.
@@ -243,7 +247,7 @@ impl PartialEq for CheckInherentsResult {
 
 /// All `InherentData` providers.
 #[cfg(feature = "std")]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct InherentDataProviders {
 	providers: Arc<RwLock<Vec<Box<dyn ProvideInherentData + Send + Sync>>>>,
 }
@@ -252,9 +256,7 @@ pub struct InherentDataProviders {
 impl InherentDataProviders {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		Self {
-			providers: Default::default(),
-		}
+		Self::default()
 	}
 
 	/// Register an `InherentData` provider.

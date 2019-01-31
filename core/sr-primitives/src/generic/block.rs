@@ -23,6 +23,7 @@ use rstd::prelude::*;
 use codec::Codec;
 use traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
 use ::Justification;
+use substrate_metadata::EncodeMetadata;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone)]
@@ -58,7 +59,7 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 }
 
 /// Abstraction over a substrate block.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -72,7 +73,7 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Codec + traits::Extrinsic,
+	Extrinsic: Member + Codec + EncodeMetadata + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;

@@ -16,7 +16,7 @@
 
 //! Generic implementation of a block header.
 
-use codec::{Decode, Encode, Codec, Input, Output, HasCompact};
+use codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
 use generic::Digest;
@@ -75,7 +75,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
-		dest.push(&<<Number as HasCompact>::Type>::from(self.number));
+		dest.push(&<<<Number as HasCompact>::Type as EncodeAsRef<_>>::RefType>::from(&self.number));
 		dest.push(&self.state_root);
 		dest.push(&self.extrinsics_root);
 		dest.push(&self.digest);
@@ -98,10 +98,10 @@ impl<Number, Hash, DigestItem> EncodeMetadata for Header<Number, Hash, DigestIte
 }
 
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
-	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + Copy + Into<u128>,
+	Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + MaybeDisplay + SimpleArithmetic + Codec + EncodeMetadata + Copy + Into<u128>,
 	Hash: HashT,
-	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
+	DigestItem: DigestItemT<Hash = Hash::Output> + Codec + EncodeMetadata,
+	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec + EncodeMetadata,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
@@ -142,10 +142,10 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 }
 
 impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + Into<u128>,
+	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec + EncodeMetadata + Into<u128>,
 	Hash: HashT,
-	DigestItem: DigestItemT + Codec,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
+	DigestItem: DigestItemT + Codec + EncodeMetadata,
+	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec + EncodeMetadata,
  {
 	/// Convenience helper for computing the hash of the header without having
 	/// to import the trait.

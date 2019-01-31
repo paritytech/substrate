@@ -22,53 +22,21 @@
 
 #[macro_use]
 extern crate srml_support;
-
 #[macro_use]
-extern crate sr_primitives as runtime_primitives;
-
-extern crate substrate_primitives;
-
-#[macro_use]
-extern crate substrate_client as client;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-
-extern crate substrate_metadata;
-#[macro_use]
-extern crate substrate_metadata_derive;
-
-#[macro_use]
-extern crate sr_std as rstd;
-extern crate srml_aura as aura;
-extern crate srml_balances as balances;
-extern crate srml_consensus as consensus;
-extern crate srml_contract as contract;
-extern crate srml_council as council;
-extern crate srml_democracy as democracy;
-extern crate srml_executive as executive;
-extern crate srml_grandpa as grandpa;
-extern crate srml_indices as indices;
-extern crate srml_session as session;
-extern crate srml_staking as staking;
-extern crate srml_sudo as sudo;
-extern crate srml_system as system;
-extern crate srml_timestamp as timestamp;
-extern crate srml_treasury as treasury;
-#[macro_use]
-extern crate sr_version as version;
-extern crate node_primitives;
-extern crate substrate_consensus_aura_primitives as consensus_aura;
+extern crate runtime_primitives;
 
 use rstd::prelude::*;
+use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive:EncodeMetadata;
+#[cfg(feature = "std")]
+use srml_support::{Serialize, Deserialize};
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
-use client::{
+use substrate_client::impl_runtime_apis;
+use substrate_client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api,
 };
@@ -76,7 +44,7 @@ use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, Extrinsic, StaticLookup,
+	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -85,7 +53,6 @@ use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 use substrate_primitives::OpaqueMetadata;
-use consensus_aura::api as aura_api;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -93,7 +60,7 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
-pub use srml_support::{StorageValue, RuntimeMetadata};
+pub use srml_support::StorageValue;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -340,7 +307,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl aura_api::AuraApi<Block> for Runtime {
+	impl consensus_aura::AuraApi<Block> for Runtime {
 		fn slot_duration() -> u64 {
 			Aura::slot_duration()
 		}

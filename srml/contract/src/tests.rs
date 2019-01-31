@@ -23,13 +23,16 @@ use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
+use runtime_io;
 use runtime_support::{StorageMap, StorageDoubleMap};
 use substrate_primitives::{Blake2Hasher};
-use system::{ensure_signed, Phase, EventRecord};
-use wabt;
-use {
-	balances, runtime_io, system, ComputeDispatchFee, ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
-	Trait
+use system::{self, Phase, EventRecord};
+use {wabt, balances};
+use hex_literal::*;
+use assert_matches::assert_matches;
+use crate::{
+	ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
+	Trait, ComputeDispatchFee
 };
 
 mod contract {

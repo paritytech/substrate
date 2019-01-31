@@ -25,16 +25,23 @@ use std::{fs, path::Path};
 const SECRET_FILE: &str = "secret";
 
 /// Obtains or generates the local private key using the configuration.
-pub fn obtain_private_key(
+pub fn obtain_private_key_from_config(
 	config: &NetworkConfiguration
 ) -> Result<secio::SecioKeyPair, IoError> {
-	if let Some(ref secret) = config.use_secret {
+	obtain_private_key(&config.use_secret, &config.net_config_path)
+}
+
+/// Obtains or generates the local private key using the configuration.
+pub fn obtain_private_key(
+	secret: &Option<[u8; 32]>,
+	net_config_path: &Option<String>,
+) -> Result<secio::SecioKeyPair, IoError> {
+	if let Some(ref secret) = secret {
 		// Key was specified in the configuration.
 		secio::SecioKeyPair::secp256k1_raw_key(&secret[..])
 			.map_err(|err| IoError::new(IoErrorKind::InvalidData, err))
-
 	} else {
-		if let Some(ref path) = config.net_config_path {
+		if let Some(ref path) = net_config_path {
 			// Try fetch the key from a the file containing the secret.
 			let secret_path = Path::new(path).join(SECRET_FILE);
 			match load_private_key_from_file(&secret_path) {

@@ -5,8 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 hex-literal = "0.1.0"
-parity-codec = { version = "2.2", default-features = false }
-parity-codec-derive = { version = "2.1", default-features = false }
+parity-codec = { version = "3.0", default-features = false }
+parity-codec-derive = { version = "3.0", default-features = false }
 serde = { version = "1.0", default-features = false }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
 substrate-inherents = { path = "../../core/inherents", default-features = false }

@@ -26,23 +26,6 @@
 // our error-chain could potentially blow up otherwise
 #![recursion_limit="128"]
 
-extern crate substrate_primitives as primitives;
-extern crate substrate_inherents as inherents;
-extern crate futures;
-extern crate parking_lot;
-extern crate sr_version as runtime_version;
-extern crate sr_primitives as runtime_primitives;
-#[cfg(any(test, feature = "test-helpers"))]
-extern crate substrate_test_client as test_client;
-extern crate tokio;
-
-extern crate parity_codec as codec;
-extern crate parity_codec_derive;
-
-#[macro_use]
-extern crate error_chain;
-#[macro_use] extern crate log;
-
 use std::sync::Arc;
 
 use runtime_primitives::generic::BlockId;
@@ -60,7 +43,7 @@ pub mod evaluation;
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 pub use self::error::{Error, ErrorKind};
-pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult, ForkChoiceStrategy};
+pub use block_import::{BlockImport, JustificationImport, ImportBlock, BlockOrigin, ImportResult, ForkChoiceStrategy};
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
