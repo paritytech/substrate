@@ -203,6 +203,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
 		next_account_id: u64,
+		random_seed: H256,
 	}
 	impl Ext for MockExt {
 		type T = Test;
@@ -265,6 +266,14 @@ mod tests {
 		}
 		fn value_transferred(&self) -> u64 {
 			1337
+		}
+
+		fn now(&self) -> &u64 {
+			&1111
+		}
+
+		fn random_seed(&self) -> &H256{
+			&self.random_seed
 		}
 	}
 
@@ -1011,7 +1020,6 @@ mod tests {
 )
 "#;
 
-
 	#[test]
 	fn return_from_start_fn() {
 		let mut mock_ext = MockExt::default();
@@ -1027,4 +1035,134 @@ mod tests {
 
 		assert_eq!(output_data, vec![1, 2, 3, 4]);
 	}
+
+	const CODE_TIMESTAMP_NOW: &str = r#"
+(module
+	(import "env" "ext_now" (func $ext_now))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the block timestamp in the scratch buffer
+		(call $ext_now)
+
+		;; assert $ext_scratch_size == 8
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 8)		;; Count of bytes to copy.
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 1111.
+		(call $assert
+			(i64.eq
+				(i64.load
+					(i32.const 8)
+				)
+				(i64.const 1111)
+			)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn now() {
+		let mut mock_ext = MockExt::default();
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		execute(
+			CODE_TIMESTAMP_NOW,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut gas_meter,
+		)
+		.unwrap();
+	}
+
+	const CODE_RANDOM_SEED: &str = r#"
+(module
+	(import "env" "ext_random_seed" (func $ext_random_seed))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the block random seed in the scratch buffer
+		(call $ext_random_seed)
+
+		;; assert $ext_scratch_size == 32
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 32)
+			)
+		)
+
+		;; copy contents of the scratch buffer into the contract's memory.
+		(call $ext_scratch_copy
+			(i32.const 8)		;; Pointer in memory to the place where to copy.
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(i32.const 32)		;; Count of bytes to copy.
+		)
+
+		;; assert the contents of the buffer in 4 x i64 parts matches 1,2,3,4.
+		(call $assert (i64.eq (i64.load (i32.const 8))  (i64.const 1)))
+		(call $assert (i64.eq (i64.load (i32.const 16)) (i64.const 2)))
+		(call $assert (i64.eq (i64.load (i32.const 24)) (i64.const 3)))
+		(call $assert (i64.eq (i64.load (i32.const 32)) (i64.const 4)))
+	)
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn random_seed() {
+		let mut mock_ext = MockExt::default();
+		let seed: [u8; 32] = [
+			1,0,0,0,0,0,0,0,
+			2,0,0,0,0,0,0,0,
+			3,0,0,0,0,0,0,0,
+			4,0,0,0,0,0,0,0,
+		];
+		mock_ext.random_seed = H256::from_slice(&seed);
+		let mut gas_meter = GasMeter::with_limit(50_000, 1);
+		execute(
+			CODE_RANDOM_SEED,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&mut gas_meter,
+		)
+		.unwrap();
+	}
+
 }
