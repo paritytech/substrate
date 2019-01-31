@@ -23,8 +23,8 @@ pub use std::fmt;
 pub use rstd::result;
 pub use codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
-	ModuleMetadata, FunctionMetadata, DecodeDifferent,
-	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
+	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
+	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };
 
 /// Result of a module function call; either nothing (functions are only called for "side efeects")
@@ -175,7 +175,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-	    { $( $deposit_event:tt )* }
+			{ $( $deposit_event:tt )* }
 		{}
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -827,7 +827,6 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		)*
-		__impl_outer_dispatch_metadata!($runtime; $call_type; $( $module::$camelcase, )*);
 	}
 }
 
@@ -853,50 +852,6 @@ macro_rules! __impl_outer_dispatch_common {
 	}
 }
 
-/// Implement metadata for outer dispatch.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __impl_outer_dispatch_metadata {
-	(
-		$runtime:ident;
-		$outer_name:ident;
-		$( $module:ident::$call:ident, )*
-	) => {
-		impl $runtime {
-			pub fn outer_dispatch_metadata() -> $crate::dispatch::OuterDispatchMetadata {
-				$crate::dispatch::OuterDispatchMetadata {
-					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($outer_name)),
-					calls: __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*),
-				}
-			}
-		}
-	};
-	(@encode_calls
-		$index:expr;
-		$( $encoded_call:expr ),*;
-		$module:ident::$call:ident,
-		$( $rest_module:ident::$rest:ident, )*
-	) => {
-		__impl_outer_dispatch_metadata!(
-			@encode_calls
-			$index + 1;
-			$( $encoded_call, )*
-			$crate::dispatch::OuterDispatchCall {
-				name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
-				prefix: $crate::dispatch::DecodeDifferent::Encode(stringify!($module)),
-				index: $index,
-			};
-			$( $rest_module::$rest, )*
-		)
-	};
-	(@encode_calls
-		$index:expr;
-		$( $encoded_call:expr ),*;
-	) => {
-		$crate::dispatch::DecodeDifferent::Encode(&[ $( $encoded_call ),* ])
-	};
-}
-
 /// Implement metadata for dispatch.
 #[macro_export]
 #[doc(hidden)]
@@ -906,11 +861,8 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
-				$crate::dispatch::ModuleMetadata {
-					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($mod_type)),
-					call: __call_to_metadata!($($rest)*),
-				}
+			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
+				__call_to_functions!($($rest)*)
 			}
 		}
 	}
@@ -919,7 +871,7 @@ macro_rules! __dispatch_impl_metadata {
 /// Convert the list of calls into their JSON representation, joined by ",".
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __call_to_metadata {
+macro_rules! __call_to_functions {
 	(
 		$call_type:ident $origin_type:ty
 			{$(
@@ -931,15 +883,13 @@ macro_rules! __call_to_metadata {
 				);
 			)*}
 	) => {
-		$crate::dispatch::CallMetadata {
-			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
-			functions: __functions_to_metadata!(0; $origin_type;; $(
-				fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
-				$( $doc_attr ),*;
-			)*),
-		}
+		__functions_to_metadata!(0; $origin_type;; $(
+			fn $fn_name( $($(#[$codec_attr])* $param_name: $param ),* );
+			$( $doc_attr ),*;
+		)*)
 	};
 }
+
 
 /// Convert a list of functions into a list of `FunctionMetadata` items.
 #[macro_export]
@@ -970,7 +920,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		$crate::dispatch::DecodeDifferent::Encode(&[ $( $function_metadata ),* ])
+		&[ $( $function_metadata ),* ]
 	}
 }
 
@@ -986,7 +936,6 @@ macro_rules! __function_to_metadata {
 		$fn_id:expr;
 	) => {
 		$crate::dispatch::FunctionMetadata {
-			id: $fn_id,
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
 			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
 				$(
@@ -1048,13 +997,8 @@ mod tests {
 		}
 	}
 
-	const EXPECTED_METADATA: ModuleMetadata = ModuleMetadata {
-		name: DecodeDifferent::Encode("Module"),
-		call: CallMetadata {
-			name: DecodeDifferent::Encode("Call"),
-			functions: DecodeDifferent::Encode(&[
+	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
 				FunctionMetadata {
-					id: 0,
 					name: DecodeDifferent::Encode("aux_0"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[
@@ -1062,7 +1006,6 @@ mod tests {
 					])
 				},
 				FunctionMetadata {
-					id: 1,
 					name: DecodeDifferent::Encode("aux_1"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
@@ -1073,7 +1016,6 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					id: 2,
 					name: DecodeDifferent::Encode("aux_2"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
@@ -1088,13 +1030,11 @@ mod tests {
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					id: 3,
 					name: DecodeDifferent::Encode("aux_3"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
-					id: 4,
 					name: DecodeDifferent::Encode("aux_4"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
@@ -1104,9 +1044,7 @@ mod tests {
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
 				}
-			]),
-		},
-	};
+			];
 
 	struct TraitImpl {}
 
@@ -1117,7 +1055,7 @@ mod tests {
 
 	#[test]
 	fn module_json_metadata() {
-		let metadata = Module::<TraitImpl>::metadata();
+		let metadata = Module::<TraitImpl>::call_functions();
 		assert_eq!(EXPECTED_METADATA, metadata);
 	}
 
