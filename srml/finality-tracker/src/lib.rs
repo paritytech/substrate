@@ -16,6 +16,8 @@
 
 //! SRML module that tracks the last finalized block, as perceived by block authors.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 #[macro_use]
 extern crate srml_support;
 
@@ -25,9 +27,12 @@ use substrate_inherents::{
 };
 use srml_support::StorageValue;
 use sr_primitives::traits::{As, One, Zero};
-use sr_std::{result, cmp};
-use parity_codec::{Decode, Encode};
+use sr_std::{prelude::*, result, cmp, vec};
+use parity_codec::Decode;
 use srml_system::{ensure_inherent, Trait as SystemTrait};
+
+#[cfg(feature = "std")]
+use parity_codec::Encode;
 
 const DEFAULT_WINDOW_SIZE: u64 = 101;
 const DEFAULT_DELAY: u64 = 1000;
@@ -55,6 +60,7 @@ pub struct InherentDataProvider<F, N> {
 	_marker: std::marker::PhantomData<N>,
 }
 
+#[cfg(feature = "std")]
 impl<F, N> InherentDataProvider<F, N> {
 	pub fn new(final_oracle: F) -> Self {
 		InherentDataProvider { inner: final_oracle, _marker: Default::default() }
