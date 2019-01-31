@@ -40,7 +40,6 @@ pub trait SlotWorker<B: Block> {
 	/// Called when the proposer starts.
 	fn on_start(
 		&self,
-		inherent_data_providers: &InherentDataProviders,
 		slot_duration: u64
 	) -> Result<(), consensus_common::Error>;
 
@@ -136,7 +135,7 @@ pub fn start_slot_worker<B, C, W, SO, SC, OnExit>(
 	SC: SlotCompatible,
 	OnExit: Future<Item=(), Error=()>,
 {
-	worker.on_start(&inherent_data_providers, slot_duration.0)?;
+	worker.on_start(slot_duration.0)?;
 
 	let make_authorship = move || {
 		let client = client.clone();

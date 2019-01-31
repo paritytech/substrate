@@ -164,7 +164,7 @@ pub fn start_aura_thread<B, C, E, I, SO, Error, OnExit>(
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key
+		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(),
 	};
 
 	aura_slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
@@ -201,7 +201,7 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key
+		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(),
 	};
 
 	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
@@ -219,6 +219,7 @@ struct AuraWorker<C, E, I> {
 	block_import: Arc<I>,
 	env: Arc<E>,
 	local_key: Arc<ed25519::Pair>,
+	inherent_data_providers: InherentDataProviders,
 }
 
 impl<B: Block, C, E, I, Error> SlotWorker<B> for AuraWorker<C, E, I> where
@@ -235,10 +236,9 @@ impl<B: Block, C, E, I, Error> SlotWorker<B> for AuraWorker<C, E, I> where
 
 	fn on_start(
 		&self,
-		inherent_data_providers: &InherentDataProviders,
 		slot_duration: u64
 	) -> Result<(), consensus_common::Error> {
-		register_aura_inherent_data_provider(inherent_data_providers, slot_duration)
+		register_aura_inherent_data_provider(&self.inherent_data_providers, slot_duration)
 	}
 
 	fn on_slot(
