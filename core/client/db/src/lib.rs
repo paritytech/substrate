@@ -1384,7 +1384,7 @@ mod tests {
 				Some(vec![]),
 				None,
 				NewBlockState::Best,
-				).unwrap();
+			).unwrap();
 
 			backend.commit_operation(op).unwrap();
 
