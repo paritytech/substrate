@@ -24,7 +24,7 @@ use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 use bytes::Bytes;
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
-use libp2p::{Multiaddr, PeerId, multiaddr};
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, multiaddr};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
 use log::{debug, info, warn};
@@ -82,7 +82,10 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	// Listen on multiaddresses.
 	for addr in &config.listen_addresses {
 		match Swarm::listen_on(&mut swarm, addr.clone()) {
-			Ok(new_addr) => debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr),
+			Ok(mut new_addr) => {
+				new_addr.append(Protocol::P2p(local_peer_id.clone().into()));
+				info!(target: "sub-libp2p", "Local node address is: {}", new_addr);
+			},
 			Err(err) => warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 		}
 	}

@@ -21,15 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-extern crate parity_codec as codec;
-
-extern crate sr_std as rstd;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_primitives as primitives;
-
 use runtime_primitives::generic;
 use runtime_primitives::{OpaqueExtrinsic, traits::BlakeTwo256};
 

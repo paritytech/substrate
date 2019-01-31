@@ -27,7 +27,7 @@ use std::{
 };
 use parking_lot::RwLock;
 
-use base_pool::Transaction;
+use crate::base_pool::Transaction;
 
 /// Expected size of the banned extrinsics cache.
 const EXPECTED_SIZE: usize = 2048;

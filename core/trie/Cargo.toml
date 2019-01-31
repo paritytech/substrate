@@ -5,13 +5,14 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-codec node format"
 repository = "https://github.com/paritytech/parity-common"
 license = "GPL-3.0"
+edition = "2018"
 
 [[bench]]
 name = "bench"
 harness = false
 
 [dependencies]
-parity-codec = { version = "3.0" }
+codec = { package = "parity-codec", version = "3.0" }
 hash-db = { version = "0.9", default-features = false }
 trie-db = { version = "0.9", optional = true }
 trie-root = { version = "0.9", default-features = false }
@@ -19,7 +20,7 @@ memory-db = { version = "0.9", optional = true }
 
 [dev-dependencies]
 substrate-primitives = { path = "../primitives" }
-trie-bench = { version = "0.9" }
+trie-bench = { version = "0.10" }
 trie-standardmap = { version = "0.9" }
 keccak-hasher = { version = "0.2" }
 criterion = "0.2"

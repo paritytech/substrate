@@ -20,9 +20,9 @@
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
-use wasm_utils::UserError;
+use crate::wasm_utils::UserError;
 use wasmi;
 use wasmi::memory_units::Pages;
 use wasmi::{
@@ -558,7 +558,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
 	use primitives::{Blake2Hasher};
-	use wasm_executor::WasmExecutor;
+	use crate::wasm_executor::WasmExecutor;
 	use state_machine::TestExternalities;
 	use wabt;
 

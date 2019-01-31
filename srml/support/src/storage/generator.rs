@@ -194,7 +194,7 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Storage>(key: &K, f: F, storage: &S) -> R;
 }
 
-// TODO: Remove this in favour of `decl_storage` macro.
+// FIXME #1466 Remove this in favour of `decl_storage` macro.
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 #[macro_export]
 macro_rules! storage_items {
@@ -445,7 +445,6 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Get the key used to put the length field.
-			// TODO: concat macro should accept byte literals.
 			fn len_key() -> $crate::rstd::vec::Vec<u8> {
 				let mut key = $prefix.to_vec();
 				key.extend(b"len");
@@ -513,7 +512,7 @@ macro_rules! __handle_wrap_internal {
 	};
 }
 
-// TODO: revisit this idiom once we get `type`s in `impl`s.
+// FIXME: revisit this idiom once we get `type`s in `impl`s.
 /*impl<T: Trait> Module<T> {
 	type Now = super::Now<T>;
 }*/
@@ -636,9 +635,9 @@ mod tests {
 			GETMAPU32MYDEF get(map_u32_getter_mydef): map u32 => String = "map".into();
 			pub PUBGETMAPU32MYDEF get(pub_map_u32_getter_mydef): map u32 => String = "pubmap".into();
 
-			COMPLEX_TYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
-			COMPLEX_TYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
-			COMPLEX_TYPE3: ([u32;25]);
+			COMPLEXTYPE1: ::std::vec::Vec<<T as Trait>::Origin>;
+			COMPLEXTYPE2: (Vec<Vec<(u16,Box<(  )>)>>, u32);
+			COMPLEXTYPE3: ([u32;25]);
 		}
 		add_extra_genesis {
 			build(|_, _, _| {});
@@ -653,7 +652,6 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		prefix: DecodeDifferent::Encode("TestStorage"),
 		functions: DecodeDifferent::Encode(&[
 			StorageFunctionMetadata {
 				name: DecodeDifferent::Encode("U32"),
@@ -862,29 +860,29 @@ mod tests {
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("COMPLEX_TYPE1"),
+				name: DecodeDifferent::Encode("COMPLEXTYPE1"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("::std::vec::Vec<<T as Trait>::Origin>")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructCOMPLEX_TYPE1(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructCOMPLEXTYPE1(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("COMPLEX_TYPE2"),
+				name: DecodeDifferent::Encode("COMPLEXTYPE2"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("(Vec<Vec<(u16, Box<()>)>>, u32)")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructCOMPLEX_TYPE2(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructCOMPLEXTYPE2(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: DecodeDifferent::Encode("COMPLEX_TYPE3"),
+				name: DecodeDifferent::Encode("COMPLEXTYPE3"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("([u32; 25])")),
 				default: DecodeDifferent::Encode(
-					DefaultByteGetter(&__GetByteStructCOMPLEX_TYPE3(PhantomData::<TraitImpl>))
+					DefaultByteGetter(&__GetByteStructCOMPLEXTYPE3(PhantomData::<TraitImpl>))
 				),
 				documentation: DecodeDifferent::Encode(&[]),
 			},

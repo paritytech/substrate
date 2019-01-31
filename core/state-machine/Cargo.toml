@@ -3,6 +3,7 @@ name = "substrate-state-machine"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
+edition = "2018"
 
 [dependencies]
 hex-literal = "0.1.0"
@@ -12,6 +13,6 @@ heapsize = "0.4"
 hash-db = "0.9"
 trie-db = "0.9"
 trie-root = "0.9"
-substrate-trie = { path = "../trie" }
-substrate-primitives = { path = "../primitives" }
+trie = { package = "substrate-trie", path = "../trie" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
 parity-codec = "3.0"

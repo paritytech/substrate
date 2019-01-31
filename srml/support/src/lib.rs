@@ -50,6 +50,8 @@ pub extern crate parity_codec as codec;
 #[doc(hidden)]
 pub extern crate once_cell;
 
+pub extern crate paste;
+
 pub use self::storage::generator::Storage as GenericStorage;
 
 #[macro_use]
@@ -72,7 +74,6 @@ mod double_map;
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
-pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
 pub use double_map::StorageDoubleMap;
 

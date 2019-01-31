@@ -16,12 +16,10 @@
 
 //! Support code for the runtime. A set of test accounts.
 
-#[macro_use] extern crate hex_literal;
-#[macro_use] extern crate lazy_static;
-extern crate substrate_primitives;
-
 use std::collections::HashMap;
 use std::ops::Deref;
+use lazy_static::lazy_static;
+use hex_literal::{hex, hex_impl};
 use substrate_primitives::ed25519::{Pair, Public, Signature};
 pub use substrate_primitives::ed25519;
 

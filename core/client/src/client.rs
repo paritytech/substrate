@@ -130,7 +130,6 @@ pub trait BlockBody<Block: BlockT> {
 }
 
 /// Client info
-// TODO: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
 pub struct ClientInfo<Block: BlockT> {
 	/// Best block hash.
@@ -325,7 +324,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
-		// TODO: Post Poc-2 return an error if version is missing
 		self.executor.runtime_version(id)
 	}
 
@@ -738,11 +736,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			self.apply_finality_with_block_hash(operation, parent_hash, None, last_best, make_notifications)?;
 		}
 
-		// TODO: correct path logic for when to execute this function
-		// https://github.com/paritytech/substrate/issues/1232
+		// FIXME #1232: correct path logic for when to execute this function
 		let (storage_update,changes_update,storage_changes) = self.block_execution(&operation.op, &import_headers, origin, hash, body.clone())?;
 
-		// TODO: non longest-chain rule.
 		let is_new_best = finalized || match fork_choice {
 			ForkChoiceStrategy::LongestChain => import_headers.post().number() > &last_best_number,
 			ForkChoiceStrategy::Custom(v) => v,
@@ -880,7 +876,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// if the block is not a direct ancestor of the current best chain,
 		// then some other block is the common ancestor.
 		if route_from_best.common_block().hash != block {
-			// TODO: reorganize best block to be the best chain containing
+			// FIXME: #1442 reorganize best block to be the best chain containing
 			// `block`.
 		}
 
@@ -1020,7 +1016,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Get block status.
 	pub fn block_status(&self, id: &BlockId<Block>) -> error::Result<BlockStatus> {
-		// TODO: more efficient implementation
+		// this can probably be implemented more efficiently
 		if let BlockId::Hash(ref h) = id {
 			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
 				return Ok(BlockStatus::Queued);
@@ -1073,10 +1069,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// If `maybe_max_block_number` is `Some(max_block_number)`
 	/// the search is limited to block `numbers <= max_block_number`.
 	/// in other words as if there were no blocks greater `max_block_number`.
-	///
-	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
+	/// TODO : we want to move this implement to `blockchain::Backend`, see [#1443](https://github.com/paritytech/substrate/issues/1443)
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
-	/// TODO [snd] write down time complexity
+	/// TODO: document time complexity of this, see [#1444](https://github.com/paritytech/substrate/issues/1444)
 	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>)
 		-> error::Result<Option<Block::Hash>>
 	{
@@ -1140,7 +1135,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			// waiting until we are <= max_number
 			if let Some(max_number) = maybe_max_number {
 				loop {
-					// TODO [snd] this should be a panic
 					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
@@ -1160,7 +1154,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					return Ok(Some(best_hash));
 				}
 
-				// TODO [snd] this should be a panic
 				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
 					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
@@ -1176,8 +1169,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		// header may be on a dead fork -- the only leaves that are considered are
 		// those which can still be finalized.
 		//
-		// TODO: only issue this warning when not on a dead fork
-		// part of https://github.com/paritytech/substrate/issues/1558
+		// FIXME #1558 only issue this warning when not on a dead fork
 		warn!(
 			"Block {:?} exists in chain but not found when following all \
 			leaves backwards. Number limit = {:?}",
