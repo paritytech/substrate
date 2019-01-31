@@ -9,7 +9,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-extern crate substrate_client as client;
+use substrate_client as client;
 
 #[macro_use]
 extern crate parity_codec_derive;

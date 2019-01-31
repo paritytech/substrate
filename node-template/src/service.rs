@@ -13,7 +13,7 @@ use substrate_service::{
 use basic_authorship::ProposerFactory;
 use node_executor;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
-use client;
+use substrate_client as client;
 use primitives::ed25519::Pair;
 use inherents::InherentDataProviders;
 
