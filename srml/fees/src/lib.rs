@@ -28,7 +28,7 @@ extern crate parity_codec as codec;
 extern crate srml_support as runtime_support;
 
 use runtime_support::{Parameter, dispatch::Result};
-use primitives::traits::{Member, SimpleArithmetic, ChargeFee, TransferAsset};
+use primitives::traits::{Member, SimpleArithmetic, ChargeBytesFee, ChargeFee, TransferAsset};
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
@@ -53,7 +53,7 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where <T as Trait>::Amount {
-		/// Fee charged (extrinsic index, fee amount)
+		/// Fee charged (extrinsic_index, fee_amount)
 		Charged(u32, Amount),
 	}
 );
@@ -69,13 +69,15 @@ decl_storage! {
 	}
 }
 
-impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
-	type Amount = T::Amount;
-
+impl<T: Trait> ChargeBytesFee<T::AccountId> for Module<T> {
 	fn charge_base_bytes_fee(transactor: &T::AccountId, len: usize) -> Result {
 		// TODO: update CurrentTransactionFee, make transfer
 		Ok(())
 	}
+}
+
+impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
+	type Amount = T::Amount;
 
 	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
 		// TODO: update CurrentTransactionFee, make transfer

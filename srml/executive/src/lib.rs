@@ -46,7 +46,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	ChargeFee, Hash, As, Digest};
+	ChargeBytesFee, Hash, As, Digest};
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -79,7 +79,7 @@ impl<
 	Context: Default,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Payment: ChargeFee<System::AccountId>,
+	Payment: ChargeBytesFee<System::AccountId>,
 	Finalisation: OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, Finalisation> where
 	Block::Extrinsic: Checkable<Context> + Codec,

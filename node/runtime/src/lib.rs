@@ -114,9 +114,9 @@ impl balances::Trait for Runtime {
 }
 
 impl fees::Trait for Runtime {
-	type Event = Event;
 	type Amount = Balance;
-	type TransferAsset = Balances
+	type TransferAsset = Balances;
+	type Event = Event;
 }
 
 impl consensus::Trait for Runtime {
@@ -219,6 +219,7 @@ construct_runtime!(
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		Sudo: sudo,
+		Fees: fees::{Module, Storage, Event<T>},
 	}
 );
 

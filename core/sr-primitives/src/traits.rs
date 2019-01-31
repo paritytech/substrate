@@ -124,13 +124,17 @@ pub trait BlockNumberToHash {
 	}
 }
 
-/// Charge fee trait
-pub trait ChargeFee<AccountId> {
-	type Amount;
-
+/// Charge bytes fee trait
+pub trait ChargeBytesFee<AccountId> {
 	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
 	/// `encoded_len` bytes. Return Ok iff the payment was successful.
 	fn charge_base_bytes_fee(transactor: &AccountId, len: usize) -> Result<(), &'static str>;
+}
+
+/// Charge fee trait
+pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
+	/// The type of fee amount.
+	type Amount;
 
 	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
 	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
@@ -141,6 +145,7 @@ pub trait ChargeFee<AccountId> {
 
 /// Transfer fungible asset trait
 pub trait TransferAsset<AccountId> {
+	/// The type of asset amount.
 	type Amount;
 
 	/// Transfer asset from `from` account to `to` account with `amount` of asset
@@ -153,34 +158,23 @@ pub trait TransferAsset<AccountId> {
 	fn transfer_to(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 
+impl<T> ChargeBytesFee<T> for () {
+	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+}
+
 impl<T> ChargeFee<T> for () {
 	type Amount = ();
 
-	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> {
-		Ok(())
-	}
-
-	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> {
-		Ok(())
-	}
-
+	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 	fn refund_fee(_: &T, _: Self::Amount) {}
 }
 
 impl<T> TransferAsset<T> for () {
 	type Amount = ();
 
-	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> {
-		Ok(())
-	}
-
-	fn transfer_from(_: &T, _: Self::Amount) -> Result<(), &'static str> {
-		Ok(())
-	}
-
-	fn transfer_to(_: &T, _: Self::Amount) -> Result<(), &'static str> {
-		Ok(())
-	}
+	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn transfer_from(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn transfer_to(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
