@@ -190,12 +190,6 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
-		if number == 0 {
-			return Ok(CommitSet {
-				data: changeset,
-				meta: Default::default(),
-			})
-		}
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
@@ -232,12 +226,16 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		Ok(commit)
 	}
 
-	pub fn best_canonical(&self) -> u64 {
+	pub fn best_canonical(&self) -> Option<u64> {
 		return self.non_canonical.last_canonicalized_block_number()
 	}
 
-	pub fn is_pruned(&self, number: u64) -> bool {
-		self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending())
+	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
+		if self.best_canonical().map(|c| number > c).unwrap_or(true) {
+			!self.non_canonical.have_block(hash)
+		} else {
+			self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending() || !pruning.have_block(hash))
+		}
 	}
 
 	fn prune(&mut self, commit: &mut CommitSet<Key>) {
@@ -351,13 +349,13 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Returns last finalized block number.
-	pub fn best_canonical(&self) -> u64 {
+	pub fn best_canonical(&self) -> Option<u64> {
 		return self.db.read().best_canonical()
 	}
 
 	/// Check if block is pruned away.
-	pub fn is_pruned(&self, number: u64) -> bool {
-		return self.db.read().is_pruned(number)
+	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
+		return self.db.read().is_pruned(hash, number)
 	}
 
 	/// Apply all pending changes
@@ -471,9 +469,10 @@ mod tests {
 			max_blocks: Some(1),
 			max_mem: None,
 		}));
-		assert!(sdb.is_pruned(0));
-		assert!(sdb.is_pruned(1));
-		assert!(!sdb.is_pruned(2));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(0), 0));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(1), 1));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(21), 2));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
 	}
 
@@ -483,8 +482,10 @@ mod tests {
 			max_blocks: Some(2),
 			max_mem: None,
 		}));
-		assert!(sdb.is_pruned(0));
-		assert!(!sdb.is_pruned(1));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(0), 0));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(1), 1));
+		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
+		assert!(sdb.is_pruned(&H256::from_low_u64_be(22), 2));
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
 	}
 }

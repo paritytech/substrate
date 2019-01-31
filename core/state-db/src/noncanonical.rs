@@ -119,10 +119,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	pub fn insert<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
 		let front_block_number = self.pending_front_block_number();
-		if self.levels.is_empty() && self.last_canonicalized.is_none() {
-			if number < 1 {
-				return Err(Error::InvalidBlockNumber);
-			}
+		if self.levels.is_empty() && self.last_canonicalized.is_none() && number > 0 {
 			// assume that parent was canonicalized
 			let last_canonicalized = (parent_hash.clone(), number - 1);
 			commit.meta.inserted.push((to_meta_key(LAST_CANONICAL, &()), last_canonicalized.encode()));
@@ -224,8 +221,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			.unwrap_or(0)
 	}
 
-	pub fn last_canonicalized_block_number(&self) -> u64 {
-		self.last_canonicalized.as_ref().map(|&(_, n)| n).unwrap_or(0)
+	pub fn last_canonicalized_block_number(&self) -> Option<u64> {
+		match self.last_canonicalized.as_ref().map(|&(_, n)| n) {
+			Some(n) => Some(n + self.pending_canonicalizations.len() as u64),
+			None if !self.pending_canonicalizations.is_empty() => Some(self.pending_canonicalizations.len() as u64),
+			_ => None,
+		}
 	}
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
@@ -278,7 +279,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			}
 		}
 		if let Some(hash) = last {
-			let last_canonicalized = (hash, self.last_canonicalized_block_number() + count);
+			let last_canonicalized = (hash, self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1));
 			self.last_canonicalized = Some(last_canonicalized);
 		}
 	}
@@ -293,6 +294,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			}
 		}
 		None
+	}
+
+	/// Check if the block is in the canonicalization queue. 
+	pub fn have_block(&self, hash: &BlockHash) -> bool {
+		(self.parents.contains_key(hash) || self.pending_insertions.contains(hash))
+			&& !self.pending_canonicalizations.contains(hash)
 	}
 
 	/// Revert a single level. Returns commit set that deletes the journal or `None` if not possible.
@@ -589,6 +596,10 @@ mod tests {
 		assert!(contains(&overlay, 121));
 		assert!(contains(&overlay, 122));
 		assert!(contains(&overlay, 123));
+		assert!(overlay.have_block(&h_1_2_1));
+		assert!(!overlay.have_block(&h_1_2));
+		assert!(!overlay.have_block(&h_1_1));
+		assert!(!overlay.have_block(&h_1_1_1));
 
 		// canonicalize 1_2_2
 		db.commit(&overlay.canonicalize::<io::Error>(&h_1_2_2).unwrap());

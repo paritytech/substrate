@@ -26,3 +26,4 @@ trie = { package = "substrate-trie", path = "../../trie" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 substrate-keyring = { path = "../../keyring" }
 test-client = { package = "substrate-test-client", path = "../../test-client" }
+env_logger = { version = "0.6" }
