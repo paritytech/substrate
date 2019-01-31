@@ -20,8 +20,8 @@ pub struct Dag<H, N, V> {
 }
 
 impl<H, N, V> Dag<H, N, V> where
-	H: Clone + PartialEq,
-	N: Clone + Ord
+	H: PartialEq,
+	N: Ord
 {
 	pub fn empty() -> Dag<H, N, V> {
 		Dag { roots: Vec::new() }
