@@ -53,12 +53,10 @@ use params::{
 };
 pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
-pub use params::{CoreParams, CoreCommands};
 use app_dirs::{AppInfo, AppDataType};
 use error_chain::bail;
 use log::info;
 use lazy_static::lazy_static;
-use state_machine::ExecutionStrategy;
 
 use futures::Future;
 
@@ -304,36 +302,9 @@ fn fill_network_configuration(
 	Ok(())
 }
 
-fn parse_execution_strategies(matches: &clap::ArgMatches) -> error::Result<ExecutionStrategies> {
-	let mut execution_strategies: ExecutionStrategies = Default::default();
-	let parse_execution_strategy = |s: &str| -> error::Result<ExecutionStrategy> {
-		match s {
-			"both" => Ok(ExecutionStrategy::Both),
-			"native" => Ok(ExecutionStrategy::NativeWhenPossible),
-			"wasm" => Ok(ExecutionStrategy::AlwaysWasm),
-			"native-else-wasm" => Ok(ExecutionStrategy::NativeElseWasm),
-			_ => bail!(create_input_err("Invalid execution mode specified")),
-		}
-	};
-	if let Some(s) = matches.value_of("syncing_execution") {
-		execution_strategies.syncing = parse_execution_strategy(s)?; 
-	}
-	if let Some(s) = matches.value_of("importing_execution") {
-		execution_strategies.importing = parse_execution_strategy(s)?; 
-	}
-	if let Some(s) = matches.value_of("block_construction_execution") {
-		execution_strategies.block_construction = parse_execution_strategy(s)?; 
-	}
-	Ok(execution_strategies)
-}
-
-/// Parse clap::Matches into config and chain specification
-pub fn parse_matches<'a, F, S>(
-	spec_factory: S,
-	version: &VersionInfo,
-	impl_name: &'static str,
-	matches: &clap::ArgMatches<'a>,
-) -> error::Result<(ChainSpec<<F as service::ServiceFactory>::Genesis>, FactoryFullConfiguration<F>)>
+fn create_run_node_config<F, S>(
+	cli: RunCmd, spec_factory: S, impl_name: &'static str, version: &VersionInfo
+) -> error::Result<FactoryFullConfiguration<F>>
 where
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
@@ -380,15 +351,20 @@ where
 	};
 
 	let role =
-		if matches.is_present("light") {
+		if cli.light {
 			service::Roles::LIGHT
-		} else if matches.is_present("validator") || matches.is_present("dev") {
+		} else if cli.validator || cli.shared_params.dev {
 			service::Roles::AUTHORITY
 		} else {
 			service::Roles::FULL
 		};
 
-	config.execution_strategies = parse_execution_strategies(matches)?;
+	config.execution_strategies = ExecutionStrategies {
+		syncing: cli.syncing_execution.into(),
+		importing: cli.importing_execution.into(),
+		block_construction: cli.block_construction_execution.into(),
+	}; 
+
 	config.roles = role;
 	let client_id = config.client_id();
 	fill_network_configuration(
@@ -562,11 +538,9 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path.to_string();
-	config.execution_strategies = parse_execution_strategies(matches)?;
+	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
-	let file: Box<Read> = match matches.value_of("input") {
+	let file: Box<Read> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),
 		None => Box::new(stdin()),
 	};

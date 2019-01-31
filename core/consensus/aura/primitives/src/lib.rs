@@ -19,6 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use substrate_client::decl_runtime_apis;
+use substrate_client::runtime_api::ExecutionContext;
 
 decl_runtime_apis! {
 	/// API necessary for block authorship with aura.

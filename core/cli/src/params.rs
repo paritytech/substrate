@@ -38,6 +38,7 @@ arg_enum! {
 		Native,
 		Wasm,
 		Both,
+		Native-Else-Wasm,
 	}
 }
 
@@ -47,6 +48,7 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Native => client::ExecutionStrategy::NativeWhenPossible,
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
+			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
 		}
 	}
 }
@@ -175,17 +177,41 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL")]
 	pub telemetry_url: Option<String>,
 
-	/// The means of execution used when calling into the runtime. Can be either wasm, native or both.
+	/// The means of execution used when calling into the runtime. Can be either wasm, native, native-else-wasm or both.
 	#[structopt(
-		long = "execution",
+		long = "syncing-execution",
 		value_name = "STRATEGY",
 		raw(
 			possible_values = "&ExecutionStrategy::variants()",
 			case_insensitive = "true",
-			default_value = r#""Both""#
+			default_value = r#""NativeElseWasm""#
 		)
 	)]
-	pub execution: ExecutionStrategy,
+	pub syncing_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime. Can be either wasm, native, native-else-wasm or both.
+	#[structopt(
+		long = "importing-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeElseWasm""#
+		)
+	)]
+	pub importing_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime. Can be either wasm, native, native-else-wasm or both.
+	#[structopt(
+		long = "block-construction-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""Wasm""#
+		)
+	)]
+	pub block_construction_execution: ExecutionStrategy,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -254,33 +280,9 @@ pub struct ImportBlocksCmd {
 	#[structopt(parse(from_os_str))]
 	pub input: Option<PathBuf>,
 
-	/// The means of execution used when executing blocks. Can be either wasm, native or both.
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Both""#
-		)
-	)]
-	pub execution: ExecutionStrategy,
-
 	/// The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
 	#[structopt(long = "max-heap-pages", value_name = "COUNT")]
 	pub max_heap_pages: Option<u32>,
-	
-	/// The execution strategy when syncing. Can be either wasm, native, native-else-wasm or both. Default is native-else-wasm.
-	#[structopt(long = "syncing-execution", value_name = "STRATEGY")]
-	syncing_execution: Option<ExecutionStrategy>,
-
-	/// The execution strategy when importing blocks. Can be either wasm, native, native-else-wasm or both. Default is native-else-wasm.
-	#[structopt(long = "importing-execution", value_name = "STRATEGY")]
-	importing_execution: Option<ExecutionStrategy>,
-
-	/// The execution strategy when constructing blocks. Can be either wasm, native, native-else-wasm or both. Default is wasm.
-	#[structopt(long = "block-construction-execution", value_name = "STRATEGY")]
-	block_construction_execution: Option<ExecutionStrategy>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -309,19 +311,6 @@ pub struct PurgeChainCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
-}
-
-/// How to execute blocks
-#[derive(Debug, StructOpt)]
-pub enum ExecutionStrategy {
-	/// Execute native only
-	Native,
-	/// Execute wasm only
-	Wasm,
-	/// Execute natively when possible, wasm otherwise
-	Both,
-	/// First native, then if that fails or is not possible, wasm.
-	NativeElseWasm,
 }
 
 impl_get_log_filter!(PurgeChainCmd);
@@ -385,31 +374,6 @@ impl<CC, RP> StructOpt for CoreParams<CC, RP> where
 				.about("Remove the whole chain data.")
 		)
 	}
-}
-
-impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
-	fn get_log_filter(&self) -> Option<String> {
-		match self {
-			CoreParams::Run(c) => c.left.get_log_filter(),
-			CoreParams::BuildSpec(c) => c.get_log_filter(),
-			CoreParams::ExportBlocks(c) => c.get_log_filter(),
-			CoreParams::ImportBlocks(c) => c.get_log_filter(),
-			CoreParams::PurgeChain(c) => c.get_log_filter(),
-			CoreParams::Revert(c) => c.get_log_filter(),
-			CoreParams::Custom(c) => c.get_log_filter(),
-		}
-	}
-}
-
-impl std::str::FromStr for ExecutionStrategy {
-	type Err = String;
-	fn from_str(input: &str) -> Result<Self, Self::Err> {
-		match input {
-			"native" => Ok(ExecutionStrategy::Native),
-			"wasm" | "webassembly" => Ok(ExecutionStrategy::Wasm),
-			"both" => Ok(ExecutionStrategy::Both),
-			"native-else-wasm" => Ok(ExecutionStrategy::NativeElseWasm),
-			_ => Err("Please specify either 'native', 'wasm', 'native-else-wasm' or 'both".to_owned())
 
 	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
 		match matches.subcommand() {
@@ -424,6 +388,20 @@ impl std::str::FromStr for ExecutionStrategy {
 				CoreParams::PurgeChain(PurgeChainCmd::from_clap(matches)),
 			(_, None) => CoreParams::Run(MergeParameters::from_clap(matches)),
 			_ => CoreParams::Custom(CC::from_clap(matches)),
+		}
+	}
+}
+
+impl<CC, RP> GetLogFilter for CoreParams<CC, RP> where CC: GetLogFilter {
+	fn get_log_filter(&self) -> Option<String> {
+		match self {
+			CoreParams::Run(c) => c.left.get_log_filter(),
+			CoreParams::BuildSpec(c) => c.get_log_filter(),
+			CoreParams::ExportBlocks(c) => c.get_log_filter(),
+			CoreParams::ImportBlocks(c) => c.get_log_filter(),
+			CoreParams::PurgeChain(c) => c.get_log_filter(),
+			CoreParams::Revert(c) => c.get_log_filter(),
+			CoreParams::Custom(c) => c.get_log_filter(),
 		}
 	}
 }
