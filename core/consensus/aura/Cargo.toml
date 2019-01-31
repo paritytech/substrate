@@ -18,8 +18,8 @@ aura_primitives = { package = "substrate-consensus-aura-primitives", path = "pri
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 srml-consensus = { path = "../../../srml/consensus" }
 srml-aura = { path = "../../../srml/aura" }
-futures = "0.1.17"
-tokio = "0.1.7"
+futures = "0.1"
+tokio = "0.1"
 parking_lot = "0.7.1"
 error-chain = "0.12"
 log = "0.4"
