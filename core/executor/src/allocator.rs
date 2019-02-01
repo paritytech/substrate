@@ -106,22 +106,6 @@ impl FreeingBumpHeapAllocator {
 		(self.ptr_offset + ptr) as u32
 	}
 
-	fn get_heap(&mut self, ptr: u32, size: usize) -> Vec<u8> {
-		self.heap.get(self.ptr_offset + ptr, size).unwrap()
-	}
-
-	fn get_heap_byte(&mut self, ptr: u32) -> u8 {
-		self.heap.get(self.ptr_offset + ptr, 1).unwrap()[0]
-	}
-
-	fn set_heap(&mut self, ptr: u32, value: u8) {
-		self.heap.set(self.ptr_offset + ptr as u32, &[value]).unwrap()
-	}
-
-	fn set_heap_bytes(&mut self, ptr: u32, value: &[u8]) {
-		self.heap.set(self.ptr_offset + ptr as u32, value).unwrap()
-	}
-
 	/// Deallocates the space which was allocated for a pointer.
 	pub fn deallocate(&mut self, ptr: u32) {
 		let ptr = ptr - self.ptr_offset;
@@ -159,6 +143,22 @@ impl FreeingBumpHeapAllocator {
 	fn get_item_size_from_index(index: usize) -> usize {
 		// we shift 1 by three places, since the first possible item size is 8
 		1 << 3 << index
+	}
+
+	fn get_heap(&mut self, ptr: u32, size: usize) -> Vec<u8> {
+		self.heap.get(self.ptr_offset + ptr, size).unwrap()
+	}
+
+	fn get_heap_byte(&mut self, ptr: u32) -> u8 {
+		self.heap.get(self.ptr_offset + ptr, 1).unwrap()[0]
+	}
+
+	fn set_heap(&mut self, ptr: u32, value: u8) {
+		self.heap.set(self.ptr_offset + ptr as u32, &[value]).unwrap()
+	}
+
+	fn set_heap_bytes(&mut self, ptr: u32, value: &[u8]) {
+		self.heap.set(self.ptr_offset + ptr as u32, value).unwrap()
 	}
 
 }
