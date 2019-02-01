@@ -118,7 +118,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
 	pub fn insert<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
-		let front_block_number = self.pending_front_block_number();
+		let front_block_number = self.front_block_number();
 		if self.levels.is_empty() && self.last_canonicalized.is_none() && number > 0 {
 			// assume that parent was canonicalized
 			let last_canonicalized = (parent_hash.clone(), number - 1);
@@ -214,19 +214,24 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		self.last_canonicalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
 	}
 
-	fn pending_front_block_number(&self) -> u64 {
-		self.last_canonicalized
-			.as_ref()
-			.map(|&(_, n)| n + 1 + self.pending_canonicalizations.len() as u64)
-			.unwrap_or(0)
-	}
-
 	pub fn last_canonicalized_block_number(&self) -> Option<u64> {
 		match self.last_canonicalized.as_ref().map(|&(_, n)| n) {
 			Some(n) => Some(n + self.pending_canonicalizations.len() as u64),
 			None if !self.pending_canonicalizations.is_empty() => Some(self.pending_canonicalizations.len() as u64),
 			_ => None,
 		}
+	}
+
+	pub fn last_canonicalized_hash(&self) -> Option<BlockHash> {
+		self.last_canonicalized.as_ref().map(|&(ref h, _)| h.clone())
+	}
+
+	pub fn top_level(&self) -> Vec<(BlockHash, u64)> {
+		let start = self.last_canonicalized_block_number().unwrap_or(0);
+		self.levels
+			.get(self.pending_canonicalizations.len())
+			.map(|level| level.iter().map(|r| (r.hash.clone(), start)).collect())
+			.unwrap_or_default()
 	}
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
@@ -504,6 +509,23 @@ mod tests {
 		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
 	}
 
+	#[test]
+	fn insert_with_pending_canonicalization() {
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let h3 = H256::random();
+		let mut db = make_db(&[]);
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		let changeset = make_changeset(&[], &[]);
+		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset.clone()).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset.clone()).unwrap());
+		overlay.apply_pending();
+		db.commit(&overlay.canonicalize::<io::Error>(&h1).unwrap());
+		db.commit(&overlay.canonicalize::<io::Error>(&h2).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h3, 3, &h2, changeset.clone()).unwrap());
+		overlay.apply_pending();
+		assert_eq!(overlay.levels.len(), 1);
+	}
 
 	#[test]
 	fn complex_tree() {
