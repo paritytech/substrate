@@ -135,10 +135,18 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 		mut self,
 		parent: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
-		authorities_at: Option<Vec<AuthorityIdFor<Block>>>,
+		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		is_final: bool,
 	) -> ClientResult<Self> {
 		assert!(self.authorities_at_op.is_none());
+
+		// new_authorities are only passed when they're changed
+		// but the cache is currenty tracks value changes itself && we should call it with
+		// value for parent block
+		let authorities = match new_authorities {
+			Some(new_authorities) => Some(new_authorities),
+			None => self.cache.authorities_at.value_at_block(&parent)?,
+		};
 
 		self.authorities_at_op = self.cache.authorities_at.on_block_insert(
 			&mut self::list_storage::DbStorageTransaction::new(
@@ -147,7 +155,7 @@ impl<'a, Block: BlockT> DbCacheTransaction<'a, Block> {
 			),
 			parent,
 			block,
-			authorities_at,
+			authorities,
 			is_final,
 		)?;
 

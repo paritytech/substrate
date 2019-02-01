@@ -307,7 +307,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn import_header(
 		&self,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityIdFor<Block>>>,
+		new_authorities: Option<Vec<AuthorityIdFor<Block>>>,
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
@@ -403,7 +403,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				.on_block_insert(
 					ComplexBlockId::new(*header.parent_hash(), if number.is_zero() { Zero::zero() } else { number - One::one() }),
 					ComplexBlockId::new(hash, number),
-					authorities,
+					new_authorities,
 					finalized,
 				)?
 				.into_ops();
@@ -465,7 +465,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	}
 
 	fn cache(&self) -> Option<&BlockchainCache<Block>> {
-		None
+		Some(&self.cache)
 	}
 }
 

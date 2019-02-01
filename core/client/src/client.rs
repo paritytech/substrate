@@ -38,7 +38,7 @@ use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::{Encode, Decode};
+use codec::{Encode, Decode, KeyedVec};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
@@ -255,10 +255,23 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
+			let genesis_authorities_len: Option<u32> = genesis_storage
+				.get(well_known_keys::AUTHORITY_COUNT)
+				.and_then(|v| Decode::decode(&mut &v[..]));
+			let genesis_authorities = genesis_authorities_len.map(|len| {
+				(0..len).filter_map(|i| {
+					let auth_key = i.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX);
+					let auth: Option<AuthorityIdFor<Block>> = genesis_storage.get(&auth_key)
+						.and_then(|v| Decode::decode(&mut &v[..]));
+					auth
+				}).collect()
+			});
+
 			let mut op = backend.begin_operation()?;
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
+
 			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			op.set_block_data(
 				genesis_block.deconstruct().0,
@@ -266,6 +279,9 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				None,
 				crate::backend::NewBlockState::Final
 			)?;
+			if let Some(genesis_authorities) = genesis_authorities{
+				op.update_authorities(genesis_authorities);
+			}
 			backend.commit_operation(op)?;
 		}
 
