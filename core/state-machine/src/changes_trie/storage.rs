@@ -22,15 +22,15 @@ use trie::DBValue;
 use heapsize::HeapSizeOf;
 use trie::MemoryDB;
 use parking_lot::RwLock;
-use changes_trie::{AnchorBlockId, RootsStorage, Storage};
-use trie_backend_essence::TrieBackendStorage;
+use crate::changes_trie::{AnchorBlockId, RootsStorage, Storage};
+use crate::trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
 use std::collections::HashSet;
 #[cfg(test)]
-use backend::insert_into_memory_db;
+use crate::backend::insert_into_memory_db;
 #[cfg(test)]
-use changes_trie::input::InputPair;
+use crate::changes_trie::input::InputPair;
 
 /// In-memory implementation of changes trie storage.
 pub struct InMemoryStorage<H: Hasher> where H::Out: HeapSizeOf {

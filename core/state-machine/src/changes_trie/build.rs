@@ -17,15 +17,15 @@
 //! Structures and functions required to build changes trie for given block.
 
 use std::collections::{BTreeMap, BTreeSet};
-use codec::Decode;
+use parity_codec::Decode;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use backend::Backend;
-use overlayed_changes::OverlayedChanges;
-use trie_backend_essence::{TrieBackendStorage, TrieBackendEssence};
-use changes_trie::build_iterator::digest_build_iterator;
-use changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
-use changes_trie::{AnchorBlockId, Configuration, Storage};
+use crate::backend::Backend;
+use crate::overlayed_changes::OverlayedChanges;
+use crate::trie_backend_essence::{TrieBackendStorage, TrieBackendEssence};
+use crate::changes_trie::build_iterator::digest_build_iterator;
+use crate::changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
+use crate::changes_trie::{AnchorBlockId, Configuration, Storage};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -142,12 +142,12 @@ fn prepare_digest_input<'a, S, H>(
 
 #[cfg(test)]
 mod test {
-	use codec::Encode;
+	use parity_codec::Encode;
 	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-	use backend::InMemory;
-	use changes_trie::storage::InMemoryStorage;
-	use overlayed_changes::OverlayedValue;
+	use crate::backend::InMemory;
+	use crate::changes_trie::storage::InMemoryStorage;
+	use crate::overlayed_changes::OverlayedValue;
 	use super::*;
 
 	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher>, OverlayedChanges) {

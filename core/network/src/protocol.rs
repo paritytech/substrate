@@ -458,7 +458,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			message::FromBlock::Number(n) => BlockId::Number(n),
 		};
 		let max = cmp::min(request.max.unwrap_or(u32::max_value()), MAX_BLOCK_DATA_RESPONSE) as usize;
-		// TODO: receipts, etc.
 		let get_header = request.fields.contains(message::BlockAttributes::HEADER);
 		let get_body = request.fields.contains(message::BlockAttributes::BODY);
 		let get_justification = request.fields.contains(message::BlockAttributes::JUSTIFICATION);
@@ -498,7 +497,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn on_block_response(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
-		// TODO: validate response
 		let blocks_range = match (
 				response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 				response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),

@@ -70,11 +70,7 @@ impl NetworkConfiguration {
 		NetworkConfiguration {
 			config_path: None,
 			net_config_path: None,
-			listen_addresses: vec![
-				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(Protocol::Tcp(30333)))
-					.collect()
-			],
+			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			use_secret: None,

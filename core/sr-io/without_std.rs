@@ -315,8 +315,6 @@ pub fn trie_root<
 	B: AsRef<[u8]>,
 >(_input: I) -> [u8; 32] {
 	unimplemented!()
-	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
-	// implemneted natively and compile the trie logic as wasm).
 }
 
 /// A trie root formed from the enumerated items.
@@ -326,8 +324,6 @@ pub fn ordered_trie_root<
 	A: AsRef<[u8]>
 >(_input: I) -> [u8; 32] {
 	unimplemented!()
-	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
-	// implemneted natively and compile the trie logic as wasm).
 }
 
 /// The current relay chain identifier.

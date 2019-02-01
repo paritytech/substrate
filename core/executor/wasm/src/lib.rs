@@ -6,10 +6,6 @@ extern crate alloc;
 use alloc::vec::Vec;
 use alloc::slice;
 
-extern crate sr_io as runtime_io;
-extern crate sr_sandbox as sandbox;
-extern crate substrate_primitives;
-
 use runtime_io::{
 	set_storage, storage, clear_prefix, print, blake2_256,
 	twox_128, twox_256, ed25519_verify, enumerated_trie_root

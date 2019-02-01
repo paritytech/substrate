@@ -2,14 +2,15 @@
 name = "substrate-test-client"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
-substrate-client = { path = "../client" }
+client = { package = "substrate-client", path = "../client" }
 parity-codec = "3.0"
-substrate-executor = { path = "../executor" }
-substrate-consensus-common = { path = "../consensus/common" }
-substrate-keyring = { path = "../../core/keyring" }
-substrate-primitives = { path = "../primitives" }
-substrate-state-machine = { path = "../state-machine" }
-substrate-test-runtime = { path = "../test-runtime" }
-sr-primitives = { path = "../sr-primitives" }
+executor = { package = "substrate-executor", path = "../executor" }
+consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+state_machine = { package = "substrate-state-machine", path = "../state-machine" }
+runtime = { package = "substrate-test-runtime", path = "../test-runtime" }
+runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }

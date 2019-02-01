@@ -21,12 +21,14 @@ use std::{
 	time,
 };
 
-use base_pool as base;
-use error;
-use listener::Listener;
-use rotator::PoolRotator;
-use watcher::Watcher;
+use crate::base_pool as base;
+use crate::error;
+use crate::listener::Listener;
+use crate::rotator::PoolRotator;
+use crate::watcher::Watcher;
 use serde::Serialize;
+use error_chain::bail;
+use log::debug;
 
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -116,12 +118,12 @@ impl<B: ChainApi> Pool<B> {
 							valid_till: block_number.as_().saturating_add(longevity),
 						})
 					},
-					TransactionValidity::Invalid => {
-						bail!(error::Error::from(error::ErrorKind::InvalidTransaction))
+					TransactionValidity::Invalid(e) => {
+						bail!(error::Error::from(error::ErrorKind::InvalidTransaction(e)))
 					},
-					TransactionValidity::Unknown => {
+					TransactionValidity::Unknown(e) => {
 						self.listener.write().invalid(&hash);
-						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity))
+						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity(e)))
 					},
 				}
 			})
@@ -245,7 +247,7 @@ impl<B: ChainApi> Pool<B> {
 		// Collect the hashes of transactions that now became invalid (meaning that they are succesfuly pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
 			Err(Ok(err)) => match err.kind() {
-				error::ErrorKind::InvalidTransaction => Some(hashes[idx].clone()),
+				error::ErrorKind::InvalidTransaction(_) => Some(hashes[idx].clone()),
 				_ => None,
 			},
 			_ => None,
@@ -305,7 +307,6 @@ impl<B: ChainApi> Pool<B> {
 
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
-	/// TODO [ToDr] Options
 	pub fn new(_options: Options, api: B) -> Self {
 		Pool {
 			api,
@@ -394,6 +395,8 @@ mod tests {
 	use super::*;
 	use futures::Stream;
 	use test_runtime::{Block, Extrinsic, Transfer, H256};
+	use assert_matches::assert_matches;
+	use crate::watcher;
 
 	#[derive(Debug, Default)]
 	struct TestApi;
@@ -409,7 +412,7 @@ mod tests {
 			let nonce = uxt.transfer().nonce;
 
 			if nonce < block_number {
-				Ok(TransactionValidity::Invalid)
+				Ok(TransactionValidity::Invalid(0))
 			} else {
 				Ok(TransactionValidity::Valid {
 					priority: 4,
@@ -606,8 +609,8 @@ mod tests {
 
 			// then
 			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(H256::from_low_u64_be(2)))));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalised(H256::from_low_u64_be(2)))));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -631,8 +634,8 @@ mod tests {
 
 			// then
 			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(H256::from_low_u64_be(2)))));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Finalised(H256::from_low_u64_be(2)))));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -660,8 +663,8 @@ mod tests {
 
 			// then
 			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Future)));
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Future)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
 		}
 
 		#[test]
@@ -683,8 +686,8 @@ mod tests {
 
 			// then
 			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Invalid)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Invalid)));
 			assert_eq!(stream.next(), None);
 		}
 
@@ -710,8 +713,8 @@ mod tests {
 
 			// then
 			let mut stream = watcher.into_stream().wait();
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
-			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Broadcast(peers))));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Broadcast(peers))));
 		}
 	}
 }

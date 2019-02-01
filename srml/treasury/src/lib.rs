@@ -201,7 +201,7 @@ impl<T: Trait> Module<T> {
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: T::Balance) -> T::Balance {
-		Self::proposal_bond_minimum().max(Self::proposal_bond().times(value))
+		Self::proposal_bond_minimum().max(Self::proposal_bond() * value)
 	}
 
 	// Spend some money!
@@ -238,7 +238,7 @@ impl<T: Trait> Module<T> {
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = Self::burn().times(budget_remaining).min(budget_remaining);
+			let burn = (Self::burn() * budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}

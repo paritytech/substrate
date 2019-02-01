@@ -181,7 +181,7 @@ decl_module! {
 		/// Report some misbehaviour.
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
-			// TODO: https://github.com/paritytech/substrate/issues/1112
+			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 
 		fn on_finalise(block_number: T::BlockNumber) {
@@ -259,7 +259,7 @@ impl<T: Trait> Module<T> where Ed25519AuthorityId: core::convert::From<<T as Tra
 /// sets should be.
 pub struct SyncedAuthorities<T>(::rstd::marker::PhantomData<T>);
 
-// TODO: remove when https://github.com/rust-lang/rust/issues/26925 is fixed
+// FIXME: remove when https://github.com/rust-lang/rust/issues/26925 is fixed
 impl<T> Default for SyncedAuthorities<T> {
 	fn default() -> Self {
 		SyncedAuthorities(::rstd::marker::PhantomData)
