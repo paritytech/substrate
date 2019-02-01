@@ -314,13 +314,15 @@ mod tests {
 
 		macro_rules! push_msg {
 			($topic:expr, $hash: expr, $now: expr, $m:expr) => {
-				consensus.messages.push(MessageEntry {
-					topic: $topic,
-					message_hash: $hash,
-					message: $m,
-					broadcast: false,
-				});
-				consensus.message_times.insert(($topic, $hash), $now);
+				if consensus.known_messages.insert(($topic, $hash)) {
+					consensus.messages.push(MessageEntry {
+						topic: $topic,
+						message_hash: $hash,
+						message: $m,
+						broadcast: false,
+					});
+					consensus.message_times.insert(($topic, $hash), $now);
+				}
 			}
 		}
 
@@ -342,18 +344,21 @@ mod tests {
 		// topic that was used in one message.
 		consensus.collect_garbage(|topic| topic != &prev_hash);
 		assert_eq!(consensus.messages.len(), 1);
-		assert_eq!(consensus.known_messages.len(), 1);
+		// known messages are only pruned based on expiration time
+		assert_eq!(consensus.known_messages.len(), 2);
 		assert!(consensus.known_messages.contains(&(best_hash, m2_hash)));
 
 		// make timestamp expired, but the message is still kept as known
 		consensus.messages.clear();
+		consensus.known_messages.clear();
 		push_msg!(best_hash, m2_hash, now - MESSAGE_LIFETIME, m2.clone());
 		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert_eq!(consensus.known_messages.len(), 1);
 
 		// make timestamp expired past the known message lifetime
-		push_msg!(best_hash, m2_hash, now - (2 * MESSAGE_LIFETIME), m2);
+		consensus.known_messages.clear();
+		push_msg!(best_hash, m2_hash, now - (5 * MESSAGE_LIFETIME), m2);
 		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert!(consensus.known_messages.is_empty());
