@@ -272,6 +272,11 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 					}
 				};
 
+				if sync_oracle.is_offline() && authorities.len() > 1 {
+					debug!(target: "aura", "Skipping proposal slot. Waiting for the netork.");
+					return Either::B(future::ok(()));
+				}
+
 				let proposal_work = match slot_author(slot_num, &authorities) {
 					None => return Either::B(future::ok(())),
 					Some(author) => if author.0 == public_key.0 {
