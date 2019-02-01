@@ -33,6 +33,7 @@ impl network::SyncProvider<Block> for Status {
 			sync: SyncStatus {
 				state: if self.is_syncing { SyncState::Downloading } else { SyncState::Idle },
 				best_seen_block: None,
+				num_peers: self.peers as u32,
 			},
 			num_peers: self.peers,
 			num_active_peers: 0,
