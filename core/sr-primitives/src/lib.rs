@@ -535,7 +535,7 @@ macro_rules! impl_outer_log {
 
 /// Simple blob to hold an extrinsic without commiting to its format and ensure it is serialized
 /// correctly.
-#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct OpaqueExtrinsic(pub Vec<u8>);
 

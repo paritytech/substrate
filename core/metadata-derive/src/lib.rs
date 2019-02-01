@@ -30,8 +30,7 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 	let impl_block = quote! {
 		impl #impl_generics _substrate_metadata::EncodeMetadata for #name #ty_generics #where_clause {
 			fn type_name() -> _substrate_metadata::MetadataName {
-				// TODO: use module_path!() to get fully qualified name?
-				vec![module_path!().into(), stringify!(#name).into()]
+				_substrate_metadata::MetadataName::Custom(module_path!().into(), stringify!(#name).into())
 			}
 
 			fn type_metadata_kind(registry: &mut _substrate_metadata::MetadataRegistry) -> _substrate_metadata::TypeMetadataKind {

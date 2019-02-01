@@ -22,7 +22,7 @@ use codec::{Decode, Encode, Codec, Input};
 use traits::{self, Member, DigestItem as DigestItemT, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
-use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind, PrimativeMetadata};
+use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind};
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
@@ -224,11 +224,11 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 
 impl<'a, Hash: EncodeMetadata, AuthorityId: EncodeMetadata> EncodeMetadata for DigestItemRef<'a, Hash, AuthorityId> {
 	fn type_name() -> MetadataName {
-		vec!["DigestItem".into()]
+		MetadataName::Custom(module_path!().into(), "DigestItem".into())
 	}
 	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		// TODO: implement this
-		TypeMetadataKind::Primative(PrimativeMetadata::Unknown)
+		TypeMetadataKind::Primative
 	}
 }
 

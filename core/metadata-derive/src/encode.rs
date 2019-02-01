@@ -25,7 +25,7 @@ fn encode_fields(
 		quote_spanned! { f.span() =>
 			{
 				let type_name = <#ty as _substrate_metadata::EncodeMetadata>::type_name();
-				#registry.register(&type_name, <#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind);
+				#registry.register(type_name.clone(), <#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind);
 				_substrate_metadata::FieldMetadata {
 					name: #name,
 					ty: type_name
@@ -75,7 +75,7 @@ pub fn quote(data: &Data, registry: &TokenStream) -> TokenStream {
 									{
 										let type_name = <#ty as _substrate_metadata::EncodeMetadata>::type_name();
 										#registry.register(
-											&type_name,
+											type_name.clone(),
 											<#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind
 										);
 										_substrate_metadata::FieldMetadata {
@@ -107,7 +107,7 @@ pub fn quote(data: &Data, registry: &TokenStream) -> TokenStream {
 									{
 										let type_name = <#ty as _substrate_metadata::EncodeMetadata>::type_name();
 										#registry.register(
-											&type_name,
+											type_name.clone(),
 											<#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind
 										);
 										_substrate_metadata::FieldMetadata {

@@ -33,7 +33,7 @@ pub type StringBuf = &'static str;
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum MetadataName {
 	Unknown,
-	Compound(Vec<StringBuf>),
+	Custom(StringBuf, StringBuf),
 	Array(u32, Box<MetadataName>),
 	Vector(Box<MetadataName>),
 	Tuple(Vec<MetadataName>),
