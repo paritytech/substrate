@@ -140,7 +140,7 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
 	/// Refund `amount` of previous charged fees from `transactor`.
-	fn refund_fee(transactor: &AccountId, amount: Self::Amount);
+	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 
 /// Transfer fungible asset trait
@@ -166,7 +166,7 @@ impl<T> ChargeFee<T> for () {
 	type Amount = ();
 
 	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn refund_fee(_: &T, _: Self::Amount) {}
+	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }
 
 impl<T> TransferAsset<T> for () {

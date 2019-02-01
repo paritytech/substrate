@@ -24,15 +24,16 @@ extern crate srml_support as runtime_support;
 
 use parity_codec_derive::{Encode, Decode};
 
-use runtime_support::{Parameter, dispatch::Result};
-use runtime_primitives::traits::{Member, SimpleArithmetic, ChargeBytesFee, ChargeFee, TransferAsset};
+use runtime_support::{Parameter, dispatch::Result, StorageMap};
+use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee, TransferAsset};
+use system;
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// The unit for fee amount
-	type Amount: Member + Parameter + SimpleArithmetic + Default + Copy;
+	type Amount: Member + Parameter + SimpleArithmetic + Default + Copy + As<u64>;
 
 	/// A function does the asset transfer between accounts
 	type TransferAsset: TransferAsset<Self::AccountId, Amount = Self::Amount>;
@@ -62,14 +63,14 @@ decl_storage! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		pub TransactionByteFee get(transaction_byte_fee) config(): T::Amount;
 
-		CurrentTransactionFee: map u32 => T::Amount;
+		CurrentTransactionFee get(current_transaction_fee): map u32 => T::Amount;
 	}
 }
 
 impl<T: Trait> ChargeBytesFee<T::AccountId> for Module<T> {
-	fn charge_base_bytes_fee(transactor: &T::AccountId, len: usize) -> Result {
-		// TODO: update CurrentTransactionFee, make transfer
-		Ok(())
+	fn charge_base_bytes_fee(transactor: &T::AccountId, encoded_len: usize) -> Result {
+		let fee = Self::transaction_base_fee() + Self::transaction_base_fee() * <T::Amount as As<u64>>::sa(encoded_len as u64);
+		Self::charge_fee(transactor, fee)
 	}
 }
 
@@ -77,11 +78,30 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 	type Amount = T::Amount;
 
 	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		// TODO: update CurrentTransactionFee, make transfer
-		Ok(())
+		T::TransferAsset::transfer_from(transactor, amount).and_then(|_| {
+			match <system::Module<T>>::extrinsic_index() {
+				Some(extrinsic_index) => {
+					let current_fee = Self::current_transaction_fee(extrinsic_index);
+					<CurrentTransactionFee<T>>::insert(extrinsic_index, current_fee + amount);
+					Ok(())
+				},
+				// TODO: how do we deal with no extrinsic index?
+				None => return Err("No extrinsic index found.")
+			}
+		})
 	}
 
-	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) {
-		// TODO: update CurrentTransactionFee, make transfer
+	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
+		T::TransferAsset::transfer_to(transactor, amount).and_then(|_| {
+			match <system::Module<T>>::extrinsic_index() {
+				Some(extrinsic_index) => {
+					let current_fee = Self::current_transaction_fee(extrinsic_index);
+					<CurrentTransactionFee<T>>::insert(extrinsic_index, current_fee - amount);
+					Ok(())
+				},
+				// TODO: how do we deal with no extrinsic index?
+				None => return Err("No extrinsic index found.")
+			}
+		})
 	}
 }
