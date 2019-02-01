@@ -1235,7 +1235,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Some(skip) = maybe_skip {
 			children.retain(|&c| c != skip);
 		}
-		let mut descendants = vec![];
+		let mut descendants = Vec::new();
 		for child in children {
 			descendants.push(child);
 			let d = self.get_descendants(child, None);
