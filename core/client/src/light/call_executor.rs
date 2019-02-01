@@ -17,7 +17,7 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
-use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, maker::PhantomData};
+use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::PhantomData};
 use futures::{IntoFuture, Future};
 
 use codec::{Encode, Decode};
@@ -214,7 +214,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -285,7 +285,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,
