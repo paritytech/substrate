@@ -24,12 +24,13 @@ extern crate srml_support as runtime_support;
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
-use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
+use rstd::{prelude::*, marker::PhantomData};
+use parity_codec::{Encode, Decode, Input};
 use parity_codec_derive::{Encode, Decode};
 
-use substrate_client::{runtime_api as client_api, block_builder::api as block_builder_api,
-	decl_runtime_apis, impl_runtime_apis,
+use substrate_client::{
+	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
+	impl_runtime_apis,
 };
 use runtime_primitives::{
 	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
@@ -164,14 +165,47 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
+/// A type that can not be decoded.
+#[derive(PartialEq)]
+pub struct DecodeFails<B: BlockT> {
+	_phantom: PhantomData<B>,
+}
+
+impl<B: BlockT> Encode for DecodeFails<B> {
+	fn encode(&self) -> Vec<u8> {
+		Vec::new()
+	}
+}
+
+impl<B: BlockT> DecodeFails<B> {
+	/// Create a new instance.
+	pub fn new() -> DecodeFails<B> {
+		DecodeFails {
+			_phantom: Default::default(),
+		}
+	}
+}
+
+impl<B: BlockT> Decode for DecodeFails<B> {
+	fn decode<I: Input>(_: &mut I) -> Option<Self> {
+		// decoding always fails
+		None
+	}
+}
+
 decl_runtime_apis! {
 	pub trait TestAPI {
+		/// Return the balance of the given account id.
 		fn balance_of(id: AccountId) -> u64;
 		/// A benchmkark function that adds one to the given value and returns the result.
 		fn benchmark_add_one(val: &u64) -> u64;
 		/// A benchmark function that adds one to each value in the given vector and returns the
 		/// result.
 		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
+		/// A function that always fails to convert a parameter between runtime and node.
+		fn fail_convert_parameter(param: DecodeFails<Block>);
+		/// A function that always fails to convert its return value between runtime and node.
+		fn fail_convert_return_value() -> DecodeFails<Block>;
 	}
 }
 
@@ -251,6 +285,12 @@ impl_runtime_apis! {
 			let mut vec = vec.clone();
 			vec.iter_mut().for_each(|v| *v += 1);
 			vec
+		}
+
+		fn fail_convert_parameter(_: DecodeFails<Block>) {}
+
+		fn fail_convert_return_value() -> DecodeFails<Block> {
+			DecodeFails::new()
 		}
 	}
 

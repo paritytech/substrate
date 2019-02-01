@@ -17,7 +17,7 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
-use std::{collections::HashSet, marker::PhantomData, sync::Arc};
+use std::{collections::HashSet, marker::PhantomData, sync::Arc, result};
 use futures::{IntoFuture, Future};
 
 use codec::{Encode, Decode};
@@ -124,7 +124,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R,
+		NC: FnOnce() -> result::Result<R, &'static str>,
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
