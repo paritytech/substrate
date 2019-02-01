@@ -34,7 +34,7 @@ use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
 use trie::ordered_trie_root;
 use crate::sandbox;
-use crate::heap;
+use crate::allocator;
 use log::trace;
 
 #[cfg(feature="wasm-extern-trace")]
@@ -48,7 +48,7 @@ macro_rules! debug_trace {
 
 struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 	sandbox_store: sandbox::Store,
-	heap: heap::FreeingBumpHeapAllocator,
+	heap: allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	ext: &'e mut E,
@@ -64,7 +64,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: heap::FreeingBumpHeapAllocator::new(used_size, heap_size),
+			heap: allocator::FreeingBumpHeapAllocator::new(used_size, heap_size),
 			memory: m,
 			table: t,
 			ext: e,
