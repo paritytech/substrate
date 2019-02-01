@@ -19,7 +19,6 @@
 
 use log::trace;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
 
 // The pointers need to be aligned to 8 bytes.
 const ALIGNMENT: usize = 8;
@@ -39,7 +38,6 @@ pub struct Heap {
 	heap: Vec<u8>,
 	max_heap_size: usize,
 	ptr_offset: usize,
-	start: Instant,
 	total_size: usize,
 }
 
@@ -58,7 +56,6 @@ impl Heap {
 	///   allocating memory.
 	///
 	pub fn new(mut ptr_offset: usize, heap_size: usize) -> Self {
-		eprintln!("Creating heap");
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
 			ptr_offset += ALIGNMENT - padding;
@@ -71,7 +68,6 @@ impl Heap {
 			heap: vec![0; heap_size],
 			max_heap_size: heap_size,
 			ptr_offset,
-			start: Instant::now(),
 			total_size: 0,
 		}
 	}
@@ -157,13 +153,6 @@ impl Heap {
 		1 << 3 << index
 	}
 
-}
-
-impl Drop for Heap {
-	fn drop(&mut self) {
-		let duration = self.start.elapsed();
-		eprintln!("Dropping heap after {:?}", duration);
-	}
 }
 
 #[cfg(test)]
