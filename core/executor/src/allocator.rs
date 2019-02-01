@@ -54,6 +54,9 @@ impl FreeingBumpHeapAllocator {
 	/// * `heap_size` - The size available to this heap instance (in bytes) for
 	///   allocating memory.
 	///
+	/// * `heap` - A `MemoryRef` to the available `MemoryInstance` which is
+	///   used as the heap.
+	///
 	pub fn new(mut ptr_offset: usize, heap_size: usize, heap: MemoryRef) -> Self {
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
