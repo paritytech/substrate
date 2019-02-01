@@ -64,7 +64,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: allocator::FreeingBumpHeapAllocator::new(used_size, heap_size),
+			heap: allocator::FreeingBumpHeapAllocator::new(used_size, heap_size, m.clone()),
 			memory: m,
 			table: t,
 			ext: e,
