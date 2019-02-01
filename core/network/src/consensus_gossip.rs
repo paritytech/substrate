@@ -188,11 +188,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		known_messages.retain(|(topic, message_hash)| {
 			message_times.get(&(*topic, *message_hash))
-				.map(|instant| *instant + (2 * MESSAGE_LIFETIME) >= now && predicate(topic))
+				.map(|instant| *instant + (2 * MESSAGE_LIFETIME) >= now)
 				.unwrap_or(false)
 		});
 
-		trace!(target:"gossip", "Cleaned up {} stale messages, {} left ({} known)",
+		trace!(target: "gossip", "Cleaned up {} stale messages, {} left ({} known)",
 			before - self.messages.len(),
 			self.messages.len(),
 			known_messages.len(),
