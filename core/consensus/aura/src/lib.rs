@@ -48,7 +48,7 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
 use slots::Slots;
-use ::log::{warn, debug, log, info, trace};
+use ::log::{warn, debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -291,10 +291,9 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 						};
 
 						let remaining_duration = slot_info.remaining_duration();
-						// deadline our production to approx. the end of the
-						// slot
+						// deadline our production to approx. the end of the slot
 						Timeout::new(
-							proposer.propose(slot_info.inherent_data).into_future(),
+							proposer.propose(slot_info.inherent_data, remaining_duration).into_future(),
 							remaining_duration,
 						)
 					} else {
@@ -710,7 +709,7 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData) -> Result<TestBlock, Error> {
+		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}

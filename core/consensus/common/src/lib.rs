@@ -27,6 +27,7 @@
 #![recursion_limit="128"]
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block};
@@ -40,7 +41,7 @@ pub mod import_queue;
 pub mod evaluation;
 
 // block size limit.
-const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
+const MAX_BLOCK_SIZE: usize = 4 * 1024 * 1024 + 512;
 
 pub use self::error::{Error, ErrorKind};
 pub use block_import::{BlockImport, JustificationImport, ImportBlock, BlockOrigin, ImportResult, ForkChoiceStrategy};
@@ -76,7 +77,7 @@ pub trait Proposer<B: Block> {
 	/// Future that resolves to a committed proposal.
 	type Create: IntoFuture<Item=B, Error=Self::Error>;
 	/// Create a proposal.
-	fn propose(&self, inherent_data: InherentData) -> Self::Create;
+	fn propose(&self, inherent_data: InherentData, max_duration: Duration) -> Self::Create;
 }
 
 /// An oracle for when major synchronization work is being undertaken.
