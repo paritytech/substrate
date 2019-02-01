@@ -18,6 +18,7 @@
 //! See more details at https://github.com/paritytech/substrate/issues/1615.
 
 use log::trace;
+use std::collections::HashMap;
 
 // The pointers need to be aligned to 8 bytes.
 const ALIGNMENT: usize = 8;
@@ -31,6 +32,7 @@ const N: usize = 22;
 const MAX_POSSIBLE_ALLOCATION: usize = 16777216; // 2^24 bytes
 
 pub struct Heap {
+	allocated_ptrs: HashMap<usize, bool>,
 	bumper: usize,
 	heads: [u32; N],
 	heap: Vec<u8>,
@@ -60,6 +62,7 @@ impl Heap {
 		}
 
 		Heap {
+			allocated_ptrs: HashMap::new(),
 			bumper: 0,
 			heads: [0; N],
 			heap: vec![0; heap_size],
@@ -102,6 +105,9 @@ impl Heap {
 		self.total_size = self.total_size + item_size + 8;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after allocation", self.total_size);
 
+		assert_eq!(self.allocated_ptrs.get(&ptr), None, "Double allocate at {}", ptr);
+		self.allocated_ptrs.insert(ptr, true);
+
 		(self.ptr_offset + ptr) as u32
 	}
 
@@ -110,12 +116,16 @@ impl Heap {
 		let mut ptr = ptr as usize;
 		ptr -= self.ptr_offset;
 
+		assert_ne!(self.allocated_ptrs.get(&ptr), None, "Double free at {}", ptr);
+
 		let list_index = self.heap[ptr - 8] as usize;
 		for i in 1..8 { assert!(self.heap[ptr - i] == 255); }
 		let tail = self.heads[list_index];
 		self.heads[list_index] = (ptr - 8) as u32;
 
 		Heap::write_u32_into_le_bytes(tail, &mut self.heap[ptr - 8..ptr - 4]);
+
+		self.allocated_ptrs.remove(&ptr).unwrap();
 
 		let item_size = Heap::get_item_size_from_index(list_index);
 		self.total_size = self.total_size.checked_sub(item_size + 8).unwrap_or(0);
