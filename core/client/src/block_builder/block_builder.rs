@@ -76,9 +76,9 @@ where
 		})
 	}
 
-	/// Push onto the block's list of extrinsics. This will ensure the extrinsic
-	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
-	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
+	/// Push onto the block's list of extrinsics.
+	///
+	/// This will ensure the extrinsic can be validly executed (by executing it);
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
 		use crate::runtime_api::ApiExt;
 

@@ -292,6 +292,13 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		if let Some(pruning) = &mut self.pruning {
 			pruning.apply_pending();
 		}
+		trace!(target: "forks", "First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
+			self.pruning.as_ref().and_then(|p| p.next_hash()),
+			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
+			self.non_canonical.last_canonicalized_hash(),
+			self.non_canonical.last_canonicalized_block_number().unwrap_or(0),
+			self.non_canonical.top_level(),
+		);
 	}
 
 	pub fn revert_pending(&mut self) {
