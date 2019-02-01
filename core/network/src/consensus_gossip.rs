@@ -319,6 +319,20 @@ mod tests {
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
+	macro_rules! push_msg {
+		($consensus:expr, $topic:expr, $hash: expr, $now: expr, $m:expr) => {
+			if $consensus.known_messages.insert(($topic, $hash)) {
+				$consensus.messages.push(MessageEntry {
+					topic: $topic,
+					message_hash: $hash,
+					message: $m,
+					broadcast: false,
+				});
+				$consensus.message_times.insert(($topic, $hash), $now);
+			}
+		}
+	}
+
 	#[test]
 	fn collects_garbage() {
 		let prev_hash = H256::random();
@@ -330,22 +344,8 @@ mod tests {
 		let m1 = vec![1, 2, 3];
 		let m2 = vec![4, 5, 6];
 
-		macro_rules! push_msg {
-			($topic:expr, $hash: expr, $now: expr, $m:expr) => {
-				if consensus.known_messages.insert(($topic, $hash)) {
-					consensus.messages.push(MessageEntry {
-						topic: $topic,
-						message_hash: $hash,
-						message: $m,
-						broadcast: false,
-					});
-					consensus.message_times.insert(($topic, $hash), $now);
-				}
-			}
-		}
-
-		push_msg!(prev_hash, m1_hash, now, m1);
-		push_msg!(best_hash, m2_hash, now, m2.clone());
+		push_msg!(consensus, prev_hash, m1_hash, now, m1);
+		push_msg!(consensus, best_hash, m2_hash, now, m2.clone());
 		consensus.known_messages.insert((prev_hash, m1_hash));
 		consensus.known_messages.insert((best_hash, m2_hash));
 
@@ -369,17 +369,43 @@ mod tests {
 		// make timestamp expired, but the message is still kept as known
 		consensus.messages.clear();
 		consensus.known_messages.clear();
-		push_msg!(best_hash, m2_hash, now - MESSAGE_LIFETIME, m2.clone());
+		push_msg!(consensus, best_hash, m2_hash, now - MESSAGE_LIFETIME, m2.clone());
 		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert_eq!(consensus.known_messages.len(), 1);
 
 		// make timestamp expired past the known message lifetime
 		consensus.known_messages.clear();
-		push_msg!(best_hash, m2_hash, now - (5 * MESSAGE_LIFETIME), m2);
+		push_msg!(consensus, best_hash, m2_hash, now - (5 * MESSAGE_LIFETIME), m2);
 		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert!(consensus.known_messages.is_empty());
+	}
+
+	#[test]
+	fn collects_garbage_for_topic() {
+		let topic = H256::random();
+		let dead_topic = H256::random();
+		let message = Vec::new();
+		let now = Instant::now();
+		let mut consensus = ConsensusGossip::<Block>::new();
+
+		let message_hash = H256::random();
+		push_msg!(consensus, topic, message_hash, now, message.clone());
+		push_msg!(consensus, dead_topic, message_hash, now, message.clone());
+		assert_eq!(consensus.messages.len(), 2);
+
+		consensus.collect_garbage_for_topic(topic);
+
+		// removes all messages for the topic and marks the topic as dead
+		assert_eq!(consensus.messages.len(), 1);
+		assert_eq!(consensus.known_messages.len(), 2);
+		assert_eq!(consensus.known_dead_topics.len(), 1);
+
+		// new messages for dead topics are ignored
+		consensus.register_message(HashFor::<Block>::hash(&message), topic, false, || message.clone());
+		assert_eq!(consensus.messages.len(), 1);
+		assert_eq!(consensus.known_messages.len(), 2);
 	}
 
 	#[test]
