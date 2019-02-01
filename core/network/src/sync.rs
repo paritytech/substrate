@@ -263,6 +263,8 @@ pub struct Status<B: BlockT> {
 	pub state: SyncState,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
+	/// Number of peers participating in syncing.
+	pub num_peers: u32,
 }
 
 impl<B: BlockT> Status<B> {
@@ -273,6 +275,11 @@ impl<B: BlockT> Status<B> {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		}
+	}
+
+	/// Are we all alone?
+	pub fn is_offline(&self) -> bool {
+		self.num_peers == 0
 	}
 }
 
@@ -315,6 +322,7 @@ impl<B: BlockT> ChainSync<B> {
 		Status {
 			state: state,
 			best_seen_block: best_seen,
+			num_peers: self.peers.len() as u32,
 		}
 	}
 

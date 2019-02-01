@@ -234,6 +234,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ::consensus::
 	fn is_major_syncing(&self) -> bool {
 		self.handler.sync().read().status().is_major_syncing()
 	}
+	fn is_offline(&self) -> bool {
+		self.handler.sync().read().status().is_offline()
+	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H:ExHashT> Drop for Service<B, S, H> {
