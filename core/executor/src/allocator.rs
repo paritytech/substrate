@@ -103,7 +103,7 @@ impl FreeingBumpHeapAllocator {
 		self.total_size = self.total_size + item_size + 8;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after allocation", self.total_size);
 
-		(self.ptr_offset + ptr) as u32
+		self.ptr_offset + ptr
 	}
 
 	/// Deallocates the space which was allocated for a pointer.
@@ -113,7 +113,7 @@ impl FreeingBumpHeapAllocator {
 		let list_index = self.get_heap_byte(ptr - 8) as usize;
 		for i in 1..8 { assert!(self.get_heap_byte(ptr - i) == 255); }
 		let tail = self.heads[list_index];
-		self.heads[list_index] = (ptr - 8) as u32;
+		self.heads[list_index] = ptr - 8;
 
 		let slice = &mut self.get_heap(ptr - 8, 4);
 		FreeingBumpHeapAllocator::write_u32_into_le_bytes(tail, slice);
@@ -154,11 +154,11 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	fn set_heap(&mut self, ptr: u32, value: u8) {
-		self.heap.set(self.ptr_offset + ptr as u32, &[value]).unwrap()
+		self.heap.set(self.ptr_offset + ptr, &[value]).unwrap()
 	}
 
 	fn set_heap_bytes(&mut self, ptr: u32, value: &[u8]) {
-		self.heap.set(self.ptr_offset + ptr as u32, value).unwrap()
+		self.heap.set(self.ptr_offset + ptr, value).unwrap()
 	}
 
 }
