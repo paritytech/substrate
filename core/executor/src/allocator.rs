@@ -21,7 +21,7 @@ use log::trace;
 use wasmi::MemoryRef;
 
 // The pointers need to be aligned to 8 bytes.
-const ALIGNMENT: usize = 8;
+const ALIGNMENT: u32 = 8;
 
 // The pointer returned by `allocate()` needs to fulfill the alignment
 // requirement. In our case a pointer will always be a multiple of
@@ -29,15 +29,15 @@ const ALIGNMENT: usize = 8;
 // This is because all pointers will contain a 8 byte prefix (the list
 // index) and then a subsequent item of 2^x bytes, where x = [3..24].
 const N: usize = 22;
-const MAX_POSSIBLE_ALLOCATION: usize = 16777216; // 2^24 bytes
+const MAX_POSSIBLE_ALLOCATION: u32 = 16777216; // 2^24 bytes
 
 pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	heads: [u32; N],
 	heap: MemoryRef,
-	max_heap_size: usize,
+	max_heap_size: u32,
 	ptr_offset: u32,
-	total_size: usize,
+	total_size: u32,
 }
 
 impl FreeingBumpHeapAllocator {
@@ -57,7 +57,7 @@ impl FreeingBumpHeapAllocator {
 	/// * `heap` - A `MemoryRef` to the available `MemoryInstance` which is
 	///   used as the heap.
 	///
-	pub fn new(mut ptr_offset: usize, heap_size: usize, heap: MemoryRef) -> Self {
+	pub fn new(mut ptr_offset: u32, heap_size: u32, heap: MemoryRef) -> Self {
 		let padding = ptr_offset % ALIGNMENT;
 		if padding != 0 {
 			ptr_offset += ALIGNMENT - padding;
@@ -68,7 +68,7 @@ impl FreeingBumpHeapAllocator {
 			heads: [0; N],
 			heap,
 			max_heap_size: heap_size,
-			ptr_offset: ptr_offset as u32,
+			ptr_offset: ptr_offset,
 			total_size: 0,
 		}
 	}
@@ -76,8 +76,6 @@ impl FreeingBumpHeapAllocator {
 	/// Gets requested number of bytes to allocate and returns a pointer.
 	/// The maximum size which can be allocated at once is 16 MiB.
 	pub fn allocate(&mut self, size: u32) -> u32 {
-		let size = size as usize;
-
 		if size > MAX_POSSIBLE_ALLOCATION {
 			return 0;
 		}
@@ -96,7 +94,7 @@ impl FreeingBumpHeapAllocator {
 			item + 8
 		} else {
 			// Nothing to be freed. Bump.
-			self.bump(item_size as u32 + 8) + 8
+			self.bump(item_size + 8) + 8
 		};
 
 		for i in 1..8 { self.set_heap(ptr - i, 255); }
@@ -123,7 +121,7 @@ impl FreeingBumpHeapAllocator {
 		self.set_heap_bytes(ptr - 8, slice);
 
 		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(list_index);
-		self.total_size = self.total_size.checked_sub(item_size + 8).unwrap_or(0);
+		self.total_size = self.total_size.checked_sub(item_size as u32 + 8).unwrap_or(0);
 		trace!(target: "wasm-heap", "Heap size is {} bytes after deallocation", self.total_size);
 	}
 
@@ -352,7 +350,7 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(offset, heap_size, mem);
 
 		// when
-		let ptr = heap.allocate(MAX_POSSIBLE_ALLOCATION as u32);
+		let ptr = heap.allocate(MAX_POSSIBLE_ALLOCATION);
 
 		// then
 		assert_eq!(ptr, 8);
@@ -367,7 +365,7 @@ mod tests {
 		let mut heap = FreeingBumpHeapAllocator::new(offset, heap_size, mem);
 
 		// when
-		let ptr = heap.allocate(MAX_POSSIBLE_ALLOCATION as u32 + 1);
+		let ptr = heap.allocate(MAX_POSSIBLE_ALLOCATION + 1);
 
 		// then
 		assert_eq!(ptr, 0);
@@ -468,7 +466,7 @@ mod tests {
 		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(index);
 
 		// then
-		assert_eq!(item_size, MAX_POSSIBLE_ALLOCATION);
+		assert_eq!(item_size as u32, MAX_POSSIBLE_ALLOCATION);
 	}
 
 }
