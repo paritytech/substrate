@@ -29,7 +29,7 @@ use protocol::Context;
 use config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
-const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
+const MESSAGE_LIFETIME: Duration = Duration::from_secs(120);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
@@ -188,7 +188,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		known_messages.retain(|(topic, message_hash)| {
 			message_times.get(&(*topic, *message_hash))
-				.map(|instant| *instant + (2 * MESSAGE_LIFETIME) >= now)
+				.map(|instant| *instant + (5 * MESSAGE_LIFETIME) >= now)
 				.unwrap_or(false)
 		});
 
