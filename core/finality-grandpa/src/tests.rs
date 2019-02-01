@@ -151,7 +151,7 @@ impl MessageRouting {
 		let peer = inner.peer(self.peer_id);
 		let mut gossip = peer.consensus_gossip().write();
 		peer.with_spec(move |_, _| {
-			gossip.collect_garbage(|t| t != &topic)
+			gossip.collect_garbage_for_topic(topic);
 		});
 	}
 }

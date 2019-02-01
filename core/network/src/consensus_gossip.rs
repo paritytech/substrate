@@ -18,9 +18,10 @@
 //! Handles chain-specific and standard BFT messages.
 
 use std::collections::{HashMap, HashSet};
-use futures::sync::mpsc;
 use std::time::{Instant, Duration};
+use futures::sync::mpsc;
 use rand::{self, seq::SliceRandom};
+use lru_cache::LruCache;
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
@@ -30,6 +31,7 @@ use config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(120);
+const DEAD_TOPICS_CACHE_SIZE: usize = 4096;
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
@@ -49,6 +51,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	live_message_sinks: HashMap<B::Hash, Vec<mpsc::UnboundedSender<ConsensusMessage>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: HashSet<(B::Hash, B::Hash)>,
+	known_dead_topics: LruCache<B::Hash, ()>,
 	message_times: HashMap<(B::Hash, B::Hash), Instant>,
 	session_start: Option<B::Hash>,
 }
@@ -61,6 +64,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			live_message_sinks: HashMap::new(),
 			messages: Default::default(),
 			known_messages: Default::default(),
+			known_dead_topics: LruCache::new(DEAD_TOPICS_CACHE_SIZE),
 			message_times: Default::default(),
 			session_start: None
 		}
@@ -150,7 +154,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 	fn register_message<F>(&mut self, message_hash: B::Hash, topic: B::Hash, broadcast: bool, get_message: F)
 		where F: Fn() -> ConsensusMessage
 	{
-		if self.known_messages.insert((topic, message_hash)) {
+		if !self.known_dead_topics.contains_key(&topic) &&
+			self.known_messages.insert((topic, message_hash))
+		{
 			self.messages.push(MessageEntry {
 				topic,
 				message_hash,
@@ -167,6 +173,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 		self.peers.remove(&who);
 	}
 
+	pub fn collect_garbage_for_topic(&mut self, topic: B::Hash) {
+		self.known_dead_topics.insert(topic, ());
+		self.collect_garbage(|_| true);
+	}
+
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
 	/// for pruning, which returns `false` when the items with a given topic should be pruned.
 	pub fn collect_garbage<P: Fn(&B::Hash) -> bool>(&mut self, predicate: P) {
@@ -177,13 +188,15 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		let message_times = &mut self.message_times;
 		let known_messages = &mut self.known_messages;
+		let known_dead_topics = &mut self.known_dead_topics;
 		let before = self.messages.len();
 		let now = Instant::now();
 
 		self.messages.retain(|entry| {
-			message_times.get(&(entry.topic, entry.message_hash))
-				.map(|instant| *instant + MESSAGE_LIFETIME >= now && predicate(&entry.topic))
-				.unwrap_or(false)
+			!known_dead_topics.contains_key(&entry.topic) &&
+				message_times.get(&(entry.topic, entry.message_hash))
+					.map(|instant| *instant + MESSAGE_LIFETIME >= now && predicate(&entry.topic))
+					.unwrap_or(false)
 		});
 
 		known_messages.retain(|(topic, message_hash)| {
@@ -229,6 +242,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 		broadcast: bool,
 	) -> Option<(B::Hash, ConsensusMessage)> {
 		let message_hash = HashFor::<B>::hash(&message[..]);
+
+		if self.known_dead_topics.contains_key(&topic) {
+			trace!(target:"gossip", "Ignored message from {} in dead topic {}", who, topic);
+			return None;
+		}
 
 		if self.known_messages.contains(&(topic, message_hash)) {
 			trace!(target:"gossip", "Ignored already known message from {} in {}", who, topic);
