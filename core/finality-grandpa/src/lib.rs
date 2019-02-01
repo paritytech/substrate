@@ -285,7 +285,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn drop_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.consensus_gossip().write().collect_garbage(|t| t == &topic);
+		self.service.consensus_gossip().write().collect_garbage(|t| t != &topic);
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
