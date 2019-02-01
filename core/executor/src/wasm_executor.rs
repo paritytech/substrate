@@ -48,7 +48,7 @@ macro_rules! debug_trace {
 
 struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 	sandbox_store: sandbox::Store,
-	heap: heap::Heap,
+	heap: heap::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	ext: &'e mut E,
@@ -64,7 +64,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: heap::Heap::new(used_size, heap_size),
+			heap: heap::FreeingBumpHeapAllocator::new(used_size, heap_size),
 			memory: m,
 			table: t,
 			ext: e,
