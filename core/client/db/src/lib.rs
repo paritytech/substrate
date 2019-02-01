@@ -52,6 +52,7 @@ use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue};
 use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
 use client::LeafSet;
+use client::ChildrenMap;
 use state_db::StateDb;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
@@ -130,15 +131,18 @@ pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
+	children: RwLock<ChildrenMap<Block::Hash, NumberFor<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
+		let children = ChildrenMap::read_from_db(&*db, columns::META, meta_keys::CHILD_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
 			leaves: RwLock::new(leaves),
+			children: RwLock::new(children),
 			meta: Arc::new(RwLock::new(meta)),
 		})
 	}
