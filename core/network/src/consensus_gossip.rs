@@ -22,7 +22,7 @@ use futures::sync::mpsc;
 use std::time::{Instant, Duration};
 use rand::{self, seq::SliceRandom};
 use network_libp2p::NodeIndex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
+use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
 pub use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
@@ -234,21 +234,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 			trace!(target:"gossip", "Ignored already known message from {} in {}", who, topic);
 			return None;
 		}
-
-		match (protocol.client().info(), protocol.client().header(&BlockId::Hash(topic))) {
-			(_, Err(e)) | (Err(e), _) => {
-				debug!(target:"gossip", "Error reading blockchain: {:?}", e);
-				return None;
-			},
-			(Ok(info), Ok(Some(header))) => {
-				if header.number() < &info.chain.best_number {
-					trace!(target:"gossip", "Ignored ancient message from {}, hash={}", who, topic);
-					return None;
-				}
-			},
-			(Ok(_), Ok(None)) => {},
-		}
-
 
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			use std::collections::hash_map::Entry;
