@@ -231,7 +231,10 @@ pub trait Network<Block: BlockT>: Clone {
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>);
 
 	/// Clean up messages for a round.
-	fn drop_messages(&self, round: u64, set_id: u64);
+	fn drop_round_messages(&self, round: u64, set_id: u64);
+
+	/// Clean up messages for a given authority set id (e.g. commit messages).
+	fn drop_set_messages(&self, set_id: u64);
 
 	/// Get a stream of commit messages for a specific set-id. This stream
 	/// should never logically conclude.
@@ -283,8 +286,13 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 		self.service.gossip_consensus_message(topic, message, false);
 	}
 
-	fn drop_messages(&self, round: u64, set_id: u64) {
+	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
+		self.service.consensus_gossip().write().collect_garbage(|t| t != &topic);
+	}
+
+	fn drop_set_messages(&self, set_id: u64) {
+		let topic = commit_topic::<B>(set_id);
 		self.service.consensus_gossip().write().collect_garbage(|t| t != &topic);
 	}
 

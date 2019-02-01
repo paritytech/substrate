@@ -18,6 +18,8 @@
 //! that sign or re-shape.
 
 use std::collections::HashMap;
+use std::sync::Arc;
+
 use grandpa::VoterSet;
 use futures::prelude::*;
 use futures::sync::mpsc;
@@ -26,8 +28,6 @@ use substrate_primitives::{ed25519, Ed25519AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
-
-use std::sync::Arc;
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
@@ -42,6 +42,8 @@ enum Broadcast<Block: BlockT> {
 	Announcement(u64, u64, Block::Hash),
 	// set_id, round being dropped.
 	DropRound(u64, u64),
+	// set_id being dropped.
+	DropSet(u64),
 }
 
 impl<Block: BlockT> Broadcast<Block> {
@@ -51,6 +53,7 @@ impl<Block: BlockT> Broadcast<Block> {
 			Broadcast::Message(s, _, _) => s,
 			Broadcast::Announcement(s, _, _) => s,
 			Broadcast::DropRound(s, _) => s,
+			Broadcast::DropSet(s) => s,
 		}
 	}
 }
@@ -179,7 +182,12 @@ impl<B: BlockT, N: Network<B>> Future for BroadcastWorker<B, N> {
 						Broadcast::DropRound(set_id, round) => {
 							// stop making announcements for any dead rounds.
 							self.announcements.retain(|_, &mut r| r > round);
-							self.network.drop_messages(round, set_id);
+							self.network.drop_round_messages(round, set_id);
+						}
+						Broadcast::DropSet(set_id) => {
+							// stop making announcements for any dead rounds.
+							self.announcements.retain(|_, &mut s| s > set_id);
+							self.network.drop_set_messages(set_id);
 						}
 					}
 				}
@@ -199,8 +207,12 @@ impl<B: BlockT, N: Network<B>> Network<B> for BroadcastHandle<B, N> {
 		let _ = self.relay.unbounded_send(Broadcast::Message(set_id, round, message));
 	}
 
-	fn drop_messages(&self, round: u64, set_id: u64) {
+	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let _ = self.relay.unbounded_send(Broadcast::DropRound(set_id, round));
+	}
+
+	fn drop_set_messages(&self, set_id: u64) {
+		let _ = self.relay.unbounded_send(Broadcast::DropSet(set_id));
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
@@ -322,7 +334,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 impl<Block: BlockT, N: Network<Block>> Drop for OutgoingMessages<Block, N> {
 	fn drop(&mut self) {
-		self.network.drop_messages(self.round, self.set_id);
+		self.network.drop_round_messages(self.round, self.set_id);
 	}
 }
 
@@ -429,14 +441,14 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 }
 
 /// An output sink for commit messages.
-pub(crate) struct CommitsOut<Block, N> {
+pub(crate) struct CommitsOut<Block: BlockT, N: Network<Block>> {
 	network: N,
 	set_id: u64,
 	_marker: ::std::marker::PhantomData<Block>,
 	is_voter: bool,
 }
 
-impl<Block, N> CommitsOut<Block, N> {
+impl<Block: BlockT, N: Network<Block>> CommitsOut<Block, N> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(network: N, set_id: u64, is_voter: bool) -> Self {
 		CommitsOut {
@@ -476,4 +488,10 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 
 	fn close(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
 	fn poll_complete(&mut self) -> Poll<(), Error> { Ok(Async::Ready(())) }
+}
+
+impl<Block: BlockT, N: Network<Block>> Drop for CommitsOut<Block, N> {
+	fn drop(&mut self) {
+		self.network.drop_set_messages(self.set_id);
+	}
 }
