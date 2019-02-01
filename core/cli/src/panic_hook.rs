@@ -29,7 +29,7 @@ pub fn set() {
 static ABOUT_PANIC: &str = "
 This is a bug. Please report it at:
 
-    https://github.com/paritytech/polkadot/issues/new
+    https://github.com/paritytech/substrate/issues/new
 ";
 
 fn panic_hook(info: &PanicInfo) {
