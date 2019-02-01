@@ -19,16 +19,13 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-
 #[macro_use]
 extern crate srml_support as runtime_support;
 
+use parity_codec_derive::{Encode, Decode};
+
 use runtime_support::{Parameter, dispatch::Result};
-use primitives::traits::{Member, SimpleArithmetic, ChargeBytesFee, ChargeFee, TransferAsset};
+use runtime_primitives::traits::{Member, SimpleArithmetic, ChargeBytesFee, ChargeFee, TransferAsset};
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
