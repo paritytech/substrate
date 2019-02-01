@@ -433,7 +433,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		debug!(target: "sync", "{} clogging messages:", clogging_messages.len());
-		for msg_bytes in clogging_messages {
+		for msg_bytes in clogging_messages.take(5) {
 			if let Some(msg) = <Message<B> as Decode>::decode(&mut Cursor::new(msg_bytes)) {
 				debug!(target: "sync", "{:?}", msg);
 			} else {

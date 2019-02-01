@@ -80,7 +80,7 @@ use state_db::StateDb;
 use storage_cache::{CachingState, SharedCache, new_shared_cache};
 pub use state_db::PruningMode;
 
-const CANONICALIZATION_DELAY: u64 = 256;
+const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u64 = 32768;
 const STATE_CACHE_SIZE_BYTES: usize = 16 * 1024 * 1024;
 
