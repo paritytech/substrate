@@ -226,7 +226,7 @@ impl_runtime_apis! {
 		}
 
 		fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-			unimplemented!()
+			vec![]
 		}
 
 		fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {

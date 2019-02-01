@@ -23,7 +23,6 @@ extern crate substrate_primitives;
 
 #[macro_use]
 extern crate parity_codec_derive;
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support;

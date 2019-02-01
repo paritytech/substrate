@@ -67,8 +67,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 16,
-	impl_version: 16,
+	spec_version: 18,
+	impl_version: 18,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -212,7 +212,7 @@ construct_runtime!(
 		CouncilSeats: council_seats::{Config<T>},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Config<T>, Event<T>},
+		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
 	}
 );

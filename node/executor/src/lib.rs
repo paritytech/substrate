@@ -72,7 +72,11 @@ mod tests {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
-				let signature = pair.sign(&payload.encode()).into();
+				let signature = payload.using_encoded(|b| if b.len() > 256 {
+					pair.sign(&runtime_io::blake2_256(b))
+				} else {
+					pair.sign(b)
+				}).into();
 				UncheckedExtrinsic {
 					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
 					function: payload.1,
