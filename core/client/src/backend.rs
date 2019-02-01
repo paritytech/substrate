@@ -177,4 +177,7 @@ pub trait RemoteBackend<Block, H>: Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher<Out=Block::Hash>,
-{}
+{
+	/// Returns true if the state for given block is available locally.
+	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool;
+}

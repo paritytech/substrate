@@ -199,12 +199,20 @@ pub mod tests {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn number(&self, _hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn number(&self, hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
+			if hash == Default::default() {
+				Ok(Some(Default::default()))
+			} else {
+				Err(ClientErrorKind::Backend("Test error".into()).into())
+			}
 		}
 
-		fn hash(&self, _number: u64) -> ClientResult<Option<Hash>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn hash(&self, number: u64) -> ClientResult<Option<Hash>> {
+			if number == 0 {
+				Ok(Some(Default::default()))
+			} else {
+				Err(ClientErrorKind::Backend("Test error".into()).into())
+			}
 		}
 	}
 
@@ -235,7 +243,7 @@ pub mod tests {
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Ok(())
 		}
 
 		fn finalize_header(&self, _block: BlockId<Block>) -> ClientResult<()> {

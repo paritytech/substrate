@@ -17,14 +17,15 @@
 //! Light client backend. Only stores headers and justifications of blocks.
 //! Everything else is requested from full nodes on demand.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use state_machine::{Backend as StateBackend, TrieBackend};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor};
-use crate::in_mem;
+use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor, Zero, Header};
+use crate::in_mem::{self, check_genesis_storage};
 use crate::backend::{AuxStore, Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use crate::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
@@ -34,18 +35,22 @@ use hash_db::Hasher;
 use trie::MemoryDB;
 use heapsize::HeapSizeOf;
 
+const IN_MEMORY_EXPECT_PROOF: &'static str = "InMemory state backend has Void error type and always suceeds; qed";
+
 /// Light client backend.
-pub struct Backend<S, F> {
+pub struct Backend<S, F, H> {
 	blockchain: Arc<Blockchain<S, F>>,
+	genesis_state: RwLock<Option<InMemoryState<H>>>,
 }
 
 /// Light block (header and justification) import operation.
-pub struct ImportOperation<Block: BlockT, S, F> {
+pub struct ImportOperation<Block: BlockT, S, F, H> {
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityIdFor<Block>>>,
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
+	storage_update: Option<InMemoryState<H>>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -57,10 +62,21 @@ pub struct OnDemandState<Block: BlockT, S, F> {
 	cached_header: RwLock<Option<Block::Header>>,
 }
 
-impl<S, F> Backend<S, F> {
+/// On-demand or in-memory genesis state.
+pub enum OnDemandOrGenesisState<Block: BlockT, S, F, H> {
+	/// On-demand state - storage values are fetched from remote nodes.
+	OnDemand(OnDemandState<Block, S, F>),
+	/// Genesis state - storage values are stored in-memory.
+	Genesis(InMemoryState<H>),
+}
+
+impl<S, F, H> Backend<S, F, H> {
 	/// Create new light backend.
 	pub fn new(blockchain: Arc<Blockchain<S, F>>) -> Self {
-		Self { blockchain }
+		Self {
+			blockchain,
+			genesis_state: RwLock::new(None),
+		}
 	}
 
 	/// Get shared blockchain reference.
@@ -69,7 +85,7 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S: AuxStore, F> AuxStore for Backend<S, F> {
+impl<S: AuxStore, F, H> AuxStore for Backend<S, F, H> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -85,16 +101,16 @@ impl<S: AuxStore, F> AuxStore for Backend<S, F> {
 	}
 }
 
-impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
+impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: HeapSizeOf + Ord,
 {
-	type BlockImportOperation = ImportOperation<Block, S, F>;
+	type BlockImportOperation = ImportOperation<Block, S, F, H>;
 	type Blockchain = Blockchain<S, F>;
-	type State = OnDemandState<Block, S, F>;
+	type State = OnDemandOrGenesisState<Block, S, F, H>;
 	type ChangesTrieStorage = in_mem::ChangesTrieStorage<H>;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
@@ -104,6 +120,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
+			storage_update: None,
 			_phantom: Default::default(),
 		})
 	}
@@ -116,7 +133,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
+	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> ClientResult<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for block in operation.finalized_blocks {
 				self.blockchain.storage().finalize_header(block)?;
@@ -124,12 +141,18 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 		}
 
 		if let Some(header) = operation.header {
+			let is_genesis_import = header.number().is_zero();
 			self.blockchain.storage().import_header(
 				header,
 				operation.authorities,
 				operation.leaf_state,
 				operation.aux_ops,
 			)?;
+
+			// when importing genesis block => remember its state
+			if is_genesis_import {
+				*self.genesis_state.write() = operation.storage_update.take();
+			}
 		} else {
 			for (key, maybe_val) in operation.aux_ops {
 				match maybe_val {
@@ -158,17 +181,23 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
-		let block_hash = match block {
-			BlockId::Hash(h) => Some(h),
-			BlockId::Number(n) => self.blockchain.hash(n).unwrap_or_default(),
-		};
+		let block_number = self.blockchain.expect_block_number_from_id(&block)?;
 
-		Ok(OnDemandState {
+		// special case for genesis block
+		if block_number.is_zero() {
+			if let Some(genesis_state) = self.genesis_state.read().clone() {
+				return Ok(OnDemandOrGenesisState::Genesis(genesis_state));
+			}
+		}
+
+		// else create on-demand state
+		let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
+		Ok(OnDemandOrGenesisState::OnDemand(OnDemandState {
 			fetcher: self.blockchain.fetcher(),
 			blockchain: Arc::downgrade(&self.blockchain),
-			block: block_hash.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", block)))?,
+			block: block_hash,
 			cached_header: RwLock::new(None),
-		})
+		}))
 	}
 
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
@@ -176,16 +205,23 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	}
 }
 
-impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F>
+impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F, H>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher<Out=Block::Hash>,
 	H::Out: HeapSizeOf + Ord,
-{}
+{
+	fn is_local_state_available(&self, block: &BlockId<Block>) -> bool {
+		self.genesis_state.read().is_some()
+			&& self.blockchain.expect_block_number_from_id(block)
+				.map(|num| num.is_zero())
+				.unwrap_or(false)
+	}
+}
 
-impl<S, F, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, F>
+impl<S, F, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, F, H>
 where
 	Block: BlockT,
 	F: Fetcher<Block>,
@@ -193,7 +229,7 @@ where
 	H: Hasher<Out=Block::Hash>,
 	H::Out: HeapSizeOf + Ord,
 {
-	type State = OnDemandState<Block, S, F>;
+	type State = OnDemandOrGenesisState<Block, S, F, H>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -227,9 +263,19 @@ where
 	}
 
 	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> ClientResult<H::Out> {
-		let in_mem = in_mem::Backend::<Block, H>::new();
-		let mut op = in_mem.begin_operation()?;
-		op.reset_storage(top, children)
+		check_genesis_storage(&top, &children)?;
+
+		// this is only called when genesis block is imported => shouldn't be performance bottleneck
+		let mut storage: HashMap<Option<Vec<u8>>, StorageMap> = HashMap::new();
+		storage.insert(None, top);
+		for (child_key, child_storage) in children {
+			storage.insert(Some(child_key), child_storage);
+		}
+		let storage_update: InMemoryState<H> = storage.into();
+		let (storage_root, _) = storage_update.storage_root(::std::iter::empty());
+		self.storage_update = Some(storage_update);
+
+		Ok(storage_root)
 	}
 
 	fn insert_aux<I>(&mut self, ops: I) -> ClientResult<()>
@@ -322,14 +368,139 @@ where
 	}
 }
 
+impl<Block, S, F, H> StateBackend<H> for OnDemandOrGenesisState<Block, S, F, H>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+	S: BlockchainStorage<Block>,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
+{
+	type Error = ClientError;
+	type Transaction = ();
+	type TrieBackendStorage = MemoryDB<H>;
+
+	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::storage(state, key),
+			OnDemandOrGenesisState::Genesis(ref state) =>
+				Ok(state.storage(key).expect(IN_MEMORY_EXPECT_PROOF)),
+		}
+	}
+
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::child_storage(state, storage_key, key),
+			OnDemandOrGenesisState::Genesis(ref state) =>
+				Ok(state.child_storage(storage_key, key).expect(IN_MEMORY_EXPECT_PROOF)),
+		}
+	}
+
+	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, prefix: &[u8], action: A) {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::for_keys_with_prefix(state, prefix, action),
+			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_with_prefix(prefix, action),
+		}
+	}
+
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, storage_key: &[u8], action: A) {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::for_keys_in_child_storage(state, storage_key, action),
+			OnDemandOrGenesisState::Genesis(ref state) => state.for_keys_in_child_storage(storage_key, action),
+		}
+	}
+
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::storage_root(state, delta),
+			OnDemandOrGenesisState::Genesis(ref state) => {
+				let (root, _) = state.storage_root(delta);
+				(root, ())
+			},
+		}
+	}
+
+	fn child_storage_root<I>(&self, key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::child_storage_root(state, key, delta),
+			OnDemandOrGenesisState::Genesis(ref state) => {
+				let (root, is_equal, _) = state.child_storage_root(key, delta);
+				(root, is_equal, ())
+			},
+		}
+	}
+
+	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::pairs(state),
+			OnDemandOrGenesisState::Genesis(ref state) => state.pairs(),
+		}
+	}
+
+	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
+		match *self {
+			OnDemandOrGenesisState::OnDemand(ref state) =>
+				StateBackend::<H>::keys(state, prefix),
+			OnDemandOrGenesisState::Genesis(ref state) => state.keys(prefix),
+		}
+	}
+
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
+		match self {
+			OnDemandOrGenesisState::OnDemand(state) => state.try_into_trie_backend(),
+			OnDemandOrGenesisState::Genesis(state) => state.try_into_trie_backend(),
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use primitives::Blake2Hasher;
-	use test_client::runtime::Block;
+	use test_client::{self, runtime::Block};
+	use crate::backend::NewBlockState;
 	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
 	use super::*;
 
 	#[test]
+	fn local_state_is_created_when_genesis_state_is_available() {
+		let def = Default::default();
+		let header0 = test_client::runtime::Header::new(0, def, def, def, Default::default());
+
+		let backend: Backend<_, _, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let mut op = backend.begin_operation().unwrap();
+		op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
+		op.reset_storage(Default::default(), Default::default()).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		match backend.state_at(BlockId::Number(0)).unwrap() {
+			OnDemandOrGenesisState::Genesis(_) => (),
+			_ => panic!("unexpected state"),
+		}
+	}
+
+	#[test]
+	fn remote_state_is_created_when_genesis_state_is_inavailable() {
+		let backend: Backend<_, _, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+
+		match backend.state_at(BlockId::Number(0)).unwrap() {
+			OnDemandOrGenesisState::OnDemand(_) => (),
+			_ => panic!("unexpected state"),
+		}
+	}
+
 	fn light_aux_store_is_updated_via_non_importing_op() {
 		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 		let mut op = ClientBackend::<Block, Blake2Hasher>::begin_operation(&backend).unwrap();

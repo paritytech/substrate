@@ -154,7 +154,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 where
-	B: backend::LocalBackend<Block, Blake2Hasher>,
+	B: backend::Backend<Block, Blake2Hasher>,
 	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 	Block: BlockT<Hash=H256>,
 {
