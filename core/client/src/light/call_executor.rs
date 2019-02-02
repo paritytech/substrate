@@ -17,7 +17,7 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
-use std::{collections::HashSet, sync::Arc, panic::UnwindSafe};
+use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::PhantomData};
 use futures::{IntoFuture, Future};
 
 use codec::{Encode, Decode};
@@ -52,7 +52,7 @@ pub struct RemoteOrLocalCallExecutor<Block: BlockT<Hash=H256>, B, R, L> {
 	backend: Arc<B>,
 	remote: R,
 	local: L,
-	_block: ::std::marker::PhantomData<Block>,
+	_block: PhantomData<Block>,
 }
 
 impl<B, F> Clone for RemoteCallExecutor<B, F> {
@@ -133,7 +133,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R,
+		NC: FnOnce() -> result::Result<R, &'static str>,
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
@@ -214,7 +214,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -285,7 +285,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,

@@ -2832,6 +2832,7 @@ dependencies = [
  "sr-version 0.1.0",
  "substrate-client 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
  "syn 0.15.26 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
