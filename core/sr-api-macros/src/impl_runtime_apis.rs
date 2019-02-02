@@ -330,7 +330,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		impl<C: #crate_::runtime_api::CallRuntimeAt<#block>> RuntimeApiImpl<C> {
 			fn call_api_at<
 				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
-				NC: FnOnce() -> R + ::std::panic::UnwindSafe,
+				NC: FnOnce() -> ::std::result::Result<R, &'static str> + ::std::panic::UnwindSafe,
 			>(
 				&self,
 				at: &#block_id,

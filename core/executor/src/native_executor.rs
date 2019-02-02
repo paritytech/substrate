@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::borrow::BorrowMut;
-use std::cell::{RefMut, RefCell};
+use std::{borrow::BorrowMut, result, cell::{RefMut, RefCell}};
 use crate::error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
@@ -109,7 +108,7 @@ fn safe_call<F, U>(f: F) -> Result<U>
 ///
 /// If the inner closure panics, it will be caught and return an error.
 pub fn with_native_environment<F, U>(ext: &mut Externalities<Blake2Hasher>, f: F) -> Result<U>
-where F: UnwindSafe + FnOnce() -> U
+	where F: UnwindSafe + FnOnce() -> U
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
@@ -186,7 +185,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 	<
 		E: Externalities<Blake2Hasher>,
 		R:Decode + Encode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
 	>(
 		&self,
 		ext: &mut E,
@@ -242,7 +241,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 					(
-						with_native_environment(ext, move || (call)()).map(NativeOrEncoded::Native),
+						with_native_environment(ext, move || (call)())
+							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Into::into)),
 						true
 					)
 				}

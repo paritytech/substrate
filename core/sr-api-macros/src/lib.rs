@@ -16,7 +16,7 @@
 
 //! Macros for declaring and implementing runtime apis.
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 extern crate proc_macro;
 extern crate proc_macro2;
 extern crate quote;
