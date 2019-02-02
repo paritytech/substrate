@@ -20,37 +20,19 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(feature = "std")]
-pub extern crate serde;
-
+pub use serde;
 #[doc(hidden)]
-pub extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
+pub use sr_std as rstd;
 #[doc(hidden)]
-pub extern crate sr_primitives as runtime_primitives;
-extern crate srml_metadata;
-
-extern crate mashup;
-#[cfg_attr(test, macro_use)]
-extern crate srml_support_procedural;
-extern crate substrate_inherents as inherents;
-
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
-#[cfg(feature = "std")]
-extern crate serde_derive;
-#[cfg(test)]
-#[macro_use]
-extern crate parity_codec_derive;
-
+pub use parity_codec as codec;
 #[doc(hidden)]
-pub extern crate parity_codec as codec;
-
+pub use parity_codec_derive;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub extern crate once_cell;
-
-pub extern crate paste;
+pub use once_cell;
+#[doc(hidden)]
+pub use paste;
+pub use sr_primitives as runtime_primitives;
 
 pub use self::storage::generator::Storage as GenericStorage;
 

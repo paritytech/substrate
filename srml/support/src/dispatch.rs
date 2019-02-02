@@ -17,11 +17,11 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
+pub use crate::rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
-pub use rstd::result;
-pub use codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
+pub use crate::rstd::result;
+pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
 	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall

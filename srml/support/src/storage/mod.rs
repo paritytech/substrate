@@ -16,10 +16,10 @@
 
 //! Stuff to do with the runtime's storage.
 
-use rstd::prelude::*;
-use rstd::borrow::Borrow;
+use crate::rstd::prelude::*;
+use crate::rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
-use codec::{Codec, Decode, KeyedVec, Input};
+use crate::codec::{Codec, Decode, KeyedVec, Input};
 
 #[macro_use]
 pub mod generator;
@@ -32,7 +32,7 @@ struct IncrementalInput<'a> {
 impl<'a> Input for IncrementalInput<'a> {
 	fn read(&mut self, into: &mut [u8]) -> usize {
 		let len = runtime_io::read_storage(self.key, into, self.pos).unwrap_or(0);
-		let read = ::rstd::cmp::min(len, into.len());
+		let read = crate::rstd::cmp::min(len, into.len());
 		self.pos += read;
 		read
 	}
@@ -123,7 +123,7 @@ pub fn put_raw(key: &[u8], value: &[u8]) {
 /// The underlying runtime storage.
 pub struct RuntimeStorage;
 
-impl ::GenericStorage for RuntimeStorage {
+impl crate::GenericStorage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
 		super::storage::exists(key)
 	}
@@ -396,7 +396,7 @@ pub trait StorageVec {
 }
 
 pub mod unhashed {
-	use rstd::borrow::Borrow;
+	use crate::rstd::borrow::Borrow;
 	use super::{runtime_io, Codec, Decode, KeyedVec, Vec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
