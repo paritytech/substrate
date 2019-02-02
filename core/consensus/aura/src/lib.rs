@@ -203,7 +203,6 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	let worker = AuraWorker {
 		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(),
 	};
-
 	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
 		slot_duration,
 		client,
@@ -626,7 +625,7 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData) -> Result<TestBlock, Error> {
+		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}

@@ -58,6 +58,14 @@ pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
 	Ident::new(&format!("runtime_decl_for_{}", trait_.to_string()), Span::call_site())
 }
 
+/// Get the type of a `syn::ReturnType`.
+pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
+	match rt {
+		syn::ReturnType::Default => parse_quote!( () ),
+		syn::ReturnType::Type(_, ref ty) => *ty.clone(),
+	}
+}
+
 /// Fold the given `FnDecl` to make it usable on the client side.
 pub fn fold_fn_decl_for_client_side(
 	mut input: FnDecl,
@@ -70,14 +78,8 @@ pub fn fold_fn_decl_for_client_side(
 
 	// Wrap the output in a `Result`
 	input.output = {
-		let generate_result = |ty: &Type| {
-			parse_quote!( -> ::std::result::Result<#ty, #crate_::error::Error> )
-		};
-
-		match &input.output {
-			syn::ReturnType::Default => generate_result(&parse_quote!( () )),
-			syn::ReturnType::Type(_, ref ty) => generate_result(&ty),
-		}
+		let ty = return_type_extract_type(&input.output);
+		parse_quote!( -> ::std::result::Result<#ty, #crate_::error::Error> )
 	};
 
 	input

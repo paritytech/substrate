@@ -118,11 +118,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
 	pub fn insert<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
-		let front_block_number = self.pending_front_block_number();
-		if self.levels.is_empty() && self.last_canonicalized.is_none() {
-			if number < 1 {
-				return Err(Error::InvalidBlockNumber);
-			}
+		let front_block_number = self.front_block_number();
+		if self.levels.is_empty() && self.last_canonicalized.is_none() && number > 0 {
 			// assume that parent was canonicalized
 			let last_canonicalized = (parent_hash.clone(), number - 1);
 			commit.meta.inserted.push((to_meta_key(LAST_CANONICAL, &()), last_canonicalized.encode()));
@@ -217,15 +214,24 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		self.last_canonicalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
 	}
 
-	fn pending_front_block_number(&self) -> u64 {
-		self.last_canonicalized
-			.as_ref()
-			.map(|&(_, n)| n + 1 + self.pending_canonicalizations.len() as u64)
-			.unwrap_or(0)
+	pub fn last_canonicalized_block_number(&self) -> Option<u64> {
+		match self.last_canonicalized.as_ref().map(|&(_, n)| n) {
+			Some(n) => Some(n + self.pending_canonicalizations.len() as u64),
+			None if !self.pending_canonicalizations.is_empty() => Some(self.pending_canonicalizations.len() as u64),
+			_ => None,
+		}
 	}
 
-	pub fn last_canonicalized_block_number(&self) -> u64 {
-		self.last_canonicalized.as_ref().map(|&(_, n)| n).unwrap_or(0)
+	pub fn last_canonicalized_hash(&self) -> Option<BlockHash> {
+		self.last_canonicalized.as_ref().map(|&(ref h, _)| h.clone())
+	}
+
+	pub fn top_level(&self) -> Vec<(BlockHash, u64)> {
+		let start = self.last_canonicalized_block_number().unwrap_or(0);
+		self.levels
+			.get(self.pending_canonicalizations.len())
+			.map(|level| level.iter().map(|r| (r.hash.clone(), start)).collect())
+			.unwrap_or_default()
 	}
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
@@ -278,7 +284,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			}
 		}
 		if let Some(hash) = last {
-			let last_canonicalized = (hash, self.last_canonicalized_block_number() + count);
+			let last_canonicalized = (hash, self.last_canonicalized.as_ref().map(|(_, n)| n + count).unwrap_or(count - 1));
 			self.last_canonicalized = Some(last_canonicalized);
 		}
 	}
@@ -293,6 +299,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			}
 		}
 		None
+	}
+
+	/// Check if the block is in the canonicalization queue. 
+	pub fn have_block(&self, hash: &BlockHash) -> bool {
+		(self.parents.contains_key(hash) || self.pending_insertions.contains(hash))
+			&& !self.pending_canonicalizations.contains(hash)
 	}
 
 	/// Revert a single level. Returns commit set that deletes the journal or `None` if not possible.
@@ -497,6 +509,23 @@ mod tests {
 		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
 	}
 
+	#[test]
+	fn insert_with_pending_canonicalization() {
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let h3 = H256::random();
+		let mut db = make_db(&[]);
+		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
+		let changeset = make_changeset(&[], &[]);
+		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset.clone()).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset.clone()).unwrap());
+		overlay.apply_pending();
+		db.commit(&overlay.canonicalize::<io::Error>(&h1).unwrap());
+		db.commit(&overlay.canonicalize::<io::Error>(&h2).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h3, 3, &h2, changeset.clone()).unwrap());
+		overlay.apply_pending();
+		assert_eq!(overlay.levels.len(), 1);
+	}
 
 	#[test]
 	fn complex_tree() {
@@ -589,6 +618,10 @@ mod tests {
 		assert!(contains(&overlay, 121));
 		assert!(contains(&overlay, 122));
 		assert!(contains(&overlay, 123));
+		assert!(overlay.have_block(&h_1_2_1));
+		assert!(!overlay.have_block(&h_1_2));
+		assert!(!overlay.have_block(&h_1_1));
+		assert!(!overlay.have_block(&h_1_1_1));
 
 		// canonicalize 1_2_2
 		db.commit(&overlay.canonicalize::<io::Error>(&h_1_2_2).unwrap());

@@ -38,6 +38,8 @@ use runtime_primitives::StorageMap;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use keyring::Keyring;
+use state_machine::ExecutionStrategy;
+use client::LocalCallExecutor;
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -67,6 +69,23 @@ pub type Executor = client::LocalCallExecutor<
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	new_with_backend(Arc::new(Backend::new()), false)
+}
+
+/// Creates new client instance used for tests with the given api execution strategy.
+pub fn new_with_api_execution_strat(
+	api_execution_strategy: ExecutionStrategy
+) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
+	let backend = Arc::new(Backend::new());
+	let executor = NativeExecutor::new();
+	let executor = LocalCallExecutor::new(backend.clone(), executor);
+
+	client::Client::new(
+		backend,
+		executor,
+		genesis_storage(false),
+		ExecutionStrategy::NativeWhenPossible,
+		api_execution_strategy
+	).expect("Creates new client")
 }
 
 /// Creates new test client instance that suports changes trie creation.

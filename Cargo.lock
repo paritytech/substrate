@@ -2832,6 +2832,7 @@ dependencies = [
  "sr-version 0.1.0",
  "substrate-client 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
  "syn 0.15.26 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3421,6 +3422,7 @@ dependencies = [
  "substrate-consensus-common 0.1.0",
  "substrate-inherents 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-test-client 0.1.0",
  "substrate-transaction-pool 0.1.0",
 ]
 
@@ -3490,6 +3492,7 @@ dependencies = [
 name = "substrate-client-db"
 version = "0.1.0"
 dependencies = [
+ "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
  "kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity-common?rev=b0317f649ab2c665b7987b8475878fc4d2e1f81d)",
@@ -3725,6 +3728,7 @@ dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lru-cache 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
