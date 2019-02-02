@@ -158,13 +158,13 @@ pub fn start_aura_thread<B, C, E, I, SO, Error, OnExit>(
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error> + 'static,
-	SO: SyncOracle + Send + Clone + 'static,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
 	OnExit: Future<Item=(), Error=()> + Send + 'static,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId> + 'static,
 	Error: ::std::error::Error + Send + From<::consensus_common::Error> + 'static,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(),
+		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(), sync_oracle: sync_oracle.clone(),
 	};
 
 	aura_slots::start_slot_worker_thread::<_, _, _, _, AuraSlotCompatible, _>(
@@ -195,13 +195,13 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error>,
-	SO: SyncOracle + Send + Clone,
+	SO: SyncOracle + Send + Sync + Clone,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 	OnExit: Future<Item=(), Error=()>,
 {
 	let worker = AuraWorker {
-		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(),
+		client: client.clone(), block_import, env, local_key, inherent_data_providers: inherent_data_providers.clone(), sync_oracle: sync_oracle.clone(),
 	};
 	aura_slots::start_slot_worker::<_, _, _, _, AuraSlotCompatible, _>(
 		slot_duration,
@@ -213,21 +213,23 @@ pub fn start_aura<B, C, E, I, SO, Error, OnExit>(
 	)
 }
 
-struct AuraWorker<C, E, I> {
+struct AuraWorker<C, E, I, SO> {
 	client: Arc<C>,
 	block_import: Arc<I>,
 	env: Arc<E>,
 	local_key: Arc<ed25519::Pair>,
+	sync_oracle: SO,
 	inherent_data_providers: InherentDataProviders,
 }
 
-impl<B: Block, C, E, I, Error> SlotWorker<B> for AuraWorker<C, E, I> where
+impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> where
 	C: Authorities<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
 	<<E::Proposer as Proposer<B>>::Create as IntoFuture>::Future: Send + 'static,
 	I: BlockImport<B> + Send + Sync + 'static,
 	Error: From<C::Error> + From<I::Error>,
+	SO: SyncOracle + Send + Clone,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
@@ -266,6 +268,11 @@ impl<B: Block, C, E, I, Error> SlotWorker<B> for AuraWorker<C, E, I> where
 			}
 		};
 
+		if self.sync_oracle.is_offline() && authorities.len() > 1 {
+			debug!(target: "aura", "Skipping proposal slot. Waiting for the netork.");
+			return Box::new(future::ok(()));
+		}
+
 		let proposal_work = match slot_author(slot_num, &authorities) {
 			None => return Box::new(future::ok(())),
 			Some(author) => if author.0 == public_key.0 {
@@ -288,7 +295,7 @@ impl<B: Block, C, E, I, Error> SlotWorker<B> for AuraWorker<C, E, I> where
 				// deadline our production to approx. the end of the
 				// slot
 				Timeout::new(
-					proposer.propose(slot_info.inherent_data).into_future(),
+					proposer.propose(slot_info.inherent_data, remaining_duration).into_future(),
 					remaining_duration,
 				)
 			} else {
