@@ -179,6 +179,7 @@ impl AuraReport {
 
 		// the number of times everyone was skipped.
 		let skipped_all = self.skipped / validator_count;
+
 		// the number of validators who were skipped once after that.
 		let skipped_after = self.skipped % validator_count;
 
@@ -186,8 +187,11 @@ impl AuraReport {
 			.chain(0..start_slot)
 			.enumerate();
 
+		// Don't include skipped_all in the bad block count, since that would imply the
+		// network as a whole was down, indicating a systematic issue rather than a
+		// minority of bad actors.
 		for (rel_index, actual_index) in iter {
-			let slash_count = skipped_all + if rel_index < skipped_after {
+			let slash_count = if rel_index < skipped_after {
 				1
 			} else {
 				// avoid iterating over all authorities when skipping a couple.
