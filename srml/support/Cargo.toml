@@ -2,17 +2,19 @@
 name = "srml-support"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "3.0", default-features = false }
+parity-codec-derive = { version = "3.0", default-features = false }
 srml-metadata = { path = "../metadata", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
-sr-io = { path = "../../core/sr-io", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-substrate-inherents = { path = "../../core/inherents", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 srml-support-procedural = { path = "./procedural" }
 mashup = "0.1.7"
 once_cell = { version = "0.1.6", default-features = false, optional = true }
@@ -20,7 +22,6 @@ paste = "0.1"
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
-parity-codec-derive = { version = "3.0" }
 
 [features]
 default = ["std"]
@@ -29,12 +30,12 @@ std = [
 	"once_cell",
 	"serde/std",
 	"serde_derive",
-	"sr-io/std",
+	"runtime_io/std",
 	"parity-codec/std",
 	"sr-std/std",
 	"sr-primitives/std",
 	"srml-metadata/std",
-	"substrate-inherents/std",
+	"inherents/std",
 ]
 nightly = []
 strict = []

@@ -238,7 +238,8 @@ mod tests {
 		StorageFunctionMetadata,
 		ModuleMetadata, RuntimeMetadataPrefixed
 	};
-	use codec::{Decode, Encode};
+	use crate::codec::{Encode, Decode};
+	use parity_codec_derive::{Decode, Encode};
 
 
 	mod system {
@@ -278,7 +279,7 @@ mod tests {
 	}
 
 	mod event_module {
-		use dispatch::Result;
+		use crate::dispatch::Result;
 
 		pub trait Trait {
 			type Origin;
@@ -319,7 +320,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
-		decl_storage! {
+		crate::decl_storage! {
 			trait Store for Module<T: Trait> as TestStorage {
 				StorageMethod : Option<u32>;
 			}
