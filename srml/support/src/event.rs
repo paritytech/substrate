@@ -101,7 +101,7 @@ macro_rules! decl_event {
 			)*
 		}
 	) => {
-		__decl_generic_event!(
+		$crate::__decl_generic_event!(
 			$( #[ $attr ] )*;
 			$evt_generic_param;
 			$( $( $generic_rename = )* <$generic as $trait>::$trait_type ),*;
@@ -117,7 +117,7 @@ macro_rules! decl_event {
 		}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum Event {
@@ -131,7 +131,7 @@ macro_rules! decl_event {
 		impl Event {
 			#[allow(dead_code)]
 			pub fn metadata() -> &'static [ $crate::event::EventMetadata ] {
-				__events_to_metadata!(; $( $events )* )
+				$crate::__events_to_metadata!(; $( $events )* )
 			}
 		}
 	}
@@ -218,7 +218,7 @@ macro_rules! __decl_generic_event {
 	) => {
 		pub type Event<$event_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),*> {
@@ -232,7 +232,7 @@ macro_rules! __decl_generic_event {
 		impl<$( $generic_param ),*> RawEvent<$( $generic_param ),*> {
 			#[allow(dead_code)]
 			pub fn metadata() -> &'static [$crate::event::EventMetadata] {
-				__events_to_metadata!(; $( $events )* )
+				$crate::__events_to_metadata!(; $( $events )* )
 			}
 		}
 	}
@@ -375,7 +375,7 @@ macro_rules! impl_outer_event {
 		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
@@ -454,6 +454,7 @@ macro_rules! __impl_outer_event_json_metadata {
 mod tests {
 	use super::*;
 	use serde_derive::Serialize;
+	use parity_codec_derive::{Encode, Decode};
 
 	mod system {
 		pub trait Trait {

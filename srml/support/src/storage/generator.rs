@@ -46,12 +46,12 @@
 //!# fn main() { }
 //! ```
 
-use codec;
-use rstd::vec::Vec;
+use crate::codec;
+use crate::rstd::vec::Vec;
 #[doc(hidden)]
-pub use rstd::borrow::Borrow;
+pub use crate::rstd::borrow::Borrow;
 #[doc(hidden)]
-pub use rstd::marker::PhantomData;
+pub use crate::rstd::marker::PhantomData;
 
 pub use srml_metadata::{
 	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
@@ -525,7 +525,7 @@ mod tests {
 	use std::cell::RefCell;
 	use codec::Codec;
 	use super::*;
-	use rstd::marker::PhantomData;
+	use crate::rstd::marker::PhantomData;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
 		fn exists(&self, key: &[u8]) -> bool {
@@ -600,7 +600,7 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
-	decl_storage! {
+	crate::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			// non-getters: pub / $default
 
@@ -923,7 +923,7 @@ mod test2 {
 
 	type PairOf<T> = (T, T);
 
-	decl_storage! {
+	crate::decl_storage! {
 		trait Store for Module<T: Trait> as TestStorage {
 			SingleDef : u32;
 			PairDef : PairOf<u32>;
@@ -955,7 +955,7 @@ mod test3 {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
-	decl_storage! {
+	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			Foo get(foo) config(initial_foo): u32;
 		}
