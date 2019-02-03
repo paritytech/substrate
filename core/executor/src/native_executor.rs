@@ -97,11 +97,9 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	// Substrate uses custom panic hook that terminates process on panic. Disable it for the native call.
-	let hook = ::std::panic::take_hook();
-	let result = ::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into());
-	::std::panic::set_hook(hook);
-	result
+	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
+	let _guard = panic_handler::AbortGuard::new(false);
+	::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
 }
 
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.

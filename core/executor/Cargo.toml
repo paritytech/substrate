@@ -13,6 +13,7 @@ trie = { package = "substrate-trie", path = "../trie" }
 serializer = { package = "substrate-serializer", path = "../serializer" }
 state_machine = { package = "substrate-state-machine", path = "../state-machine"  }
 runtime_version = { package = "sr-version", path = "../sr-version" }
+panic-handler = { package = "substrate-panic-handler", path = "../panic-handler" }
 serde = "1.0"
 serde_derive = "1.0"
 wasmi = { version = "0.4.3" }
