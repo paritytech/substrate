@@ -36,9 +36,11 @@ macro_rules! impl_runtime_metadata {
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
+				let mut registry = $crate::substrate_metadata::MetadataRegistry::new();
 				$crate::metadata::RuntimeMetadata::V1 (
 					$crate::metadata::RuntimeMetadataV1 {
-						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+						modules: __runtime_modules_to_metadata!(registry; $runtime;; $( $rest )*),
+						type_registry: registry
 					}
 				).into()
 			}
@@ -50,17 +52,19 @@ macro_rules! impl_runtime_metadata {
 #[doc(hidden)]
 macro_rules! __runtime_modules_to_metadata {
 	(
+		$registry: ident;
 		$runtime: ident;
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident $(with)+ $($kw:ident)*,
 		$( $rest:tt )*
 	) => {
 		__runtime_modules_to_metadata!(
+			$registry;
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
 				prefix: __runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
-				storage: __runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
+				storage: __runtime_modules_to_metadata_calls_storage!($registry, $mod, $module, $runtime, $(with $kw)*),
 				calls: __runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
 				event: __runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
 			};
@@ -68,6 +72,7 @@ macro_rules! __runtime_modules_to_metadata {
 		)
 	};
 	(
+		$registry: ident;
 		$runtime:ident;
 		$( $metadata:expr ),*;
 	) => {
@@ -196,28 +201,34 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 #[doc(hidden)]
 macro_rules! __runtime_modules_to_metadata_calls_storage {
 	(
+		$registry: ident,
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
 		with Storage
 		$(with $kws:ident)*
 	) => {
-		Some($crate::metadata::DecodeDifferent::Encode(
-			$crate::metadata::FnEncode(
-				$mod::$module::<$runtime>::store_metadata_functions
-			)
-		))
+		{
+			$mod::$module::<$runtime>::register_type_metadata(&mut $registry);
+			Some($crate::metadata::DecodeDifferent::Encode(
+				$crate::metadata::FnEncode(
+					$mod::$module::<$runtime>::store_metadata_functions
+				)
+			))
+		}
 	};
 	(
+		$registry: ident,
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		__runtime_modules_to_metadata_calls_storage!( $mod, $module, $runtime, $(with $kws)* );
+		__runtime_modules_to_metadata_calls_storage!( $registry, $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
+		$registry: ident,
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,

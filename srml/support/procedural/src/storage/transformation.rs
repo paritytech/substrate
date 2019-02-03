@@ -110,7 +110,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		&traitinstance,
 		&storage_lines,
 	);
-	let (store_default_struct, store_functions_to_metadata) = store_functions_to_metadata(
+	let (store_default_struct, store_functions_to_metadata, register_type_metadata) = store_functions_to_metadata(
 		&scrate,
 		&traitinstance,
 		&traittype,
@@ -140,7 +140,9 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			pub fn store_metadata_name() -> &'static str {
 				#cratename_string
 			}
-
+			pub fn register_type_metadata(registry: &mut #scrate::substrate_metadata::MetadataRegistry) {
+				#register_type_metadata
+			}
 		}
 
 		#extra_genesis
@@ -599,10 +601,11 @@ fn store_functions_to_metadata (
 	traitinstance: &Ident,
 	traittype: &syn::TypeParamBound,
 	storage_lines: &ext::Punctuated<DeclStorageLine, Token![;]>,
-) -> (TokenStream2, TokenStream2) {
+) -> (TokenStream2, TokenStream2, TokenStream2) {
 
 	let mut items = TokenStream2::new();
 	let mut default_getter_struct_def = TokenStream2::new();
+	let mut register_type_metadata = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
 			attrs,
@@ -616,24 +619,36 @@ fn store_functions_to_metadata (
 		let gettype = type_infos.full_type;
 
 		let typ = type_infos.typ;
-		let stype = if type_infos.is_simple {
+		let (stype, reg_type) = if type_infos.is_simple {
 			let styp = clean_type_string(&typ.to_string());
-			quote!{
-				#scrate::storage::generator::StorageFunctionType::Plain(
-					#scrate::storage::generator::DecodeDifferent::Encode(#styp),
-				)
-			}
-		} else {
-			let kty = type_infos.map_key.expect("is not simple; qed");
-			let kty = clean_type_string(&quote!(#kty).to_string());
-			let styp = clean_type_string(&typ.to_string());
-			quote!{
-				#scrate::storage::generator::StorageFunctionType::Map {
-					key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
-					value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+			(
+				quote!{
+					#scrate::storage::generator::StorageFunctionType::Plain(
+						#scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					)
+				},
+				quote!{
+					<#typ as #scrate::substrate_metadata::EncodeMetadata>::register_type_metadata(registry);
 				}
-			}
+			)
+		} else {
+			let key_type = type_infos.map_key.expect("is not simple; qed");
+			let kty = clean_type_string(&quote!(#key_type).to_string());
+			let styp = clean_type_string(&typ.to_string());
+			(
+				quote!{
+					#scrate::storage::generator::StorageFunctionType::Map {
+						key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
+						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					}
+				},
+				quote!{
+					<#key_type as #scrate::substrate_metadata::EncodeMetadata>::register_type_metadata(registry);
+					<#typ as #scrate::substrate_metadata::EncodeMetadata>::register_type_metadata(registry);
+				}
+			)
 		};
+		register_type_metadata.extend(reg_type);
 		let modifier = if type_infos.is_option {
 			quote!{
 				#scrate::storage::generator::StorageFunctionModifier::Optional
@@ -703,13 +718,17 @@ fn store_functions_to_metadata (
 		};
 		default_getter_struct_def.extend(def_get);
 	}
-	(default_getter_struct_def, quote!{
-		{
-			&[
-				#items
-			]
-		}
-	})
+	(
+		default_getter_struct_def,
+		quote!{
+			{
+				&[
+					#items
+				]
+			}
+		},
+		register_type_metadata
+	)
 }
 
 

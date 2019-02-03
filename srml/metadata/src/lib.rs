@@ -224,21 +224,12 @@ pub trait DefaultByte {
 	fn default_byte(&self) -> Vec<u8>;
 }
 
-pub trait TypeMetadataRegistry {
-	fn type_registry(&self) -> substrate_metadata::MetadataRegistry;
-}
-
 /// Wrapper over dyn pointer for accessing a cached once byet value.
 #[derive(Clone)]
 pub struct DefaultByteGetter(pub &'static dyn DefaultByte);
 
-#[derive(Clone)]
-pub struct TypeMetadataRegistryGetter(pub &'static dyn TypeMetadataRegistry);
-
 /// Decode different for static lazy initiated byte value.
 pub type ByteGetter = DecodeDifferent<DefaultByteGetter, Vec<u8>>;
-
-pub type DecodeDifferentTypeRegistryGetter = DecodeDifferent<TypeMetadataRegistryGetter, substrate_metadata::MetadataRegistry>;
 
 impl Encode for DefaultByteGetter {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
@@ -270,39 +261,6 @@ impl serde::Serialize for DefaultByteGetter {
 impl std::fmt::Debug for DefaultByteGetter {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		self.0.default_byte().fmt(f)
-	}
-}
-
-impl Encode for TypeMetadataRegistryGetter {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
-		self.0.type_registry().encode_to(dest)
-	}
-}
-
-impl PartialEq<TypeMetadataRegistryGetter> for TypeMetadataRegistryGetter {
-	fn eq(&self, other: &TypeMetadataRegistryGetter) -> bool {
-		let left = self.0.type_registry();
-		let right = other.0.type_registry();
-		left.eq(&right)
-	}
-}
-
-impl Eq for TypeMetadataRegistryGetter { }
-
-#[cfg(feature = "std")]
-impl serde::Serialize for TypeMetadataRegistryGetter {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-		where
-				S: serde::Serializer,
-	{
-		self.0.type_registry().serialize(serializer)
-	}
-}
-
-#[cfg(feature = "std")]
-impl std::fmt::Debug for TypeMetadataRegistryGetter {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.0.type_registry().fmt(f)
 	}
 }
 
@@ -380,7 +338,7 @@ impl Decode for RuntimeMetadataDeprecated {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV1 {
 	pub modules: DecodeDifferentArray<ModuleMetadata>,
-	pub type_registry: DecodeDifferentTypeRegistryGetter,
+	pub type_registry: substrate_metadata::MetadataRegistry,
 }
 
 /// All metadata about an runtime module.

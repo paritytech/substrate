@@ -22,7 +22,7 @@ use std::fmt;
 use rstd::prelude::*;
 use runtime_io::blake2_256;
 use codec::{Decode, Encode, Input, Compact};
-use substrate_metadata::EncodeMetadata;
+use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind};
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
 use super::{CheckedExtrinsic, Era};
@@ -163,6 +163,23 @@ where
 			}
 			self.function.encode_to(v);
 		})
+	}
+}
+
+impl<Address, Index, Call, Signature> EncodeMetadata
+	for UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature>
+where
+	Address: Encode,
+	Signature: Encode,
+	Compact<Index>: Encode,
+	Call: Encode,
+{
+	fn type_name() -> MetadataName {
+		MetadataName::Custom(module_path!().into(), "UncheckedMortalCompactExtrinsic".into())
+	}
+	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
+		// TODO: implement this
+		TypeMetadataKind::Primative
 	}
 }
 
