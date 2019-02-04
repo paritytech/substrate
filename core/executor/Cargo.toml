@@ -21,7 +21,6 @@ byteorder = "1.1"
 lazy_static = "1.0"
 parking_lot = "0.7.1"
 log = "0.4"
-fnv = "1.0.6"
 libsecp256k1 = "0.2.1"
 tiny-keccak = "1.4.2"
 
