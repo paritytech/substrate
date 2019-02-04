@@ -364,7 +364,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				function: &'static str,
 				args: Vec<u8>,
 				native_call: NC,
-				context: ExecutionContext
+				context: #crate_::runtime_api::ExecutionContext
 			) -> #crate_::error::Result<R> {
 				let res = unsafe {
 					self.call.call_api_at(

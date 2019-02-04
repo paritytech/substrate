@@ -571,7 +571,7 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	let (impl_generics, ty_generics, where_clause) = trait_.generics.split_for_impl();
 
 	quote!(
-		 #[cfg(any(feature = "std", test))]
+		#[cfg(any(feature = "std", test))]
 		impl #impl_generics #crate_::runtime_api::RuntimeApiInfo
 			for #trait_name #ty_generics #where_clause
 		{
@@ -714,13 +714,8 @@ fn check_trait_decls(decls: &[ItemTrait]) -> Option<TokenStream> {
 }
 
 fn generate_decl_with_context(decls: &mut [ItemTrait]) {
-	let pat = Pat::Ident(PatIdent { by_ref: None, mutability: None, ident: Ident::new("context", Span::call_site()), subpat: None });
-	let mut punctuated = syn::punctuated::Punctuated::new();
-	let punctuated_item = PathSegment { ident: Ident::new("ExecutionContext", Span::call_site()), arguments: PathArguments::None };
-	punctuated.push(punctuated_item); 
-	let ty = syn::Type::Path(syn::TypePath { qself: None, path: Path { leading_colon: None, segments: punctuated } });
-	let context_arg = Captured(ArgCaptured { pat, colon_token: syn::token::Colon(Span::call_site()), ty });
-	
+	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
 	for decl in decls {
 		let mut ctx_methods = vec![];
 	
