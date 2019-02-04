@@ -125,7 +125,7 @@ impl FreeingBumpHeapAllocator {
 
 		let mut slice = self.get_heap_4bytes(ptr - 8);
 		FreeingBumpHeapAllocator::write_u32_into_le_bytes(tail, &mut slice);
-		self.set_heap_bytes(ptr - 8, slice);
+		self.set_heap_4bytes(ptr - 8, slice);
 
 		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(list_index);
 		self.total_size = self.total_size.checked_sub(item_size as u32 + 8).unwrap_or(0);
@@ -167,7 +167,7 @@ impl FreeingBumpHeapAllocator {
 		self.heap.set(self.ptr_offset + ptr, &[value]).unwrap()
 	}
 
-	fn set_heap_bytes(&mut self, ptr: u32, value: [u8; 4]) {
+	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) {
 		self.heap.set(self.ptr_offset + ptr, &value).unwrap()
 	}
 
