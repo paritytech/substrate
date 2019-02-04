@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::borrow::BorrowMut;
-use std::cell::{RefMut, RefCell};
+use std::{borrow::BorrowMut, result, cell::{RefMut, RefCell}};
 use crate::error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
 use crate::wasm_executor::WasmExecutor;
@@ -98,18 +97,16 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	// Substrate uses custom panic hook that terminates process on panic. Disable it for the native call.
-	let hook = ::std::panic::take_hook();
-	let result = ::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into());
-	::std::panic::set_hook(hook);
-	result
+	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
+	let _guard = panic_handler::AbortGuard::new(false);
+	::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
 }
 
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
 pub fn with_native_environment<F, U>(ext: &mut Externalities<Blake2Hasher>, f: F) -> Result<U>
-where F: UnwindSafe + FnOnce() -> U
+	where F: UnwindSafe + FnOnce() -> U
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
@@ -186,7 +183,7 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 	<
 		E: Externalities<Blake2Hasher>,
 		R:Decode + Encode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
 	>(
 		&self,
 		ext: &mut E,
@@ -242,7 +239,8 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 					(
-						with_native_environment(ext, move || (call)()).map(NativeOrEncoded::Native),
+						with_native_environment(ext, move || (call)())
+							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Into::into)),
 						true
 					)
 				}

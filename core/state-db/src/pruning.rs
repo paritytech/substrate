@@ -130,6 +130,11 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		self.pending_number + self.pending_prunings as u64
 	}
 
+	pub fn have_block(&self, hash: &BlockHash) -> bool {
+		self.death_rows.iter().skip(self.pending_prunings).any(|r| r.hash == *hash) ||
+			self.pending_records.iter().any(|(_, record)| record.hash == *hash)
+	}
+
 	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
 	pub fn prune_one(&mut self, commit: &mut CommitSet<Key>) {
 		if let Some(pruned) = self.death_rows.get(self.pending_prunings) {
@@ -236,7 +241,9 @@ mod tests {
 		let h = H256::random();
 		pruning.note_canonical(&h, &mut commit);
 		db.commit(&commit);
+		assert!(pruning.have_block(&h));
 		pruning.apply_pending();
+		assert!(pruning.have_block(&h));
 		assert!(commit.data.deleted.is_empty());
 		assert_eq!(pruning.death_rows.len(), 1);
 		assert_eq!(pruning.death_index.len(), 2);
@@ -245,8 +252,10 @@ mod tests {
 
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit);
+		assert!(!pruning.have_block(&h));
 		db.commit(&commit);
 		pruning.apply_pending();
+		assert!(!pruning.have_block(&h));
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());

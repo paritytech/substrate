@@ -70,6 +70,7 @@ use traits::{Verify, Lazy};
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(not(feature = "std"))]
 pub type RuntimeString = &'static str;
 
@@ -297,6 +298,8 @@ pub enum ApplyError {
 	Future = 2,
 	/// Sending account had too low a balance.
 	CantPay = 3,
+	/// Block is full, no more extrinsics can be applied.
+	FullBlock = 255,
 }
 
 impl codec::Encode for ApplyError {
