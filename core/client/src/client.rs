@@ -1751,13 +1751,10 @@ pub(crate) mod tests {
 
 	#[test]
 	fn uncles_with_genesis_block() {
-		use test_client::blockchain::Backend;
-
 		// block tree:
 		// G -> A1 -> A2
 
 		let client = test_client::new();
-		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
 		// G -> A1
 		let a1 = client.new_block().unwrap().bake().unwrap();
@@ -1772,11 +1769,6 @@ pub(crate) mod tests {
 
 	#[test]
 	fn uncles_with_multiple_forks() {
-		// NOTE: we use the version of the trait from `test_client`
-		// because that is actually different than the version linked to
-		// in the test facade crate.
-		use test_client::blockchain::Backend as BlockchainBackendT;
-
 		// block tree:
 		// G -> A1 -> A2 -> A3 -> A4 -> A5
 		//      A1 -> B2 -> B3 -> B4

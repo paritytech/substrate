@@ -115,7 +115,7 @@ mod tests {
 		children.import(1_1, 1_5);
 		children.import(1_2, 1_6);
 		
-		children.prepare_transaction(&db, &mut tx, None, PREFIX);
+		let _ = children.prepare_transaction(&db, &mut tx, None, PREFIX);
 		db.write(tx).unwrap();
 		
 		let r1: Vec<u32> = children.hashes(&db, None, PREFIX, 1_1).unwrap();
