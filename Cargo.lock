@@ -3433,7 +3433,6 @@ dependencies = [
  "ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "app_dirs 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "atty 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "backtrace 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3449,6 +3448,7 @@ dependencies = [
  "structopt 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
  "substrate-network 0.1.0",
+ "substrate-panic-handler 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",
  "substrate-telemetry 0.3.0",
@@ -3618,6 +3618,7 @@ dependencies = [
  "serde_derive 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",
  "sr-version 0.1.0",
+ "substrate-panic-handler 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
@@ -3747,6 +3748,14 @@ dependencies = [
  "tokio-timer 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "unsigned-varint 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-panic-handler"
+version = "0.1.0"
+dependencies = [
+ "backtrace 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3898,6 +3907,7 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-panic-handler 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-trie 0.4.0",
  "trie-db 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
