@@ -278,9 +278,9 @@ cargo run --release \-- \
 
 Additional Substate CLI usage options are available and may be shown by running `cargo run \-- --help`.
 
-=== Joining the Charred Cherry Testnet
+=== Joining the Dried Danta Testnet
 
-Charred Cherry is the new testnet for Substrate 1.0 beta. Please note that 1.0 beta is not compatible with the BBQ-Birch testnet. Ensure you have the dependencies listed above before compiling.
+Dried Danta is the new testnet for Substrate 1.0 gamma. Please note that 1.0 gamma is not compatible with the BBQ-Birch or Charred-Cherry testnets. Ensure you have the dependencies listed above before compiling.
 
 [source, shell]
 ----
@@ -308,7 +308,7 @@ For example, you can choose a custom node name:
 [source, shell]
 cargo run --release \-- --name my_custom_name
 
-If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Charred%20Cherry
+If you are successful, you will see your node syncing at https://telemetry.polkadot.io/#/Dried%20Danta
 
 
 == Documentation
