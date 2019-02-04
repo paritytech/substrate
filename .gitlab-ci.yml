@@ -49,41 +49,6 @@ test:runtime:
     - ./scripts/gitlab/check_runtime.sh
 
 
-test:rust:stable:                  &test
-  stage:                           test
-  variables:
-    RUST_TOOLCHAIN: stable
-    # Enable debug assertions since we are running optimized builds for testing
-    # but still want to have debug assertions.
-    RUSTFLAGS: -Cdebug-assertions=y
-    TARGET: native
-  only:
-    - triggers
-    - tags
-    - master
-    - schedules
-    - web
-    - /^pr-[0-9]+$/
-    - /^[0-9]+$/
-  tags:
-    - linux-docker
-  before_script:
-   - echo "build cache size:"
-   - du -hs ${CARGO_HOME} ./target
-   - ./scripts/build.sh
-  script:
-    - time cargo test --all --release --verbose --locked
-
-.optional_test:                    &optional_test
-  <<:                              *test
-  allow_failure:                   true
-  only:
-    - master
-
-
-
-
-
 .build_only:                      &build_only
   only:
     - master
