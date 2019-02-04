@@ -119,7 +119,7 @@ impl FreeingBumpHeapAllocator {
 		let ptr = ptr - self.ptr_offset;
 
 		let list_index = self.get_heap_byte(ptr - 8) as usize;
-		for i in 1..8 { assert!(self.get_heap_byte(ptr - i) == 255); }
+		for i in 1..8 { debug_assert!(self.get_heap_byte(ptr - i) == 255); }
 		let tail = self.heads[list_index];
 		self.heads[list_index] = ptr - 8;
 
