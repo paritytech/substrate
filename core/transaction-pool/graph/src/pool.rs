@@ -163,7 +163,6 @@ impl<B: ChainApi> Pool<B> {
 			})
 			.collect::<Vec<_>>();
 
-		// TODO [ToDr] Should return an error if it got immediately removed.
 		let removed = self.enforce_limits();
 
 		Ok(results.into_iter().map(|res| match res {
