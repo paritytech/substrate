@@ -32,7 +32,8 @@ use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
 use consensus_common::BlockOrigin;
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
-use std::{collections::HashSet, result};
+use std::collections::{HashMap, HashSet};
+use std::result;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
 use runtime_primitives::generic::BlockId;
 
