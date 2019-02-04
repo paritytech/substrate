@@ -124,34 +124,6 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn deposit_event<T>() = default;
-
-		/// Transfer some liquid free balance to another staker.
-		pub fn transfer(
-			origin,
-			dest: <T::Lookup as StaticLookup>::Source,
-			#[compact] value: T::Balance
-		) {
-			let transactor = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
-			Self::make_transfer(&transactor, &dest, value)?;
-		}
-
-		/// Set the balances of a given account.
-		fn set_balance(
-			who: <T::Lookup as StaticLookup>::Source,
-			#[compact] free: T::Balance,
-			#[compact] reserved: T::Balance
-		) {
-			let who = T::Lookup::lookup(who)?;
-			Self::set_free_balance(&who, free);
-			Self::set_reserved_balance(&who, reserved);
-		}
-	}
-}
-
 decl_event!(
 	pub enum Event<T> where
 		<T as system::Trait>::AccountId,
@@ -166,6 +138,19 @@ decl_event!(
 	}
 );
 
+/// Struct to encode the vesting schedule of an individual account.
+pub struct VestingSchedule<Balance> {
+	offset: Balance,
+	per_block: Balance,
+}
+
+impl<Balance: SimpleArithmetic + Copy + As<u64>> Lockup<Balance> {
+	fn locked_at<BlockNumber: As<u64>>(n: BlockNumber) -> Balance {
+		let x = <Balance as As<u64>>::sa(n.as_()).saturating_mul(per_block);
+		offset.max(x) - x
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
 		/// The total amount of stake on the system.
@@ -178,6 +163,28 @@ decl_storage! {
 		pub TransferFee get(transfer_fee) config(): T::Balance;
 		/// The fee required to create an account. At least as big as ReclaimRebate.
 		pub CreationFee get(creation_fee) config(): T::Balance;
+
+		/// Information regarding the vesting of a given account.
+		pub Vesting get(vesting) build(|config: &GenesisConfig<T>| {
+			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
+				let begin: u64 = begin.as_();
+				let length: u64 = length.as_();
+				let begin: T::Balance = begin.as_();
+				let length: T::Balance = length.as_();
+
+				config.balances.iter()
+					.find(|&&(ref w, _)| w == who)
+					.map(|&(_, balance)| {
+						// <= begin it should be >= balance
+						// >= begin+length it should be <= 0
+
+						let per_block = balance / length;
+						let offset = begin * per_block + balance;
+						
+						(who.clone(), VestingSchedule { offset, per_block })
+					})
+			}).collect::<Vec<_>>()
+		}): map T::AccountId => VestingSchedule<T::Balance>;
 
 		/// The 'free' balance of a given account.
 		///
@@ -216,6 +223,35 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
+		config(vesting): Vec<(T::AccountId, T::BlockNumber, T::BlockNumber)>;		// begin, length
+	}
+}
+
+decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event<T>() = default;
+
+		/// Transfer some liquid free balance to another staker.
+		pub fn transfer(
+			origin,
+			dest: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: T::Balance
+		) {
+			let transactor = ensure_signed(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			Self::make_transfer(&transactor, &dest, value)?;
+		}
+
+		/// Set the balances of a given account.
+		fn set_balance(
+			who: <T::Lookup as StaticLookup>::Source,
+			#[compact] free: T::Balance,
+			#[compact] reserved: T::Balance
+		) {
+			let who = T::Lookup::lookup(who)?;
+			Self::set_free_balance(&who, free);
+			Self::set_reserved_balance(&who, reserved);
+		}
 	}
 }
 
