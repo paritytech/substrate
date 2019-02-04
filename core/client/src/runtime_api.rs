@@ -77,7 +77,7 @@ pub trait ApiExt<Block: BlockT> {
 pub trait CallRuntimeAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
-	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
+	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,

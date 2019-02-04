@@ -15,6 +15,7 @@ blake2-rfc = "0.2"
 [dev-dependencies]
 substrate-client = { path = "../client" }
 substrate-test-client = { path = "../test-client" }
+substrate-state-machine = { path = "../state-machine" }
 sr-primitives = { path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
 substrate-primitives = { path = "../primitives" }

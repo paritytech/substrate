@@ -118,7 +118,7 @@ mod tests {
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialise_block",
 			&vec![].and(&from_block_number(1u64)),
@@ -126,7 +126,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let v = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let v = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -151,7 +151,7 @@ mod tests {
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialise_block",
 			&vec![].and(&from_block_number(1u64)),
@@ -159,7 +159,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let v = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let v = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -184,7 +184,7 @@ mod tests {
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialise_block",
 			&vec![].and(&from_block_number(1u64)),
@@ -192,7 +192,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -221,7 +221,7 @@ mod tests {
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
-		let r = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_initialise_block",
 			&vec![].and(&from_block_number(1u64)),
@@ -229,7 +229,7 @@ mod tests {
 			None,
 		).0;
 		assert!(r.is_ok());
-		let r = executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"BlockBuilder_apply_extrinsic",
 			&vec![].and(&xt()),
@@ -422,7 +422,7 @@ mod tests {
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1(false).0,
@@ -477,7 +477,7 @@ mod tests {
 			]);
 		});
 
-		executor().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block2().0,
@@ -729,7 +729,7 @@ mod tests {
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		Executor::new().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		Executor::new().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1big().0,
@@ -743,7 +743,7 @@ mod tests {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
-			Executor::new().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+			Executor::new().call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
 				&block1big().0,
@@ -805,7 +805,7 @@ mod tests {
 	#[test]
 	fn full_native_block_import_works_with_changes_trie() {
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		Executor::new().call::<_, NeverNativeValue, fn() -> NeverNativeValue>(
+		Executor::new().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1(true).0,

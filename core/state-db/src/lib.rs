@@ -231,10 +231,15 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
-		if self.best_canonical().map(|c| number > c).unwrap_or(true) {
-			!self.non_canonical.have_block(hash)
-		} else {
-			self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending() || !pruning.have_block(hash))
+		match self.mode {
+			PruningMode::ArchiveAll => false,
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
+					!self.non_canonical.have_block(hash)
+				} else {
+					self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending() || !pruning.have_block(hash))
+				}
+			}
 		}
 	}
 
@@ -292,6 +297,13 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		if let Some(pruning) = &mut self.pruning {
 			pruning.apply_pending();
 		}
+		trace!(target: "forks", "First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
+			self.pruning.as_ref().and_then(|p| p.next_hash()),
+			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
+			self.non_canonical.last_canonicalized_hash(),
+			self.non_canonical.last_canonicalized_block_number().unwrap_or(0),
+			self.non_canonical.top_level(),
+		);
 	}
 
 	pub fn revert_pending(&mut self) {
@@ -444,8 +456,9 @@ mod tests {
 
 	#[test]
 	fn full_archive_keeps_everything() {
-		let (db, _) = make_test_db(PruningMode::ArchiveAll);
+		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
+		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}
 
 	#[test]

@@ -16,7 +16,7 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe};
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe, result};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -804,7 +804,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
@@ -1244,7 +1244,9 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>
 {
-	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
+	fn call_api_at<
+		R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+	>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,

@@ -21,6 +21,7 @@
 //! Allows attachment of an optional subprotocol for chain-specific requests.
 
 extern crate linked_hash_map;
+extern crate lru_cache;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
 extern crate substrate_client as client;

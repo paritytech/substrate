@@ -17,27 +17,25 @@
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
 // FIXME #1021 move this into substrate-consensus-common
-// 
-use std::{sync::Arc, self};
+//
+use std::{self, time, sync::Arc};
 
-use log::{info, trace};
+use log::{info, debug, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
 	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{Core, ApiExt}
 };
-use codec::{Decode, Encode};
+use codec::Decode;
 use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
 };
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 use inherents::InherentData;
-
-// block size limit.
-const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
@@ -144,6 +142,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
+			now: Box::new(time::Instant::now),
 		};
 
 		Ok(proposer)
@@ -157,6 +156,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
+	now: Box<Fn() -> time::Instant>,
 }
 
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
@@ -169,10 +169,12 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
 	type Error = error::Error;
 
-	fn propose(&self, inherent_data: InherentData)
+	fn propose(&self, inherent_data: InherentData, max_duration: time::Duration)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
-		self.propose_with(inherent_data)
+		// leave some time for evaluation and block finalisation (33%)
+	 	let deadline = (self.now)() + max_duration - max_duration / 3;
+		self.propose_with(inherent_data, deadline)
 	}
 }
 
@@ -183,7 +185,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
 {
-	fn propose_with(&self, inherent_data: InherentData)
+	fn propose_with(&self, inherent_data: InherentData, deadline: time::Instant)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
@@ -193,16 +195,21 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			inherent_data,
 			|block_builder| {
 				let mut unqueue_invalid = Vec::new();
-				let mut pending_size = 0;
 				let pending_iterator = self.transaction_pool.ready();
 
 				for pending in pending_iterator {
-					let encoded_size = pending.data.encode().len();
-					if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
+					if (self.now)() > deadline {
+						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
+						break;
+					}
 
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(()) => {
-							pending_size += encoded_size;
+							debug!("[{:?}] Pushed to the block.", pending.hash);
+						}
+						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
+							debug!("Block is full, proceed with proposing.");
+							break;
 						}
 						Err(e) => {
 							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
@@ -236,4 +243,61 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 
 		Ok(substrate_block)
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use codec::Encode;
+	use std::cell::RefCell;
+	use consensus_common::{Environment, Proposer};
+	use test_client::keyring::Keyring;
+	use test_client::{self, runtime::{Extrinsic, Transfer}};
+
+	fn extrinsic(nonce: u64) -> Extrinsic {
+		let tx = Transfer {
+			amount: Default::default(),
+			nonce,
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Default::default(),
+		};
+		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		Extrinsic::Transfer(tx, signature)
+	}
+
+	#[test]
+	fn should_cease_building_block_when_deadline_is_reached() {
+		// given
+		let client = Arc::new(test_client::new());
+		let chain_api = transaction_pool::ChainApi::new(client.clone());
+		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+
+		txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)]).unwrap();
+
+		let proposer_factory = ProposerFactory {
+			client: client.clone(),
+			transaction_pool: txpool.clone(),
+		};
+
+		let mut proposer = proposer_factory.init(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&[]
+		).unwrap();
+
+		// when
+		let cell = RefCell::new(time::Instant::now());
+		proposer.now = Box::new(move || {
+			let new = *cell.borrow() + time::Duration::from_secs(2);
+			cell.replace(new)
+		});
+		let deadline = time::Duration::from_secs(3);
+		let block = proposer.propose(Default::default(), deadline).unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert_eq!(block.extrinsics().len(), 1);
+		assert_eq!(txpool.ready().count(), 2);
+	}
+
 }
