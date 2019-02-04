@@ -44,12 +44,12 @@ impl<K, V> ChildrenMap<K, V> where
 		}
 	}
 
-	pub fn hashes(db: &KeyValueDB, column: Option<u32>, prefix: &[u8],
+	pub fn hashes(&self, db: &KeyValueDB, column: Option<u32>, prefix: &[u8],
 		parent_hash: K) -> error::Result<Vec<V>> {
 		
 		let mut buf = prefix.to_vec();
 		parent_hash.using_encoded(|s| buf.extend(s));
-		let raw_val = match db.get_by_prefix(column, &buf[..]) {
+		let raw_val = match db.get(column, &buf[..]).unwrap() {
 			Some(val) => val,
 			None => return Ok(vec![]),
 		};
@@ -58,6 +58,13 @@ impl<K, V> ChildrenMap<K, V> where
 			None => return Err(error::ErrorKind::Backend("Error decoding children".into()).into()),
 		};
 		Ok(children)
+	}
+
+	pub fn hashes_from_mem(&self, parent_hash: K) -> Vec<V> {
+		match self.storage.get(&parent_hash) {
+			Some(children) => children.clone(),
+			None => vec![],
+		}
 	}
 
 	pub fn import(&mut self, parent_hash: K, child_hash: V) {
@@ -72,7 +79,7 @@ impl<K, V> ChildrenMap<K, V> where
 	pub fn prepare_transaction(&self, db: &KeyValueDB, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8])
 		-> error::Result<()> {
 		for (parent_hash, children) in self.storage.iter() {
-			let mut children_db = Self::hashes(db, column, prefix, parent_hash.clone())?;
+			let mut children_db = self.hashes(db, column, prefix, parent_hash.clone())?;
 			children_db.extend(children.iter().cloned());
 			let mut buf = prefix.to_vec();
 			parent_hash.using_encoded(|s| buf.extend(s));
@@ -103,8 +110,8 @@ mod tests {
 		children.prepare_transaction(&db, &mut tx, None, PREFIX);
 		db.write(tx).unwrap();
 		
-		let r1: Vec<u32> = ChildrenMap::hashes(&db, None, PREFIX, 1_1).unwrap();
-		let r2: Vec<u32> = ChildrenMap::hashes(&db, None, PREFIX, 1_2).unwrap();
+		let r1: Vec<u32> = children.hashes(&db, None, PREFIX, 1_1).unwrap();
+		let r2: Vec<u32> = children.hashes(&db, None, PREFIX, 1_2).unwrap();
 		
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2, vec![1_4, 1_6]);

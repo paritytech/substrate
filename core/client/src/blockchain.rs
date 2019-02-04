@@ -85,7 +85,6 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// Results must be ordered best (longest, heighest) chain first.
 	fn leaves(&self) -> Result<Vec<Block::Hash>>;
 
-	/// Returns the hashes of all blocks that are children of the block with `parent_hash`.
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 }
 
