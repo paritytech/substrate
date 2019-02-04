@@ -112,13 +112,11 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 
-use authorities::SharedAuthoritySet;
-use until_imported::{UntilCommitBlocksImported, UntilVoteTargetImported};
-
 pub use fg_primitives::ScheduledChange;
 
 mod authorities;
 mod communication;
+mod consensus_changes;
 mod finality_proof;
 mod until_imported;
 
@@ -127,6 +125,9 @@ mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService};
 
+use authorities::SharedAuthoritySet;
+use until_imported::{UntilCommitBlocksImported, UntilVoteTargetImported};
+use consensus_changes::{ConsensusChanges, SharedConsensusChanges};
 pub use finality_proof::{prove_finality, check_finality_proof};
 
 #[cfg(test)]
@@ -330,58 +331,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E,
 			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
 	}
 }
-
-/// Consensus-related data changes tracker.
-#[derive(Clone, Debug, Encode, Decode)]
-struct ConsensusChanges<H, N> {
-	pending_changes: Vec<(N, H)>,
-}
-
-impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
-	/// Create empty consensus changes.
-	pub fn empty() -> Self {
-		ConsensusChanges { pending_changes: Vec::new(), }
-	}
-
-	/// Note unfinalized change of consensus-related data.
-	pub fn note_change(&mut self, at: (N, H)) {
-		let idx = self.pending_changes
-			.binary_search_by_key(&at.0, |change| change.0)
-			.unwrap_or_else(|i| i);
-		self.pending_changes.insert(idx, at);
-	}
-
-	/// Finalize all pending consensus changes that are finalized by given block.
-	/// Returns true if there any changes were finalized.
-	pub fn finalize<F: Fn(N) -> ::client::error::Result<Option<H>>>(
-		&mut self,
-		block: (N, H),
-		canonical_at_height: F,
-	) -> ::client::error::Result<(bool, bool)> {
-		let (split_idx, has_finalized_changes) = self.pending_changes.iter()
-			.enumerate()
-			.take_while(|(_, &(at_height, _))| at_height <= block.0)
-			.fold((None, Ok(false)), |(_, has_finalized_changes), (idx, ref at)|
-				(
-					Some(idx),
-					has_finalized_changes
-						.and_then(|has_finalized_changes| if has_finalized_changes {
-							Ok(has_finalized_changes)
-						} else {
-							canonical_at_height(at.0).map(|can_hash| Some(at.1) == can_hash)
-						}),
-				));
-
-		let altered_changes = split_idx.is_some();
-		if let Some(split_idx) = split_idx {
-			self.pending_changes = self.pending_changes.split_off(split_idx + 1);
-		}
-		has_finalized_changes.map(|has_finalized_changes| (altered_changes, has_finalized_changes))
-	}
-}
-
-/// Thread-safe consensus changes tracker reference.
-type SharedConsensusChanges<H, N> = Arc<parking_lot::Mutex<ConsensusChanges<H, N>>>;
 
 /// The environment we run GRANDPA in.
 struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
