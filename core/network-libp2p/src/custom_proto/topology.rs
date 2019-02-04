@@ -234,6 +234,7 @@ impl NetTopology {
 		}
 
 		let mut addrs: Vec<_> = addrs.collect();
+
 		let now_systime = SystemTime::now();
 		let now = Instant::now();
 
@@ -241,14 +242,14 @@ impl NetTopology {
 
 		let new_addrs = peer.addrs
 			.drain(..)
-			.filter_map(|a| {
+			.filter(|a| {
 				if a.expires < now_systime && !a.is_connected() {
-					return None
+					return false
 				}
-				if let Some(pos) = addrs.iter().position(|&(ref addr, _)| addr == &a.addr) {
+				while let Some(pos) = addrs.iter().position(|&(ref addr, _)| addr == &a.addr) {
 					addrs.remove(pos);
 				}
-				Some(a)
+				true
 			})
 			.collect();
 		peer.addrs = new_addrs;
@@ -256,6 +257,7 @@ impl NetTopology {
 		let mut anything_changed = false;
 
 		if !addrs.is_empty() {
+			anything_changed = true;
 			trace!(
 				target: "sub-libp2p",
 				"Peer store: adding addresses {:?} for {:?}",
@@ -281,7 +283,11 @@ impl NetTopology {
 				}
 			}
 
-			anything_changed = true;
+			// `addrs` can contain duplicates, therefore we would insert the same address twice.
+			if peer.addrs.iter().any(|a| a.addr == addr) {
+				continue;
+			}
+
 			peer.addrs.push(Addr {
 				addr,
 				expires: now_systime + KADEMLIA_DISCOVERY_EXPIRATION,
@@ -406,6 +412,7 @@ impl NetTopology {
 					continue
 				}
 
+				debug_assert!(!a.is_connected());
 				a.adjust_score(SCORE_DIFF_ON_FAILED_TO_CONNECT);
 				trace!(target: "sub-libp2p", "Back off for {} = {:?}", addr, a.next_back_off);
 				a.back_off_until = Instant::now() + a.next_back_off;

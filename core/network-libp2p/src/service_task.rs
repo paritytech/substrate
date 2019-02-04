@@ -73,10 +73,10 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 		}
 	}
 
-	// Add external addresses.
+	/*// Add external addresses.
 	for addr in &config.public_addresses {
 		Swarm::add_external_address(addr.clone());
-	}
+	}*/
 
 	// Connect to the bootnodes.
 	for bootnode in config.boot_nodes.iter() {

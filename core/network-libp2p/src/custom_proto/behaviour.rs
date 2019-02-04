@@ -63,6 +63,9 @@ pub struct CustomProtos<TSubstream> {
 	/// If true, only reserved peers can connect.
 	reserved_only: bool,
 
+	/// List of the IDs of the peers we are connected to.
+	connected_peers: FnvHashSet<PeerId>,
+
 	/// List of the IDs of the reserved peers. We always try to maintain a connection these peers.
 	reserved_peers: FnvHashSet<PeerId>,
 
@@ -164,6 +167,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 			max_incoming_connections,
 			max_outgoing_connections,
 			reserved_only: config.non_reserved_mode == NonReservedPeerMode::Deny,
+			connected_peers: Default::default(),
 			reserved_peers: Default::default(),
 			banned_peers: Vec::new(),
 			open_protocols: Vec::with_capacity(open_protos_cap),
@@ -339,7 +343,6 @@ impl<TSubstream> CustomProtos<TSubstream> {
 
 			if let Some((_, ban_end)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
 				if *ban_end > Instant::now() {
-					println!("banned peer");
 					continue
 				}
 			}
@@ -349,7 +352,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 		}
 
 		// Next round is when we expect the topology will change.
-		self.next_connect_to_nodes.reset(std::cmp::min(will_change, Instant::now() + Duration::from_secs(5)));
+		self.next_connect_to_nodes.reset(will_change);
 	}
 }
 
@@ -371,6 +374,8 @@ where
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
 		// When a peer connects, its handler is initially in the disabled state. We make sure that
 		// the peer is allowed, and if so we put it in the enabled state.
+
+		self.connected_peers.insert(peer_id.clone());
 
 		let is_reserved = self.reserved_peers.contains(&peer_id);
 		if self.reserved_only && !is_reserved {
@@ -439,6 +444,9 @@ where
 	}
 
 	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+		let was_connected = self.connected_peers.remove(&peer_id);
+		debug_assert!(was_connected);
+
 		self.topology.set_disconnected(peer_id, &endpoint);
 
 		while let Some(pos) = self.open_protocols.iter().position(|(p, _)| p == peer_id) {
@@ -460,10 +468,15 @@ where
 	}
 
 	fn inject_dial_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn error::Error) {
-		debug!(target: "sub-libp2p", "Failed to reach peer {:?} through {} => {:?}", peer_id, addr, error);
-		self.topology.set_unreachable(addr);
-		// Trigger a `connect_to_nodes` round.
-		self.next_connect_to_nodes = Delay::new(Instant::now());
+		if let Some(peer_id) = peer_id.as_ref() {
+			debug!(target: "sub-libp2p", "Failed to reach peer {:?} through {} => {:?}", peer_id, addr, error);
+			if self.connected_peers.contains(peer_id) {
+				self.topology.set_unreachable(addr);
+			}
+
+			// Trigger a `connect_to_nodes` round.
+			self.next_connect_to_nodes = Delay::new(Instant::now());
+		}
 	}
 
 	fn inject_node_event(
