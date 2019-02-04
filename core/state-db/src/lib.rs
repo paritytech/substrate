@@ -231,10 +231,15 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
-		if self.best_canonical().map(|c| number > c).unwrap_or(true) {
-			!self.non_canonical.have_block(hash)
-		} else {
-			self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending() || !pruning.have_block(hash))
+		match self.mode {
+			PruningMode::ArchiveAll => false,
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
+					!self.non_canonical.have_block(hash)
+				} else {
+					self.pruning.as_ref().map_or(false, |pruning| number < pruning.pending() || !pruning.have_block(hash))
+				}
+			}
 		}
 	}
 
@@ -451,8 +456,9 @@ mod tests {
 
 	#[test]
 	fn full_archive_keeps_everything() {
-		let (db, _) = make_test_db(PruningMode::ArchiveAll);
+		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
+		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
 	}
 
 	#[test]
