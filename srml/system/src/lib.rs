@@ -209,7 +209,7 @@ decl_storage! {
 
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 
-		ExtrinsicCount: Option<u32>;
+		pub ExtrinsicCount get(extrinsic_count): Option<u32>;
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), [69u8; 32])]): map T::BlockNumber => T::Hash;
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		RandomSeed get(random_seed) build(|_| [0u8; 32]): T::Hash;

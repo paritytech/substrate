@@ -44,7 +44,14 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		fn on_finalise() {
-			// TODO: read CurrentTransactionFee, deposit events, kill storage
+			let extrinsic_count = match <system::Module<T>>::extrinsic_count() {
+				Some(extrinsic_count) => extrinsic_count,
+				None => return,
+			};
+			(0..extrinsic_count).for_each(|index| {
+				Self::deposit_event(RawEvent::Charged(index.clone(), Self::current_transaction_fee(index.clone())));
+				<CurrentTransactionFee<T>>::remove(index);
+			});
 		}
 	}
 }
@@ -63,6 +70,10 @@ decl_storage! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		pub TransactionByteFee get(transaction_byte_fee) config(): T::Amount;
 
+		/// The `extrinsic_index => accumulated_fees` map, containing records to
+		/// track the overall charged fees for each transaction.
+		///
+		/// All records should be removed at finalise stage.
 		CurrentTransactionFee get(current_transaction_fee): map u32 => T::Amount;
 	}
 }
