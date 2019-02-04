@@ -87,7 +87,7 @@ use futures::prelude::*;
 use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
-	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
+	error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
@@ -107,7 +107,6 @@ use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps, V
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
-use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::{Instant, Duration};
@@ -118,6 +117,7 @@ mod authorities;
 mod communication;
 mod consensus_changes;
 mod finality_proof;
+mod justification;
 mod until_imported;
 
 #[cfg(feature="service-integration")]
@@ -128,6 +128,7 @@ pub use service_integration::{LinkHalfForService, BlockImportForService};
 use authorities::SharedAuthoritySet;
 use until_imported::{UntilCommitBlocksImported, UntilVoteTargetImported};
 use consensus_changes::{ConsensusChanges, SharedConsensusChanges};
+use justification::GrandpaJustification;
 pub use finality_proof::{prove_finality, check_finality_proof};
 
 #[cfg(test)]
@@ -632,148 +633,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet
-	}
-}
-
-/// A GRANDPA justification for block finality, it includes a commit message and
-/// an ancestry proof including all headers routing all precommit target blocks
-/// to the commit target block. Due to the current voting strategy the precommit
-/// targets should be the same as the commit target, since honest voters don't
-/// vote past authority set change blocks.
-///
-/// This is meant to be stored in the db and passed around the network to other
-/// nodes, and are used by syncing nodes to prove authority set handoffs.
-#[derive(Encode, Decode)]
-struct GrandpaJustification<Block: BlockT> {
-	round: u64,
-	commit: Commit<Block>,
-	votes_ancestries: Vec<Block::Header>,
-}
-
-impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
-	/// Create a GRANDPA justification from the given commit. This method
-	/// assumes the commit is valid and well-formed.
-	fn from_commit<B, E, RA>(
-		client: &Client<B, E, Block, RA>,
-		round: u64,
-		commit: Commit<Block>,
-	) -> Result<GrandpaJustification<Block>, Error> where
-		B: Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-		RA: Send + Sync,
-	{
-		let mut votes_ancestries_hashes = HashSet::new();
-		let mut votes_ancestries = Vec::new();
-
-		let error = || {
-			let msg = "invalid precommits for target commit".to_string();
-			Err(Error::Client(ClientErrorKind::BadJustification(msg).into()))
-		};
-
-		for signed in commit.precommits.iter() {
-			let mut current_hash = signed.precommit.target_hash.clone();
-			loop {
-				if current_hash == commit.target_hash { break; }
-
-				match client.backend().blockchain().header(BlockId::Hash(current_hash))? {
-					Some(current_header) => {
-						if *current_header.number() <= commit.target_number {
-							return error();
-						}
-
-						let parent_hash = current_header.parent_hash().clone();
-						if votes_ancestries_hashes.insert(current_hash) {
-							votes_ancestries.push(current_header);
-						}
-						current_hash = parent_hash;
-					},
-					_ => return error(),
-				}
-			}
-		}
-
-		Ok(GrandpaJustification { round, commit, votes_ancestries })
-	}
-
-	/// Decode a GRANDPA justification and validate the commit and the votes'
-	/// ancestry proofs.
-	fn decode_and_verify(
-		encoded: Vec<u8>,
-		set_id: u64,
-		voters: &VoterSet<Ed25519AuthorityId>,
-	) -> Result<GrandpaJustification<Block>, ClientError> where
-		NumberFor<Block>: grandpa::BlockNumberOps,
-	{
-		GrandpaJustification::<Block>::decode(&mut &*encoded).ok_or_else(|| {
-			let msg = "failed to decode grandpa justification".to_string();
-			ClientErrorKind::BadJustification(msg).into()
-		}).and_then(|just| just.verify(set_id, voters).map(|_| just))
-	}
-
-	/// Validate the commit and the votes' ancestry proofs.
-	fn verify(&self, set_id: u64, voters: &VoterSet<Ed25519AuthorityId>) -> Result<(), ClientError>
-	where
-		NumberFor<Block>: grandpa::BlockNumberOps,
-	{
-		use grandpa::Chain;
-
-		let ancestry_chain = AncestryChain::<Block>::new(&self.votes_ancestries);
-
-		match grandpa::validate_commit(
-			&self.commit,
-			voters,
-			&ancestry_chain,
-		) {
-			Ok(Some(_)) => {},
-			_ => {
-				let msg = "invalid commit in grandpa justification".to_string();
-				return Err(ClientErrorKind::BadJustification(msg).into());
-			}
-		}
-
-		let mut visited_hashes = HashSet::new();
-		for signed in self.commit.precommits.iter() {
-			if let Err(_) = communication::check_message_sig::<Block>(
-				&grandpa::Message::Precommit(signed.precommit.clone()),
-				&signed.id,
-				&signed.signature,
-				self.round,
-				set_id,
-			) {
-				return Err(ClientErrorKind::BadJustification(
-					"invalid signature for precommit in grandpa justification".to_string()).into());
-			}
-
-			if self.commit.target_hash == signed.precommit.target_hash {
-				continue;
-			}
-
-			match ancestry_chain.ancestry(self.commit.target_hash, signed.precommit.target_hash) {
-				Ok(route) => {
-					// ancestry starts from parent hash but the precommit target hash has been visited
-					visited_hashes.insert(signed.precommit.target_hash);
-					for hash in route {
-						visited_hashes.insert(hash);
-					}
-				},
-				_ => {
-					return Err(ClientErrorKind::BadJustification(
-						"invalid precommit ancestry proof in grandpa justification".to_string()).into());
-				},
-			}
-		}
-
-		let ancestry_hashes = self.votes_ancestries
-			.iter()
-			.map(|h: &Block::Header| h.hash())
-			.collect();
-
-		if visited_hashes != ancestry_hashes {
-			return Err(ClientErrorKind::BadJustification(
-				"invalid precommit ancestries in grandpa justification with unused headers".to_string()).into());
-		}
-
-		Ok(())
 	}
 }
 
@@ -1312,48 +1171,6 @@ pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>, RA> {
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	authority_set_change: mpsc::UnboundedReceiver<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
-}
-
-struct AncestryChain<Block: BlockT> {
-	ancestry: HashMap<Block::Hash, Block::Header>,
-}
-
-impl<Block: BlockT> AncestryChain<Block> {
-	fn new(ancestry: &[Block::Header]) -> AncestryChain<Block> {
-		let ancestry: HashMap<_, _> = ancestry
-			.iter()
-			.cloned()
-			.map(|h: Block::Header| (h.hash(), h))
-			.collect();
-
-		AncestryChain { ancestry }
-	}
-}
-
-impl<Block: BlockT> grandpa::Chain<Block::Hash, NumberFor<Block>> for AncestryChain<Block> where
-	NumberFor<Block>: grandpa::BlockNumberOps
-{
-	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
-		let mut route = Vec::new();
-		let mut current_hash = block;
-		loop {
-			if current_hash == base { break; }
-			match self.ancestry.get(&current_hash) {
-				Some(current_header) => {
-					current_hash = *current_header.parent_hash();
-					route.push(current_hash);
-				},
-				_ => return Err(GrandpaError::NotDescendent),
-			}
-		}
-		route.pop(); // remove the base
-
-		Ok(route)
-	}
-
-	fn best_chain_containing(&self, _block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
-		None
-	}
 }
 
 /// Make block importer and link half necessary to tie the background voter
