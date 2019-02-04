@@ -16,8 +16,8 @@ primitives = { package = "substrate-primitives", path = "../../primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 client = { package = "substrate-client", path = "../../client" }
 state-machine = { package = "substrate-state-machine", path = "../../state-machine" }
-parity-codec = "2.2"
-parity-codec-derive = "2.1"
+parity-codec = "3.0"
+parity-codec-derive = "3.0"
 executor = { package = "substrate-executor", path = "../../executor" }
 state_db = { package = "substrate-state-db", path = "../../state-db" }
 trie = { package = "substrate-trie", path = "../../trie" }
@@ -26,3 +26,4 @@ trie = { package = "substrate-trie", path = "../../trie" }
 kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 substrate-keyring = { path = "../../keyring" }
 test-client = { package = "substrate-test-client", path = "../../test-client" }
+env_logger = { version = "0.6" }

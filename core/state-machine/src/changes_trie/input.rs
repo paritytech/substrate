@@ -16,7 +16,7 @@
 
 //! Different types of changes trie input pairs.
 
-use codec::{Decode, Encode, Input, Output};
+use parity_codec::{Decode, Encode, Input, Output};
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]

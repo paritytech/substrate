@@ -16,7 +16,7 @@
 
 //! Hashable trait.
 
-use codec::Codec;
+use crate::codec::Codec;
 use runtime_io::{blake2_256, twox_128, twox_256};
 
 pub trait Hashable: Sized {

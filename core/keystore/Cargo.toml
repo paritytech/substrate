@@ -2,10 +2,11 @@
 name = "substrate-keystore"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 substrate-primitives = { path = "../primitives" }
-parity-crypto = { version = "0.2", default-features = false }
+crypto = { package = "parity-crypto", version = "0.2", default-features = false }
 error-chain = "0.12"
 hex = "0.3"
 rand = "0.6"

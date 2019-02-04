@@ -41,7 +41,8 @@ impl<Number: traits::As<u64>> NumberOrHex<Number> {
 		match self {
 			NumberOrHex::Number(n) => Ok(n),
 			NumberOrHex::Hex(h) => {
-				// TODO [ToDr] this only supports `u64` since `BlockNumber` is `As<u64>` we could possibly go with `u128`. (#1377)
+				// FIXME #1377 this only supports `u64` since `BlockNumber`
+				// is `As<u64>` we could possibly go with `u128`.
 				let l = h.low_u64();
 				if U256::from(l) != h {
 					Err(format!("`{}` does not fit into the block number type.", h))

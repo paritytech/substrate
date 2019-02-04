@@ -18,45 +18,23 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-extern crate sr_std as rstd;
-extern crate parity_codec as codec;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_inherents as inherents;
-extern crate substrate_consensus_aura_primitives as consensus_aura;
-
-#[macro_use]
-extern crate substrate_client as client;
-
 #[macro_use]
 extern crate srml_support as runtime_support;
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate sr_io as runtime_io;
-#[macro_use]
-extern crate sr_version as runtime_version;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-#[cfg_attr(any(feature = "std", test), macro_use)]
-extern crate substrate_primitives as primitives;
-
-#[cfg(test)] extern crate substrate_executor;
 
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
-use rstd::prelude::*;
-use codec::{Encode, Decode};
+use rstd::{prelude::*, marker::PhantomData};
+use parity_codec::{Encode, Decode, Input};
+use parity_codec_derive::{Encode, Decode};
 
-use client::{runtime_api as client_api, block_builder::api as block_builder_api};
+use substrate_client::{
+	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
+	impl_runtime_apis,
+};
 use runtime_primitives::{
 	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
+	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType
@@ -187,14 +165,47 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
+/// A type that can not be decoded.
+#[derive(PartialEq)]
+pub struct DecodeFails<B: BlockT> {
+	_phantom: PhantomData<B>,
+}
+
+impl<B: BlockT> Encode for DecodeFails<B> {
+	fn encode(&self) -> Vec<u8> {
+		Vec::new()
+	}
+}
+
+impl<B: BlockT> DecodeFails<B> {
+	/// Create a new instance.
+	pub fn new() -> DecodeFails<B> {
+		DecodeFails {
+			_phantom: Default::default(),
+		}
+	}
+}
+
+impl<B: BlockT> Decode for DecodeFails<B> {
+	fn decode<I: Input>(_: &mut I) -> Option<Self> {
+		// decoding always fails
+		None
+	}
+}
+
 decl_runtime_apis! {
 	pub trait TestAPI {
+		/// Return the balance of the given account id.
 		fn balance_of(id: AccountId) -> u64;
 		/// A benchmkark function that adds one to the given value and returns the result.
 		fn benchmark_add_one(val: &u64) -> u64;
 		/// A benchmark function that adds one to each value in the given vector and returns the
 		/// result.
 		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
+		/// A function that always fails to convert a parameter between runtime and node.
+		fn fail_convert_parameter(param: DecodeFails<Block>);
+		/// A function that always fails to convert its return value between runtime and node.
+		fn fail_convert_return_value() -> DecodeFails<Block>;
 	}
 }
 
@@ -249,7 +260,7 @@ impl_runtime_apis! {
 		}
 
 		fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-			unimplemented!()
+			vec![]
 		}
 
 		fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
@@ -274,6 +285,12 @@ impl_runtime_apis! {
 			let mut vec = vec.clone();
 			vec.iter_mut().for_each(|v| *v += 1);
 			vec
+		}
+
+		fn fail_convert_parameter(_: DecodeFails<Block>) {}
+
+		fn fail_convert_return_value() -> DecodeFails<Block> {
+			DecodeFails::new()
 		}
 	}
 

@@ -145,6 +145,15 @@ impl MessageRouting {
 			peer_id,
 		}
 	}
+
+	fn drop_messages(&self, topic: Hash) {
+		let inner = self.inner.lock();
+		let peer = inner.peer(self.peer_id);
+		let mut gossip = peer.consensus_gossip().write();
+		peer.with_spec(move |_, _| {
+			gossip.collect_garbage_for_topic(topic);
+		});
+	}
 }
 
 fn make_topic(round: u64, set_id: u64) -> Hash {
@@ -175,7 +184,7 @@ fn make_commit_topic(set_id: u64) -> Hash {
 	hash
 }
 
-impl Network for MessageRouting {
+impl Network<Block> for MessageRouting {
 	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
@@ -199,14 +208,14 @@ impl Network for MessageRouting {
 		inner.route_until_complete();
 	}
 
-	fn drop_messages(&self, round: u64, set_id: u64) {
+	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = make_topic(round, set_id);
-		let inner = self.inner.lock();
-		let peer = inner.peer(self.peer_id);
-		let mut gossip = peer.consensus_gossip().write();
-		peer.with_spec(move |_, _| {
-			gossip.collect_garbage(|t| t == &topic)
-		});
+		self.drop_messages(topic);
+	}
+
+	fn drop_set_messages(&self, set_id: u64) {
+		let topic = make_commit_topic(set_id);
+		self.drop_messages(topic);
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
@@ -226,8 +235,12 @@ impl Network for MessageRouting {
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, true);
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, false);
 		inner.route_until_complete();
+	}
+
+	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
+
 	}
 }
 

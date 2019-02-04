@@ -91,8 +91,11 @@ extern "C" {
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
+	fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
 	/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+	/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
+	fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
 }
 
 /// Ensures we use the right crypto when calling into native
@@ -312,8 +315,6 @@ pub fn trie_root<
 	B: AsRef<[u8]>,
 >(_input: I) -> [u8; 32] {
 	unimplemented!()
-	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
-	// implemneted natively and compile the trie logic as wasm).
 }
 
 /// A trie root formed from the enumerated items.
@@ -323,8 +324,6 @@ pub fn ordered_trie_root<
 	A: AsRef<[u8]>
 >(_input: I) -> [u8; 32] {
 	unimplemented!()
-	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
-	// implemneted natively and compile the trie logic as wasm).
 }
 
 /// The current relay chain identifier.
@@ -339,6 +338,15 @@ pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
 		ext_blake2_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+	}
+	result
+}
+
+/// Conduct a 256-bit Keccak hash.
+pub fn keccak_256(data: &[u8]) -> [u8; 32] {
+	let mut result: [u8; 32] = Default::default();
+	unsafe {
+		ext_keccak_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }
@@ -365,6 +373,22 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	unsafe {
 		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+	}
+}
+
+/// Verify and recover a SECP256k1 ECDSA signature.
+/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+/// - returns `None` if the signatue is bad, the 64-byte pubkey (doesn't include the 0x04 prefix).
+pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
+	let mut pubkey = [0u8; 64];
+	match unsafe {
+		ext_secp256k1_ecdsa_recover(msg.as_ptr(), sig.as_ptr(), pubkey.as_mut_ptr())
+	} {
+		0 => Ok(pubkey),
+		1 => Err(EcdsaVerifyError::BadRS),
+		2 => Err(EcdsaVerifyError::BadV),
+		3 => Err(EcdsaVerifyError::BadSignature),
+		_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
 	}
 }
 

@@ -17,7 +17,7 @@
 use utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
 	fold_fn_decl_for_client_side, unwrap_or_error, extract_parameter_names_types_and_borrows,
-	generate_native_call_generator_fn_name
+	generate_native_call_generator_fn_name, return_type_extract_type,
 };
 
 use proc_macro;
@@ -157,12 +157,15 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	// Auxilariy function that is used to convert between types that use different block types.
 	// The function expects that both a convertable by encoding the one and decoding the other.
 	result.push(quote!(
+		#[cfg(any(feature = "std", test))]
 		fn convert_between_block_types
-			<I: #crate_::runtime_api::Encode, R: #crate_::runtime_api::Decode>(input: &I) -> R
+			<I: #crate_::runtime_api::Encode, R: #crate_::runtime_api::Decode>(
+				input: &I, error_desc: &'static str,
+			) -> ::std::result::Result<R, &'static str>
 		{
 			<R as #crate_::runtime_api::Decode>::decode(
 				&mut &#crate_::runtime_api::Encode::encode(input)[..]
-			).unwrap()
+			).ok_or_else(|| error_desc)
 		}
 	));
 
@@ -172,20 +175,30 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 		let trait_fn_name = &fn_.ident;
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
 		let output = return_type_replace_block_with_node_block(fn_.decl.output.clone());
+		let output_ty = return_type_extract_type(&output);
+		let output = quote!( ::std::result::Result<#output_ty, &'static str> );
 
 		// Every type that is using the `Block` generic parameter, we need to encode/decode,
 		// to make it compatible between the runtime/node.
 		let conversions = params.iter().filter(|v| type_is_using_block(&v.1)).map(|(n, t, _)| {
+			let name_str = format!(
+				"Could not convert parameter `{}` between node and runtime!", quote!(#n)
+			);
 			quote!(
-				let #n: #t = convert_between_block_types(&#n);
+				let #n: #t = convert_between_block_types(&#n, #name_str)?;
 			)
 		});
 		// Same as for the input types, we need to check if we also need to convert the output,
 		// before returning it.
 		let output_conversion = if return_type_is_using_block(&fn_.decl.output) {
-			quote!( convert_between_block_types(&res) )
+			quote!(
+				convert_between_block_types(
+					&res,
+					"Could not convert return value from runtime to node!"
+				)
+			)
 		} else {
-			quote!( res )
+			quote!( Ok(res) )
 		};
 
 		let input_names = params.iter().map(|v| &v.0);
@@ -240,7 +253,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 				#(, #impl_generics_params)*
 			>(
 				#( #fn_inputs ),*
-			) -> impl FnOnce() #output + 'a #where_clause {
+			) -> impl FnOnce() -> #output + 'a #where_clause {
 				move || {
 					#( #conversions )*
 					let res = ApiImpl::#trait_fn_name(#( #input_borrows #input_names ),*);

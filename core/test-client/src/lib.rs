@@ -18,26 +18,19 @@
 
 #![warn(missing_docs)]
 
-extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate sr_primitives as runtime_primitives;
-#[macro_use] extern crate substrate_executor as executor;
-
-pub extern crate substrate_client as client;
-pub extern crate substrate_keyring as keyring;
-pub extern crate substrate_test_runtime as runtime;
-pub extern crate substrate_consensus_common as consensus;
-extern crate substrate_state_machine as state_machine;
-
 pub mod client_ext;
 pub mod trait_tests;
 mod block_builder_ext;
 
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
+pub use client;
 pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
+pub use keyring;
+pub use runtime;
+pub use consensus;
 
 use std::sync::Arc;
 use primitives::Blake2Hasher;
@@ -45,11 +38,14 @@ use runtime_primitives::StorageMap;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use keyring::Keyring;
+use state_machine::ExecutionStrategy;
+use client::LocalCallExecutor;
 
 mod local_executor {
 	#![allow(missing_docs)]
-	use super::runtime;
-	// TODO: change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
+	use runtime;
+	use executor::native_executor_instance;
+	// FIXME #1576 change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
 	native_executor_instance!(
 		pub LocalExecutor,
 		runtime::api::dispatch,
@@ -73,6 +69,23 @@ pub type Executor = client::LocalCallExecutor<
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	new_with_backend(Arc::new(Backend::new()), false)
+}
+
+/// Creates new client instance used for tests with the given api execution strategy.
+pub fn new_with_api_execution_strat(
+	api_execution_strategy: ExecutionStrategy
+) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
+	let backend = Arc::new(Backend::new());
+	let executor = NativeExecutor::new();
+	let executor = LocalCallExecutor::new(backend.clone(), executor);
+
+	client::Client::new(
+		backend,
+		executor,
+		genesis_storage(false),
+		ExecutionStrategy::NativeWhenPossible,
+		api_execution_strategy
+	).expect("Creates new client")
 }
 
 /// Creates new test client instance that suports changes trie creation.

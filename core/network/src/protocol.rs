@@ -433,7 +433,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		debug!(target: "sync", "{} clogging messages:", clogging_messages.len());
-		for msg_bytes in clogging_messages {
+		for msg_bytes in clogging_messages.take(5) {
 			if let Some(msg) = <Message<B> as Decode>::decode(&mut Cursor::new(msg_bytes)) {
 				debug!(target: "sync", "{:?}", msg);
 			} else {
@@ -458,7 +458,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			message::FromBlock::Number(n) => BlockId::Number(n),
 		};
 		let max = cmp::min(request.max.unwrap_or(u32::max_value()), MAX_BLOCK_DATA_RESPONSE) as usize;
-		// TODO: receipts, etc.
 		let get_header = request.fields.contains(message::BlockAttributes::HEADER);
 		let get_body = request.fields.contains(message::BlockAttributes::BODY);
 		let get_justification = request.fields.contains(message::BlockAttributes::JUSTIFICATION);
@@ -468,6 +467,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			let number = header.number().clone();
 			let hash = header.hash();
+			let parent_hash = header.parent_hash().clone();
 			let justification = if get_justification { self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None };
 			let block_data = message::generic::BlockData {
 				hash: hash,
@@ -484,7 +484,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					if number == As::sa(0) {
 						break;
 					}
-					id = BlockId::Number(number - As::sa(1))
+					id = BlockId::Hash(parent_hash)
 				}
 			}
 		}
@@ -497,7 +497,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn on_block_response(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
-		// TODO: validate response
 		let blocks_range = match (
 				response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 				response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
@@ -684,6 +683,33 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 		self.transaction_pool.on_broadcasted(propagated_to);
+	}
+
+	/// Make sure an important block is propagated to peers.
+	///
+	/// In chain-based consensus, we often need to make sure non-best forks are
+	/// at least temporarily synced.
+	pub fn announce_block(&self, io: &mut SyncIo, hash: B::Hash) {
+		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
+			Ok(Some(header)) => header,
+			Ok(None) => {
+				warn!("Trying to announce unknown block: {}", hash);
+				return;
+			}
+			Err(e) => {
+				warn!("Error reading block header {}: {:?}", hash, e);
+				return;
+			}
+		};
+		let mut peers = self.context_data.peers.write();
+		let hash = header.hash();
+		for (who, ref mut peer) in peers.iter_mut() {
+			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
+			peer.known_blocks.insert(hash);
+			self.send_message(io, *who, GenericMessage::BlockAnnounce(message::BlockAnnounce {
+				header: header.clone()
+			}));
+		}
 	}
 
 	/// Send Status message

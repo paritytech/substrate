@@ -116,6 +116,12 @@ error_chain! {
 			display("Error decoding call result of {}", method)
 		}
 
+		/// Error converting a parameter between runtime and node.
+		RuntimeParamConversion(param: &'static str) {
+			description("Error converting parameter between runtime and node")
+			display("Error converting `{}` between runtime and node", param)
+		}
+
 		/// Changes tries are not supported.
 		ChangesTriesNotSupported {
 			description("changes tries are not supported"),

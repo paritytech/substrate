@@ -200,6 +200,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));
 	}
 
+	/// Make sure an important block is propagated to peers.
+	///
+	/// In chain-based consensus, we often need to make sure non-best forks are
+	/// at least temporarily synced.
+	pub fn announce_block(&self, hash: B::Hash) {
+		self.handler.announce_block(&mut NetSyncIo::new(&self.network, self.protocol_id), hash);
+	}
+
 	/// Send a consensus message through the gossip
 	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
 		self.handler.gossip_consensus_message(
@@ -225,6 +233,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
 	fn is_major_syncing(&self) -> bool {
 		self.handler.sync().read().status().is_major_syncing()
+	}
+	fn is_offline(&self) -> bool {
+		self.handler.sync().read().status().is_offline()
 	}
 }
 

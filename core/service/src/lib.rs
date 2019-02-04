@@ -137,7 +137,7 @@ impl<Components: components::Components> Service<Components> {
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 
 		// This is meant to be for testing only
-		// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
+		// FIXME #1063 remove this
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
@@ -274,7 +274,6 @@ impl<Components: components::Components> Service<Components> {
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
 			let events = transaction_pool.import_notification_stream()
-				// TODO [ToDr] Consider throttling?
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
