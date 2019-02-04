@@ -89,8 +89,8 @@ impl Default for Options {
 	fn default() -> Self {
 		Options {
 			ready: Limit {
-				count: 2048,
-				total_bytes: 4 * 1024 * 1024,
+				count: 512,
+				total_bytes: 10 * 1024 * 1024,
 			},
 			future: Limit {
 				count: 128,

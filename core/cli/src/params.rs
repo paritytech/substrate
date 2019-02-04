@@ -109,6 +109,17 @@ pub struct NetworkConfigurationParams {
 	pub in_peers: u32,
 }
 
+/// Parameters used to create the pool configuration.
+#[derive(Debug, StructOpt, Clone)]
+pub struct TransactionPoolParams {
+	/// Maximum number of transactions in the transaction pool.
+	#[structopt(long = "pool-limit", value_name = "COUNT", default_value = "512")]
+	pub pool_limit: usize,
+	/// Maximum number of kilobytes of all transactions stored in the pool.
+	#[structopt(long = "pool-kbytes", value_name = "COUNT", default_value="10240")]
+	pub pool_kbytes: usize,
+}
+
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
 pub struct RunCmd {
@@ -183,6 +194,10 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub network_config: NetworkConfigurationParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub pool_config: TransactionPoolParams,
 }
 
 impl_augment_clap!(RunCmd);
