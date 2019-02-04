@@ -456,15 +456,13 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					Ok(e) => match e.kind() {
-						txpool::error::ErrorKind::AlreadyImported(hash) => {
-							// TODO [ToDr] Check/assert?
-							hash.downcast::<ComponentExHash<C>>().ok()
-						},
-						_ => {
-							debug!("Error adding transaction to the pool: {:?}", e);
-							None
-						},
+					Ok(txpool::error::Error(txpool::error::ErrorKind::AlreadyImported(hash), _)) => {
+						hash.downcast::<ComponentExHash<C>>().ok()
+							.map(|x| x.as_ref().clone())
+					},
+					Ok(e) => {
+						debug!("Error adding transaction to the pool: {:?}", e);
+						None
 					},
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);

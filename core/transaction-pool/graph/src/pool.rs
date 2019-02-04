@@ -36,6 +36,8 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
+pub use base_pool::Limit;
+
 /// Modification notification event stream type;
 pub type EventStream = mpsc::UnboundedReceiver<()>;
 
@@ -70,15 +72,6 @@ pub trait ChainApi: Send + Sync {
 
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (Self::Hash, usize);
-}
-
-/// Queue limits
-#[derive(Debug, Clone)]
-pub struct Limit {
-	/// Maximal number of transactions in the queue.
-	pub count: usize,
-	/// Maximal size of encodings of all transactions in the queue.
-	pub total_bytes: usize,
 }
 
 /// Pool configuration options.
@@ -119,7 +112,6 @@ pub struct Pool<B: ChainApi> {
 }
 
 impl<B: ChainApi> Pool<B> {
-
 	/// Imports a bunch of unverified extrinsics to the pool
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
@@ -127,7 +119,7 @@ impl<B: ChainApi> Pool<B> {
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
 
-		Ok(xts
+		let results = xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
 				let (hash, bytes) = self.api.hash_and_length(&xt);
@@ -167,7 +159,28 @@ impl<B: ChainApi> Pool<B> {
 				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
 			})
-			.collect())
+			.collect();
+
+		self.enforce_limits();
+
+		Ok(results)
+	}
+
+	fn enforce_limits(&self) {
+		let status = self.pool.read().status();
+		let ready_limit = &self.options.ready;
+		let future_limit = &self.options.future;
+
+		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
+			|| future_limit.is_exceeded(status.future, status.future_bytes) {
+			// clean up the pool
+			let removed = self.pool.write().enforce_limits(ready_limit, future_limit);
+			// run notifications
+			let mut listener = self.listener.write();
+			for f in &removed {
+				listener.dropped(&f.hash, None);
+			}
+		}
 	}
 
 	/// Imports one unverified extrinsic to the pool
@@ -332,9 +345,7 @@ impl<B: ChainApi> Pool<B> {
 
 		Ok(())
 	}
-}
 
-impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, api: B) -> Self {
 		Pool {

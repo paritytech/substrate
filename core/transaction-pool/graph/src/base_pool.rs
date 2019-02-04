@@ -243,6 +243,58 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 			.collect()
 	}
 
+	/// Makes sure that the transactions in the queues stay within provided limits.
+	///
+	/// Removes and returns worst transactions from the queues and all transactions that depend on them.
+	/// Technically the worst transaction should be evaluated by computing the entire pending set.
+	/// We use a simplified approach to remove the transaction that occupies the pool for the longest time.
+	pub fn enforce_limits(&mut self, ready: &Limit, future: &Limit) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		let mut removed = vec![];
+
+		while ready.is_exceeded(self.ready.len(), self.ready.bytes()) {
+			// find the worst transaction
+			let minimal = self.ready
+				.fold(|minimal, current| {
+					let transaction = &current.transaction;
+					match minimal {
+						None => Some(transaction.clone()),
+						Some(ref tx) if tx.insertion_id > transaction.insertion_id => {
+							Some(transaction.clone())
+						},
+						other => other,
+					}
+				});
+
+			if let Some(minimal) = minimal {
+				removed.append(&mut self.remove_invalid(&[minimal.transaction.hash.clone()]))
+			} else {
+				break;
+			}
+		}
+
+		while future.is_exceeded(self.future.len(), self.future.bytes()) {
+			// find the worst transaction
+			let minimal = self.future
+				.fold(|minimal, current| {
+					match minimal {
+						None => Some(current.clone()),
+						Some(ref tx) if tx.imported_at > current.imported_at => {
+							Some(current.clone())
+						},
+						other => other,
+					}
+				});
+
+			if let Some(minimal) = minimal {
+				removed.append(&mut self.remove_invalid(&[minimal.transaction.hash.clone()]))
+			} else {
+				break;
+			}
+		}
+
+		removed
+	}
+
 	/// Removes all transactions represented by the hashes and all other transactions
 	/// that depend on them.
 	///
@@ -321,6 +373,22 @@ impl Status {
 	/// Returns true if the are no transactions in the pool.
 	pub fn is_empty(&self) -> bool {
 		self.ready == 0 && self.future == 0
+	}
+}
+
+/// Queue limits
+#[derive(Debug, Clone)]
+pub struct Limit {
+	/// Maximal number of transactions in the queue.
+	pub count: usize,
+	/// Maximal size of encodings of all transactions in the queue.
+	pub total_bytes: usize,
+}
+
+impl Limit {
+	/// Returns true if any of the provided values exceeds the limit.
+	pub fn is_exceeded(&self, count: usize, bytes: usize) -> bool {
+		self.count < count || self.total_bytes < bytes
 	}
 }
 

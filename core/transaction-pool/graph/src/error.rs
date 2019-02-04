@@ -37,7 +37,7 @@ error_chain! {
 			display("Temporarily Banned"),
 		}
 		/// The transaction is already in the pool.
-		AlreadyImported(hash: Box<Debug + Send>) {
+		AlreadyImported(hash: Box<::std::any::Any + Send>) {
 			description("Transaction is already in the pool"),
 			display("[{:?}] Already imported", hash),
 		}
