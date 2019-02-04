@@ -129,7 +129,6 @@ fn two_nodes_transfer_lots_of_packets() {
 
 #[test]
 fn many_nodes_connectivity() {
-	env_logger::init();
 	// Creates many nodes, then make sure that they are all connected to each other.
 	// Note: if you increase this number, keep in mind that there's a limit to the number of
 	// simultaneous connections which will make the test fail if it is reached. This can be

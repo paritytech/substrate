@@ -10,7 +10,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
-env_logger = "0.6"
 fnv = "1.0"
 futures = "0.1"
 libp2p = { version = "0.3.1", default-features = false, features = ["secio-secp256k1", "libp2p-websocket"] }
