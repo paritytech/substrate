@@ -1,0 +1,10 @@
+[package]
+name = "substrate-panic-handler"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate panic handler."
+edition = "2018"
+
+[dependencies]
+backtrace = "0.3"
+log = "0.4"

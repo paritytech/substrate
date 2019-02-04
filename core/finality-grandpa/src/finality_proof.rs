@@ -44,7 +44,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Ed25519AuthorityId, H256};
 
-use GrandpaJustification;
+use justification::GrandpaJustification;
 
 /// Prepare proof-of-finality for the given block.
 ///

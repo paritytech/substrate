@@ -30,6 +30,7 @@ members = [
 	"core/finality-grandpa/primitives",
 	"core/keyring",
 	"core/network",
+	"core/panic-handler",
 	"core/primitives",
 	"core/rpc",
 	"core/rpc-servers",
