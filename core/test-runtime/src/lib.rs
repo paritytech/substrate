@@ -27,6 +27,7 @@ pub mod system;
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Encode, Decode, Input};
 use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
 
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
@@ -71,7 +72,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Transfer {
 	pub from: AccountId,
@@ -81,7 +82,7 @@ pub struct Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<Ed25519AuthorityId>),

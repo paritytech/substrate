@@ -256,7 +256,7 @@ impl From<codec::Compact<Perbill>> for Perbill {
 }
 
 /// Ed25519 signature verify.
-#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Ed25519Signature(pub H512);
 

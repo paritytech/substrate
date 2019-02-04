@@ -27,6 +27,10 @@ pub use sr_std as rstd;
 pub use parity_codec as codec;
 #[doc(hidden)]
 pub use parity_codec_derive;
+#[doc(hidden)]
+pub use substrate_metadata;
+#[doc(hidden)]
+pub use substrate_metadata_derive;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;

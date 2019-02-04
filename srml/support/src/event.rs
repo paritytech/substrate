@@ -117,7 +117,7 @@ macro_rules! decl_event {
 		}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode, $crate::substrate_metadata::EncodeMetadata)]
+		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode, $crate::substrate_metadata_derive::EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum Event {
@@ -218,7 +218,7 @@ macro_rules! __decl_generic_event {
 	) => {
 		pub type Event<$event_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode, $crate::substrate_metadata::EncodeMetadata)]
+		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode, $crate::substrate_metadata_derive::EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),*> {
@@ -375,7 +375,7 @@ macro_rules! impl_outer_event {
 		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode, $crate::substrate_metadata::EncodeMetadata)]
+		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode, $crate::substrate_metadata_derive::EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
