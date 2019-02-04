@@ -196,7 +196,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
-		self.subscribe_headers(/*  */
+		self.subscribe_headers(
 			subscriber,
 			|| self.block_hash(None.into()),
 			|| self.client.import_notification_stream()
