@@ -175,34 +175,30 @@ impl AuraReport {
 	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
 		where F: FnMut(usize, usize)
 	{
-		let start_slot = self.start_slot % validator_count;
+		// If all validators have been skipped, then it implies some sort of 
+		// systematic problem common to all rather than a minority of validators
+		// unfulfilling their specific duties. In this case, it doesn't make
+		// sense to punish anyone, so we guard against it.
+		if self.skipped < validator_count {
 
-		// the number of times everyone was skipped.
-		let skipped_all = self.skipped / validator_count;
+			let start_slot = self.start_slot % validator_count;
 
-		// the number of validators who were skipped once after that.
-		let skipped_after = self.skipped % validator_count;
+			// the number of validators whose turned were skipped.
+			let iter = (start_slot..validator_count).into_iter()
+				.chain(0..start_slot)
+				.enumerate();
 
-		let iter = (start_slot..validator_count).into_iter()
-			.chain(0..start_slot)
-			.enumerate();
+			for (rel_index, actual_index) in iter {
+				let slash_count = if rel_index < self.skipped {
+					1
+				} else {
+					break
+				};
 
-		// Don't include skipped_all in the bad block count, since that would imply the
-		// network as a whole was down, indicating a systematic issue rather than a
-		// minority of bad actors.
-		for (rel_index, actual_index) in iter {
-			let slash_count = if rel_index < skipped_after {
-				1
-			} else {
-				// avoid iterating over all authorities when skipping a couple.
-				if skipped_all == 0 { break }
-				0
-			};
-
-			if slash_count > 0 {
-				punish_with(actual_index, slash_count);
+				if slash_count > 0 {
+					punish_with(actual_index, slash_count);
+				}
 			}
-		}
 	}
 }
 
