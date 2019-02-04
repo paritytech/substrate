@@ -44,6 +44,7 @@ impl<K, V> ChildrenMap<K, V> where
 		}
 	}
 
+	/// Returns the hashes of the children blocks of the block with `parent_hash`.
 	pub fn hashes(&self, db: &KeyValueDB, column: Option<u32>, prefix: &[u8],
 		parent_hash: K) -> error::Result<Vec<V>> {
 		
@@ -60,6 +61,8 @@ impl<K, V> ChildrenMap<K, V> where
 		Ok(children)
 	}
 
+	/// Returns the hashes of the children blocks of the block with `parent_hash`.
+	/// It doesn't read the database.
 	pub fn hashes_from_mem(&self, parent_hash: K) -> Vec<V> {
 		match self.storage.get(&parent_hash) {
 			Some(children) => children.clone(),
@@ -67,6 +70,8 @@ impl<K, V> ChildrenMap<K, V> where
 		}
 	}
 
+	/// Import the hash `child_hash` as child of `parent_hash`.
+	/// It doesn't save changes to database.
 	pub fn import(&mut self, parent_hash: K, child_hash: V) {
 		match self.storage.get_mut(&parent_hash) {
 			Some(children) => children.push(child_hash),
@@ -76,7 +81,9 @@ impl<K, V> ChildrenMap<K, V> where
 		}
 	}
 
-	pub fn prepare_transaction(&self, db: &KeyValueDB, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8])
+	/// Prepare the transaction `tx` that saves the content of the ChildrenMap to database.
+	/// It clears the content of ChildrenMap.
+	pub fn prepare_transaction(&mut self, db: &KeyValueDB, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8])
 		-> error::Result<()> {
 		for (parent_hash, children) in self.storage.iter() {
 			let mut children_db = self.hashes(db, column, prefix, parent_hash.clone())?;
@@ -85,6 +92,7 @@ impl<K, V> ChildrenMap<K, V> where
 			parent_hash.using_encoded(|s| buf.extend(s));
 			tx.put_vec(column, &buf[..], children_db.encode());
 		}
+		self.storage.clear();
 		Ok(())
 	}
 }
