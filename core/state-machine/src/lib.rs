@@ -18,27 +18,11 @@
 
 #![warn(missing_docs)]
 
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-#[macro_use]
-extern crate log;
-
-extern crate hash_db;
-extern crate substrate_trie;
-
-extern crate parking_lot;
-extern crate heapsize;
-#[cfg_attr(test, macro_use)]
-extern crate substrate_primitives as primitives;
-extern crate parity_codec as codec;
-extern crate substrate_trie as trie;
-
-use std::{fmt, panic::UnwindSafe};
+use std::{fmt, panic::UnwindSafe, result};
+use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
 
 pub mod backend;
@@ -61,7 +45,8 @@ pub use changes_trie::{
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check,
 	prune as prune_changes_tries,
-	oldest_non_pruned_trie as oldest_non_pruned_changes_trie};
+	oldest_non_pruned_trie as oldest_non_pruned_changes_trie
+};
 pub use overlayed_changes::OverlayedChanges;
 pub use proving_backend::{create_proof_check_backend, create_proof_check_backend_storage};
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
@@ -172,7 +157,9 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
+	fn call<
+		E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+	>(
 		&self,
 		ext: &mut E,
 		method: &str,
@@ -264,7 +251,7 @@ where
 {
 	// We are not giving a native call and thus we are sure that the result can never be a native
 	// value.
-	execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
+	execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> _>(
 		backend,
 		changes_trie_storage,
 		overlay,
@@ -302,7 +289,7 @@ where
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
 pub fn execute_using_consensus_failure_handler<
-	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> R + UnwindSafe
+	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
 >(
 	backend: &B,
 	changes_trie_storage: Option<&T>,
@@ -343,7 +330,7 @@ where
 	init_overlay(overlay, false)?;
 
 	let result = {
-		let mut orig_prospective = overlay.prospective.clone();
+		let orig_prospective = overlay.prospective.clone();
 
 		let (result, was_native, storage_delta, changes_delta) = {
 			let ((result, was_native), (storage_delta, changes_delta)) = {
@@ -459,7 +446,7 @@ where
 {
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
 	let (result, _, _) = execute_using_consensus_failure_handler::
-		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> NeverNativeValue>
+		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> _>
 	(
 		&proving_backend,
 		None,
@@ -507,7 +494,7 @@ where
 	H::Out: Ord + HeapSizeOf,
 {
 	execute_using_consensus_failure_handler::
-		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> NeverNativeValue>
+		<H, _, changes_trie::InMemoryStorage<H>, _, _, NeverNativeValue, fn() -> _>
 	(
 		trie_backend,
 		None,
@@ -616,7 +603,7 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use codec::Encode;
+	use parity_codec::Encode;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
@@ -625,7 +612,7 @@ mod tests {
 		InMemoryStorage as InMemoryChangesTrieStorage,
 		Configuration as ChangesTrieConfig,
 	};
-	use primitives::Blake2Hasher;
+	use primitives::{Blake2Hasher, map};
 
 	struct DummyCodeExecutor {
 		change_changes_trie_config: bool,
@@ -637,7 +624,7 @@ mod tests {
 	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> R>(
+		fn call<E: Externalities<H>, R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str>>(
 			&self,
 			ext: &mut E,
 			_method: &str,
@@ -700,7 +687,7 @@ mod tests {
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
 		let mut consensus_failed = false;
-		assert!(execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> NeverNativeValue>(
+		assert!(execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> _>(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),

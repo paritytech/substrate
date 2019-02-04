@@ -18,8 +18,8 @@
 
 #[cfg(test)] use std::iter::FromIterator;
 use std::collections::{HashMap, HashSet};
-use codec::Decode;
-use changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
+use parity_codec::Decode;
+use crate::changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 
 /// The overlayed changes to state to be queried on top of the backend.
@@ -276,7 +276,7 @@ impl OverlayedChanges {
 	/// Inserts storage entry responsible for current extrinsic index.
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
-		use codec::Encode;
+		use parity_codec::Encode;
 		self.prospective.top.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 			value: Some(extrinsic_index.encode()),
 			extrinsics: None,
@@ -309,12 +309,13 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 
 #[cfg(test)]
 mod tests {
+	use hex_literal::{hex, hex_impl};
 	use primitives::{Blake2Hasher, H256};
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
-	use backend::InMemory;
-	use changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
-	use ext::Ext;
-	use {Externalities};
+	use crate::backend::InMemory;
+	use crate::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
+	use crate::ext::Ext;
+	use crate::Externalities;
 	use super::*;
 
 	fn strip_extrinsic_index(map: &HashMap<Vec<u8>, OverlayedValue>) -> HashMap<Vec<u8>, OverlayedValue> {

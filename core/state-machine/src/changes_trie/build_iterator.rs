@@ -17,7 +17,7 @@
 //! Structures and functions to return blocks whose changes are to be included
 //! in given block' changes trie.
 
-use changes_trie::Configuration;
+use crate::changes_trie::Configuration;
 
 /// Returns iterator of OTHER blocks that are required for inclusion into
 /// changes trie of given block.

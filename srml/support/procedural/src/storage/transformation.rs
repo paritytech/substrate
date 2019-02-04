@@ -131,10 +131,16 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			#impl_store_fns
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
-					prefix: #scrate::storage::generator::DecodeDifferent::Encode(#cratename_string),
-					functions: #store_functions_to_metadata ,
+					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
 			}
+			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
+				#store_functions_to_metadata
+			}
+			pub fn store_metadata_name() -> &'static str {
+				#cratename_string
+			}
+
 		}
 
 		#extra_genesis
@@ -656,7 +662,7 @@ fn store_functions_to_metadata (
 		}
 		let str_name = name.to_string();
 		let struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
-		let cache_name = proc_macro2::Ident::new(&("__CacheGetByteStruct".to_string() + &str_name), name.span());
+		let cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
 		let item = quote! {
 			#scrate::storage::generator::StorageFunctionMetadata {
 				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
@@ -674,6 +680,7 @@ fn store_functions_to_metadata (
 		let def_get = quote! {
 			pub struct #struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
+			#[allow(non_upper_case_globals)]
 			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
 			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
@@ -698,9 +705,9 @@ fn store_functions_to_metadata (
 	}
 	(default_getter_struct_def, quote!{
 		{
-			#scrate::storage::generator::DecodeDifferent::Encode(&[
+			&[
 				#items
-			])
+			]
 		}
 	})
 }

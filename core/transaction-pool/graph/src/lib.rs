@@ -20,9 +20,6 @@
 //! and their priority.
 //! The pool is able to return an iterator that traverses transaction
 //! graph in the correct order taking into account priorities and dependencies.
-//!
-//! TODO [ToDr]
-//! - [ ] Multi-threading (getting ready transactions should not block the pool)
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]

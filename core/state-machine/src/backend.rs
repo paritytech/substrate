@@ -20,10 +20,11 @@ use std::{error, fmt};
 use std::cmp::Ord;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use log::warn;
 use hash_db::Hasher;
-use trie_backend::TrieBackend;
-use trie_backend_essence::TrieBackendStorage;
-use substrate_trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root};
+use crate::trie_backend::TrieBackend;
+use crate::trie_backend_essence::TrieBackendStorage;
+use trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root};
 use heapsize::HeapSizeOf;
 
 /// A state backend is used to read state data and can have changes committed
@@ -118,7 +119,7 @@ impl<H: Hasher> Consolidate for MemoryDB<H> {
 }
 
 /// Error impossible.
-// TODO: use `!` type when stabilized.
+// FIXME: use `!` type when stabilized. https://github.com/rust-lang/rust/issues/35121
 #[derive(Debug)]
 pub enum Void {}
 
@@ -291,7 +292,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
-		let mut mdb = MemoryDB::default();	// TODO: should be more correct and use ::new()
+		let mut mdb = MemoryDB::default();
 		let mut root = None;
 		for (storage_key, map) in self.inner {
 			if storage_key != None {

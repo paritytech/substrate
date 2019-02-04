@@ -48,7 +48,7 @@ use inherents::{InherentDataProviders, InherentData, RuntimeString};
 use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Timeout;
 use slots::Slots;
-use ::log::{warn, debug, log, info, trace};
+use ::log::{warn, debug, info, trace};
 
 use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
@@ -272,6 +272,11 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 					}
 				};
 
+				if sync_oracle.is_offline() && authorities.len() > 1 {
+					debug!(target: "aura", "Skipping proposal slot. Waiting for the netork.");
+					return Either::B(future::ok(()));
+				}
+
 				let proposal_work = match slot_author(slot_num, &authorities) {
 					None => return Either::B(future::ok(())),
 					Some(author) => if author.0 == public_key.0 {
@@ -291,10 +296,9 @@ pub fn start_aura<B, C, E, I, SO, Error>(
 						};
 
 						let remaining_duration = slot_info.remaining_duration();
-						// deadline our production to approx. the end of the
-						// slot
+						// deadline our production to approx. the end of the slot
 						Timeout::new(
-							proposer.propose(slot_info.inherent_data).into_future(),
+							proposer.propose(slot_info.inherent_data, remaining_duration).into_future(),
 							remaining_duration,
 						)
 					} else {
@@ -392,7 +396,7 @@ enum CheckedHeader<H> {
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
-// FIXME: needs misbehavior types - https://github.com/paritytech/substrate/issues/1018
+// FIXME #1018 needs misbehavior types
 fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[Ed25519AuthorityId])
 	-> Result<CheckedHeader<B::Header>, String>
 	where DigestItemFor<B>: CompatibleDigestItem
@@ -537,8 +541,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 		);
 
 		// we add one to allow for some small drift.
-		// FIXME: in the future, alter this queue to allow deferring of headers
-		// https://github.com/paritytech/substrate/issues/1019
+		// FIXME #1019 in the future, alter this queue to allow deferring of headers
 		let checked_header = check_header::<B>(slot_now + 1, header, hash, &authorities[..])?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
@@ -577,7 +580,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 					fork_choice: ForkChoiceStrategy::LongestChain,
 				};
 
-				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
+				// FIXME #1019 extract authorities
 				Ok((import_block, None))
 			}
 			CheckedHeader::Deferred(a, b) => {
@@ -711,7 +714,7 @@ mod tests {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
-		fn propose(&self, _: InherentData) -> Result<TestBlock, Error> {
+		fn propose(&self, _: InherentData, _: Duration) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
 		}
 	}

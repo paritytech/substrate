@@ -25,7 +25,6 @@ extern crate parity_codec_derive;
 #[cfg_attr(test, macro_use)]
 extern crate srml_support as runtime_support;
 
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
@@ -54,11 +53,14 @@ use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
 
 mod internal {
+	pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
+
 	pub enum ApplyError {
 		BadSignature(&'static str),
 		Stale,
 		Future,
 		CantPay,
+		FullBlock,
 	}
 
 	pub enum ApplyOutcome {
@@ -144,33 +146,39 @@ impl<
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> result::Result<ApplyOutcome, ApplyError> {
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		<system::Module<System>>::note_extrinsic(encoded);
-		match Self::apply_extrinsic_no_note_with_len(uxt, encoded_len) {
+		match Self::apply_extrinsic_with_len(uxt, encoded_len, Some(encoded)) {
 			Ok(internal::ApplyOutcome::Success) => Ok(ApplyOutcome::Success),
 			Ok(internal::ApplyOutcome::Fail(_)) => Ok(ApplyOutcome::Fail),
 			Err(internal::ApplyError::CantPay) => Err(ApplyError::CantPay),
 			Err(internal::ApplyError::BadSignature(_)) => Err(ApplyError::BadSignature),
 			Err(internal::ApplyError::Stale) => Err(ApplyError::Stale),
 			Err(internal::ApplyError::Future) => Err(ApplyError::Future),
+			Err(internal::ApplyError::FullBlock) => Err(ApplyError::FullBlock),
 		}
 	}
 
 	/// Apply an extrinsic inside the block execution function.
 	fn apply_extrinsic_no_note(uxt: Block::Extrinsic) {
 		let l = uxt.encode().len();
-		match Self::apply_extrinsic_no_note_with_len(uxt, l) {
+		match Self::apply_extrinsic_with_len(uxt, l, None) {
 			Ok(internal::ApplyOutcome::Success) => (),
 			Ok(internal::ApplyOutcome::Fail(e)) => runtime_io::print(e),
 			Err(internal::ApplyError::CantPay) => panic!("All extrinsics should have sender able to pay their fees"),
 			Err(internal::ApplyError::BadSignature(_)) => panic!("All extrinsics should be properly signed"),
 			Err(internal::ApplyError::Stale) | Err(internal::ApplyError::Future) => panic!("All extrinsics should have the correct nonce"),
+			Err(internal::ApplyError::FullBlock) => panic!("Extrinsics should not exceed block limit"),
 		}
 	}
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
+	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
+
+		// Check the size of the block if that extrinsic is applied.
+		if <system::Module<System>>::all_extrinsics_len() + encoded_len as u32 > internal::MAX_TRANSACTIONS_SIZE {
+			return Err(internal::ApplyError::FullBlock);
+		}
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
@@ -188,10 +196,16 @@ impl<
 			<system::Module<System>>::inc_account_nonce(sender);
 		}
 
+		// make sure to `note_extrinsic` only after we know it's going to be executed
+		// to prevent it from leaking in storage.
+		if let Some(encoded) = to_note {
+			<system::Module<System>>::note_extrinsic(encoded);
+		}
+
 		// decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
 		let r = f.dispatch(s.into());
-		<system::Module<System>>::note_applied_extrinsic(&r);
+		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}
@@ -414,5 +428,36 @@ mod tests {
 			assert!(Executive::apply_extrinsic(xt).is_err());
 			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
 		});
+	}
+
+	#[test]
+	fn block_size_limit_enforced() {
+		let run_test = |should_fail: bool| {
+			let mut t = new_test_ext();
+			let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(33, 69));
+			let xt2 = primitives::testing::TestXt(Some(1), 1, Call::transfer(33, 69));
+			let encoded = xt2.encode();
+			let len = if should_fail { (internal::MAX_TRANSACTIONS_SIZE - 1) as usize } else { encoded.len() };
+			with_externalities(&mut t, || {
+				Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+				assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 0);
+
+				Executive::apply_extrinsic(xt).unwrap();
+				let res = Executive::apply_extrinsic_with_len(xt2, len, Some(encoded));
+
+				if should_fail {
+					assert!(res.is_err());
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 28);
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(1));
+				} else {
+					assert!(res.is_ok());
+					assert_eq!(<system::Module<Runtime>>::all_extrinsics_len(), 56);
+					assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(2));
+				}
+			});
+		};
+
+		run_test(false);
+		run_test(true);
 	}
 }

@@ -209,7 +209,8 @@ decl_storage! {
 
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 
-		pub ExtrinsicCount get(extrinsic_count): Option<u32>;
+		ExtrinsicCount: Option<u32>;
+		AllExtrinsicsLen: Option<u32>;
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), [69u8; 32])]): map T::BlockNumber => T::Hash;
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		RandomSeed get(random_seed) build(|_| [0u8; 32]): T::Hash;
@@ -283,6 +284,11 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
+	/// Gets a total length of all executed extrinsics.
+	pub fn all_extrinsics_len() -> u32 {
+		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
@@ -299,6 +305,7 @@ impl<T: Trait> Module<T> {
 	pub fn finalise() -> T::Header {
 		<RandomSeed<T>>::kill();
 		<ExtrinsicCount<T>>::kill();
+		<AllExtrinsicsLen<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -344,9 +351,9 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
+			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
+			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
 			twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
 		])
 	}
@@ -385,19 +392,25 @@ impl<T: Trait> Module<T> {
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
+	///
+	/// NOTE this function is called only when the block is being constructed locally.
+	/// `execute_block` doesn't note any extrinsics.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
 		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>) {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
+		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
+
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
+		<AllExtrinsicsLen<T>>::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -500,8 +513,8 @@ mod tests {
 
 			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()));
-			System::note_applied_extrinsic(&Err(""));
+			System::note_applied_extrinsic(&Ok(()), 0);
+			System::note_applied_extrinsic(&Err(""), 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalise();
