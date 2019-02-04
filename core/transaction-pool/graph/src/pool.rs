@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	collections::HashMap,
+	collections::{HashSet, HashMap},
 	hash,
 	sync::Arc,
 	time,
@@ -161,14 +161,18 @@ impl<B: ChainApi> Pool<B> {
 				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
 			})
-			.collect();
+			.collect::<Vec<_>>();
 
-		self.enforce_limits();
+		// TODO [ToDr] Should return an error if it got immediately removed.
+		let removed = self.enforce_limits();
 
-		Ok(results)
+		Ok(results.into_iter().map(|res| match res {
+			Ok(ref hash) if removed.contains(hash) => Err(error::Error::from(error::ErrorKind::ImmediatelyDropped).into()),
+			other => other,
+		}).collect())
 	}
 
-	fn enforce_limits(&self) {
+	fn enforce_limits(&self) -> HashSet<ExHash<B>> {
 		let status = self.pool.read().status();
 		let ready_limit = &self.options.ready;
 		let future_limit = &self.options.future;
@@ -176,12 +180,23 @@ impl<B: ChainApi> Pool<B> {
 		if ready_limit.is_exceeded(status.ready, status.ready_bytes)
 			|| future_limit.is_exceeded(status.future, status.future_bytes) {
 			// clean up the pool
-			let removed = self.pool.write().enforce_limits(ready_limit, future_limit);
+			let removed = {
+				let mut pool = self.pool.write();
+				let removed = pool.enforce_limits(ready_limit, future_limit)
+					.into_iter().map(|x| x.hash.clone()).collect::<HashSet<_>>();
+				// ban all removed transactions
+				self.rotator.ban(&std::time::Instant::now(), removed.iter().map(|x| x.clone()));
+				removed
+			};
 			// run notifications
 			let mut listener = self.listener.write();
-			for f in &removed {
-				listener.dropped(&f.hash, None);
+			for h in &removed {
+				listener.dropped(h, None);
 			}
+
+			removed
+		} else {
+			Default::default()
 		}
 	}
 
@@ -438,6 +453,7 @@ fn fire_events<H, H2, Ex>(
 mod tests {
 	use super::*;
 	use futures::Stream;
+	use parity_codec::Encode;
 	use test_runtime::{Block, Extrinsic, Transfer, H256};
 	use assert_matches::assert_matches;
 	use crate::watcher;
@@ -634,6 +650,66 @@ mod tests {
 		assert!(pool.rotator.is_banned(&hash1));
 	}
 
+	#[test]
+	fn should_limit_futures() {
+		// given
+		let limit = Limit {
+			count: 100,
+			total_bytes: 200,
+		};
+		let pool = Pool::new(Options {
+			ready: limit.clone(),
+			future: limit.clone(),
+		}, TestApi::default());
+
+		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
+			amount: 5,
+			nonce: 1,
+		})).unwrap();
+		assert_eq!(pool.status().future, 1);
+
+		// when
+		let hash2 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: H256::from_low_u64_be(2),
+			to: H256::from_low_u64_be(2),
+			amount: 5,
+			nonce: 10,
+		})).unwrap();
+
+		// then
+		assert_eq!(pool.status().future, 1);
+		assert!(pool.rotator.is_banned(&hash1));
+		assert!(!pool.rotator.is_banned(&hash2));
+	}
+
+	#[test]
+	fn should_error_if_reject_immediately() {
+		// given
+		let limit = Limit {
+			count: 100,
+			total_bytes: 10,
+		};
+		let pool = Pool::new(Options {
+			ready: limit.clone(),
+			future: limit.clone(),
+		}, TestApi::default());
+
+		// when
+		pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: H256::from_low_u64_be(1),
+			to: H256::from_low_u64_be(2),
+			amount: 5,
+			nonce: 1,
+		})).unwrap_err();
+
+		// then
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
+	}
+
+
 	mod listener {
 		use super::*;
 
@@ -763,6 +839,43 @@ mod tests {
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
 			assert_eq!(stream.next(), Some(Ok(watcher::Status::Broadcast(peers))));
+		}
+
+		#[test]
+		fn should_trigger_dropped() {
+			// given
+			let limit = Limit {
+				count: 1,
+				total_bytes: 1000,
+			};
+			let pool = Pool::new(Options {
+				ready: limit.clone(),
+				future: limit.clone(),
+			}, TestApi::default());
+
+			let xt = uxt(Transfer {
+				from: H256::from_low_u64_be(1),
+				to: H256::from_low_u64_be(2),
+				amount: 5,
+				nonce: 0,
+			});
+			let watcher = pool.submit_and_watch(&BlockId::Number(0), xt).unwrap();
+			assert_eq!(pool.status().ready, 1);
+
+			// when
+			let xt = uxt(Transfer {
+				from: H256::from_low_u64_be(2),
+				to: H256::from_low_u64_be(1),
+				amount: 4,
+				nonce: 1,
+			});
+			pool.submit_one(&BlockId::Number(1), xt).unwrap();
+			assert_eq!(pool.status().ready, 1);
+
+			// then
+			let mut stream = watcher.into_stream().wait();
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(watcher::Status::Dropped)));
 		}
 	}
 }

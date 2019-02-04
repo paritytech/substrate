@@ -53,6 +53,11 @@ error_chain! {
 			description("Transaction was not imported because of detected cycle."),
 			display("Cycle Detected"),
 		}
+		/// Transaction was dropped immediately after it got inserted.
+		ImmediatelyDropped {
+			description("Transaction couldn't enter the pool because of the limit."),
+			display("Immediately Dropped"),
+		}
 	}
 }
 
