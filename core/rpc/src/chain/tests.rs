@@ -191,7 +191,7 @@ fn should_return_finalised_hash() {
 fn should_notify_about_latest_block() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
-	let (subscriber, id, transport) = typed::Subscriber::new_test("test");
+	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let api = Chain {
@@ -222,7 +222,7 @@ fn should_notify_about_latest_block() {
 fn should_notify_about_finalised_block() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
-	let (subscriber, id, transport) = typed::Subscriber::new_test("test");
+	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let api = Chain {

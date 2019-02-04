@@ -24,7 +24,7 @@ use std::{
 
 use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher, Bytes};
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
@@ -90,7 +90,7 @@ pub trait StateApi<Hash> {
 		name = "state_subscribeRuntimeVersion",
 		alias("chain_subscribeRuntimeVersion")
 	)]
-	fn subscribe_runtime_version(&self, Self::Metadata, typed::Subscriber<RuntimeVersion>);
+	fn subscribe_runtime_version(&self, Self::Metadata, Subscriber<RuntimeVersion>);
 
 	/// Unsubscribe from runtime version subscription
 	#[pubsub(
@@ -103,7 +103,7 @@ pub trait StateApi<Hash> {
 
 	/// New storage subscription
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(&self, Self::Metadata, typed::Subscriber<StorageChangeSet<Hash>>, Option<Vec<StorageKey>>);
+	fn subscribe_storage(&self, Self::Metadata, Subscriber<StorageChangeSet<Hash>>, Option<Vec<StorageKey>>);
 
 	/// Unsubscribe from storage subscription
 	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
@@ -342,7 +342,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	fn subscribe_storage(
 		&self,
 		_meta: Self::Metadata,
-		subscriber: typed::Subscriber<StorageChangeSet<Block::Hash>>,
+		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
 		keys: Option<Vec<StorageKey>>
 	) {
 		let keys = Into::<Option<Vec<_>>>::into(keys);
@@ -393,7 +393,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
 	}
 
-	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: typed::Subscriber<RuntimeVersion>) {
+	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
 		let stream = match self.client.storage_changes_notification_stream(Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])) {
 			Ok(stream) => stream,
 			Err(err) => {

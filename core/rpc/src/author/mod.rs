@@ -31,7 +31,7 @@ use transaction_pool::{
 	},
 };
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{Bytes, Blake2Hasher, H256};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
@@ -60,7 +60,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Submit an extrinsic to watch.
 	#[pubsub(subscription = "author_extrinsicUpdate", subscribe, name = "author_submitAndWatchExtrinsic")]
-	fn watch_extrinsic(&self, Self::Metadata, typed::Subscriber<Status<Hash, BlockHash>>, Bytes);
+	fn watch_extrinsic(&self, Self::Metadata, Subscriber<Status<Hash, BlockHash>>, Bytes);
 
 	/// Unsubscribe from extrinsic watching.
 	#[pubsub(subscription = "author_extrinsicUpdate", unsubscribe, name = "author_unwatchExtrinsic")]
@@ -117,7 +117,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
 
-	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: typed::Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
+	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;

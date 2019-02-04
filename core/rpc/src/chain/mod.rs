@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use client::{self, Client, BlockchainEvents};
 use jsonrpc_derive::rpc;
-use jsonrpc_pubsub::{typed, SubscriptionId};
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
@@ -67,7 +67,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		name = "chain_subscribeNewHead",
 		alias("subscribe_newHead")
 	)]
-	fn subscribe_new_head(&self, Self::Metadata, typed::Subscriber<Header>);
+	fn subscribe_new_head(&self, Self::Metadata, Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
 	#[pubsub(
@@ -84,7 +84,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		subscribe,
 		name = "chain_subscribeFinalisedHeads"
 	)]
-	fn subscribe_finalised_heads(&self, Self::Metadata, typed::Subscriber<Header>);
+	fn subscribe_finalised_heads(&self, Self::Metadata, Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
 	#[pubsub(
@@ -128,7 +128,7 @@ impl<B, E, Block, RA> Chain<B, E, Block, RA> where
 
 	fn subscribe_headers<F, G, S, ERR>(
 		&self,
-		subscriber: typed::Subscriber<Block::Header>,
+		subscriber: Subscriber<Block::Header>,
 		best_block_hash: G,
 		stream: F,
 	) where
@@ -195,7 +195,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		Ok(self.client.info()?.chain.finalized_hash)
 	}
 
-	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: typed::Subscriber<Block::Header>) {
+	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
 		self.subscribe_headers(/*  */
 			subscriber,
 			|| self.block_hash(None.into()),
@@ -209,7 +209,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 		Ok(self.subscriptions.cancel(id))
 	}
 
-	fn subscribe_finalised_heads(&self, _meta: Self::Metadata, subscriber: typed::Subscriber<Block::Header>) {
+	fn subscribe_finalised_heads(&self, _meta: Self::Metadata, subscriber: Subscriber<Block::Header>) {
 		self.subscribe_headers(
 			subscriber,
 			|| Ok(Some(self.client.info()?.chain.finalized_hash)),

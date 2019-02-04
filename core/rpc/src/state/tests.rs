@@ -51,7 +51,7 @@ fn should_call_contract() {
 fn should_notify_about_storage_changes() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
-	let (subscriber, id, transport) = typed::Subscriber::new_test("test");
+	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
@@ -82,7 +82,7 @@ fn should_notify_about_storage_changes() {
 fn should_send_initial_storage_changes_and_notifications() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
-	let (subscriber, id, transport) = typed::Subscriber::new_test("test");
+	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
@@ -229,7 +229,7 @@ fn should_return_runtime_version() {
 #[test]
 fn should_notify_on_runtime_version_initially() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();
-	let (subscriber, id, transport) = typed::Subscriber::new_test("test");
+	let (subscriber, id, transport) = Subscriber::new_test("test");
 
 	{
 		let client = Arc::new(test_client::new());
