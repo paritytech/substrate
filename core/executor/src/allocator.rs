@@ -160,7 +160,9 @@ impl FreeingBumpHeapAllocator {
 	}
 
 	fn get_heap_byte(&mut self, ptr: u32) -> u8 {
-		self.heap.get(self.ptr_offset + ptr, 1).unwrap()[0]
+		let mut arr = [0u8; 1];
+		self.heap.get_into(self.ptr_offset + ptr, &mut arr).unwrap();
+		arr[0]
 	}
 
 	fn set_heap(&mut self, ptr: u32, value: u8) {
