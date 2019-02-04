@@ -28,6 +28,7 @@ fn run() -> cli::error::Result<()> {
 		executable_name: "template-node",
 		author: "Anonymous",
 		description: "Template Node",
+		support_url: "support.anonymous.an",
 	};
 	cli::run(::std::env::args(), cli::Exit, version)
 }
