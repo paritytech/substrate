@@ -40,7 +40,7 @@ sub_spec_version="git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
 # see if the spec version and the binary blob changed
 if git diff --name-only master...${CI_COMMIT_SHA} \
 	| grep -q "${RUNTIME}" && \
-	[ "${add_spec_version}" -ne "${sub_spec_version}" ]
+	[ "${add_spec_version}" != "${sub_spec_version}" ]
 then
 	cat <<-EOT
 	
