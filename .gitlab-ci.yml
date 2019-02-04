@@ -93,10 +93,11 @@ build:rust:linux:release:          &build
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
     - echo -n "Substrate version = "
-    - ./artifacts/substrate --version | 
+    - ./artifacts/substrate --version |
       sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
       tee ./artifacts/VERSION
     - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
+    - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
 
 
 
@@ -205,6 +206,3 @@ publish:s3:doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
   tags:
     - linux-docker
-
-
-
