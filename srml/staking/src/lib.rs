@@ -596,3 +596,16 @@ impl<T: Trait> consensus::OnOfflineReport<Vec<u32>> for Module<T> {
 		}
 	}
 }
+
+// fetch_url(Vec<u8>) -> u32
+// send_message(AuthorityId, Vec<u8>)
+// receive_message(AuthorityId) -> u32
+// ipfs_get(&[u8]) -> u32
+// ipfs_put(&[u8], &[u8])
+// localStorage_get(&[u8]) -> Vec<u8>
+// localStorage_put(&[u8], &[u8])
+// await(&[u32]) -> (u32, Vec<u8>)
+
+impl<T: Trait> OfflineWorker for Module<T> {
+	fn generate_extrinsics() -> Vec<Extrisnic>;
+}

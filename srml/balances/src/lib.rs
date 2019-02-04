@@ -42,7 +42,7 @@ extern crate sr_io as runtime_io;
 extern crate substrate_primitives;
 
 use rstd::prelude::*;
-use rstd::{cmp, result};
+use rstd::{cmp, result, };
 use codec::Codec;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
@@ -139,15 +139,23 @@ decl_event!(
 );
 
 /// Struct to encode the vesting schedule of an individual account.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct VestingSchedule<Balance> {
-	offset: Balance,
-	per_block: Balance,
+	/// Locked amount at genesis.
+	pub offset: Balance,
+	/// Amount that gets unlocked every block from genesis.
+	pub per_block: Balance,
 }
 
-impl<Balance: SimpleArithmetic + Copy + As<u64>> Lockup<Balance> {
-	fn locked_at<BlockNumber: As<u64>>(n: BlockNumber) -> Balance {
-		let x = <Balance as As<u64>>::sa(n.as_()).saturating_mul(per_block);
-		offset.max(x) - x
+impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
+	/// Amount locked at block `n`.
+	pub fn locked_at<BlockNumber: As<u64>>(&self, n: BlockNumber) -> Balance {
+		if let Some(x) = Balance::sa(n.as_()).checked_mul(&self.per_block) {
+			self.offset.max(x) - x
+		} else {
+			Zero::zero()
+		}
 	}
 }
 
@@ -169,8 +177,8 @@ decl_storage! {
 			config.vesting.iter().filter_map(|&(ref who, begin, length)| {
 				let begin: u64 = begin.as_();
 				let length: u64 = length.as_();
-				let begin: T::Balance = begin.as_();
-				let length: T::Balance = length.as_();
+				let begin: T::Balance = As::sa(begin);
+				let length: T::Balance = As::sa(length);
 
 				config.balances.iter()
 					.find(|&&(ref w, _)| w == who)
@@ -184,7 +192,7 @@ decl_storage! {
 						(who.clone(), VestingSchedule { offset, per_block })
 					})
 			}).collect::<Vec<_>>()
-		}): map T::AccountId => VestingSchedule<T::Balance>;
+		}): map T::AccountId => Option<VestingSchedule<T::Balance>>;
 
 		/// The 'free' balance of a given account.
 		///
@@ -284,6 +292,15 @@ impl<T: Trait> Module<T> {
 			Self::free_balance(who) >= value
 		} else {
 			false
+		}
+	}
+
+	/// Get the amount that is currently being vested and cannot be transfered out of this account.
+	pub fn vesting_balance(who: &T::AccountId) -> T::Balance {
+		if let Some(v) = Self::vesting(who) {
+			Self::free_balance(who).min(v.locked_at(<system::Module<T>>::block_number()))
+		} else {
+			Zero::zero()
 		}
 	}
 
@@ -456,9 +473,11 @@ impl<T: Trait> Module<T> {
 			None => return Err("got overflow after adding a fee to value"),
 		};
 
+		let vesting_balance = Self::vesting_balance(transactor);
 		let new_from_balance = match from_balance.checked_sub(&liability) {
-			Some(b) => b,
 			None => return Err("balance too low to send value"),
+			Some(b) if b < vesting_balance => return Err("vesting balance too high to send value"),
+			Some(b) => b,
 		};
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
