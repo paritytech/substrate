@@ -26,7 +26,7 @@ use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourActi
 use libp2p::core::{protocols_handler::ProtocolsHandler, Multiaddr, PeerId};
 use log::{debug, trace, warn};
 use smallvec::SmallVec;
-use std::{error, io, marker::PhantomData, path::Path, time::Duration, time::Instant};
+use std::{cmp, error, io, marker::PhantomData, path::Path, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::Delay;
 
@@ -352,7 +352,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 		}
 
 		// Next round is when we expect the topology will change.
-		self.next_connect_to_nodes.reset(will_change);
+		self.next_connect_to_nodes.reset(cmp::min(will_change, Instant::now() + Duration::from_secs(60)));
 	}
 }
 
