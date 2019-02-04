@@ -97,7 +97,7 @@ impl FreeingBumpHeapAllocator {
 		let ptr: u32 = if self.heads[list_index] != 0 {
 			// Something from the free list
 			let item = self.heads[list_index];
-			self.heads[list_index] = FreeingBumpHeapAllocator::le_bytes_to_u32(&mut self.get_heap(item, 4));
+			self.heads[list_index] = FreeingBumpHeapAllocator::le_bytes_to_u32(self.get_heap_4bytes(item));
 			item + 8
 		} else {
 			// Nothing to be freed. Bump.
@@ -123,8 +123,8 @@ impl FreeingBumpHeapAllocator {
 		let tail = self.heads[list_index];
 		self.heads[list_index] = ptr - 8;
 
-		let slice = &mut self.get_heap(ptr - 8, 4);
-		FreeingBumpHeapAllocator::write_u32_into_le_bytes(tail, slice);
+		let mut slice = self.get_heap_4bytes(ptr - 8);
+		FreeingBumpHeapAllocator::write_u32_into_le_bytes(tail, &mut slice);
 		self.set_heap_bytes(ptr - 8, slice);
 
 		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(list_index);
@@ -138,8 +138,8 @@ impl FreeingBumpHeapAllocator {
 		res
 	}
 
-	fn le_bytes_to_u32(slice: &mut [u8]) -> u32 {
-		let bytes = [slice[0], slice[1], slice[2], slice[3]];
+	fn le_bytes_to_u32(arr: [u8; 4]) -> u32 {
+		let bytes = [arr[0], arr[1], arr[2], arr[3]];
 		unsafe { std::mem::transmute::<[u8; 4], u32>(bytes) }.to_le()
 	}
 
@@ -153,8 +153,10 @@ impl FreeingBumpHeapAllocator {
 		1 << 3 << index
 	}
 
-	fn get_heap(&mut self, ptr: u32, size: usize) -> Vec<u8> {
-		self.heap.get(self.ptr_offset + ptr, size).unwrap()
+	fn get_heap_4bytes(&mut self, ptr: u32) -> [u8; 4] {
+		let mut arr = [0u8; 4];
+		self.heap.get_into(self.ptr_offset + ptr, &mut arr).unwrap();
+		arr
 	}
 
 	fn get_heap_byte(&mut self, ptr: u32) -> u8 {
@@ -165,8 +167,8 @@ impl FreeingBumpHeapAllocator {
 		self.heap.set(self.ptr_offset + ptr, &[value]).unwrap()
 	}
 
-	fn set_heap_bytes(&mut self, ptr: u32, value: &[u8]) {
-		self.heap.set(self.ptr_offset + ptr, value).unwrap()
+	fn set_heap_bytes(&mut self, ptr: u32, value: [u8; 4]) {
+		self.heap.set(self.ptr_offset + ptr, &value).unwrap()
 	}
 
 }
