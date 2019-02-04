@@ -18,7 +18,7 @@ RUNTIME="node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.co
 
 # check if the wasm sources changed
 if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
-	| grep -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
+	| grep -q -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
 then
 	cat <<-EOT
 	
@@ -27,16 +27,24 @@ then
 	exit 0
 fi
 
-# see if the version and the binary blob changed, too
-if git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
-	| grep -q 'spec_version:' && \
-	git diff --name-only master...${CI_COMMIT_SHA} \
-	| grep -q "${RUNTIME}"
+
+# check for spec_version updates
+add_spec_version="git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
+	| sed -n -r 's/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p'"
+sub_spec_version="git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
+	| sed -n -r 's/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p'"
+
+# see if the version and the binary blob changed
+if git diff --name-only master...${CI_COMMIT_SHA} \
+	| grep -q "${RUNTIME}" && \
+	[ "${add_spec_version}" -ne "${sub_spec_version}" ]
 then
 	cat <<-EOT
 	
 	changes to the runtime sources and changes in the spec version and wasm 
 	binary blob.
+
+	spec_version: ${sub_spec_version} -> ${add_spec_version}
 	EOT
 	exit 0
 fi
