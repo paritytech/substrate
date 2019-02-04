@@ -114,7 +114,6 @@ decl_event!(
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
-
 		/// The current set of validators.
 		pub Validators get(validators) config(): Vec<T::AccountId>;
 		/// Current length of the session.
@@ -139,7 +138,7 @@ decl_storage! {
 impl<T: Trait> Module<T> {
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
-		<Validators<T>>::get().len() as u32	// TODO: can probably optimised
+		<Validators<T>>::get().len() as u32
 	}
 
 	/// The last length change, if there was one, zero if not.
@@ -159,7 +158,7 @@ impl<T: Trait> Module<T> {
 	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
-		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
+		<Validators<T>>::put(&new.to_vec());
 		<consensus::Module<T>>::set_authorities(
 			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
 		);
@@ -246,7 +245,6 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl consensus::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type Log = DigestItem;
 		type SessionKey = UintAuthorityId;
 		type InherentOfflineReport = ();
@@ -265,7 +263,6 @@ mod tests {
 		type Log = DigestItem;
 	}
 	impl timestamp::Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
 		type OnTimestampSet = ();
 	}

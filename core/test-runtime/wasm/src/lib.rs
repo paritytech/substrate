@@ -18,5 +18,4 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate substrate_test_runtime;
 pub use substrate_test_runtime::*;

@@ -23,18 +23,19 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
+use executor::RuntimeInfo;
 use primitives::{H256, Blake2Hasher};
 use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{CodeExecutor, ExecutionStrategy};
 
+use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
 use crate::error::Result as ClientResult;
 use crate::light::backend::Backend;
 use crate::light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use crate::light::call_executor::RemoteCallExecutor;
+use crate::light::call_executor::{RemoteCallExecutor, RemoteOrLocalCallExecutor};
 use crate::light::fetcher::{Fetcher, LightDataChecker};
-use hash_db::Hasher;
 
 /// Create an instance of light client blockchain backend.
 pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -> Arc<Blockchain<S, F>> {
@@ -42,37 +43,48 @@ pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -
 }
 
 /// Create an instance of light client backend.
-pub fn new_light_backend<B: BlockT, S: BlockchainStorage<B>, F: Fetcher<B>>(blockchain: Arc<Blockchain<S, F>>, fetcher: Arc<F>) -> Arc<Backend<S, F>> {
+pub fn new_light_backend<B, S, F>(blockchain: Arc<Blockchain<S, F>>, fetcher: Arc<F>) -> Arc<Backend<S, F, Blake2Hasher>>
+	where
+		B: BlockT,
+		S: BlockchainStorage<B>,
+		F: Fetcher<B>,
+{
 	blockchain.set_fetcher(Arc::downgrade(&fetcher));
 	Arc::new(Backend::new(blockchain))
 }
 
 /// Create an instance of light client.
-pub fn new_light<B, S, F, GS, RA>(
-	backend: Arc<Backend<S, F>>,
+pub fn new_light<B, S, F, GS, RA, E>(
+	backend: Arc<Backend<S, F, Blake2Hasher>>,
 	fetcher: Arc<F>,
 	genesis_storage: GS,
-) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F, Blake2Hasher>, B, RA>>
-where
-	B: BlockT<Hash=H256>,
-	S: BlockchainStorage<B>,
-	F: Fetcher<B>,
-	GS: BuildStorage,
-
+	code_executor: E,
+) -> ClientResult<Client<Backend<S, F, Blake2Hasher>, RemoteOrLocalCallExecutor<
+	B,
+	Backend<S, F, Blake2Hasher>,
+	RemoteCallExecutor<Blockchain<S, F>, F>,
+	LocalCallExecutor<Backend<S, F, Blake2Hasher>, E>
+>, B, RA>>
+	where
+		B: BlockT<Hash=H256>,
+		S: BlockchainStorage<B>,
+		F: Fetcher<B>,
+		GS: BuildStorage,
+		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 {
-	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
+	let remote_executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
+	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);
+	let executor = RemoteOrLocalCallExecutor::new(backend.clone(), remote_executor, local_executor);
 	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<E, H, B: BlockT, S: BlockchainStorage<B>, F>(
+pub fn new_fetch_checker<E, B: BlockT, S: BlockchainStorage<B>, F>(
 	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
-) -> LightDataChecker<E, H, B, S, F>
+) -> LightDataChecker<E, Blake2Hasher, B, S, F>
 	where
-		E: CodeExecutor<H>,
-		H: Hasher,
-
+		E: CodeExecutor<Blake2Hasher>,
 {
 	LightDataChecker::new(blockchain, executor)
 }

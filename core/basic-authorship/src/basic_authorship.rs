@@ -16,29 +16,26 @@
 
 //! A consensus proposer for "basic" chains which use the primitive inherent-data.
 
-// FIXME: move this into substrate-consensus-common - https://github.com/paritytech/substrate/issues/1021
+// FIXME #1021 move this into substrate-consensus-common
+//
+use std::{self, time, sync::Arc};
 
-use std::sync::Arc;
-use std::time;
-use std;
+use log::{info, debug, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
 	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{Core, ApiExt}
 };
-use codec::{Decode, Encode};
+use codec::Decode;
 use consensus_common::{self, evaluation};
 use primitives::{H256, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor};
+use runtime_primitives::traits::{
+	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
+};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::BasicInherentData;
+use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use aura_primitives::AuraConsensusData;
-
-type Timestamp = u64;
-
-// block size limit.
-const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
+use inherents::InherentData;
 
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
@@ -59,20 +56,20 @@ pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
 	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
-		inherent_data: BasicInherentData,
+		inherent_data: InherentData,
 		build_ctx: F,
 	) -> Result<Self::Block, error::Error>;
 }
 
 impl<'a, B, E, Block, RA> BlockBuilder<Block>
-	for client::block_builder::BlockBuilder<'a, Block, BasicInherentData, SubstrateClient<B, E, Block, RA>>
+	for client::block_builder::BlockBuilder<'a, Block, SubstrateClient<B, E, Block, RA>>
 where
 	B: client::backend::Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
@@ -85,7 +82,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 	RA: Send + Sync + 'static,
 	SubstrateClient<B, E, Block, RA> : ProvideRuntimeApi,
-	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<SubstrateClient<B, E, Block, RA> as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 {
 	type Block = Block;
 	type Error = client::error::Error;
@@ -93,13 +90,13 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
 		&self,
 		at: &BlockId<Self::Block>,
-		inherent_data: BasicInherentData,
+		inherent_data: InherentData,
 		mut build_ctx: F,
 	) -> Result<Self::Block, error::Error> {
 		let mut block_builder = self.new_block_at(at)?;
 
 		let runtime_api = self.runtime_api();
-		if runtime_api.has_api::<BlockBuilderApi<Block, BasicInherentData>>(at)? {
+		if runtime_api.has_api::<BlockBuilderApi<Block>>(at)? {
 			runtime_api.inherent_extrinsics(at, inherent_data)?
 				.into_iter().try_for_each(|i| block_builder.push(i))?;
 		}
@@ -118,12 +115,12 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub transaction_pool: Arc<TransactionPool<A>>,
 }
 
-impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Block, ConsensusData> for ProposerFactory<C, A> where
+impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
 	C: AuthoringApi,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block, BasicInherentData>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<<C as AuthoringApi>::Block>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
-	Proposer<<C as AuthoringApi>::Block, C, A>: consensus_common::Proposer<<C as AuthoringApi>::Block, ConsensusData>,
+	Proposer<<C as AuthoringApi>::Block, C, A>: consensus_common::Proposer<<C as AuthoringApi>::Block>,
 {
 	type Proposer = Proposer<<C as AuthoringApi>::Block, C, A>;
 	type Error = error::Error;
@@ -145,14 +142,11 @@ impl<C, A, ConsensusData> consensus_common::Environment<<C as AuthoringApi>::Blo
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
+			now: Box::new(time::Instant::now),
 		};
 
 		Ok(proposer)
 	}
-}
-
-struct ConsensusData {
-	timestamp: Option<u64>,
 }
 
 /// The proposer logic.
@@ -162,71 +156,60 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
+	now: Box<Fn() -> time::Instant>,
 }
 
-impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block, AuraConsensusData> for Proposer<Block, C, A> where
+impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
 	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
 	type Error = error::Error;
 
-	fn propose(&self, consensus_data: AuraConsensusData)
+	fn propose(&self, inherent_data: InherentData, max_duration: time::Duration)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
-		self.propose_with(ConsensusData { timestamp: Some(consensus_data.timestamp) })
-	}
-}
-
-impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block, ()> for Proposer<Block, C, A> where
-	Block: BlockT,
-	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
-	A: txpool::ChainApi<Block=Block>,
-	client::error::Error: From<<C as AuthoringApi>::Error>
-{
-	type Create = Result<<C as AuthoringApi>::Block, error::Error>;
-	type Error = error::Error;
-
-	fn propose(&self, _consensus_data: ()) -> Result<<C as AuthoringApi>::Block, error::Error> {
-		self.propose_with(ConsensusData { timestamp: None })
+		// leave some time for evaluation and block finalisation (33%)
+	 	let deadline = (self.now)() + max_duration - max_duration / 3;
+		self.propose_with(inherent_data, deadline)
 	}
 }
 
 impl<Block, C, A> Proposer<Block, C, A>	where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block, BasicInherentData>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderApi<Block>,
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
 {
-	fn propose_with(&self, consensus_data: ConsensusData)
+	fn propose_with(&self, inherent_data: InherentData, deadline: time::Instant)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
-
-		let timestamp = consensus_data.timestamp.unwrap_or_else(current_timestamp);
-		let inherent_data = BasicInherentData::new(timestamp, 0);
 
 		let block = self.client.build_block(
 			&self.parent_id,
 			inherent_data,
 			|block_builder| {
 				let mut unqueue_invalid = Vec::new();
-				let mut pending_size = 0;
 				let pending_iterator = self.transaction_pool.ready();
 
 				for pending in pending_iterator {
-					// TODO [ToDr] Probably get rid of it, and validate in runtime.
-					let encoded_size = pending.data.encode().len();
-					if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
+					if (self.now)() > deadline {
+						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
+						break;
+					}
 
 					match block_builder.push_extrinsic(pending.data.clone()) {
 						Ok(()) => {
-							pending_size += encoded_size;
+							debug!("[{:?}] Pushed to the block.", pending.hash);
+						}
+						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
+							debug!("Block is full, proceed with proposing.");
+							break;
 						}
 						Err(e) => {
 							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
@@ -262,8 +245,59 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	}
 }
 
-fn current_timestamp() -> Timestamp {
-	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
-		.expect("now always later than unix epoch; qed")
-		.as_secs()
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use codec::Encode;
+	use std::cell::RefCell;
+	use consensus_common::{Environment, Proposer};
+	use test_client::keyring::Keyring;
+	use test_client::{self, runtime::{Extrinsic, Transfer}};
+
+	fn extrinsic(nonce: u64) -> Extrinsic {
+		let tx = Transfer {
+			amount: Default::default(),
+			nonce,
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Default::default(),
+		};
+		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		Extrinsic::Transfer(tx, signature)
+	}
+
+	#[test]
+	fn should_cease_building_block_when_deadline_is_reached() {
+		// given
+		let client = Arc::new(test_client::new());
+		let chain_api = transaction_pool::ChainApi::new(client.clone());
+		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+
+		txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)]).unwrap();
+
+		let proposer_factory = ProposerFactory {
+			client: client.clone(),
+			transaction_pool: txpool.clone(),
+		};
+
+		let mut proposer = proposer_factory.init(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&[]
+		).unwrap();
+
+		// when
+		let cell = RefCell::new(time::Instant::now());
+		proposer.now = Box::new(move || {
+			let new = *cell.borrow() + time::Duration::from_secs(2);
+			cell.replace(new)
+		});
+		let deadline = time::Duration::from_secs(3);
+		let block = proposer.propose(Default::default(), deadline).unwrap();
+
+		// then
+		// block should have some extrinsics although we have some more in the pool.
+		assert_eq!(block.extrinsics().len(), 1);
+		assert_eq!(txpool.ready().count(), 2);
+	}
+
 }

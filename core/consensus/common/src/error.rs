@@ -16,6 +16,8 @@
 
 //! Error types in Consensus
 use runtime_version::RuntimeVersion;
+use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+	impl_extract_backtrace, impl_error_chain_kind};
 
 error_chain! {
 	errors {
@@ -35,6 +37,12 @@ error_chain! {
 		FaultyTimer(e: ::tokio::timer::Error) {
 			description("Timer error"),
 			display("Timer error: {}", e),
+		}
+
+		/// Error while working with inherent data.
+		InherentData(e: String) {
+			description("InherentData error"),
+			display("InherentData error: {}", e),
 		}
 
 		/// Unable to propose a block.

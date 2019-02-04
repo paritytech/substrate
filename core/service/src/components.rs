@@ -27,7 +27,9 @@ use consensus_common::import_queue::ImportQueue;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
-use runtime_primitives::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId};
+use runtime_primitives::{
+	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
+};
 use config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
@@ -58,16 +60,32 @@ pub type FullExecutor<F> = client::LocalCallExecutor<
 pub type LightBackend<F> = client::light::backend::Backend<
 	client_db::light::LightStorage<<F as ServiceFactory>::Block>,
 	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+	Blake2Hasher,
 >;
 
 /// Light client executor type for a factory.
-pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
-	client::light::blockchain::Blockchain<
+pub type LightExecutor<F> = client::light::call_executor::RemoteOrLocalCallExecutor<
+	<F as ServiceFactory>::Block,
+	client::light::backend::Backend<
 		client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+		Blake2Hasher
+	>,
+	client::light::call_executor::RemoteCallExecutor<
+		client::light::blockchain::Blockchain<
+			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+			network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+		>,
 		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
 	>,
-	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
-	Blake2Hasher,
+	client::LocalCallExecutor<
+		client::light::backend::Backend<
+			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
+			network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+			Blake2Hasher
+		>,
+		CodeExecutor<F>
+	>
 >;
 
 /// Full client type for a factory.
@@ -197,36 +215,17 @@ fn on_block_imported<Api, Backend, Block, Executor, PoolApi>(
 	Executor: client::CallExecutor<Block, Blake2Hasher>,
 	PoolApi: txpool::ChainApi<Hash = Block::Hash, Block = Block>,
 {
-	use runtime_primitives::transaction_validity::TransactionValidity;
-
 	// Avoid calling into runtime if there is nothing to prune from the pool anyway.
 	if transaction_pool.status().is_empty() {
 		return Ok(())
 	}
 
-	let block = client.block(id)?;
-	let tags = match block {
-		None => return Ok(()),
-		Some(block) => {
-			let parent_id = BlockId::hash(*block.block.header().parent_hash());
-			let mut tags = vec![];
-			for tx in block.block.extrinsics() {
-				let tx = client.runtime_api().validate_transaction(&parent_id, tx.clone())?;
-				match tx {
-					TransactionValidity::Valid { mut provides, .. } => {
-						tags.append(&mut provides);
-					},
-					// silently ignore invalid extrinsics,
-					// cause they might just be inherent
-					_ => {}
-				}
+	if let Some(block) = client.block(id)? {
+		let parent_id = BlockId::hash(*block.block.header().parent_hash());
+		let extrinsics = block.block.extrinsics();
+		transaction_pool.prune(id, &parent_id, extrinsics).map_err(|e| format!("{:?}", e))?;
+	}
 
-			}
-			tags
-		}
-	};
-
-	transaction_pool.prune_tags(id, tags).map_err(|e| format!("{:?}", e))?;
 	Ok(())
 }
 
@@ -234,7 +233,6 @@ impl<C: Components> MaintainTransactionPool<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
 	<ComponentClient<C> as ProvideRuntimeApi>::Api: TaggedTransactionQueue<ComponentBlock<C>>,
 {
-	// TODO [ToDr] Optimize and re-use tags from the pool.
 	fn on_block_imported(
 		id: &BlockId<ComponentBlock<C>>,
 		client: &ComponentClient<C>,
@@ -346,7 +344,7 @@ pub trait Components: Sized + 'static {
 	type RuntimeApi: Send + Sync;
 	/// A type that can start the RPC.
 	type RPC: StartRPC<Self>;
-	// TODO [ToDr] Traitify transaction pool and allow people to implement their own. (#1242)
+	// TODO: Traitify transaction pool and allow people to implement their own. (#1242)
 	/// A type that can maintain transaction pool.
 	type TransactionPool: MaintainTransactionPool<Self>;
 	/// Extrinsic pool type.
@@ -517,10 +515,10 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher, _, _, _>(light_blockchain.clone(), executor));
+		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor.clone()));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;
+		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec, executor)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 

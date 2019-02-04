@@ -18,9 +18,10 @@
 
 #![cfg(test)]
 
-use primitives::{generic, testing::{self, UintAuthorityId}, traits::{OnFinalise, ProvideInherent}};
+use primitives::{generic, testing::{self, UintAuthorityId}, traits::OnFinalise};
 use runtime_io::with_externalities;
 use mock::{Consensus, System, new_test_ext};
+use inherents::{InherentData, ProvideInherent};
 
 #[test]
 fn authorities_change_logged() {
@@ -31,7 +32,13 @@ fn authorities_change_logged() {
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
-				generic::DigestItem::AuthoritiesChange(vec![UintAuthorityId(4).into(), UintAuthorityId(5).into(), UintAuthorityId(6).into()]),
+				generic::DigestItem::AuthoritiesChange(
+					vec![
+						UintAuthorityId(4).into(),
+						UintAuthorityId(5).into(),
+						UintAuthorityId(6).into()
+					]
+				),
 			],
 		});
 	});
@@ -67,7 +74,12 @@ fn authorities_change_is_not_logged_when_changed_back_to_original() {
 fn offline_report_can_be_excluded() {
 	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		assert!(Consensus::create_inherent_extrinsics(Vec::new()).is_empty());
-		assert_eq!(Consensus::create_inherent_extrinsics(vec![0]).len(), 1);
+		assert!(Consensus::create_inherent(&InherentData::new()).is_none());
+
+		let offline_report: Vec<u32> = vec![0];
+		let mut data = InherentData::new();
+		data.put_data(super::INHERENT_IDENTIFIER, &offline_report).unwrap();
+
+		assert!(Consensus::create_inherent(&data).is_some());
 	});
 }

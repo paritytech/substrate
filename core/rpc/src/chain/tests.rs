@@ -16,7 +16,7 @@
 
 use super::*;
 use test_client::{self, TestClient};
-use test_client::runtime::{Block, Header};
+use test_client::runtime::{H256, Block, Header};
 use consensus::BlockOrigin;
 
 #[test]
@@ -32,7 +32,7 @@ fn should_return_header() {
 	assert_matches!(
 		client.header(Some(client.client.genesis_hash()).into()),
 		Ok(Some(ref x)) if x == &Header {
-			parent_hash: 0.into(),
+			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
 			state_root: x.state_root.clone(),
 			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
@@ -43,7 +43,7 @@ fn should_return_header() {
 	assert_matches!(
 		client.header(None.into()),
 		Ok(Some(ref x)) if x == &Header {
-			parent_hash: 0.into(),
+			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
 			state_root: x.state_root.clone(),
 			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314".parse().unwrap(),
@@ -52,7 +52,7 @@ fn should_return_header() {
 	);
 
 	assert_matches!(
-		client.header(Some(5.into()).into()),
+		client.header(Some(H256::from_low_u64_be(5)).into()),
 		Ok(None)
 	);
 }
@@ -106,7 +106,7 @@ fn should_return_a_block() {
 	);
 
 	assert_matches!(
-		api.block(Some(5.into()).into()),
+		api.block(Some(H256::from_low_u64_be(5)).into()),
 		Ok(None)
 	);
 }

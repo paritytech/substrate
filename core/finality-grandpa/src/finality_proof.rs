@@ -29,7 +29,7 @@
 //! The caller should track the `set_id`. The most straightforward way is to fetch finality
 //! proofs ONLY for blocks on the tip of the chain and track the latest known `set_id`.
 
-use std::collections::HashMap;
+use grandpa::VoterSet;
 
 use client::{
 	blockchain::Backend as BlockchainBackend,
@@ -222,7 +222,7 @@ trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	fn target_block(&self) -> (Header::Number, Header::Hash);
 
 	/// Verify justification with respect to authorities set and authorities set id.
-	fn verify(&self, set_id: u64, authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()>;
+	fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()>;
 }
 
 impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJustification<Block>
@@ -233,7 +233,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 		(self.commit.target_number, self.commit.target_hash)
 	}
 
-	fn verify(&self, set_id: u64, authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()> {
+	fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()> {
 		GrandpaJustification::verify(self, set_id, authorities)
 	}
 }
@@ -253,7 +253,7 @@ mod tests {
 	impl ProvableJustification<Header> for ValidFinalityProof {
 		fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
-		fn verify(&self, set_id: u64, authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()> {
+		fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()> {
 			assert_eq!(set_id, 1);
 			assert_eq!(authorities, &vec![
 				(Ed25519AuthorityId([1u8; 32]), 1),
@@ -269,11 +269,11 @@ mod tests {
 			0 => Default::default(),
 			_ => header(number - 1).hash(),
 		};
-		Header::new(number, 0.into(), 0.into(), parent_hash, Default::default())
+		Header::new(number, H256::from_low_u64_be(0), H256::from_low_u64_be(0), parent_hash, Default::default())
 	}
 
 	fn side_header(number: u64) -> Header {
-		Header::new(number, 0.into(), 1.into(), header(number - 1).hash(), Default::default())
+		Header::new(number, H256::from_low_u64_be(0), H256::from_low_u64_be(1), header(number - 1).hash(), Default::default())
 	}
 
 	fn test_blockchain() -> InMemoryBlockchain<Block> {
@@ -304,7 +304,7 @@ mod tests {
 		blockchain.insert(header(5).hash(), header(5), Some(vec![5]), None, NewBlockState::Final).unwrap();
 
 		// when asking for finality of side-block 42, None is returned
-		let proof_of_side_4_fails = prove_finality(&blockchain, |_, _, _| Ok(vec![vec![42]]), 42.into()).is_err();
+		let proof_of_side_4_fails = prove_finality(&blockchain, |_, _, _| Ok(vec![vec![42]]), H256::from_low_u64_be(42)).is_err();
 		assert_eq!(proof_of_side_4_fails, true);
 	}
 
@@ -314,7 +314,7 @@ mod tests {
 		blockchain.insert(header(4).hash(), header(4), None, None, NewBlockState::Final).unwrap();
 
 		// when asking for finality of block 4, search for justification failing
-		let proof_of_4_fails = prove_finality(&blockchain, |_, _, _| Ok(vec![vec![42]]), 42.into()).is_err();
+		let proof_of_4_fails = prove_finality(&blockchain, |_, _, _| Ok(vec![vec![42]]), H256::from_low_u64_be(42)).is_err();
 		assert_eq!(proof_of_4_fails, true);
 	}
 
@@ -387,7 +387,7 @@ mod tests {
 		impl ProvableJustification<Header> for InvalidFinalityProof {
 			fn target_block(&self) -> (u64, H256) { (3, header(3).hash()) }
 
-			fn verify(&self, _set_id: u64, _authorities: &HashMap<Ed25519AuthorityId, u64>) -> ClientResult<()> {
+			fn verify(&self, _set_id: u64, _authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()> {
 				Err(ClientErrorKind::Backend("test error".into()).into())
 			}
 		}

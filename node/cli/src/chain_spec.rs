@@ -23,6 +23,7 @@ use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, Dem
 	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
+use hex_literal::{hex, hex_impl};
 
 use substrate_keystore::pad_seed;
 
@@ -57,7 +58,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
-			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // TODO change
+			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
 			authorities: initial_authorities.clone(),
 		}),
 		system: None,
@@ -303,7 +304,7 @@ pub fn local_testnet_config() -> ChainSpec {
 mod tests {
 	use super::*;
 	use service_test;
-	use service::Factory;
+	use crate::service::Factory;
 
 	fn local_testnet_genesis_instant() -> GenesisConfig {
 		let mut genesis = local_testnet_genesis();
@@ -318,6 +319,6 @@ mod tests {
 
 	#[test]
 	fn test_connectivity() {
-		service_test::connectivity::<Factory, node_primitives::InherentData>(integration_test_config());
+		service_test::connectivity::<Factory>(integration_test_config());
 	}
 }

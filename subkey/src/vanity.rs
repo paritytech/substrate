@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use rand::{OsRng, Rng};
+use rand::{rngs::OsRng, RngCore};
 use substrate_primitives::ed25519::Pair;
 
 fn good_waypoint(done: u64) -> u64 {

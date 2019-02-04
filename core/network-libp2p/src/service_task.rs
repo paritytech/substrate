@@ -14,14 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key, transport};
+use crate::{
+	behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key_from_config,
+	transport
+};
 use crate::custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use crate::topology::NetTopology;
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 use bytes::Bytes;
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
-use libp2p::{Multiaddr, PeerId, multiaddr};
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, multiaddr};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
 use log::{debug, info, warn};
@@ -30,6 +33,7 @@ use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_timer::Interval;
 
@@ -50,7 +54,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	}
 
 	// Private and public keys configuration.
-	let local_private_key = obtain_private_key(&config)?;
+	let local_private_key = obtain_private_key_from_config(&config)?;
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
 
@@ -68,17 +72,20 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	topology.add_external_addrs(config.public_addresses.clone().into_iter());
 
 	// Build the swarm.
-	let mut swarm = {
+	let (mut swarm, bandwidth) = {
 		let registered_custom = RegisteredProtocols(registered_custom.into_iter().collect());
 		let behaviour = Behaviour::new(&config, local_peer_id.clone(), registered_custom);
-		let transport = transport::build_transport(local_private_key);
-		Swarm::new(transport, behaviour, topology)
+		let (transport, bandwidth) = transport::build_transport(local_private_key);
+		(Swarm::new(transport, behaviour, topology), bandwidth)
 	};
 
 	// Listen on multiaddresses.
 	for addr in &config.listen_addresses {
 		match Swarm::listen_on(&mut swarm, addr.clone()) {
-			Ok(new_addr) => debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr),
+			Ok(mut new_addr) => {
+				new_addr.append(Protocol::P2p(local_peer_id.clone().into()));
+				info!(target: "sub-libp2p", "Local node address is: {}", new_addr);
+			},
 			Err(err) => warn!(target: "sub-libp2p", "Can't listen on {} because: {:?}", addr, err)
 		}
 	}
@@ -127,6 +134,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 
 	Ok(Service {
 		swarm,
+		bandwidth,
 		nodes_info: Default::default(),
 		index_by_id: Default::default(),
 		next_node_id: 1,
@@ -175,12 +183,25 @@ pub enum ServiceEvent {
 		/// Data that has been received.
 		data: Bytes,
 	},
+
+	/// The substream with a node is clogged. We should avoid sending data to it if possible.
+	Clogged {
+		/// Index of the node.
+		node_index: NodeIndex,
+		/// Protocol which generated the message.
+		protocol_id: ProtocolId,
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
+	},
 }
 
 /// Network service. Must be polled regularly in order for the networking to work.
 pub struct Service {
 	/// Stream of events of the swarm.
 	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<Substream<StreamMuxerBox>>, NetTopology>,
+
+	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
+	bandwidth: Arc<transport::BandwidthSinks>,
 
 	/// Information about all the nodes we're connected to.
 	nodes_info: FnvHashMap<NodeIndex, NodeInfo>,
@@ -215,6 +236,18 @@ impl Service {
 	#[inline]
 	pub fn listeners(&self) -> impl Iterator<Item = &Multiaddr> {
 		Swarm::listeners(&self.swarm)
+	}
+
+	/// Returns the downloaded bytes per second averaged over the past few seconds.
+	#[inline]
+	pub fn average_download_per_sec(&self) -> u64 {
+		self.bandwidth.average_download_per_sec()
+	}
+
+	/// Returns the uploaded bytes per second averaged over the past few seconds.
+	#[inline]
+	pub fn average_upload_per_sec(&self) -> u64 {
+		self.bandwidth.average_upload_per_sec()
 	}
 
 	/// Returns the peer id of the local node.
@@ -368,6 +401,14 @@ impl Service {
 						node_index,
 						protocol_id,
 						data,
+					})))
+				}
+				Ok(Async::Ready(Some(BehaviourOut::Clogged { protocol_id, peer_id, messages }))) => {
+					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
+					break Ok(Async::Ready(Some(ServiceEvent::Clogged {
+						node_index,
+						protocol_id,
+						messages,
 					})))
 				}
 				Ok(Async::Ready(Some(BehaviourOut::Identified { peer_id, info }))) => {

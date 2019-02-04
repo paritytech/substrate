@@ -16,26 +16,18 @@
 
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
-extern crate substrate_primitives;
-extern crate parity_crypto as crypto;
-extern crate subtle;
-extern crate rand;
-extern crate serde_json;
-extern crate hex;
-
-#[macro_use]
-extern crate serde_derive;
-
-#[macro_use]
-extern crate error_chain;
-
-#[cfg(test)]
-extern crate tempdir;
+// Silence: `use of deprecated item 'std::error::Error::cause': replaced by Error::source, which can support downcasting`
+// https://github.com/paritytech/substrate/issues/1547
+#![allow(deprecated)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
+
+use serde_derive::{Serialize, Deserialize};
+use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+	impl_extract_backtrace, impl_error_chain_kind};
 
 use substrate_primitives::{hashing::blake2_256, ed25519::{Pair, Public, PKCS_LEN}};
 
@@ -66,14 +58,14 @@ pub struct InvalidPassword;
 struct EncryptedKey {
 	mac: [u8; 32],
 	salt: [u8; 32],
-	ciphertext: Vec<u8>, // TODO: switch to fixed-size when serde supports
+	ciphertext: Vec<u8>, // FIXME: switch to fixed-size when serde supports
 	iv: [u8; 16],
 	iterations: u32,
 }
 
 impl EncryptedKey {
 	fn encrypt(plain: &[u8; PKCS_LEN], password: &str, iterations: u32) -> Self {
-		use rand::{Rng, OsRng};
+		use rand::{Rng, rngs::OsRng};
 
 		let mut rng = OsRng::new().expect("OS Randomness available on all supported platforms; qed");
 

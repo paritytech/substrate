@@ -49,7 +49,7 @@ impl ChangesTrieConfiguration {
 			return 1;
 		}
 
-		// TODO: use saturating_pow when available
+		// FIXME: use saturating_pow once stabilized  - https://github.com/rust-lang/rust/issues/48320
 		let mut max_digest_interval = self.digest_interval;
 		for _ in 1..self.digest_levels {
 			max_digest_interval = match max_digest_interval.checked_mul(self.digest_interval) {

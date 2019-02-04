@@ -91,11 +91,11 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult, Authorities};
+use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
-	DigestItemFor, DigestItem, As, Zero,
+	DigestItemFor, DigestItem, As, One, Zero,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
@@ -103,7 +103,7 @@ use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use tokio::timer::Delay;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
+use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps, VoterSet};
 
 use network::{Service as NetworkService, ExHashT};
 use network::consensus_gossip::{ConsensusMessage};
@@ -219,7 +219,7 @@ impl From<ClientError> for Error {
 /// handle to a gossip service or similar.
 ///
 /// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network: Clone {
+pub trait Network<Block: BlockT>: Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
@@ -231,7 +231,10 @@ pub trait Network: Clone {
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>);
 
 	/// Clean up messages for a round.
-	fn drop_messages(&self, round: u64, set_id: u64);
+	fn drop_round_messages(&self, round: u64, set_id: u64);
+
+	/// Clean up messages for a given authority set id (e.g. commit messages).
+	fn drop_set_messages(&self, set_id: u64);
 
 	/// Get a stream of commit messages for a specific set-id. This stream
 	/// should never logically conclude.
@@ -239,6 +242,9 @@ pub trait Network: Clone {
 
 	/// Send message over the commit channel.
 	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
+
+	/// Inform peers that a block with given hash should be downloaded.
+	fn announce(&self, round: u64, set_id: u64, block: Block::Hash);
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
@@ -269,7 +275,7 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network for NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network<B> for NetworkBridge<B, S, H> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
 		self.service.consensus_gossip().write().messages_for(message_topic::<B>(round, set_id))
@@ -280,9 +286,14 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 		self.service.gossip_consensus_message(topic, message, false);
 	}
 
-	fn drop_messages(&self, round: u64, set_id: u64) {
+	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.consensus_gossip().write().collect_garbage(|t| t == &topic);
+		self.service.consensus_gossip().write().collect_garbage_for_topic(topic);
+	}
+
+	fn drop_set_messages(&self, set_id: u64) {
+		let topic = commit_topic::<B>(set_id);
+		self.service.consensus_gossip().write().collect_garbage_for_topic(topic);
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
@@ -291,7 +302,12 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, message, true);
+		self.service.gossip_consensus_message(topic, message, false);
+	}
+
+	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
+		debug!(target: "afg", "Announcing block {} to peers which we voted on in round {}", block, round);
+		self.service.announce_block(block)
 	}
 }
 
@@ -368,9 +384,9 @@ impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 type SharedConsensusChanges<H, N> = Arc<parking_lot::Mutex<ConsensusChanges<H, N>>>;
 
 /// The environment we run GRANDPA in.
-struct Environment<B, E, Block: BlockT, N: Network, RA> {
+struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	inner: Arc<Client<B, E, Block, RA>>,
-	voters: Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
@@ -382,7 +398,7 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	N: Network + 'static,
+	N: Network<Block> + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
 {
@@ -415,6 +431,14 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	}
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
+		// NOTE: when we finalize an authority set change through the sync protocol the voter is
+		//       signalled asynchronously. therefore the voter could still vote in the next round
+		//       before activating the new set. the `authority_set` is updated immediately thus we
+		//       restrict the voter based on that.
+		if self.set_id != self.authority_set.inner().read().current().0 {
+			return None;
+		}
+
 		// we refuse to vote beyond the current limit number where transitions are scheduled to
 		// occur.
 		// once blocks are finalized that make that transition irrelevant or activate it,
@@ -422,16 +446,57 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 		let limit = self.authority_set.current_limit();
 		debug!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
 
-		match self.inner.best_containing(block, limit) {
-			Ok(Some(hash)) => {
-				let header = self.inner.header(&BlockId::Hash(hash)).ok()?
+		match self.inner.best_containing(block, None) {
+			Ok(Some(mut best_hash)) => {
+				let base_header = self.inner.header(&BlockId::Hash(block)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
-				Some((hash, header.number().clone()))
+				if let Some(limit) = limit {
+					// this is a rare case which might cause issues,
+					// might be better to return the header itself.
+					if *base_header.number() > limit {
+						debug!(target: "afg", "Encountered error finding best chain containing {:?} with limit {:?}: target block is after limit",
+							block,
+							limit,
+						);
+						return None;
+					}
+				}
+
+				let mut best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
+					.expect("Header known to exist after `best_containing` call; qed");
+
+				// we target a vote towards 3/4 of the unfinalized chain (rounding up)
+				let target = {
+					let two = NumberFor::<Block>::one() + One::one();
+					let three = two + One::one();
+					let four = three + One::one();
+
+					let diff = *best_header.number() - *base_header.number();
+					let diff = ((diff * three) + two) / four;
+
+					*base_header.number() + diff
+				};
+
+				// unless our vote is currently being limited due to a pending change
+				let target = limit.map(|limit| limit.min(target)).unwrap_or(target);
+
+				// walk backwards until we find the target block
+				loop {
+					if *best_header.number() < target { unreachable!(); }
+					if *best_header.number() == target {
+						return Some((best_hash, *best_header.number()));
+					}
+
+					best_hash = *best_header.parent_hash();
+					best_header = self.inner.header(&BlockId::Hash(best_hash)).ok()?
+						.expect("Header known to exist after `best_containing` call; qed");
+				}
+			},
+			Ok(None) => {
+				debug!(target: "afg", "Encountered error finding best chain containing {:?}: couldn't find target block", block);
+				None
 			}
-			// Ok(None) can be returned when `block` is after `limit`. That might cause issues.
-			// might be better to return the header itself in this (rare) case.
-			Ok(None) => None,
 			Err(e) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
 				None
@@ -491,7 +556,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
-	N: Network + 'static + Send,
+	N: Network<Block> + 'static + Send,
 	N::In: 'static + Send,
 	RA: 'static + Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
@@ -520,7 +585,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		// TODO: dispatch this with `mpsc::spawn`.
 		let incoming = ::communication::checked_message_stream::<Block, _>(
 			round,
 			self.set_id,
@@ -528,10 +592,13 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			self.voters.clone(),
 		);
 
+		let local_key = self.config.local_key.as_ref()
+			.filter(|pair| self.voters.contains_key(&pair.public().into()));
+
 		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
-			self.config.local_key.clone(),
+			local_key.cloned(),
 			self.voters.clone(),
 			self.network.clone(),
 		);
@@ -684,7 +751,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	fn decode_and_verify(
 		encoded: Vec<u8>,
 		set_id: u64,
-		voters: &HashMap<Ed25519AuthorityId, u64>,
+		voters: &VoterSet<Ed25519AuthorityId>,
 	) -> Result<GrandpaJustification<Block>, ClientError> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -695,7 +762,7 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 	}
 
 	/// Validate the commit and the votes' ancestry proofs.
-	fn verify(&self, set_id: u64, voters: &HashMap<Ed25519AuthorityId, u64>) -> Result<(), ClientError>
+	fn verify(&self, set_id: u64, voters: &VoterSet<Ed25519AuthorityId>) -> Result<(), ClientError>
 	where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 	{
@@ -706,7 +773,6 @@ impl<Block: BlockT<Hash=H256>> GrandpaJustification<Block> {
 		match grandpa::validate_commit(
 			&self.commit,
 			voters,
-			None,
 			&ancestry_chain,
 		) {
 			Ok(Some(_)) => {},
@@ -798,7 +864,7 @@ fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	// lock must be held through writing to DB to avoid race
 	let mut authority_set = authority_set.inner().write();
 
-	// TODO [andre]: clone only when changed (#1483)
+	// FIXME #1483: clone only when changed
 	let old_authority_set = authority_set.clone();
 	// needed in case there is an authority set change, used for reverting in
 	// case of error
@@ -992,7 +1058,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	api: Arc<PRA>,
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 	for GrandpaBlockImport<B, E, Block, RA, PRA> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		B: Backend<Block, Blake2Hasher> + 'static,
@@ -1032,6 +1098,29 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		}
 	}
 
+	fn import_justification(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		justification: Justification,
+	) -> Result<(), Self::Error> {
+		self.import_justification(hash, number, justification, false)
+	}
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
+	for GrandpaBlockImport<B, E, Block, RA, PRA> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		DigestFor<Block>: Encode,
+		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		RA: Send + Sync,
+		PRA: ProvideRuntimeApi,
+		PRA::Api: GrandpaApi<Block>,
+{
+	type Error = ConsensusError;
+
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
@@ -1061,6 +1150,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
 				let error = || {
+					debug!(target: "afg", "rejecting change: {} is in the same chain as {}", hash, base);
 					Err(ConsensusErrorKind::ClientImport("Incorrect base hash".to_string()).into())
 				};
 
@@ -1159,15 +1249,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		}
 
 		Ok(import_result)
-	}
-
-	fn import_justification(
-		&self,
-		hash: Block::Hash,
-		number: NumberFor<Block>,
-		justification: Justification,
-	) -> Result<(), Self::Error> {
-		self.import_justification(hash, number, justification, false)
 	}
 }
 
@@ -1273,32 +1354,6 @@ fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	}
 
 	Ok(Some(current.hash()))
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> Authorities<Block> for GrandpaBlockImport<B, E, Block, RA, PRA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
-{
-
-	type Error = <Client<B, E, Block, RA> as Authorities<Block>>::Error;
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<Ed25519AuthorityId>, Self::Error> {
-		self.inner.authorities_at(at)
-	}
-}
-
-impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> ProvideRuntimeApi for GrandpaBlockImport<B, E, Block, RA, PRA>
-where
-	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
-	PRA: ProvideRuntimeApi,
-{
-	type Api = PRA::Api;
-
-	fn runtime_api<'a>(&'a self) -> ::runtime_primitives::traits::ApiRef<'a, Self::Api> {
-		self.api.runtime_api()
-	}
 }
 
 /// Half of a link between a block-import worker and a the background voter.
@@ -1419,8 +1474,9 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 }
 
 fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
+	local_key: Option<Arc<ed25519::Pair>>,
 	set_id: u64,
-	voters: &Arc<HashMap<Ed25519AuthorityId, u64>>,
+	voters: &Arc<VoterSet<Ed25519AuthorityId>>,
 	client: &Arc<Client<B, E, Block, RA>>,
 	network: &N,
 ) -> (
@@ -1435,7 +1491,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 ) where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	N: Network,
+	N: Network<Block>,
 	RA: Send + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
@@ -1454,9 +1510,14 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		commit_in,
 	);
 
+	let is_voter = local_key
+		.map(|pair| voters.contains_key(&pair.public().into()))
+		.unwrap_or(false);
+
 	let commit_out = ::communication::CommitsOut::<Block, _>::new(
 		network.clone(),
 		set_id,
+		is_voter,
 	);
 
 	let commit_in = commit_in.map_err(Into::into);
@@ -1476,7 +1537,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	N: Network + Send + Sync + 'static,
+	N: Network<Block> + Send + Sync + 'static,
 	N::In: Send + 'static,
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
@@ -1536,6 +1597,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		);
 
 		let committer_data = committer_communication(
+			config.local_key.clone(),
 			env.set_id,
 			&env.voters,
 			&client,
