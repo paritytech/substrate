@@ -46,7 +46,8 @@ pub use native_executor::{with_native_environment, NativeExecutor, NativeExecuti
 pub use state_machine::Externalities;
 pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use parity_codec::Codec;
-use primitives::Blake2Hasher;
+#[doc(hidden)]
+pub use primitives::Blake2Hasher;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
