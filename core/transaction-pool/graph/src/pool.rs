@@ -38,7 +38,7 @@ use sr_primitives::{
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
-pub use base_pool::Limit;
+pub use crate::base_pool::Limit;
 
 /// Modification notification event stream type;
 pub type EventStream = mpsc::UnboundedReceiver<()>;
