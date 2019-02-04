@@ -23,9 +23,11 @@ then
 	cat <<-EOT
 	
 	no changes to the runtime source code detected
+
 	EOT
 	exit 0
 fi
+
 
 
 # check for spec_version updates
@@ -34,7 +36,8 @@ add_spec_version="git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
 sub_spec_version="git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
 	| sed -n -r 's/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p'"
 
-# see if the version and the binary blob changed
+
+# see if the spec version and the binary blob changed
 if git diff --name-only master...${CI_COMMIT_SHA} \
 	| grep -q "${RUNTIME}" && \
 	[ "${add_spec_version}" -ne "${sub_spec_version}" ]
@@ -45,6 +48,7 @@ then
 	binary blob.
 
 	spec_version: ${sub_spec_version} -> ${add_spec_version}
+
 	EOT
 	exit 0
 fi
@@ -52,7 +56,7 @@ fi
 
 cat <<-EOT
 
-wasm source files changed but not the spec version or the runtime"
+wasm source files changed but not the spec version or the runtime
 binary blob. This may break the api.
 
 EOT
