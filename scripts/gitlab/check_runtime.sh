@@ -31,10 +31,10 @@ fi
 
 
 # check for spec_version updates
-add_spec_version="git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
-	| sed -n -r 's/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p'"
-sub_spec_version="git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
-	| sed -n -r 's/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p'"
+add_spec_version="$(git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
+	| sed -n -r 's/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p')"
+sub_spec_version="$(git diff master...${CI_COMMIT_SHA} node/runtime/src/lib.rs \
+	| sed -n -r 's/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p')"
 
 
 # see if the spec version and the binary blob changed
