@@ -338,6 +338,10 @@ where
 		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
 	}
 
+	fn inject_replaced(&mut self, peer_id: PeerId, closed: ConnectedPoint, opened: ConnectedPoint) {
+		NetworkBehaviour::inject_replaced(&mut self.kademlia, peer_id, closed, opened)
+	}
+
 	fn inject_node_event(
 		&mut self,
 		peer_id: PeerId,

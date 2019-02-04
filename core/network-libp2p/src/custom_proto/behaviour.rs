@@ -140,9 +140,6 @@ impl<TSubstream> CustomProtos<TSubstream> {
 			NetTopology::memory(local_peer_id.clone())
 		};
 
-		// Register the external addresses provided by the user as our own.
-		topology.add_external_addrs(config.public_addresses.clone().into_iter());
-
 		// Add the bootstrap nodes to the topology.
 		for bootnode in config.boot_nodes.iter() {
 			if let Ok((peer_id, addr)) = parse_str_addr(bootnode) {
@@ -342,6 +339,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 
 			if let Some((_, ban_end)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
 				if *ban_end > Instant::now() {
+					println!("banned peer");
 					continue
 				}
 			}
@@ -351,7 +349,7 @@ impl<TSubstream> CustomProtos<TSubstream> {
 		}
 
 		// Next round is when we expect the topology will change.
-		self.next_connect_to_nodes.reset(will_change);
+		self.next_connect_to_nodes.reset(std::cmp::min(will_change, Instant::now() + Duration::from_secs(5)));
 	}
 }
 
@@ -453,10 +451,10 @@ where
 			};
 
 			self.events.push(NetworkBehaviourAction::GenerateEvent(event));
-
-			// Trigger a `connect_to_nodes` round.
-			self.next_connect_to_nodes = Delay::new(Instant::now());
 		}
+
+		// Trigger a `connect_to_nodes` round.
+		self.next_connect_to_nodes = Delay::new(Instant::now());
 
 		self.enabled_peers.remove(peer_id);
 	}

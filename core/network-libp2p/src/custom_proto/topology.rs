@@ -65,8 +65,6 @@ pub struct NetTopology {
 	cache_path: Option<PathBuf>,
 	/// PeerId of the local node.
 	local_peer_id: PeerId,
-	/// Known addresses for the local node to report to the network.
-	external_addresses: Vec<Multiaddr>,
 }
 
 impl NetTopology {
@@ -79,7 +77,6 @@ impl NetTopology {
 			store: Default::default(),
 			cache_path: None,
 			local_peer_id,
-			external_addresses: Vec::new(),
 		}
 	}
 
@@ -97,7 +94,6 @@ impl NetTopology {
 			store,
 			cache_path: Some(path.to_owned()),
 			local_peer_id,
-			external_addresses: Vec::new(),
 		}
 	}
 
@@ -134,12 +130,6 @@ impl NetTopology {
 			peer.addrs = new_addrs;
 			!peer.addrs.is_empty()
 		});
-	}
-
-	/// Add the external addresses that are known for the local node.
-	pub fn add_external_addrs<TIter>(&mut self, addrs: TIter)
-	where TIter: Iterator<Item = Multiaddr> {
-		self.external_addresses.extend(addrs);
 	}
 
 	/// Returns a list of all the known addresses of peers, ordered by the
@@ -190,6 +180,10 @@ impl NetTopology {
 	///
 	/// We assume that the address is valid, so its score starts very high.
 	pub fn add_bootstrap_addr(&mut self, peer: &PeerId, addr: Multiaddr) {
+		if *peer == self.local_peer_id {
+			return
+		}
+
 		let now_systime = SystemTime::now();
 		let now = Instant::now();
 
@@ -235,6 +229,10 @@ impl NetTopology {
 		addrs: I,
 	) -> bool
 		where I: Iterator<Item = (Multiaddr, bool)> {
+		if *peer_id == self.local_peer_id {
+			return false
+		}
+
 		let mut addrs: Vec<_> = addrs.collect();
 		let now_systime = SystemTime::now();
 		let now = Instant::now();
@@ -303,10 +301,6 @@ impl NetTopology {
 	/// Returns the addresses stored for a specific peer.
 	#[inline]
 	pub fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
-		if peer == &self.local_peer_id {
-			return self.external_addresses.clone()
-		}
-
 		let peer = if let Some(peer) = self.store.get_mut(peer) {
 			peer
 		} else {
@@ -331,6 +325,10 @@ impl NetTopology {
 
 	/// Marks the given peer as connected through the given endpoint.
 	pub fn set_connected(&mut self, peer: &PeerId, endpoint: &ConnectedPoint) {
+		if *peer == self.local_peer_id {
+			return
+		}
+
 		let addr = match endpoint {
 			ConnectedPoint::Dialer { address } => address,
 			ConnectedPoint::Listener { .. } => return
