@@ -364,7 +364,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().leaves.hashes())
 	}
 
-	fn children(&self, _id: Block::Hash) -> Vec<Block::Hash> {
+	fn children(&self, _id: Block::Hash) -> error::Result<Vec<Block::Hash>> {
 		unimplemented!()
 	}
 }

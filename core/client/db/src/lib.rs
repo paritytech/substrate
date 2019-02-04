@@ -251,8 +251,8 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		Ok(self.leaves.read().hashes())
 	}
 
-	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>> {
-		ChildrenMap::hashes(&self.db, columns::META, meta_keys::CHILD_PREFIX, parent_hash)
+	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>, client::error::Error> {
+		ChildrenMap::hashes(&*self.db, columns::META, meta_keys::CHILD_PREFIX, parent_hash)
 	}
 }
 
@@ -859,9 +859,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				let displaced_leaf = leaves.import(hash, number, parent_hash);
 				leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 				
-				let mut children = self.blockchain.children.write();
+				let mut children = ChildrenMap::new();
 				children.import(parent_hash, hash);
-				children.prepare_transaction(&mut transaction, columns::META, meta_keys::CHILD_PREFIX);
+				children.prepare_transaction(&*self.storage.db, &mut transaction, columns::META, meta_keys::CHILD_PREFIX);
 
 				displaced_leaf
 			};

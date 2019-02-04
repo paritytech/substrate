@@ -86,7 +86,7 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	fn leaves(&self) -> Result<Vec<Block::Hash>>;
 
 	/// Returns the hashes of all blocks that are children of the block with `parent_hash`.
-	fn children(&self, parent_hash: Block::Hash) -> Vec<Block::Hash>;
+	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 }
 
 /// Blockchain optional data cache.

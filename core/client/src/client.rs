@@ -1230,18 +1230,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(None)
 	}
 
-	fn get_descendants(&self, target: Block::Hash, maybe_skip: Option<Block::Hash>) -> Vec<Block::Hash> {
-		let mut children = self.backend.blockchain().children(target);
+	fn get_descendants(&self, target: Block::Hash, maybe_skip: Option<Block::Hash>) -> error::Result<Vec<Block::Hash>> {
+		let mut children = self.backend.blockchain().children(target)?;
 		if let Some(skip) = maybe_skip {
 			children.retain(|&c| c != skip);
 		}
 		let mut descendants = Vec::new();
 		for child in children {
 			descendants.push(child);
-			let d = self.get_descendants(child, None);
+			let d = self.get_descendants(child, None)?;
 			descendants.extend(d);
 		}
-		descendants
+		Ok(descendants)
 	}
 
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
@@ -1265,7 +1265,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut ancestor = load_header(*current.parent_hash())?;
 
 		for _generation in 0..max_generation.as_() {
-			uncles.extend(self.get_descendants(ancestor.hash(), Some(current.hash())));
+			uncles.extend(self.get_descendants(ancestor.hash(), Some(current.hash()))?);
 			current = ancestor;
 			if genesis == current { break; }
 			ancestor = load_header(*current.parent_hash())?;
@@ -1891,7 +1891,6 @@ pub(crate) mod tests {
 		assert_eq!(a2.hash(), client.best_containing(a1.hash(), None).unwrap().unwrap());
 		assert_eq!(a2.hash(), client.best_containing(a2.hash(), None).unwrap().unwrap());
 	}
-	
 
 	#[test]
 	fn best_containing_with_multiple_forks() {

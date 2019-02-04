@@ -164,7 +164,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 		unimplemented!()
 	}
 
-	fn children(&self, _id: Block::Hash) -> Vec<Block::Hash> {
+	fn children(&self, _id: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
 		unimplemented!()
 	}
 }

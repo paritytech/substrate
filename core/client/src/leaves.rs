@@ -91,8 +91,7 @@ impl<H, N> LeafSet<H, N> where
 				Some(hash) => hash,
 				None => return Err(error::ErrorKind::Backend("Error decoding hash".into()).into()),
 			};
-			let raw_value = &mut &value[..];
-			let number = match Decode::decode(raw_value) {
+			let number = match Decode::decode(&mut &value[..]) {
 				Some(number) => number,
 				None => return Err(error::ErrorKind::Backend("Error decoding number".into()).into()),
 			};
