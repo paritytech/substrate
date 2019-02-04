@@ -199,6 +199,7 @@ impl AuraReport {
 					punish_with(actual_index, slash_count);
 				}
 			}
+		}
 	}
 }
 
