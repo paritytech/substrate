@@ -189,7 +189,6 @@ mod tests {
 	#[test]
 	fn should_allocate_properly() {
 		// given
-		let heap_size = 64;
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
 		let mut heap = FreeingBumpHeapAllocator::new(mem);
 
@@ -292,7 +291,6 @@ mod tests {
 	#[test]
 	fn should_build_linked_list_of_free_areas_properly() {
 		// given
-		let heap_size = 128;
 		let mem = MemoryInstance::alloc(Pages(1), None).unwrap();
 		let mut heap = FreeingBumpHeapAllocator::new(mem);
 
