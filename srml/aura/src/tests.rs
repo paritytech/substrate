@@ -33,6 +33,11 @@ fn aura_report_gets_skipped_correctly() {
 
 	let mut validators = vec![0; 10];
 	report.punish(10, |idx, count| validators[idx] += count);
+	assert_eq!(validators, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+	let mut validators = vec![0; 10];
+	report.skipped = 5;
+	report.punish(10, |idx, count| validators[idx] += count);
 	assert_eq!(validators, vec![0, 0, 0, 1, 1, 1, 1, 1, 0, 0]);
 
 	let mut validators = vec![0; 10];
@@ -42,6 +47,7 @@ fn aura_report_gets_skipped_correctly() {
 
 	let mut validators = vec![0; 4];
 	report.start_slot = 1;
+	report.skipped = 3;
 	report.punish(4, |idx, count| validators[idx] += count);
 	assert_eq!(validators, vec![0, 1, 1, 1]);
 
