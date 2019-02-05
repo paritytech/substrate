@@ -177,12 +177,14 @@ pub mod tests {
 
 	pub struct DummyStorage {
 		pub changes_tries_cht_roots: HashMap<u64, Hash>,
+		pub aux_store: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
 	}
 
 	impl DummyStorage {
 		pub fn new() -> Self {
 			DummyStorage {
 				changes_tries_cht_roots: HashMap::new(),
+				aux_store: Mutex::new(HashMap::new()),
 			}
 		}
 	}
@@ -200,12 +202,20 @@ pub mod tests {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn number(&self, _hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn number(&self, hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
+			if hash == Default::default() {
+				Ok(Some(Default::default()))
+			} else {
+				Err(ClientErrorKind::Backend("Test error".into()).into())
+			}
 		}
 
-		fn hash(&self, _number: u64) -> ClientResult<Option<Hash>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn hash(&self, number: u64) -> ClientResult<Option<Hash>> {
+			if number == 0 {
+				Ok(Some(Default::default()))
+			} else {
+				Err(ClientErrorKind::Backend("Test error".into()).into())
+			}
 		}
 	}
 
@@ -216,12 +226,15 @@ pub mod tests {
 			'c: 'a,
 			I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 			D: IntoIterator<Item=&'a &'b [u8]>,
-		>(&self, _insert: I, _delete: D) -> ClientResult<()> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		>(&self, insert: I, _delete: D) -> ClientResult<()> {
+			for (k, v) in insert.into_iter() {
+				self.aux_store.lock().insert(k.to_vec(), v.to_vec());
+			}
+			Ok(())
 		}
 
-		fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+			Ok(self.aux_store.lock().get(key).cloned())
 		}
 	}
 
@@ -233,7 +246,7 @@ pub mod tests {
 			_state: NewBlockState,
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+			Ok(())
 		}
 
 		fn set_head(&self, _block: BlockId<Block>) -> ClientResult<()> {

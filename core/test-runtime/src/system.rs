@@ -23,7 +23,7 @@ use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
-use codec::{KeyedVec, Encode};
+use parity_codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
 use primitives::{Ed25519AuthorityId, Blake2Hasher};
 use primitives::storage::well_known_keys;
@@ -256,12 +256,13 @@ mod tests {
 	use super::*;
 
 	use runtime_io::{with_externalities, twox_128, TestExternalities};
-	use codec::{Joiner, KeyedVec};
+	use parity_codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
-	use ::{Header, Digest, Extrinsic, Transfer};
-	use primitives::{Blake2Hasher};
+	use crate::{Header, Digest, Extrinsic, Transfer};
+	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;
+	use hex_literal::{hex, hex_impl};
 
 	const WASM_CODE: &'static [u8] =
 			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");

@@ -263,9 +263,9 @@ pub struct ImportBlocksCmd {
 	)]
 	pub api_execution: ExecutionStrategy,
 
-	/// The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
-	#[structopt(long = "max-heap-pages", value_name = "COUNT")]
-	pub max_heap_pages: Option<u32>,
+	/// The default number of 64KB pages to allocate for Wasm execution. Don't alter this unless you know what you're doing.
+	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
+	pub default_heap_pages: Option<u32>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]

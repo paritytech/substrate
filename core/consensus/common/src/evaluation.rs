@@ -16,7 +16,7 @@
 
 //! Block evaluation and evaluation errors.
 
-use super::MAX_TRANSACTIONS_SIZE;
+use super::MAX_BLOCK_SIZE;
 
 use parity_codec::Encode;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
@@ -43,7 +43,7 @@ error_chain! {
 			description("Proposal exceeded the maximum size."),
 			display(
 				"Proposal exceeded the maximum size of {} by {} bytes.",
-				MAX_TRANSACTIONS_SIZE, size.saturating_sub(MAX_TRANSACTIONS_SIZE)
+				MAX_BLOCK_SIZE, size.saturating_sub(MAX_BLOCK_SIZE)
 			),
 		}
 	}
@@ -61,12 +61,8 @@ pub fn evaluate_initial<Block: BlockT>(
 	let proposal = Block::decode(&mut &encoded[..])
 		.ok_or_else(|| ErrorKind::BadProposalFormat)?;
 
-	let transactions_size = proposal.extrinsics().iter().fold(0, |a, tx| {
-		a + Encode::encode(tx).len()
-	});
-
-	if transactions_size > MAX_TRANSACTIONS_SIZE {
-		bail!(ErrorKind::ProposalTooLarge(transactions_size))
+	if encoded.len() > MAX_BLOCK_SIZE {
+		bail!(ErrorKind::ProposalTooLarge(encoded.len()))
 	}
 
 	if *parent_hash != *proposal.header().parent_hash() {

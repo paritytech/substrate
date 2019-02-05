@@ -16,9 +16,9 @@
 
 //! An implementation of double map backed by storage.
 
-use rstd::prelude::*;
-use codec::{Codec, Encode};
-use storage::unhashed;
+use crate::rstd::prelude::*;
+use crate::codec::{Codec, Encode};
+use crate::storage::unhashed;
 
 /// An implementation of a map with a two keys.
 ///
