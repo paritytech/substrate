@@ -221,7 +221,7 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 							} else if skipped < MAX_SKIPPED_TRANSACTIONS {
 								skipped += 1;
 								debug!(
-									"Block is full, but will try {} more transactions before quitting.",
+									"Block seems full, but will try {} more transactions before quitting.",
 									MAX_SKIPPED_TRANSACTIONS - skipped
 								);
 							} else {
