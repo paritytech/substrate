@@ -186,7 +186,7 @@ impl AuraReport {
 			// the number of validators whose turned were skipped.
 			let iter = (start_slot..validator_count).into_iter()
 				.chain(0..start_slot)
-				.enumerate();
+				.take(self.skipped);
 
 			for (rel_index, actual_index) in iter {
 				let slash_count = if rel_index < self.skipped {
