@@ -180,24 +180,8 @@ impl AuraReport {
 		// unfulfilling their specific duties. In this case, it doesn't make
 		// sense to punish anyone, so we guard against it.
 		if self.skipped < validator_count {
-
-			let start_slot = self.start_slot % validator_count;
-
-			// the number of validators whose turned were skipped.
-			let iter = (start_slot..validator_count).into_iter()
-				.chain(0..start_slot)
-				.take(self.skipped);
-
-			for (rel_index, actual_index) in iter {
-				let slash_count = if rel_index < self.skipped {
-					1
-				} else {
-					break
-				};
-
-				if slash_count > 0 {
-					punish_with(actual_index, slash_count);
-				}
+			for index in 0..self.skipped {
+				punish_with((self.start_slot + index) % validator_count, 1);
 			}
 		}
 	}
