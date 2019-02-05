@@ -458,7 +458,7 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	impl_trait_ident: &'a Ident,
 	runtime_mod_path: &'a Path,
 	runtime_type: &'a Type,
-	trait_generic_arguments: &'a [GenericArgument]
+	trait_generic_arguments: &'a [GenericArgument],
 }
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -562,27 +562,33 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		// the feature `std` or `test`.
 		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
 
-		fold::fold_item_impl(self, input)
-	}
-}
+		input = fold::fold_item_impl(self, input);
 
-fn generate_impl_with_context(impls: &mut [ItemImpl]) {
-	let context_arg: syn::FnArg = parse_quote!( context: ExecutionContext );
-	for impl_ in impls {
-		let mut ctx_methods = vec![];
-		for item in &impl_.items {
-			match item {
-				ImplItem::Method(method) => {
-					let mut new_method = method.clone();
-					new_method.sig.ident = Ident::new(&format!("{}_with_context", &method.sig.ident), Span::call_site());
-					new_method.sig.decl.inputs.push(context_arg.clone());
-					ctx_methods.push(ImplItem::Method(new_method));
-				},
-				_ => {},
+		let context_arg: syn::FnArg = parse_quote!( context: ExecutionContext );
+		let mut methods_with_context = vec![];
+
+		for item in &input.items {
+			if let ImplItem::Method(method) = item {
+				let mut ctx_method = method.clone();
+				let mut stmt = ctx_method.block.stmts.pop().unwrap();
+				if let syn::Stmt::Expr(ref mut method_call) = stmt {
+					if let syn::Expr::MethodCall(ref mut expr) = method_call {
+						expr.args.pop();
+						let default_context = parse_quote!( context );
+						expr.args.push(default_context);
+					}
+				}
+				ctx_method.sig.ident = Ident::new(&format!("{}_with_context", &ctx_method.sig.ident), Span::call_site());
+				ctx_method.sig.decl.inputs.push(context_arg.clone());
+				ctx_method.block.stmts.push(stmt);
+				methods_with_context.push(ImplItem::Method(ctx_method.clone()));
 			}
 		}
-		impl_.items.extend(ctx_methods);
+		
+		input.items.extend(methods_with_context);
+		input
 	}
+
 }
 
 /// Generate the implementations of the runtime apis for the `RuntimeApi` type.
@@ -608,7 +614,6 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			PathArguments::Parenthesized(_) | PathArguments::None => vec![],
 			PathArguments::AngleBracketed(ref b) => b.args.iter().cloned().collect(),
 		};
-
 		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
 			runtime_block,
 			node_block: &node_block,
@@ -617,6 +622,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			runtime_mod_path: &runtime_mod_path,
 			runtime_type: &*runtime_type,
 			trait_generic_arguments: &trait_generic_arguments,
+		
 		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
@@ -678,7 +684,7 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
 	
-	generate_impl_with_context(&mut api_impls);
+	// generate_impl_with_context(&mut api_impls);
 
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
 
