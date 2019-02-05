@@ -135,7 +135,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			pub fn store_metadata_name() -> &'static str {
 				#cratename_string
 			}
-			pub fn register_type_metadata(registry: &mut #scrate::substrate_metadata::MetadataRegistry) {
+			pub fn store_metadata_register(registry: &mut #scrate::substrate_metadata::MetadataRegistry) {
 				#register_type_metadata
 			}
 		}

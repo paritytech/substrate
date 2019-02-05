@@ -209,7 +209,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 		$(with $kws:ident)*
 	) => {
 		{
-			$mod::$module::<$runtime>::register_type_metadata(&mut $registry);
+			$mod::$module::<$runtime>::store_metadata_register(&mut $registry);
 			Some($crate::metadata::DecodeDifferent::Encode(
 				$crate::metadata::FnEncode(
 					$mod::$module::<$runtime>::store_metadata_functions
