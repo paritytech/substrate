@@ -22,7 +22,7 @@ use primitives::BuildStorage;
 use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, system};
+use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}

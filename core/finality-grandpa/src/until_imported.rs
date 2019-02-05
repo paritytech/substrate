@@ -162,7 +162,7 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 				} else {
 					let next_log = *last_log + LOG_PENDING_INTERVAL;
 					if Instant::now() <= next_log {
-						warn!(
+						debug!(
 							target: "afg",
 							"Waiting to import block {} before {} votes can be imported. \
 							Possible fork?",
