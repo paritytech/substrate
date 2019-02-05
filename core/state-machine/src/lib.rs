@@ -312,7 +312,8 @@ where
 }
 
 
-fn execute_aux<H, B, T, Exec, R: Decode + Encode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
+fn execute_aux<H, B, T, Exec, R: Decode + Encode + PartialEq, 
+	NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe>(
 	overlay: &mut OverlayedChanges,
 	backend: &B,
 	changes_trie_storage: Option<&T>,
@@ -347,7 +348,8 @@ where
 	(result, was_native, storage_delta, changes_delta)
 }
 
-fn execute_call_with_both_strategy<H, B, T, Exec,  Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
+fn execute_call_with_both_strategy<H, B, T, Exec,  Handler, R: Decode + Encode + PartialEq,
+	NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe>(
 	overlay: &mut OverlayedChanges,
 	backend: &B,
 	changes_trie_storage: Option<&T>,
@@ -389,7 +391,8 @@ where
 	}
 }
 
-fn execute_call_with_native_else_wasm_strategy<H, B, T, Exec, R: Decode + Encode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
+fn execute_call_with_native_else_wasm_strategy<H, B, T, Exec, R: Decode + Encode + PartialEq,
+	NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe>(
 	overlay: &mut OverlayedChanges,
 	backend: &B,
 	changes_trie_storage: Option<&T>,
@@ -468,7 +471,7 @@ where
 	init_overlay(overlay, false)?;
 
 	let result = {
-		let mut orig_prospective = overlay.prospective.clone();
+		let orig_prospective = overlay.prospective.clone();
 		
 		let (result, storage_delta, changes_delta) = match manager {
 			ExecutionManager::Both(on_consensus_failure) =>

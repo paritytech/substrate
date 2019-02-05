@@ -71,23 +71,6 @@ pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::Runti
 	new_with_backend(Arc::new(Backend::new()), false)
 }
 
-/// Creates new client instance used for tests with the given api execution strategy.
-pub fn new_with_api_execution_strat(
-	api_execution_strategy: ExecutionStrategy
-) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
-	let backend = Arc::new(Backend::new());
-	let executor = NativeExecutor::new(None);
-	let executor = LocalCallExecutor::new(backend.clone(), executor);
-
-	client::Client::new(
-		backend,
-		executor,
-		genesis_storage(false),
-		ExecutionStrategy::NativeWhenPossible,
-		api_execution_strategy
-	).expect("Creates new client")
-}
-
 /// Creates new test client instance that suports changes trie creation.
 pub fn new_with_changes_trie()
 	-> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi>

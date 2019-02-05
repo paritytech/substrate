@@ -846,7 +846,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",

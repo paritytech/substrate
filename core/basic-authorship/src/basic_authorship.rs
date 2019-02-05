@@ -173,7 +173,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		// leave some time for evaluation and block finalisation (33%)
-	 	let deadline = (self.now)() + max_duration - max_duration / 3;
+		let deadline = (self.now)() + max_duration - max_duration / 3;
 		self.propose_with(inherent_data, deadline)
 	}
 }
