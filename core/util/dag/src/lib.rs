@@ -87,14 +87,14 @@ impl<H, N, V> Dag<H, N, V> where
 	}
 
 	pub fn roots(&self) -> impl Iterator<Item=(&H, &N)> {
-		self.roots.iter().map(|change| (&change.hash, &change.number))
+		self.roots.iter().map(|node| (&node.hash, &node.number))
 	}
 
 	pub fn apply(&mut self, hash: &H) -> Option<V> {
-		if let Some(position) = self.roots.iter().position(|change| change.hash == *hash) {
-			let changes = self.roots.swap_remove(position);
-			self.roots = changes.children;
-			return Some(changes.data);
+		if let Some(position) = self.roots.iter().position(|node| node.hash == *hash) {
+			let node = self.roots.swap_remove(position);
+			self.roots = node.children;
+			return Some(node.data);
 		}
 
 		None
@@ -122,8 +122,8 @@ impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 	{
 		if number <= self.number { return Ok(Some((hash, number, data))); }
 
-		for change in self.children.iter_mut() {
-			match change.import(hash, number, data, is_descendent_of)? {
+		for node in self.children.iter_mut() {
+			match node.import(hash, number, data, is_descendent_of)? {
 				Some((h, n, d)) => {
 					hash = h;
 					number = n;
