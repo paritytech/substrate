@@ -32,6 +32,7 @@ pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
 	changes: OverlayedChanges,
+	code: Option<Vec<u8>>,
 }
 
 impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
@@ -49,16 +50,13 @@ impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 			false,
 		).expect("changes trie configuration is correct in test env; qed");
 
-		if !code.is_empty() {
-			inner.insert(CODE.to_vec(), code.to_vec());
-		}
-
 		inner.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 
 		TestExternalities {
 			inner,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: overlay,
+			code: Some(code.to_vec()),
 		}
 	}
 
@@ -83,9 +81,7 @@ impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf {
 impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
-		for i in iter {
-			t.inner.insert(i.0, i.1);
-		}
+		t.inner.extend(iter);
 		t
 	}
 }
@@ -106,13 +102,17 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 			inner: hashmap,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: Default::default(),
+			code: None,
 		}
 	}
 }
 
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.inner.get(key).cloned()
+		match key {
+			CODE => self.code.clone(),
+			_ => self.inner.get(key).cloned(),
+		}
 	}
 
 	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> Option<Vec<u8>> {
@@ -121,9 +121,14 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		self.changes.set_storage(key.clone(), maybe_value.clone());
-		match maybe_value {
-			Some(value) => { self.inner.insert(key, value); }
-			None => { self.inner.remove(&key); }
+		match key.as_ref() {
+			CODE => self.code = maybe_value,
+			_ => {
+				match maybe_value {
+					Some(value) => { self.inner.insert(key, value); }
+					None => { self.inner.remove(&key); }
+				}
+			}
 		}
 	}
 
@@ -141,7 +146,6 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
-		println!("STORAGE_ROOT:\n{:?}", self.inner);
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
