@@ -67,6 +67,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub rpc_ws: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_url: Option<String>,
+	/// The default number of 64KB pages to allocate for Wasm execution
+	pub default_heap_pages: Option<u64>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -92,6 +94,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			rpc_http: None,
 			rpc_ws: None,
 			telemetry_url: None,
+			default_heap_pages: None,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration.telemetry_url = configuration.chain_spec.telemetry_url().map(str::to_owned);

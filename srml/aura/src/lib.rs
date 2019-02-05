@@ -18,34 +18,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec;
-
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-pub extern crate srml_timestamp as timestamp;
-extern crate srml_staking as staking;
-extern crate substrate_primitives;
-extern crate substrate_inherents as inherents;
-
-#[cfg(test)]
-extern crate srml_consensus as consensus;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-
-#[cfg(test)]
-#[macro_use]
-extern crate lazy_static;
-
-#[cfg(test)]
-extern crate parking_lot;
+pub use timestamp;
 
 use rstd::{result, prelude::*};
 use runtime_support::storage::StorageValue;
@@ -55,6 +31,7 @@ use timestamp::OnTimestampSet;
 use timestamp::TimestampInherentData;
 #[cfg(feature = "std")]
 use parity_codec::Decode;
+use parity_codec_derive::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
