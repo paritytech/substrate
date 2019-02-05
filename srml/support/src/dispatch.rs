@@ -477,7 +477,6 @@ macro_rules! decl_module {
 			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
 			for $module<$trait_instance>
 		{
- 			fn on_finalise(_: $trait_instance::BlockNumber) { ::std::println!("DEFAULT"); }
 		}
 	};
 
