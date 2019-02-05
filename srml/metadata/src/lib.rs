@@ -313,7 +313,7 @@ pub enum RuntimeMetadata {
 	/// Unused; enum filler.
 	V0(RuntimeMetadataDeprecated),
 	/// Version 1 for runtime metadata.
-	V1(RuntimeMetadataV1),
+	V1(RuntimeMetadataDeprecated),
 	/// Version 2 for runtime metadata with complete type information.
 	V2(RuntimeMetadataV2),
 }
@@ -333,13 +333,6 @@ impl Decode for RuntimeMetadataDeprecated {
 	fn decode<I: Input>(_input: &mut I) -> Option<Self> {
 		unimplemented!()
 	}
-}
-
-/// The metadata of a runtime version 1.
-#[derive(Eq, Encode, PartialEq)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct RuntimeMetadataV1 {
-	pub modules: DecodeDifferentArray<ModuleMetadata>,
 }
 
 /// The metadata of a runtime version 2 with complete type information
