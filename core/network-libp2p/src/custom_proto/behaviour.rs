@@ -341,6 +341,10 @@ impl<TSubstream> CustomProtos<TSubstream> {
 				continue
 			}
 
+			if self.connected_peers.contains(&peer_id) {
+				continue
+			}
+
 			if let Some((_, ban_end)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
 				if *ban_end > Instant::now() {
 					continue
