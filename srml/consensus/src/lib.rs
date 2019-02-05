@@ -18,27 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate sr_std as rstd;
-
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-extern crate parity_codec;
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate sr_primitives as primitives;
-extern crate parity_codec as codec;
-extern crate srml_system as system;
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-
-extern crate substrate_inherents as inherents;
-
 use rstd::prelude::*;
-use parity_codec::Encode;
+use parity_codec as codec;
+use codec::Encode;
+use parity_codec_derive::{Encode, Decode};
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;

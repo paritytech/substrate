@@ -1165,16 +1165,13 @@ dependencies = [
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
- "srml-consensus 0.1.0",
  "srml-staking 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
  "substrate-inherents 0.1.0",
- "substrate-primitives 0.1.0",
 ]
 
 [[package]]
@@ -1183,16 +1180,13 @@ version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
 ]
 
 [[package]]
@@ -1203,7 +1197,6 @@ dependencies = [
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-support 0.1.0",
@@ -1398,6 +1391,7 @@ dependencies = [
  "mashup 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "paste 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
