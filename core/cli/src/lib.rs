@@ -538,7 +538,7 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
 	let file: Box<Read> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),

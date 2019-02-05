@@ -39,7 +39,6 @@ use runtime_primitives::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
 		GetNodeBlockType, GetRuntimeBlockType,
 	},
-	ExecutionContext,
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;

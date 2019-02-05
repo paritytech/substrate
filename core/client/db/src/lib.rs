@@ -49,7 +49,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberF
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
+use state_machine::{CodeExecutor, DBValue};
 use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
 use client::LeafSet;
 use state_db::StateDb;

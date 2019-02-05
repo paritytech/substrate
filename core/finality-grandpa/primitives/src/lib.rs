@@ -37,7 +37,6 @@ extern crate sr_std as rstd;
 use substrate_primitives::Ed25519AuthorityId;
 use sr_primitives::traits::{DigestFor, NumberFor};
 use rstd::vec::Vec;
-use client::runtime_api::ExecutionContext;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
