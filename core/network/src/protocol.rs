@@ -379,15 +379,15 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			ProtocolMsg::Status(sender) => self.status(sender),
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
 			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
-			ProtocolMsg::ExecuteWithSpec(job) => {
+			ProtocolMsg::ExecuteWithSpec(task) => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				job.call_box(&mut self.specialization, &mut context);
+				task.call_box(&mut self.specialization, &mut context);
 			},
-			ProtocolMsg::ExecuteWithGossip(job) => {
+			ProtocolMsg::ExecuteWithGossip(task) => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
-				job.call_box(&mut self.consensus_gossip, &mut context);
+				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
 			ProtocolMsg::GossipConsensusMessage(topic, message, broadcast) => {
 				self.gossip_consensus_message(topic, message, broadcast)
