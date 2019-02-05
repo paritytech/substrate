@@ -18,6 +18,7 @@ use utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
 	fold_fn_decl_for_client_side, unwrap_or_error, extract_parameter_names_types_and_borrows,
 	generate_native_call_generator_fn_name, return_type_extract_type,
+	generate_method_runtime_api_impl_name
 };
 
 use proc_macro;
@@ -27,8 +28,9 @@ use quote::quote;
 
 use syn::{
 	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error}, ReturnType,
-	fold::{self, Fold}, FnDecl, parse_quote, ItemTrait, Generics, GenericParam, Attribute,
-	visit::{Visit, self}, FnArg, Pat, TraitBound, Meta, NestedMeta, Lit, TraitItem, Ident, Type
+	fold::{self, Fold}, parse_quote, ItemTrait, Generics, GenericParam, Attribute, FnArg,
+	visit::{Visit, self}, Pat, TraitBound, Meta, NestedMeta, Lit, TraitItem, Ident, Type,
+	TraitItemMethod
 };
 
 use std::collections::HashMap;
@@ -308,17 +310,123 @@ struct ToClientSideDecl<'a> {
 	found_attributes: &'a mut HashMap<&'static str, Attribute>,
 }
 
-impl<'a> Fold for ToClientSideDecl<'a> {
-	fn fold_fn_decl(&mut self, input: FnDecl) -> FnDecl {
-		let input = fold_fn_decl_for_client_side(
-			input,
+impl<'a> ToClientSideDecl<'a> {
+	fn fold_item_trait_items(&self, items: Vec<TraitItem>) -> Vec<TraitItem> {
+		let mut result = Vec::new();
+
+		items.into_iter().for_each(|i| match i {
+			TraitItem::Method(method) => {
+				let (fn_decl, fn_impl) = self.fold_trait_item_method(method);
+				result.push(fn_decl.into());
+				result.push(fn_impl.into());
+			},
+			r => result.push(r),
+		});
+
+		result
+	}
+
+	fn fold_trait_item_method(&self, method: TraitItemMethod) -> (TraitItemMethod, TraitItemMethod) {
+		let fn_impl = self.create_method_runtime_api_impl(&method);
+		let fn_decl = self.create_method_decl(method);
+
+		(fn_decl, fn_impl)
+	}
+
+	/// Takes the given method and creates a `method_runtime_api_impl` method that will be
+	/// implemented in the runtime for the client side.
+	fn create_method_runtime_api_impl(&self, method: &TraitItemMethod) -> TraitItemMethod {
+		let fn_decl = &method.sig.decl;
+		let ret_type = return_type_extract_type(&fn_decl.output);
+
+		// Get types and if the value is borrowed from all parameters.
+		// If there is an error, we push it as the block to the user.
+		let (param_types, error) = match extract_parameter_names_types_and_borrows(fn_decl) {
+			Ok(res) => (
+				res.into_iter().map(|v| {
+					let ty = v.1;
+					let borrow = v.2;
+					quote!( #borrow #ty )
+				}).collect::<Vec<_>>(),
+				None
+			),
+			Err(e) => (Vec::new(), Some(e.to_compile_error())),
+		};
+		let name = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let block_id = self.block_id;
+		let crate_ = self.crate_;
+
+		let mut res: TraitItemMethod = parse_quote!{
+			#[doc(hidden)]
+			fn #name(
+				&self,
+				at: &#block_id,
+				params: Option<( #( #param_types ),* )>,
+				params_encoded: Vec<u8>
+			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>;
+		};
+
+		// Yeah... Just miss-use the block to "throw" our error to the user.
+		res.default = error.map(|e| parse_quote!( { #e }));
+
+		res
+	}
+
+	/// Takes the method declared by the user and creates the declaration we require for the runtime
+	/// api client side. This method will call by default the `method_runtime_api_impl` for doing
+	/// the actual call into the runtime.
+	fn create_method_decl(&self, mut method: TraitItemMethod) -> TraitItemMethod {
+		let (params, error) = match extract_parameter_names_types_and_borrows(&method.sig.decl) {
+			Ok(res) => (res.into_iter().map(|v| v.0).collect::<Vec<_>>(), None),
+			Err(e) => (Vec::new(), Some(e.to_compile_error())),
+		};
+		let params2 = params.clone();
+		let ret_type = return_type_extract_type(&method.sig.decl.output);
+
+		method.sig.decl = fold_fn_decl_for_client_side(
+			method.sig.decl.clone(),
 			&self.block_id,
 			&self.crate_
 		);
+		let name_impl = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let crate_ = self.crate_;
+		let function_name = method.sig.ident.to_string();
 
-		fold::fold_fn_decl(self, input)
+		// Generate the default implementation that calls the `method_runtime_api_impl` method.
+		method.default = Some(
+			parse_quote! {
+				{
+					let runtime_api_impl_params_encoded =
+						#crate_::runtime_api::Encode::encode(&( #( &#params ),* ));
+
+					// Bring the compile error to the user.
+					#( #error )*
+
+					self.#name_impl(at, Some(( #( #params2 ),* )), runtime_api_impl_params_encoded)
+						.and_then(|r|
+							match r {
+								#crate_::runtime_api::NativeOrEncoded::Native(n) => {
+									Ok(n)
+								},
+								#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
+									<#ret_type as #crate_::runtime_api::Decode>::decode(&mut &r[..])
+										.ok_or_else(||
+											#crate_::error::ErrorKind::CallResultDecode(
+												#function_name
+											).into()
+										)
+								}
+							}
+						)
+				}
+			}
+		);
+
+		method
 	}
+}
 
+impl<'a> Fold for ToClientSideDecl<'a> {
 	fn fold_item_trait(&mut self, mut input: ItemTrait) -> ItemTrait {
 		extend_generics_with_block(&mut input.generics);
 
@@ -344,6 +452,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 
 		// The client side trait is only required when compiling with the feature `std` or `test`.
 		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
+		input.items = self.fold_item_trait_items(input.items);
 
 		fold::fold_item_trait(self, input)
 	}
