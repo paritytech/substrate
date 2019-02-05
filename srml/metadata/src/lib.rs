@@ -40,6 +40,8 @@ use codec::{Encode, Output};
 use codec::{Decode, Input};
 use rstd::vec::Vec;
 
+use substrate_metadata::MetadataName;
+
 #[cfg(feature = "std")]
 type StringBuf = String;
 
@@ -201,13 +203,6 @@ pub struct EventMetadata {
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
-/// All the metadata about a storage.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub struct StorageMetadata {
-	pub functions: DecodeDifferentArray<StorageFunctionMetadata>,
-}
-
 /// All the metadata about a storage function.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -268,10 +263,10 @@ impl std::fmt::Debug for DefaultByteGetter {
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum StorageFunctionType {
-	Plain(DecodeDifferentStr),
+	Plain(MetadataName),
 	Map {
-		key: DecodeDifferentStr,
-		value: DecodeDifferentStr,
+		key: MetadataName,
+		value: MetadataName,
 	}
 }
 
@@ -349,7 +344,7 @@ pub struct RuntimeMetadataV2 {
 pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferent<FnEncode<&'static str>, StringBuf>,
-	pub storage: ODFnA<StorageFunctionMetadata>,
+	pub storage: Option<DecodeDifferent<FnEncode<Vec<StorageFunctionMetadata>>, Vec<StorageFunctionMetadata>>>,
 	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,
 }

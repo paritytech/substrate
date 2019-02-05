@@ -54,7 +54,7 @@ pub use crate::rstd::borrow::Borrow;
 pub use crate::rstd::marker::PhantomData;
 
 pub use srml_metadata::{
-	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
+	DecodeDifferent, StorageFunctionMetadata,
 	StorageFunctionType, StorageFunctionModifier,
 	DefaultByte, DefaultByteGetter
 };
@@ -890,8 +890,8 @@ mod tests {
 	};
 
 	#[test]
-	fn store_metadata() {
-		let metadata = Module::<TraitImpl>::store_metadata();
+	fn store_metadata_functions() {
+		let metadata = Module::<TraitImpl>::store_metadata_functions();
 		assert_eq!(EXPECTED_METADATA, metadata);
 	}
 

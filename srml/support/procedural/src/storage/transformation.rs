@@ -19,7 +19,7 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
+use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -129,12 +129,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		}
 		impl<#traitinstance: 'static + #traittype> #module_ident<#traitinstance> {
 			#impl_store_fns
-			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
-				#scrate::storage::generator::StorageMetadata {
-					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
-				}
-			}
-			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
+			pub fn store_metadata_functions() -> #scrate::rstd::vec::Vec<#scrate::storage::generator::StorageFunctionMetadata> {
 				#store_functions_to_metadata
 			}
 			pub fn store_metadata_name() -> &'static str {
@@ -620,11 +615,10 @@ fn store_functions_to_metadata (
 
 		let typ = type_infos.typ;
 		let (stype, reg_type) = if type_infos.is_simple {
-			let styp = clean_type_string(&typ.to_string());
 			(
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Plain(
-						#scrate::storage::generator::DecodeDifferent::Encode(#styp),
+						<#typ as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
 					)
 				},
 				quote!{
@@ -632,18 +626,16 @@ fn store_functions_to_metadata (
 				}
 			)
 		} else {
-			let key_type = type_infos.map_key.expect("is not simple; qed");
-			let kty = clean_type_string(&quote!(#key_type).to_string());
-			let styp = clean_type_string(&typ.to_string());
+			let ktype = type_infos.map_key.expect("is not simple; qed");
 			(
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Map {
-						key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
-						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+						key: <#ktype as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
+						value: <#typ as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
 					}
 				},
 				quote!{
-					<#key_type as #scrate::substrate_metadata::EncodeMetadata>::register_type_metadata(registry);
+					<#ktype as #scrate::substrate_metadata::EncodeMetadata>::register_type_metadata(registry);
 					<#typ as #scrate::substrate_metadata::EncodeMetadata>::register_type_metadata(registry);
 				}
 			)
@@ -722,7 +714,7 @@ fn store_functions_to_metadata (
 		default_getter_struct_def,
 		quote!{
 			{
-				&[
+				vec![
 					#items
 				]
 			}
