@@ -224,7 +224,7 @@ impl Network<Block> for MessageRouting {
 	}
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
-		let mut inner = self.inner.lock();
+		let inner = self.inner.lock();
 		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, false);
 	}
 

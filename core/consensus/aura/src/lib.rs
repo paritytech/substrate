@@ -800,7 +800,7 @@ mod tests {
 
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
-			let mut client = net.lock().peer(*peer_id).client().clone();
+			let client = net.lock().peer(*peer_id).client().clone();
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
