@@ -179,7 +179,7 @@ where
 	}
 	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		// TODO: implement this
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 

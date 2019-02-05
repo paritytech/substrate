@@ -78,7 +78,7 @@ pub struct EnumVariantMetadata {
 #[derive(Encode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum TypeMetadataKind {
-	Primative,
+	Primitive,
 	Struct(Vec<FieldMetadata>),
 	Enum(Vec<EnumVariantMetadata>),
 }
@@ -100,7 +100,7 @@ pub trait EncodeMetadata {
 	}
 }
 
-macro_rules! impl_primatives {
+macro_rules! impl_primitives {
 	( $( $t:ty => $p:expr, )* ) => { $(
 		impl EncodeMetadata for $t {
 			fn type_name() -> MetadataName {
@@ -108,13 +108,13 @@ macro_rules! impl_primatives {
 			}
 
 			fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
-				TypeMetadataKind::Primative
+				TypeMetadataKind::Primitive
 			}
 		}
 	)* }
 }
 
-impl_primatives!(
+impl_primitives!(
 	bool => MetadataName::Bool,
 	usize => MetadataName::Usize,
 	isize => MetadataName::Isize,
@@ -144,7 +144,7 @@ macro_rules! impl_array {
 
 			fn type_metadata_kind(registry: &mut MetadataRegistry) -> TypeMetadataKind {
 				registry.register(T::type_name(), T::type_metadata_kind);
-				TypeMetadataKind::Primative
+				TypeMetadataKind::Primitive
 			}
 		}
 	)* }
@@ -162,7 +162,7 @@ macro_rules! tuple_impl {
 
 			fn type_metadata_kind(registry: &mut MetadataRegistry) -> TypeMetadataKind {
 				registry.register(<$one>::type_name(), <$one>::type_metadata_kind);
-				TypeMetadataKind::Primative
+				TypeMetadataKind::Primitive
 			}
 		}
 	};
@@ -182,7 +182,7 @@ macro_rules! tuple_impl {
 				$( {
 					registry.register(<$rest>::type_name(), <$rest>::type_metadata_kind);
 				} )+
-				TypeMetadataKind::Primative
+				TypeMetadataKind::Primitive
 			}
 		}
 
@@ -199,7 +199,7 @@ impl<T: EncodeMetadata> EncodeMetadata for Vec<T> {
 
 	fn type_metadata_kind(registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		registry.register(T::type_name(), T::type_metadata_kind);
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 
@@ -210,7 +210,7 @@ impl<T: EncodeMetadata> EncodeMetadata for Option<T> {
 
 	fn type_metadata_kind(registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		registry.register(T::type_name(), T::type_metadata_kind);
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 
@@ -222,7 +222,7 @@ impl<T: EncodeMetadata, E: EncodeMetadata> EncodeMetadata for Result<T, E> {
 	fn type_metadata_kind(registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		registry.register(T::type_name(), T::type_metadata_kind);
 		registry.register(E::type_name(), E::type_metadata_kind);
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 
@@ -262,7 +262,7 @@ impl<T: EncodeMetadata> EncodeMetadata for parity_codec::Compact<T> {
 	}
 
 	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 
@@ -272,7 +272,7 @@ impl<T: EncodeMetadata> EncodeMetadata for ::rstd::marker::PhantomData<T> {
 	}
 
 	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 
@@ -282,7 +282,7 @@ impl EncodeMetadata for () {
 	}
 
 	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 

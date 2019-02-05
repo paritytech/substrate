@@ -93,7 +93,7 @@ impl<Number, Hash, DigestItem> EncodeMetadata for Header<Number, Hash, DigestIte
 	}
 	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
 		// TODO: implement this
-		TypeMetadataKind::Primative
+		TypeMetadataKind::Primitive
 	}
 }
 

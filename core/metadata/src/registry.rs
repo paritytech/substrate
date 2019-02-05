@@ -18,11 +18,25 @@ impl MetadataRegistry {
 	pub fn register<
 		F: Fn(& mut MetadataRegistry) -> TypeMetadataKind
 	>(&mut self, name: MetadataName, f: F) {
+		// simple primitive types are ignored to reduce storage usage
+		// and they are assumed to be decodable by all valid decoder implementations
+		let should_ignore = match name {
+			MetadataName::Custom(_, _) => false,
+			MetadataName::Array(_, _) => false,
+			MetadataName::Vector(_) => false,
+			MetadataName::Tuple(_) => false,
+			MetadataName::Option(_) => false,
+			MetadataName::Result(_, _) => false,
+			_ => true
+		};
+		if should_ignore {
+			return;
+		}
 		if self.get(&name).is_some() {
 			return;
 		}
 		let m = TypeMetadata {
-			kind: TypeMetadataKind::Primative,
+			kind: TypeMetadataKind::Primitive,
 			name,
 		};
 		self.list.push(m);
@@ -31,7 +45,7 @@ impl MetadataRegistry {
 		self.list[idx - 1].kind = f(self);
 	}
 
-	pub fn get(&self, name: &MetadataName) -> Option<TypeMetadata> {
+	fn get(&self, name: &MetadataName) -> Option<TypeMetadata> {
 		self.list.iter().find(|m| m.name == *name).map(|m| m.clone())
 	}
 }
