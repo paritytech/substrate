@@ -16,7 +16,7 @@
 
 pub use srml_metadata::{
 	DecodeDifferent, FnEncode, RuntimeMetadata,
-	ModuleMetadata, RuntimeMetadataV1,
+	ModuleMetadata, RuntimeMetadataV2,
 	DefaultByteGetter, RuntimeMetadataPrefixed,
 };
 
@@ -37,8 +37,8 @@ macro_rules! impl_runtime_metadata {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
 				let mut registry = $crate::substrate_metadata::MetadataRegistry::new();
-				$crate::metadata::RuntimeMetadata::V1 (
-					$crate::metadata::RuntimeMetadataV1 {
+				$crate::metadata::RuntimeMetadata::V2 (
+					$crate::metadata::RuntimeMetadataV2 {
 						modules: __runtime_modules_to_metadata!(registry; $runtime;; $( $rest )*),
 						type_registry: registry
 					}
