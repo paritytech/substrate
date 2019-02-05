@@ -242,6 +242,9 @@ impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubs
 					warn!(target: "sub-libp2p", "Received identify response with empty list of \
 						addresses");
 				}
+				for addr in &info.listen_addrs {
+					self.discovery.kademlia.add_address(&peer_id, addr.clone());
+				}
 				self.custom_protocols.add_discovered_addrs(
 					&peer_id,
 					info.listen_addrs.iter().map(|addr| (addr.clone(), true))
