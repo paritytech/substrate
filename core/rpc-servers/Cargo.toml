@@ -4,9 +4,9 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-jsonrpc-http-server = { git = "https://github.com/paritytech/jsonrpc.git" }
-jsonrpc-pubsub = { git = "https://github.com/paritytech/jsonrpc.git" }
-jsonrpc-ws-server = { git = "https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-http-server = "10.0.1"
+jsonrpc-pubsub = "10.0.1"
+jsonrpc-ws-server = "10.0.1"
 log = "0.4"
 serde = "1.0"
 substrate-rpc = { path = "../rpc", version = "0.1" }

@@ -37,6 +37,17 @@ cache:
 
 #### stage:                        test
 
+test:runtime:
+  stage:                           test
+  # image:                         alpine/git:latest
+  cache:                           {}
+  tags:
+    - linux-docker
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./scripts/gitlab/check_runtime.sh
+
 
 test:rust:stable:                  &test
   stage:                           test
@@ -57,6 +68,8 @@ test:rust:stable:                  &test
   tags:
     - linux-docker
   before_script:
+   - echo "build cache size:"
+   - du -hs ${CARGO_HOME} ./target
    - ./scripts/build.sh
   script:
     - time cargo test --all --release --verbose --locked
