@@ -17,13 +17,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{io, thread};
-use futures::{Async, Future, Stream, stream, sync::mpsc, sync::oneshot};
+use futures::{Async, Future, Stream, stream, sync::oneshot};
 use parking_lot::Mutex;
 use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
-use consensus_gossip::ConsensusMessage;
+use consensus_gossip::ConsensusGossip;
 use protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
 use codec::Decode;
 use config::Params;
@@ -225,25 +225,13 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			.send(ProtocolMsg::ExecuteWithSpec(Box::new(f)));
 	}
 
-	/// access the underlying consensus gossip handler
-	pub fn consensus_gossip_messages_for(
-		&self,
-		topic: B::Hash,
-	) -> mpsc::UnboundedReceiver<ConsensusMessage> {
-		let (sender, port) = unbounded();
+	/// Execute a closure with the consensus gossip.
+	pub fn with_gossip<F>(&self, f: F)
+		where F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>) + Send + 'static
+	{
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessagesFor(topic, sender));
-		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
-			or the ProtocolMsg::Stop message is received,
-			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
-	}
-
-	/// Collect consensus gossip garbage for a topic.
-	pub fn consensus_gossip_collect_garbage_for(&self, topic: B::Hash) {
-		let _ = self
-			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusCollectGarbargeFor(topic));
+			.send(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
 	}
 }
 

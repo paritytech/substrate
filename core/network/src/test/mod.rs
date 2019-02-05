@@ -34,9 +34,10 @@ use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use consensus_gossip::ConsensusMessage;
+use consensus_gossip::{ConsensusGossip, ConsensusMessage};
 use crossbeam_channel::{unbounded, after, Sender};
-use futures::sync::mpsc;
+use futures::Future;
+use futures::sync::{mpsc, oneshot};
 use keyring::Keyring;
 use network_libp2p::{NodeIndex, ProtocolId, Severity};
 use parking_lot::Mutex;
@@ -381,9 +382,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	}
 
 	pub fn consensus_gossip_collect_garbage_for(&self, topic: <Block as BlockT>::Hash) {
-		let _ = self
-			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusCollectGarbargeFor(topic));
+		self.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic))
 	}
 
 	/// access the underlying consensus gossip handler
@@ -391,11 +390,21 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		&self,
 		topic: <Block as BlockT>::Hash,
 	) -> mpsc::UnboundedReceiver<ConsensusMessage> {
-		let (sender, port) = unbounded();
+		let (tx, rx) = oneshot::channel();
+		self.with_gossip(move |gossip, _| {
+			let inner_rx = gossip.messages_for(topic);
+			let _ = tx.send(inner_rx);
+		});
+		rx.wait().ok().expect("1. Network is running, 2. it should handle the above closure successfully")
+	}
+
+	/// Execute a closure with the consensus gossip.
+	pub fn with_gossip<F>(&self, f: F)
+		where F: FnOnce(&mut ConsensusGossip<Block>, &mut Context<Block>) + Send + 'static
+	{
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessagesFor(topic, sender));
-		port.recv().unwrap()
+			.send(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
 	}
 
 	/// Announce a block to peers.

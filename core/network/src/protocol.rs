@@ -16,7 +16,6 @@
 
 use codec::Encode;
 use crossbeam_channel::{tick, unbounded, Receiver, Sender};
-use futures::sync::mpsc;
 use network_libp2p::{NodeIndex, Severity};
 use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
@@ -24,7 +23,7 @@ use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberF
 use consensus::import_queue::ImportQueue;
 use message::{self, Message};
 use message::generic::Message as GenericMessage;
-use consensus_gossip::{ConsensusGossip, ConsensusMessage};
+use consensus_gossip::ConsensusGossip;
 use on_demand::OnDemandService;
 use specialization::NetworkSpecialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
@@ -217,13 +216,23 @@ pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	pub chain: Arc<Client<B>>,
 }
 
-pub trait FnBox<B: BlockT, S: NetworkSpecialization<B>>  {
+pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>>  {
     fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
 }
 
-impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> FnBox<B, S> for F {
+impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> SpecTask<B, S> for F {
     fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
         (*self)(spec, context)
+    }
+}
+
+pub trait GossipTask<B: BlockT>  {
+    fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
+}
+
+impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<B> for F {
+    fn call_box(self: Box<F>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>) {
+        (*self)(gossip, context)
     }
 }
 
@@ -240,13 +249,11 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	/// Tell protocol to propagate extrinsics.
 	PropagateExtrinsics,
 	/// Execute a closure with the chain-specific network specialization.
-	ExecuteWithSpec(Box<FnBox<B, S> + Send + 'static>),
+	ExecuteWithSpec(Box<SpecTask<B, S> + Send + 'static>),
+	/// Execute a closure with the consensus gossip.
+	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, Vec<u8>, bool),
-	/// Ask for all gossip consensus messages for a given topic.
-	GossipConsensusMessagesFor(B::Hash, Sender<mpsc::UnboundedReceiver<ConsensusMessage>>),
-	/// Ask protocol to collect garbage for a given topic.
-	GossipConsensusCollectGarbargeFor(B::Hash),
 	/// Is protocol currently major-syncing?
 	IsMajorSyncing(Sender<bool>),
 	/// Is protocol currently offline?
@@ -377,15 +384,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				job.call_box(&mut self.specialization, &mut context);
 			},
+			ProtocolMsg::ExecuteWithGossip(job) => {
+				let mut context =
+					ProtocolContext::new(&mut self.context_data, &self.network_chan);
+				job.call_box(&mut self.consensus_gossip, &mut context);
+			}
 			ProtocolMsg::GossipConsensusMessage(topic, message, broadcast) => {
 				self.gossip_consensus_message(topic, message, broadcast)
-			}
-			ProtocolMsg::GossipConsensusMessagesFor(topic, sender) => {
-				let rx = self.consensus_gossip.messages_for(topic);
-				let _ = sender.send(rx);
-			}
-			ProtocolMsg::GossipConsensusCollectGarbargeFor(topic) => {
-				self.consensus_gossip.collect_garbage(|t| t == &topic);
 			}
 			ProtocolMsg::IsMajorSyncing(sender) => {
 				let is_syncing = self.sync.status().is_major_syncing();

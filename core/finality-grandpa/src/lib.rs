@@ -84,7 +84,7 @@ extern crate env_logger;
 extern crate parity_codec_derive;
 
 use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::sync::{self, mpsc};
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
@@ -278,7 +278,12 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B> for NetworkBridge<B, S> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.service.consensus_gossip_messages_for(message_topic::<B>(round, set_id))
+		let (tx, rx) = sync::oneshot::channel();
+		self.service.with_gossip(move |gossip, _| {
+			let inner_rx = gossip.messages_for(message_topic::<B>(round, set_id));
+			let _ = tx.send(inner_rx);
+		});
+		rx.wait().ok().expect("1. Network is running, 2. it should handle the above closure successfully")
 	}
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
@@ -288,16 +293,21 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.consensus_gossip_collect_garbage_for(topic);
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.consensus_gossip_collect_garbage_for(topic);
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.service.consensus_gossip_messages_for(commit_topic::<B>(set_id))
+		let (tx, rx) = sync::oneshot::channel();
+		self.service.with_gossip(move |gossip, _| {
+			let inner_rx = gossip.messages_for(commit_topic::<B>(set_id));
+			let _ = tx.send(inner_rx);
+		});
+		rx.wait().ok().expect("1. Network is running, 2. it should handle the above closure successfully")
 	}
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
