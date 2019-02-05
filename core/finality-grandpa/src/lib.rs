@@ -248,18 +248,18 @@ pub trait Network<Block: BlockT>: Clone {
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
-pub struct NetworkBridge<B: BlockT> {
-	service: Arc<NetworkService<B>>
+pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>> {
+	service: Arc<NetworkService<B, S>>
 }
 
-impl<B: BlockT> NetworkBridge<B> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>> NetworkBridge<B, S> {
 	/// Create a new NetworkBridge to the given NetworkService
-	pub fn new(service: Arc<NetworkService<B>>) -> Self {
+	pub fn new(service: Arc<NetworkService<B, S>>) -> Self {
 		NetworkBridge { service }
 	}
 }
 
-impl<B: BlockT> Clone for NetworkBridge<B> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Clone for NetworkBridge<B, S> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: Arc::clone(&self.service)
@@ -275,7 +275,7 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
 }
 
-impl<B: BlockT> Network<B> for NetworkBridge<B> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B> for NetworkBridge<B, S> {
 	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
 		self.service.consensus_gossip_messages_for(message_topic::<B>(round, set_id))

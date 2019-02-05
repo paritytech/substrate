@@ -24,7 +24,7 @@ use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, S
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
 use consensus_gossip::ConsensusMessage;
-use protocol::{self, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
+use protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
 use codec::Decode;
 use config::Params;
 use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
@@ -67,14 +67,14 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 }
 
 /// A link implementation that connects to the network.
-pub struct NetworkLink<B: BlockT> {
+pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 	/// The protocol sender
-	pub(crate) protocol_sender: Sender<ProtocolMsg<B>>,
+	pub(crate) protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// The network sender
 	pub(crate) network_sender: NetworkChan,
 }
 
-impl<B: BlockT> Link<B> for NetworkLink<B> {
+impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::BlockImportedSync(hash.clone(), number));
 	}
@@ -105,11 +105,11 @@ impl<B: BlockT> Link<B> for NetworkLink<B> {
 }
 
 /// Substrate network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static> {
+pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	/// Network service
 	network: Arc<Mutex<NetworkService>>,
 	/// Protocol sender
-	protocol_sender: Sender<ProtocolMsg<B>>,
+	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// Network sender
 	network_sender: NetworkChan,
 	/// Sender for messages to the background service task, and handle for the background thread.
@@ -118,13 +118,13 @@ pub struct Service<B: BlockT + 'static> {
 	bg_thread: Option<(oneshot::Sender<()>, thread::JoinHandle<()>)>,
 }
 
-impl<B: BlockT + 'static> Service<B> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	/// Creates and register protocol with the network service
-	pub fn new<I: 'static + ImportQueue<B>, S: NetworkSpecialization<B>, H: ExHashT>(
+	pub fn new<I: 'static + ImportQueue<B>, H: ExHashT>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: Arc<I>,
-	) -> Result<Arc<Service<B>>, Error> {
+	) -> Result<Arc<Service<B, S>>, Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
 		let protocol_sender = Protocol::new(
 			network_chan.clone(),
@@ -216,6 +216,15 @@ impl<B: BlockT + 'static> Service<B> {
 			));
 	}
 
+	/// Execute a closure with the chain-specific network specialization.
+	pub fn with_spec<F, U>(&self, f: F)
+		where F: FnOnce(&mut S, &mut Context<B>) + Send + 'static
+	{
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::ExecuteWithSpec(Box::new(f)));
+	}
+
 	/// access the underlying consensus gossip handler
 	pub fn consensus_gossip_messages_for(
 		&self,
@@ -238,7 +247,7 @@ impl<B: BlockT + 'static> Service<B> {
 	}
 }
 
-impl<B: BlockT + 'static> ::consensus::SyncOracle for Service<B> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
 	fn is_major_syncing(&self) -> bool {
 		let (sender, port) = unbounded();
 		let _ = self
@@ -259,7 +268,7 @@ impl<B: BlockT + 'static> ::consensus::SyncOracle for Service<B> {
 	}
 }
 
-impl<B: BlockT + 'static> Drop for Service<B> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Drop for Service<B, S> {
 	fn drop(&mut self) {
 		if let Some((sender, join)) = self.bg_thread.take() {
 			let _ = sender.send(());
@@ -270,7 +279,7 @@ impl<B: BlockT + 'static> Drop for Service<B> {
 	}
 }
 
-impl<B: BlockT + 'static> SyncProvider<B> for Service<B> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Service<B, S> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		let (sender, port) = unbounded();
@@ -307,7 +316,7 @@ pub trait ManageNetwork {
 	fn node_id(&self) -> Option<String>;
 }
 
-impl<B: BlockT + 'static> ManageNetwork for Service<B> {
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service<B, S> {
 	fn accept_unreserved_peers(&self) {
 		self.network.lock().accept_unreserved_peers();
 	}
@@ -431,8 +440,8 @@ pub enum NetworkMsg {
 }
 
 /// Starts the background thread that handles the networking.
-fn start_thread<B: BlockT + 'static>(
-	protocol_sender: Sender<ProtocolMsg<B>>,
+fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
+	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	network_port: NetworkPort,
 	network_sender: NetworkChan,
 	config: NetworkConfiguration,
@@ -474,8 +483,8 @@ fn start_thread<B: BlockT + 'static>(
 }
 
 /// Runs the background thread that handles the networking.
-fn run_thread<B: BlockT + 'static>(
-	protocol_sender: Sender<ProtocolMsg<B>>,
+fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
+	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	network_service: Arc<Mutex<NetworkService>>,
 	network_sender: NetworkChan,
 	network_port: NetworkPort,

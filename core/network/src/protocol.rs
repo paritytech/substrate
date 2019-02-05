@@ -57,7 +57,7 @@ const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	network_chan: NetworkChan,
-	port: Receiver<ProtocolMsg<B>>,
+	port: Receiver<ProtocolMsg<B, S>>,
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
@@ -217,8 +217,18 @@ pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	pub chain: Arc<Client<B>>,
 }
 
+pub trait FnBox<B: BlockT, S: NetworkSpecialization<B>>  {
+    fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
+}
+
+impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)> FnBox<B, S> for F {
+    fn call_box(self: Box<F>, spec: &mut S, context: &mut Context<B>) {
+        (*self)(spec, context)
+    }
+}
+
 /// Messages sent to Protocol.
-pub enum ProtocolMsg<B: BlockT> {
+pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	/// A peer connected, with debug info.
 	PeerConnected(NodeIndex, String),
 	/// A peer disconnected, with debug info.
@@ -229,6 +239,8 @@ pub enum ProtocolMsg<B: BlockT> {
 	Status(Sender<ProtocolStatus<B>>),
 	/// Tell protocol to propagate extrinsics.
 	PropagateExtrinsics,
+	/// Execute a closure with the chain-specific network specialization.
+	ExecuteWithSpec(Box<FnBox<B, S> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, Vec<u8>, bool),
 	/// Ask for all gossip consensus messages for a given topic.
@@ -277,7 +289,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<Sender<ProtocolMsg<B>>> {
+	) -> error::Result<Sender<ProtocolMsg<B, S>>> {
 		let (sender, port) = unbounded();
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info, import_queue);
@@ -335,7 +347,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.handle_msg(msg)
 	}
 
-	fn handle_msg(&mut self, msg: ProtocolMsg<B>) -> bool {
+	fn handle_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
 		match msg {
 			ProtocolMsg::Peers(sender) => {
 				let peers = self.context_data.peers.iter().map(|(idx, p)| {
@@ -360,6 +372,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			ProtocolMsg::Status(sender) => self.status(sender),
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
 			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
+			ProtocolMsg::ExecuteWithSpec(job) => {
+				let mut context =
+					ProtocolContext::new(&mut self.context_data, &self.network_chan);
+				job.call_box(&mut self.specialization, &mut context);
+			},
 			ProtocolMsg::GossipConsensusMessage(topic, message, broadcast) => {
 				self.gossip_consensus_message(topic, message, broadcast)
 			}

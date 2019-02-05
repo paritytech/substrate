@@ -234,7 +234,7 @@ pub type PeersClient = client::Client<test_client::Backend, test_client::Executo
 
 pub struct Peer<V: 'static + Verifier<Block>, D> {
 	client: Arc<PeersClient>,
-	pub protocol_sender: Sender<ProtocolMsg<Block>>,
+	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
 	network_port: Mutex<NetworkPort>,
 	import_queue: Arc<SyncImportQueue<Block, V>>,
 	network_sender: NetworkChan,
@@ -245,7 +245,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	fn new(
 		client: Arc<PeersClient>,
 		import_queue: Arc<SyncImportQueue<Block, V>>,
-		protocol_sender: Sender<ProtocolMsg<Block>>,
+		protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
 		network_sender: NetworkChan,
 		network_port: NetworkPort,
 		data: D,
