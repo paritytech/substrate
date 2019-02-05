@@ -19,7 +19,7 @@ use crate::custom_proto::upgrade::{RegisteredProtocol, RegisteredProtocols, Regi
 use bytes::Bytes;
 use futures::prelude::*;
 use libp2p::core::{
-	Endpoint, ProtocolsHandler, ProtocolsHandlerEvent,
+	ProtocolsHandler, ProtocolsHandlerEvent,
 	protocols_handler::KeepAlive,
 	protocols_handler::ProtocolsHandlerUpgrErr,
 	upgrade::{InboundUpgrade, OutboundUpgrade}
@@ -146,11 +146,17 @@ where
 	fn inject_fully_negotiated(
 		&mut self,
 		proto: RegisteredProtocolSubstream<TSubstream>,
-		_: Endpoint,
 	) {
 		match self.state {
-			State::Disabled | State::ShuttingDown => return,
-			State::Normal => ()
+			// TODO: Normally we should refuse incoming connections if we're disabled; however
+			// tests are failing if we do that because on localhost substreams arrive quicker than
+			// we receive the "Enabled" message from the network behaviour. Which fix to employ is
+			// kind of blurry. This problem will become irrelevant after
+			// https://github.com/paritytech/substrate/issues/1517
+			// TODO: also, we should shut down refused substreams gracefully; this should be fixed
+			// at the same time as the todo above
+			State::ShuttingDown => return,
+			State::Disabled | State::Normal => ()
 		}
 
 		if self.substreams.iter().any(|p| p.protocol_id() == proto.protocol_id()) {
@@ -189,7 +195,7 @@ where
 		&mut self,
 		proto: <Self::InboundProtocol as InboundUpgrade<TSubstream>>::Output
 	) {
-		self.inject_fully_negotiated(proto, Endpoint::Listener);
+		self.inject_fully_negotiated(proto);
 	}
 
 	#[inline]
@@ -198,7 +204,7 @@ where
 		proto: <Self::OutboundProtocol as OutboundUpgrade<TSubstream>>::Output,
 		_: Self::OutboundOpenInfo
 	) {
-		self.inject_fully_negotiated(proto, Endpoint::Dialer);
+		self.inject_fully_negotiated(proto);
 	}
 
 	fn inject_event(&mut self, message: CustomProtosHandlerIn) {
