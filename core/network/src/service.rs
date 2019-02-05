@@ -225,7 +225,9 @@ impl<B: BlockT + 'static> Service<B> {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::GossipConsensusMessagesFor(topic, sender));
-		port.recv().unwrap()
+		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
+			or the ProtocolMsg::Stop message is received,
+			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
 	}
 
 	/// Collect consensus gossip garbage for a topic.
@@ -242,14 +244,18 @@ impl<B: BlockT + 'static> ::consensus::SyncOracle for Service<B> {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::IsMajorSyncing(sender));
-		port.recv().unwrap()
+		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
+			or the ProtocolMsg::Stop message is received,
+			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
 	}
 	fn is_offline(&self) -> bool {
 		let (sender, port) = unbounded();
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::IsOffline(sender));
-		port.recv().unwrap()
+		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
+			or the ProtocolMsg::Stop message is received,
+			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
 	}
 }
 
@@ -269,13 +275,17 @@ impl<B: BlockT + 'static> SyncProvider<B> for Service<B> {
 	fn status(&self) -> ProtocolStatus<B> {
 		let (sender, port) = unbounded();
 		let _ = self.protocol_sender.send(ProtocolMsg::Status(sender));
-		port.recv().unwrap()
+		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
+			or the ProtocolMsg::Stop message is received,
+			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
 	}
 
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
 		let (sender, port) = unbounded();
 		let _ = self.protocol_sender.send(ProtocolMsg::Peers(sender));
-		let peers = port.recv().unwrap();
+		let peers = port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
+			or the ProtocolMsg::Stop message is received,
+			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.");
 		let network = self.network.lock();
 		peers.into_iter().map(|(idx, info)| {
 			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)
