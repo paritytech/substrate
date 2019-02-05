@@ -254,7 +254,7 @@ impl<N> OnFinalise<N> for () {}
 /// The block initialisation trait. Implementing this lets you express what should happen
 /// for your module when the block is beginning (right before the first extrinsic is executed).
 pub trait OnInitialise<BlockNumber> {
-	/// The block is being finalised. Implement to have something happen.
+	/// The block is being initialised. Implement to have something happen.
 	fn on_initialise(_n: BlockNumber) {}
 }
 
