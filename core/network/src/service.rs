@@ -217,7 +217,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	}
 
 	/// Execute a closure with the chain-specific network specialization.
-	pub fn with_spec<F, U>(&self, f: F)
+	pub fn with_spec<F>(&self, f: F)
 		where F: FnOnce(&mut S, &mut Context<B>) + Send + 'static
 	{
 		let _ = self
