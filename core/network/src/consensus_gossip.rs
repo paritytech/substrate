@@ -24,7 +24,6 @@ use rand::{self, seq::SliceRandom};
 use lru_cache::LruCache;
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
-use runtime_primitives::generic::BlockId;
 pub use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
 use config::Roles;
