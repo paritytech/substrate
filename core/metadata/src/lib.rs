@@ -39,9 +39,9 @@ pub enum MetadataName {
 	Tuple(Vec<MetadataName>),
 	Option(Box<MetadataName>),
 	Result(Box<MetadataName>, Box<MetadataName>),
+	Compact(Box<MetadataName>),
 	Unit,
 	Bool,
-	Compact, // integer enocded in compac format, the original size doesn't matter
 	Usize, Isize,
 	U8, I8,
 	U16, I16,
@@ -258,7 +258,7 @@ impl<T: EncodeMetadata> EncodeMetadata for [T] {
 
 impl<T: EncodeMetadata> EncodeMetadata for parity_codec::Compact<T> {
 	fn type_name() -> MetadataName {
-		MetadataName::Compact
+		MetadataName::Compact(Box::new(T::type_name()))
 	}
 
 	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
