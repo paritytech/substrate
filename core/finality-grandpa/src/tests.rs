@@ -358,7 +358,14 @@ fn make_ids(keys: &[Keyring]) -> Vec<(Ed25519AuthorityId, u64)> {
 		.collect()
 }
 
-fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) -> u64 {
+// run the voters to completion. provide a closure to be invoked after
+// the voters are spawned but before blocking on them.
+fn run_to_completion_with<F: FnOnce()>(
+	blocks: u64,
+	net: Arc<Mutex<GrandpaTestNet>>,
+	peers: &[Keyring],
+	before_waiting: F,
+) -> u64 {
 	use parking_lot::RwLock;
 
 	let mut finality_notifications = Vec::new();
@@ -417,11 +424,17 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 		.map(|_| ())
 		.map_err(|_| ());
 
+	(before_waiting)();
+
 	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 
 	let highest_finalized = *highest_finalized.read();
 
 	highest_finalized
+}
+
+fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyring]) -> u64 {
+	run_to_completion_with(blocks, net, peers, || {})
 }
 
 #[test]
@@ -811,37 +824,42 @@ fn force_change_to_new_set() {
 	let net = GrandpaTestNet::new(api, 3);
 	let net = Arc::new(Mutex::new(net));
 
-	net.lock().peer(0).push_blocks(1, false);
+	let runner_net = net.clone();
+	let add_blocks = move || {
+		net.lock().peer(0).push_blocks(1, false);
 
-	{
-		// add a forced transition at block 12.
-		let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
-		forced_transitions.lock().insert(parent_hash, ScheduledChange {
-			next_authorities: voters.clone(),
-			delay: 10,
-		});
+		{
+			// add a forced transition at block 12.
+			let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
+			forced_transitions.lock().insert(parent_hash, ScheduledChange {
+				next_authorities: voters.clone(),
+				delay: 10,
+			});
 
-		// add a normal transition too to ensure that forced changes take priority.
-		normal_transitions.lock().insert(parent_hash, ScheduledChange {
-			next_authorities: make_ids(genesis_authorities),
-			delay: 5,
-		});
-	}
+			// add a normal transition too to ensure that forced changes take priority.
+			normal_transitions.lock().insert(parent_hash, ScheduledChange {
+				next_authorities: make_ids(genesis_authorities),
+				delay: 5,
+			});
+		}
 
-	net.lock().peer(0).push_blocks(25, false);
-	net.lock().sync();
+		net.lock().peer(0).push_blocks(25, false);
+		net.lock().sync();
 
-	for (i, peer) in net.lock().peers().iter().enumerate() {
-		assert_eq!(peer.client().info().unwrap().chain.best_number, 26,
-				   "Peer #{} failed to sync", i);
+		for (i, peer) in net.lock().peers().iter().enumerate() {
+			assert_eq!(peer.client().info().unwrap().chain.best_number, 26,
+					"Peer #{} failed to sync", i);
 
-		let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
-		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
+			let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
+			let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
-		assert_eq!(set.current(), (1, voters.as_slice()));
-		assert_eq!(set.pending_changes().len(), 0);
-	}
+			assert_eq!(set.current(), (1, voters.as_slice()));
+			assert_eq!(set.pending_changes().len(), 0);
+		}
+	};
 
 	// it will only finalize if the forced transition happens.
-	run_to_completion(25, net, peers_a);
+	// we add_blocks after the voters are spawned because otherwise
+	// the link-halfs have the wrong AuthoritySet
+	run_to_completion_with(25, runner_net, peers_a, add_blocks);
 }

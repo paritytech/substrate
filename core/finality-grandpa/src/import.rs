@@ -109,18 +109,42 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 	}
 }
 
+enum AppliedChanges<H, N> {
+	Standard,
+	Forced(NewAuthoritySet<H, N>),
+	None,
+}
+
+impl<H, N> AppliedChanges<H, N> {
+	fn needs_justification(&self) -> bool {
+		match *self {
+			AppliedChanges::Standard => true,
+			AppliedChanges::Forced(_) | AppliedChanges::None => false,
+		}
+	}
+}
+
 struct PendingSetChanges<'a, Block: 'a + BlockT> {
 	just_in_case: Option<(
 		AuthoritySet<Block::Hash, NumberFor<Block>>,
 		RwLockWriteGuard<'a, AuthoritySet<Block::Hash, NumberFor<Block>>>,
 	)>,
-	needs_justification: bool,
+	applied_changes: AppliedChanges<Block::Hash, NumberFor<Block>>,
 }
 
 impl<'a, Block: 'a + BlockT> PendingSetChanges<'a, Block> {
-	// revert the pending set change.
-	fn revert(self) {
-		if let Some((old_set, mut authorities)) = self.just_in_case {
+	// revert the pending set change explicitly.
+	fn revert(self) { }
+
+	fn defuse(mut self) -> AppliedChanges<Block::Hash, NumberFor<Block>> {
+		self.just_in_case = None;
+		::std::mem::replace(&mut self.applied_changes, AppliedChanges::None)
+	}
+}
+
+impl<'a, Block: 'a + BlockT> Drop for PendingSetChanges<'a, Block> {
+	fn drop(&mut self) {
+		if let Some((old_set, mut authorities)) = self.just_in_case.take() {
 			*authorities = old_set;
 		}
 	}
@@ -316,20 +340,35 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 			)?;
 		}
 
-		let needs_justification = {
+		let applied_changes = {
 			let forced_change_set = guard.as_mut().apply_forced_changes(number, &canon_at_height)
 				.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
 
 			if let Some(new_set) = forced_change_set {
+				let new_authorities = {
+					let (set_id, new_authorities) = new_set.current();
+					NewAuthoritySet {
+						canon_number: number,
+						canon_hash: hash,
+						set_id,
+						authorities: new_authorities.to_vec(),
+					}
+				};
 				let old = ::std::mem::replace(guard.as_mut(), new_set);
 				guard.set_old(old);
 
-				false
+				AppliedChanges::Forced(new_authorities)
 			} else {
-				guard.as_mut().enacts_standard_change(number, &canon_at_height)
+				let did_standard = guard.as_mut().enacts_standard_change(number, &canon_at_height)
 					.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
-					.map_err(ConsensusError::from)?
+					.map_err(ConsensusError::from)?;
+
+				if did_standard {
+					AppliedChanges::Standard
+				} else {
+					AppliedChanges::None
+				}
 			}
 		};
 
@@ -338,7 +377,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		if let Some((_, ref authorities)) = just_in_case {
 			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
 		}
-		Ok(PendingSetChanges { just_in_case, needs_justification })
+		Ok(PendingSetChanges { just_in_case, applied_changes })
 	}
 }
 
@@ -364,7 +403,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 
 		// we don't want to finalize on `inner.import_block`
-		let justification = block.justification.take();
+		let mut justification = block.justification.take();
 		let enacts_consensus_change = new_authorities.is_some();
 		let import_result = self.inner.import_block(block, new_authorities);
 
@@ -384,7 +423,17 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			}
 		};
 
-		let needs_justification = pending_changes.needs_justification;
+		let applied_changes = pending_changes.defuse();
+
+		let needs_justification = applied_changes.needs_justification();
+		if let AppliedChanges::Forced(new) = applied_changes {
+			// NOTE: when we do a force change we are "discrediting" the old set
+			// so we ignore any justifications from them.
+			// TODO: figure out if this is right...the new set will finalize this block as
+			// well so we should probably only reject justifications from the old set.
+			justification = None;
+			let _ = self.authority_set_change.unbounded_send(new);
+		}
 
 		if !needs_justification && !enacts_consensus_change {
 			return Ok(import_result);
