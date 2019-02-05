@@ -20,6 +20,7 @@ impl MetadataRegistry {
 	>(&mut self, name: MetadataName, f: F) {
 		// simple primitive types are ignored to reduce storage usage
 		// and they are assumed to be decodable by all valid decoder implementations
+		// TODO: only save metadata with custom names. i.e. No need to save Vec<MyStruct> but MyStruct needs to be saved
 		let should_ignore = match name {
 			MetadataName::Custom(_, _) => false,
 			MetadataName::Array(_, _) => false,
