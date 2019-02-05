@@ -141,6 +141,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> H::Out {
+		println!("STORAGE_ROOT:\n{:?}", self.inner);
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
