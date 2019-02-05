@@ -97,11 +97,9 @@ fn fetch_cached_runtime_version<'a, E: Externalities<Blake2Hasher>>(
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: UnwindSafe + FnOnce() -> U
 {
-	// Substrate uses custom panic hook that terminates process on panic. Disable it for the native call.
-	let hook = ::std::panic::take_hook();
-	let result = ::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into());
-	::std::panic::set_hook(hook);
-	result
+	// Substrate uses custom panic hook that terminates process on panic. Disable termination for the native call.
+	let _guard = panic_handler::AbortGuard::new(false);
+	::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
 }
 
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
@@ -268,14 +266,13 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
-		use primitives::Blake2Hasher as _Blake2Hasher;
 		impl $crate::NativeExecutionDispatch for $name {
 			fn native_equivalent() -> &'static [u8] {
 				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
 				$code
 			}
-			fn dispatch(ext: &mut $crate::Externalities<_Blake2Hasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+			fn dispatch(ext: &mut $crate::Externalities<$crate::Blake2Hasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
