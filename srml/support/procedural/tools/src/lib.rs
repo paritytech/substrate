@@ -57,9 +57,7 @@ macro_rules! custom_keyword {
 }
 
 
-// TODO following functions are copied from sr-api-macros : do a merge to get a unique procedural
-// macro tooling crate (this crate path does not look good for it)
-
+// FIXME #1569, remove the following functions, which are copied from sr-api-macros
 use proc_macro2::{TokenStream, Span};
 use syn::Ident;
 

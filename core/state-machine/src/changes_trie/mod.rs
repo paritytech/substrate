@@ -48,11 +48,11 @@ pub use self::prune::{prune, oldest_non_pruned_trie};
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use backend::Backend;
+use crate::backend::Backend;
 use primitives;
-use changes_trie::build::prepare_input;
-use overlayed_changes::OverlayedChanges;
-use trie_backend_essence::TrieBackendStorage;
+use crate::changes_trie::build::prepare_input;
+use crate::overlayed_changes::OverlayedChanges;
+use crate::trie_backend_essence::TrieBackendStorage;
 use trie::{DBValue, trie_root};
 
 /// Changes that are made outside of extrinsics are marked with this index;

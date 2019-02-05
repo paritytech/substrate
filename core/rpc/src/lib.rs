@@ -20,6 +20,7 @@
 
 extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_pubsub;
+extern crate jsonrpc_derive;
 extern crate parity_codec as codec;
 extern crate parking_lot;
 extern crate serde;
@@ -34,8 +35,6 @@ extern crate tokio;
 
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate jsonrpc_macros;
 #[macro_use]
 extern crate log;
 #[macro_use]

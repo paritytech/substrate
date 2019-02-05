@@ -58,17 +58,11 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 /// (most importantly, storage) or perform heavy hash calculations.
 /// See also "ext_" functions in sr-sandbox and sr-std
 extern "C" {
-	/// Most of the functions below return fixed-size arrays (e.g. hashes) by writing them into
-	/// memory regions that should be preallocated by module. 
-	/// Functions that return variable-sized data use host-side allocations. These should be
-	/// manually freed by the module.
-	fn ext_free(addr: *mut u8);
-	
 	/// Printing, useful for debugging
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
-	
+
 	/// Host storage access and verification
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
@@ -86,19 +80,22 @@ extern "C" {
 	fn ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
 	/// Host-side result allocation
-	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8; 
+	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_num: u64, result: *mut u8) -> u32;
-	
+
 	/// The current relay chain identifier.
 	fn ext_chain_id() -> u64;
-	
+
 	/// Hash calculation and verification
 	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
+	fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
 	/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+	/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
+	fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
 }
 
 /// Ensures we use the right crypto when calling into native
@@ -318,8 +315,6 @@ pub fn trie_root<
 	B: AsRef<[u8]>,
 >(_input: I) -> [u8; 32] {
 	unimplemented!()
-	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
-	// implemneted natively and compile the trie logic as wasm).
 }
 
 /// A trie root formed from the enumerated items.
@@ -329,8 +324,6 @@ pub fn ordered_trie_root<
 	A: AsRef<[u8]>
 >(_input: I) -> [u8; 32] {
 	unimplemented!()
-	// TODO Maybe implement (though probably easier/cleaner to have blake2 be the only thing
-	// implemneted natively and compile the trie logic as wasm).
 }
 
 /// The current relay chain identifier.
@@ -345,6 +338,15 @@ pub fn blake2_256(data: &[u8]) -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
 		ext_blake2_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+	}
+	result
+}
+
+/// Conduct a 256-bit Keccak hash.
+pub fn keccak_256(data: &[u8]) -> [u8; 32] {
+	let mut result: [u8; 32] = Default::default();
+	unsafe {
+		ext_keccak_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 	}
 	result
 }
@@ -371,6 +373,22 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	unsafe {
 		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+	}
+}
+
+/// Verify and recover a SECP256k1 ECDSA signature.
+/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+/// - returns `None` if the signatue is bad, the 64-byte pubkey (doesn't include the 0x04 prefix).
+pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
+	let mut pubkey = [0u8; 64];
+	match unsafe {
+		ext_secp256k1_ecdsa_recover(msg.as_ptr(), sig.as_ptr(), pubkey.as_mut_ptr())
+	} {
+		0 => Ok(pubkey),
+		1 => Err(EcdsaVerifyError::BadRS),
+		2 => Err(EcdsaVerifyError::BadV),
+		3 => Err(EcdsaVerifyError::BadSignature),
+		_ => unreachable!("`ext_secp256k1_ecdsa_recover` only returns 0, 1, 2 or 3; qed"),
 	}
 }
 

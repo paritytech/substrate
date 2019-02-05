@@ -160,6 +160,16 @@ pub enum BehaviourOut {
 		data: Bytes,
 	},
 
+	/// A substream with a remote is clogged. We should avoid sending more data to it if possible.
+	Clogged {
+		/// Id of the peer the message came from.
+		peer_id: PeerId,
+		/// Protocol which generated the message.
+		protocol_id: ProtocolId,
+		/// Copy of the messages that are within the buffer, for further diagnostic.
+		messages: Vec<Bytes>,
+	},
+
 	/// We have obtained debug information from a peer.
 	Identified {
 		/// Id of the peer that has been identified.
@@ -174,13 +184,16 @@ impl From<CustomProtosOut> for BehaviourOut {
 		match other {
 			CustomProtosOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint } => {
 				BehaviourOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint }
-			},
+			}
 			CustomProtosOut::CustomProtocolClosed { protocol_id, peer_id, result } => {
 				BehaviourOut::CustomProtocolClosed { protocol_id, peer_id, result }
-			},
+			}
 			CustomProtosOut::CustomMessage { protocol_id, peer_id, data } => {
 				BehaviourOut::CustomMessage { protocol_id, peer_id, data }
-			},
+			}
+			CustomProtosOut::Clogged { protocol_id, peer_id, messages } => {
+				BehaviourOut::Clogged { protocol_id, peer_id, messages }
+			}
 		}
 	}
 }

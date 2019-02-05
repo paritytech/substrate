@@ -173,6 +173,18 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		Ok(service)
 	}
 
+	/// Returns the downloaded bytes per second averaged over the past few seconds.
+	#[inline]
+	pub fn average_download_per_sec(&self) -> u64 {
+		self.network.lock().average_download_per_sec()
+	}
+
+	/// Returns the uploaded bytes per second averaged over the past few seconds.
+	#[inline]
+	pub fn average_upload_per_sec(&self) -> u64 {
+		self.network.lock().average_upload_per_sec()
+	}
+
 	/// Called when a new block is imported by the client.
 	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
 		self.handler.on_block_imported(&mut NetSyncIo::new(&self.network, self.protocol_id), hash, header)
@@ -186,6 +198,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 	/// Called when new transactons are imported by the client.
 	pub fn trigger_repropagate(&self) {
 		self.handler.propagate_extrinsics(&mut NetSyncIo::new(&self.network, self.protocol_id));
+	}
+
+	/// Make sure an important block is propagated to peers.
+	///
+	/// In chain-based consensus, we often need to make sure non-best forks are
+	/// at least temporarily synced.
+	pub fn announce_block(&self, hash: B::Hash) {
+		self.handler.announce_block(&mut NetSyncIo::new(&self.network, self.protocol_id), hash);
 	}
 
 	/// Send a consensus message through the gossip
@@ -213,6 +233,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
 	fn is_major_syncing(&self) -> bool {
 		self.handler.sync().read().status().is_major_syncing()
+	}
+	fn is_offline(&self) -> bool {
+		self.handler.sync().read().status().is_offline()
 	}
 }
 
@@ -400,6 +423,10 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT>(
 			}
 			NetworkServiceEvent::CustomMessage { node_index, data, .. } => {
 				protocol.handle_packet(&mut net_sync, node_index, &data);
+			}
+			NetworkServiceEvent::Clogged { node_index, messages, .. } => {
+				protocol.on_clogged_peer(&mut net_sync, node_index,
+					messages.iter().map(|d| d.as_ref()));
 			}
 		};
 

@@ -77,7 +77,9 @@ use codec::{Encode, Decode};
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::{ChainSpec, Properties};
-pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
+pub use transaction_pool::txpool::{
+	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
+};
 pub use client::{ExecutionStrategy, FinalityNotifications};
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -111,7 +113,7 @@ pub struct Service<Components: components::Components> {
 pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
-	let executor = NativeExecutor::new();
+	let executor = NativeExecutor::new(config.default_heap_pages);
 	let (client, _) = components::FullComponents::<Factory>::build_client(
 		config,
 		executor,
@@ -130,12 +132,12 @@ impl<Components: components::Components> Service<Components> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = NativeExecutor::new();
+		let executor = NativeExecutor::new(config.default_heap_pages);
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 
 		// This is meant to be for testing only
-		// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
+		// FIXME #1063 remove this
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
@@ -272,7 +274,6 @@ impl<Components: components::Components> Service<Components> {
 			// extrinsic notifications
 			let network = Arc::downgrade(&network);
 			let events = transaction_pool.import_notification_stream()
-				// TODO [ToDr] Consider throttling?
 				.for_each(move |_| {
 					if let Some(network) = network.upgrade() {
 						network.trigger_repropagate();
@@ -294,7 +295,8 @@ impl<Components: components::Components> Service<Components> {
 			properties: config.chain_spec.properties(),
 		};
 		let rpc = Components::RPC::start_rpc(
-			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http, config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
+			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
+			config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
 		)?;
 
 		// Telemetry
@@ -392,8 +394,8 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 	}
 }
 
-fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error> where
-	F: Fn(&SocketAddr) -> Result<T, io::Error>,
+fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error>
+	where F: Fn(&SocketAddr) -> Result<T, io::Error>,
 {
 	Ok(match address {
 		Some(mut address) => Some(start(&address)
@@ -428,7 +430,9 @@ impl<C: Components> TransactionPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync{
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for
+	TransactionPoolAdapter<C> where <C as components::Components>::RuntimeApi: Send + Sync
+{
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		self.pool.ready()
 			.map(|t| {

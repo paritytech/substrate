@@ -16,11 +16,12 @@
 
 //! Trie-based state machine backend.
 
+use log::{warn, debug};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::{TrieDB, TrieError, Trie, MemoryDB, delta_trie_root, default_child_trie_root, child_delta_trie_root};
-use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
-use {Backend};
+use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
+use crate::Backend;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -82,7 +83,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		let mut read_overlay = MemoryDB::default();	// TODO: use new for correctness
+		let mut read_overlay = MemoryDB::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
@@ -106,7 +107,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn keys(&self, prefix: &Vec<u8>) -> Vec<Vec<u8>> {
-		let mut read_overlay = MemoryDB::default();	// TODO: use new for correctness
+		let mut read_overlay = MemoryDB::default();
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
@@ -193,7 +194,7 @@ pub mod tests {
 
 	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to be more correct
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
@@ -230,7 +231,7 @@ pub mod tests {
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
 		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher>::new(
-			MemoryDB::default(),	// TODO: use new() to be more correct
+			MemoryDB::default(),
 			Default::default(),
 		).pairs().is_empty());
 	}

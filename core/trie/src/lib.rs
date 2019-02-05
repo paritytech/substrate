@@ -16,21 +16,7 @@
 
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
 
-// TODO: no_std
-
-extern crate trie_root;
-extern crate parity_codec as codec;
-extern crate trie_db;
-extern crate hash_db;
-extern crate memory_db;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate trie_standardmap;
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
+// FIXME: no_std - https://github.com/paritytech/substrate/issues/1574
 
 mod error;
 mod node_header;
@@ -92,7 +78,7 @@ pub fn delta_trie_root<H: Hasher, I, A, B, DB>(
 		for (key, change) in delta {
 			match change {
 				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?, // TODO: archive mode
+				None => trie.remove(key.as_ref())?,
 			};
 		}
 	}
@@ -187,7 +173,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
 		for (key, change) in delta {
 			match change {
 				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
-				None => trie.remove(key.as_ref())?, // TODO: archive mode
+				None => trie.remove(key.as_ref())?,
 			};
 		}
 	}
@@ -331,6 +317,7 @@ mod tests {
 	use hash_db::{HashDB, Hasher};
 	use trie_db::{DBValue, TrieMut, Trie};
 	use trie_standardmap::{Alphabet, ValueMode, StandardMap};
+	use hex_literal::{hex, hex_impl};
 
 	fn check_equivalent(input: &Vec<(&[u8], &[u8])>) {
 		{

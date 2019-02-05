@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{sync::Arc, cmp::Ord, panic::UnwindSafe};
+use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result};
 use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
@@ -61,7 +61,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<B>,
@@ -89,7 +89,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
 		overlay: &mut OverlayedChanges,
@@ -154,7 +154,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 
 impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 where
-	B: backend::LocalBackend<Block, Blake2Hasher>,
+	B: backend::Backend<Block, Blake2Hasher>,
 	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 	Block: BlockT<Hash=H256>,
 {
@@ -168,7 +168,7 @@ where
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::execute_using_consensus_failure_handler::<
-			_, _, _, _, _, _, fn() -> NeverNativeValue
+			_, _, _, _, _, NeverNativeValue, fn() -> _
 		>(
 			&state,
 			self.backend.changes_trie_storage(),
@@ -192,7 +192,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -205,11 +205,10 @@ where
 		native_call: Option<NC>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
-		//TODO: Find a better way to prevent double block initialization
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
 			state_machine::execute_using_consensus_failure_handler::<
-				_, _, _, _, _, R, fn() -> R,
+				_, _, _, _, _, R, fn() -> _,
 			>(
 				&state,
 				self.backend.changes_trie_storage(),
@@ -255,7 +254,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,

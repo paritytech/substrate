@@ -17,6 +17,8 @@
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
 
+#![warn(missing_docs)]
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
@@ -60,6 +62,7 @@ pub mod traits;
 pub mod generic;
 pub mod transaction_validity;
 
+/// Justification type.
 pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
@@ -67,6 +70,7 @@ use traits::{Verify, Lazy};
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(not(feature = "std"))]
 pub type RuntimeString = &'static str;
 
@@ -96,11 +100,15 @@ pub type ChildrenStorageMap = HashMap<Vec<u8>, StorageMap>;
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
 pub trait BuildStorage {
+	/// Hash given slice.
+	///
+	/// Default to xx128 hashing.
 	fn hash(data: &[u8]) -> [u8; 16] {
 		let r = runtime_io::twox_128(data);
 		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
 		r
 	}
+	/// Build the storage out of this builder.
 	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String>;
 }
 
@@ -116,19 +124,26 @@ impl BuildStorage for StorageMap {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Permill(u32);
 
-// TODO: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
-	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// TODO: handle overflows
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
-	}
-
+	/// Wraps the argument into `Permill` type.
 	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
 
+	/// Converts percents into `Permill`.
 	pub fn from_percent(x: u32) -> Permill { Permill(x * 10_000) }
 
+	/// Converts a fraction into `Permill`.
 	#[cfg(feature = "std")]
 	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
+}
+
+impl<N> ::rstd::ops::Mul<N> for Permill
+where
+	N: traits::As<u64>
+{
+	type Output = N;
+	fn mul(self, b: N) -> Self::Output {
+		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -167,14 +182,7 @@ impl From<codec::Compact<Permill>> for Permill {
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Perbill(u32);
 
-// TODO: impl Mul<Perbill> for N where N: As<usize>
 impl Perbill {
-	/// Attenuate `b` by self.
-	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
-		// TODO: handle overflows
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
-	}
-
 	/// Nothing.
 	pub fn zero() -> Perbill { Perbill(0) }
 
@@ -200,6 +208,16 @@ impl Perbill {
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
 	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+}
+
+impl<N> ::rstd::ops::Mul<N> for Perbill
+where
+	N: traits::As<u64>
+{
+	type Output = N;
+	fn mul(self, b: N) -> Self::Output {
+		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000_000)
+	}
 }
 
 #[cfg(feature = "std")]
@@ -280,6 +298,8 @@ pub enum ApplyError {
 	Future = 2,
 	/// Sending account had too low a balance.
 	CantPay = 3,
+	/// Block is full, no more extrinsics can be applied.
+	FullBlock = 255,
 }
 
 impl codec::Encode for ApplyError {
@@ -511,57 +531,6 @@ macro_rules! impl_outer_log {
 	};
 }
 
-//TODO: https://github.com/paritytech/substrate/issues/1022
-/// Basic Inherent data to include in a block; used by simple runtimes.
-#[derive(Encode, Decode)]
-pub struct BasicInherentData {
-	/// Current timestamp.
-	pub timestamp: u64,
-	/// Blank report.
-	pub consensus: (),
-	/// Aura expected slot. Can take any value during block construction.
-	pub aura_expected_slot: u64,
-}
-
-impl BasicInherentData {
-	/// Create a new `BasicInherentData` instance.
-	pub fn new(timestamp: u64, expected_slot: u64) -> Self {
-		Self {
-			timestamp,
-			consensus: (),
-			aura_expected_slot: expected_slot,
-		}
-	}
-}
-
-//TODO: https://github.com/paritytech/substrate/issues/1022
-/// Error type used while checking inherents.
-#[derive(Encode, PartialEq)]
-#[cfg_attr(feature = "std", derive(Decode))]
-pub enum CheckInherentError {
-	/// The inherents are generally valid but a delay until the given timestamp
-	/// is required.
-	ValidAtTimestamp(u64),
-	/// Some other error has occurred.
-	Other(RuntimeString),
-}
-
-impl CheckInherentError {
-	/// Combine two results, taking the "worse" of the two.
-	pub fn combine_results<F: FnOnce() -> Result<(), Self>>(this: Result<(), Self>, other: F) -> Result<(), Self> {
-		match this {
-			Ok(()) => other(),
-			Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
-			Err(CheckInherentError::ValidAtTimestamp(x)) => match other() {
-				Ok(()) => Err(CheckInherentError::ValidAtTimestamp(x)),
-				Err(CheckInherentError::ValidAtTimestamp(y))
-					=> Err(CheckInherentError::ValidAtTimestamp(rstd::cmp::max(x, y))),
-				Err(CheckInherentError::Other(s)) => Err(CheckInherentError::Other(s)),
-			}
-		}
-	}
-}
-
 /// Simple blob to hold an extrinsic without commiting to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
@@ -613,7 +582,6 @@ mod tests {
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 
-	// TODO try to avoid redundant brackets: a(AuthoritiesChange), b
 	impl_outer_log! {
 		pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
 			a(AuthoritiesChange), b()
@@ -698,5 +666,11 @@ mod tests {
 		let data = WithCompact { data: super::Perbill(1) };
 		let encoded = data.encode();
 		assert_eq!(data, WithCompact::<super::Perbill>::decode(&mut &encoded[..]).unwrap());
+	}
+
+	#[test]
+	fn saturating_mul() {
+		assert_eq!(super::Perbill::one() * std::u64::MAX, std::u64::MAX/1_000_000_000);
+		assert_eq!(super::Permill::from_percent(100) * std::u64::MAX, std::u64::MAX/1_000_000);
 	}
 }

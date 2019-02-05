@@ -15,7 +15,7 @@ futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 
 [build-dependencies]
-vergen = "2"
+vergen = "3"
 
 [workspace]
 members = [
@@ -30,6 +30,7 @@ members = [
 	"core/finality-grandpa/primitives",
 	"core/keyring",
 	"core/network",
+	"core/panic-handler",
 	"core/primitives",
 	"core/rpc",
 	"core/rpc-servers",
@@ -49,6 +50,7 @@ members = [
 	"core/keystore",
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
+	"core/inherents",
 	"srml/support",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
