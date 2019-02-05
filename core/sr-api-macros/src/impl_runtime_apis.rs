@@ -581,10 +581,10 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				ctx_method.sig.ident = Ident::new(&format!("{}_with_context", &ctx_method.sig.ident), Span::call_site());
 				ctx_method.sig.decl.inputs.push(context_arg.clone());
 				ctx_method.block.stmts.push(stmt);
-				methods_with_context.push(ImplItem::Method(ctx_method.clone()));
+				methods_with_context.push(ImplItem::Method(ctx_method));
 			}
 		}
-		
+
 		input.items.extend(methods_with_context);
 		input
 	}
