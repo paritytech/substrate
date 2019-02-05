@@ -255,7 +255,10 @@ impl_runtime_apis! {
 
 	impl client_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
-			Runtime::metadata().into()
+			// Runtime::metadata().into()
+			let metadata = Runtime::metadata();
+			println!("{:#?}", metadata);
+			metadata.into()
 		}
 	}
 

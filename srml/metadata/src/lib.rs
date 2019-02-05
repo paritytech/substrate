@@ -147,7 +147,7 @@ pub struct FunctionMetadata {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct FunctionArgumentMetadata {
 	pub name: DecodeDifferentStr,
-	pub ty: DecodeDifferentStr,
+	pub ty: MetadataName,
 }
 
 /// Newtype wrapper for support encoding functions (actual the result of the function).

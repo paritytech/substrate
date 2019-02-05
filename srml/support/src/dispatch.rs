@@ -21,7 +21,7 @@ pub use crate::rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
 pub use crate::rstd::result;
-pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
+pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef, Compact};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
 	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
@@ -866,6 +866,9 @@ macro_rules! __dispatch_impl_metadata {
 			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				__call_to_functions!($($rest)*)
 			}
+			pub fn call_metadata_register(registry: &mut $crate::substrate_metadata::MetadataRegistry) {
+				__call_metadata_register!(registry; $($rest)*);
+			}
 		}
 	}
 }
@@ -944,7 +947,7 @@ macro_rules! __function_to_metadata {
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
 						ty: $crate::dispatch::DecodeDifferent::Encode(
-							__function_to_metadata!(@stringify_expand_attr
+							__function_to_metadata!(@get_type_name
 								$(#[$codec_attr])* $param_name: $param
 							)
 						),
@@ -955,18 +958,85 @@ macro_rules! __function_to_metadata {
 		}
 	};
 
-	(@stringify_expand_attr #[compact] $param_name:ident : $param:ty) => {
-		concat!("Compact<", stringify!($param), ">")
+	(@get_type_name #[compact] $param_name:ident : $param:ty) => {
+		<$crate::dispatch::Compact<$param> as $crate::substrate_metadata::EncodeMetadata>::type_name()
 	};
 
-	(@stringify_expand_attr $param_name:ident : $param:ty) => { stringify!($param) };
+	(@get_type_name $param_name:ident : $param:ty) => {
+		<$param as $crate::substrate_metadata::EncodeMetadata>::type_name()
+	 };
 
-	(@stringify_expand_attr $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
+	(@get_type_name $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
 		compile_error!(concat!(
 			"Invalid attribute for parameter `", stringify!($param_name),
 			"`, the following attributes are supported: `#[compact]`"
 		))
 	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __call_metadata_register {
+	(
+		$registry:ident;
+		$call_type:ident $origin_type:ty
+			{$(
+				$(#[doc = $doc_attr:tt])*
+				fn $fn_name:ident($from:ident
+					$(
+						, $(#[$codec_attr:ident])* $param_name:ident : $param:ty
+					)*
+				);
+			)*}
+	) => {
+		__call_metadata_register_fn!(
+			$registry;
+			;
+			$(
+				fn $fn_name(
+					$( $param_name: $param ),*
+				);
+			)*
+		)
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __call_metadata_register_fn {
+	(
+		$registry:ident;
+		$( $function_metadata:expr ),*;
+		fn $fn_name:ident(
+			$(
+				$param_name:ident : $param:ty
+			),*
+		);
+		$( $rest:tt )*
+	) => {
+		__call_metadata_register_fn!(
+			$registry;
+			$( $function_metadata, )* __call_metadata_register_fn!(@expand $registry;
+				$( $param_name : $param ),*
+			);
+			$($rest)*
+		)
+	};
+	(
+		$registry:ident;
+		$( $function_metadata:expr ),*;
+	) => {
+		$( $function_metadata );*
+	};
+	(
+		@expand $registry:ident;
+		$( $param_name:ident : $param:ty ),*
+	) => {
+		$registry.register(
+			<$param as $crate::substrate_metadata::EncodeMetadata>::type_name(),
+			<$param as $crate::substrate_metadata::EncodeMetadata>::type_metadata_kind
+		)
+	};
 }
 
 #[cfg(test)]
