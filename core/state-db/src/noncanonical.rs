@@ -121,7 +121,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	fn insert_values(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<(Key, DBValue)>) {
-		for (k, v) in inserted.into_iter() {
+		for (k, v) in inserted {
 			debug_assert!(values.get(&k).map_or(true, |(_, value)| *value == v));
 			let (ref mut counter, _) = values.entry(k).or_insert_with(|| (0, v));
 			*counter += 1;
@@ -129,7 +129,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	fn discard_values(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<Key>) {
-		for k in inserted.into_iter() {
+		for k in inserted {
 			match values.entry(k) {
 				Entry::Occupied(mut e) => {
 					let (ref mut counter, _) = e.get_mut();
@@ -226,7 +226,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				}
 			}).collect();
 		}
-		for hash in discarded.into_iter() {
+		for hash in discarded {
 			Self::discard_descendants(levels, values, index + 1, parents, &hash);
 		}
 	}
