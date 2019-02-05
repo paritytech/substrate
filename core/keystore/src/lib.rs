@@ -230,7 +230,7 @@ mod tests {
 	#[test]
 	fn encrypt_and_decrypt() {
 		let plain = [1; PKCS_LEN];
-		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", KEY_ITERATIONS as u32);
+		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED"));
 
 		let decrypted_key = encrypted_key.decrypt("thepassword").unwrap();
 
@@ -240,7 +240,11 @@ mod tests {
 	#[test]
 	fn decrypt_wrong_password_fails() {
 		let plain = [1; PKCS_LEN];
-		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", KEY_ITERATIONS as u32);
+		let encrypted_key = EncryptedKey::encrypt(
+			&plain,
+			"thepassword",
+			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
+		);
 
 		assert!(encrypted_key.decrypt("thepassword2").is_err());
 	}
@@ -248,9 +252,13 @@ mod tests {
 	#[test]
 	fn decrypt_wrong_iterations_fails() {
 		let plain = [1; PKCS_LEN];
-		let mut encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", KEY_ITERATIONS as u32);
+		let mut encrypted_key = EncryptedKey::encrypt(
+			&plain,
+			"thepassword",
+			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
+		);
 
-		encrypted_key.iterations -= 64;
+		encrypted_key.iterations = NonZeroU32::new(encrypted_key.iterations.get() - 64).unwrap();
 
 		assert!(encrypted_key.decrypt("thepassword").is_err());
 	}
