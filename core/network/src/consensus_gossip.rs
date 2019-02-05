@@ -24,7 +24,6 @@ use rand::{self, seq::SliceRandom};
 use lru_cache::LruCache;
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
-use runtime_primitives::generic::BlockId;
 pub use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
 use config::Roles;
@@ -173,6 +172,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 		self.peers.remove(&who);
 	}
 
+	/// Prune all existing messages for the given topic and mark it as dead, all
+	/// new messages for the given topic are ignored.
 	pub fn collect_garbage_for_topic(&mut self, topic: B::Hash) {
 		self.known_dead_topics.insert(topic, ());
 		self.collect_garbage(|_| true);
