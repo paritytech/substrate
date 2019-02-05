@@ -944,6 +944,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			changes_trie_updates: MemoryDB::default(),
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
+			set_head: None,
 		})
 	}
 
