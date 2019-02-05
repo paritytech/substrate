@@ -76,7 +76,7 @@ pub fn new_with_api_execution_strat(
 	api_execution_strategy: ExecutionStrategy
 ) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	let backend = Arc::new(Backend::new());
-	let executor = NativeExecutor::new();
+	let executor = NativeExecutor::new(None);
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
 
 	client::Client::new(
@@ -95,7 +95,7 @@ pub fn new_with_changes_trie()
 	new_with_backend(Arc::new(Backend::new()), true)
 }
 
-/// Creates new client instance used for tests with an explicitely provided backend.
+/// Creates new client instance used for tests with an explicitly provided backend.
 /// This is useful for testing backend implementations.
 pub fn new_with_backend<B>(
 	backend: Arc<B>,
@@ -107,7 +107,7 @@ pub fn new_with_backend<B>(
 	runtime::RuntimeApi
 > where B: backend::LocalBackend<runtime::Block, Blake2Hasher>
 {
-	let executor = NativeExecutor::new();
+	let executor = NativeExecutor::new(None);
 	client::new_with_backend(backend, executor, genesis_storage(support_changes_trie)).unwrap()
 }
 

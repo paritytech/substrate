@@ -450,7 +450,7 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = test_client::LocalExecutor::new();
+			let local_executor = test_client::LocalExecutor::new(None);
 			let local_result = check_execution_proof(&local_executor, &RemoteCallRequest {
 				block: test_client::runtime::Hash::default(),
 				header: test_client::runtime::Header {
