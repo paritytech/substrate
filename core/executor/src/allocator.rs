@@ -128,7 +128,8 @@ impl FreeingBumpHeapAllocator {
 		self.set_heap_4bytes(ptr - 8, slice);
 
 		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(list_index);
-		self.total_size = self.total_size.checked_sub(item_size as u32 + 8).unwrap_or(0);
+		self.total_size = self.total_size.checked_sub(item_size as u32 + 8)
+			.expect("Subtracting from total heap size must never overflow");
 		trace!(target: "wasm-heap", "Heap size is {} bytes after deallocation", self.total_size);
 	}
 
@@ -155,22 +156,26 @@ impl FreeingBumpHeapAllocator {
 
 	fn get_heap_4bytes(&mut self, ptr: u32) -> [u8; 4] {
 		let mut arr = [0u8; 4];
-		self.heap.get_into(self.ptr_offset + ptr, &mut arr).unwrap();
+		self.heap.get_into(self.ptr_offset + ptr, &mut arr)
+			.expect("Getting 4 bytes from heap at pointer must always be valid");
 		arr
 	}
 
 	fn get_heap_byte(&mut self, ptr: u32) -> u8 {
 		let mut arr = [0u8; 1];
-		self.heap.get_into(self.ptr_offset + ptr, &mut arr).unwrap();
+		self.heap.get_into(self.ptr_offset + ptr, &mut arr)
+			.expect("Getting single byte from heap at pointer must always be valid");
 		arr[0]
 	}
 
 	fn set_heap(&mut self, ptr: u32, value: u8) {
-		self.heap.set(self.ptr_offset + ptr, &[value]).unwrap()
+		self.heap.set(self.ptr_offset + ptr, &[value])
+			.expect("Writing single byte into heap at pointer must always be valid");
 	}
 
 	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) {
-		self.heap.set(self.ptr_offset + ptr, &value).unwrap()
+		self.heap.set(self.ptr_offset + ptr, &value)
+			.expect("Writing 4 bytes into heap at pointer must always be valid");
 	}
 
 }
