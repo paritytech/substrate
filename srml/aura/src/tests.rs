@@ -28,22 +28,34 @@ use crate::{AuraReport, HandleReport};
 #[test]
 fn aura_report_gets_skipped_correctly() {
 	let mut report = AuraReport {
-		start_slot: 0,
-		skipped: 30,
+		start_slot: 3,
+		skipped: 15,
 	};
 
 	let mut validators = vec![0; 10];
 	report.punish(10, |idx, count| validators[idx] += count);
+	assert_eq!(validators, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
-	assert_eq!(validators, vec![3; 10]);
+	let mut validators = vec![0; 10];
+	report.skipped = 5;
+	report.punish(10, |idx, count| validators[idx] += count);
+	assert_eq!(validators, vec![0, 0, 0, 1, 1, 1, 1, 1, 0, 0]);
+
+	let mut validators = vec![0; 10];
+	report.start_slot = 8;
+	report.punish(10, |idx, count| validators[idx] += count);
+	assert_eq!(validators, vec![1, 1, 1, 0, 0, 0, 0, 0, 1, 1]);
 
 	let mut validators = vec![0; 4];
+	report.start_slot = 1;
+	report.skipped = 3;
 	report.punish(4, |idx, count| validators[idx] += count);
-	assert_eq!(validators, vec![8, 8, 7, 7]);
+	assert_eq!(validators, vec![0, 1, 1, 1]);
 
+	let mut validators = vec![0; 4];
 	report.start_slot = 2;
 	report.punish(4, |idx, count| validators[idx] += count);
-	assert_eq!(validators, vec![15, 15, 15, 15]);
+	assert_eq!(validators, vec![1, 0, 1, 1]);
 }
 
 #[test]
