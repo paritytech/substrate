@@ -149,9 +149,9 @@ pub fn generate_native_call_generator_fn_name(name: &String) -> Ident {
 	Ident::new(&format!("{}_native_call_generator", name), Span::call_site())
 }
 
-/// Gnerates a method with a context argument from the input `method`.
-pub fn generate_method_with_context(method: &ImplItemMethod) -> ImplItemMethod {
-	let context_arg: syn::FnArg = parse_quote!( context: ExecutionContext );
+/// Generates a method with a context argument from the input `method`.
+pub fn generate_method_with_context(method: &ImplItemMethod, crate_: &TokenStream) -> ImplItemMethod {
+	let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
 	let mut ctx_method = method.clone();
 	let mut stmt = ctx_method.block.stmts.pop().unwrap();
 	if let syn::Stmt::Expr(ref mut method_call) = stmt {

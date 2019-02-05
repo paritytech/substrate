@@ -566,7 +566,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 		for item in &input.items {
 			if let ImplItem::Method(method) = item {
-				let ctx_method = generate_method_with_context(method);
+				let ctx_method = generate_method_with_context(method, &crate_);
 				methods_with_context.push(ImplItem::Method(ctx_method));	
 			}
 		}
