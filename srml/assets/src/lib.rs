@@ -19,31 +19,9 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// Assert macros used in tests.
-extern crate sr_std;
-
-// Needed for tests (`with_externalities`).
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-
-// Needed for the set of mock primitives used in our tests.
-#[cfg(test)]
-extern crate substrate_primitives;
-
-// Needed for deriving `Encode` and `Decode` for `RawEvent`.
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-
 // Needed for type-safe access to storage DB.
 #[macro_use]
 extern crate srml_support as runtime_support;
-
-// Needed for various traits. In our case, `OnFinalise`.
-extern crate sr_primitives as primitives;
-// `system` module provides us with all sorts of useful stuff and macros
-// depend on it being around.
-extern crate srml_system as system;
 
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
