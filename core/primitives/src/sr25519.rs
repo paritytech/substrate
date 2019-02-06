@@ -281,7 +281,7 @@ mod test {
 			))
 		);
 		let message = b"";
-		let signature: Signature = Signature::from_bytes(&hex!("d46f56ab56414eb14daaece2bd7dd421b6a9d6bef7d9259fc154696076423f48756c42b7db942ebe8e5d9c36d5a607ee3919e7a8847fa9dc66674630f2b46d04")).unwrap();
+		let signature = pair.sign(message);
 		assert!(verify(&signature.to_bytes(), message, &public.0));
 		assert!(verify_strong(&signature, &message[..], &public));
 	}
