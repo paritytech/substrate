@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use codec::Encode;
 use crossbeam_channel::{self as channel, Receiver, Sender};
 use network_libp2p::{NodeIndex, Severity};
 use primitives::storage::StorageKey;
@@ -55,7 +54,7 @@ const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
-	network_chan: NetworkChan,
+	network_chan: NetworkChan<B>,
 	port: Receiver<ProtocolMsg<B, S>>,
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
@@ -148,14 +147,14 @@ pub trait Context<B: BlockT> {
 
 /// Protocol context.
 pub(crate) struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
-	network_chan: &'a NetworkChan,
+	network_chan: &'a NetworkChan<B>,
 	context_data: &'a mut ContextData<B, H>,
 }
 
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	pub(crate) fn new(
 		context_data: &'a mut ContextData<B, H>,
-		network_chan: &'a NetworkChan,
+		network_chan: &'a NetworkChan<B>,
 	) -> Self {
 		ProtocolContext {
 			network_chan,
@@ -291,7 +290,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new<I: 'static + ImportQueue<B>>(
-		network_chan: NetworkChan,
+		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
 		import_queue: Arc<I>,
@@ -1172,7 +1171,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 fn send_message<B: BlockT, H: ExHashT>(
 	peers: &mut HashMap<NodeIndex, Peer<B, H>>,
-	network_chan: &NetworkChan,
+	network_chan: &NetworkChan<B>,
 	who: NodeIndex,
 	mut message: Message<B>,
 ) {
@@ -1193,7 +1192,7 @@ fn send_message<B: BlockT, H: ExHashT>(
 		}
 		_ => (),
 	}
-	network_chan.send(NetworkMsg::Outgoing(who, message.encode()));
+	network_chan.send(NetworkMsg::Outgoing(who, message));
 }
 
 /// Construct a simple protocol that is composed of several sub protocols.

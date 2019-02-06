@@ -1312,7 +1312,7 @@ dependencies = [
  "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "libp2p-core-derive 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libp2p-core-derive 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-dns 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-floodsub 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-identify 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1363,7 +1363,7 @@ dependencies = [
 
 [[package]]
 name = "libp2p-core-derive"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "quote 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5003,7 +5003,7 @@ dependencies = [
 "checksum libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9c3ad660d7cb8c5822cd83d10897b0f1f1526792737a179e73896152f85b88c2"
 "checksum libp2p 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1cd53656209acc649a3aa4d9ce3580dd75d016317126fbdc6f8a8956f15f74de"
 "checksum libp2p-core 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "214b5c378d5cf045417bde07e3cba0ec1d7dece84639763a98f9c223c951f5c6"
-"checksum libp2p-core-derive 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "040ed14400a3640ef060734f5ac5f7b6691902d962f7a65a28a883db99be6092"
+"checksum libp2p-core-derive 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "21d637c8aa4d8540d160d747755ac5bd75073de70bd3c0c238d8b1685a66a6be"
 "checksum libp2p-dns 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a822c32da15ab0c4451792a4b000c37fbf8e3bc5ac471632f0b1f13e8e555524"
 "checksum libp2p-floodsub 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4380fbc42ec03251c9e9a4656744e8e88bbe59cbf4e084fa66370ed0b868d085"
 "checksum libp2p-identify 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "583eb9c0ee46457e1dfe3495a0a306467ee7ab287d17e19fda392106acc8f166"

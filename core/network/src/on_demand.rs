@@ -16,7 +16,6 @@
 
 //! On-demand requests service.
 
-use codec::Encode;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
@@ -78,7 +77,7 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 pub struct OnDemand<B: BlockT> {
 	core: Mutex<OnDemandCore<B>>,
 	checker: Arc<FetchChecker<B>>,
-	network_sender: Mutex<Option<NetworkChan>>,
+	network_sender: Mutex<Option<NetworkChan<B>>>,
 }
 
 /// On-demand remote call response.
@@ -149,11 +148,11 @@ impl<B: BlockT> OnDemand<B> where
 	}
 
 	/// Sets weak reference to network service.
-	pub fn set_network_sender(&self, network_sender: NetworkChan) {
+	pub fn set_network_sender(&self, network_sender: NetworkChan<B>) {
 		self.network_sender.lock().replace(network_sender);
 	}
 
-	fn send(&self, msg: NetworkMsg) {
+	fn send(&self, msg: NetworkMsg<B>) {
 		let _ = self.network_sender
 			.lock()
 			.as_ref()
@@ -458,7 +457,7 @@ impl<B> OnDemandCore<B> where
 			let mut request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 			request.timestamp = Instant::now();
 			trace!(target: "sync", "Dispatching remote request {} to peer {}", request.id, peer);
-			on_demand.send(NetworkMsg::Outgoing(peer, request.message().encode()));
+			on_demand.send(NetworkMsg::Outgoing(peer, request.message()));
 			self.active_peers.insert(peer, request);
 		}
 
@@ -603,7 +602,7 @@ pub mod tests {
 		}
 	}
 
-	fn assert_disconnected_peer(network_port: NetworkPort, expected_severity: Severity) {
+	fn assert_disconnected_peer(network_port: NetworkPort<Block>, expected_severity: Severity) {
 		let mut disconnect_count = 0;
 		while let Ok(msg) = network_port.receiver().try_recv() {
 			match msg {
