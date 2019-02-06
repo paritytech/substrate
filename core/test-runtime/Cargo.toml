@@ -21,6 +21,7 @@ runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
 runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }
 srml-support = { path = "../../srml/support", default-features = false }
+cfg-if = "0.1.6"
 
 [dev-dependencies]
 substrate-executor = { path = "../executor" }
@@ -44,13 +45,3 @@ std = [
 	"runtime_version/std",
 	"consensus_aura/std",
 ]
-
-[patch.crates-io]
-hash-db = { git = "https://github.com/paritytech/trie" }
-hash256-std-hasher = { git = "https://github.com/paritytech/trie" }
-keccak-hasher = { git = "https://github.com/paritytech/trie" }
-memory-db = { git = "https://github.com/paritytech/trie" }
-trie-bench = { git = "https://github.com/paritytech/trie" }
-trie-db = { git = "https://github.com/paritytech/trie" }
-trie-root = { git = "https://github.com/paritytech/trie" }
-trie-standardmap = { git = "https://github.com/paritytech/trie" }

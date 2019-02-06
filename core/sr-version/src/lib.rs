@@ -136,6 +136,16 @@ impl RuntimeVersion {
 			s == &A::ID && *v == A::VERSION
 		})
 	}
+
+	/// Check if the given api is implemented and the version passes a predicate.
+	pub fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+		&self,
+		pred: P,
+	) -> bool {
+		self.apis.iter().any(|(s, v)| {
+			s == &A::ID && pred(*v)
+		})
+	}
 }
 
 #[cfg(feature = "std")]
