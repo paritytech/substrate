@@ -17,7 +17,7 @@ impl-serde = { version = "0.1", optional = true }
 wasmi = { version = "0.4.3", optional = true }
 hash-db = { version = "0.11", default-features = false }
 hash256-std-hasher = { version = "0.11", default-features = false }
-ring = { version = "0.13", optional = true }
+ring = { version = "0.14", optional = true }
 untrusted = { version = "0.6", optional = true }
 hex-literal = { version = "0.1", optional = true }
 base58 = { version = "0.1", optional = true }
