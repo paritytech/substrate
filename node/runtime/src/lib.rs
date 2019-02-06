@@ -66,8 +66,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 21,
-	impl_version: 21,
+	spec_version: 22,
+	impl_version: 22,
 	apis: RUNTIME_API_VERSIONS,
 };
 
