@@ -300,11 +300,11 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				res
 			}
 
-			fn has_api<A: #crate_::runtime_api::RuntimeApiInfo + ?Sized>(
+			fn runtime_version_at(
 				&self,
 				at: &#block_id
-			) -> #crate_::error::Result<bool> where Self: Sized {
-				self.call.runtime_version_at(at).map(|r| r.has_api::<A>())
+			) -> #crate_::error::Result<#crate_::runtime_api::RuntimeVersion> {
+				self.call.runtime_version_at(at)
 			}
 		}
 

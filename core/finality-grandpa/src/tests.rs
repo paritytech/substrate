@@ -34,7 +34,7 @@ use consensus_common::BlockOrigin;
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, RuntimeApiInfo};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::NativeOrEncoded;
 
@@ -319,7 +319,7 @@ impl ApiExt<Block> for RuntimeApi {
 		unimplemented!("Not required for testing!")
 	}
 
-	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, _: &BlockId<Block>) -> Result<bool> {
+	fn runtime_version_at(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
 		unimplemented!("Not required for testing!")
 	}
 }
