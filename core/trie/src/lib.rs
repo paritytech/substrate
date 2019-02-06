@@ -40,6 +40,8 @@ pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 /// As in `hash_db`, but less generic, trait exposed.
 pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
+/// As in `hash_db`, but less generic, trait exposed.
+pub type PlainDB<'a, K> = hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// As in `memory_db`, but less generic, trait exposed.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
 
@@ -60,13 +62,18 @@ pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
 }
 
 /// Determine a trie root given a hash DB and delta values.
-pub fn delta_trie_root<H: Hasher, I, A, B>(db: &mut HashDB<H>, mut root: H::Out, delta: I) -> Result<H::Out, Box<TrieError<H::Out>>> where
+pub fn delta_trie_root<H: Hasher, I, A, B, DB>(
+	db: &mut DB,
+	mut root: H::Out,
+	delta: I
+) -> Result<H::Out, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
+	DB: hash_db::HashDB<H, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<H>::from_existing(db, &mut root)?;
+		let mut trie = TrieDBMut::<H>::from_existing(&mut *db, &mut root)?;
 
 		for (key, change) in delta {
 			match change {
@@ -80,13 +87,22 @@ pub fn delta_trie_root<H: Hasher, I, A, B>(db: &mut HashDB<H>, mut root: H::Out,
 }
 
 /// Read a value from the trie.
-pub fn read_trie_value<H: Hasher>(db: &HashDB<H>, root: &H::Out, key: &[u8]) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
-	Ok(TrieDB::<H>::new(db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+pub fn read_trie_value<H: Hasher, DB: hash_db::HashDBRef<H, trie_db::DBValue>>(
+	db: &DB,
+	root: &H::Out,
+	key: &[u8]
+) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+	Ok(TrieDB::<H>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the trie with given Query.
-pub fn read_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>>(db: &HashDB<H>, root: &H::Out, key: &[u8], query: Q) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
-	Ok(TrieDB::<H>::new(db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+pub fn read_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB: hash_db::HashDBRef<H, trie_db::DBValue>>(
+	db: &DB,
+	root: &H::Out,
+	key: &[u8],
+	query: Q
+) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+	Ok(TrieDB::<H>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Determine a trie root node's data given its ordered contents, closed form.
@@ -137,16 +153,22 @@ pub fn child_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> Vec
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_delta_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], db: &mut HashDB<H>, root_vec: Vec<u8>, delta: I) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
+pub fn child_delta_trie_root<H: Hasher, I, A, B, DB>(
+	_storage_key: &[u8],
+	db: &mut DB,
+	root_vec: Vec<u8>,
+	delta: I
+) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
+	DB: hash_db::HashDB<H, trie_db::DBValue> + hash_db::PlainDB<H::Out, trie_db::DBValue>,
 {
 	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(&root_vec); // root is fetched from DB, not writable by runtime, so it's always valid.
 
 	{
-		let mut trie = TrieDBMut::<H>::from_existing(db, &mut root)?;
+		let mut trie = TrieDBMut::<H>::from_existing(&mut *db, &mut root)?;
 
 		for (key, change) in delta {
 			match change {
@@ -160,11 +182,18 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], db: &mut H
 }
 
 /// Call `f` for all keys in a child trie.
-pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8])>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], mut f: F) -> Result<(), Box<TrieError<H::Out>>> {
+pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8]), DB>(
+	_storage_key: &[u8],
+	db: &DB,
+	root_slice: &[u8],
+	mut f: F
+) -> Result<(), Box<TrieError<H::Out>>> where
+	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
+{
 	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
 
-	let trie = TrieDB::<H>::new(db, &root)?;
+	let trie = TrieDB::<H>::new(&*db, &root)?;
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -176,8 +205,14 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8])>(_storage_key: &[u8], d
 }
 
 /// Record all keys for a given root.
-pub fn record_all_keys<H: Hasher>(db: &HashDB<H>, root: &H::Out, recorder: &mut Recorder<H::Out>) -> Result<(), Box<TrieError<H::Out>>> {
-	let trie = TrieDB::<H>::new(db, root)?;
+pub fn record_all_keys<H: Hasher, DB>(
+	db: &DB,
+	root: &H::Out,
+	recorder: &mut Recorder<H::Out>
+) -> Result<(), Box<TrieError<H::Out>>> where
+	DB: hash_db::HashDBRef<H, trie_db::DBValue>
+{
+	let trie = TrieDB::<H>::new(&*db, root)?;
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -193,19 +228,34 @@ pub fn record_all_keys<H: Hasher>(db: &HashDB<H>, root: &H::Out, recorder: &mut 
 }
 
 /// Read a value from the child trie.
-pub fn read_child_trie_value<H: Hasher>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+pub fn read_child_trie_value<H: Hasher, DB>(
+	_storage_key: &[u8],
+	db: &DB,
+	root_slice: &[u8],
+	key: &[u8]
+) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
+	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
+{
 	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
 
-	Ok(TrieDB::<H>::new(db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	Ok(TrieDB::<H>::new(&*db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 /// Read a value from the child trie with given query.
-pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], key: &[u8], query: Q) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>, DB>(
+	_storage_key: &[u8],
+	db: &DB,
+	root_slice: &[u8],
+	key: &[u8],
+	query: Q
+) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> where
+	DB: hash_db::HashDBRef<H, trie_db::DBValue> + hash_db::PlainDBRef<H::Out, trie_db::DBValue>,
+{
 	let mut root = H::Out::default();
 	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
 
-	Ok(TrieDB::<H>::new(db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	Ok(TrieDB::<H>::new(&*db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 // Utilities (not exported):
