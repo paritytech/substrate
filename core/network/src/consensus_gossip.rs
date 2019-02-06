@@ -172,7 +172,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 		self.peers.remove(&who);
 	}
 
-	/// Collect garbage for a topic.
+	/// Prune all existing messages for the given topic and mark it as dead, all
+	/// new messages for the given topic are ignored.
 	pub fn collect_garbage_for_topic(&mut self, topic: B::Hash) {
 		self.known_dead_topics.insert(topic, ());
 		self.collect_garbage(|_| true);

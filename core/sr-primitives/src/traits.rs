@@ -251,11 +251,25 @@ pub trait OnFinalise<BlockNumber> {
 
 impl<N> OnFinalise<N> for () {}
 
+/// The block initialisation trait. Implementing this lets you express what should happen
+/// for your module when the block is beginning (right before the first extrinsic is executed).
+pub trait OnInitialise<BlockNumber> {
+	/// The block is being initialised. Implement to have something happen.
+	fn on_initialise(_n: BlockNumber) {}
+}
+
+impl<N> OnInitialise<N> for () {}
+
 macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
 			fn on_finalise(n: Number) {
 				$one::on_finalise(n);
+			}
+		}
+		impl<Number: Copy, $one: OnInitialise<Number>> OnInitialise<Number> for ($one,) {
+			fn on_initialise(n: Number) {
+				$one::on_initialise(n);
 			}
 		}
 	};
@@ -268,6 +282,16 @@ macro_rules! tuple_impl {
 			fn on_finalise(n: Number) {
 				$first::on_finalise(n);
 				$($rest::on_finalise(n);)+
+			}
+		}
+		impl<
+			Number: Copy,
+			$first: OnInitialise<Number>,
+			$($rest: OnInitialise<Number>),+
+		> OnInitialise<Number> for ($first, $($rest),+) {
+			fn on_initialise(n: Number) {
+				$first::on_initialise(n);
+				$($rest::on_initialise(n);)+
 			}
 		}
 		tuple_impl!($($rest,)+);

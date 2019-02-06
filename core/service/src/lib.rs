@@ -113,7 +113,7 @@ pub struct Service<Components: components::Components> {
 pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
-	let executor = NativeExecutor::new();
+	let executor = NativeExecutor::new(config.default_heap_pages);
 	let (client, _) = components::FullComponents::<Factory>::build_client(
 		config,
 		executor,
@@ -132,7 +132,7 @@ impl<Components: components::Components> Service<Components> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = NativeExecutor::new();
+		let executor = NativeExecutor::new(config.default_heap_pages);
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 
