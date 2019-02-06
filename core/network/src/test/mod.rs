@@ -35,7 +35,7 @@ use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
 use consensus_gossip::{ConsensusGossip, ConsensusMessage};
-use crossbeam_channel::{unbounded, after, Sender};
+use crossbeam_channel::{self as channel, Sender};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use keyring::Keyring;
@@ -325,7 +325,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		select! {
 			recv(self.network_port.lock().receiver()) -> msg => return msg.ok(),
 			// If there are no messages ready, give protocol a change to send one.
-			recv(after(Duration::from_millis(100))) -> _ => return None,
+			recv(channel::after(Duration::from_millis(100))) -> _ => return None,
 		}
 	}
 
@@ -368,7 +368,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	}
 
 	pub fn status(&self) -> ProtocolStatus<Block> {
-		let (sender, port) = unbounded();
+		let (sender, port) = channel::unbounded();
 		let _ = self.protocol_sender.send(ProtocolMsg::Status(sender));
 		port.recv().unwrap()
 	}

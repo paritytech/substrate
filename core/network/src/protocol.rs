@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::Encode;
-use crossbeam_channel::{tick, unbounded, Receiver, Sender};
+use crossbeam_channel::{self as channel, Receiver, Sender};
 use network_libp2p::{NodeIndex, Severity};
 use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
@@ -216,6 +216,7 @@ pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	pub chain: Arc<Client<B>>,
 }
 
+/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
 pub trait SpecTask<B: BlockT, S: NetworkSpecialization<B>>  {
     fn call_box(self: Box<Self>, spec: &mut S, context: &mut Context<B>);
 }
@@ -226,6 +227,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, F: FnOnce(&mut S, &mut Context<B>)>
     }
 }
 
+/// A task, consisting of a user-provided closure, to be executed on the Protocol thread.
 pub trait GossipTask<B: BlockT>  {
     fn call_box(self: Box<Self>, gossip: &mut ConsensusGossip<B>, context: &mut Context<B>);
 }
@@ -297,7 +299,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
 	) -> error::Result<Sender<ProtocolMsg<B, S>>> {
-		let (sender, port) = unbounded();
+		let (sender, port) = channel::unbounded();
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let _ = thread::Builder::new()
@@ -319,8 +321,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					handshaking_peers: HashMap::new(),
 					transaction_pool: transaction_pool,
 				};
-				let tick_timeout = tick(TICK_TIMEOUT);
-				let propagate_timeout = tick(PROPAGATE_TIMEOUT);
+				let tick_timeout = channel::tick(TICK_TIMEOUT);
+				let propagate_timeout = channel::tick(PROPAGATE_TIMEOUT);
 				while protocol.run(&tick_timeout, &propagate_timeout) {
 					// Running until all senders have been dropped...
 				}
@@ -880,7 +882,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.unzip();
 
 			if !to_send.is_empty() {
-				let (sender, port) = unbounded();
+				let (sender, port) = channel::unbounded();
 				let _ = self
 					.network_chan
 					.send(NetworkMsg::GetPeerId(who.clone(), sender));

@@ -27,7 +27,7 @@ use consensus_gossip::ConsensusGossip;
 use protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
 use codec::Decode;
 use config::Params;
-use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use error::Error;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use specialization::NetworkSpecialization;
@@ -237,7 +237,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
 	fn is_major_syncing(&self) -> bool {
-		let (sender, port) = unbounded();
+		let (sender, port) = channel::unbounded();
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::IsMajorSyncing(sender));
@@ -246,7 +246,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle f
 			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
 	}
 	fn is_offline(&self) -> bool {
-		let (sender, port) = unbounded();
+		let (sender, port) = channel::unbounded();
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::IsOffline(sender));
@@ -270,7 +270,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Drop for Service<B, S> {
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Service<B, S> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
-		let (sender, port) = unbounded();
+		let (sender, port) = channel::unbounded();
 		let _ = self.protocol_sender.send(ProtocolMsg::Status(sender));
 		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
 			or the ProtocolMsg::Stop message is received,
@@ -278,7 +278,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 	}
 
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
-		let (sender, port) = unbounded();
+		let (sender, port) = channel::unbounded();
 		let _ = self.protocol_sender.send(ProtocolMsg::Peers(sender));
 		let peers = port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
 			or the ProtocolMsg::Stop message is received,
@@ -340,7 +340,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 
 /// Create a NetworkPort/Chan pair.
 pub fn network_channel(protocol_id: ProtocolId) -> (NetworkChan, NetworkPort) {
-	let (network_sender, network_receiver) = unbounded();
+	let (network_sender, network_receiver) = channel::unbounded();
 	let task_notify = Arc::new(AtomicTask::new());
 	let network_port = NetworkPort::new(network_receiver, protocol_id, task_notify.clone());
 	let network_chan = NetworkChan::new(network_sender, task_notify);
