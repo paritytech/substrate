@@ -14,13 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles setting and retrieval of free balance,
-//! retrieving total balance, reserve and unreserve balance,
-//! repatriating a reserved balance to a beneficiary account that exists,
-//! transfering a balance between accounts (when not reserved),
-//! slashing an account balance, account removal, rewards,
-//! lookup of an index to reclaim an account (when not balance not reserved),
-//! increasing total stake.
+//! An index is a short form of an address. This module handles allocation
+//! of indices for a newly created accounts.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -92,7 +87,10 @@ decl_event!(
 		<T as system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
-		/// A new account was created.
+		/// A new account index was assigned.
+		///
+		/// This event is not triggered when an existing index is reassigned
+		/// to another `AccountId`.
 		NewAccountIndex(AccountId, AccountIndex),
 	}
 );
