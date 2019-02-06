@@ -75,12 +75,6 @@ test:rust:stable:                  &test
   script:
     - time cargo test --all --release --verbose --locked
 
-.optional_test:                    &optional_test
-  <<:                              *test
-  allow_failure:                   true
-  only:
-    - master
-
 
 
 
@@ -107,9 +101,13 @@ build:rust:linux:release:          &build
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
     - echo -n "Substrate version = "
-    - ./artifacts/substrate --version |
-      sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
-      tee ./artifacts/VERSION
+    - if [ "${CI_COMMIT_TAG}" ]; then 
+        echo "${CI_COMMIT_TAG}" | tee ./artifacts/VERSION;
+      else 
+        ./artifacts/substrate --version |
+        sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+        tee ./artifacts/VERSION;
+      fi
     - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
     - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
 
@@ -123,11 +121,7 @@ build:rust:doc:release:            &build
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  only:
-    - master
-    - tags
-    - web
-    - publish-rustdoc
+  <<:                              *build_only
   tags:
     - linux-docker
   script:
