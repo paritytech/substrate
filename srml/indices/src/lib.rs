@@ -14,42 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles setting and retrieval of free balance,
-//! retrieving total balance, reserve and unreserve balance,
-//! repatriating a reserved balance to a beneficiary account that exists,
-//! transfering a balance between accounts (when not reserved),
-//! slashing an account balance, account removal, rewards,
-//! lookup of an index to reclaim an account (when not balance not reserved),
-//! increasing total stake.
+//! An index is a short form of an address. This module handles allocation
+//! of indices for a newly created accounts.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// We need these `extern crate` to be placed here otherwise there will be errors.
+// TODO: https://github.com/paritytech/substrate/issues/1509
 #[macro_use]
 extern crate srml_support as runtime_support;
-
-extern crate sr_std as rstd;
-
-#[macro_use]
 extern crate parity_codec_derive;
-
 extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-
-#[cfg(test)]
-#[macro_use]
-extern crate ref_thread_local;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-#[cfg(test)]
-extern crate substrate_primitives;
 
 use rstd::{prelude::*, result, marker::PhantomData};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
-use address::Address as RawAddress;
 use system::{IsDeadAccount, OnNewAccount};
+
+use self::address::Address as RawAddress;
 
 mod mock;
 
@@ -104,7 +87,10 @@ decl_event!(
 		<T as system::Trait>::AccountId,
 		<T as Trait>::AccountIndex
 	{
-		/// A new account was created.
+		/// A new account index was assigned.
+		///
+		/// This event is not triggered when an existing index is reassigned
+		/// to another `AccountId`.
 		NewAccountIndex(AccountId, AccountIndex),
 	}
 );
@@ -138,7 +124,7 @@ impl<T: Trait> Module<T> {
 		let enum_set_size = Self::enum_set_size();
 		let set = Self::enum_set(index / enum_set_size);
 		let i: usize = (index % enum_set_size).as_();
-		set.get(i).map(|x| x.clone())
+		set.get(i).cloned()
 	}
 
 	/// `true` if the account `index` is ready for reclaim.
