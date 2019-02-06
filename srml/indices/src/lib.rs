@@ -126,7 +126,7 @@ impl<T: Trait> Module<T> {
 		let enum_set_size = Self::enum_set_size();
 		let set = Self::enum_set(index / enum_set_size);
 		let i: usize = (index % enum_set_size).as_();
-		set.get(i).map(|x| x.clone())
+		set.get(i).cloned()
 	}
 
 	/// `true` if the account `index` is ready for reclaim.
