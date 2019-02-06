@@ -23,7 +23,6 @@ mod sync;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 
 use log::trace;
@@ -687,32 +686,39 @@ pub trait TestNetFactory: Sized {
 		self.peers()[i].restart_sync();
 	}
 
-	/// Perform synchronization until complete.
-	fn sync(&mut self) -> u32 {
+	/// Perform synchronization until complete, if provided the
+	/// given nodes set are excluded from sync.
+	fn sync_with(&mut self, disconnected: Option<HashSet<NodeIndex>>) -> u32 {
 		self.start();
 		let mut total_steps = 0;
-		self.sync_step();
-		self.route(None);
-		while !self.done() {
+		let mut done = 0;
+
+		loop {
+			if done > 10 { break; }
+			if self.done() {
+				done += 1;
+			} else {
+				done = 0;
+			}
+
+			self.sync_step();
+			self.route(disconnected.clone());
+
 			total_steps += 1;
-			self.route(None);
 		}
+
 		total_steps
+	}
+
+	/// Perform synchronization until complete.
+	fn sync(&mut self) -> u32 {
+		self.sync_with(None)
 	}
 
 	/// Perform synchronization until complete,
 	/// excluding sync between certain nodes.
 	fn sync_with_disconnected(&mut self, disconnected: HashSet<NodeIndex>) -> u32 {
-		self.start();
-		let mut total_steps = 0;
-		self.sync_step();
-		self.route(Some(disconnected.clone()));
-		while !self.done() {
-			self.sync_step();
-			total_steps += 1;
-			self.route(Some(disconnected.clone()));
-		}
-		total_steps
+		self.sync_with(Some(disconnected))
 	}
 
 	/// Do the given amount of sync steps.
@@ -725,16 +731,6 @@ pub trait TestNetFactory: Sized {
 
 	/// Whether all peers have synced.
 	fn done(&self) -> bool {
-		for _ in 0..10 {
-			if self.peers().iter().all(|p| p.is_done()) {
-				// If all peers are done, wait a little bit
-				// in case one is still about to send a message.
-				thread::sleep(Duration::from_millis(1000));
-				continue;
-			}
-			// Do another round of routing.
-			return false
-		}
 		self.peers().iter().all(|p| p.is_done())
 	}
 }
