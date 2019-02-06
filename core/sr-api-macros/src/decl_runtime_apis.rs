@@ -18,6 +18,7 @@ use utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
 	fold_fn_decl_for_client_side, unwrap_or_error, extract_parameter_names_types_and_borrows,
 	generate_native_call_generator_fn_name, return_type_extract_type,
+	generate_method_runtime_api_impl_name
 };
 
 use proc_macro;
@@ -27,8 +28,9 @@ use quote::quote;
 
 use syn::{
 	spanned::Spanned, parse_macro_input, parse::{Parse, ParseStream, Result, Error}, ReturnType,
-	fold::{self, Fold}, FnDecl, parse_quote, ItemTrait, Generics, GenericParam, Attribute,
-	visit::{Visit, self}, FnArg, Pat, TraitBound, Meta, NestedMeta, Lit, TraitItem, Ident, Type
+	fold::{self, Fold}, parse_quote, ItemTrait, Generics, GenericParam, Attribute, FnArg,
+	visit::{Visit, self}, Pat, TraitBound, Meta, NestedMeta, Lit, TraitItem, Ident, Type,
+	TraitItemMethod
 };
 
 use std::collections::HashMap;
@@ -44,9 +46,16 @@ const HIDDEN_INCLUDES_ID: &str = "DECL_RUNTIME_APIS";
 /// The `core_trait` attribute.
 const CORE_TRAIT_ATTRIBUTE: &str = "core_trait";
 /// The `api_version` attribute.
+/// Is used to set the current version of the trait.
 const API_VERSION_ATTRIBUTE: &str = "api_version";
+/// The `changed_in` attribute.
+/// Is used when the function signature changed between different versions of a trait.
+/// This attribute should be placed on the old signature of the function.
+const CHANGED_IN_ATTRIBUTE: &str = "changed_in";
 /// All attributes that we support in the declaratio of a runtime api trait.
-const SUPPORTED_ATTRIBUTE_NAMES: &[&str] = &[CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE];
+const SUPPORTED_ATTRIBUTE_NAMES: &[&str] = &[
+	CORE_TRAIT_ATTRIBUTE, API_VERSION_ATTRIBUTE, CHANGED_IN_ATTRIBUTE
+];
 
 /// The structure used for parsing the runtime api declarations.
 struct RuntimeApiDecls {
@@ -279,6 +288,20 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 			generate_runtime_api_version(v as u32)
 		}));
 		let id = generate_runtime_api_id(&decl.ident.to_string());
+
+		// Remove methods that have the `changed_in` attribute as they are not required for the
+		// runtime anymore.
+		decl.items = decl.items.iter_mut().filter_map(|i| match i {
+			TraitItem::Method(ref mut method) => {
+				if remove_supported_attributes(&mut method.attrs).contains_key(CHANGED_IN_ATTRIBUTE) {
+					None
+				} else {
+					Some(TraitItem::Method(method.clone()))
+				}
+			}
+			r => Some(r.clone()),
+		}).collect();
+
 		let native_call_generators = unwrap_or_error(generate_native_call_generators(&decl));
 
 		result.push(quote!(
@@ -306,19 +329,164 @@ struct ToClientSideDecl<'a> {
 	block_id: &'a TokenStream,
 	crate_: &'a TokenStream,
 	found_attributes: &'a mut HashMap<&'static str, Attribute>,
+	/// Any error that we found while converting this declaration.
+	errors: &'a mut Vec<TokenStream>,
 }
 
-impl<'a> Fold for ToClientSideDecl<'a> {
-	fn fold_fn_decl(&mut self, input: FnDecl) -> FnDecl {
-		let input = fold_fn_decl_for_client_side(
-			input,
+impl<'a> ToClientSideDecl<'a> {
+	fn fold_item_trait_items(&mut self, items: Vec<TraitItem>) -> Vec<TraitItem> {
+		let mut result = Vec::new();
+
+		items.into_iter().for_each(|i| match i {
+			TraitItem::Method(method) => {
+				let (fn_decl, fn_impl) = self.fold_trait_item_method(method);
+				result.push(fn_decl.into());
+
+				if let Some(fn_impl) = fn_impl {
+					result.push(fn_impl.into());
+				}
+			},
+			r => result.push(r),
+		});
+
+		result
+	}
+
+	fn fold_trait_item_method(&mut self, method: TraitItemMethod) -> (TraitItemMethod, Option<TraitItemMethod>) {
+		let fn_impl = self.create_method_runtime_api_impl(method.clone());
+		let fn_decl = self.create_method_decl(method);
+
+		(fn_decl, fn_impl)
+	}
+
+	/// Takes the given method and creates a `method_runtime_api_impl` method that will be
+	/// implemented in the runtime for the client side.
+	fn create_method_runtime_api_impl(&mut self, mut method: TraitItemMethod) -> Option<TraitItemMethod> {
+		if remove_supported_attributes(&mut method.attrs).contains_key(CHANGED_IN_ATTRIBUTE) {
+			return None;
+		}
+
+		let fn_decl = &method.sig.decl;
+		let ret_type = return_type_extract_type(&fn_decl.output);
+
+		// Get types and if the value is borrowed from all parameters.
+		// If there is an error, we push it as the block to the user.
+		let param_types = match extract_parameter_names_types_and_borrows(fn_decl) {
+			Ok(res) => res.into_iter().map(|v| {
+				let ty = v.1;
+				let borrow = v.2;
+				quote!( #borrow #ty )
+			}).collect::<Vec<_>>(),
+			Err(e) => {
+				self.errors.push(e.to_compile_error());
+				Vec::new()
+			}
+		};
+		let name = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let block_id = self.block_id;
+		let crate_ = self.crate_;
+
+		Some(
+			parse_quote!{
+				#[doc(hidden)]
+				fn #name(
+					&self,
+					at: &#block_id,
+					params: Option<( #( #param_types ),* )>,
+					params_encoded: Vec<u8>
+				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>;
+			}
+		)
+	}
+
+	/// Takes the method declared by the user and creates the declaration we require for the runtime
+	/// api client side. This method will call by default the `method_runtime_api_impl` for doing
+	/// the actual call into the runtime.
+	fn create_method_decl(&mut self, mut method: TraitItemMethod) -> TraitItemMethod {
+		let params = match extract_parameter_names_types_and_borrows(&method.sig.decl) {
+			Ok(res) => res.into_iter().map(|v| v.0).collect::<Vec<_>>(),
+			Err(e) => {
+				self.errors.push(e.to_compile_error());
+				Vec::new()
+			}
+		};
+		let params2 = params.clone();
+		let ret_type = return_type_extract_type(&method.sig.decl.output);
+
+		method.sig.decl = fold_fn_decl_for_client_side(
+			method.sig.decl.clone(),
 			&self.block_id,
 			&self.crate_
 		);
+		let name_impl = generate_method_runtime_api_impl_name(&method.sig.ident);
+		let crate_ = self.crate_;
 
-		fold::fold_fn_decl(self, input)
+		let found_attributes = remove_supported_attributes(&mut method.attrs);
+		// If the method has a `changed_in` attribute, we need to alter the method name to
+		// `method_before_version_VERSION`.
+		let (native_handling, param_tuple) = match get_changed_in(&found_attributes) {
+			Ok(Some(version)) => {
+				// Make sure that the `changed_in` version is at least the current `api_version`.
+				if get_api_version(&self.found_attributes).ok() < Some(version) {
+					self.errors.push(
+						Error::new(
+							method.span(),
+							"`changed_in` version can not be greater than the `api_version`",
+						).to_compile_error()
+					);
+				}
+
+				let ident = Ident::new(
+					&format!("{}_before_version_{}", method.sig.ident, version),
+					method.sig.ident.span()
+				);
+				method.sig.ident = ident;
+				method.attrs.push(parse_quote!( #[deprecated] ));
+
+				let panic = format!("Calling `{}` should not return a native value!", method.sig.ident);
+				(quote!( panic!(#panic) ), quote!( None ))
+			},
+			Ok(None) => (quote!( Ok(n) ), quote!( Some(( #( #params2 ),* )) )),
+			Err(e) => {
+				self.errors.push(e.to_compile_error());
+				(quote!( unimplemented!() ), quote!( None ))
+			}
+		};
+
+		let function_name = method.sig.ident.to_string();
+
+		// Generate the default implementation that calls the `method_runtime_api_impl` method.
+		method.default = Some(
+			parse_quote! {
+				{
+					let runtime_api_impl_params_encoded =
+						#crate_::runtime_api::Encode::encode(&( #( &#params ),* ));
+
+					self.#name_impl(at, #param_tuple, runtime_api_impl_params_encoded)
+						.and_then(|r|
+							match r {
+								#crate_::runtime_api::NativeOrEncoded::Native(n) => {
+									#native_handling
+								},
+								#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
+									<#ret_type as #crate_::runtime_api::Decode>::decode(&mut &r[..])
+										.ok_or_else(||
+											#crate_::error::ErrorKind::CallResultDecode(
+												#function_name
+											).into()
+										)
+								}
+							}
+						)
+				}
+			}
+		);
+
+		method
 	}
+}
 
+impl<'a> Fold for ToClientSideDecl<'a> {
 	fn fold_item_trait(&mut self, mut input: ItemTrait) -> ItemTrait {
 		extend_generics_with_block(&mut input.generics);
 
@@ -344,6 +512,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 
 		// The client side trait is only required when compiling with the feature `std` or `test`.
 		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
+		input.items = self.fold_item_trait_items(input.items);
 
 		fold::fold_item_trait(self, input)
 	}
@@ -412,12 +581,16 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	)
 }
 
+/// Get changed in version from the user given attribute or `Ok(None)`, if no attribute was given.
+fn get_changed_in(found_attributes: &HashMap<&'static str, Attribute>) -> Result<Option<u64>> {
+	found_attributes.get(&CHANGED_IN_ATTRIBUTE)
+		.map(|v| parse_runtime_api_version(v).map(Some))
+		.unwrap_or(Ok(None))
+}
+
 /// Get the api version from the user given attribute or `Ok(1)`, if no attribute was given.
 fn get_api_version(found_attributes: &HashMap<&'static str, Attribute>) -> Result<u64> {
-	match found_attributes.get(&API_VERSION_ATTRIBUTE) {
-		Some(attr) => parse_runtime_api_version(attr),
-		None => Ok(1),
-	}
+	found_attributes.get(&API_VERSION_ATTRIBUTE).map(parse_runtime_api_version).unwrap_or(Ok(1))
 }
 
 /// Generate the decleration of the trait for the client side.
@@ -430,12 +603,14 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 		let block_id = quote!( #crate_::runtime_api::BlockId<Block> );
 		let mut found_attributes = HashMap::new();
+		let mut errors = Vec::new();
 
 		let decl = {
 			let mut to_client_side = ToClientSideDecl {
 				crate_: &crate_,
 				block_id: &block_id,
-				found_attributes: &mut found_attributes
+				found_attributes: &mut found_attributes,
+				errors: &mut errors,
 			};
 			to_client_side.fold_item_trait(decl)
 		};
@@ -446,7 +621,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 			api_version.map(|v| generate_runtime_info_impl(&decl, v))
 		);
 
-		result.push(quote!( #decl #runtime_info ));
+		result.push(quote!( #decl #runtime_info #( #errors )* ));
 	}
 
 	quote!( #( #result )* )

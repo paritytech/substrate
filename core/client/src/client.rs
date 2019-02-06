@@ -1426,7 +1426,7 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;
-	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
+	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, RuntimeApi, TestAPI};
 
@@ -1520,17 +1520,6 @@ pub(crate) mod tests {
 				Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
-		);
-	}
-
-	#[test]
-	fn runtime_api_has_test_api() {
-		let client = test_client::new();
-
-		assert!(
-			client.runtime_api().has_api::<TestAPI<Block>>(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
-			).unwrap()
 		);
 	}
 
