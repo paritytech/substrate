@@ -52,6 +52,7 @@ mod runtime;
 #[macro_use]
 pub mod inherent;
 mod double_map;
+pub mod traits;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
