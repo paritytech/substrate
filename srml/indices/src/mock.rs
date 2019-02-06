@@ -19,13 +19,12 @@
 #![cfg(test)]
 
 use std::collections::HashSet;
-use ref_thread_local::RefThreadLocal;
+use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use primitives::BuildStorage;
 use primitives::testing::{Digest, DigestItem, Header};
 use substrate_primitives::{H256, Blake2Hasher};
-use runtime_io;
-use {GenesisConfig, Module, Trait, system};
-use super::{IsDeadAccount, OnNewAccount, ResolveHint};
+use {runtime_io, system};
+use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
