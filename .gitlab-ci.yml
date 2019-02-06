@@ -68,8 +68,9 @@ test:rust:stable:                  &test
   tags:
     - linux-docker
   before_script:
-   - echo "build cache size:"
-   - du -hs ${CARGO_HOME} ./target
+   - test -d ${CARGO_HOME} -a -d ./target && 
+     echo "build cache size:" &&
+     du -hs ${CARGO_HOME} ./target
    - ./scripts/build.sh
   script:
     - time cargo test --all --release --verbose --locked
