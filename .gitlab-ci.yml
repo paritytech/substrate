@@ -159,7 +159,7 @@ publish:docker:release:
 
 
 # configures aws for fast uploads/syncs
-.s3:before_script:                &s3:before_script
+.s3_before_script:                &s3_before_script
   before_script:
     - mkdir -p ${HOME}/.aws
     - |
@@ -184,7 +184,7 @@ publish:s3:release:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io.s3.amazonaws.com"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
-  <<:                              *s3:before_script
+  <<:                              *s3_before_script
   script:
     - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
     - echo "update objects in latest path"
@@ -216,7 +216,7 @@ publish:s3:doc:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io.s3.amazonaws.com"
     PREFIX:                        "substrate-rustdoc"
-  <<:                              *s3:before_script
+  <<:                              *s3_before_script
   script:
     - aws s3 sync --delete --size-only --only-show-errors
         ./crate-docs/ s3://${BUCKET}/${PREFIX}/
