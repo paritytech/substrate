@@ -1177,8 +1177,8 @@ fn send_message<B: BlockT, H: ExHashT>(
 	who: NodeIndex,
 	mut message: Message<B>,
 ) {
-	match &mut message {
-		&mut GenericMessage::BlockRequest(ref mut r) => {
+	match message {
+		GenericMessage::BlockRequest(ref mut r) => {
 			if let Some(ref mut peer) = peers.get_mut(&who) {
 				r.id = peer.next_request_id;
 				peer.next_request_id = peer.next_request_id + 1;
