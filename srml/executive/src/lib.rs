@@ -45,7 +45,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash, As, Digest};
+	OnInitialise, MakePayment, Hash, As, Digest};
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -74,16 +74,16 @@ pub struct Executive<
 	Block,
 	Context,
 	Payment,
-	Finalisation,
->(PhantomData<(System, Block, Context, Payment, Finalisation)>);
+	AllModules,
+>(PhantomData<(System, Block, Context, Payment, AllModules)>);
 
 impl<
 	Context: Default,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Payment: MakePayment<System::AccountId>,
-	Finalisation: OnFinalise<System::BlockNumber>,
-> Executive<System, Block, Context, Payment, Finalisation> where
+	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
+> Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
@@ -92,6 +92,7 @@ impl<
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
 		<system::Module<System>>::initialise(header.number(), header.parent_hash(), header.extrinsics_root());
+		<AllModules as OnInitialise<System::BlockNumber>>::on_initialise(*header.number());
 	}
 
 	fn initial_checks(block: &Block) {
@@ -123,7 +124,7 @@ impl<
 
 		// post-transactional book-keeping.
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::on_finalise(*header.number());
+		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(*header.number());
 
 		// any final checks
 		Self::final_checks(&header);
@@ -133,7 +134,7 @@ impl<
 	/// except state-root.
 	pub fn finalise_block() -> System::Header {
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::on_finalise(<system::Module<System>>::block_number());
+		<AllModules as OnFinalise<System::BlockNumber>>::on_finalise(<system::Module<System>>::block_number());
 
 		// setup extrinsics
 		<system::Module<System>>::derive_extrinsics();
