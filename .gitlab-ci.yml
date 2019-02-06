@@ -182,7 +182,7 @@ publish:s3:release:
   image:                           parity/awscli:latest
   variables:
     GIT_STRATEGY:                  none
-    BUCKET:                        "releases.parity.io.s3.amazonaws.com"
+    BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
   <<:                              *s3_before_script
   script:
@@ -214,7 +214,7 @@ publish:s3:doc:
     - publish-rustdoc
   variables:
     GIT_STRATEGY:                  none
-    BUCKET:                        "releases.parity.io.s3.amazonaws.com"
+    BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate-rustdoc"
   <<:                              *s3_before_script
   script:
