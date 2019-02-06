@@ -21,14 +21,13 @@
 #![recursion_limit="256"]
 
 #[macro_use]
-extern crate srml_support;
-#[macro_use]
 extern crate runtime_primitives;
 
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
 #[cfg(feature = "std")]
 use srml_support::{Serialize, Deserialize};
+use srml_support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature

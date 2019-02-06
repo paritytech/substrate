@@ -342,7 +342,7 @@ macro_rules! __impl_outer_config_types {
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig<$concrete>;
-		__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! {$concrete $($rest)*}
 	};
 	(
 		$concrete:ident $config:ident $snake:ident $( $rest:tt )*
@@ -367,7 +367,7 @@ macro_rules! impl_outer_config {
 			$( $config:ident => $snake:ident $( < $generic:ident > )*, )*
 		}
 	) => {
-		__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
+		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
 		#[cfg(any(feature = "std", test))]
 		#[derive(Serialize, Deserialize)]
 		#[serde(rename_all = "camelCase")]

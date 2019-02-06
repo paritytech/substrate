@@ -113,9 +113,6 @@ macro_rules! assert_ok {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Void {}
 
-#[doc(hidden)]
-pub use mashup::*;
-
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde_derive::*;
