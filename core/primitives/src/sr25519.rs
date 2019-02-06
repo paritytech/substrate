@@ -28,7 +28,7 @@ use sha2::Sha512;
 use serde::{de, Deserialize, Deserializer, Serializer};
 
 // signing context
-const SIGNING_CTX: &'static [u8] = b"polkadot transaction";
+const SIGNING_CTX: &'static [u8] = b"substrate transaction";
 
 /// Instead of importing it for the local module, alias it to be available as a public type
 pub type Signature = schnorrkel::Signature;
