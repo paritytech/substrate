@@ -114,6 +114,7 @@ mod tests {
 		let hash = 5u64;
 		let tx = Transaction {
 			data: (),
+			bytes: 1,
 			hash: hash.clone(),
 			priority: 5,
 			valid_till: 1,
@@ -178,6 +179,7 @@ mod tests {
 			let hash = i;
 			Transaction {
 				data: (),
+				bytes: 2,
 				hash,
 				priority: 5,
 				valid_till,
