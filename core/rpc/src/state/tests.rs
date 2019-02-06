@@ -215,14 +215,9 @@ fn should_return_runtime_version() {
 	let client = Arc::new(test_client::new());
 	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
-	assert_matches!(
-		api.runtime_version(None.into()),
-		Ok(ref ver) if ver == &runtime::VERSION
-	);
-
 	assert_eq!(
 		::serde_json::to_string(&api.runtime_version(None.into()).unwrap()).unwrap(),
-		r#"{"specName":"test","implName":"parity-test","authoringVersion":1,"specVersion":1,"implVersion":1,"apis":[["0xdf6acb689907609b",1],["0x37e397fc7c91f5e4",1],["0xd2bc9897eed08f15",1],["0x40fe3ad401f8959a",1],["0xc6e9a76309f39b09",1],["0xdd718d5cc53262d4",1]]}"#
+		r#"{"specName":"test","implName":"parity-test","authoringVersion":1,"specVersion":1,"implVersion":1,"apis":[["0xdf6acb689907609b",1],["0x37e397fc7c91f5e4",1],["0xd2bc9897eed08f15",1],["0x40fe3ad401f8959a",2],["0xc6e9a76309f39b09",1],["0xdd718d5cc53262d4",1]]}"#
 	);
 }
 
