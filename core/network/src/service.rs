@@ -358,7 +358,7 @@ pub struct NetworkChan {
 impl NetworkChan {
 	/// Create a new network chan.
 	pub fn new(sender: Sender<NetworkMsg>, task_notify: Arc<AtomicTask>) -> Self {
-		Self {
+		 NetworkChan {
 			sender,
 			task_notify,
 		}
