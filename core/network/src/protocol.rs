@@ -431,10 +431,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let _ = self
 				.network_chan
 				.send(NetworkMsg::ReportPeer(who, Severity::Bad("Unexpected response packet received from peer".to_string())));
-			None
-		} else {
-			None
 		}
+		None
 	}
 
 	/// Returns protocol status

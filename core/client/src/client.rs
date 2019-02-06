@@ -1310,18 +1310,16 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		parent_hash: Block::Hash,
 	) -> Result<ImportResult, Self::Error> {
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash))
-			.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
 		{
-			Ok(blockchain::BlockStatus::InChain) => {},
-			Ok(blockchain::BlockStatus::Unknown) => return Ok(ImportResult::UnknownParent),
-			Err(e) => return Err(e),
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
 		match self.backend.blockchain().status(BlockId::Hash(hash))
-			.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
 		{
-			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
-			Ok(blockchain::BlockStatus::Unknown) => {},
-			Err(e) => return Err(e),
+			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
+			blockchain::BlockStatus::Unknown => {},
 		}
 		Ok(ImportResult::Queued)
 	}
