@@ -18,7 +18,10 @@ use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use config::Roles;
 use consensus::BlockOrigin;
+use network_libp2p::NodeIndex;
 use sync::SyncState;
+use std::{thread, time};
+use std::collections::HashSet;
 use super::*;
 
 #[test]
@@ -29,7 +32,7 @@ fn sync_from_two_peers_works() {
 	net.peer(2).push_blocks(100, false);
 	net.sync();
 	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
-	let status = net.peer(0).sync.status();
+	let status = net.peer(0).status();
 	assert_eq!(status.sync.state, SyncState::Idle);
 }
 
@@ -49,9 +52,12 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 fn sync_long_chain_works() {
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
-	net.sync_steps(3);
-	assert_eq!(net.peer(0).sync.status().sync.state, SyncState::Downloading);
 	net.sync();
+	// Wait for peer 0 to import blocks received over the network.
+	thread::sleep(time::Duration::from_millis(1000));
+	net.sync();
+	// Wait for peers to get up to speed.
+	thread::sleep(time::Duration::from_millis(1000));
 	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
 }
 
@@ -137,7 +143,7 @@ fn own_blocks_are_announced() {
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
 
 	let header = net.peer(0).client().header(&BlockId::Number(1)).unwrap().unwrap();
-	net.peer(0).with_io(|io| net.peer(0).sync.on_block_imported(io, header.hash(), &header));
+	net.peer(0).on_block_imported(header.hash(), &header);
 	net.sync();
 	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
 	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);
@@ -166,10 +172,11 @@ fn blocks_are_not_announced_by_light_nodes() {
 	net.peer(0).on_connect(1);
 	net.peer(1).on_connect(2);
 
-	// generate block at peer0 && run sync
-	while !net.done() {
-		net.sync_step();
-	}
+	// Only sync between 0 -> 1, and 1 -> 2
+	let mut disconnected = HashSet::new();
+	disconnected.insert(0 as NodeIndex);
+	disconnected.insert(2 as NodeIndex);
+	net.sync_with_disconnected(disconnected);
 
 	// peer 0 has the best chain
 	// peer 1 has the best chain

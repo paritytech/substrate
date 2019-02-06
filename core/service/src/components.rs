@@ -38,11 +38,7 @@ use parking_lot::Mutex;
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
 /// Network service type for a factory.
-pub type NetworkService<F> = network::Service<
-	<F as ServiceFactory>::Block,
-	<F as ServiceFactory>::NetworkProtocol,
-	<<F as ServiceFactory>::Block as BlockT>::Hash,
->;
+pub type NetworkService<F> = network::Service<<F as ServiceFactory>::Block, <F as ServiceFactory>::NetworkProtocol>;
 
 /// Code executor type for a factory.
 pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
@@ -59,7 +55,7 @@ pub type FullExecutor<F> = client::LocalCallExecutor<
 /// Light client backend type for a factory.
 pub type LightBackend<F> = client::light::backend::Backend<
 	client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+	network::OnDemand<<F as ServiceFactory>::Block>,
 	Blake2Hasher,
 >;
 
@@ -68,20 +64,20 @@ pub type LightExecutor<F> = client::light::call_executor::RemoteOrLocalCallExecu
 	<F as ServiceFactory>::Block,
 	client::light::backend::Backend<
 		client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+		network::OnDemand<<F as ServiceFactory>::Block>,
 		Blake2Hasher
 	>,
 	client::light::call_executor::RemoteCallExecutor<
 		client::light::blockchain::Blockchain<
 			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-			network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+			network::OnDemand<<F as ServiceFactory>::Block>
 		>,
-		network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>
+		network::OnDemand<<F as ServiceFactory>::Block>
 	>,
 	client::LocalCallExecutor<
 		client::light::backend::Backend<
 			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
-			network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
+			network::OnDemand<<F as ServiceFactory>::Block>,
 			Blake2Hasher
 		>,
 		CodeExecutor<F>
@@ -363,7 +359,7 @@ pub trait Components: Sized + 'static {
 	) -> Result<
 		(
 			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 		),
 		error::Error
 	>;
@@ -429,7 +425,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	)
 		-> Result<(
 			Arc<ComponentClient<Self>>,
-			Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+			Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 		), error::Error>
 	{
 		let db_settings = client_db::DatabaseSettings {
@@ -505,7 +501,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		-> Result<
 			(
 				Arc<ComponentClient<Self>>,
-				Option<Arc<OnDemand<FactoryBlock<Self::Factory>, NetworkService<Self::Factory>>>>
+				Option<Arc<OnDemand<FactoryBlock<Self::Factory>>>>
 			), error::Error>
 	{
 		let db_settings = client_db::DatabaseSettings {
