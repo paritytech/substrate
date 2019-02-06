@@ -1055,10 +1055,11 @@ macro_rules! __function_to_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
+	use crate::runtime_primitives::traits::{OnInitialise, OnFinalise};
 
 	pub trait Trait {
 		type Origin;
-		type BlockNumber;
+		type BlockNumber: Into<u32>;
 	}
 
 	pub mod system {
@@ -1077,6 +1078,9 @@ mod tests {
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
+
+			fn on_initialise(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialise") } }
+			fn on_finalise(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalise") } }
 		}
 	}
 
@@ -1147,5 +1151,17 @@ mod tests {
 		let call: Call<TraitImpl> = Call::aux_1(0);
 		let encoded = call.encode();
 		assert_eq!(encoded.len(), 2);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_initialise")]
+	fn on_initialise_should_work() {
+		<Module<TraitImpl> as OnInitialise<u32>>::on_initialise(42);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_finalise")]
+	fn on_finalise_should_work() {
+		<Module<TraitImpl> as OnFinalise<u32>>::on_finalise(42);
 	}
 }
