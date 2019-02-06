@@ -1,35 +1,24 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # 
-# Check for any changes in the node/src/runtime, srml/ and core/sr_* trees. If
+# 
+# check for any changes in the node/src/runtime, srml/ and core/sr_* trees. if 
 # there are any changes found, it should mark the PR breaksconsensus and 
 # "auto-fail" the PR in some way unless a) the runtime is rebuilt and b) there 
 # isn't a change in the runtime/src/lib.rs file that alters the version.
 
 set -e # fail on any error
 
-PROJECT_ROOT=`git rev-parse --show-toplevel`
-RUNTIME="$PROJECT_ROOT/node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
-CURRENT_BRANCH=$(git branch | grep \* | cut -d ' ' -f2)
-
-# Rebuild the wasm files
-$PROJECT_ROOT/scripts/build.sh
-cp $RUNTIME branch_runtime.wasm
-
-# Switch to master
-git checkout master
-
-# Rebuild the wasm files on master
-$PROJECT_ROOT/scripts/build.sh
-cp $RUNTIME master_runtime.wasm
-
-git checkout -f $CURRENT_BRANCH
-
 # give some context
 git log --graph --oneline --decorate=short -n 10
 
 
+RUNTIME="node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
+
+
+
 # check if the wasm sources changed
-if cmp master_runtime.wasm branch_runtime.wasm
+if ! git diff --name-only origin/master...${CI_COMMIT_SHA} \
+	| grep -q -e '^node/src/runtime' -e '^srml/' -e '^core/sr-'
 then
 	cat <<-EOT
 	
