@@ -110,8 +110,6 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	network: Arc<Mutex<NetworkService>>,
 	/// Protocol sender
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
-	/// Network sender
-	network_sender: NetworkChan,
 	/// Sender for messages to the background service task, and handle for the background thread.
 	/// Dropping the sender should close the task and the thread.
 	/// This is an `Option` because we need to extract it in the destructor.
@@ -124,7 +122,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: Arc<I>,
-	) -> Result<Arc<Service<B, S>>, Error> {
+	) -> Result<(Arc<Service<B, S>>, NetworkChan), Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
 		let protocol_sender = Protocol::new(
 			network_chan.clone(),
@@ -147,7 +145,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 
 		let service = Arc::new(Service {
 			network,
-			network_sender: network_chan.clone(),
 			protocol_sender: protocol_sender.clone(),
 			bg_thread: Some(thread),
 		});
@@ -155,12 +152,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		// connect the import-queue to the network service.
 		let link = NetworkLink {
 			protocol_sender,
-			network_sender: network_chan,
+			network_sender: network_chan.clone(),
 		};
 
 		import_queue.start(link)?;
 
-		Ok(service)
+		Ok((service, network_chan))
 	}
 
 	/// Returns the downloaded bytes per second averaged over the past few seconds.
@@ -173,11 +170,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	#[inline]
 	pub fn average_upload_per_sec(&self) -> u64 {
 		self.network.lock().average_upload_per_sec()
-	}
-
-	/// Get a clone of the channel to network/libp2p.
-	pub fn network_sender(&self) -> NetworkChan {
-		self.network_sender.clone()
 	}
 
 	/// Called when a new block is imported by the client.

@@ -192,12 +192,12 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network = network::Service::new(
+		let (network, network_chan) = network::Service::new(
 			network_params,
 			protocol_id,
 			import_queue
 		)?;
-		on_demand.map(|on_demand| on_demand.set_network_sender(network.network_sender()));
+		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
 		{
 			// block notifications
