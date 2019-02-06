@@ -34,7 +34,7 @@ const SIGNING_CTX: &'static [u8] = b"polkadot transaction";
 pub type Signature = schnorrkel::Signature;
 
 /// A localized signature also contains sender information.
-/// TODO: Encode and Decode traits are supported in ed25519 but not possible for now here.
+/// NOTE: Encode and Decode traits are supported in ed25519 but not possible for now here.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct LocalizedSignature {
     /// The signer of the signature.
@@ -106,11 +106,6 @@ impl Public {
         r.to_vec()
     }
 
-    // convert the public key byte array to a schnorrkel type
-    pub fn to_schnorrkel_pubkey(&self) -> PublicKey {
-        PublicKey::from_bytes(self.as_ref()).expect("32 byte array is always a pubkey; qed")
-    }
-
     /// Return a slice filled with raw data.
     pub fn as_slice(&self) -> &[u8] {
         let r: &[u8; 32] = self.as_ref();
@@ -171,12 +166,7 @@ impl ::std::fmt::Display for Public {
 impl ::std::fmt::Debug for Public {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         let s = self.to_ss58check();
-        write!(
-            f,
-            "{} ({}...)",
-            ::hexdisplay::HexDisplay::from(&self.0),
-            &s[0..8]
-        )
+        write!(f, "{} ({}...)", ::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
     }
 }
 
@@ -212,9 +202,7 @@ impl Pair {
 }
 
 /// Verify a signature on a message. Returns true if the signature is good.
-/// NOTE: this is technically checking a (signature, message) against a pubkey, I think
-/// hence `Verifiable` trait should be implemented for `Public`, not `Signature`.
-/// FIXME: should we still use `untrusted` crate here?
+/// FIXME: use `untrusted` crate here?
 pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: P) -> bool {
     match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
         Ok(pk) => pk.verify(signing_context(SIGNING_CTX).bytes(message), sig),
@@ -224,7 +212,6 @@ pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: 
 
 /// Verify a message without type checking the parameters' types for the right size.
 /// Returns true if both the pubkey and the signature is good.
-/// TODO: clean this and probably use some helper function / traits to make the conversion easier.
 pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], pubkey: P) -> bool {
     let signature = match Signature::from_bytes(sig) {
         Ok(sig) => sig,
@@ -309,7 +296,6 @@ mod test {
 
     #[test]
     fn seeded_pair_should_work() {
-        use hexdisplay::HexDisplay;
 
         let pair = Pair::from_seed(b"12345678901234567890123456789012");
         let public = pair.public();
@@ -323,14 +309,6 @@ mod test {
         let signature = pair.sign(&message[..]);
         assert!(verify_strong(&signature, &message[..], &public));
     }
-
-    // #[test]
-    // fn generate_with_pkcs8_recovery_possible() {
-    // 	let (pair1, pkcs8) = Pair::generate_with_pkcs8();
-    // 	let pair2 = Pair::from_pkcs8(&pkcs8).unwrap();
-
-    // 	assert_eq!(pair1.public(), pair2.public());
-    // }
 
     #[test]
     fn ss58check_roundtrip_works() {
