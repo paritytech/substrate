@@ -472,13 +472,13 @@ pub fn process_import_result<B: BlockT>(
 		},
 		Err(BlockImportError::IncompleteHeader(who)) => {
 			if let Some(peer) = who {
-				link.useless_peer(peer, "Sent block with incomplete header to import");
+				link.note_useless_and_restart_sync(peer, "Sent block with incomplete header to import");
 			}
 			0
 		},
 		Err(BlockImportError::VerificationFailed(who, e)) => {
 			if let Some(peer) = who {
-				link.useless_peer(peer, &format!("Verification failed: {}", e));
+				link.note_useless_and_restart_sync(peer, &format!("Verification failed: {}", e));
 			}
 			0
 		},
