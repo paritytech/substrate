@@ -718,7 +718,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.on_demand
 			.as_ref()
-			.map(|s| s.maintain_peers(&self.network_chan));
+			.map(|s| s.maintain_peers());
 	}
 
 	fn maintain_peers(&mut self) {
@@ -1055,7 +1055,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Remote call response {} from {}", response.id, who);
 		self.on_demand
 			.as_ref()
-			.map(|s| s.on_remote_call_response(&self.network_chan, who, response));
+			.map(|s| s.on_remote_call_response(who, response));
 	}
 
 	fn on_remote_read_request(
@@ -1085,7 +1085,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Remote read response {} from {}", response.id, who);
 		self.on_demand
 			.as_ref()
-			.map(|s| s.on_remote_read_response(&self.network_chan, who, response));
+			.map(|s| s.on_remote_read_response(who, response));
 	}
 
 	fn on_remote_header_request(
@@ -1121,7 +1121,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
 		self.on_demand
 			.as_ref()
-			.map(|s| s.on_remote_header_response(&self.network_chan, who, response));
+			.map(|s| s.on_remote_header_response(who, response));
 	}
 
 	fn on_remote_changes_request(
@@ -1166,7 +1166,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			response.id, who, response.max);
 		self.on_demand
 			.as_ref()
-			.map(|s| s.on_remote_changes_response(&self.network_chan, who, response));
+			.map(|s| s.on_remote_changes_response(who, response));
 	}
 }
 

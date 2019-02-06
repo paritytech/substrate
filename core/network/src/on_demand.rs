@@ -51,26 +51,24 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 	fn on_disconnect(&self, peer: NodeIndex);
 
 	/// Maintain peers requests.
-	fn maintain_peers(&self, network_sender: &NetworkChan);
+	fn maintain_peers(&self);
 
 	/// When header response is received from remote node.
 	fn on_remote_header_response(
 		&self,
-		network_sender: &NetworkChan,
 		peer: NodeIndex,
 		response: message::RemoteHeaderResponse<Block::Header>
 	);
 
 	/// When read response is received from remote node.
-	fn on_remote_read_response(&self, network_sender: &NetworkChan, peer: NodeIndex, response: message::RemoteReadResponse);
+	fn on_remote_read_response(&self, peer: NodeIndex, response: message::RemoteReadResponse);
 
 	/// When call response is received from remote node.
-	fn on_remote_call_response(&self, network_sender: &NetworkChan, peer: NodeIndex, response: message::RemoteCallResponse);
+	fn on_remote_call_response(&self, peer: NodeIndex, response: message::RemoteCallResponse);
 
 	/// When changes response is received from remote node.
 	fn on_remote_changes_response(
 		&self,
-		network_sender: &NetworkChan,
 		peer: NodeIndex,
 		response: message::RemoteChangesResponse<NumberFor<Block>, Block::Hash>
 	);
@@ -80,6 +78,7 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 pub struct OnDemand<B: BlockT> {
 	core: Mutex<OnDemandCore<B>>,
 	checker: Arc<FetchChecker<B>>,
+	network_sender: Mutex<Option<NetworkChan>>,
 }
 
 /// On-demand remote call response.
@@ -89,7 +88,6 @@ pub struct RemoteResponse<T> {
 
 #[derive(Default)]
 struct OnDemandCore<B: BlockT> {
-	network_sender: Option<NetworkChan>,
 	next_request_id: u64,
 	pending_requests: VecDeque<Request<B>>,
 	active_peers: LinkedHashMap<NodeIndex, Request<B>>,
@@ -139,8 +137,8 @@ impl<B: BlockT> OnDemand<B> where
 	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
 		OnDemand {
 			checker,
+			network_sender: Mutex::new(None),
 			core: Mutex::new(OnDemandCore {
-				network_sender: None,
 				next_request_id: 0,
 				pending_requests: VecDeque::new(),
 				active_peers: LinkedHashMap::new(),
@@ -152,25 +150,33 @@ impl<B: BlockT> OnDemand<B> where
 
 	/// Sets weak reference to network service.
 	pub fn set_network_sender(&self, network_sender: NetworkChan) {
-		self.core.lock().network_sender = Some(network_sender);
+		self.network_sender.lock().replace(network_sender);
+	}
+
+	fn send(&self, msg: NetworkMsg) {
+		let _ = self.network_sender
+			.lock()
+			.as_ref()
+			.expect("1. OnDemand is passed a network sender upon initialization of the service, 2. it should bet set by now")
+		   	.send(msg);
 	}
 
 	/// Schedule && dispatch all scheduled requests.
 	fn schedule_request<R>(&self, retry_count: Option<usize>, data: RequestData<B>, result: R) -> R {
 		let mut core = self.core.lock();
 		core.insert(retry_count.unwrap_or(RETRY_COUNT), data);
-		core.dispatch();
+		core.dispatch(self);
 		result
 	}
 
 	/// Try to accept response from given peer.
-	fn accept_response<F: FnOnce(Request<B>) -> Accept<B>>(&self, rtype: &str, network_sender: &NetworkChan, peer: NodeIndex, request_id: u64, try_accept: F) {
+	fn accept_response<F: FnOnce(Request<B>) -> Accept<B>>(&self, rtype: &str, peer: NodeIndex, request_id: u64, try_accept: F) {
 		let mut core = self.core.lock();
 		let request = match core.remove(peer, request_id) {
 			Some(request) => request,
 			None => {
 				let reason = format!("Invalid remote {} response from peer", rtype);
-				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
+				self.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
 				core.remove_peer(peer);
 				return;
 			},
@@ -181,7 +187,7 @@ impl<B: BlockT> OnDemand<B> where
 			Accept::Ok => (retry_count, None),
 			Accept::CheckFailed(error, retry_request_data) => {
 				let reason = format!("Failed to check remote {} response from peer: {}", rtype, error);
-				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
+				self.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
 				core.remove_peer(peer);
 
 				if retry_count > 0 {
@@ -194,7 +200,7 @@ impl<B: BlockT> OnDemand<B> where
 			},
 			Accept::Unexpected(retry_request_data) => {
 				let reason = format!("Unexpected response to remote {} from peer", rtype);
-				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
+				self.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
 				core.remove_peer(peer);
 
 				(retry_count, Some(retry_request_data))
@@ -205,7 +211,7 @@ impl<B: BlockT> OnDemand<B> where
 			core.insert(retry_count, request_data);
 		}
 
-		core.dispatch();
+		core.dispatch(self);
 	}
 }
 
@@ -220,31 +226,31 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 
 		let mut core = self.core.lock();
 		core.add_peer(peer, best_number);
-		core.dispatch();
+		core.dispatch(self);
 	}
 
 	fn on_block_announce(&self, peer: NodeIndex, best_number: NumberFor<B>) {
 		let mut core = self.core.lock();
 		core.update_peer(peer, best_number);
-		core.dispatch();
+		core.dispatch(self);
 	}
 
 	fn on_disconnect(&self, peer: NodeIndex) {
 		let mut core = self.core.lock();
 		core.remove_peer(peer);
-		core.dispatch();
+		core.dispatch(self);
 	}
 
-	fn maintain_peers(&self, network_sender: &NetworkChan) {
+	fn maintain_peers(&self) {
 		let mut core = self.core.lock();
 		for bad_peer in core.maintain_peers() {
-			let _ = network_sender.send(NetworkMsg::ReportPeer(bad_peer, Severity::Timeout));
+			self.send(NetworkMsg::ReportPeer(bad_peer, Severity::Timeout));
 		}
-		core.dispatch();
+		core.dispatch(self);
 	}
 
-	fn on_remote_header_response(&self, network_sender: &NetworkChan, peer: NodeIndex, response: message::RemoteHeaderResponse<B::Header>) {
-		self.accept_response("header", network_sender, peer, response.id, |request| match request.data {
+	fn on_remote_header_response(&self, peer: NodeIndex, response: message::RemoteHeaderResponse<B::Header>) {
+		self.accept_response("header", peer, response.id, |request| match request.data {
 			RequestData::RemoteHeader(request, sender) => match self.checker.check_header_proof(&request, response.header, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
@@ -257,8 +263,8 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 		})
 	}
 
-	fn on_remote_read_response(&self, network_sender: &NetworkChan, peer: NodeIndex, response: message::RemoteReadResponse) {
-		self.accept_response("read", network_sender, peer, response.id, |request| match request.data {
+	fn on_remote_read_response(&self, peer: NodeIndex, response: message::RemoteReadResponse) {
+		self.accept_response("read", peer, response.id, |request| match request.data {
 			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
@@ -271,8 +277,8 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 		})
 	}
 
-	fn on_remote_call_response(&self, network_sender: &NetworkChan, peer: NodeIndex, response: message::RemoteCallResponse) {
-		self.accept_response("call", network_sender, peer, response.id, |request| match request.data {
+	fn on_remote_call_response(&self, peer: NodeIndex, response: message::RemoteCallResponse) {
+		self.accept_response("call", peer, response.id, |request| match request.data {
 			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, response.proof) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
@@ -285,8 +291,8 @@ impl<B> OnDemandService<B> for OnDemand<B> where
 		})
 	}
 
-	fn on_remote_changes_response(&self, network_sender: &NetworkChan, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
-		self.accept_response("changes", network_sender, peer, response.id, |request| match request.data {
+	fn on_remote_changes_response(&self, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
+		self.accept_response("changes", peer, response.id, |request| match request.data {
 			RequestData::RemoteChanges(request, sender) => match self.checker.check_changes_proof(
 				&request, ChangesProof {
 					max_block: response.max,
@@ -406,7 +412,7 @@ impl<B> OnDemandCore<B> where
 		}
 	}
 
-	pub fn dispatch(&mut self) {
+	pub fn dispatch(&mut self, on_demand: &OnDemand<B>) {
 
 		let mut last_peer = self.idle_peers.back().cloned();
 		let mut unhandled_requests = VecDeque::new();
@@ -452,8 +458,7 @@ impl<B> OnDemandCore<B> where
 			let mut request = self.pending_requests.pop_front().expect("checked in loop condition; qed");
 			request.timestamp = Instant::now();
 			trace!(target: "sync", "Dispatching remote request {} to peer {}", request.id, peer);
-			let sender = self.network_sender.as_ref().expect("OnDemand should have a network sender at dispatch");
-			let _ = sender.send(NetworkMsg::Outgoing(peer, request.message().encode()));
+			on_demand.send(NetworkMsg::Outgoing(peer, request.message().encode()));
 			self.active_peers.insert(peer, request);
 		}
 
@@ -528,7 +533,7 @@ pub mod tests {
 	use config::Roles;
 	use message;
 	use network_libp2p::{NodeIndex, ProtocolId, Severity};
-	use service::{network_channel, NetworkChan, NetworkPort, NetworkMsg};
+	use service::{network_channel, NetworkPort, NetworkMsg};
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{changes_trie_config, Block, Header};
 
@@ -581,8 +586,8 @@ pub mod tests {
 		core.idle_peers.len() + core.active_peers.len()
 	}
 
-	fn receive_call_response(on_demand: &OnDemand<Block>, network_sender: &NetworkChan, peer: NodeIndex, id: message::RequestId) {
-		on_demand.on_remote_call_response(network_sender, peer, message::RemoteCallResponse {
+	fn receive_call_response(on_demand: &OnDemand<Block>, peer: NodeIndex, id: message::RequestId) {
+		on_demand.on_remote_call_response(peer, message::RemoteCallResponse {
 			id: id,
 			proof: vec![vec![2]],
 		});
@@ -657,7 +662,7 @@ pub mod tests {
 		assert_eq!(vec![0], on_demand.core.lock().active_peers.keys().cloned().collect::<Vec<_>>());
 
 		on_demand.core.lock().active_peers[&0].timestamp = Instant::now() - REQUEST_TIMEOUT - REQUEST_TIMEOUT;
-		on_demand.maintain_peers(&network_sender);
+		on_demand.maintain_peers();
 		assert!(on_demand.core.lock().idle_peers.is_empty());
 		assert_eq!(vec![1], on_demand.core.lock().active_peers.keys().cloned().collect::<Vec<_>>());
 		assert_disconnected_peer(network_port, Severity::Timeout);
@@ -677,7 +682,7 @@ pub mod tests {
 			call_data: vec![],
 			retry_count: None,
 		});
-		receive_call_response(&*on_demand, &network_sender, 0, 1);
+		receive_call_response(&*on_demand, 0, 1);
 		assert_disconnected_peer(network_port, Severity::Bad("Invalid remote call response from peer".to_string()));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
@@ -696,7 +701,7 @@ pub mod tests {
 		});
 
 		on_demand.on_connect(0, Roles::FULL, 1000);
-		receive_call_response(&*on_demand, &network_sender, 0, 0);
+		receive_call_response(&*on_demand, 0, 0);
 		assert_disconnected_peer(network_port, Severity::Bad("Failed to check remote call response from peer: Backend error: Test error".to_string()));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 	}
@@ -708,7 +713,7 @@ pub mod tests {
 		on_demand.set_network_sender(network_sender.clone());
 		on_demand.on_connect(0, Roles::FULL, 1000);
 
-		receive_call_response(&*on_demand, &network_sender, 0, 0);
+		receive_call_response(&*on_demand, 0, 0);
 		assert_disconnected_peer(network_port, Severity::Bad("Invalid remote call response from peer".to_string()));
 	}
 
@@ -727,7 +732,7 @@ pub mod tests {
 			retry_count: Some(1),
 		});
 
-		on_demand.on_remote_read_response(&network_sender, 0, message::RemoteReadResponse {
+		on_demand.on_remote_read_response(0, message::RemoteReadResponse {
 			id: 0,
 			proof: vec![vec![2]],
 		});
@@ -768,7 +773,7 @@ pub mod tests {
 		for i in 0..retry_count+1 {
 			let mut current = current.lock();
 			*current = *current + 1;
-			receive_call_response(&*on_demand, &network_sender, i, i as u64);
+			receive_call_response(&*on_demand, i, i as u64);
 		}
 
 		let mut finished_at = finished_at.lock();
@@ -797,7 +802,7 @@ pub mod tests {
 			assert_eq!(result, vec![42]);
 		});
 
-		receive_call_response(&*on_demand, &network_sender, 0, 0);
+		receive_call_response(&*on_demand, 0, 0);
 		thread.join().unwrap();
 	}
 
@@ -819,7 +824,7 @@ pub mod tests {
 			assert_eq!(result, Some(vec![42]));
 		});
 
-		on_demand.on_remote_read_response(&network_sender, 0, message::RemoteReadResponse {
+		on_demand.on_remote_read_response(0, message::RemoteReadResponse {
 			id: 0,
 			proof: vec![vec![2]],
 		});
@@ -847,7 +852,7 @@ pub mod tests {
 			);
 		});
 
-		on_demand.on_remote_header_response(&network_sender, 0, message::RemoteHeaderResponse {
+		on_demand.on_remote_header_response(0, message::RemoteHeaderResponse {
 			id: 0,
 			header: Some(Header {
 				parent_hash: Default::default(),
@@ -882,7 +887,7 @@ pub mod tests {
 			assert_eq!(result, vec![(100, 2)]);
 		});
 
-		on_demand.on_remote_changes_response(&network_sender, 0, message::RemoteChangesResponse {
+		on_demand.on_remote_changes_response(0, message::RemoteChangesResponse {
 			id: 0,
 			max: 1000,
 			proof: vec![vec![2]],
@@ -931,7 +936,7 @@ pub mod tests {
 		assert!(!on_demand.core.lock().idle_peers.iter().any(|_| true));
 		assert_eq!(on_demand.core.lock().pending_requests.len(), 1);
 
-		on_demand.on_remote_header_response(&network_sender, 1, message::RemoteHeaderResponse {
+		on_demand.on_remote_header_response(1, message::RemoteHeaderResponse {
 			id: 0,
 			header: Some(dummy_header()),
 			proof: vec![],
