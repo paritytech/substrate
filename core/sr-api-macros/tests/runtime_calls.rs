@@ -58,3 +58,23 @@ fn calling_native_runtime_function_with_non_decodable_return_value() {
 	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
 	runtime_api.fail_convert_return_value(&block_id).unwrap();
 }
+
+#[test]
+fn calling_native_runtime_signature_changed_function() {
+	let client = test_client::new_with_api_execution_strat(ExecutionStrategy::NativeWhenPossible);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+
+	assert_eq!(runtime_api.function_signature_changed(&block_id).unwrap(), 1);
+}
+
+#[test]
+fn calling_wasm_runtime_signature_changed_old_function() {
+	let client = test_client::new_with_api_execution_strat(ExecutionStrategy::AlwaysWasm);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+
+	#[allow(deprecated)]
+	let res = runtime_api.function_signature_changed_before_version_2(&block_id).unwrap();
+	assert_eq!(&res, &[1, 2]);
+}
