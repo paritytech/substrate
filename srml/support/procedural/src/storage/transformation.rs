@@ -194,7 +194,7 @@ fn decl_store_extra_genesis(
 			for t in ext::get_non_bound_serde_derive_types(type_infos.value_type, &traitinstance).into_iter() {
 				serde_complete_bound.insert(t);
 			}
-			if let DeclStorageTypeInfosKind::Map { key_type } = type_infos.kind {
+			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
 				for t in ext::get_non_bound_serde_derive_types(key_type, &traitinstance).into_iter() {
 					serde_complete_bound.insert(t);
 				}
@@ -209,8 +209,7 @@ fn decl_store_extra_genesis(
 				} else {
 					quote!( #d )
 				}).unwrap_or_else(|| quote!( Default::default() ));
-					config_field_default.extend(quote!( #ident: #fielddefault, ));
-
+			config_field_default.extend(quote!( #ident: #fielddefault, ));
 		} else {
 			opt_build = build.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
 		}
@@ -221,20 +220,27 @@ fn decl_store_extra_genesis(
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
-						use #scrate::codec::Encode;
+						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+						use #scrate::codec::{Encode, Decode};
+
+						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
-						r.insert(Self::hash(
-							<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::key()
-							).to_vec(), v.encode());
+						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
+							.expect("Genesis parameters encoding does not match the expected type.");
+						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
-				DeclStorageTypeInfosKind::Map { key_type } => {
+				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{{
-						use #scrate::codec::Encode;
+						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+						use #scrate::codec::{Encode, Decode};
+
+						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							let key = <#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::key_for(&k);
-							r.insert(Self::hash(&key[..]).to_vec(), v.encode());
+							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
+								.expect("Genesis parameters encoding does not match the expected type.");
+							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
 				},
@@ -368,9 +374,9 @@ fn decl_store_extra_genesis(
 			#[cfg(feature = "std")]
 			impl#fparam #scrate::runtime_primitives::BuildStorage for GenesisConfig#sparam {
 
-				fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageMap, #scrate::runtime_primitives::ChildrenStorageMap), String> {
-					let mut r: #scrate::runtime_primitives::StorageMap = Default::default();
-					let mut c: #scrate::runtime_primitives::ChildrenStorageMap = Default::default();
+				fn build_storage(self) -> ::std::result::Result<(#scrate::runtime_primitives::StorageOverlay, #scrate::runtime_primitives::ChildrenStorageOverlay), String> {
+					let mut r: #scrate::runtime_primitives::StorageOverlay = Default::default();
+					let mut c: #scrate::runtime_primitives::ChildrenStorageOverlay = Default::default();
 
 					#builders
 
@@ -404,130 +410,29 @@ fn decl_storage_items(
 		} = sline;
 
 		let type_infos = get_type_infos(storage_type);
-		let gettype = type_infos.value_type;
-		let fielddefault = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
-			.unwrap_or_else(|| quote!{ Default::default() });
-
-		let typ = type_infos.typ;
-
-		let option_simple_1 = if !type_infos.is_option {
-			// raw type case
-			quote!( unwrap_or_else )
-		} else {
-			// Option<> type case
-			quote!( or_else )
+		let kind = type_infos.kind.clone();
+		let i = impls::Impls {
+			scrate,
+			visibility,
+			traitinstance,
+			traittype,
+			type_infos,
+			fielddefault: default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
+				.unwrap_or_else(|| quote!{ Default::default() }),
+			prefix: format!("{} {}", cratename, name),
+			name,
 		};
-		let implementation = match type_infos.kind {
+
+		let implementation = match kind {
 			DeclStorageTypeInfosKind::Simple => {
-				let mutate_impl = if !type_infos.is_option {
-					quote!{
-						<Self as #scrate::storage::generator::StorageValue<#typ>>::put(&val, storage)
-					}
-				} else {
-					quote!{
-						match val {
-							Some(ref val) => <Self as #scrate::storage::generator::StorageValue<#typ>>::put(&val, storage),
-							None => <Self as #scrate::storage::generator::StorageValue<#typ>>::kill(storage),
-						}
-					}
-				};
-
-				let key_string = cratename.to_string() + " " + &name.to_string();
-				// generator for value
-				quote!{
-
-					#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
-
-					impl<#traitinstance: #traittype> #scrate::storage::generator::StorageValue<#typ> for #name<#traitinstance> {
-						type Query = #gettype;
-
-						/// Get the storage key.
-						fn key() -> &'static [u8] {
-							#key_string.as_bytes()
-						}
-
-						/// Load the value from the provided storage instance.
-						fn get<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
-							storage.get(<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::key())
-								.#option_simple_1(|| #fielddefault)
-						}
-
-						/// Take a value from storage, removing it afterwards.
-						fn take<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
-							storage.take(<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::key())
-								.#option_simple_1(|| #fielddefault)
-						}
-
-						/// Mutate the value under a key.
-						fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(f: F, storage: &S) -> R {
-							let mut val = <Self as #scrate::storage::generator::StorageValue<#typ>>::get(storage);
-
-							let ret = f(&mut val);
-							#mutate_impl ;
-							ret
-						}
-					}
-
-				}
+				i.simple_value()
 			},
-			DeclStorageTypeInfosKind::Map { key_type } => {
-				let kty = key_type;
-				let mutate_impl = if !type_infos.is_option {
-					quote!{
-						<Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage)
-					}
-				} else {
-					quote!{
-						match val {
-							Some(ref val) => <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage),
-							None => <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::remove(key, storage),
-						}
-					}
-				};
-				let prefix_string = cratename.to_string() + " " + &name.to_string();
-				// generator for map
-				quote!{
-					#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
-
-					impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
-						type Query = #gettype;
-
-						/// Get the prefix key in storage.
-						fn prefix() -> &'static [u8] {
-							#prefix_string.as_bytes()
-						}
-
-						/// Get the storage key used to fetch a value corresponding to a specific key.
-						fn key_for(x: &#kty) -> #scrate::rstd::vec::Vec<u8> {
-							let mut key = <#name<#traitinstance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::prefix().to_vec();
-							#scrate::codec::Encode::encode_to(x, &mut key);
-							key
-						}
-
-						/// Load the value associated with the given key from the map.
-						fn get<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-							let key = <#name<#traitinstance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key);
-							storage.get(&key[..]).#option_simple_1(|| #fielddefault)
-						}
-
-						/// Take the value, reading and removing it.
-						fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-							let key = <#name<#traitinstance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key);
-							storage.take(&key[..]).#option_simple_1(|| #fielddefault)
-						}
-
-						/// Mutate the value under a key
-						fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
-							let mut val = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::take(key, storage);
-
-							let ret = f(&mut val);
-							#mutate_impl ;
-							ret
-						}
-
-					}
-				}
-			}
+			DeclStorageTypeInfosKind::Map { key_type, is_linked: false } => {
+				i.map(key_type)
+			},
+			DeclStorageTypeInfosKind::Map { key_type, is_linked: true } => {
+				i.linked_map(key_type)
+			},
 		};
 		impls.extend(implementation)
 	}
@@ -574,20 +479,20 @@ fn impl_store_fns(
 			let get_fn = &getter.getfn.content;
 
 			let type_infos = get_type_infos(storage_type);
-			let gettype = type_infos.value_type;
+			let value_type = type_infos.value_type;
 
 			let typ = type_infos.typ;
 			let item = match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{
-						pub fn #get_fn() -> #gettype {
+						pub fn #get_fn() -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
 						}
 					}
 				},
-				DeclStorageTypeInfosKind::Map { key_type } => {
+				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{
-						pub fn #get_fn<K: #scrate::storage::generator::Borrow<#key_type>>(key: K) -> #gettype {
+						pub fn #get_fn<K: #scrate::storage::generator::Borrow<#key_type>>(key: K) -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
@@ -618,7 +523,7 @@ fn store_functions_to_metadata (
 		} = sline;
 
 		let type_infos = get_type_infos(storage_type);
-		let gettype = type_infos.value_type;
+		let value_type = type_infos.value_type;
 
 		let typ = type_infos.typ;
 		let styp = clean_type_string(&typ.to_string());
@@ -630,7 +535,8 @@ fn store_functions_to_metadata (
 					)
 				}
 			},
-			DeclStorageTypeInfosKind::Map { key_type } => {
+			DeclStorageTypeInfosKind::Map { key_type, .. } => {
+				// TODO [ToDr] should it be part of metadata?
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Map {
@@ -693,8 +599,8 @@ fn store_functions_to_metadata (
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					#cache_name.get_or_init(|| {
-						let def_val: #gettype = #default;
-						<#gettype as Encode>::encode(&def_val)
+						let def_val: #value_type = #default;
+						<#value_type as Encode>::encode(&def_val)
 					}).clone()
 				}
 			}
@@ -702,8 +608,8 @@ fn store_functions_to_metadata (
 			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
-					let def_val: #gettype = #default;
-					<#gettype as Encode>::encode(&def_val)
+					let def_val: #value_type = #default;
+					<#value_type as Encode>::encode(&def_val)
 				}
 			}
 		};
@@ -719,17 +625,20 @@ fn store_functions_to_metadata (
 }
 
 
-struct DeclStorageTypeInfos<'a> {
-	is_option: bool,
-	typ: TokenStream2,
-	value_type: &'a syn::Type,
+#[derive(Debug, Clone)]
+pub(crate) struct DeclStorageTypeInfos<'a> {
+	pub is_option: bool,
+	pub typ: TokenStream2,
+	pub value_type: &'a syn::Type,
 	kind: DeclStorageTypeInfosKind<'a>,
 }
 
+#[derive(Debug, Clone)]
 enum DeclStorageTypeInfosKind<'a> {
 	Simple,
 	Map {
 		key_type: &'a syn::Type,
+		is_linked: bool,
 	},
 }
 
@@ -745,7 +654,14 @@ impl<'a> DeclStorageTypeInfosKind<'a> {
 fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 	let (value_type, kind) = match storage_type {
 		DeclStorageType::Simple(ref st) => (st, DeclStorageTypeInfosKind::Simple),
-		DeclStorageType::Map(ref map) => (&map.value, DeclStorageTypeInfosKind::Map { key_type: &map.key }),
+		DeclStorageType::Map(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
+			key_type: &map.key,
+			is_linked: false,
+		}),
+		DeclStorageType::LinkedMap(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
+			key_type: &map.key,
+			is_linked: true,
+		}),
 	};
 
 	let extracted_type = ext::extract_type_option(value_type);

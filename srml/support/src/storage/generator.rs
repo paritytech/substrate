@@ -47,6 +47,7 @@
 //! ```
 
 use crate::codec;
+use crate::rstd::cell::RefCell;
 use crate::rstd::vec::Vec;
 #[doc(hidden)]
 pub use crate::rstd::borrow::Borrow;
@@ -93,6 +94,26 @@ pub trait Storage {
 
 	/// Take a value from storage, deleting it after reading.
 	fn take_or_default<T: codec::Codec + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+}
+
+// We use a construct like this during when genesis storage is being built.
+impl<S: sr_primitives::BuildStorage> Storage for (RefCell<&mut sr_primitives::StorageOverlay>, PhantomData<S>) {
+	fn exists(&self, key: &[u8]) -> bool {
+		self.0.borrow().contains_key(S::hash(key).as_ref())
+	}
+
+	fn get<T: codec::Codec>(&self, key: &[u8]) -> Option<T> {
+		self.0.borrow().get(S::hash(key).as_ref())
+			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
+	}
+
+	fn put<T: codec::Codec>(&self, key: &[u8], val: &T) {
+		self.0.borrow_mut().insert(S::hash(key).to_vec(), codec::Encode::encode(val));
+	}
+
+	fn kill(&self, key: &[u8]) {
+		self.0.borrow_mut().remove(S::hash(key).as_ref());
+	}
 }
 
 /// A strongly-typed value kept in storage.
@@ -192,6 +213,14 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 
 	/// Mutate the value under a key.
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: Storage>(key: &K, f: F, storage: &S) -> R;
+}
+
+/// A `StorageMap` with enumerable entries.
+pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
+	type Enumerator: Iterator<Item=(K, V)>;
+
+	/// Create an enumerator over storage items.
+	fn enumerate<S: Storage>(storage: &S) -> Self::Enumerator;
 }
 
 // FIXME #1466 Remove this in favour of `decl_storage` macro.
