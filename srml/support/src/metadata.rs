@@ -39,7 +39,7 @@ macro_rules! impl_runtime_metadata {
 				let mut registry = $crate::substrate_metadata::MetadataRegistry::new();
 				$crate::metadata::RuntimeMetadata::V2 (
 					$crate::metadata::RuntimeMetadataV2 {
-						modules: __runtime_modules_to_metadata!(registry; $runtime;; $( $rest )*),
+						modules: $crate::__runtime_modules_to_metadata!(registry; $runtime;; $( $rest )*),
 						type_registry: registry
 					}
 				).into()
@@ -63,10 +63,10 @@ macro_rules! __runtime_modules_to_metadata {
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
-				prefix: __runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
-				storage: __runtime_modules_to_metadata_calls_storage!($registry, $mod, $module, $runtime, $(with $kw)*),
-				calls: __runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
-				event: __runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
+				prefix: $crate::__runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
+				storage: $crate::__runtime_modules_to_metadata_calls_storage!($registry, $mod, $module, $runtime, $(with $kw)*),
+				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
+				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
 			};
 			$( $rest )*
 		)
@@ -113,7 +113,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
- 		__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
+ 		$crate::__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
@@ -150,7 +150,7 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		__runtime_modules_to_metadata_calls_event!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_event!( $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
@@ -184,7 +184,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		__runtime_modules_to_metadata_calls_storagename!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_storagename!( $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
@@ -225,7 +225,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		__runtime_modules_to_metadata_calls_storage!( $registry, $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_storage!( $registry, $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$registry: ident,

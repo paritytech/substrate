@@ -124,7 +124,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	});
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+	tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
 }
 
 #[test]
@@ -148,10 +148,13 @@ fn many_nodes_connectivity() {
 								return Ok(Async::Ready(Some(())))
 							}
 						}
-						// TODO: we sometimes receive a closed connection event; maybe this is
-						//	benign, but it would be nice to figure out why
-						//	(https://github.com/libp2p/rust-libp2p/issues/844)
-						Some(ServiceEvent::ClosedCustomProtocol { .. }) => {}
+						Some(ServiceEvent::ClosedCustomProtocol { .. }) => {
+							// Only remove 1 if we haven't returned success yet, otherwise we
+							// will succeed the test multiple times.
+							if num_connecs < NUM_NODES - 1 {
+								num_connecs -= 1;
+							}
+						}
 						_ => panic!(),
 					}
 				}

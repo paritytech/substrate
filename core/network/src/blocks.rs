@@ -19,9 +19,10 @@ use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
+use log::trace;
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
-use message;
+use crate::message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
 
@@ -194,7 +195,7 @@ impl<B: BlockT> BlockCollection<B> {
 #[cfg(test)]
 mod test {
 	use super::{BlockCollection, BlockData, BlockRangeState};
-	use message;
+	use crate::message;
 	use runtime_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
 	use primitives::H256;
 

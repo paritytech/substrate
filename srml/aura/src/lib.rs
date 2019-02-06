@@ -19,38 +19,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec;
-
-extern crate substrate_metadata;
-#[macro_use]
-extern crate substrate_metadata_derive;
-
-#[macro_use]
 extern crate srml_support as runtime_support;
 
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-pub extern crate srml_timestamp as timestamp;
-extern crate srml_staking as staking;
-extern crate substrate_primitives;
-extern crate substrate_inherents as inherents;
-
-#[cfg(test)]
-extern crate srml_consensus as consensus;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-
-#[cfg(test)]
-#[macro_use]
-extern crate lazy_static;
-
-#[cfg(test)]
-extern crate parking_lot;
+pub use timestamp;
 
 use rstd::{result, prelude::*};
 use runtime_support::storage::StorageValue;
@@ -60,6 +31,7 @@ use timestamp::OnTimestampSet;
 use timestamp::TimestampInherentData;
 #[cfg(feature = "std")]
 use parity_codec::Decode;
+use parity_codec_derive::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -180,28 +152,13 @@ impl AuraReport {
 	pub fn punish<F>(&self, validator_count: usize, mut punish_with: F)
 		where F: FnMut(usize, usize)
 	{
-		let start_slot = self.start_slot % validator_count;
-
-		// the number of times everyone was skipped.
-		let skipped_all = self.skipped / validator_count;
-		// the number of validators who were skipped once after that.
-		let skipped_after = self.skipped % validator_count;
-
-		let iter = (start_slot..validator_count).into_iter()
-			.chain(0..start_slot)
-			.enumerate();
-
-		for (rel_index, actual_index) in iter {
-			let slash_count = skipped_all + if rel_index < skipped_after {
-				1
-			} else {
-				// avoid iterating over all authorities when skipping a couple.
-				if skipped_all == 0 { break }
-				0
-			};
-
-			if slash_count > 0 {
-				punish_with(actual_index, slash_count);
+		// If all validators have been skipped, then it implies some sort of
+		// systematic problem common to all rather than a minority of validators
+		// unfulfilling their specific duties. In this case, it doesn't make
+		// sense to punish anyone, so we guard against it.
+		if self.skipped < validator_count {
+			for index in 0..self.skipped {
+				punish_with((self.start_slot + index) % validator_count, 1);
 			}
 		}
 	}

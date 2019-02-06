@@ -16,7 +16,9 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use H256;
+use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
+use crate::H256;
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode, EncodeMetadata)]
@@ -25,15 +27,15 @@ pub struct Ed25519AuthorityId(pub [u8; 32]);
 #[cfg(feature = "std")]
 impl ::std::fmt::Display for Ed25519AuthorityId {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", ::ed25519::Public(self.0).to_ss58check())
+		write!(f, "{}", crate::ed25519::Public(self.0).to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
 impl ::std::fmt::Debug for Ed25519AuthorityId {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		let h = format!("{}", ::hexdisplay::HexDisplay::from(&self.0));
-		write!(f, "{} ({}…{})", ::ed25519::Public(self.0).to_ss58check(), &h[0..8], &h[60..])
+		let h = format!("{}", crate::hexdisplay::HexDisplay::from(&self.0));
+		write!(f, "{} ({}…{})", crate::ed25519::Public(self.0).to_ss58check(), &h[0..8], &h[60..])
 	}
 }
 
@@ -83,13 +85,13 @@ impl Into<H256> for Ed25519AuthorityId {
 #[cfg(feature = "std")]
 impl Serialize for Ed25519AuthorityId {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		::ed25519::serialize(&self, serializer)
+		crate::ed25519::serialize(&self, serializer)
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'de> Deserialize<'de> for Ed25519AuthorityId {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		::ed25519::deserialize(deserializer)
+		crate::ed25519::deserialize(deserializer)
 	}
 }

@@ -21,41 +21,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate substrate_metadata;
-#[macro_use]
-extern crate substrate_metadata_derive;
-
-extern crate num_traits;
-extern crate integer_sqrt;
-#[macro_use]
-extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
 #[doc(hidden)]
-pub extern crate parity_codec as codec;
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate serde_json;
+pub use parity_codec as codec;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use serde_derive;
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
 use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
+use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
 
 #[cfg(feature = "std")]
 use substrate_primitives::hexdisplay::ascii_format;
@@ -93,6 +71,8 @@ macro_rules! create_runtime_str {
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
 
 /// A set of key value pairs for storage.
 #[cfg(feature = "std")]
@@ -110,7 +90,7 @@ pub trait BuildStorage {
 	/// Default to xx128 hashing.
 	fn hash(data: &[u8]) -> [u8; 16] {
 		let r = runtime_io::twox_128(data);
-		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
+		log::trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
 		r
 	}
 	/// Build the storage out of this builder.
@@ -347,7 +327,7 @@ macro_rules! __impl_outer_config_types {
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig<$concrete>;
-		__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! {$concrete $($rest)*}
 	};
 	(
 		$concrete:ident $config:ident $snake:ident $( $rest:tt )*
@@ -372,7 +352,7 @@ macro_rules! impl_outer_config {
 			$( $config:ident => $snake:ident $( < $generic:ident > )*, )*
 		}
 	) => {
-		__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
+		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
 		#[cfg(any(feature = "std", test))]
 		#[derive(Serialize, Deserialize)]
 		#[serde(rename_all = "camelCase")]
@@ -427,16 +407,16 @@ macro_rules! impl_outer_log {
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, EncodeMetadata)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[derive(Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize, $crate::substrate_metadata::EncodeMetadata))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
 
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize, $crate::substrate_metadata::EncodeMetadata))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -545,7 +525,7 @@ pub struct OpaqueExtrinsic(pub Vec<u8>);
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		::codec::Encode::using_encoded(&self.0, |bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
+		codec::Encode::using_encoded(&self.0, |bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
@@ -558,8 +538,9 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;
-	use codec::{Encode as EncodeHidden, Decode as DecodeHidden};
-	use traits::DigestItem;
+	use crate::codec::{Encode as EncodeHidden, Decode as DecodeHidden};
+	use parity_codec_derive::{Encode, Decode};
+	use crate::traits::DigestItem;
 
 	pub trait RuntimeT {
 		type AuthorityId;
@@ -573,6 +554,8 @@ mod tests {
 
 	mod a {
 		use super::RuntimeT;
+		use parity_codec_derive::{Encode, Decode};
+		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -581,6 +564,8 @@ mod tests {
 
 	mod b {
 		use super::RuntimeT;
+		use parity_codec_derive::{Encode, Decode};
+		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -638,24 +623,24 @@ mod tests {
 	fn compact_permill_perbill_encoding() {
 		let tests = [(0u32, 1usize), (63, 1), (64, 2), (16383, 2), (16384, 4), (1073741823, 4), (1073741824, 5), (u32::max_value(), 5)];
 		for &(n, l) in &tests {
-			let compact: codec::Compact<super::Permill> = super::Permill(n).into();
+			let compact: crate::codec::Compact<super::Permill> = super::Permill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
+			let decoded = <crate::codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
 			let permill: super::Permill = decoded.into();
 			assert_eq!(permill, super::Permill(n));
 
-			let compact: codec::Compact<super::Perbill> = super::Perbill(n).into();
+			let compact: crate::codec::Compact<super::Perbill> = super::Perbill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
+			let decoded = <crate::codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
 			let perbill: super::Perbill = decoded.into();
 			assert_eq!(perbill, super::Perbill(n));
 		}
 	}
 
 	#[derive(Encode, Decode, PartialEq, Eq, Debug)]
-	struct WithCompact<T: codec::HasCompact> {
+	struct WithCompact<T: crate::codec::HasCompact> {
 		data: T,
 	}
 

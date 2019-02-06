@@ -29,9 +29,6 @@
 #![recursion_limit="128"]
 
 #[macro_use]
-extern crate log;
-
-#[macro_use]
 mod wasm_utils;
 mod wasm_executor;
 #[macro_use]

@@ -27,29 +27,9 @@
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-#[macro_use]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-
-extern crate substrate_metadata;
-#[macro_use]
-extern crate substrate_metadata_derive;
-
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-#[cfg(test)]
-extern crate substrate_primitives;
-
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use codec::Codec;
+use parity_codec::Codec;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, SimpleArithmetic, MakePayment,

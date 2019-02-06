@@ -6,6 +6,7 @@ ROOT=`dirname "$0"`
 SRCS=(
 	"core/executor/wasm"
 	"node/runtime/wasm"
+	"node-template/runtime/wasm"
 	"core/test-runtime/wasm"
 )
 
