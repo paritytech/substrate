@@ -20,7 +20,7 @@
 
 use primitives::{generic, testing::{self, UintAuthorityId}, traits::OnFinalise};
 use runtime_io::with_externalities;
-use mock::{Consensus, System, new_test_ext};
+use crate::mock::{Consensus, System, new_test_ext};
 use inherents::{InherentData, ProvideInherent};
 
 #[test]

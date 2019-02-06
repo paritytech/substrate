@@ -21,7 +21,7 @@
 use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
-use {Trait, Module, consensus, system, timestamp};
+use crate::{Trait, Module};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}

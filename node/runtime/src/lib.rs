@@ -66,8 +66,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 18,
-	impl_version: 18,
+	spec_version: 19,
+	impl_version: 19,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -203,7 +203,7 @@ construct_runtime!(
 		Indices: indices,
 		Balances: balances,
 		Session: session,
-		Staking: staking,
+		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy,
 		Council: council::{Module, Call, Storage, Event<T>},
 		CouncilVoting: council_voting,
