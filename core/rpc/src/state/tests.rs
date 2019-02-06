@@ -17,6 +17,7 @@
 use super::*;
 use self::error::{Error, ErrorKind};
 
+use assert_matches::assert_matches;
 use consensus::BlockOrigin;
 use rustc_hex::FromHex;
 use test_client::{self, runtime, keyring::Keyring, TestClient, BlockBuilderExt};

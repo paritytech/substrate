@@ -17,20 +17,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{io, thread};
+use log::{warn, debug, error, trace};
 use futures::{Async, Future, Stream, stream, sync::oneshot};
 use parking_lot::Mutex;
 use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
-use consensus_gossip::ConsensusGossip;
-use protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
-use codec::Decode;
-use config::Params;
+use crate::consensus_gossip::ConsensusGossip;
+use crate::protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
+use parity_codec::Decode;
+use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
-use error::Error;
+use crate::error::Error;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use specialization::NetworkSpecialization;
+use crate::specialization::NetworkSpecialization;
 
 use tokio::prelude::task::AtomicTask;
 use tokio::runtime::Runtime;

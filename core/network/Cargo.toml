@@ -4,6 +4,7 @@ name = "substrate-network"
 version = "0.1.0"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [lib]
 
@@ -18,24 +19,22 @@ linked-hash-map = "0.5"
 lru-cache = "0.1.1"
 rustc-hex = "2.0"
 rand = "0.6"
-substrate-primitives = { path = "../../core/primitives" }
-substrate-consensus-common = { path = "../../core/consensus/common" }
-substrate-client = { path = "../../core/client" }
-sr-primitives = { path = "../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
+client = { package = "substrate-client", path = "../../core/client" }
+runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 parity-codec = "3.0"
 parity-codec-derive = "3.0"
-substrate-network-libp2p = { path = "../../core/network-libp2p" }
+network_libp2p = { package = "substrate-network-libp2p", path = "../../core/network-libp2p" }
 tokio = "0.1.11"
-
-env_logger = { version = "0.6", optional = true }
-substrate-keyring = { path = "../../core/keyring", optional = true }
-substrate-test-client = { path = "../../core/test-client", optional = true }
+keyring = { package = "substrate-keyring", path = "../../core/keyring", optional = true }
+test_client = { package = "substrate-test-client", path = "../../core/test-client", optional = true }
 
 [dev-dependencies]
 env_logger = { version = "0.6" }
-substrate-keyring = { path = "../../core/keyring" }
-substrate-test-client = { path = "../../core/test-client" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+test_client = { package = "substrate-test-client", path = "../../core/test-client" }
 
 [features]
 default = []
-test-helpers = ["env_logger", "substrate-keyring", "substrate-test-client"]
+test-helpers = ["keyring", "test_client"]
