@@ -769,21 +769,21 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
-				let reason = &format!(
+				let reason = format!(
 					"Peer is on different chain (our genesis: {} theirs: {})",
 					self.genesis_hash, status.genesis_hash
 				);
 				self.network_chan.send(NetworkMsg::ReportPeer(
 					who,
-					Severity::Bad(reason.to_string()),
+					Severity::Bad(reason),
 				));
 				return;
 			}
 			if status.version != CURRENT_VERSION {
-				let reason = &format!("Peer using unsupported protocol version {}", status.version);
+				let reason = format!("Peer using unsupported protocol version {}", status.version);
 				self.network_chan.send(NetworkMsg::ReportPeer(
 					who,
-					Severity::Bad(reason.to_string()),
+					Severity::Bad(reason),
 				));
 				return;
 			}

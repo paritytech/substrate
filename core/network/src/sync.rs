@@ -211,7 +211,7 @@ impl<B: BlockT> PendingJustifications<B> {
 				} else {
 					protocol.report_peer(
 						who,
-						Severity::Bad(format!("Invalid justification provided for #{}", request.0).to_string()),
+						Severity::Bad(format!("Invalid justification provided for #{}", request.0)),
 					);
 				}
 			} else {
@@ -332,16 +332,16 @@ impl<B: BlockT> ChainSync<B> {
 			match (block_status(&*protocol.client(), &*self.import_queue, info.best_hash), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
-					let reason = &format!("Error legimimately reading blockchain status: {:?}", e);
-					protocol.report_peer(who, Severity::Useless(reason.to_string()));
+					let reason = format!("Error legimimately reading blockchain status: {:?}", e);
+					protocol.report_peer(who, Severity::Useless(reason));
 				},
 				(Ok(BlockStatus::KnownBad), _) => {
-					let reason = &format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
-					protocol.report_peer(who, Severity::Bad(reason.to_string()));
+					let reason = format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who, Severity::Bad(reason));
 				},
 				(Ok(BlockStatus::Unknown), b) if b == As::sa(0) => {
-					let reason = &format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
-					protocol.report_peer(who, Severity::Bad(reason.to_string()));
+					let reason = format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who, Severity::Bad(reason));
 				},
 				(Ok(BlockStatus::Unknown), _) if self.import_queue.status().importing_count > MAJOR_SYNC_BLOCKS => {
 					// when actively syncing the common point moves too fast.
@@ -464,8 +464,8 @@ impl<B: BlockT> ChainSync<B> {
 									return None;
 								},
 								Err(e) => {
-									let reason = &format!("Error answering legitimate blockchain query: {:?}", e);
-									protocol.report_peer(who, Severity::Useless(reason.to_string()));
+									let reason = format!("Error answering legitimate blockchain query: {:?}", e);
+									protocol.report_peer(who, Severity::Useless(reason));
 									return None;
 								}
 							}
@@ -521,7 +521,7 @@ impl<B: BlockT> ChainSync<B> {
 								response.hash,
 							);
 
-							protocol.report_peer(who, Severity::Bad(msg.to_string()));
+							protocol.report_peer(who, Severity::Bad(msg));
 							return;
 						}
 
@@ -538,7 +538,7 @@ impl<B: BlockT> ChainSync<B> {
 							hash,
 						);
 
-						protocol.report_peer(who, Severity::Useless(msg.to_string()));
+						protocol.report_peer(who, Severity::Useless(msg));
 						return;
 					},
 				}

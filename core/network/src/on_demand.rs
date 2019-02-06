@@ -169,8 +169,8 @@ impl<B: BlockT> OnDemand<B> where
 		let request = match core.remove(peer, request_id) {
 			Some(request) => request,
 			None => {
-				let reason = &format!("Invalid remote {} response from peer", rtype);
-				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason.to_string())));
+				let reason = format!("Invalid remote {} response from peer", rtype);
+				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
 				core.remove_peer(peer);
 				return;
 			},
@@ -180,8 +180,8 @@ impl<B: BlockT> OnDemand<B> where
 		let (retry_count, retry_request_data) = match try_accept(request) {
 			Accept::Ok => (retry_count, None),
 			Accept::CheckFailed(error, retry_request_data) => {
-				let reason = &format!("Failed to check remote {} response from peer: {}", rtype, error);
-				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason.to_string())));
+				let reason = format!("Failed to check remote {} response from peer: {}", rtype, error);
+				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
 				core.remove_peer(peer);
 
 				if retry_count > 0 {
@@ -193,8 +193,8 @@ impl<B: BlockT> OnDemand<B> where
 				}
 			},
 			Accept::Unexpected(retry_request_data) => {
-				let reason = &format!("Unexpected response to remote {} from peer", rtype);
-				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason.to_string())));
+				let reason = format!("Unexpected response to remote {} from peer", rtype);
+				let _ = network_sender.send(NetworkMsg::ReportPeer(peer, Severity::Bad(reason)));
 				core.remove_peer(peer);
 
 				(retry_count, Some(retry_request_data))
