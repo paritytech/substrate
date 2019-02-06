@@ -541,7 +541,7 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 		Self::make_transfer(from, to, amount)
 	}
 
-	fn transfer_from(who: &T::AccountId, value: T::Balance) -> Result {
+	fn remove_from(who: &T::AccountId, value: T::Balance) -> Result {
 		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
 		let b = Self::free_balance(who);
 		if b < value {
@@ -552,7 +552,7 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 		Ok(())
 	}
 
-	fn transfer_to(who: &T::AccountId, value: T::Balance) -> Result {
+	fn add_to(who: &T::AccountId, value: T::Balance) -> Result {
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
 		Self::increase_total_stake_by(value);
 		Ok(())

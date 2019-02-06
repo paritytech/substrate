@@ -89,7 +89,7 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 	type Amount = T::Amount;
 
 	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		T::TransferAsset::transfer_from(transactor, amount).and_then(|_| {
+		T::TransferAsset::remove_from(transactor, amount).and_then(|_| {
 			match <system::Module<T>>::extrinsic_index() {
 				Some(extrinsic_index) => {
 					let current_fee = Self::current_transaction_fee(extrinsic_index);
@@ -103,7 +103,7 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 	}
 
 	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		T::TransferAsset::transfer_to(transactor, amount).and_then(|_| {
+		T::TransferAsset::add_to(transactor, amount).and_then(|_| {
 			match <system::Module<T>>::extrinsic_index() {
 				Some(extrinsic_index) => {
 					let current_fee = Self::current_transaction_fee(extrinsic_index);
