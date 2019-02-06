@@ -17,7 +17,8 @@
 //! Definition of a sandbox environment.
 
 #[cfg(test)]
-use codec::Encode;
+use parity_codec::Encode;
+use parity_codec_derive::{Encode, Decode};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
@@ -185,7 +186,7 @@ pub const ERR_EXECUTION: u32 = -3i32 as u32;
 mod tests {
 	use super::*;
 	use std::fmt;
-	use codec::Codec;
+	use parity_codec::Codec;
 
 	fn roundtrip<S: Codec + PartialEq + fmt::Debug>(s: S) {
 		let encoded = s.encode();

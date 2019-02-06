@@ -16,10 +16,11 @@
 
 //! On-demand requests service.
 
-use codec::Encode;
+use parity_codec::Encode;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
+use log::trace;
 use futures::{Async, Future, Poll};
 use futures::sync::oneshot::{channel, Receiver, Sender as OneShotSender};
 use linked_hash_map::LinkedHashMap;
@@ -28,10 +29,10 @@ use parking_lot::Mutex;
 use client::{error::{Error as ClientError, ErrorKind as ClientErrorKind}};
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
-use message;
+use crate::message;
 use network_libp2p::{Severity, NodeIndex};
-use config::Roles;
-use service::{NetworkChan, NetworkMsg};
+use crate::config::Roles;
+use crate::service::{NetworkChan, NetworkMsg};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Remote request timeout.
@@ -530,10 +531,10 @@ pub mod tests {
 	use client::{error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof};
-	use config::Roles;
-	use message;
+	use crate::config::Roles;
+	use crate::message;
 	use network_libp2p::{NodeIndex, ProtocolId, Severity};
-	use service::{network_channel, NetworkPort, NetworkMsg};
+	use crate::service::{network_channel, NetworkPort, NetworkMsg};
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{changes_trie_config, Block, Header};
 

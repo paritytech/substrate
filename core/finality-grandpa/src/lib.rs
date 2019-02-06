@@ -102,7 +102,7 @@ use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
 
-use network::{Service as NetworkService, ExHashT};
+use network::Service as NetworkService;
 use network::consensus_gossip::ConsensusMessage;
 use std::sync::Arc;
 use std::time::Duration;

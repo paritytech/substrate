@@ -17,18 +17,19 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use protocol::Context;
+use log::{trace, debug};
+use crate::protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
-use blocks::BlockCollection;
+use crate::blocks::BlockCollection;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
 use runtime_primitives::generic::BlockId;
-use message::{self, generic::Message as GenericMessage};
-use config::Roles;
+use crate::message::{self, generic::Message as GenericMessage};
+use crate::config::Roles;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -790,7 +791,7 @@ impl<B: BlockT> ChainSync<B> {
 
 /// Get block status, taking into account import queue.
 fn block_status<B: BlockT>(
-	chain: &::chain::Client<B>,
+	chain: &crate::chain::Client<B>,
 	queue: &ImportQueue<B>,
 	hash: B::Hash) -> Result<BlockStatus, ClientError>
 {

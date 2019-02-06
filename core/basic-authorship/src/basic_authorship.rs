@@ -24,7 +24,7 @@ use log::{info, debug, trace};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
-	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{Core, ApiExt}
+	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::Core,
 };
 use codec::Decode;
 use consensus_common::{self, evaluation};

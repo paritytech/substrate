@@ -20,8 +20,9 @@
 use std::fmt;
 
 use rstd::prelude::*;
-use codec::{Decode, Encode, Codec, Input, HasCompact};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
+use parity_codec_derive::{Encode, Decode};
+use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
 use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -92,7 +93,7 @@ where
 			Some(SignatureContent{signed, signature, index}) => {
 				let payload = (index, self.function);
 				let signed = context.lookup(signed)?;
-				if !::verify_encoded_lazy(&signature, &payload, &signed) {
+				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err("bad signature in extrinsic")
 				}
 				CheckedExtrinsic {
@@ -172,7 +173,7 @@ where
 
 #[cfg(test)]
 mod test {
-	use codec::{Decode, Encode};
+	use crate::codec::{Decode, Encode};
 	use super::UncheckedExtrinsic;
 
 	#[test]
