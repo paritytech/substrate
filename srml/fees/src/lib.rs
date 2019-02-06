@@ -22,8 +22,6 @@
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-use parity_codec_derive::{Encode, Decode};
-
 use runtime_support::{Parameter, dispatch::Result, StorageMap};
 use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee, TransferAsset};
 use system;
@@ -44,12 +42,14 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		fn on_finalise() {
-			let extrinsic_count = match <system::Module<T>>::extrinsic_count() {
-				Some(extrinsic_count) => extrinsic_count,
-				None => return,
-			};
+			let extrinsic_count = <system::Module<T>>::extrinsic_count();
 			(0..extrinsic_count).for_each(|index| {
-				Self::deposit_event(RawEvent::Charged(index.clone(), Self::current_transaction_fee(index.clone())));
+				// Deposit `Charged` event if some amount of fee charged.
+				let fee = Self::current_transaction_fee(index.clone());
+				if fee.as_() != 0 {
+					Self::deposit_event(RawEvent::Charged(index.clone(), fee));
+				}
+				// Remove transaction fee records of current block.
 				<CurrentTransactionFee<T>>::remove(index);
 			});
 		}
@@ -64,7 +64,7 @@ decl_event!(
 );
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Assets {
+	trait Store for Module<T: Trait> as Fees {
 		/// The fee to be paid for making a transaction; the base.
 		pub TransactionBaseFee get(transaction_base_fee) config(): T::Amount;
 		/// The fee to be paid for making a transaction; the per-byte portion.

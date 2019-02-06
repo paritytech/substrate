@@ -219,7 +219,7 @@ construct_runtime!(
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
-		Fees: fees::{Module, Storage, Event<T>},
+		Fees: fees::{Module, Storage, Config<T>, Event<T>},
 	}
 );
 
