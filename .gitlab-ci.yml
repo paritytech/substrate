@@ -107,10 +107,11 @@ build:rust:linux:release:          &build
     - mkdir -p ./artifacts
     - mv ./target/release/substrate ./artifacts/.
     - echo -n "Substrate version = "
-    - ./artifacts/substrate --version | 
+    - ./artifacts/substrate --version |
       sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
       tee ./artifacts/VERSION
     - sha256sum ./artifacts/substrate | tee ./artifacts/substrate.sha256
+    - ./scripts/node-template-release.sh ./artifacts/substrate-node-template.tar.gz
 
 
 
@@ -169,6 +170,27 @@ publish:docker:release:
     - docker logout
 
 
+
+
+# configures aws for fast uploads/syncs
+.s3_before_script:                &s3_before_script
+  before_script:
+    - mkdir -p ${HOME}/.aws
+    - |
+      cat > ${HOME}/.aws/config <<EOC
+      [default]
+      s3 =
+        max_concurrent_requests = 20
+        max_queue_size = 10000
+        multipart_threshold = 64MB
+        multipart_chunksize = 16MB
+        max_bandwidth = 50MB/s
+        use_accelerate_endpoint = false
+        addressing_style = path
+      EOC
+
+
+
 publish:s3:release:
   <<:                              *publish_build
   image:                           parity/awscli:latest
@@ -176,10 +198,19 @@ publish:s3:release:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate/${ARCH}-${DOCKER_OS}"
+  <<:                              *s3_before_script
   script:
     - aws s3 sync ./artifacts/ s3://${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/
+    - echo "update objects in latest path"
+    - for file in ./artifacts/*; do
+      name="$(basename ${file})";
+      aws s3api copy-object
+        --copy-source ${BUCKET}/${PREFIX}/$(cat ./artifacts/VERSION)/${name}
+        --bucket ${BUCKET} --key ${PREFIX}/latest/${name};
+      done
   after_script:
-    - aws s3 ls s3://${BUCKET}/${PREFIX}/
+    - aws s3 ls s3://${BUCKET}/${PREFIX}/latest/
+        --recursive --human-readable --summarize
   tags:
     - linux-docker
 
@@ -199,26 +230,12 @@ publish:s3:doc:
     GIT_STRATEGY:                  none
     BUCKET:                        "releases.parity.io"
     PREFIX:                        "substrate-rustdoc"
-  before_script:
-    - mkdir -p ${HOME}/.aws
-    - |
-      cat > ${HOME}/.aws/config <<EOC
-      [default]
-      s3 =
-        max_concurrent_requests = 20
-        max_queue_size = 10000
-        multipart_threshold = 64MB
-        multipart_chunksize = 16MB
-        max_bandwidth = 50MB/s
-        use_accelerate_endpoint = false
-        addressing_style = path
-      EOC
+  <<:                              *s3_before_script
   script:
-    - aws s3 sync --delete --size-only --only-show-errors ./crate-docs/ s3://${BUCKET}/${PREFIX}/
+    - aws s3 sync --delete --size-only --only-show-errors
+        ./crate-docs/ s3://${BUCKET}/${PREFIX}/
   after_script:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
+        --human-readable --summarize
   tags:
     - linux-docker
-
-
-
