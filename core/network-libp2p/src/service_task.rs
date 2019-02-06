@@ -16,7 +16,6 @@
 
 use crate::{behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key, transport};
 use crate::custom_proto::{RegisteredProtocol, RegisteredProtocols};
-use crate::topology::NetTopology;
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 use bytes::Bytes;
 use fnv::FnvHashMap;
@@ -33,9 +32,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio_timer::Interval;
-
-// File where the network topology is stored.
-const NODES_FILE: &str = "nodes.json";
 
 /// Starts the substrate libp2p service.
 ///
@@ -55,25 +51,12 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
 
-	// Initialize the topology of the network.
-	let mut topology = if let Some(ref path) = config.net_config_path {
-		let path = Path::new(path).join(NODES_FILE);
-		debug!(target: "sub-libp2p", "Initializing peer store for JSON file {:?}", path);
-		NetTopology::from_file(local_public_key, path)
-	} else {
-		debug!(target: "sub-libp2p", "No peers file configured ; peers won't be saved");
-		NetTopology::memory(local_public_key)
-	};
-
-	// Register the external addresses provided by the user as our own.
-	topology.add_external_addrs(config.public_addresses.clone().into_iter());
-
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let registered_custom = RegisteredProtocols(registered_custom.into_iter().collect());
-		let behaviour = Behaviour::new(&config, local_peer_id.clone(), registered_custom);
+		let behaviour = Behaviour::new(&config, local_public_key.clone(), registered_custom);
 		let (transport, bandwidth) = transport::build_transport(local_private_key);
-		(Swarm::new(transport, behaviour, topology), bandwidth)
+		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
 
 	// Listen on multiaddresses.
@@ -87,11 +70,15 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 		}
 	}
 
-	// Add the bootstrap nodes to the topology and connect to them.
+	// Add external addresses.
+	for addr in &config.public_addresses {
+		Swarm::add_external_address(&mut swarm, addr.clone());
+	}
+
+	// Connect to the bootnodes.
 	for bootnode in config.boot_nodes.iter() {
 		match parse_str_addr(bootnode) {
-			Ok((peer_id, addr)) => {
-				Swarm::topology_mut(&mut swarm).add_bootstrap_addr(&peer_id, addr.clone());
+			Ok((peer_id, _)) => {
 				Swarm::dial(&mut swarm, peer_id);
 			},
 			Err(_) => {
@@ -118,8 +105,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	// Initialize the reserved peers.
 	for reserved in config.reserved_nodes.iter() {
 		if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
-			Swarm::topology_mut(&mut swarm).add_bootstrap_addr(&peer_id, addr);
-			swarm.add_reserved_peer(peer_id.clone());
+			swarm.add_reserved_peer(peer_id.clone(), addr);
 			Swarm::dial(&mut swarm, peer_id);
 		} else {
 			warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved);
@@ -127,7 +113,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	}
 
 	debug!(target: "sub-libp2p", "Topology started with {} entries",
-		Swarm::topology_mut(&mut swarm).num_peers());
+		swarm.num_topology_peers());
 
 	Ok(Service {
 		swarm,
@@ -195,7 +181,7 @@ pub enum ServiceEvent {
 /// Network service. Must be polled regularly in order for the networking to work.
 pub struct Service {
 	/// Stream of events of the swarm.
-	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<Substream<StreamMuxerBox>>, NetTopology>,
+	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<Substream<StreamMuxerBox>>>,
 
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
@@ -261,8 +247,7 @@ impl Service {
 
 	/// Try to add a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
-		Swarm::topology_mut(&mut self.swarm).add_bootstrap_addr(&peer_id, addr);
-		self.swarm.add_reserved_peer(peer_id);
+		self.swarm.add_reserved_peer(peer_id, addr);
 	}
 
 	/// Try to remove a reserved peer.
@@ -432,13 +417,13 @@ impl Service {
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
 				Ok(Async::Ready(Some(_))) => {
 					debug!(target: "sub-libp2p", "Cleaning and flushing topology");
-					Swarm::topology_mut(&mut self.swarm).cleanup();
-					if let Err(err) = Swarm::topology_mut(&mut self.swarm).flush_to_disk() {
+					self.swarm.cleanup();
+					if let Err(err) = self.swarm.flush_topology() {
 						warn!(target: "sub-libp2p", "Failed to flush topology: {:?}", err);
 					}
 					debug!(target: "sub-libp2p", "Topology now contains {} nodes",
-						Swarm::topology_mut(&mut self.swarm).num_peers());
-				},
+						self.swarm.num_topology_peers());
+				}
 				Ok(Async::Ready(None)) => {
 					warn!(target: "sub-libp2p", "Topology flush stream ended unexpectedly");
 					return Ok(Async::Ready(None))
@@ -454,7 +439,7 @@ impl Service {
 
 impl Drop for Service {
 	fn drop(&mut self) {
-		if let Err(err) = Swarm::topology_mut(&mut self.swarm).flush_to_disk() {
+		if let Err(err) = self.swarm.flush_topology() {
 			warn!(target: "sub-libp2p", "Failed to flush topology: {:?}", err);
 		}
 	}

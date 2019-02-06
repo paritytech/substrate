@@ -20,7 +20,7 @@
 
 use untrusted;
 use blake2_rfc;
-use ring::{rand, signature};
+use ring::{rand, signature, signature::KeyPair};
 use {hash::H512, Ed25519AuthorityId};
 use base58::{ToBase58, FromBase58};
 
@@ -199,9 +199,11 @@ impl Pair {
 	pub fn generate_with_pkcs8() -> (Self, [u8; PKCS_LEN]) {
 		let rng = rand::SystemRandom::new();
 		let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("system randomness is available; qed");
-		let pair = Self::from_pkcs8(&pkcs8_bytes).expect("just-generated pkcs#8 data is valid; qed");
+		let pair = Self::from_pkcs8(&pkcs8_bytes.as_ref()).expect("just-generated pkcs#8 data is valid; qed");
 
-		(pair, pkcs8_bytes)
+		let mut out = [0; PKCS_LEN];
+		out.copy_from_slice(pkcs8_bytes.as_ref());
+		(pair, out)
 	}
 
 	/// Generate new secure (random) key pair.
@@ -211,7 +213,7 @@ impl Pair {
 	}
 
 	/// Generate from pkcs#8 bytes.
-	pub fn from_pkcs8(pkcs8_bytes: &[u8]) -> Result<Self, ::ring::error::Unspecified> {
+	pub fn from_pkcs8(pkcs8_bytes: &[u8]) -> Result<Self, ::ring::error::KeyRejected> {
 		signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).map(Pair)
 	}
 
@@ -234,7 +236,7 @@ impl Pair {
 	/// Get the public key.
 	pub fn public(&self) -> Public {
 		let mut r = [0u8; 32];
-		let pk = self.0.public_key_bytes();
+		let pk = self.0.public_key().as_ref();
 		r.copy_from_slice(pk);
 		Public(r)
 	}

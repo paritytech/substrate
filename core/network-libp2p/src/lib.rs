@@ -21,7 +21,6 @@ mod custom_proto;
 mod error;
 mod secret;
 mod service_task;
-mod topology;
 mod traits;
 mod transport;
 
