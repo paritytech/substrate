@@ -86,8 +86,8 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// corresponding to a function of the module. This enum implements Callable and thus its values
 /// can be used as an extrinsic's payload.
 ///
-/// The `on_finalise` function is special, since it can either take no parameters,
-/// or one parameter, which has the runtime's block number type.
+/// The `on_initialise` and `on_finalise` functions are special, since it can either take no
+/// parameters, or one parameter, which has the runtime's block number type.
 #[macro_export]
 macro_rules! decl_module {
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical
@@ -103,6 +103,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = system
+			{}
 			{}
 			{}
 			[]
@@ -122,6 +123,7 @@ macro_rules! decl_module {
 			for enum $call_type where origin: $origin_type, system = $system
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -132,6 +134,7 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{}
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -143,6 +146,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $vis fn deposit_event $(<$dpeg>)* () = default; }
+			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
 			[ $($t)* ]
 			$($rest)*
@@ -153,6 +157,7 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{}
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -166,6 +171,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $vis fn deposit_event $(<$dpeg>)* ($( $param_name: $param ),* ) { $( $impl )* } }
+			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
 			[ $($t)* ]
 			$($rest)*
@@ -175,7 +181,8 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-			{ $( $deposit_event:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
 		{}
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -187,6 +194,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
+			{ $( $on_initialise )* }
 			{ fn on_finalise( $( $param_name : $param ),* ) { $( $impl )* } }
 			[ $($t)* ]
 			$($rest)*
@@ -197,6 +205,30 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
+		{}
+		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ fn on_initialise( $( $param_name : $param ),* ) { $( $impl )* } }
+			{ $( $on_finalise )* }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -210,6 +242,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
+			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
 			[
 				$($t)*
@@ -226,6 +259,7 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -245,6 +279,7 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -264,6 +299,7 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -277,6 +313,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $deposit_event )* }
+			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
 			[
 				$($t)*
@@ -293,6 +330,7 @@ macro_rules! decl_module {
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 	) => {
@@ -303,6 +341,7 @@ macro_rules! decl_module {
 				$($t)*
 			}
 			{ $( $deposit_event )* }
+			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
 		);
 	};
@@ -374,13 +413,47 @@ macro_rules! decl_module {
 		}
 	};
 
+	(@impl_on_initialise
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		fn on_initialise() { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OnInitialise<$trait_instance::BlockNumber>
+			for $module<$trait_instance>
+		{
+			fn on_initialise(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+		}
+	};
+
+	(@impl_on_initialise
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		fn on_initialise($param:ident : $param_ty:ty) { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OnInitialise<$trait_instance::BlockNumber>
+			for $module<$trait_instance>
+		{
+			fn on_initialise($param: $param_ty) { $( $impl )* }
+		}
+	};
+
+	(@impl_on_initialise
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OnInitialise<$trait_instance::BlockNumber>
+			for $module<$trait_instance>
+		{}
+	};
+
 	(@impl_on_finalise
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		fn on_finalise() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name>
 			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
-			for $module<$trait_instance> {
+			for $module<$trait_instance>
+		{
 			fn on_finalise(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
 		}
 	};
@@ -391,7 +464,8 @@ macro_rules! decl_module {
 	) => {
 		impl<$trait_instance: $trait_name>
 			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
-			for $module<$trait_instance> {
+			for $module<$trait_instance>
+		{
 			fn on_finalise($param: $param_ty) { $( $impl )* }
 		}
 	};
@@ -401,7 +475,9 @@ macro_rules! decl_module {
 	) => {
 		impl<$trait_instance: $trait_name>
 			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
-			for $module<$trait_instance> {}
+			for $module<$trait_instance>
+		{
+		}
 	};
 
 	(@impl_function
@@ -480,6 +556,7 @@ macro_rules! decl_module {
 			)*
 		}
 		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -496,6 +573,12 @@ macro_rules! decl_module {
 		#[cfg_attr(feature = "std", derive(Debug))]
 		#[cfg(not(feature = "std"))]
 		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
+
+		decl_module! {
+			@impl_on_initialise
+			$mod_type<$trait_instance: $trait_name>;
+			$( $on_initialise )*
+		}
 
 		decl_module! {
 			@impl_on_finalise
@@ -972,10 +1055,11 @@ macro_rules! __function_to_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
+	use crate::runtime_primitives::traits::{OnInitialise, OnFinalise};
 
 	pub trait Trait {
 		type Origin;
-		type BlockNumber;
+		type BlockNumber: Into<u32>;
 	}
 
 	pub mod system {
@@ -994,6 +1078,9 @@ mod tests {
 			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
 			fn aux_3() -> Result { unreachable!() }
 			fn aux_4(_data: i32) -> Result { unreachable!() }
+
+			fn on_initialise(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialise") } }
+			fn on_finalise(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalise") } }
 		}
 	}
 
@@ -1064,5 +1151,17 @@ mod tests {
 		let call: Call<TraitImpl> = Call::aux_1(0);
 		let encoded = call.encode();
 		assert_eq!(encoded.len(), 2);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_initialise")]
+	fn on_initialise_should_work() {
+		<Module<TraitImpl> as OnInitialise<u32>>::on_initialise(42);
+	}
+
+	#[test]
+	#[should_panic(expected = "on_finalise")]
+	fn on_finalise_should_work() {
+		<Module<TraitImpl> as OnFinalise<u32>>::on_finalise(42);
 	}
 }
