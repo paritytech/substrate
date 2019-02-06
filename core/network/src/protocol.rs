@@ -870,8 +870,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		let extrinsics = self.transaction_pool.transactions();
-		// TODO: see if self.send_message can be made &self,
-		// so that this vec would become uncessary.
+		// FIXME: find a way to remove this vec. https://github.com/paritytech/substrate/issues/1698
 		let mut will_send = vec![];
 		let mut propagated_to = HashMap::new();
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
@@ -923,8 +922,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 		let hash = header.hash();
 
-		// TODO: see if self.send_message can be made &self,
-		// so that this vec would become uncessary.
+		// FIXME: find a way to remove this vec. https://github.com/paritytech/substrate/issues/1698
 		let mut to_send = vec![];
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
@@ -1004,8 +1002,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		// send out block announcements
 
-		// TODO: see if self.send_message can be made &self,
-		// so that this vec would become uncessary.
+		// FIXME: find a way to remove this vec. https://github.com/paritytech/substrate/issues/1698
 		let mut to_send = vec![];
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			if peer.known_blocks.insert(hash.clone()) {
