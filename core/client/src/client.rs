@@ -1524,17 +1524,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn runtime_api_has_test_api() {
-		let client = test_client::new();
-
-		assert!(
-			client.runtime_api().has_api::<TestAPI<Block>>(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
-			).unwrap()
-		);
-	}
-
-	#[test]
 	fn authorities_call_works() {
 		let client = test_client::new();
 
