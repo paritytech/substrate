@@ -677,7 +677,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>,
 	) {
-		// TODO: validate response
 		let blocks_range = match (
 				response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
 				response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
