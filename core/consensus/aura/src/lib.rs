@@ -780,9 +780,7 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
-					.take_while(|n| {
-						Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5))
-					})
+					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| Ok(()))
 			);
 
@@ -816,7 +814,7 @@ mod tests {
 		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
-				net.lock().sync();
+				net.lock().route_fast();
 				Ok(())
 			})
 			.map(|_| ())
