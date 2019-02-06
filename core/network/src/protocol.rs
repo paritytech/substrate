@@ -884,7 +884,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				let _ = self
 					.network_chan
 					.send(NetworkMsg::GetPeerId(who.clone(), sender));
-				let node_id = port.recv().expect("Failed to receive GetPeerId response");
+				let node_id = port.recv().expect("1. We are running 2. Network should be running too.");
 				if let Some(id) = node_id {
 					for hash in hashes {
 						propagated_to
