@@ -71,6 +71,10 @@ extern crate heapsize;
 #[macro_use]
 extern crate pretty_assertions;
 
+extern crate rand;
+extern crate sha2;
+extern crate schnorrkel;
+
 #[macro_export]
 macro_rules! map {
 	($( $name:expr => $value:expr ),*) => (
@@ -94,6 +98,7 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 pub mod hexdisplay;
 #[cfg(feature = "std")]
 pub mod ed25519;
+pub mod sr25519;
 
 pub mod u32_trait;
 
