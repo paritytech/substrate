@@ -22,19 +22,21 @@ use std::{
 	sync::Arc,
 };
 
+use error_chain::bail;
+use log::{warn, trace};
 use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher, Bytes};
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
-use rpc::Result as RpcResult;
-use rpc::futures::{stream, Future, Sink, Stream};
+use crate::rpc::Result as RpcResult;
+use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, As, NumberFor};
 use runtime_version::RuntimeVersion;
 
-use subscriptions::Subscriptions;
+use crate::subscriptions::Subscriptions;
 
 mod error;
 #[cfg(test)]
@@ -50,38 +52,38 @@ pub trait StateApi<Hash> {
 
 	/// Call a contract at a block's state.
 	#[rpc(name = "state_call", alias("state_callAt"))]
-	fn call(&self, String, Bytes, Option<Hash>) -> Result<Bytes>;
+	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> Result<Bytes>;
 
 	/// Returns the keys with prefix, leave empty to get all the keys
 	#[rpc(name = "state_getKeys")]
-	fn storage_keys(&self, StorageKey, Option<Hash>) -> Result<Vec<StorageKey>>;
+	fn storage_keys(&self, key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>>;
 
 	/// Returns a storage entry at a specific block's state.
 	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
-	fn storage(&self, StorageKey, Option<Hash>) -> Result<Option<StorageData>>;
+	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<StorageData>>;
 
 	/// Returns the hash of a storage entry at a block's state.
 	#[rpc(name = "state_getStorageHash", alias("state_getStorageHashAt"))]
-	fn storage_hash(&self, StorageKey, Option<Hash>) -> Result<Option<Hash>>;
+	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<Hash>>;
 
 	/// Returns the size of a storage entry at a block's state.
 	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
-	fn storage_size(&self, StorageKey, Option<Hash>) -> Result<Option<u64>>;
+	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<u64>>;
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[rpc(name = "state_getMetadata")]
-	fn metadata(&self, Option<Hash>) -> Result<Bytes>;
+	fn metadata(&self, hash: Option<Hash>) -> Result<Bytes>;
 
 	/// Get the runtime version.
 	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
-	fn runtime_version(&self, Option<Hash>) -> Result<RuntimeVersion>;
+	fn runtime_version(&self, hash: Option<Hash>) -> Result<RuntimeVersion>;
 
 	/// Query historical storage entries (by key) starting from a block given as the second parameter.
 	///
 	/// NOTE This first returned result contains the initial state of storage for all keys.
 	/// Subsequent values in the vector represent changes to the previous state (diffs).
 	#[rpc(name = "state_queryStorage")]
-	fn query_storage(&self, Vec<StorageKey>, Hash, Option<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
+	fn query_storage(&self, keys: Vec<StorageKey>, block: Hash, hash: Option<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
 
 	/// New runtime version subscription
 	#[pubsub(
@@ -90,7 +92,7 @@ pub trait StateApi<Hash> {
 		name = "state_subscribeRuntimeVersion",
 		alias("chain_subscribeRuntimeVersion")
 	)]
-	fn subscribe_runtime_version(&self, Self::Metadata, Subscriber<RuntimeVersion>);
+	fn subscribe_runtime_version(&self, metadata: Self::Metadata, subscriber: Subscriber<RuntimeVersion>);
 
 	/// Unsubscribe from runtime version subscription
 	#[pubsub(
@@ -99,15 +101,15 @@ pub trait StateApi<Hash> {
 		name = "state_unsubscribeRuntimeVersion",
 		alias("chain_unsubscribeRuntimeVersion")
 	)]
-	fn unsubscribe_runtime_version(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_runtime_version(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 
 	/// New storage subscription
 	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
-	fn subscribe_storage(&self, Self::Metadata, Subscriber<StorageChangeSet<Hash>>, Option<Vec<StorageKey>>);
+	fn subscribe_storage(&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>);
 
 	/// Unsubscribe from storage subscription
 	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
-	fn unsubscribe_storage(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_storage(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 }
 
 /// State API with subscriptions support.
@@ -274,7 +276,7 @@ impl<B, E, Block, RA> State<B, E, Block, RA> where
 	E: CallExecutor<Block, Blake2Hasher>,
 {
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Result<Block::Hash> {
-		::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
+		crate::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
 	}
 }
 
@@ -286,7 +288,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	Client<B, E, Block, RA>: ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: Metadata<Block>
 {
-	type Metadata = ::metadata::Metadata;
+	type Metadata = crate::metadata::Metadata;
 
 	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;

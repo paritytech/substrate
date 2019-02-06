@@ -18,16 +18,17 @@
 
 use std::sync::Arc;
 
+use log::warn;
 use client::{self, Client, BlockchainEvents};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher};
-use rpc::Result as RpcResult;
-use rpc::futures::{stream, Future, Sink, Stream};
+use crate::rpc::Result as RpcResult;
+use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 
-use subscriptions::Subscriptions;
+use crate::subscriptions::Subscriptions;
 
 mod error;
 #[cfg(test)]
@@ -44,17 +45,17 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 
 	/// Get header of a relay chain block.
 	#[rpc(name = "chain_getHeader")]
-	fn header(&self, Option<Hash>) -> Result<Option<Header>>;
+	fn header(&self, hash: Option<Hash>) -> Result<Option<Header>>;
 
 	/// Get header and body of a relay chain block.
 	#[rpc(name = "chain_getBlock")]
-	fn block(&self, Option<Hash>) -> Result<Option<SignedBlock>>;
+	fn block(&self, hash: Option<Hash>) -> Result<Option<SignedBlock>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
 	#[rpc(name = "chain_getBlockHash", alias("chain_getHead"))]
-	fn block_hash(&self, Option<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
+	fn block_hash(&self, hash: Option<number::NumberOrHex<Number>>) -> Result<Option<Hash>>;
 
 	/// Get hash of the last finalised block in the canon chain.
 	#[rpc(name = "chain_getFinalisedHead")]
@@ -67,7 +68,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		name = "chain_subscribeNewHead",
 		alias("subscribe_newHead")
 	)]
-	fn subscribe_new_head(&self, Self::Metadata, Subscriber<Header>);
+	fn subscribe_new_head(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
 	#[pubsub(
@@ -76,7 +77,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		name = "chain_unsubscribeNewHead",
 		alias("unsubscribe_newHead")
 	)]
-	fn unsubscribe_new_head(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_new_head(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 
 	/// New head subscription
 	#[pubsub(
@@ -84,7 +85,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		subscribe,
 		name = "chain_subscribeFinalisedHeads"
 	)]
-	fn subscribe_finalised_heads(&self, Self::Metadata, Subscriber<Header>);
+	fn subscribe_finalised_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
 
 	/// Unsubscribe from new head subscription.
 	#[pubsub(
@@ -92,7 +93,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		unsubscribe,
 		name = "chain_unsubscribeFinalisedHeads"
 	)]
-	fn unsubscribe_finalised_heads(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
+	fn unsubscribe_finalised_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 }
 
 /// Chain API with subscriptions support.
@@ -169,7 +170,7 @@ impl<B, E, Block, RA> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Sig
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	RA: Send + Sync + 'static
 {
-	type Metadata = ::metadata::Metadata;
+	type Metadata = crate::metadata::Metadata;
 
 	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>> {
 		let hash = self.unwrap_or_best(hash)?;

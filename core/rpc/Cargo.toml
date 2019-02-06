@@ -2,6 +2,7 @@
 name = "substrate-rpc"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
@@ -14,18 +15,18 @@ parity-codec = "3.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-substrate-client = { path = "../client" }
+client = { package = "substrate-client", path = "../client" }
 substrate-executor = { path = "../executor" }
-substrate-network = { path = "../network" }
-substrate-primitives = { path = "../primitives" }
-substrate-transaction-pool = { path = "../transaction-pool" }
-sr-primitives = { path = "../sr-primitives" }
-sr-version = { path = "../sr-version" }
+network = { package = "substrate-network", path = "../network" }
+primitives = { package = "substrate-primitives", path = "../primitives" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../transaction-pool" }
+runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
+runtime_version = { package = "sr-version", path = "../sr-version" }
 tokio = "0.1.7"
 
 [dev-dependencies]
 assert_matches = "1.1"
-substrate-test-client = { path = "../test-client" }
-substrate-consensus-common = { path = "../consensus/common" }
+test_client = { package = "substrate-test-client", path = "../test-client" }
+consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
 rustc-hex = "2.0"
 hex-literal = "0.1"

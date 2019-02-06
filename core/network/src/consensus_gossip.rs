@@ -19,14 +19,15 @@
 
 use std::collections::{HashMap, HashSet};
 use std::time::{Instant, Duration};
+use log::{trace, debug};
 use futures::sync::mpsc;
 use rand::{self, seq::SliceRandom};
 use lru_cache::LruCache;
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
-pub use message::generic::{Message, ConsensusMessage};
-use protocol::Context;
-use config::Roles;
+pub use crate::message::generic::{Message, ConsensusMessage};
+use crate::protocol::Context;
+use crate::config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(120);
