@@ -136,7 +136,7 @@ where
 			protocols,
 			// We keep the connection alive for at least 5 seconds, waiting for what happens.
 			keep_alive: KeepAlive::Until(Instant::now() + Duration::from_secs(5)),
-			state: State::Disabled,
+			state: State::Normal,
 			substreams: SmallVec::new(),
 			events_queue: SmallVec::new(),
 		}
@@ -148,15 +148,10 @@ where
 		proto: RegisteredProtocolSubstream<TSubstream>,
 	) {
 		match self.state {
-			// TODO: Normally we should refuse incoming connections if we're disabled; however
-			// tests are failing if we do that because on localhost substreams arrive quicker than
-			// we receive the "Enabled" message from the network behaviour. Which fix to employ is
-			// kind of blurry. This problem will become irrelevant after
-			// https://github.com/paritytech/substrate/issues/1517
-			// TODO: also, we should shut down refused substreams gracefully; this should be fixed
-			// at the same time as the todo above
-			State::ShuttingDown => return,
-			State::Disabled | State::Normal => ()
+			// TODO: we should shut down refused substreams gracefully; this should be fixed
+			// at the same time as https://github.com/paritytech/substrate/issues/1517
+			State::Disabled | State::ShuttingDown => return,
+			State::Normal => ()
 		}
 
 		if self.substreams.iter().any(|p| p.protocol_id() == proto.protocol_id()) {

@@ -384,6 +384,10 @@ where
 		let is_reserved = self.reserved_peers.contains(&peer_id);
 		if self.reserved_only && !is_reserved {
 			debug!(target: "sub-libp2p", "Ignoring {:?} because we're in reserved mode", peer_id);
+			self.events.push(NetworkBehaviourAction::SendEvent {
+				peer_id: peer_id.clone(),
+				event: CustomProtosHandlerIn::Disable,
+			});
 			return
 		}
 
@@ -392,6 +396,10 @@ where
 			if let Some((_, expire)) = self.banned_peers.iter().find(|(p, _)| p == &peer_id) {
 				if *expire >= Instant::now() {
 					debug!(target: "sub-libp2p", "Ignoring banned peer {:?}", peer_id);
+					self.events.push(NetworkBehaviourAction::SendEvent {
+						peer_id: peer_id.clone(),
+						event: CustomProtosHandlerIn::Disable,
+					});
 					return
 				}
 			}
@@ -407,6 +415,10 @@ where
 
 				debug_assert!(num_outgoing <= self.max_outgoing_connections);
 				if num_outgoing == self.max_outgoing_connections {
+					self.events.push(NetworkBehaviourAction::SendEvent {
+						peer_id: peer_id.clone(),
+						event: CustomProtosHandlerIn::Disable,
+					});
 					return
 				}
 			}
@@ -420,6 +432,10 @@ where
 				if num_ingoing == self.max_incoming_connections {
 					debug!(target: "sub-libp2p", "Ignoring incoming connection from {:?} because \
 						we're full", peer_id);
+					self.events.push(NetworkBehaviourAction::SendEvent {
+						peer_id: peer_id.clone(),
+						event: CustomProtosHandlerIn::Disable,
+					});
 					return
 				}
 			}
