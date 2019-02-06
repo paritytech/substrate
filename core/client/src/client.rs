@@ -1291,7 +1291,6 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			ExecutionContext::Other => ExecutionManager::NativeElseWasm,
 		};
 		let strategy: ExecutionStrategy = (&manager).into();
-		println!("context={:?} strategy={:?}", context, strategy);
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			at,
 			function,
