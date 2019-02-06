@@ -45,7 +45,7 @@ const NODES_FILE: &str = "nodes.json";
 /// Returns a stream that must be polled regularly in order for the networking to function.
 pub fn start_service<TProtos>(
 	config: NetworkConfiguration,
-	registered_custom: TProtos
+	registered_custom: TProtos,
 ) -> Result<Service, Error>
 where TProtos: IntoIterator<Item = RegisteredProtocol> {
 
