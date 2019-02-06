@@ -24,32 +24,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// We need these `extern crate` to be placed here otherwise there will be errors.
+// TODO: https://github.com/paritytech/substrate/issues/1509
 #[macro_use]
 extern crate srml_support as runtime_support;
-
-extern crate sr_std as rstd;
-
-#[macro_use]
 extern crate parity_codec_derive;
-
 extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-
-#[cfg(test)]
-#[macro_use]
-extern crate ref_thread_local;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-#[cfg(test)]
-extern crate substrate_primitives;
 
 use rstd::{prelude::*, result, marker::PhantomData};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
-use address::Address as RawAddress;
 use system::{IsDeadAccount, OnNewAccount};
+
+use self::address::Address as RawAddress;
 
 mod mock;
 
