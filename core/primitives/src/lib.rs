@@ -71,8 +71,11 @@ extern crate heapsize;
 #[macro_use]
 extern crate pretty_assertions;
 
+#[cfg(feature = "std")]
 extern crate rand;
+#[cfg(feature = "std")]
 extern crate sha2;
+#[cfg(feature = "std")]
 extern crate schnorrkel;
 
 #[macro_export]
@@ -98,6 +101,7 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 pub mod hexdisplay;
 #[cfg(feature = "std")]
 pub mod ed25519;
+#[cfg(feature = "std")]
 pub mod sr25519;
 
 pub mod u32_trait;

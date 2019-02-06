@@ -22,9 +22,9 @@ untrusted = { version = "0.6", optional = true }
 hex-literal = { version = "0.1", optional = true }
 base58 = { version = "0.1", optional = true }
 blake2-rfc = { version = "0.2.18", optional = true }
-schnorrkel = { git = "https://github.com/w3f/schnorrkel.git", optional = false }
-rand = { version = "0.6.5", optional = false }
-sha2 = { version = "0.8.0", optional = false }
+schnorrkel = { git = "https://github.com/w3f/schnorrkel.git", optional = true }
+rand = { version = "0.6", optional = true }
+sha2 = { version = "0.8", optional = true }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
@@ -56,4 +56,7 @@ std = [
 	"base58",
 	"serde_derive",
 	"byteorder/std",
+	"rand",
+	"sha2",
+	"schnorrkel",
 ]
