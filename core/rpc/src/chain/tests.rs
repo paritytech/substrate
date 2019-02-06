@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
+use assert_matches::assert_matches;
 use test_client::{self, TestClient};
 use test_client::runtime::{H256, Block, Header};
 use consensus::BlockOrigin;

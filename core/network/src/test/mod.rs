@@ -26,28 +26,29 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use log::trace;
 use client;
 use client::block_builder::BlockBuilder;
-use codec::{Decode, Encode};
-use config::ProtocolConfig;
+use parity_codec::{Decode, Encode};
+use crate::config::ProtocolConfig;
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use consensus_gossip::{ConsensusGossip, ConsensusMessage};
-use crossbeam_channel::{self as channel, Sender};
+use crate::consensus_gossip::{ConsensusGossip, ConsensusMessage};
+use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use keyring::Keyring;
 use network_libp2p::{NodeIndex, ProtocolId, Severity};
 use parking_lot::Mutex;
 use primitives::{H256, Ed25519AuthorityId};
-use protocol::{Context, Protocol, ProtocolMsg, ProtocolStatus};
+use crate::protocol::{Context, Protocol, ProtocolMsg, ProtocolStatus};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, Zero, NumberFor};
 use runtime_primitives::Justification;
-use service::{network_channel, NetworkChan, NetworkLink, NetworkMsg, NetworkPort, TransactionPool};
-use specialization::NetworkSpecialization;
+use crate::service::{network_channel, NetworkChan, NetworkLink, NetworkMsg, NetworkPort, TransactionPool};
+use crate::specialization::NetworkSpecialization;
 use test_client;
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
@@ -216,7 +217,7 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		vec![]
 	}
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: ::message::Status<Block>) {
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: crate::message::Status<Block>) {
 	}
 
 	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
@@ -226,7 +227,7 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 		&mut self,
 		_ctx: &mut Context<Block>,
 		_peer_id: NodeIndex,
-		_message: &mut Option<::message::Message<Block>>,
+		_message: &mut Option<crate::message::Message<Block>>,
 	) {
 	}
 }

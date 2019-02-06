@@ -14,30 +14,31 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use codec::Encode;
-use crossbeam_channel::{self as channel, Receiver, Sender};
+use parity_codec::Encode;
+use crossbeam_channel::{self as channel, Receiver, Sender, select};
 use network_libp2p::{NodeIndex, Severity};
 use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus::import_queue::ImportQueue;
-use message::{self, Message};
-use message::generic::Message as GenericMessage;
-use consensus_gossip::ConsensusGossip;
-use on_demand::OnDemandService;
-use specialization::NetworkSpecialization;
-use sync::{ChainSync, Status as SyncStatus, SyncState};
-use service::{NetworkChan, NetworkMsg, TransactionPool, ExHashT};
-use config::{ProtocolConfig, Roles};
+use crate::message::{self, Message};
+use crate::message::generic::Message as GenericMessage;
+use crate::consensus_gossip::ConsensusGossip;
+use crate::on_demand::OnDemandService;
+use crate::specialization::NetworkSpecialization;
+use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
+use crate::service::{NetworkChan, NetworkMsg, TransactionPool, ExHashT};
+use crate::config::{ProtocolConfig, Roles};
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::thread;
 use std::time;
 use std::cmp;
-use chain::Client;
+use log::{trace, debug, warn};
+use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
-use error;
+use crate::error;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
@@ -134,7 +135,7 @@ pub struct PeerInfo<B: BlockT> {
 /// Context for a network-specific handler.
 pub trait Context<B: BlockT> {
 	/// Get a reference to the client.
-	fn client(&self) -> &::chain::Client<B>;
+	fn client(&self) -> &crate::chain::Client<B>;
 
 	/// Point out that a peer has been malign or irresponsible or appeared lazy.
 	fn report_peer(&mut self, who: NodeIndex, reason: Severity);
@@ -143,7 +144,7 @@ pub trait Context<B: BlockT> {
 	fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>>;
 
 	/// Send a message to a peer.
-	fn send_message(&mut self, who: NodeIndex, data: ::message::Message<B>);
+	fn send_message(&mut self, who: NodeIndex, data: crate::message::Message<B>);
 }
 
 /// Protocol context.
