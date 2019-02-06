@@ -37,7 +37,7 @@ mod wasm_executor;
 #[macro_use]
 mod native_executor;
 mod sandbox;
-mod heap;
+mod allocator;
 
 pub mod error;
 pub use wasmi;

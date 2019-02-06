@@ -69,7 +69,21 @@ pub trait ApiExt<Block: BlockT> {
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
 		&self,
 		at: &BlockId<Block>
-	) -> error::Result<bool> where Self: Sized;
+	) -> error::Result<bool> where Self: Sized {
+		self.runtime_version_at(at).map(|v| v.has_api::<A>())
+	}
+
+	/// Check if the given api is implemented and the version passes a predicate.
+	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+		&self,
+		at: &BlockId<Block>,
+		pred: P,
+	) -> error::Result<bool> where Self: Sized {
+		self.runtime_version_at(at).map(|v| v.has_api_with::<A, _>(pred))
+	}
+
+	/// Returns the runtime version at the given block id.
+	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion>;
 }
 
 /// Something that can call into the runtime at a given block.

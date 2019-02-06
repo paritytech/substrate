@@ -17,8 +17,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, atomic::{self, AtomicUsize}};
 
-use jsonrpc_macros::pubsub;
-use jsonrpc_pubsub::SubscriptionId;
+use jsonrpc_pubsub::{SubscriptionId, typed::{Sink, Subscriber}};
 use parking_lot::Mutex;
 use rpc::futures::sync::oneshot;
 use rpc::futures::{Future, future};
@@ -72,8 +71,8 @@ impl Subscriptions {
 	/// Second parameter is a function that converts Subscriber sink into a future.
 	/// This future will be driven to completion bu underlying event loop
 	/// or will be cancelled in case #cancel is invoked.
-	pub fn add<T, E, G, R, F>(&self, subscriber: pubsub::Subscriber<T, E>, into_future: G) where
-		G: FnOnce(pubsub::Sink<T, E>) -> R,
+	pub fn add<T, E, G, R, F>(&self, subscriber: Subscriber<T, E>, into_future: G) where
+		G: FnOnce(Sink<T, E>) -> R,
 		R: future::IntoFuture<Future=F, Item=(), Error=()>,
 		F: future::Future<Item=(), Error=()> + Send + 'static,
 	{

@@ -113,7 +113,7 @@ pub struct Service<Components: components::Components> {
 pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
-	let executor = NativeExecutor::new();
+	let executor = NativeExecutor::new(config.default_heap_pages);
 	let (client, _) = components::FullComponents::<Factory>::build_client(
 		config,
 		executor,
@@ -132,7 +132,7 @@ impl<Components: components::Components> Service<Components> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = NativeExecutor::new();
+		let executor = NativeExecutor::new(config.default_heap_pages);
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 
@@ -192,12 +192,12 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
-		let network = network::Service::new(
+		let (network, network_chan) = network::Service::new(
 			network_params,
 			protocol_id,
 			import_queue
 		)?;
-		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
+		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
 		{
 			// block notifications
@@ -208,7 +208,7 @@ impl<Components: components::Components> Service<Components> {
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
 					if let Some(network) = network.upgrade() {
-						network.on_block_imported(notification.hash, &notification.header);
+						network.on_block_imported(notification.hash, notification.header);
 					}
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
 						Components::TransactionPool::on_block_imported(
@@ -260,7 +260,7 @@ impl<Components: components::Components> Service<Components> {
 			let events = MostRecentNotification(client.finality_notification_stream().fuse())
 				.for_each(move |notification| {
 					if let Some(network) = network.upgrade() {
-						network.on_block_finalized(notification.hash, &notification.header);
+						network.on_block_finalized(notification.hash, notification.header);
 					}
 					Ok(())
 				})

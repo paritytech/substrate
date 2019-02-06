@@ -135,6 +135,7 @@ fn node_config<F: ServiceFactory> (
 		rpc_http: None,
 		rpc_ws: None,
 		telemetry_url: None,
+		default_heap_pages: None,
 	}
 }
 

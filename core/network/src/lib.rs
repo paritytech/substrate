@@ -20,6 +20,8 @@
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
 
+#[macro_use]
+extern crate crossbeam_channel;
 extern crate linked_hash_map;
 extern crate lru_cache;
 extern crate parking_lot;
@@ -51,7 +53,6 @@ mod service;
 mod sync;
 #[macro_use]
 mod protocol;
-mod io;
 mod chain;
 mod blocks;
 mod on_demand;
@@ -65,7 +66,7 @@ pub mod specialization;
 pub mod test;
 
 pub use chain::Client as ClientHandle;
-pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, SyncProvider, ExHashT};
+pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, NetworkMsg, SyncProvider, ExHashT};
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
