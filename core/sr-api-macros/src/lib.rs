@@ -159,7 +159,11 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// To support versioning of the traits, the macro supports the attribute `#[api_version(1)]`.
 /// The attribute supports any `u32` as version. By default, each trait is at version `1`, if no
-/// version is provided.
+/// version is provided. We also support chaning the signature of a method. This signature
+/// change is highlighted with the `#[changed_in(2)]` attribute above a method. A method that is
+/// tagged with this attribute is callable by the name `METHOD_before_version_VERSION`. This
+/// method will only support calling into wasm, trying to call into native will fail (change the
+/// spec version!). Such a method also does not need to be implemented in the runtime.
 ///
 /// ```rust
 /// #[macro_use]
@@ -171,8 +175,13 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///     pub trait Balance {
 ///         /// Get the balance.
 ///         fn get_balance() -> u64;
-///         /// Set the balance.
+///         /// Set balance.
 ///         fn set_balance(val: u64);
+///         /// Set balance, old version.
+///         ///
+///         /// Is callable by `set_balance_before_version_2`.
+///         #[changed_in(2)]
+///         fn set_balance(val: u8);
 ///         /// In version 2, we added this new function.
 ///         fn increase_balance(val: u64);
 ///     }

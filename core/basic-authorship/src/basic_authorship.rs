@@ -96,10 +96,10 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		let mut block_builder = self.new_block_at(at)?;
 
 		let runtime_api = self.runtime_api();
-		if runtime_api.has_api::<BlockBuilderApi<Block>>(at)? {
-			runtime_api.inherent_extrinsics(at, inherent_data)?
-				.into_iter().try_for_each(|i| block_builder.push(i))?;
-		}
+		// We don't check the API versions any further here since the dispatch compatibility
+		// check should be enough.
+		runtime_api.inherent_extrinsics(at, inherent_data)?
+			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
 		build_ctx(&mut block_builder);
 

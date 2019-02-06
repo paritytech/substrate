@@ -20,6 +20,8 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
+extern crate parity_codec as codec;
+
 #[macro_use]
 pub mod runtime_api;
 #[cfg(feature = "std")]
