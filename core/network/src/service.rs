@@ -181,17 +181,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	}
 
 	/// Called when a new block is imported by the client.
-	pub fn on_block_imported(&self, hash: B::Hash, header: &B::Header) {
+	pub fn on_block_imported(&self, hash: B::Hash, header: B::Header) {
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::BlockImported(hash, header.clone()));
+			.send(ProtocolMsg::BlockImported(hash, header));
 	}
 
 	/// Called when a new block is finalized by the client.
-	pub fn on_block_finalized(&self, hash: B::Hash, header: &B::Header) {
+	pub fn on_block_finalized(&self, hash: B::Hash, header: B::Header) {
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::BlockFinalized(hash, header.clone()));
+			.send(ProtocolMsg::BlockFinalized(hash, header));
 	}
 
 	/// Called when new transactons are imported by the client.
