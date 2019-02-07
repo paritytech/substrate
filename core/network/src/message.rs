@@ -198,13 +198,14 @@ pub mod generic {
 	}
 
 	impl<Header, Hash, Number, Extrinsic> CustomMessage for Message<Header, Hash, Number, Extrinsic>
-	where Self: Decode + Encode {
+		where Self: Decode + Encode
+	{
 		fn into_bytes(self) -> Vec<u8> {
 			self.encode()
 		}
 
 		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-			Decode::decode(&mut Cursor::new(bytes)).ok_or(())
+			Decode::decode(&mut &bytes[..]).ok_or(())
 		}
 	}
 

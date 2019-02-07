@@ -21,7 +21,8 @@ use substrate_network_libp2p::{CustomMessage, ServiceEvent, multiaddr};
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
 fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
-where TMsg: CustomMessage + Send + 'static {
+	where TMsg: CustomMessage + Send + 'static
+{
 	let mut result: Vec<substrate_network_libp2p::Service<_>> = Vec::with_capacity(num);
 
 	for _ in 0 .. num {
