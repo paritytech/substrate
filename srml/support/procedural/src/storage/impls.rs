@@ -188,31 +188,60 @@ impl<'a> Impls<'a> {
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
-		let (default_linkage, with_linkage, split_linkage) = {
-			let default_linkage = quote! { () };
-			let with_linkage = quote! { (|a, b| a) };
-			let split_linkage = quote! { (|a| (a, ())) };
-
-			(default_linkage, with_linkage, split_linkage)
-		};
 		let key_for = quote! {
 			&(<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key))[..]
 		};
-		let mutate_impl = if !type_infos.is_option {
-			quote!{
-				storage.put(key_for, #with_linkage(&val, linkage));
+
+		let put_or_insert = quote! {
+			match linkage {
+				Some(linkage) => storage.put(key_for, &(val, linkage)),
+				None => Self::insert(key, &val),
 			}
+		};
+		let mutate_impl = if !type_infos.is_option {
+			put_or_insert
 		} else {
-			quote!{
+			quote! {
 				match val {
-					Some(ref val) => storage.put(key_for, #with_linkage(val, linkage)),
-					None => <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::remove(key, storage),
+					Some(ref val) => #put_or_insert,
+					None => Self::remove(key, storage),
 				}
 			}
 		};
-		// generator for map
+		// generator for linked map
 		quote!{
 			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
+
+			#[derive(Encode, Decode)]
+			struct Linkage#name {
+				previous: Option<#scrate::rstd::vec::Vec<u8>>,
+				next: Option<#scrate::rstd::vec::Vec<u8>>,
+			}
+
+			impl Linkage#name {
+				pub fn read<S: #scrate::GenericStorage>(storage: &S, key: &[u8]) -> Option<(#value_type, Linkage#name)> {
+					storage::get(key)
+				}
+
+				pub fn remove<S: #scrate::GenericStorage>(&self, storage: &S) {
+					if let Some(prev) = self.previous {
+						// Retrieve previous linkage and update `next`
+						let res = Self::read(storage, prev)
+							.expect("Linkage is updated in case previous entry is removed; hence previous must exist; qed");
+						linkage.next = self.next.clone();
+						storage::put(prev, res);
+
+					} else {
+						// update head
+						head = self.next.clone();
+					}
+
+					if let Some(next) = self.next {
+						// Update previous of next element
+
+					}
+				}
+			}
 
 			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
 				type Query = #value_type;
@@ -231,37 +260,49 @@ impl<'a> Impls<'a> {
 
 				/// Load the value associated with the given key from the map.
 				fn get<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					let (data, _linkage) = #split_linkage(storage.get(#key_for));
-					data.#option_simple_1(|| #fielddefault)
+					Linkage#name::read(storage, #key_for)
+						.map(|x| x.0)
+						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take the value, reading and removing it.
 				fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					let (data, _linkage) = #split_linkage(storage.take(#key_for));
-					// TODO [ToDr] Update linkage
-					data.#option_simple_1(|| #fielddefault)
+					match storage.take(#key_for) {
+						Some((data, linkage)) => {
+							linkage.remove(storage);
+							data
+						},
+						None => #fielddefault
+					}
 				}
 
 				/// Remove the value under a key.
 				fn remove<S: #scrate::GenericStorage>(key: &#kty, storage: &S) {
-					// TODO [ToDr] Update linkage
-					storage.kill(#key_for);
+					Self::take(key, storage);
 				}
 
 				/// Store a value to be associated with the given key from the map.
 				fn insert<S: #scrate::GenericStorage>(key: &#kty, val: &#typ, storage: &S) {
-					// TODO [ToDr] depending if the item exists we should either update or compute new linkage
-					// TODO [ToDr] How is it supposed to work with Option<>?
-					storage.put(#key_for, #with_linkage(val, #default_linkage));
+					let key_for = #key_for;
+					let linkage = match Linkage#name::read(storage, key_for) {
+						// overwrite but reuse existing linkage
+						Some((_data, linkage)) => linkage,
+						// create new linkage
+						None => {
+							// we should change head and prepend before first element.
+							unimplemented!()
+						}
+					};
+					storage.put(key_for, &(val, linkage))
 				}
 
 				/// Mutate the value under a key
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
 					let key_for = #key_for;
-					let (val, linkage) = #split_linkage(storage.get(key_for));
-					let mut val: Self::Query = val.#option_simple_1(|| #fielddefault);
+					let (mut val, linkage) = Linkage#name::read(storage, key_for)
+						.map(|(data, linkage)| (data, Some(linkage)))
+						.#option_simple_1(|| (#fielddefault, None));
 
-					// TODO [ToDr] Might need to compute new linkage if it's inserted for the first time.
 					let ret = f(&mut val);
 					#mutate_impl ;
 					ret

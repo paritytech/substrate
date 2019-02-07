@@ -134,3 +134,28 @@ macro_rules! for_each_tuple {
 		for_each_tuple! { @IMPL $m !! $($t,)* }
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	pub trait Trait {
+	}
+
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call {
+			fn deposit_event<T>() = default;
+		}
+	}
+
+	decl_storage! {
+		trait Store for Module<T: Trait> as Example {
+			pub Data get(data) build(|_| vec![(15, 42)]): map u32 => u64;
+		}
+	}
+
+	#[test]
+	fn should_work() {
+		assert_eq!(true, false);
+	}
+}

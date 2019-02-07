@@ -106,7 +106,7 @@ impl BlindCheckable for Extrinsic {
 				if ::runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err("bad signature")
+					Err("bad signature in extrinsic")
 				}
 			},
 		}
