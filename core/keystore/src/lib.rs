@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::num::NonZeroU32;
 
 use serde_derive::{Serialize, Deserialize};
 use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
@@ -60,11 +61,11 @@ struct EncryptedKey {
 	salt: [u8; 32],
 	ciphertext: Vec<u8>, // FIXME: switch to fixed-size when serde supports
 	iv: [u8; 16],
-	iterations: u32,
+	iterations: NonZeroU32,
 }
 
 impl EncryptedKey {
-	fn encrypt(plain: &[u8; PKCS_LEN], password: &str, iterations: u32) -> Self {
+	fn encrypt(plain: &[u8; PKCS_LEN], password: &str, iterations: NonZeroU32) -> Self {
 		use rand::{Rng, rngs::OsRng};
 
 		let mut rng = OsRng::new().expect("OS Randomness available on all supported platforms; qed");
@@ -149,7 +150,11 @@ impl Store {
 	/// Generate a new key, placing it into the store.
 	pub fn generate(&self, password: &str) -> Result<Pair> {
 		let (pair, pkcs_bytes) = Pair::generate_with_pkcs8();
-		let key_file = EncryptedKey::encrypt(&pkcs_bytes, password, KEY_ITERATIONS as u32);
+		let key_file = EncryptedKey::encrypt(
+			&pkcs_bytes,
+			password,
+			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
+		);
 
 		let mut file = File::create(self.key_file_path(&pair.public()))?;
 		::serde_json::to_writer(&file, &key_file)?;
@@ -225,7 +230,7 @@ mod tests {
 	#[test]
 	fn encrypt_and_decrypt() {
 		let plain = [1; PKCS_LEN];
-		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", KEY_ITERATIONS as u32);
+		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED"));
 
 		let decrypted_key = encrypted_key.decrypt("thepassword").unwrap();
 
@@ -235,7 +240,11 @@ mod tests {
 	#[test]
 	fn decrypt_wrong_password_fails() {
 		let plain = [1; PKCS_LEN];
-		let encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", KEY_ITERATIONS as u32);
+		let encrypted_key = EncryptedKey::encrypt(
+			&plain,
+			"thepassword",
+			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
+		);
 
 		assert!(encrypted_key.decrypt("thepassword2").is_err());
 	}
@@ -243,9 +252,13 @@ mod tests {
 	#[test]
 	fn decrypt_wrong_iterations_fails() {
 		let plain = [1; PKCS_LEN];
-		let mut encrypted_key = EncryptedKey::encrypt(&plain, "thepassword", KEY_ITERATIONS as u32);
+		let mut encrypted_key = EncryptedKey::encrypt(
+			&plain,
+			"thepassword",
+			NonZeroU32::new(KEY_ITERATIONS as u32).expect("KEY_ITERATIONS is not zero; QED")
+		);
 
-		encrypted_key.iterations -= 64;
+		encrypted_key.iterations = NonZeroU32::new(encrypted_key.iterations.get() - 64).unwrap();
 
 		assert!(encrypted_key.decrypt("thepassword").is_err());
 	}

@@ -18,6 +18,7 @@ use std::{
 	collections::{HashMap, HashSet},
 	hash,
 	sync::Arc,
+	time,
 };
 
 use sr_primitives::transaction_validity::{
@@ -33,6 +34,18 @@ pub struct WaitingTransaction<Hash, Ex> {
 	pub transaction: Arc<Transaction<Hash, Ex>>,
 	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
+	/// Time of import to the Future Queue.
+	pub imported_at: time::Instant,
+}
+
+impl<Hash, Ex> Clone for WaitingTransaction<Hash, Ex> {
+	fn clone(&self) -> Self {
+		WaitingTransaction {
+			transaction: self.transaction.clone(),
+			missing_tags: self.missing_tags.clone(),
+			imported_at: self.imported_at.clone(),
+		}
+	}
 }
 
 impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
@@ -50,6 +63,7 @@ impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 		WaitingTransaction {
 			transaction: Arc::new(transaction),
 			missing_tags,
+			imported_at: time::Instant::now(),
 		}
 	}
 
@@ -174,6 +188,13 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 		removed
 	}
 
+	/// Fold a list of future transactions to compute a single value.
+	pub fn fold<R, F: FnMut(Option<R>, &WaitingTransaction<Hash, Ex>) -> Option<R>>(&mut self, f: F) -> Option<R> {
+		self.waiting
+			.values()
+			.fold(None, f)
+	}
+
 	/// Returns iterator over all future transactions
 	pub fn all(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
 		self.waiting.values().map(|waiting| &*waiting.transaction)
@@ -182,5 +203,10 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Returns number of transactions in the Future queue.
 	pub fn len(&self) -> usize {
 		self.waiting.len()
+	}
+
+	/// Returns sum of encoding lengths of all transactions in this queue.
+	pub fn bytes(&self) -> usize {
+		self.waiting.values().fold(0, |acc, tx| acc + tx.transaction.bytes)
 	}
 }

@@ -16,7 +16,7 @@
 
 //! Tests for the generic implementations of Extrinsic/Header/Block.
 
-use codec::{Decode, Encode};
+use crate::codec::{Decode, Encode};
 use substrate_primitives::H256;
 use super::DigestItem;
 

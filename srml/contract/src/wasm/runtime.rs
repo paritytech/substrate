@@ -482,6 +482,19 @@ define_env!(Env, <E: Ext>,
 		Ok(())
 	},
 
+	// Load the latest block RNG seed into the scratch buffer
+	ext_random_seed(ctx) => {
+		ctx.scratch_buf = ctx.ext.random_seed().encode();
+		Ok(())
+	},
+
+	// Load the latest block timestamp into the scratch buffer
+	ext_now(ctx) => {
+		let now: u64 = As::as_(ctx.ext.now().clone());
+		ctx.scratch_buf = now.encode();
+		Ok(())
+	},
+
 	// Decodes the given buffer as a `T::Call` and adds it to the list
 	// of to-be-dispatched calls.
 	//

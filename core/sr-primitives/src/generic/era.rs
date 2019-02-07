@@ -16,7 +16,10 @@
 
 //! Generic implementation of an unchecked (pre-verification) extrinsic.
 
-use codec::{Decode, Encode, Input, Output};
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
+
+use crate::codec::{Decode, Encode, Input, Output};
 
 pub type Period = u64;
 pub type Phase = u64;
