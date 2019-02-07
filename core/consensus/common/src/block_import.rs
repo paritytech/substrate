@@ -144,6 +144,13 @@ impl<Block: BlockT> ImportBlock<Block> {
 pub trait BlockImport<B: BlockT> {
 	type Error: ::std::error::Error + Send + 'static;
 
+	/// Check block preconditions.
+	fn check_block(
+		&self,
+		hash: B::Hash,
+		parent_hash: B::Hash,
+	) -> Result<ImportResult, Self::Error>;
+
 	/// Import a Block alongside the new authorities valid from this block forward
 	fn import_block(
 		&self,
