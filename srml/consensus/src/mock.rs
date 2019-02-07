@@ -21,7 +21,7 @@
 use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header, UintAuthorityId}};
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
-use {GenesisConfig, Trait, Module, system};
+use crate::{GenesisConfig, Trait, Module};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -33,7 +33,7 @@ pub struct Test;
 impl Trait for Test {
 	type Log = DigestItem;
 	type SessionKey = UintAuthorityId;
-	type InherentOfflineReport = ::InstantFinalityReportVec<()>;
+	type InherentOfflineReport = crate::InstantFinalityReportVec<()>;
 }
 impl system::Trait for Test {
 	type Origin = Origin;

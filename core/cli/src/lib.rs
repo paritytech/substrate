@@ -24,7 +24,6 @@ mod traits;
 mod params;
 pub mod error;
 pub mod informant;
-mod panic_hook;
 
 use runtime_primitives::traits::As;
 use service::{
@@ -76,6 +75,8 @@ pub struct VersionInfo {
 	pub description: &'static str,
 	/// Executable file author.
 	pub author: &'static str,
+	/// Support URL.
+	pub support_url: &'static str,
 }
 
 /// Something that can be converted into an exit signal.
@@ -189,7 +190,7 @@ where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	panic_hook::set();
+	panic_handler::set(version.support_url);
 
 	let full_version = service::config::full_version_from_strs(
 		version.version,

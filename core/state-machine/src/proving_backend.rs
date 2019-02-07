@@ -48,7 +48,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value_with(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
+		read_trie_value_with::<H, _, Ephemeral<S, H>>(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
 	}
 
 	pub fn child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
@@ -74,7 +74,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			record_all_keys::<H>(&eph, root, &mut *self.proof_recorder)
+			record_all_keys::<H, _>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {

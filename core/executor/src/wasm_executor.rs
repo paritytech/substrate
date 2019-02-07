@@ -24,7 +24,7 @@ use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
 };
 use wasmi::RuntimeValue::{I32, I64};
-use wasmi::memory_units::Pages;
+use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
@@ -34,7 +34,7 @@ use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
 use trie::ordered_trie_root;
 use crate::sandbox;
-use crate::heap;
+use crate::allocator;
 use log::trace;
 
 #[cfg(feature="wasm-extern-trace")]
@@ -48,7 +48,7 @@ macro_rules! debug_trace {
 
 struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 	sandbox_store: sandbox::Store,
-	heap: heap::Heap,
+	heap: allocator::FreeingBumpHeapAllocator,
 	memory: MemoryRef,
 	table: Option<TableRef>,
 	ext: &'e mut E,
@@ -59,7 +59,7 @@ impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: heap::Heap::new(m.used_size().0 as u32),
+			heap: allocator::FreeingBumpHeapAllocator::new(m.clone()),
 			memory: m,
 			table: t,
 			ext: e,

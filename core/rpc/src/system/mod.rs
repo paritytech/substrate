@@ -23,43 +23,43 @@ mod helpers;
 mod tests;
 
 use std::sync::Arc;
+use jsonrpc_derive::rpc;
 use network;
 use runtime_primitives::traits::{self, Header as HeaderT};
 
 use self::error::Result;
 pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo};
 
-build_rpc_trait! {
-	/// Substrate system RPC API
-	pub trait SystemApi<Hash, Number> {
-		/// Get the node's implementation name. Plain old string.
-		#[rpc(name = "system_name")]
-		fn system_name(&self) -> Result<String>;
+/// Substrate system RPC API
+#[rpc]
+pub trait SystemApi<Hash, Number> {
+	/// Get the node's implementation name. Plain old string.
+	#[rpc(name = "system_name")]
+	fn system_name(&self) -> Result<String>;
 
-		/// Get the node implementation's version. Should be a semver string.
-		#[rpc(name = "system_version")]
-		fn system_version(&self) -> Result<String>;
+	/// Get the node implementation's version. Should be a semver string.
+	#[rpc(name = "system_version")]
+	fn system_version(&self) -> Result<String>;
 
-		/// Get the chain's type. Given as a string identifier.
-		#[rpc(name = "system_chain")]
-		fn system_chain(&self) -> Result<String>;
+	/// Get the chain's type. Given as a string identifier.
+	#[rpc(name = "system_chain")]
+	fn system_chain(&self) -> Result<String>;
 
-		/// Get a custom set of properties as a JSON object, defined in the chain spec.
-		#[rpc(name = "system_properties")]
-		fn system_properties(&self) -> Result<Properties>;
+	/// Get a custom set of properties as a JSON object, defined in the chain spec.
+	#[rpc(name = "system_properties")]
+	fn system_properties(&self) -> Result<Properties>;
 
-		/// Return health status of the node.
-		///
-		/// Node is considered healthy if it is:
-		/// - connected to some peers (unless running in dev mode)
-		/// - not performing a major sync
-		#[rpc(name = "system_health")]
-		fn system_health(&self) -> Result<Health>;
+	/// Return health status of the node.
+	///
+	/// Node is considered healthy if it is:
+	/// - connected to some peers (unless running in dev mode)
+	/// - not performing a major sync
+	#[rpc(name = "system_health")]
+	fn system_health(&self) -> Result<Health>;
 
-		/// Returns currently connected peers
-		#[rpc(name = "system_peers")]
-		fn system_peers(&self) -> Result<Vec<PeerInfo<Hash, Number>>>;
-	}
+	/// Returns currently connected peers
+	#[rpc(name = "system_peers")]
+	fn system_peers(&self) -> Result<Vec<PeerInfo<Hash, Number>>>;
 }
 
 /// System API implementation
