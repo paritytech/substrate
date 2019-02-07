@@ -182,7 +182,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	for fn_ in fns {
 		let params = extract_parameter_names_types_and_borrows(&fn_.decl)?;
 		let trait_fn_name = &fn_.ident;
-		let fn_name = generate_native_call_generator_fn_name(&fn_.ident.to_string());
+		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
 		let output = return_type_replace_block_with_node_block(fn_.decl.output.clone());
 		let output_ty = return_type_extract_type(&output);
 		let output = quote!( ::std::result::Result<#output_ty, &'static str> );
@@ -336,14 +336,30 @@ struct ToClientSideDecl<'a> {
 impl<'a> ToClientSideDecl<'a> {
 	fn fold_item_trait_items(&mut self, items: Vec<TraitItem>) -> Vec<TraitItem> {
 		let mut result = Vec::new();
+		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+		let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
+		let context_other = quote!( #crate_::runtime_api::ExecutionContext::Other );
 
 		items.into_iter().for_each(|i| match i {
 			TraitItem::Method(method) => {
-				let (fn_decl, fn_impl) = self.fold_trait_item_method(method);
+				let (fn_decl, mut fn_impl) = self.fold_trait_item_method(method.clone(), context_other.clone());
 				result.push(fn_decl.into());
-
-				if let Some(fn_impl) = fn_impl {
+				
+				if let Some(mut fn_impl) = fn_impl {
+					fn_impl.sig.decl.inputs.push(context_arg.clone());
 					result.push(fn_impl.into());
+				}
+
+				let mut new_method = method.clone();
+				new_method.sig.ident = Ident::new(&format!("{}_with_context", &new_method.sig.ident), Span::call_site());
+				let (mut fn_decl_ctx, mut fn_impl_ctx) = self.fold_trait_item_method(new_method, quote!( context ));
+				fn_decl_ctx.sig.decl.inputs.push(context_arg.clone());
+
+				result.push(fn_decl_ctx.into());
+				
+				if let Some(mut fn_impl_ctx) = fn_impl_ctx {
+					fn_impl_ctx.sig.decl.inputs.push(context_arg.clone());
+					result.push(fn_impl_ctx.into());
 				}
 			},
 			r => result.push(r),
@@ -352,9 +368,9 @@ impl<'a> ToClientSideDecl<'a> {
 		result
 	}
 
-	fn fold_trait_item_method(&mut self, method: TraitItemMethod) -> (TraitItemMethod, Option<TraitItemMethod>) {
+	fn fold_trait_item_method(&mut self, method: TraitItemMethod, context: TokenStream) -> (TraitItemMethod, Option<TraitItemMethod>) {
 		let fn_impl = self.create_method_runtime_api_impl(method.clone());
-		let fn_decl = self.create_method_decl(method);
+		let fn_decl = self.create_method_decl(method, context);
 
 		(fn_decl, fn_impl)
 	}
@@ -385,7 +401,7 @@ impl<'a> ToClientSideDecl<'a> {
 		let name = generate_method_runtime_api_impl_name(&method.sig.ident);
 		let block_id = self.block_id;
 		let crate_ = self.crate_;
-
+	
 		Some(
 			parse_quote!{
 				#[doc(hidden)]
@@ -393,7 +409,7 @@ impl<'a> ToClientSideDecl<'a> {
 					&self,
 					at: &#block_id,
 					params: Option<( #( #param_types ),* )>,
-					params_encoded: Vec<u8>
+					params_encoded: Vec<u8>,
 				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>;
 			}
 		)
@@ -402,7 +418,7 @@ impl<'a> ToClientSideDecl<'a> {
 	/// Takes the method declared by the user and creates the declaration we require for the runtime
 	/// api client side. This method will call by default the `method_runtime_api_impl` for doing
 	/// the actual call into the runtime.
-	fn create_method_decl(&mut self, mut method: TraitItemMethod) -> TraitItemMethod {
+	fn create_method_decl(&mut self, mut method: TraitItemMethod, context: TokenStream) -> TraitItemMethod {
 		let params = match extract_parameter_names_types_and_borrows(&method.sig.decl) {
 			Ok(res) => res.into_iter().map(|v| v.0).collect::<Vec<_>>(),
 			Err(e) => {
@@ -454,7 +470,7 @@ impl<'a> ToClientSideDecl<'a> {
 		};
 
 		let function_name = method.sig.ident.to_string();
-
+			
 		// Generate the default implementation that calls the `method_runtime_api_impl` method.
 		method.default = Some(
 			parse_quote! {
@@ -462,7 +478,7 @@ impl<'a> ToClientSideDecl<'a> {
 					let runtime_api_impl_params_encoded =
 						#crate_::runtime_api::Encode::encode(&( #( &#params ),* ));
 
-					self.#name_impl(at, #param_tuple, runtime_api_impl_params_encoded)
+					self.#name_impl(at, #param_tuple, runtime_api_impl_params_encoded, #context)
 						.and_then(|r|
 							match r {
 								#crate_::runtime_api::NativeOrEncoded::Native(n) => {
@@ -713,41 +729,17 @@ fn check_trait_decls(decls: &[ItemTrait]) -> Option<TokenStream> {
 	}
 }
 
-fn generate_decl_with_context(decls: &mut [ItemTrait]) {
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-	let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
-	for decl in decls {
-		let mut ctx_methods = vec![];
-	
-		for item in &decl.items {
-			match item {
-				TraitItem::Method(method) => {
-					let mut new_method = method.clone();
-					new_method.sig.ident = Ident::new(&format!("{}_with_context", &method.sig.ident), Span::call_site());
-					new_method.sig.decl.inputs.push(context_arg.clone());
-					ctx_methods.push(TraitItem::Method(new_method));
-				},
-				_ => {},
-			}
-		}
-		decl.items.extend(ctx_methods);
-	}
-}
-
-
 /// The implementation of the `decl_runtime_apis!` macro.
 pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all trait declarations
-	let RuntimeApiDecls { decls: mut api_decls } = parse_macro_input!(input as RuntimeApiDecls);
+	let RuntimeApiDecls { decls: api_decls } = parse_macro_input!(input as RuntimeApiDecls);
 
 	if let Some(errors) = check_trait_decls(&api_decls) {
 		return errors.into();
 	}
 
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);	
-	
 	let runtime_decls = generate_runtime_decls(&api_decls);
-	generate_decl_with_context(&mut api_decls);
 	let client_side_decls = generate_client_side_decls(&api_decls);
 
 	quote!(

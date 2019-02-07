@@ -17,7 +17,8 @@
 use utils::{
 	unwrap_or_error, generate_crate_access, generate_hidden_includes,
 	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
-	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name, return_type_extract_type
+	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,
+	return_type_extract_type, generate_method_with_context
 };
 
 use proc_macro;
@@ -337,6 +338,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				function: &'static str,
 				args: Vec<u8>,
 				native_call: Option<NC>,
+				context: #crate_::runtime_api::ExecutionContext
 			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
 				let res = unsafe {
 					self.call.call_api_at(
@@ -346,47 +348,7 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 						&mut *self.changes.borrow_mut(),
 						&mut *self.initialised_block.borrow_mut(),
 						native_call,
-					)
-				};
-
-				self.commit_on_ok(&res);
-				res
-			}
-
-			fn call_api_at_with_context<
-				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
-				NC: FnOnce() -> R + ::std::panic::UnwindSafe,
-			>(
-				&self,
-				at: &#block_id,
-				function: &'static str,
-				args: Vec<u8>,
-				native_call: NC,
-				context: #crate_::runtime_api::ExecutionContext
-			) -> #crate_::error::Result<R> {
-				let res = unsafe {
-					self.call.call_api_at(
-						at,
-						function,
-						args,
-						&mut *self.changes.borrow_mut(),
-						&mut *self.initialised_block.borrow_mut(),
-						Some(native_call),
 						context
-					).and_then(|r|
-						match r {
-							#crate_::runtime_api::NativeOrEncoded::Native(n) => {
-								Ok(n)
-							},
-							#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
-								R::decode(&mut &r[..])
-									.ok_or_else(||
-										#crate_::error::ErrorKind::CallResultDecode(
-											function
-										).into()
-									)
-							}
-						}
 					)
 				};
 
@@ -505,12 +467,14 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				Err(e) => (Vec::new(), Some(e.to_compile_error())),
 			};
 
+			let execution_context: syn::FnArg = parse_quote!( #crate_::runtime_api::ExecutionContext::Other );
+			let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
+	
 			// Rewrite the input parameters.
 			input.sig.decl.inputs = parse_quote! {
-				&self, at: &#block_id, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
+				&self, at: &#block_id, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>, #context_arg
 			};
 
-			input.sig.ident = generate_method_runtime_api_impl_name(&input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.decl.output);
 
 			// Generate the correct return type.
@@ -533,7 +497,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 								<#runtime, #node_block #(, #trait_generic_arguments )*> (
 								#( #param_tuple_access ),*
 							)
-						})
+						}),
+						#execution_context
 					)
 				}
 			)
@@ -564,9 +529,11 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 		let mut methods_with_context = vec![];
 
-		for item in &input.items {
-			if let ImplItem::Method(method) = item {
-				let ctx_method = generate_method_with_context(method, &crate_);
+		for item in &mut input.items {
+			if let ImplItem::Method(ref mut method) = item {
+				let mut ctx_method = generate_method_with_context(method);
+				method.sig.ident = generate_method_runtime_api_impl_name(&method.sig.ident);
+				ctx_method.sig.ident = generate_method_runtime_api_impl_name(&ctx_method.sig.ident);
 				methods_with_context.push(ImplItem::Method(ctx_method));	
 			}
 		}
@@ -670,7 +637,7 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
-
+	
 	quote!(
 		#hidden_includes
 
