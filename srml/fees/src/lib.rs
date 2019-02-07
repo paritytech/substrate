@@ -23,7 +23,8 @@
 extern crate srml_support as runtime_support;
 
 use runtime_support::{Parameter, dispatch::Result, StorageMap};
-use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee, TransferAsset};
+use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee,
+	TransferAsset, CheckedAdd, CheckedSub, CheckedMul};
 use system;
 
 pub trait Trait: system::Trait {
@@ -80,8 +81,17 @@ decl_storage! {
 
 impl<T: Trait> ChargeBytesFee<T::AccountId> for Module<T> {
 	fn charge_base_bytes_fee(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let fee = Self::transaction_base_fee() + Self::transaction_base_fee() * <T::Amount as As<u64>>::sa(encoded_len as u64);
-		Self::charge_fee(transactor, fee)
+		let bytes_fee = match Self::transaction_byte_fee().checked_mul(
+			&<T::Amount as As<u64>>::sa(encoded_len as u64)
+		) {
+			Some(f) => f,
+			None => return Err("bytes fee overflow"),
+		};
+		let overall = match Self::transaction_base_fee().checked_add(&bytes_fee) {
+			Some(f) => f,
+			None => return Err("bytes fee overflow"),
+		};
+		Self::charge_fee(transactor, overall)
 	}
 }
 
@@ -89,30 +99,32 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 	type Amount = T::Amount;
 
 	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		T::TransferAsset::remove_from(transactor, amount).and_then(|_| {
-			match <system::Module<T>>::extrinsic_index() {
-				Some(extrinsic_index) => {
-					let current_fee = Self::current_transaction_fee(extrinsic_index);
-					<CurrentTransactionFee<T>>::insert(extrinsic_index, current_fee + amount);
-					Ok(())
-				},
-				// TODO: how do we deal with no extrinsic index?
-				None => return Err("No extrinsic index found.")
-			}
-		})
+		T::TransferAsset::remove_from(transactor, amount)?;
+		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
+			Some(i) => i,
+			None => return Err("no extrinsic index found"),
+		};
+		let current_fee = Self::current_transaction_fee(extrinsic_index);
+		let new_fee = match current_fee.checked_add(&current_fee) {
+			Some(f) => f,
+			None => return Err("fee got overflow after charge"),
+		};
+		<CurrentTransactionFee<T>>::insert(extrinsic_index, new_fee);
+		Ok(())
 	}
 
 	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		T::TransferAsset::add_to(transactor, amount).and_then(|_| {
-			match <system::Module<T>>::extrinsic_index() {
-				Some(extrinsic_index) => {
-					let current_fee = Self::current_transaction_fee(extrinsic_index);
-					<CurrentTransactionFee<T>>::insert(extrinsic_index, current_fee - amount);
-					Ok(())
-				},
-				// TODO: how do we deal with no extrinsic index?
-				None => return Err("No extrinsic index found.")
-			}
-		})
+		T::TransferAsset::add_to(transactor, amount)?;
+		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
+			Some(i) => i,
+			None => return Err("no extrinsic index found"),
+		};
+		let current_fee = Self::current_transaction_fee(extrinsic_index);
+		let new_fee = match current_fee.checked_sub(&current_fee) {
+			Some(f) => f,
+			None => return Err("fee got underflow after refund"),
+		};
+		<CurrentTransactionFee<T>>::insert(extrinsic_index, new_fee);
+		Ok(())
 	}
 }
