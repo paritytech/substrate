@@ -21,7 +21,7 @@ use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
-use runtime_support::{StorageMap, StorageDoubleMap, traits::UpdateBalanceOutcome};
+use srml_support::{StorageMap, StorageDoubleMap, traits::UpdateBalanceOutcome};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,

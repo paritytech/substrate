@@ -18,7 +18,7 @@ use crate::{GasSpent, Module, Trait};
 use balances;
 use runtime_primitives::BLOCK_FULL;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
-use runtime_support::StorageValue;
+use srml_support::StorageValue;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};

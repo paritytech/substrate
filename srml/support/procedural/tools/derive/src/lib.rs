@@ -18,21 +18,14 @@
 //! Use to derive parsing for parsing struct.
 // end::description[]
 
-
 #![recursion_limit = "128"]
 
-#[macro_use]
-extern crate syn;
-
-#[macro_use]
-extern crate quote;
-
 extern crate proc_macro;
-extern crate proc_macro2;
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-
+use syn::parse_macro_input;
+use quote::quote;
 
 pub(crate) fn fields_idents(
 	fields: impl Iterator<Item = syn::Field>,
