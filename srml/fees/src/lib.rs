@@ -27,6 +27,9 @@ use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, C
 	TransferAsset, CheckedAdd, CheckedSub, CheckedMul};
 use system;
 
+mod mock;
+mod tests;
+
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -100,12 +103,13 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 
 	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
 		T::TransferAsset::remove_from(transactor, amount)?;
+
 		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
 			Some(i) => i,
 			None => return Err("no extrinsic index found"),
 		};
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
-		let new_fee = match current_fee.checked_add(&current_fee) {
+		let new_fee = match current_fee.checked_add(&amount) {
 			Some(f) => f,
 			None => return Err("fee got overflow after charge"),
 		};
@@ -115,12 +119,13 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 
 	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
 		T::TransferAsset::add_to(transactor, amount)?;
+
 		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
 			Some(i) => i,
 			None => return Err("no extrinsic index found"),
 		};
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
-		let new_fee = match current_fee.checked_sub(&current_fee) {
+		let new_fee = match current_fee.checked_sub(&amount) {
 			Some(f) => f,
 			None => return Err("fee got underflow after refund"),
 		};
