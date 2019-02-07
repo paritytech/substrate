@@ -36,6 +36,7 @@ use std::collections::{HashMap, HashSet};
 use std::result;
 use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::ExecutionContext;
 use substrate_primitives::NativeOrEncoded;
 
 use authorities::AuthoritySet;
@@ -267,7 +268,8 @@ impl Core<Block> for RuntimeApi {
 		&self,
 		_: &BlockId<Block>,
 		_: Option<()>,
-		_: Vec<u8>
+		_: Vec<u8>,
+		_: ExecutionContext
 	) -> Result<NativeOrEncoded<RuntimeVersion>> {
 		unimplemented!("Not required for testing!")
 	}
@@ -276,7 +278,8 @@ impl Core<Block> for RuntimeApi {
 		&self,
 		_: &BlockId<Block>,
 		_: Option<()>,
-		_: Vec<u8>
+		_: Vec<u8>,
+		_: ExecutionContext
 	) -> Result<NativeOrEncoded<Vec<Ed25519AuthorityId>>> {
 		unimplemented!("Not required for testing!")
 	}
@@ -285,7 +288,8 @@ impl Core<Block> for RuntimeApi {
 		&self,
 		_: &BlockId<Block>,
 		_: Option<(Block)>,
-		_: Vec<u8>
+		_: Vec<u8>,
+		_: ExecutionContext
 	) -> Result<NativeOrEncoded<()>> {
 		unimplemented!("Not required for testing!")
 	}
@@ -295,6 +299,47 @@ impl Core<Block> for RuntimeApi {
 		_: &BlockId<Block>,
 		_: Option<&<Block as BlockT>::Header>,
 		_: Vec<u8>,
+		_: ExecutionContext
+	) -> Result<NativeOrEncoded<()>> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn version_with_context_runtime_api_impl(
+		&self,
+		_: &BlockId<Block>,
+		_: Option<()>,
+		_: Vec<u8>,
+		_: ExecutionContext
+	) -> Result<NativeOrEncoded<RuntimeVersion>> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn authorities_with_context_runtime_api_impl(
+		&self,
+		_: &BlockId<Block>,
+		_: Option<()>,
+		_: Vec<u8>,
+		_: ExecutionContext
+	) -> Result<NativeOrEncoded<Vec<Ed25519AuthorityId>>> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn execute_block_with_context_runtime_api_impl(
+		&self,
+		_: &BlockId<Block>,
+		_: Option<(Block)>,
+		_: Vec<u8>,
+		_: ExecutionContext
+	) -> Result<NativeOrEncoded<()>> {
+		unimplemented!("Not required for testing!")
+	}
+
+	fn initialise_block_with_context_runtime_api_impl(
+		&self,
+		_: &BlockId<Block>,
+		_: Option<&<Block as BlockT>::Header>,
+		_: Vec<u8>,
+		_: ExecutionContext
 	) -> Result<NativeOrEncoded<()>> {
 		unimplemented!("Not required for testing!")
 	}
@@ -340,6 +385,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		at: &BlockId<Block>,
 		_: Option<()>,
 		_: Vec<u8>,
+		_: ExecutionContext
 	) -> Result<NativeOrEncoded<Vec<(Ed25519AuthorityId, u64)>>> {
 		if at == &BlockId::Number(0) {
 			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
@@ -352,7 +398,39 @@ impl GrandpaApi<Block> for RuntimeApi {
 		&self,
 		at: &BlockId<Block>,
 		_: Option<(&DigestFor<Block>)>,
-		_: Vec<u8>
+		_: Vec<u8>,
+		_: ExecutionContext
+	) -> Result<NativeOrEncoded<Option<ScheduledChange<NumberFor<Block>>>>> {
+		let parent_hash = match at {
+			&BlockId::Hash(at) => at,
+			_ => panic!("not requested by block hash!!"),
+		};
+
+		// we take only scheduled changes at given block number where there are no
+		// extrinsics.
+		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
+	}
+
+	fn grandpa_authorities_with_context_runtime_api_impl(
+		&self,
+		at: &BlockId<Block>,
+		_: Option<()>,
+		_: Vec<u8>,
+		_: ExecutionContext
+	) -> Result<NativeOrEncoded<Vec<(Ed25519AuthorityId, u64)>>> {
+		if at == &BlockId::Number(0) {
+			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
+		} else {
+			panic!("should generally only request genesis authorities")
+		}
+	}
+
+	fn grandpa_pending_change_with_context_runtime_api_impl(
+		&self,
+		at: &BlockId<Block>,
+		_: Option<(&DigestFor<Block>)>,
+		_: Vec<u8>,
+		_: ExecutionContext
 	) -> Result<NativeOrEncoded<Option<ScheduledChange<NumberFor<Block>>>>> {
 		let parent_hash = match at {
 			&BlockId::Hash(at) => at,
@@ -576,7 +654,7 @@ fn transition_3_voters_twice_1_observer() {
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		assert_eq!(peer.client().info().unwrap().chain.best_number, 1,
-				   "Peer #{} failed to sync", i);
+					"Peer #{} failed to sync", i);
 
 		let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
 		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
@@ -733,7 +811,7 @@ fn justification_is_generated_periodically() {
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(32, net.clone(), peers);
 
- 	// when block#32 (justification_period) is finalized, justification
+	// when block#32 (justification_period) is finalized, justification
 	// is required => generated
 	for i in 0..3 {
 		assert!(net.lock().peer(i).client().backend().blockchain()
