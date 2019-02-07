@@ -70,24 +70,32 @@ impl<Balance> OnDilution<Balance> for () {
 	fn on_dilution(_minted: Balance, _portion: Balance) {}
 }
 
-/// Determinator for whether a given account is able to transfer balance.
+/// Determinator for whether a given account is able to use its balance.
 pub trait EnsureAccountLiquid<AccountId> {
 	/// Returns `Ok` iff the account is able to transfer funds normally. `Err(...)`
 	/// with the reason why not otherwise.
-	fn ensure_account_liquid(who: &AccountId) -> Result;
+	fn ensure_account_can_transfer(who: &AccountId) -> Result;
+
+	/// Returns `Ok` iff the account is able to make transaction payments. `Err(...)`
+	/// with the reason why not otherwise.
+	fn ensure_account_can_pay(who: &AccountId) -> Result { true }
 }
 impl<
 	AccountId,
 	X: EnsureAccountLiquid<AccountId>,
 	Y: EnsureAccountLiquid<AccountId>,
 > EnsureAccountLiquid<AccountId> for (X, Y) {
-	fn ensure_account_liquid(who: &AccountId) -> Result {
-		X::ensure_account_liquid(who)?;
-		Y::ensure_account_liquid(who)
+	fn ensure_account_can_transfer(who: &AccountId) -> Result {
+		X::ensure_account_can_transfer(who)?;
+		Y::ensure_account_can_transfer(who)
+	}
+	fn ensure_account_can_pay(who: &AccountId) -> Result {
+		X::ensure_account_can_pay(who)?;
+		Y::ensure_account_can_pay(who)
 	}
 }
 impl<AccountId> EnsureAccountLiquid<AccountId> for () {
-	fn ensure_account_liquid(_who: &AccountId) -> Result { Ok(()) }
+	fn ensure_account_can_transfer(_who: &AccountId) -> Result { Ok(()) }
 }
 
 pub trait Trait: system::Trait {
@@ -230,7 +238,7 @@ impl<T: Trait> Module<T> {
 	/// Same result as `reserve(who, value)` (but without the side-effects) assuming there
 	/// are no balance changes in the meantime.
 	pub fn can_reserve(who: &T::AccountId, value: T::Balance) -> bool {
-		if T::EnsureAccountLiquid::ensure_account_liquid(who).is_ok() {
+		if T::EnsureAccountLiquid::ensure_account_can_transfer(who).is_ok() {
 			Self::free_balance(who) >= value
 		} else {
 			false
@@ -326,7 +334,7 @@ impl<T: Trait> Module<T> {
 		who: &T::AccountId,
 		value: T::Balance
 	) -> result::Result<UpdateBalanceOutcome, &'static str> {
-		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		T::EnsureAccountLiquid::ensure_account_can_transfer(who)?;
 		let b = Self::free_balance(who);
 		if b < value {
 			return Err("account has too few funds")
@@ -372,7 +380,7 @@ impl<T: Trait> Module<T> {
 		if b < value {
 			return Err("not enough free funds")
 		}
-		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		T::EnsureAccountLiquid::ensure_account_can_transfer(who)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, b - value);
 		Ok(())
@@ -413,7 +421,7 @@ impl<T: Trait> Module<T> {
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		T::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
+		T::EnsureAccountLiquid::ensure_account_can_transfer(transactor)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.

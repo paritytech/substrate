@@ -421,7 +421,7 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
-	fn ensure_account_liquid(who: &T::AccountId) -> Result {
+	fn ensure_account_can_transfer(who: &T::AccountId) -> Result {
 		if Self::bondage(who) <= <system::Module<T>>::block_number() {
 			Ok(())
 		} else {

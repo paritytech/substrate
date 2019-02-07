@@ -68,6 +68,21 @@ pub enum LockStatus<BlockNumber: Parameter> {
 	Bonded,
 }
 
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Payee {
+	/// Pay into the stash account, increasing the amount at stake accordingly.
+	Stash,
+	/// Pay into the controller account.
+	Controller,
+}
+
+impl Default for Payee {
+	fn default() -> Self {
+		Payee::Stash
+	}
+}
+
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -75,9 +90,11 @@ pub struct ValidatorPrefs<Balance: HasCompact> {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	#[codec(compact)]
 	pub unstake_threshold: u32,
-	// Reward that validator takes up-front; only the rest is split between themselves and nominators.
+	/// Reward that validator takes up-front; only the rest is split between themselves and nominators.
 	#[codec(compact)]
 	pub validator_payment: Balance,
+	/// Should reward be paid into the stash or the controller account?
+	pub payee: Payee,
 }
 
 impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
@@ -85,7 +102,38 @@ impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 		ValidatorPrefs {
 			unstake_threshold: 3,
 			validator_payment: Default::default(),
+			payee: Default::default(),
 		}
+	}
+}
+
+/// The ledger of a (bonded) stash.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct StakingLedger<AccountId, Balance, BlockNumber> {
+	/// The stash account whose balance is actually locked and at stake.
+	pub stash: AccountId,
+	/// The total amount of the stash's balance that will be at stake in any forthcoming
+	/// rounds.
+	pub active: Balance,
+	/// Any balance that is becoming (or has become) free, which may be transferred out
+	/// of the stash.
+	pub inactive: Vec<(Balance, BlockNumber)>,
+}
+
+/// Capacity in which a bonded account is participating.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Capacity<AccountId> {
+	/// We are nominating.
+	Nominator(Vec<AccountId>),
+	/// We want to be a validator.
+	Validator,
+}
+
+impl<AccountId> Default for Capacity<AccountId> {
+	fn default() -> Self {
+		Capacity::Nominator(vec![])
 	}
 }
 
@@ -97,43 +145,221 @@ pub trait Trait: balances::Trait + session::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
+pub type PairOf<T> = (T, T);
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Staking {
+
+		/// The ideal number of staking participants.
+		pub ValidatorCount get(validator_count) config(): u32;
+		/// Minimum number of staking participants before emergency conditions are imposed.
+		pub MinimumValidatorCount get(minimum_validator_count) config(): u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
+		/// The length of a staking era in sessions.
+		pub SessionsPerEra get(sessions_per_era) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		/// Maximum reward, per validator, that is provided per acceptable session.
+		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_billionths(60);
+		/// Slash, per validator that is taken for the first time they are found to be offline.
+		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000); // Perbill::from_fraction() is only for std, so use from_millionths().
+		/// Number of instances of offline reports before slashing begins for validators.
+		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
+		/// The length of the bonding duration in blocks.
+		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+
+		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialise
+		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
+		pub Invulerables get(invulnerables) config(): Vec<T::AccountId>;
+
+		/// Map from all locked "stash" accounts to the controller account.
+		pub Bonded get(bonded): map T::AccountId => Option<T::AccountId>;
+		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
+		pub Ledger get(ledger): map T::AccountId => Option<StakingLedger<T::AccountId, T::Balance, T::BlockNumber>>;
+
+		/// Preferences that a validator has.
+		pub ValidatorPreferences get(validator_preferences): map T::AccountId => ValidatorPrefs<T::Balance>;
+
+		//==============================================================================================================================
+
+		/// The desired capacity in which a controller wants to operate.
+//		pub Desired get(desired): map AccountId => Capacity<T::AccountId>;
+
+		/// All the accounts with a desire to stake.
+		pub Intentions get(intentions) config(): Vec<T::AccountId>;
+
+		/// All nominator -> nominee relationships.
+		/// TODO: should be Vec<T::AccountId>.
+		pub Nominating get(nominating): map T::AccountId => Option<T::AccountId>;
+
+		/// Nominators for a particular account.
+		/// TODO: Might need to be removed.
+		pub NominatorsFor get(nominators_for): map T::AccountId => Vec<T::AccountId>;
+
+		/// Nominators for a particular account that is in action right now.
+		pub CurrentNominatorsFor get(current_nominators_for): map T::AccountId => Vec<T::AccountId>;
+
+		//==============================================================================================================================
+
+		/// The current era index.
+		pub CurrentEra get(current_era) config(): T::BlockNumber;
+
+		/// Maximum reward, per validator, that is provided per acceptable session.
+		pub CurrentSessionReward get(current_session_reward) config(): T::Balance;
+		/// Slash, per validator that is taken for the first time they are found to be offline.
+		pub CurrentOfflineSlash get(current_offline_slash) config(): T::Balance;
+
+		/// The next value of sessions per era.
+		pub NextSessionsPerEra get(next_sessions_per_era): Option<T::BlockNumber>;
+		/// The session index at which the era length last changed.
+		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
+
+		/// The highest and lowest staked validator slashable balances.
+		pub StakeRange get(stake_range): PairOf<T::Balance>;
+
+		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
+		pub SlashCount get(slash_count): map T::AccountId => u32;
+
+		/// We are forcing a new era.
+		pub ForcingNewEra get(forcing_new_era): Option<()>;
+
+		/// Most recent `RECENT_OFFLINE_COUNT` instances. (who it was, when it was reported, how many instances they were offline for).
+		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		/// Declare the desire to stake for the transactor.
+		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will be the
+		/// account that controls it.
+		fn bond_stash(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: T::Balance) {
+			let stash = ensure_signed(origin)?;
+
+			if Self::bond(&stash).is_some() {
+				return Err("stash already bonded")
+			}
+
+			// Your auto-bonded forever, here. We might improve this by only bonding when
+			// you actually validate/nominate.
+			<Bonded<T>>::insert(&stash, controller.clone());
+
+			let stash_balance = <balances::Module<T>>::free_balance(&stash);
+			let value = value.min(stash_balance);
+			let remaining_free = stash_balance - value;
+			let inactive = match remaining_free.is_zero() {
+				false => vec![(remaining_free, <system::Module<T>>::block_number())],
+				true => vec![],
+			};
+
+			<Ledger<T>>::insert(&T::Lookup::lookup(controller), StakingLedger { stash, active: value, inactive });
+		}
+
+		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
+		/// period ends. If this leaves an amount actively bonded less than 
+		/// <balances::Module<T>>::existential_deposit(), then it is increased to the full amount.
+		fn unlock(origin, #[compact] value: T::Balance) {
+			let controller = ensure_signed(origin)?;
+			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+
+			let mut value = value.min(ledger.active);
+
+			if !value.is_zero() {
+				ledger.active -= value;
+
+				/// Avoid there being a dust balance left in the staking system.
+				let ed = <balances::Module<T>>::existential_deposit();
+				if ledger.active - value < ed {
+					value += ledger.active;
+					ledger.active = Zero::zero();
+				}
+
+				let now = <system::Module<T>>::block_number();
+				ledger.inactive.push((value, now + Self::bonding_duration()));
+				<Ledger<T>>::insert(&controller, ledger);
+			}
+		}
+
+		/// Transfer some `value` of unlocked funds from the stash to `destination` account.
+		fn transfer_unlocked(origin, destination: <T::Lookup as StaticLookup>::Source) {
+			let controller = ensure_signed(origin)?;
+			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+
+			let now = <system::Module<T>>::block_number();
+
+			let mut total = Zero::zero();
+			l.inactive = l.inactive.iter()
+				.filter(|(how_much, when)| if now < when {
+					true
+				} else {
+					total += how_much;
+					false
+				})
+				.collect();
+
+			<balances::Module<T>>::decrease_free_balance(&l.stash, total)?;
+			<balances::Module<T>>::increase_free_balance_creating(&T::Lookup::lookup(destination), total);
+			<Ledger<T>>::insert(&controller, ledger);
+		}
+
+		/// Add any extra amounts that have appeared in the stash free_balance into the balance up for
+		/// staking.
+		fn note_additional(origin) {
+			let controller = ensure_signed(origin)?;
+			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+
+			let stash_balance = <balances::Module<T>>::free_balance(&stash);
+			let inactive_balance = ledger.inactive.iter().map(|(v, _)| v).sum();
+
+			if stash_balance > inactive_balance + ledger.active {
+				let extra = stash_balance - inactive_balance - ledger.active;
+				let now = <system::Module<T>>::block_number();
+				ledger.inactive.push((extra, now));
+				<Ledger<T>>::insert(&controller, ledger);
+			}
+		}
+
+		// ***************
+		// TODO: all of the following should be made to work given that the 
+
+		/// Declare the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn stake(origin) {
-			let who = ensure_signed(origin)?;
-			ensure!(Self::nominating(&who).is_none(), "Cannot stake if already nominating.");
+		fn validate(origin) {
+			let controller = ensure_signed(origin)?;
+			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			ensure!(Self::nominating(&who).is_none(), "Cannot validate if already nominating.");
+
 			let mut intentions = <Intentions<T>>::get();
 			// can't be in the list twice.
-			ensure!(intentions.iter().find(|&t| t == &who).is_none(), "Cannot stake if already staked.");
+			ensure!(intentions.iter().find(|&t| t == &controller).is_none(), "Cannot validate if already validating.");
 
-			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
-			intentions.push(who);
+			<Bondage<T>>::insert(&controller, T::BlockNumber::max_value());
+			intentions.push(controller);
 			<Intentions<T>>::put(intentions);
 		}
 
-		/// Retract the desire to stake for the transactor.
+		/// Retract the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn unstake(origin, #[compact] intentions_index: u32) -> Result {
-			let who = ensure_signed(origin)?;
+		fn unvalidate(origin, #[compact] intentions_index: u32) -> Result {
+			let controller = ensure_signed(origin)?;
+			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+
 			// unstake fails in degenerate case of having too few existing staked parties
 			if Self::intentions().len() <= Self::minimum_validator_count() as usize {
-				return Err("cannot unstake when there are too few staked participants")
+				return Err("cannot unvalidate when there are too few validating participants")
 			}
-			Self::apply_unstake(&who, intentions_index as usize)
+			Self::apply_unvalidate(&controller, intentions_index as usize)
 		}
 
+		/// Declare the desire to nominate `target` for the origin controller.
 		fn nominate(origin, target: <T::Lookup as StaticLookup>::Source) {
 			let who = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
 
+			let mut _ledger = Self::ledger(&who).ok_or("not a controller")?;
+
 			ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
-			ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already staked.");
+			ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already validating.");
 
 			// update nominators_for
 			let mut t = Self::nominators_for(&target);
@@ -142,9 +368,6 @@ decl_module! {
 
 			// update nominating
 			<Nominating<T>>::insert(&who, &target);
-
-			// Update bondage
-			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
 		}
 
 		/// Will panic if called when source isn't currently nominating target.
@@ -168,12 +391,6 @@ decl_module! {
 
 			// update nominating
 			<Nominating<T>>::remove(&source);
-
-			// update bondage
-			<Bondage<T>>::insert(
-				source,
-				<system::Module<T>>::block_number() + Self::bonding_duration()
-			);
 		}
 
 		/// Set the given account's preference for slashing behaviour should they be a validator.
@@ -239,69 +456,6 @@ decl_event!(
 	}
 );
 
-pub type PairOf<T> = (T, T);
-
-decl_storage! {
-	trait Store for Module<T: Trait> as Staking {
-
-		/// The ideal number of staking participants.
-		pub ValidatorCount get(validator_count) config(): u32;
-		/// Minimum number of staking participants before emergency conditions are imposed.
-		pub MinimumValidatorCount get(minimum_validator_count) config(): u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
-		/// The length of a staking era in sessions.
-		pub SessionsPerEra get(sessions_per_era) config(): T::BlockNumber = T::BlockNumber::sa(1000);
-		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_billionths(60);
-		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000); // Perbill::from_fraction() is only for std, so use from_millionths().
-		/// Number of instances of offline reports before slashing begins for validators.
-		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
-		/// The length of the bonding duration in blocks.
-		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
-
-		/// Any validators that may never be slashed or forcible kicked. It's a Vec since they're easy to initialise
-		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
-		pub Invulerables get(invulnerables) config(): Vec<T::AccountId>;
-
-		/// The current era index.
-		pub CurrentEra get(current_era) config(): T::BlockNumber;
-		/// Preferences that a validator has.
-		pub ValidatorPreferences get(validator_preferences): map T::AccountId => ValidatorPrefs<T::Balance>;
-		/// All the accounts with a desire to stake.
-		pub Intentions get(intentions) config(): Vec<T::AccountId>;
-		/// All nominator -> nominee relationships.
-		pub Nominating get(nominating): map T::AccountId => Option<T::AccountId>;
-		/// Nominators for a particular account.
-		pub NominatorsFor get(nominators_for): map T::AccountId => Vec<T::AccountId>;
-		/// Nominators for a particular account that is in action right now.
-		pub CurrentNominatorsFor get(current_nominators_for): map T::AccountId => Vec<T::AccountId>;
-
-		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub CurrentSessionReward get(current_session_reward) config(): T::Balance;
-		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub CurrentOfflineSlash get(current_offline_slash) config(): T::Balance;
-
-		/// The next value of sessions per era.
-		pub NextSessionsPerEra get(next_sessions_per_era): Option<T::BlockNumber>;
-		/// The session index at which the era length last changed.
-		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
-
-		/// The highest and lowest staked validator slashable balances.
-		pub StakeRange get(stake_range): PairOf<T::Balance>;
-
-		/// The block at which the `who`'s funds become entirely liquid.
-		pub Bondage get(bondage): map T::AccountId => T::BlockNumber;
-		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
-		pub SlashCount get(slash_count): map T::AccountId => u32;
-
-		/// We are forcing a new era.
-		pub ForcingNewEra get(forcing_new_era): Option<()>;
-
-		/// Most recent `RECENT_OFFLINE_COUNT` instances. (who it was, when it was reported, how many instances they were offline for).
-		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
-	}
-}
-
 impl<T: Trait> Module<T> {
 	// Just force_new_era without origin check.
 	fn apply_force_new_era(apply_rewards: bool) -> Result {
@@ -323,7 +477,17 @@ impl<T: Trait> Module<T> {
 			.fold(Zero::zero(), |acc, x| acc + x)
 	}
 
+	/// The total balance that can be slashed from an account for any activity
+	/// henceforth.
+	pub fn backing_balance(who: &T::AccountId) -> T::Balance {
+		Self::nominators_for(who).iter()
+			.map(Self::ledger)
+			.map(|ledger| ledger.active)
+			.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
+	}
+
 	/// The total balance that can be slashed from an account.
+	/// XXXXXX
 	pub fn slashable_balance(who: &T::AccountId) -> T::Balance {
 		Self::nominators_for(who).iter()
 			.map(<balances::Module<T>>::total_balance)
@@ -331,6 +495,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// The block at which the `who`'s funds become entirely liquid.
+	/// XXXXXX
 	pub fn unlock_block(who: &T::AccountId) -> LockStatus<T::BlockNumber> {
 		match Self::bondage(who) {
 			i if i == T::BlockNumber::max_value() => LockStatus::Bonded,
@@ -391,7 +556,7 @@ impl<T: Trait> Module<T> {
 
 	/// Actually carry out the unstake operation.
 	/// Assumes `intentions()[intentions_index] == who`.
-	fn apply_unstake(who: &T::AccountId, intentions_index: usize) -> Result {
+	fn apply_unvalidate(who: &T::AccountId, intentions_index: usize) -> Result {
 		let mut intentions = Self::intentions();
 		if intentions.get(intentions_index) != Some(who) {
 			return Err("Invalid index");
@@ -568,9 +733,9 @@ impl<T: Trait> Module<T> {
 				|| next_slash <= slash
 			{
 				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
-					Self::apply_unstake(&v, pos)
+					Self::apply_unvalidate(&v, pos)
 						.expect("pos derived correctly from Self::intentions(); \
-								 apply_unstake can only fail if pos wrong; \
+								 apply_unvalidate can only fail if pos wrong; \
 								 Self::intentions() doesn't change; qed");
 				}
 				let _ = Self::apply_force_new_era(false);
@@ -591,18 +756,24 @@ impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 }
 
 impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
-	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		if Self::bondage(who) <= <system::Module<T>>::block_number() {
-			Ok(())
+	fn ensure_account_can_transfer(who: &T::AccountId) -> Result {
+		if <Bonded<T>>::exists(who) {
+			Err("stash accounts are frozen")
 		} else {
-			Err("cannot transfer illiquid funds")
+			Ok(())
 		}
+	}
+
+	fn ensure_account_can_pay(who: &T::AccountId) -> Result {
+		Self::ensure_account_can_transfer(who)
 	}
 }
 
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		<Bondage<T>>::remove(who);
+		if let Some(controller) = <Bonded<T>>::take(who) {
+			<Ledger<T>>::kill(&controller);
+		}
 	}
 }
 
