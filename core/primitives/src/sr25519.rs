@@ -23,6 +23,7 @@ use blake2_rfc;
 use rand::rngs::OsRng;
 use schnorrkel::{signing_context, Keypair, MiniSecretKey, PublicKey};
 use sha2::Sha512;
+use parity_codec_derive::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
@@ -166,7 +167,7 @@ impl ::std::fmt::Display for Public {
 impl ::std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", ::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 }
 
@@ -267,6 +268,7 @@ where
 #[cfg(test)]
 mod test {
 	use super::*;
+	use hex_literal::{hex, hex_impl};
 
 	#[test]
 	fn sr_test_vector_should_work() {

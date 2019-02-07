@@ -21,8 +21,8 @@ use std::fmt;
 
 use rstd::prelude::*;
 use runtime_io::blake2_256;
-use codec::{Decode, Encode, Input};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
+use crate::codec::{Decode, Encode, Input};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
 use super::{CheckedExtrinsic, Era};
 
@@ -189,6 +189,8 @@ impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalExtrinsic<Ad
 mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
+	use parity_codec_derive::{Encode, Decode};
+	use serde_derive::{Serialize, Deserialize};
 
 	struct TestContext;
 	impl Lookup for TestContext {

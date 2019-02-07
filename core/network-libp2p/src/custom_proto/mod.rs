@@ -19,4 +19,5 @@ pub use self::upgrade::{RegisteredProtocol, RegisteredProtocols};
 
 mod behaviour;
 mod handler;
+mod topology;
 mod upgrade;
