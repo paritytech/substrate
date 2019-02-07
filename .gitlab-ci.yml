@@ -6,6 +6,7 @@ stages:
   - test
   - build
   - publish
+  - label
 
 image:                             parity/rust:nightly
 
@@ -46,7 +47,19 @@ test:runtime:
   only:
     - /^[0-9]+$/
   script:
-    - ./scripts/gitlab/check_runtime.sh
+    - >
+      ./scripts/gitlab/check_runtime.sh || (
+      test "${BREAKSAPI}" && echo "don't call myself" && exit 2;
+      echo "runtime checks failed - triggering labelling job";
+      curl -sS -X POST 
+      -F "token=${CI_JOB_TOKEN}"
+      -F "ref=master"
+      -F "variables[BREAKSAPI]=true"
+      https://gitlab.parity.io/api/v4/projects/${CI_PROJECT_ID}/trigger/pipeline;
+      return 1
+      )
+
+
 
 
 test:rust:stable:                  &test
@@ -233,3 +246,28 @@ publish:s3:doc:
         --human-readable --summarize
   tags:
     - linux-docker
+
+
+
+
+label:run:
+  stage:                           label
+  cache:                           {}
+  variables:
+    GIT_STRATEGY:                  none
+  only:
+    variables:
+      - $BREAKSAPI == "true"
+  script:
+    - >
+      curl -sS -X POST 
+      -H "Accept: application/vnd.github.v3+json" 
+      -H "Authorization: Bearer ${GITHUB_TOKEN}"
+      --data "{ \"labels\": [\"B2-breaksapi\"] }"
+      https://api.github.com/repos/paritytech/substrate/issues/${CI_COMMIT_REF_NAME}/labels
+  tags:
+    - linux-docker
+
+
+
+
