@@ -191,33 +191,25 @@ impl ToTokens for OuterAttributes {
 }
 
 #[derive(Debug)]
-pub struct Seq<P> {
-	pub inner: Vec<P>,
+pub struct Opt<P> {
+	pub inner: Option<P>,
 }
 
-impl<P: Parse> Parse for Seq<P> {
+impl<P: Parse> Parse for Opt<P> {
 	// Note that it cost a double parsing (same as enum derive)
 	fn parse(input: ParseStream) -> Result<Self> {
-		let mut inner = Vec::new();
-		loop {
-			let fork = input.fork();
-			let res: Result<P> = fork.parse();
-			match res {
-				Ok(_item) => {
-					// move cursor
-					let item: P = input.parse().expect("Same parsing ran before");
-					inner.push(item);
-				},
-				Err(_e) => break,
-			}
-		}
-		Ok(Seq { inner })
+		let inner = match input.fork().parse::<P>() {
+			Ok(_item) => Some(input.parse().expect("Same parsing ran before")),
+			Err(_e) => None,
+		};
+
+		Ok(Opt { inner })
 	}
 }
 
-impl<P: ToTokens> ToTokens for Seq<P> {
+impl<P: ToTokens> ToTokens for Opt<P> {
 	fn to_tokens(&self, tokens: &mut T2) {
-		for p in self.inner.iter() {
+		if let Some(ref p) = self.inner {
 			p.to_tokens(tokens);
 		}
 	}
