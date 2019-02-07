@@ -28,7 +28,7 @@ use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
-use primitives::{blake2_256, twox_128, twox_256, ed25519};
+use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
@@ -480,6 +480,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
+	ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+		let mut sig = [0u8; 64];
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_sr25519_verify"))?;
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_sr25519_verify"))?;
+		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_sr25519_verify"))?;
+
+		Ok(if sr25519::verify(&sig, &msg, &pubkey) {
+			0
+		} else {
+			5
+		})
+	},
 	ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32 => {
 		let mut sig = [0u8; 65];
 		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_secp256k1_ecdsa_recover"))?;
@@ -885,6 +898,32 @@ mod tests {
 	}
 
 	#[test]
+	fn sr25519_verify_should_work() {
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
+		let sig = key.sign(b"all ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			vec![1]
+		);
+
+		let other_sig = key.sign(b"all is not ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(other_sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			vec![0]
+		);
+	}
+
+	#[test]
 	fn enumerated_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
@@ -893,6 +932,4 @@ mod tests {
 			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).as_fixed_bytes().encode()
 		);
 	}
-
-
 }
