@@ -127,7 +127,6 @@ pub mod generic {
 	use network_libp2p::CustomMessage;
 	use runtime_primitives::Justification;
 	use config::Roles;
-	use std::io::Cursor;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
 		RequestId, Transactions, Direction
