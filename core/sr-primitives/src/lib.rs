@@ -44,6 +44,9 @@ pub mod traits;
 pub mod generic;
 pub mod transaction_validity;
 
+/// A message indicating an invalid signature in extrinsic.
+pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
+
 /// Justification type.
 pub type Justification = Vec<u8>;
 
