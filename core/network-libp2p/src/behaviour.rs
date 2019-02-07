@@ -233,7 +233,7 @@ impl<TSubstream> NetworkBehaviourEventProcess<CustomProtosOut> for Behaviour<TSu
 impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubstream> {
 	fn inject_event(&mut self, event: IdentifyEvent) {
 		match event {
-			IdentifyEvent::Identified { peer_id, info, .. } => {
+			IdentifyEvent::Identified { peer_id, mut info, .. } => {
 				trace!(target: "sub-libp2p", "Identified {:?} => {:?}", peer_id, info);
 				// TODO: ideally we would delay the first identification to when we open the custom
 				//	protocol, so that we only report id info to the service about the nodes we
@@ -244,6 +244,11 @@ impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubs
 				if info.listen_addrs.is_empty() {
 					warn!(target: "sub-libp2p", "Received identify response with empty list of \
 						addresses");
+				}
+				if info.listen_addrs.len() > 30 {
+					warn!(target: "sub-libp2p", "Node {:?} id reported more than 30 addresses",
+						peer_id);
+					info.listen_addrs.truncate(30);
 				}
 				for addr in &info.listen_addrs {
 					self.discovery.kademlia.add_address(&peer_id, addr.clone());
