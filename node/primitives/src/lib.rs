@@ -31,8 +31,8 @@ pub type BlockNumber = u64;
 /// Alias to 512-bit hash when used in the context of a signature on the chain.
 pub type Signature = Sr25519Signature;
 
-/// Alias to Ed25519 pubkey that identifies an account on the chain. This will almost
-/// certainly continue to be the same as the substrate's `AuthorityId`.
+/// Some way of identifying an account on the chain. We intentionally make it equivalent
+/// to the public key of our transaction signing scheme.
 pub type AccountId = <Signature as Verify>::Signer;
 
 /// The type for looking up accounts. We don't expect more than 4 billion of them, but you
