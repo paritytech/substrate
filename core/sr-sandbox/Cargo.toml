@@ -3,15 +3,16 @@ name = "sr-sandbox"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
+edition = "2018"
 
 [build-dependencies]
 rustc_version = "0.2"
 
 [dependencies]
 wasmi = { version = "0.4.3", optional = true }
-substrate-primitives = { path = "../primitives", default-features = false }
-sr-std = { path = "../sr-std", default-features = false }
-parity-codec = { version = "3.0", default-features = false }
+primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
+codec = { package = "parity-codec", version = "3.0", default-features = false }
 
 [dev-dependencies]
 wabt = "~0.7.4"
@@ -21,9 +22,9 @@ assert_matches = "1.1"
 default = ["std"]
 std = [
 	"wasmi",
-	"substrate-primitives/std",
-	"sr-std/std",
-	"parity-codec/std",
+	"primitives/std",
+	"rstd/std",
+	"codec/std",
 ]
 nightly = []
 strict = []

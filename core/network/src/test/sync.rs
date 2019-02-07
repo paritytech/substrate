@@ -16,10 +16,10 @@
 
 use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
-use config::Roles;
+use crate::config::Roles;
 use consensus::BlockOrigin;
 use network_libp2p::NodeIndex;
-use sync::SyncState;
+use crate::sync::SyncState;
 use std::{thread, time};
 use std::collections::HashSet;
 use super::*;

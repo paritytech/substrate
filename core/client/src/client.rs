@@ -1302,6 +1302,27 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			self.apply_block(operation, import_block, new_authorities)
 		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
+
+	/// Check block preconditions.
+	fn check_block(
+		&self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+		match self.backend.blockchain().status(BlockId::Hash(hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
+			blockchain::BlockStatus::Unknown => {},
+		}
+		Ok(ImportResult::Queued)
+	}
 }
 
 impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> where

@@ -38,7 +38,7 @@ pub use self::header::Header;
 pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{Digest, DigestItem, DigestItemRef};
 
-use codec::Encode;
+use crate::codec::Encode;
 use rstd::prelude::*;
 
 fn encode_with_vec_prefix<T: Encode, F: Fn(&mut Vec<u8>)>(encoder: F) -> Vec<u8> {

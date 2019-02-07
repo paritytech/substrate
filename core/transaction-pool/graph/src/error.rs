@@ -39,9 +39,9 @@ error_chain! {
 			display("Temporarily Banned"),
 		}
 		/// The transaction is already in the pool.
-		AlreadyImported {
-			description("Transaction is already in the pool."),
-			display("Already imported"),
+		AlreadyImported(hash: Box<::std::any::Any + Send>) {
+			description("Transaction is already in the pool"),
+			display("[{:?}] Already imported", hash),
 		}
 		/// The transaction cannot be imported cause it's a replacement and has too low priority.
 		TooLowPriority(old: Priority, new: Priority) {
@@ -52,6 +52,11 @@ error_chain! {
 		CycleDetected {
 			description("Transaction was not imported because of detected cycle."),
 			display("Cycle Detected"),
+		}
+		/// Transaction was dropped immediately after it got inserted.
+		ImmediatelyDropped {
+			description("Transaction couldn't enter the pool because of the limit."),
+			display("Immediately Dropped"),
 		}
 	}
 }

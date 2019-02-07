@@ -21,56 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate primitive_types;
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate rustc_hex;
-extern crate byteorder;
-extern crate parity_codec as codec;
-
-#[cfg(feature = "std")]
-extern crate serde;
-#[cfg(feature = "std")]
-extern crate twox_hash;
-
-#[cfg(feature = "std")]
-extern crate blake2_rfc;
-#[cfg(feature = "std")]
-extern crate ring;
-#[cfg(feature = "std")]
-extern crate base58;
-#[cfg(feature = "std")]
-extern crate untrusted;
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-#[cfg(feature = "std")]
-extern crate impl_serde;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-#[cfg(feature = "std")]
-extern crate core;
-#[cfg(feature = "std")]
-extern crate wasmi;
-extern crate hash_db;
-extern crate hash256_std_hasher;
-
-extern crate sr_std as rstd;
-
-#[cfg(test)]
-extern crate substrate_serializer;
-
-#[cfg(test)]
-extern crate heapsize;
-
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
-
 #[macro_export]
 macro_rules! map {
 	($( $name:expr => $value:expr ),*) => (
@@ -80,8 +30,11 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
+use parity_codec_derive::{Encode, Decode};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
 
 #[cfg(feature = "std")]
 pub use impl_serde::serialize as bytes;
@@ -168,14 +121,14 @@ pub enum NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
+impl<R: parity_codec::Encode> ::std::fmt::Debug for NativeOrEncoded<R> {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		self.as_encoded().as_ref().fmt(f)
 	}
 }
 
 #[cfg(feature = "std")]
-impl<R: codec::Encode> NativeOrEncoded<R> {
+impl<R: parity_codec::Encode> NativeOrEncoded<R> {
 	/// Return the value as the encoded format.
 	pub fn as_encoded<'a>(&'a self) -> Cow<'a, [u8]> {
 		match self {
@@ -194,13 +147,13 @@ impl<R: codec::Encode> NativeOrEncoded<R> {
 }
 
 #[cfg(feature = "std")]
-impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
+impl<R: PartialEq + parity_codec::Decode> PartialEq for NativeOrEncoded<R> {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(NativeOrEncoded::Native(l), NativeOrEncoded::Native(r)) => l == r,
 			(NativeOrEncoded::Native(n), NativeOrEncoded::Encoded(e)) |
 			(NativeOrEncoded::Encoded(e), NativeOrEncoded::Native(n)) =>
-				Some(n) == codec::Decode::decode(&mut &e[..]).as_ref(),
+				Some(n) == parity_codec::Decode::decode(&mut &e[..]).as_ref(),
 			(NativeOrEncoded::Encoded(l), NativeOrEncoded::Encoded(r)) => l == r,
 		}
 	}
@@ -213,7 +166,7 @@ impl<R: PartialEq + codec::Decode> PartialEq for NativeOrEncoded<R> {
 pub enum NeverNativeValue {}
 
 #[cfg(feature = "std")]
-impl codec::Encode for NeverNativeValue {
+impl parity_codec::Encode for NeverNativeValue {
 	fn encode(&self) -> Vec<u8> {
 		// The enum is not constructable, so this function should never be callable!
 		unreachable!()
@@ -221,8 +174,8 @@ impl codec::Encode for NeverNativeValue {
 }
 
 #[cfg(feature = "std")]
-impl codec::Decode for NeverNativeValue {
-	fn decode<I: codec::Input>(_: &mut I) -> Option<Self> {
+impl parity_codec::Decode for NeverNativeValue {
+	fn decode<I: parity_codec::Input>(_: &mut I) -> Option<Self> {
 		None
 	}
 }

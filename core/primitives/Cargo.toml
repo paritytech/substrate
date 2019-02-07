@@ -2,9 +2,10 @@
 name = "substrate-primitives"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
-sr-std = { path = "../sr-std", default-features = false }
+rstd = { package = "sr-std", path = "../sr-std", default-features = false }
 parity-codec = { version = "3.0", default-features = false }
 parity-codec-derive = { version = "3.0", default-features = false }
 rustc-hex = { version = "2.0", default-features = false }
@@ -42,7 +43,7 @@ std = [
 	"parity-codec/std",
 	"hash256-std-hasher/std",
 	"hash-db/std",
-	"sr-std/std",
+	"rstd/std",
 	"serde/std",
 	"rustc-hex/std",
 	"twox-hash",

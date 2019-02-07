@@ -21,14 +21,13 @@
 #![recursion_limit="256"]
 
 #[macro_use]
-extern crate srml_support;
-#[macro_use]
 extern crate runtime_primitives;
 
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
 #[cfg(feature = "std")]
 use srml_support::{Serialize, Deserialize};
+use srml_support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
@@ -66,8 +65,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 22,
-	impl_version: 22,
+	spec_version: 23,
+	impl_version: 23,
 	apis: RUNTIME_API_VERSIONS,
 };
 
