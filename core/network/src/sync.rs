@@ -534,12 +534,12 @@ impl<B: BlockT> ChainSync<B> {
 						);
 					},
 					None => {
-						let msg = format!(
-							"Provided empty response for justification request {:?}",
+						// we might have asked the peer for a justification on a block that we thought it had
+						// (regardless of whether it had a justification for it or not).
+						trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}",
+							who,
 							hash,
 						);
-
-						protocol.report_peer(who, Severity::Useless(msg));
 						return;
 					},
 				}
