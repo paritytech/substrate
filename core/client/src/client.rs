@@ -1302,6 +1302,27 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			self.apply_block(operation, import_block, new_authorities)
 		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
 	}
+
+	/// Check block preconditions.
+	fn check_block(
+		&self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+		match self.backend.blockchain().status(BlockId::Hash(hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
+			blockchain::BlockStatus::Unknown => {},
+		}
+		Ok(ImportResult::Queued)
+	}
 }
 
 impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> where
@@ -1426,7 +1447,7 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;
-	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
+	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, RuntimeApi, TestAPI};
 
@@ -1520,17 +1541,6 @@ pub(crate) mod tests {
 				Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
-		);
-	}
-
-	#[test]
-	fn runtime_api_has_test_api() {
-		let client = test_client::new();
-
-		assert!(
-			client.runtime_api().has_api::<TestAPI<Block>>(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
-			).unwrap()
 		);
 	}
 

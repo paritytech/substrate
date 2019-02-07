@@ -57,6 +57,7 @@ mod mock;
 
 mod tests;
 
+const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 
 #[derive(PartialEq, Clone)]
@@ -295,6 +296,9 @@ decl_storage! {
 
 		/// We are forcing a new era.
 		pub ForcingNewEra get(forcing_new_era): Option<()>;
+
+		/// Most recent `RECENT_OFFLINE_COUNT` instances. (who it was, when it was reported, how many instances they were offline for).
+		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
 	}
 }
 
@@ -510,8 +514,22 @@ impl<T: Trait> Module<T> {
 
 		let slash_count = Self::slash_count(&v);
 		let new_slash_count = slash_count + count as u32;
-		<SlashCount<T>>::insert(v.clone(), new_slash_count);
+		<SlashCount<T>>::insert(&v, new_slash_count);
 		let grace = Self::offline_slash_grace();
+
+		if RECENT_OFFLINE_COUNT > 0 {
+			let item = (v.clone(), <system::Module<T>>::block_number(), count as u32);
+			<RecentlyOffline<T>>::mutate(|v| if v.len() >= RECENT_OFFLINE_COUNT {
+				let index = v.iter()
+					.enumerate()
+					.min_by_key(|(_, (_, block, _))| block)
+					.expect("v is non-empty; qed")
+					.0;
+				v[index] = item;
+			} else {
+				v.push(item);
+			});
+		}
 
 		let event = if new_slash_count > grace {
 			let slash = {

@@ -18,8 +18,9 @@
 
 use std::sync::Arc;
 
+use log::warn;
 use client::{self, Client};
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
@@ -33,9 +34,9 @@ use transaction_pool::{
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{Bytes, Blake2Hasher, H256};
-use rpc::futures::{Sink, Stream, Future};
+use crate::rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
-use subscriptions::Subscriptions;
+use crate::subscriptions::Subscriptions;
 
 pub mod error;
 
@@ -52,7 +53,7 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Submit hex-encoded extrinsic for inclusion in block.
 	#[rpc(name = "author_submitExtrinsic")]
-	fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
+	fn submit_extrinsic(&self, extrinsic: Bytes) -> Result<Hash>;
 
 	/// Returns all pending extrinsics, potentially grouped by sender.
 	#[rpc(name = "author_pendingExtrinsics")]
@@ -60,11 +61,11 @@ pub trait AuthorApi<Hash, BlockHash> {
 
 	/// Submit an extrinsic to watch.
 	#[pubsub(subscription = "author_extrinsicUpdate", subscribe, name = "author_submitAndWatchExtrinsic")]
-	fn watch_extrinsic(&self, Self::Metadata, Subscriber<Status<Hash, BlockHash>>, Bytes);
+	fn watch_extrinsic(&self, metadata: Self::Metadata, subscriber: Subscriber<Status<Hash, BlockHash>>, bytes: Bytes);
 
 	/// Unsubscribe from extrinsic watching.
 	#[pubsub(subscription = "author_extrinsicUpdate", unsubscribe, name = "author_unwatchExtrinsic")]
-	fn unwatch_extrinsic(&self, Option<Self::Metadata>, SubscriptionId) -> Result<bool>;
+	fn unwatch_extrinsic(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
 }
 
 /// Authoring API
@@ -100,7 +101,7 @@ impl<B, E, P, RA> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P, RA> whe
 	P::Error: 'static,
 	RA: Send + Sync + 'static
 {
-	type Metadata = ::metadata::Metadata;
+	type Metadata = crate::metadata::Metadata;
 
 	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
 		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;

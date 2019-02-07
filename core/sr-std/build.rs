@@ -1,6 +1,5 @@
 //! Set a nightly feature
 
-extern crate rustc_version;
 use rustc_version::{version, version_meta, Channel};
 
 fn main() {

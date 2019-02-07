@@ -18,9 +18,10 @@
 
 #[cfg(feature = "std")]
 use std::fmt;
-use super::{Member, Decode, Encode, As, Input, Output};
+use crate::{Member, Decode, Encode, As, Input, Output};
 
-/// A vetted and verified extrinsic from the external world.
+/// An indices-aware address, which can be either a direct `AccountId` or
+/// an index.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub enum Address<AccountId, AccountIndex> where

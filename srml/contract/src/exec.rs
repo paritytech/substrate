@@ -21,10 +21,13 @@ use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 use balances::{self, EnsureAccountLiquid};
 use rstd::prelude::*;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
+use timestamp;
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
+pub type MomentOf<T> = <T as timestamp::Trait>::Moment;
+pub type SeedOf<T> = <T as system::Trait>::Hash;
 
 #[cfg_attr(test, derive(Debug))]
 pub struct InstantiateReceipt<AccountId> {
@@ -95,6 +98,12 @@ pub trait Ext {
 
 	/// Returns the value transfered along with this call or as endowment.
 	fn value_transferred(&self) -> BalanceOf<Self::T>;
+
+	/// Returns a reference to the timestamp of the current block
+	fn now(&self) -> &MomentOf<Self::T>;
+
+	/// Returns a reference to the random seed for the current block
+	fn random_seed(&self) -> &SeedOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -311,6 +320,8 @@ where
 							ctx: &mut nested,
 							caller: self.self_account.clone(),
 							value_transferred: value,
+							timestamp: timestamp::Module::<T>::now(),
+							random_seed: system::Module::<T>::random_seed(),
 						},
 						input_data,
 						empty_output_buf,
@@ -382,6 +393,8 @@ where
 						ctx: &mut nested,
 						caller: self.self_account.clone(),
 						value_transferred: endowment,
+						timestamp: timestamp::Module::<T>::now(),
+						random_seed: system::Module::<T>::random_seed(),
 					},
 					input_data,
 					EmptyOutputBuf::new(),
@@ -528,6 +541,8 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b, V: Vm<T> + 'b, L: Loader<T>> {
 	ctx: &'a mut ExecutionContext<'b, T, V, L>,
 	caller: T::AccountId,
 	value_transferred: T::Balance,
+	timestamp: T::Moment,
+	random_seed: T::Hash,
 }
 
 impl<'a, 'b: 'a, T, E, V, L> Ext for CallContext<'a, 'b, T, V, L>
@@ -591,6 +606,14 @@ where
 
 	fn value_transferred(&self) -> T::Balance {
 		self.value_transferred
+	}
+
+	fn random_seed(&self) -> &T::Hash {
+		&self.random_seed
+	}
+
+	fn now(&self) -> &T::Moment {
+		&self.timestamp
 	}
 }
 

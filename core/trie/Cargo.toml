@@ -13,16 +13,16 @@ harness = false
 
 [dependencies]
 codec = { package = "parity-codec", version = "3.0" }
-hash-db = { version = "0.9", default-features = false }
-trie-db = { version = "0.9", optional = true }
-trie-root = { version = "0.9", default-features = false }
-memory-db = { version = "0.9", optional = true }
+hash-db = { version = "0.11", default-features = false }
+trie-db = { version = "0.11", optional = true }
+trie-root = { version = "0.11", default-features = false }
+memory-db = { version = "0.11", optional = true }
 
 [dev-dependencies]
 substrate-primitives = { path = "../primitives" }
-trie-bench = { version = "0.10" }
-trie-standardmap = { version = "0.9" }
-keccak-hasher = { version = "0.2" }
+trie-bench = { version = "0.11" }
+trie-standardmap = { version = "0.11" }
+keccak-hasher = { version = "0.11" }
 criterion = "0.2"
 hex-literal = "0.1.0"
 
