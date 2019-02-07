@@ -20,14 +20,14 @@
 #![allow(unused)]
 
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
+use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorityId};
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
 use runtime_support::{StorageMap, StorageDoubleMap};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
-use {wabt, balances};
+use {wabt, balances, consensus};
 use hex_literal::*;
 use assert_matches::assert_matches;
 use crate::{
@@ -77,6 +77,15 @@ impl balances::Trait for Test {
 	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();
 	type Event = MetaEvent;
+}
+impl timestamp::Trait for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+}
+impl consensus::Trait for Test {
+	type Log = DigestItem;
+	type SessionKey = UintAuthorityId;
+	type InherentOfflineReport = ();
 }
 impl Trait for Test {
 	type Call = Call;

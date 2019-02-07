@@ -1201,6 +1201,7 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
