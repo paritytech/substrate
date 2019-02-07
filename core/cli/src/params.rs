@@ -280,7 +280,7 @@ pub struct ImportBlocksCmd {
 	#[structopt(parse(from_os_str))]
 	pub input: Option<PathBuf>,
 
-	/// The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
+	/// The default number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
 	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 

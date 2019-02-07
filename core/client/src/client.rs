@@ -300,7 +300,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		})
 	}
 
-	/// Get a referennce to the execution strategies.
+	/// Get a reference to the execution strategies.
 	pub fn execution_strategies(&self) -> &ExecutionStrategies {
 		&self.execution_strategies
 	}

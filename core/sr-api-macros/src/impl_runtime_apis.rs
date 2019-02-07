@@ -399,9 +399,11 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 		let mut impl_ = impl_.clone();
 		let trait_ = extract_impl_trait(&impl_)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
+
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impls_prepared.push(impl_);
 	}
+
 	Ok(quote!( #( #impls_prepared )* ))
 }
 
@@ -418,7 +420,7 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	impl_trait_ident: &'a Ident,
 	runtime_mod_path: &'a Path,
 	runtime_type: &'a Type,
-	trait_generic_arguments: &'a [GenericArgument],
+	trait_generic_arguments: &'a [GenericArgument]
 }
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -567,6 +569,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			PathArguments::Parenthesized(_) | PathArguments::None => vec![],
 			PathArguments::AngleBracketed(ref b) => b.args.iter().cloned().collect(),
 		};
+
 		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
 			runtime_block,
 			node_block: &node_block,
@@ -575,7 +578,6 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			runtime_mod_path: &runtime_mod_path,
 			runtime_type: &*runtime_type,
 			trait_generic_arguments: &trait_generic_arguments,
-		
 		};
 
 		result.push(visitor.fold_item_impl(impl_.clone()));

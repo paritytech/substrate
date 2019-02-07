@@ -401,7 +401,7 @@ impl<'a> ToClientSideDecl<'a> {
 		let name = generate_method_runtime_api_impl_name(&method.sig.ident);
 		let block_id = self.block_id;
 		let crate_ = self.crate_;
-	
+
 		Some(
 			parse_quote!{
 				#[doc(hidden)]
@@ -470,7 +470,7 @@ impl<'a> ToClientSideDecl<'a> {
 		};
 
 		let function_name = method.sig.ident.to_string();
-			
+
 		// Generate the default implementation that calls the `method_runtime_api_impl` method.
 		method.default = Some(
 			parse_quote! {
@@ -738,7 +738,7 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 		return errors.into();
 	}
 
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);	
+	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_decls = generate_runtime_decls(&api_decls);
 	let client_side_decls = generate_client_side_decls(&api_decls);
 

@@ -6,7 +6,6 @@ extern crate substrate_test_client as test_client;
 
 use runtime_primitives::traits::{GetNodeBlockType, Block as BlockT, AuthorityIdFor};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::ExecutionContext;
 use client::runtime_api::{self, RuntimeApiInfo};
 use client::error::Result;
 use test_client::runtime::Block;
