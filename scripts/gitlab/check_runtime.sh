@@ -61,7 +61,14 @@ binary blob. This may break the api.
 
 EOT
 
-
+echo
+echo "# triggering labelling job";
+curl -sS -X POST \
+	-F "token=${CI_JOB_TOKEN}"\
+	-F "ref=master" \
+	-F "variables[BREAKSAPI]=true" \
+	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+ 
 
 
 
