@@ -24,6 +24,15 @@ then
 	
 	no changes to the runtime source code detected
 
+	echo "# triggering labelling job for testing purposes anyway"
+	curl -sS -X POST \
+		-F "token=${CI_JOB_TOKEN}" \
+		-F "ref=master" \
+		-F "variables[BREAKSAPI]=true" \
+		${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+ 
+
+
 	EOT
 	exit 0
 fi
@@ -62,9 +71,9 @@ binary blob. This may break the api.
 EOT
 
 echo
-echo "# triggering labelling job";
+echo "# triggering labelling job"
 curl -sS -X POST \
-	-F "token=${CI_JOB_TOKEN}"\
+	-F "token=${CI_JOB_TOKEN}" \
 	-F "ref=master" \
 	-F "variables[BREAKSAPI]=true" \
 	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
