@@ -62,6 +62,8 @@ pub type RuntimeString = &'static str;
 macro_rules! create_runtime_str {
 	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
 }
+
+/// Create a const [RuntimeString].
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! create_runtime_str {
@@ -319,6 +321,7 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 	)
 }
 
+/// Helper macro for `impl_outer_config`
 #[macro_export]
 macro_rules! __impl_outer_config_types {
 	(
