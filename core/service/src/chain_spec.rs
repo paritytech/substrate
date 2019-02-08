@@ -19,10 +19,11 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
+use serde_derive::{Serialize, Deserialize};
 use primitives::storage::{StorageKey, StorageData};
 use runtime_primitives::{BuildStorage, StorageMap, ChildrenStorageMap};
 use serde_json as json;
-use components::RuntimeGenesis;
+use crate::components::RuntimeGenesis;
 use network::Multiaddr;
 
 enum GenesisSource<G> {

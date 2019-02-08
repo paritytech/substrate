@@ -93,6 +93,8 @@ impl<B: BlockT> PendingJustifications<B> {
 			return;
 		}
 
+		let initial_pending_requests = self.pending_requests.len();
+
 		// clean up previous failed requests so we can retry again
 		for (_, requests) in self.previous_requests.iter_mut() {
 			requests.retain(|(_, instant)| instant.elapsed() < JUSTIFICATION_RETRY_WAIT);
@@ -173,6 +175,11 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 
 		self.pending_requests.append(&mut unhandled_requests);
+
+		trace!(target: "sync", "Dispatched {} justification requests ({} pending)",
+			initial_pending_requests - self.pending_requests.len(),
+			self.pending_requests.len(),
+		);
 	}
 
 	/// Queue a justification request (without dispatching it).
@@ -534,12 +541,12 @@ impl<B: BlockT> ChainSync<B> {
 						);
 					},
 					None => {
-						let msg = format!(
-							"Provided empty response for justification request {:?}",
+						// we might have asked the peer for a justification on a block that we thought it had
+						// (regardless of whether it had a justification for it or not).
+						trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}",
+							who,
 							hash,
 						);
-
-						protocol.report_peer(who, Severity::Useless(msg));
 						return;
 					},
 				}

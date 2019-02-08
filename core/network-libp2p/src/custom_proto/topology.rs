@@ -235,6 +235,11 @@ impl NetTopology {
 
 		let mut addrs: Vec<_> = addrs.collect();
 
+		if addrs.len() > 40 {
+			warn!(target: "sub-libp2p", "Attempt to add more than 40 addresses for {:?}", peer_id);
+			addrs.truncate(40);
+		}
+
 		let now_systime = SystemTime::now();
 		let now = Instant::now();
 
@@ -246,9 +251,7 @@ impl NetTopology {
 				if a.expires < now_systime && !a.is_connected() {
 					return false
 				}
-				while let Some(pos) = addrs.iter().position(|&(ref addr, _)| addr == &a.addr) {
-					addrs.remove(pos);
-				}
+				addrs.retain(|(addr, _)| *addr != a.addr);
 				true
 			})
 			.collect();
