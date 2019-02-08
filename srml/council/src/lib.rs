@@ -28,6 +28,7 @@ extern crate hex_literal;
 extern crate srml_balances as balances;
 
 extern crate parity_codec as codec;
+extern crate parity_codec_derive;
 extern crate substrate_primitives;
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;

@@ -36,7 +36,6 @@ extern crate substrate_primitives;
 extern crate sr_primitives;
 
 // Needed for deriving `Encode` and `Decode` for `RawEvent`.
-#[macro_use]
 extern crate parity_codec_derive;
 extern crate parity_codec as codec;
 

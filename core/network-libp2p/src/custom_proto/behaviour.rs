@@ -542,6 +542,9 @@ where
 				}
 			}
 			CustomProtosHandlerOut::CustomMessage { protocol_id, data } => {
+				debug_assert!(self.open_protocols.iter().any(|(s, p)|
+					s == &source && p == &protocol_id
+				));
 				let event = CustomProtosOut::CustomMessage {
 					peer_id: source,
 					protocol_id,
@@ -551,6 +554,9 @@ where
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 			CustomProtosHandlerOut::Clogged { protocol_id, messages } => {
+				debug_assert!(self.open_protocols.iter().any(|(s, p)|
+					s == &source && p == &protocol_id
+				));
 				warn!(target: "sub-libp2p", "Queue of packets to send to {:?} (protocol: {:?}) is \
 					pretty large", source, protocol_id);
 				self.events.push(NetworkBehaviourAction::GenerateEvent(CustomProtosOut::Clogged {

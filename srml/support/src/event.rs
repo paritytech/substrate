@@ -141,8 +141,8 @@ macro_rules! __decl_generic_event {
 		$event_generic_param:ident;
 		{ $( $tt:tt )* };
 	) => {
-		__decl_generic_event!(@format_generic
-			$(#[$attr])*;
+		$crate::__decl_generic_event!(@format_generic
+			$( #[ $attr ] )*;
 			$event_generic_param;
 			{ $( $tt )* };
 			{};
@@ -155,8 +155,8 @@ macro_rules! __decl_generic_event {
 		{ $generic_rename:ident = $generic_type:ty, $($rest:tt)* };
 		{$( $parsed:tt)*};
 	) => {
-		__decl_generic_event!(@format_generic
-			$(#[$attr])*;
+		$crate::__decl_generic_event!(@format_generic
+			$( #[ $attr ] )*;
 			$event_generic_param;
 			{ $($rest)* };
 			{ $($parsed)*, $generic_rename = $generic_type };
@@ -169,8 +169,8 @@ macro_rules! __decl_generic_event {
 		{ <$generic:ident as $trait:path>::$trait_type:ident, $($rest:tt)* };
 		{$($parsed:tt)*};
 	) => {
-		__decl_generic_event!(@format_generic
-			$(#[$attr])*;
+		$crate::__decl_generic_event!(@format_generic
+			$( #[ $attr ] )*;
 			$event_generic_param;
 			{ $($rest)* };
 			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type };
@@ -183,7 +183,7 @@ macro_rules! __decl_generic_event {
 		{ $generic_type:ty, $($rest:tt)* };
 		{$($parsed:tt)*};
 	) => {
-		__decl_generic_event!(@cannot_parse $generic_type);
+		$crate::__decl_generic_event!(@cannot_parse $generic_type);
 	};
 	// Finish formatting on an unnamed one
 	(@format_generic
@@ -192,8 +192,8 @@ macro_rules! __decl_generic_event {
 		{ <$generic:ident as $trait:path>::$trait_type:ident { $( $events:tt )* } };
 		{$( $parsed:tt)*};
 	) => {
-		__decl_generic_event!(@generate
-			$(#[$attr])*;
+		$crate::__decl_generic_event!(@generate
+			$( #[ $attr ] )*;
 			$event_generic_param;
 			{ $($events)* };
 			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type};
@@ -206,7 +206,7 @@ macro_rules! __decl_generic_event {
 		{ $generic_rename:ident = $generic_type:ty { $( $events:tt )* } };
 		{$( $parsed:tt)*};
 	) => {
-		__decl_generic_event!(@generate
+		$crate::__decl_generic_event!(@generate
 			$(#[$attr])*;
 			$event_generic_param;
 			{ $($events)* };
@@ -220,7 +220,7 @@ macro_rules! __decl_generic_event {
 		{ $generic_type:ty { $( $events:tt )* } };
 		{$( $parsed:tt)*};
 	) => {
-		__decl_generic_event!(@cannot_parse $generic_type);
+		$crate::__decl_generic_event!(@cannot_parse $generic_type);
 	};
 	(@generate
 		$(#[$attr:meta])*;
@@ -262,7 +262,7 @@ macro_rules! __events_to_metadata {
 		$event:ident $( ( $( $param:path ),* ) )*,
 		$( $rest:tt )*
 	) => {
-		__events_to_metadata!(
+		$crate::__events_to_metadata!(
 			$( $metadata, )*
 			$crate::event::EventMetadata {
 				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),

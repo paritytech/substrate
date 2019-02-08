@@ -24,6 +24,7 @@ use client;
 use network;
 use keystore;
 use consensus_common;
+use error_chain::*;
 
 error_chain! {
 	foreign_links {
