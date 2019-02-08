@@ -3590,7 +3590,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",
  "substrate-telemetry 0.3.0",
- "sysinfo 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sysinfo 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -4202,7 +4202,7 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "cfg-if 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5226,7 +5226,7 @@ dependencies = [
 "checksum subtle 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "702662512f3ddeb74a64ce2fbbf3707ee1b6bb663d28bb054e0779bbc720d926"
 "checksum syn 0.15.26 (registry+https://github.com/rust-lang/crates.io-index)" = "f92e629aa1d9c827b2bb8297046c1ccffc57c99b947a680d3ccff1f136a3bee9"
 "checksum synstructure 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "73687139bf99285483c96ac0add482c3776528beac1d97d444f6e91f203a2015"
-"checksum sysinfo 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4c747a1fbe091faa7bf76c19f40099f9f12495384c811485d81cf3d60c0eae62"
+"checksum sysinfo 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a4da1ccc493b46042d6f5352910a7f18ed8fe81307dd7db3f2e2d8a7db6f6284"
 "checksum take_mut 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f764005d11ee5f36500a149ace24e00e3da98b0158b3e2d53a7495660d3f4d60"
 "checksum target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c63f48baada5c52e65a29eef93ab4f8982681b67f9e8d29c7b05abcfec2b9ffe"
 "checksum tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)" = "15f2b5fb00ccdf689e0149d1b1b3c03fead81c2b37735d812fa8bddbbf41b6d8"
