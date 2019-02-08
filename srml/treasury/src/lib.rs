@@ -25,6 +25,11 @@ extern crate srml_support as runtime_support;
 
 #[cfg(test)]
 extern crate sr_io as runtime_io;
+#[cfg(test)]
+extern crate substrate_primitives;
+#[cfg(test)]
+extern crate srml_balances as balances;
+
 #[cfg(feature = "std")]
 extern crate serde;
 
@@ -32,24 +37,26 @@ extern crate serde;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
-#[cfg(test)]
-extern crate substrate_primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
-extern crate srml_balances as balances;
 
 use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
+use runtime_support::traits::{Currency, OnDilution};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
-use balances::OnDilution;
 use system::ensure_signed;
+
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 ///
 /// `system::Trait` should always be included in our implied traits.
-pub trait Trait: balances::Trait {
+pub trait Trait: system::Trait {
+	/// The staking balance.
+	type Currency: Currency<Self::AccountId>;
+
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;
 
@@ -73,14 +80,14 @@ decl_module! {
 		/// proposal is awarded.
 		fn propose_spend(
 			origin,
-			#[compact] value: T::Balance,
+			#[compact] value: BalanceOf<T>,
 			beneficiary: <T::Lookup as StaticLookup>::Source
 		) {
 			let proposer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			let bond = Self::calculate_bond(value);
-			<balances::Module<T>>::reserve(&proposer, bond)
+			T::Currency::reserve(&proposer, bond)
 				.map_err(|_| "Proposer's balance too low")?;
 
 			let c = Self::proposal_count();
@@ -91,7 +98,7 @@ decl_module! {
 		}
 
 		/// Set the balance of funds available to spend.
-		fn set_pot(#[compact] new_pot: T::Balance) {
+		fn set_pot(#[compact] new_pot: BalanceOf<T>) {
 			// Put the new value into storage.
 			<Pot<T>>::put(new_pot);
 		}
@@ -99,7 +106,7 @@ decl_module! {
 		/// (Re-)configure this module.
 		fn configure(
 			#[compact] proposal_bond: Permill,
-			#[compact] proposal_bond_minimum: T::Balance,
+			#[compact] proposal_bond_minimum: BalanceOf<T>,
 			#[compact] spend_period: T::BlockNumber,
 			#[compact] burn: Permill
 		) {
@@ -115,7 +122,7 @@ decl_module! {
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 
 			let value = proposal.bond;
-			let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
+			let _ = T::Currency::slash_reserved(&proposal.proposer, value);
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -156,7 +163,7 @@ decl_storage! {
 		ProposalBond get(proposal_bond) config(): Permill;
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		ProposalBondMinimum get(proposal_bond_minimum) config(): T::Balance;
+		ProposalBondMinimum get(proposal_bond_minimum) config(): BalanceOf<T>;
 
 		/// Period between successive spends.
 		SpendPeriod get(spend_period) config(): T::BlockNumber = runtime_primitives::traits::One::one();
@@ -167,13 +174,13 @@ decl_storage! {
 		// State...
 
 		/// Total funds available to this module for spending.
-		Pot get(pot): T::Balance;
+		Pot get(pot): BalanceOf<T>;
 
 		/// Number of proposals that have been made.
 		ProposalCount get(proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
-		Proposals get(proposals): map ProposalIndex => Option<Proposal<T::AccountId, T::Balance>>;
+		Proposals get(proposals): map ProposalIndex => Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(approvals): Vec<ProposalIndex>;
@@ -182,7 +189,11 @@ decl_storage! {
 
 /// An event in this module.
 decl_event!(
-	pub enum Event<T> where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId {
+	pub enum Event<T>
+	where
+		Balance = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance,
+		<T as system::Trait>::AccountId
+	{
 		/// New proposal.
 		Proposed(ProposalIndex),
 		/// We have ended a spend period and will now allocate funds.
@@ -200,7 +211,7 @@ impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 
 	/// The needed bond for a proposal whose spend is `value`.
-	fn calculate_bond(value: T::Balance) -> T::Balance {
+	fn calculate_bond(value: BalanceOf<T>) -> BalanceOf<T> {
 		Self::proposal_bond_minimum().max(Self::proposal_bond() * value)
 	}
 
@@ -219,10 +230,10 @@ impl<T: Trait> Module<T> {
 						<Proposals<T>>::remove(index);
 
 						// return their deposit.
-						let _ = <balances::Module<T>>::unreserve(&p.proposer, p.bond);
+						let _ = T::Currency::unreserve(&p.proposer, p.bond);
 
 						// provide the allocation.
-						<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
+						T::Currency::increase_free_balance_creating(&p.beneficiary, p.value);
 
 						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
 						false
@@ -249,12 +260,12 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnDilution<T::Balance> for Module<T> {
-	fn on_dilution(minted: T::Balance, portion: T::Balance) {
+impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
+	fn on_dilution(minted: BalanceOf<T>, portion: BalanceOf<T>) {
 		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
 		// pre dilution and post-dilution.
 		if !minted.is_zero() && !portion.is_zero() {
-			let total_issuance = <balances::Module<T>>::total_issuance();
+			let total_issuance = T::Currency::total_issuance();
 			let funding = (total_issuance - portion) / portion * minted;
 			<Pot<T>>::mutate(|x| *x += funding);
 		}
@@ -298,6 +309,7 @@ mod tests {
 		type Event = ();
 	}
 	impl Trait for Test {
+		type Currency = balances::Module<Test>;
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();

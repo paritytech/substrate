@@ -304,6 +304,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
+	use runtime_support::traits::Currency;
 	use system;
 
 	impl_outer_origin! {

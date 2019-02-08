@@ -18,10 +18,10 @@ use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
-use balances::{self, EnsureAccountLiquid};
 use rstd::prelude::*;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 use timestamp;
+use runtime_support::traits::EnsureAccountLiquid;
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;

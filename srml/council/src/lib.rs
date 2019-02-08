@@ -24,6 +24,8 @@ extern crate serde;
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
+#[cfg(test)]
+extern crate srml_balances as balances;
 
 extern crate parity_codec as codec;
 extern crate parity_codec_derive;
@@ -32,7 +34,6 @@ extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[macro_use] extern crate srml_support;
 extern crate sr_primitives as primitives;
-extern crate srml_balances as balances;
 extern crate srml_democracy as democracy;
 extern crate srml_system as system;
 
@@ -97,6 +98,7 @@ mod tests {
 		type Event = Event;
 	}
 	impl democracy::Trait for Test {
+		type Currency = balances::Module<Self>;
 		type Proposal = Call;
 		type Event = Event;
 	}
