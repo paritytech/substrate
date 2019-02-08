@@ -39,19 +39,6 @@
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
-extern crate sr_std as rstd;
-extern crate substrate_primitives as primitives;
-#[cfg(not(feature = "std"))]
-extern crate parity_codec as codec;
-
-#[cfg(test)]
-extern crate wabt;
-
-#[cfg(test)]
-#[macro_use]
-extern crate assert_matches;
-
 use rstd::prelude::*;
 
 pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};

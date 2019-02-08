@@ -14,17 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate wasmi;
-
 use rstd::collections::btree_map::BTreeMap;
 use rstd::fmt;
 
-use self::wasmi::{
+use wasmi::{
 	Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef, ImportResolver,
 	MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
 	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind
 };
-use self::wasmi::memory_units::Pages;
+use wasmi::memory_units::Pages;
 use super::{Error, TypedValue, ReturnValue, HostFuncType, HostError};
 
 #[derive(Clone)]
@@ -90,7 +88,7 @@ impl fmt::Display for DummyHostError {
 	}
 }
 
-impl self::wasmi::HostError for DummyHostError {
+impl wasmi::HostError for DummyHostError {
 }
 
 fn from_runtime_value(v: RuntimeValue) -> TypedValue {
@@ -103,7 +101,7 @@ fn from_runtime_value(v: RuntimeValue) -> TypedValue {
 }
 
 fn to_runtime_value(v: TypedValue) -> RuntimeValue {
-	use self::wasmi::nan_preserving_float::{F32, F64};
+	use wasmi::nan_preserving_float::{F32, F64};
 	match v {
 		TypedValue::I32(v) => RuntimeValue::I32(v as i32),
 		TypedValue::I64(v) => RuntimeValue::I64(v as i64),
@@ -309,7 +307,8 @@ impl<T> Instance<T> {
 #[cfg(test)]
 mod tests {
 	use wabt;
-	use ::{Error, TypedValue, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
+	use crate::{Error, TypedValue, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
+	use assert_matches::assert_matches;
 
 	fn execute_sandboxed(code: &[u8], args: &[TypedValue]) -> Result<ReturnValue, HostError> {
 		struct State {

@@ -24,7 +24,6 @@ mod traits;
 mod params;
 pub mod error;
 pub mod informant;
-mod panic_hook;
 
 use runtime_primitives::traits::As;
 use service::{
@@ -49,7 +48,7 @@ use structopt::{StructOpt, clap::AppSettings};
 pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
-	NetworkConfigurationParams, SharedParams, MergeParameters
+	NetworkConfigurationParams, SharedParams, MergeParameters, TransactionPoolParams,
 };
 pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
@@ -76,6 +75,8 @@ pub struct VersionInfo {
 	pub description: &'static str,
 	/// Executable file author.
 	pub author: &'static str,
+	/// Support URL.
+	pub support_url: &'static str,
 }
 
 /// Something that can be converted into an exit signal.
@@ -102,7 +103,7 @@ fn generate_node_name() -> String {
 			break node_name
 		}
 	};
-	
+
 	result
 }
 
@@ -189,7 +190,7 @@ where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	panic_hook::set();
+	panic_handler::set(version.support_url);
 
 	let full_version = service::config::full_version_from_strs(
 		version.version,
@@ -234,6 +235,23 @@ fn parse_node_key(key: Option<String>) -> error::Result<Option<Secret>> {
 		Some(Err(err)) => Err(create_input_err(format!("Error parsing node key: {}", err))),
 		None => Ok(None),
 	}
+}
+
+/// Fill the given `PoolConfiguration` by looking at the cli parameters.
+fn fill_transaction_pool_configuration<F: ServiceFactory>(
+	options: &mut FactoryFullConfiguration<F>,
+	params: TransactionPoolParams,
+) -> error::Result<()> {
+	// ready queue
+	options.transaction_pool.ready.count = params.pool_limit;
+	options.transaction_pool.ready.total_bytes = params.pool_kbytes * 1024;
+
+	// future queue
+	let factor = 10;
+	options.transaction_pool.future.count = params.pool_limit / factor;
+	options.transaction_pool.future.total_bytes = params.pool_kbytes * 1024 / factor;
+
+	Ok(())
 }
 
 /// Fill the given `NetworkConfiguration` by looking at the cli parameters.
@@ -353,6 +371,11 @@ where
 		spec.id(),
 		&mut config.network,
 		client_id,
+	)?;
+
+	fill_transaction_pool_configuration::<F>(
+		&mut config,
+		cli.pool_config,
 	)?;
 
 	if let Some(key) = cli.key {

@@ -21,7 +21,7 @@ use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
-use runtime_support::{StorageMap, StorageDoubleMap};
+use runtime_support::{StorageMap, StorageDoubleMap, traits::UpdateBalanceOutcome};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -65,7 +65,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				if let balances::UpdateBalanceOutcome::AccountKilled =
+				if let UpdateBalanceOutcome::AccountKilled =
 					balances::Module::<T>::set_free_balance_creating(&address, balance)
 				{
 					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
