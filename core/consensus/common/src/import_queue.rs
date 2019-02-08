@@ -299,6 +299,8 @@ pub trait Link<B: BlockT>: Send {
 	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
 	/// Request a justification for the given block.
 	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
+	/// Request a finality proof for the given block.
+	fn request_finality_proof(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
 	/// Maintain sync.
 	fn maintain_sync(&self) { }
 	/// Disconnect from peer.

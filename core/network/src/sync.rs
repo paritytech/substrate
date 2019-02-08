@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
@@ -24,9 +23,9 @@ use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
 use blocks::BlockCollection;
-use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
 use runtime_primitives::generic::BlockId;
+use extra_requests::ExtraRequestsAggregator;
 use message::{self, generic::Message as GenericMessage};
 use config::Roles;
 
@@ -36,15 +35,13 @@ const MAX_BLOCKS_TO_REQUEST: usize = 128;
 const MAX_IMPORTING_BLOCKS: usize = 2048;
 // Number of blocks in the queue that prevents ancestry search.
 const MAJOR_SYNC_BLOCKS: usize = 5;
-// Time to wait before trying to get a justification from the same peer.
-const JUSTIFICATION_RETRY_WAIT: Duration = Duration::from_secs(10);
 // Number of recently announced blocks to track for each peer.
 const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // Max number of blocks to download for unknown forks.
 // TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
 
-struct PeerSync<B: BlockT> {
+pub(crate) struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
 	pub best_hash: B::Hash,
 	pub best_number: NumberFor<B>,
@@ -53,186 +50,13 @@ struct PeerSync<B: BlockT> {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-enum PeerSyncState<B: BlockT> {
+pub(crate) enum PeerSyncState<B: BlockT> {
 	AncestorSearch(NumberFor<B>),
 	Available,
 	DownloadingNew(NumberFor<B>),
 	DownloadingStale(B::Hash),
 	DownloadingJustification(B::Hash),
-}
-
-/// Pending justification request for the given block (hash and number).
-type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
-
-/// Manages pending block justification requests.
-struct PendingJustifications<B: BlockT> {
-	justifications: HashSet<PendingJustification<B>>,
-	pending_requests: VecDeque<PendingJustification<B>>,
-	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
-	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
-}
-
-impl<B: BlockT> PendingJustifications<B> {
-	fn new() -> PendingJustifications<B> {
-		PendingJustifications {
-			justifications: HashSet::new(),
-			pending_requests: VecDeque::new(),
-			peer_requests: HashMap::new(),
-			previous_requests: HashMap::new(),
-		}
-	}
-
-	/// Dispatches all possible pending requests to the given peers. Peers are
-	/// filtered according to the current known best block (i.e. we won't send a
-	/// justification request for block #10 to a peer at block #2), and we also
-	/// throttle requests to the same peer if a previous justification request
-	/// yielded no results.
-	fn dispatch(&mut self, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
-		if self.pending_requests.is_empty() {
-			return;
-		}
-
-		// clean up previous failed requests so we can retry again
-		for (_, requests) in self.previous_requests.iter_mut() {
-			requests.retain(|(_, instant)| instant.elapsed() < JUSTIFICATION_RETRY_WAIT);
-		}
-
-		let mut available_peers = peers.iter().filter_map(|(peer, sync)| {
-			// don't request to any peers that already have pending requests or are unavailable
-			if sync.state != PeerSyncState::Available || self.peer_requests.contains_key(&peer) {
-				None
-			} else {
-				Some((*peer, sync.best_number))
-			}
-		}).collect::<VecDeque<_>>();
-
-		let mut last_peer = available_peers.back().map(|p| p.0);
-		let mut unhandled_requests = VecDeque::new();
-
-		loop {
-			let (peer, peer_best_number) = match available_peers.pop_front() {
-				Some(p) => p,
-				_ => break,
-			};
-
-			// only ask peers that have synced past the block number that we're
-			// asking the justification for and to whom we haven't already made
-			// the same request recently
-			let peer_eligible = {
-				let request = match self.pending_requests.front() {
-					Some(r) => r.clone(),
-					_ => break,
-				};
-
-				peer_best_number >= request.1 &&
-					!self.previous_requests
-						 .get(&request)
-						 .map(|requests| requests.iter().any(|i| i.0 == peer))
-						 .unwrap_or(false)
-			};
-
-			if !peer_eligible {
-				available_peers.push_back((peer, peer_best_number));
-
-				// we tried all peers and none can answer this request
-				if Some(peer) == last_peer {
-					last_peer = available_peers.back().map(|p| p.0);
-
-					let request = self.pending_requests.pop_front()
-						.expect("verified to be Some in the beginning of the loop; qed");
-
-					unhandled_requests.push_back(request);
-				}
-
-				continue;
-			}
-
-			last_peer = available_peers.back().map(|p| p.0);
-
-			let request = self.pending_requests.pop_front()
-				.expect("verified to be Some in the beginning of the loop; qed");
-
-			self.peer_requests.insert(peer, request);
-
-			peers.get_mut(&peer)
-				.expect("peer was is taken from available_peers; available_peers is a subset of peers; qed")
-				.state = PeerSyncState::DownloadingJustification(request.0);
-
-			trace!(target: "sync", "Requesting justification for block #{} from {}", request.0, peer);
-			let request = message::generic::BlockRequest {
-				id: 0,
-				fields: message::BlockAttributes::JUSTIFICATION,
-				from: message::FromBlock::Hash(request.0),
-				to: None,
-				direction: message::Direction::Ascending,
-				max: Some(1),
-			};
-
-			protocol.send_message(peer, GenericMessage::BlockRequest(request));
-		}
-
-		self.pending_requests.append(&mut unhandled_requests);
-	}
-
-	/// Queue a justification request (without dispatching it).
-	fn queue_request(&mut self, justification: &PendingJustification<B>) {
-		if !self.justifications.insert(*justification) {
-			return;
-		}
-		self.pending_requests.push_back(*justification);
-	}
-
-	/// Retry any pending request if a peer disconnected.
-	fn peer_disconnected(&mut self, who: NodeIndex) {
-		if let Some(request) = self.peer_requests.remove(&who) {
-			self.pending_requests.push_front(request);
-		}
-	}
-
-	/// Processes the response for the request previously sent to the given
-	/// peer. Queues a retry in case the import fails or the given justification
-	/// was `None`.
-	fn on_response(
-		&mut self,
-		who: NodeIndex,
-		justification: Option<Justification>,
-		protocol: &mut Context<B>,
-		import_queue: &ImportQueue<B>,
-	) {
-		// we assume that the request maps to the given response, this is
-		// currently enforced by the outer network protocol before passing on
-		// messages to chain sync.
-		if let Some(request) = self.peer_requests.remove(&who) {
-			if let Some(justification) = justification {
-				if import_queue.import_justification(request.0, request.1, justification) {
-					self.justifications.remove(&request);
-					self.previous_requests.remove(&request);
-					return;
-				} else {
-					protocol.report_peer(
-						who,
-						Severity::Bad(&format!("Invalid justification provided for #{}", request.0)),
-					);
-				}
-			} else {
-				self.previous_requests
-					.entry(request)
-					.or_insert(Vec::new())
-					.push((who, Instant::now()));
-			}
-
-			self.pending_requests.push_front(request);
-		}
-	}
-
-	/// Removes any pending justification requests for blocks lower than the
-	/// given best finalized.
-	fn collect_garbage(&mut self, best_finalized: NumberFor<B>) {
-		self.justifications.retain(|(_, n)| *n > best_finalized);
-		self.pending_requests.retain(|(_, n)| *n > best_finalized);
-		self.peer_requests.retain(|_, (_, n)| *n > best_finalized);
-		self.previous_requests.retain(|(_, n), _| *n > best_finalized);
-	}
+	DownloadingFinalityProof(B::Hash),
 }
 
 /// Relay chain sync strategy.
@@ -244,7 +68,7 @@ pub struct ChainSync<B: BlockT> {
 	best_queued_hash: B::Hash,
 	required_block_attributes: message::BlockAttributes,
 	import_queue: Arc<ImportQueue<B>>,
-	justifications: PendingJustifications<B>,
+	extra_requests: ExtraRequestsAggregator<B>,
 }
 
 /// Reported sync state.
@@ -290,7 +114,7 @@ impl<B: BlockT> ChainSync<B> {
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.best_queued_hash.unwrap_or(info.chain.best_hash),
 			best_queued_number: info.best_queued_number.unwrap_or(info.chain.best_number),
-			justifications: PendingJustifications::new(),
+			extra_requests: ExtraRequestsAggregator::new(),
 			required_block_attributes,
 			import_queue,
 		}
@@ -465,7 +289,7 @@ impl<B: BlockT> ChainSync<B> {
 						}
 					}
 				},
-				PeerSyncState::Available | PeerSyncState::DownloadingJustification(..) => Vec::new(),
+				PeerSyncState::Available | PeerSyncState::DownloadingJustification(..) | PeerSyncState::DownloadingFinalityProof(..) => Vec::new(),
 			}
 		} else {
 			Vec::new()
@@ -513,7 +337,7 @@ impl<B: BlockT> ChainSync<B> {
 							return;
 						}
 
-						self.justifications.on_response(
+						self.extra_requests.on_justification(
 							who,
 							response.justification,
 							protocol,
@@ -542,20 +366,30 @@ impl<B: BlockT> ChainSync<B> {
 		for peer in peers {
 			self.download_new(protocol, peer);
 		}
-		self.justifications.dispatch(&mut self.peers, protocol);
+		self.extra_requests.dispatch(&mut self.peers, protocol);
 	}
 
 	/// Called periodically to perform any time-based actions.
 	pub fn tick(&mut self, protocol: &mut Context<B>) {
-		self.justifications.dispatch(&mut self.peers, protocol);
+		self.extra_requests.dispatch(&mut self.peers, protocol);
 	}
 
 	/// Request a justification for the given block.
 	///
 	/// Queues a new justification request and tries to dispatch all pending requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
-		self.justifications.queue_request(&(*hash, number));
-		self.justifications.dispatch(&mut self.peers, protocol);
+		self.extra_requests.request_justification(&(*hash, number), &mut self.peers, protocol);
+/*		self.justifications.queue_request(&(*hash, number));
+		self.justifications.dispatch(&mut self.peers, protocol);*/
+	}
+
+	/// Request a finality_proof for the given block.
+	///
+	/// Queues a new finality proof request and tries to dispatch all pending requests.
+	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
+		self.extra_requests.request_finality_proof(&(*hash, number), &mut self.peers, protocol);
+		/*self.finality_proofs.queue_request(&(*hash, number));
+		self.finality_proofs.dispatch(&mut self.peers, protocol);*/
 	}
 
 	/// Notify about successful import of the given block.
@@ -565,7 +399,7 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Notify about finalization of the given block.
 	pub fn block_finalized(&mut self, _hash: &B::Hash, number: NumberFor<B>) {
-		self.justifications.collect_garbage(number);
+		self.extra_requests.collect_garbage(number);
 	}
 
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
@@ -655,7 +489,7 @@ impl<B: BlockT> ChainSync<B> {
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
 		self.blocks.clear_peer_download(who);
 		self.peers.remove(&who);
-		self.justifications.peer_disconnected(who);
+		self.extra_requests.peer_disconnected(who);
 		self.maintain_sync(protocol);
 	}
 

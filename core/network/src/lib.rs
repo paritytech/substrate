@@ -54,6 +54,7 @@ mod io;
 mod chain;
 mod blocks;
 mod on_demand;
+mod extra_requests;
 pub mod config;
 pub mod consensus_gossip;
 pub mod error;
