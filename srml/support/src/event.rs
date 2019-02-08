@@ -147,7 +147,7 @@ macro_rules! __decl_generic_event {
 			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
 		Events { $( $events:tt )* };
 	) => {
-		__decl_generic_event!(
+		$crate::__decl_generic_event!(
 			$( #[ $attr ] )*;
 			$event_generic_param;
 			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
@@ -165,7 +165,7 @@ macro_rules! __decl_generic_event {
 		$( $parsed_generic_params:ident ),*;
 		$( <$parsed_generic:ident as $parsed_trait:path>::$parsed_trait_type:ident ),*;
 	) => {
-		__decl_generic_event!(
+		$crate::__decl_generic_event!(
 			$( #[ $attr ] )*;
 			$event_generic_param;
 			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
@@ -181,7 +181,7 @@ macro_rules! __decl_generic_event {
 			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
 		Events { $( $events:tt )* };
 	) => {
-		__decl_generic_event!(
+		$crate::__decl_generic_event!(
 			$( #[ $attr ] )*;
 			$event_generic_param;
 			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
@@ -199,7 +199,7 @@ macro_rules! __decl_generic_event {
 		$( $parsed_generic_params:ident ),*;
 		$( <$parsed_generic:ident as $parsed_trait:path>::$parsed_trait_type:ident ),*;
 	) => {
-		__decl_generic_event!(
+		$crate::__decl_generic_event!(
 			$( #[ $attr ] )*;
 			$event_generic_param;
 			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
@@ -247,7 +247,7 @@ macro_rules! __events_to_metadata {
 		$event:ident $( ( $( $param:path ),* ) )*,
 		$( $rest:tt )*
 	) => {
-		__events_to_metadata!(
+		$crate::__events_to_metadata!(
 			$( $metadata, )*
 			$crate::event::EventMetadata {
 				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),
