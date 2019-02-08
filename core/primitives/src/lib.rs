@@ -21,6 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
+/// Initalise a key-value collection from array.
 #[macro_export]
 macro_rules! map {
 	($( $name:expr => $value:expr ),*) => (

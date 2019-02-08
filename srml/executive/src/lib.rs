@@ -19,7 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
-#[macro_use]
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]
