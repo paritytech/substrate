@@ -40,6 +40,8 @@ extern crate substrate_primitives;
 
 #[cfg(test)]
 extern crate srml_balances as balances;
+#[cfg(test)]
+extern crate srml_fees as fees;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
@@ -310,7 +312,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
-			balances<T>,
+			balances<T>, fees<T>,
 		}
 	}
 
@@ -337,9 +339,14 @@ mod tests {
 		type EnsureAccountLiquid = ();
 		type Event = MetaEvent;
 	}
+	impl fees::Trait for Runtime {
+		type Event = MetaEvent;
+		type Amount = u64;
+		type TransferAsset = balances::Module<Runtime>;
+	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, fees::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
@@ -351,6 +358,10 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
+		}.build_storage().unwrap().0);
+		t.extend(fees::GenesisConfig::<Runtime> {
+			transaction_base_fee: 10,
+			transaction_byte_fee: 0,
 		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);

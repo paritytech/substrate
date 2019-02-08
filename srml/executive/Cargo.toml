@@ -18,6 +18,7 @@ srml-system = { path = "../system", default-features = false }
 substrate-primitives = { path = "../../core/primitives" }
 srml-indices = { path = "../indices" }
 srml-balances = { path = "../balances" }
+srml-fees = { path = "../fees" }
 
 [features]
 default = ["std"]
