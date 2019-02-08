@@ -30,6 +30,7 @@ then
 		-F "token=${CI_JOB_TOKEN}" \
 		-F "ref=master" \
 		-F "variables[BREAKSAPI]=true" \
+		-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
 		${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
 
 	exit 0
@@ -74,6 +75,7 @@ curl -sS -X POST \
 	-F "token=${CI_JOB_TOKEN}" \
 	-F "ref=master" \
 	-F "variables[BREAKSAPI]=true" \
+	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
 	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
  
 
