@@ -31,6 +31,16 @@ impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
+mod fees {
+	pub use crate::Event;
+}
+
+impl_outer_event!{
+	pub enum TestEvent for Test {
+		fees<T>,
+	}
+}
+
 pub struct TransferAssetMock;
 
 impl<AccountId> TransferAsset<AccountId> for TransferAssetMock {
@@ -54,12 +64,12 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
-	type Event = ();
+	type Event = TestEvent;
 	type Log = DigestItem;
 }
 impl Trait for Test {
 	type Amount = u64;
-	type Event =();
+	type Event =TestEvent;
 	type TransferAsset = TransferAssetMock;
 }
 
