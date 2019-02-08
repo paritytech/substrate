@@ -31,7 +31,7 @@ use rstd::prelude::*;
 use rstd::{cmp, result};
 use parity_codec::Codec;
 use runtime_support::{StorageValue, StorageMap, Parameter};
-use runtime_support::traits::{UpdateBalanceOutcome, Funding, EnsureAccountLiquid, OnFreeBalanceZero};
+use runtime_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
 	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug};
@@ -155,7 +155,7 @@ decl_storage! {
 	}
 }
 
-// For funding methods, see Funding trait
+// For funding methods, see Currency trait
 impl<T: Trait> Module<T> {
 	/// Set the free balance of an account to some new value.
 	///
@@ -337,7 +337,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Funding<T::AccountId> for Module<T>
+impl<T: Trait> Currency<T::AccountId> for Module<T>
 where
 	T::Balance: MaybeSerializeDebug
 {
@@ -392,23 +392,7 @@ where
 		Ok(())
 	}
 
-	fn reward_creating(who: &T::AccountId, value: Self::Balance) -> UpdateBalanceOutcome {
-		let update = Self::set_free_balance_creating(who, Self::free_balance(who) + value);
-		if let UpdateBalanceOutcome::Updated = update {
-			Self::increase_total_stake_by(value);
-		}
-		update
-	}
-
-	fn reward_with_no_stake_increase(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
-		if Self::total_balance(who).is_zero() {
-			return Err("beneficiary account must pre-exist");
-		}
-		Self::set_free_balance(who, Self::free_balance(who) + value);
-		Ok(())
-	}
-
-	fn reward_with_no_stake_increase_creating(who: &T::AccountId, value: Self::Balance) -> UpdateBalanceOutcome {
+	fn increase_free_balance_creating(who: &T::AccountId, value: Self::Balance) -> UpdateBalanceOutcome {
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
 	}
 

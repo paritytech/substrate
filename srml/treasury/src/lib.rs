@@ -42,11 +42,11 @@ extern crate srml_system as system;
 
 use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
-use runtime_support::traits::{Funding, OnDilution};
+use runtime_support::traits::{Currency, OnDilution};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use system::ensure_signed;
 
-type BalanceOf<T> = <<T as Trait>::Funding as Funding<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -55,7 +55,7 @@ type BalanceOf<T> = <<T as Trait>::Funding as Funding<<T as system::Trait>::Acco
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The staking balance.
-	type Funding: Funding<Self::AccountId>;
+	type Currency: Currency<Self::AccountId>;
 
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;
@@ -87,7 +87,7 @@ decl_module! {
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
 
 			let bond = Self::calculate_bond(value);
-			T::Funding::reserve(&proposer, bond)
+			T::Currency::reserve(&proposer, bond)
 				.map_err(|_| "Proposer's balance too low")?;
 
 			let c = Self::proposal_count();
@@ -122,7 +122,7 @@ decl_module! {
 			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 
 			let value = proposal.bond;
-			let _ = T::Funding::slash_reserved(&proposal.proposer, value);
+			let _ = T::Currency::slash_reserved(&proposal.proposer, value);
 		}
 
 		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
@@ -191,7 +191,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T>
 	where
-		Balance = <<T as Trait>::Funding as Funding<<T as system::Trait>::AccountId>>::Balance,
+		Balance = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance,
 		<T as system::Trait>::AccountId
 	{
 		/// New proposal.
@@ -230,10 +230,10 @@ impl<T: Trait> Module<T> {
 						<Proposals<T>>::remove(index);
 
 						// return their deposit.
-						let _ = T::Funding::unreserve(&p.proposer, p.bond);
+						let _ = T::Currency::unreserve(&p.proposer, p.bond);
 
 						// provide the allocation.
-						T::Funding::reward_with_no_stake_increase_creating(&p.beneficiary, p.value);
+						T::Currency::increase_free_balance_creating(&p.beneficiary, p.value);
 
 						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
 						false
@@ -265,7 +265,7 @@ impl<T: Trait> OnDilution<BalanceOf<T>> for Module<T> {
 		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
 		// pre dilution and post-dilution.
 		if !minted.is_zero() && !portion.is_zero() {
-			let total_issuance = T::Funding::total_issuance();
+			let total_issuance = T::Currency::total_issuance();
 			let funding = (total_issuance - portion) / portion * minted;
 			<Pot<T>>::mutate(|x| *x += funding);
 		}
@@ -309,7 +309,7 @@ mod tests {
 		type Event = ();
 	}
 	impl Trait for Test {
-		type Funding = balances::Module<Test>;
+		type Currency = balances::Module<Test>;
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();

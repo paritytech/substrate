@@ -80,7 +80,7 @@ pub enum UpdateBalanceOutcome {
 }
 
 /// Abstraction over a fungible assets system.
-pub trait Funding<AccountId> {
+pub trait Currency<AccountId> {
 	/// The balance of an account.
 	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
 
@@ -146,23 +146,9 @@ pub trait Funding<AccountId> {
 	/// If `who` doesn't exist, it is created
 	///
 	/// Returns if the account was successfully updated or update has led to killing of the account.
-	fn reward_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
-
-	/// Adds up to `value` to the free balance of `who`.
-	///
-	/// If `who` doesn't exist, nothing is done and an Err returned.
 	///
 	/// NOTE: This assumes that the total stake remains unchanged after this operation.
-	fn reward_with_no_stake_increase(who: &AccountId, value: Self::Balance) -> result::Result<(), &'static str>;
-
-	/// Adds up to `value` to the free balance of `who`.
-	///
-	/// If `who` doesn't exist, it is created
-	///
-	/// Returns if the account was successfully updated or update has led to killing of the account.
-	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation.
-	fn reward_with_no_stake_increase_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
+	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
 
 	/// Moves `value` from balance to reserved balance.
 	///

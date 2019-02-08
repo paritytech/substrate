@@ -97,7 +97,7 @@ mod tests {
 		type Event = Event;
 	}
 	impl democracy::Trait for Test {
-		type Funding = balances::Module<Self>;
+		type Currency = balances::Module<Self>;
 		type Proposal = Call;
 		type Event = Event;
 	}

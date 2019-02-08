@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
-use srml_support::{StorageValue, StorageMap, dispatch::Result, traits::Funding};
+use srml_support::{StorageValue, StorageMap, dispatch::Result, traits::Currency};
 use democracy;
 use system::{self, ensure_signed};
 
@@ -79,7 +79,7 @@ use system::{self, ensure_signed};
 
 pub type VoteIndex = u32;
 
-type BalanceOf<T> = <<T as democracy::Trait>::Funding as Funding<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -106,7 +106,7 @@ decl_module! {
 			if !<LastActiveOf<T>>::exists(&who) {
 				// not yet a voter - deduct bond.
 				// NOTE: this must be the last potential bailer, since it changes state.
-				T::Funding::reserve(&who, Self::voting_bond())?;
+				T::Currency::reserve(&who, Self::voting_bond())?;
 
 				<Voters<T>>::put({
 					let mut v = Self::voters();
@@ -162,10 +162,10 @@ decl_module! {
 			if valid {
 				// This only fails if `reporter` doesn't exist, which it clearly must do since its the origin.
 				// Still, it's no more harmful to propagate any error at this point.
-				T::Funding::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
+				T::Currency::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
-				T::Funding::slash_reserved(&reporter, Self::voting_bond());
+				T::Currency::slash_reserved(&reporter, Self::voting_bond());
 				Self::deposit_event(RawEvent::BadReaperSlashed(reporter));
 			}
 		}
@@ -182,7 +182,7 @@ decl_module! {
 			ensure!(voters[index] == who, "retraction index mismatch");
 
 			Self::remove_voter(&who, index, voters);
-			T::Funding::unreserve(&who, Self::voting_bond());
+			T::Currency::unreserve(&who, Self::voting_bond());
 		}
 
 		/// Submit oneself for candidacy.
@@ -201,7 +201,7 @@ decl_module! {
 				"invalid candidate slot"
 			);
 			// NOTE: This must be last as it has side-effects.
-			T::Funding::reserve(&who, Self::candidacy_bond())
+			T::Currency::reserve(&who, Self::candidacy_bond())
 				.map_err(|_| "candidate has not enough funds")?;
 
 			<RegisterInfoOf<T>>::insert(&who, (Self::vote_index(), slot as u32));
@@ -233,7 +233,7 @@ decl_module! {
 			let stakes = Self::snapshoted_stakes();
 			let voters = Self::voters();
 			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(voters.len() as u64);
-			ensure!(T::Funding::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
+			ensure!(T::Currency::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
 			let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
 			ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
@@ -264,7 +264,7 @@ decl_module! {
 			} else {
 				// we can rest assured it will be Ok since we checked `can_slash` earlier; still
 				// better safe than sorry.
-				let _ = T::Funding::slash(&who, bad_presentation_punishment);
+				let _ = T::Currency::slash(&who, bad_presentation_punishment);
 				Err(if dupe { "duplicate presentation" } else { "incorrect total" })
 			}
 		}
@@ -467,7 +467,7 @@ impl<T: Trait> Module<T> {
 			<NextFinalise<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
 
 			let voters = Self::voters();
-			let votes = voters.iter().map(T::Funding::total_balance).collect::<Vec<_>>();
+			let votes = voters.iter().map(T::Currency::total_balance).collect::<Vec<_>>();
 			<SnapshotedStakes<T>>::put(votes);
 
 			// initialise leaderboard.
@@ -497,7 +497,7 @@ impl<T: Trait> Module<T> {
 			.take(coming as usize)
 			.map(|(_, a)| a)
 			.cloned()
-			.inspect(|a| {T::Funding::unreserve(a, candidacy_bond);})
+			.inspect(|a| {T::Currency::unreserve(a, candidacy_bond);})
 			.collect();
 		let active_council = Self::active_council();
 		let outgoing = active_council.iter().take(expiring.len()).map(|a| a.0.clone()).collect();

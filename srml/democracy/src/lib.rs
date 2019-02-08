@@ -38,7 +38,7 @@ use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, As};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
-use srml_support::traits::{Funding, OnFreeBalanceZero, EnsureAccountLiquid};
+use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
@@ -79,10 +79,10 @@ impl Vote {
 	}
 }
 
-type BalanceOf<T> = <<T as Trait>::Funding as Funding<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 pub trait Trait: system::Trait + Sized {
-	type Funding: Funding<<Self as system::Trait>::AccountId>;
+	type Currency: Currency<<Self as system::Trait>::AccountId>;
 
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
 
@@ -102,7 +102,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			ensure!(value >= Self::minimum_deposit(), "value too low");
-			T::Funding::reserve(&who, value)
+			T::Currency::reserve(&who, value)
 				.map_err(|_| "proposer's balance too low")?;
 
 			let index = Self::public_prop_count();
@@ -119,7 +119,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
 				.ok_or("can only second an existing proposal")?;
-			T::Funding::reserve(&who, deposit.0)
+			T::Currency::reserve(&who, deposit.0)
 				.map_err(|_| "seconder's balance too low")?;
 			deposit.1.push(who);
 			<DepositOf<T>>::insert(proposal, deposit);
@@ -131,7 +131,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(vote.multiplier() <= Self::max_lock_periods(), "vote has too great a strength");
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-			ensure!(!T::Funding::total_balance(&who).is_zero(),
+			ensure!(!T::Currency::total_balance(&who).is_zero(),
 					"transactor must have balance to signal approval.");
 			if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
 				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
@@ -282,7 +282,7 @@ impl<T: Trait> Module<T> {
 	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		Self::voters_for(ref_index).iter()
 			.map(|voter| (
-				T::Funding::total_balance(voter),
+				T::Currency::total_balance(voter),
 				Self::vote_of((ref_index, voter.clone())),
 			))
 			.map(|(bal, vote)|
@@ -354,7 +354,7 @@ impl<T: Trait> Module<T> {
 			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (BalanceOf<T>, Vec<T::AccountId>) =
 				// refund depositors
 				for d in &depositors {
-					T::Funding::unreserve(d, deposit);
+					T::Currency::unreserve(d, deposit);
 				}
 				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
 				Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove, Self::public_delay())?;
@@ -366,7 +366,7 @@ impl<T: Trait> Module<T> {
 
 	fn bake_referendum(now: T::BlockNumber, index: ReferendumIndex, info: ReferendumInfo<T::BlockNumber, T::Proposal>) -> Result {
 		let (approve, against, capital) = Self::tally(index);
-		let total_issuance = T::Funding::total_issuance();
+		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
 		let lock_period = Self::public_delay();
 
@@ -483,7 +483,7 @@ mod tests {
 		type Event = ();
 	}
 	impl Trait for Test {
-		type Funding = balances::Module<Self>;
+		type Currency = balances::Module<Self>;
 		type Proposal = Call;
 		type Event = ();
 	}

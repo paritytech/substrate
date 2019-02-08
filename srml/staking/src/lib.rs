@@ -49,7 +49,7 @@ extern crate srml_balances as balances;
 use rstd::{prelude::*, cmp};
 use codec::HasCompact;
 use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
-use runtime_support::traits::{Funding, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
+use runtime_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
 use session::OnSessionChange;
 use primitives::Perbill;
 use primitives::traits::{Zero, One, Bounded, As, StaticLookup};
@@ -91,11 +91,11 @@ impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 	}
 }
 
-type BalanceOf<T> = <<T as Trait>::Funding as Funding<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
-	type Funding: Funding<Self::AccountId>;
+	type Currency: Currency<Self::AccountId>;
 
 	/// Some tokens minted.
 	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
@@ -326,15 +326,15 @@ impl<T: Trait> Module<T> {
 	/// Balance of a (potential) validator that includes all nominators.
 	pub fn nomination_balance(who: &T::AccountId) -> BalanceOf<T> {
 		Self::nominators_for(who).iter()
-			.map(T::Funding::total_balance)
+			.map(T::Currency::total_balance)
 			.fold(Zero::zero(), |acc, x| acc + x)
 	}
 
 	/// The total balance that can be slashed from an account.
 	pub fn slashable_balance(who: &T::AccountId) -> BalanceOf<T> {
 		Self::nominators_for(who).iter()
-			.map(T::Funding::total_balance)
-			.fold(T::Funding::total_balance(who), |acc, x| acc + x)
+			.map(T::Currency::total_balance)
+			.fold(T::Currency::total_balance(who), |acc, x| acc + x)
 	}
 
 	/// The block at which the `who`'s funds become entirely liquid.
@@ -362,13 +362,13 @@ impl<T: Trait> Module<T> {
 			return
 		}
 
-		if let Some(rem) = T::Funding::slash(v, slash) {
+		if let Some(rem) = T::Currency::slash(v, slash) {
 			let noms = Self::current_nominators_for(v);
-			let total = noms.iter().map(T::Funding::total_balance).fold(BalanceOf::<T>::zero(), |acc, x| acc + x);
+			let total = noms.iter().map(T::Currency::total_balance).fold(BalanceOf::<T>::zero(), |acc, x| acc + x);
 			if !total.is_zero() {
 				let safe_mul_rational = |b| b * rem / total;// FIXME #1572 avoid overflow
 				for n in noms.iter() {
-					let _ = T::Funding::slash(n, safe_mul_rational(T::Funding::total_balance(n)));	// best effort - not much that can be done on fail.
+					let _ = T::Currency::slash(n, safe_mul_rational(T::Currency::total_balance(n)));	// best effort - not much that can be done on fail.
 				}
 			}
 		}
@@ -384,16 +384,16 @@ impl<T: Trait> Module<T> {
 		} else {
 			let noms = Self::current_nominators_for(who);
 			let total = noms.iter()
-				.map(T::Funding::total_balance)
-				.fold(T::Funding::total_balance(who), |acc, x| acc + x)
+				.map(T::Currency::total_balance)
+				.fold(T::Currency::total_balance(who), |acc, x| acc + x)
 				.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for n in noms.iter() {
-				let _ = T::Funding::reward(n, safe_mul_rational(T::Funding::total_balance(n)));
+				let _ = T::Currency::reward(n, safe_mul_rational(T::Currency::total_balance(n)));
 			}
-			safe_mul_rational(T::Funding::total_balance(who))
+			safe_mul_rational(T::Currency::total_balance(who))
 		};
-		let _ = T::Funding::reward(who, validator_cut + off_the_table);
+		let _ = T::Currency::reward(who, validator_cut + off_the_table);
 	}
 
 	/// Actually carry out the unstake operation.
