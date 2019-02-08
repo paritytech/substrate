@@ -25,6 +25,7 @@ use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
 use substrate_metadata::EncodeMetadata;
+use substrate_metadata_derive::EncodeMetadata;
 use crate::codec::Codec;
 use crate::traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
 use crate::Justification;

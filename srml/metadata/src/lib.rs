@@ -138,7 +138,7 @@ type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct FunctionMetadata {
 	pub name: DecodeDifferentStr,
-	pub arguments: DecodeDifferentArray<FunctionArgumentMetadata>,
+	pub arguments: Vec<FunctionArgumentMetadata>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
@@ -345,7 +345,7 @@ pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferent<FnEncode<&'static str>, StringBuf>,
 	pub storage: Option<DecodeDifferent<FnEncode<Vec<StorageFunctionMetadata>>, Vec<StorageFunctionMetadata>>>,
-	pub calls: ODFnA<FunctionMetadata>,
+	pub calls: Option<DecodeDifferent<FnEncode<Vec<FunctionMetadata>>, Vec<FunctionMetadata>>>,
 	pub event: ODFnA<EventMetadata>,
 }
 

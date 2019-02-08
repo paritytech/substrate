@@ -19,10 +19,11 @@
 #[cfg(feature = "std")]
 use std::fmt;
 use crate::{Member, Decode, Encode, As, Input, Output};
+use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind};
 
 /// An indices-aware address, which can be either a direct `AccountId` or
 /// an index.
-#[derive(PartialEq, Eq, Clone, EncodeMetadata)]
+#[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Hash))]
 pub enum Address<AccountId, AccountIndex> where
 	AccountId: Member,
@@ -106,5 +107,17 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 {
 	fn default() -> Self {
 		Address::Id(Default::default())
+	}
+}
+
+impl<AccountId, AccountIndex> EncodeMetadata for Address<AccountId, AccountIndex> where
+	AccountId: Member,
+	AccountIndex: Member,
+{
+	fn type_name() -> MetadataName {
+		MetadataName::Custom(module_path!().into(), "Address".into())
+	}
+	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
+		TypeMetadataKind::Primitive
 	}
 }

@@ -27,6 +27,7 @@ use crate::traits::{self, Member, DigestItem as DigestItemT, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
 use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind};
+use substrate_metadata_derive::EncodeMetadata;
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]

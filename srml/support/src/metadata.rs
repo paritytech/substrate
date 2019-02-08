@@ -58,14 +58,14 @@ macro_rules! __runtime_modules_to_metadata {
 		$mod:ident::$module:ident $(with)+ $($kw:ident)*,
 		$( $rest:tt )*
 	) => {
-		__runtime_modules_to_metadata!(
+		$crate::__runtime_modules_to_metadata!(
 			$registry;
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
 				prefix: $crate::__runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
 				storage: $crate::__runtime_modules_to_metadata_calls_storage!($registry, $mod, $module, $runtime, $(with $kw)*),
-				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
+				calls: $crate::__runtime_modules_to_metadata_calls_call!($registry, $mod, $module, $runtime, $(with $kw)*),
 				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
 			};
 			$( $rest )*
@@ -85,6 +85,7 @@ macro_rules! __runtime_modules_to_metadata {
 macro_rules! __runtime_modules_to_metadata_calls_call {
 	// skip system
 	(
+		$registry: ident,
 		system,
 		$skip_module: ident,
 		$skip_runtime: ident,
@@ -94,28 +95,34 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		None
 	};
 	(
+		$registry: ident,
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
 		with Call
 		$(with $kws:ident)*
 	) => {
-		Some($crate::metadata::DecodeDifferent::Encode(
-			$crate::metadata::FnEncode(
-				$mod::$module::<$runtime>::call_functions
-			)
-		))
+		{
+			$mod::$module::<$runtime>::call_metadata_register(&mut $registry);
+			Some($crate::metadata::DecodeDifferent::Encode(
+				$crate::metadata::FnEncode(
+					$mod::$module::<$runtime>::call_functions
+				)
+			))
+		}
 	};
 	(
+		$registry: ident,
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
 		with $_:ident
 		$(with $kws:ident)*
 	) => {
- 		$crate::__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
+ 		$crate::__runtime_modules_to_metadata_calls_call!( $registry, $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
+		$registry: ident,
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,

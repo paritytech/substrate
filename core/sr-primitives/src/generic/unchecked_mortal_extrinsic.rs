@@ -25,6 +25,7 @@ use crate::codec::{Decode, Encode, Input};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
 use super::{CheckedExtrinsic, Era};
+use substrate_metadata::EncodeMetadata;
 
 const TRANSACTION_VERSION: u8 = 1;
 

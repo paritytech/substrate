@@ -28,6 +28,7 @@ use parity_codec_derive::{Encode, Decode};
 
 pub use substrate_primitives::{H256, Ed25519AuthorityId};
 use substrate_primitives::U256;
+use substrate_metadata::EncodeMetadata;
 use substrate_metadata_derive::EncodeMetadata;
 
 /// Authority Id

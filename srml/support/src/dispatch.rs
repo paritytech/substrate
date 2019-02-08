@@ -607,7 +607,7 @@ macro_rules! decl_module {
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
-		#[derive(EncodeMetadata)]
+		#[derive($crate::substrate_metadata_derive::EncodeMetadata)]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::std::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::std::marker::PhantomData<$trait_instance>),
@@ -619,7 +619,7 @@ macro_rules! decl_module {
 
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
-		#[derive(EncodeMetadata)]
+		#[derive($crate::substrate_metadata_derive::EncodeMetadata)]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::core::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::core::marker::PhantomData<$trait_instance>),
@@ -882,7 +882,7 @@ macro_rules! impl_outer_dispatch {
 		}
 	) => {
 		$(#[$attr])*
-		#[derive(Clone, PartialEq, Eq, EncodeMetadata)]
+		#[derive(Clone, PartialEq, Eq, $crate::substrate_metadata_derive::EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum $call_type {
 			$(
@@ -946,11 +946,11 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
+			pub fn call_functions() -> $crate::rstd::vec::Vec<$crate::dispatch::FunctionMetadata> {
 				$crate::__call_to_functions!($($rest)*)
 			}
 			pub fn call_metadata_register(registry: &mut $crate::substrate_metadata::MetadataRegistry) {
-				__call_metadata_register!(registry; $($rest)*);
+				$crate::__call_metadata_register!(registry; $($rest)*);
 			}
 		}
 	}
@@ -1008,7 +1008,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		&[ $( $function_metadata ),* ]
+		vec![ $( $function_metadata ),* ]
 	}
 }
 
@@ -1025,18 +1025,16 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::dispatch::FunctionMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
-			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
+			arguments: vec![
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
-						ty: $crate::dispatch::DecodeDifferent::Encode(
-							$crate::__function_to_metadata!(@get_type_name
-								$(#[$codec_attr])* $param_name: $param
-							)
+						ty: $crate::__function_to_metadata!(@get_type_name
+							$(#[$codec_attr])* $param_name: $param
 						),
 					}
 				),*
-			]),
+			],
 			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
 	};
@@ -1072,14 +1070,10 @@ macro_rules! __call_metadata_register {
 				);
 			)*}
 	) => {
-		__call_metadata_register_fn!(
+		$crate::__call_metadata_register_fn!(
 			$registry;
 			;
-			$(
-				fn $fn_name(
-					$( $param_name: $param ),*
-				);
-			)*
+			$( $( $param ),* ; )*
 		)
 	};
 }
@@ -1090,17 +1084,17 @@ macro_rules! __call_metadata_register_fn {
 	(
 		$registry:ident;
 		$( $function_metadata:expr ),*;
-		fn $fn_name:ident(
 			$(
-				$param_name:ident : $param:ty
+				$param:ty
 			),*
-		);
+		;
 		$( $rest:tt )*
 	) => {
-		__call_metadata_register_fn!(
+
+		$crate::__call_metadata_register_fn!(
 			$registry;
-			$( $function_metadata, )* __call_metadata_register_fn!(@expand $registry;
-				$( $param_name : $param ),*
+			$( $function_metadata, )* $crate::__call_metadata_register_expand!($registry;
+				$( $param ),*
 			);
 			$($rest)*
 		)
@@ -1109,19 +1103,29 @@ macro_rules! __call_metadata_register_fn {
 		$registry:ident;
 		$( $function_metadata:expr ),*;
 	) => {
-		$( $function_metadata );*
-	};
-	(
-		@expand $registry:ident;
-		$( $param_name:ident : $param:ty ),*
-	) => {
-		$registry.register(
-			<$param as $crate::substrate_metadata::EncodeMetadata>::type_name(),
-			<$param as $crate::substrate_metadata::EncodeMetadata>::type_metadata_kind
-		)
+		{
+			$( $function_metadata );*
+		}
 	};
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __call_metadata_register_expand {
+	(
+		$registry:ident;
+		$( $param:ty ),*
+	) => {
+		{
+			$(
+				$registry.register(
+					<$param as $crate::substrate_metadata::EncodeMetadata>::type_name(),
+					<$param as $crate::substrate_metadata::EncodeMetadata>::type_metadata_kind
+				)
+			);*
+		}
+	};
+}
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]

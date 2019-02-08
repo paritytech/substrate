@@ -23,6 +23,10 @@
 
 #[doc(hidden)]
 pub use parity_codec as codec;
+#[doc(hidden)]
+pub use substrate_metadata;
+#[doc(hidden)]
+pub use substrate_metadata_derive;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde_derive;
@@ -407,16 +411,16 @@ macro_rules! impl_outer_log {
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize, $crate::substrate_metadata::EncodeMetadata))]
+		#[derive(Clone, PartialEq, Eq, $crate::substrate_metadata_derive::EncodeMetadata)]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
 
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize, $crate::substrate_metadata::EncodeMetadata))]
+		#[derive(Clone, PartialEq, Eq, Encode, Decode, $crate::substrate_metadata_derive::EncodeMetadata)]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -556,9 +560,10 @@ mod tests {
 		use super::RuntimeT;
 		use parity_codec_derive::{Encode, Decode};
 		use serde_derive::Serialize;
+		use substrate_metadata_derive::EncodeMetadata;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone, EncodeMetadata)]
 		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
 	}
 
@@ -566,9 +571,10 @@ mod tests {
 		use super::RuntimeT;
 		use parity_codec_derive::{Encode, Decode};
 		use serde_derive::Serialize;
+		use substrate_metadata_derive::EncodeMetadata;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
-		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone, EncodeMetadata)]
 		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 	}
 

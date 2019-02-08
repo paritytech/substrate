@@ -25,6 +25,7 @@ use rstd::prelude::*;
 use parity_codec as codec;
 use codec::Encode;
 use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
 use runtime_support::{storage, Parameter};
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;

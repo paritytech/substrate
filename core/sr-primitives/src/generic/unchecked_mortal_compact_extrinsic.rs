@@ -25,8 +25,7 @@ use crate::codec::{Decode, Encode, Input, Compact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
 use super::{CheckedExtrinsic, Era};
-use substrate_metadata::{MetadataName, EncodeMetadata};
-use substrate_metadata_derive::EncodeMetadata;
+use substrate_metadata::{MetadataName, EncodeMetadata, TypeMetadataKind, MetadataRegistry};
 
 const TRANSACTION_VERSION: u8 = 1;
 
@@ -206,11 +205,13 @@ impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalCompactExtri
 }
 
 #[cfg(test)]
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
 	use parity_codec_derive::{Encode, Decode};
 	use serde_derive::{Serialize, Deserialize};
+	use substrate_metadata_derive::EncodeMetadata;
 
 	struct TestContext;
 	impl Lookup for TestContext {
@@ -228,7 +229,7 @@ mod tests {
 		fn block_number_to_hash(&self, n: u64) -> Option<u64> { Some(n) }
 	}
 
-	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
+	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode, EncodeMetadata)]
 	struct TestSig(u64, Vec<u8>);
 	impl traits::Verify for TestSig {
 		type Signer = u64;
