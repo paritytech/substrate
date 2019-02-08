@@ -22,6 +22,9 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 /// Initalise a key-value collection from array.
+///
+/// Creates a vector of given pairs and calls `collect` on the iterator from it.
+/// Can be used to create a `HashMap`.
 #[macro_export]
 macro_rules! map {
 	($( $name:expr => $value:expr ),*) => (
