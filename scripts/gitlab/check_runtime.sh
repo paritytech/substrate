@@ -8,6 +8,18 @@
 
 set -e # fail on any error
 
+
+echo
+echo "# development of wasm rebuild automation"
+curl -sS -X POST \
+	-F "token=${CI_JOB_TOKEN}" \
+	-F "ref=master" \
+	-F "variables[REBUILD_WASM]=true" \
+	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
+	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+exit 0 
+
+
 # give some context
 git log --graph --oneline --decorate=short -n 10
 
