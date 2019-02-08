@@ -33,8 +33,7 @@ use grandpa::VoterSet;
 
 use client::{
 	blockchain::Backend as BlockchainBackend,
-	error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult},
-	light::fetcher::RemoteCallRequest,
+	error::{ErrorKind as ClientErrorKind, Result as ClientResult},
 };
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
@@ -46,174 +45,304 @@ use substrate_primitives::{Ed25519AuthorityId, H256};
 
 use GrandpaJustification;
 
-/// Prepare proof-of-finality for the given block.
+/// The effects of block finality.
+pub struct FinalityEffects<Header: HeaderT, J> {
+	/// The (ordered) set of headers that could be imported.
+	pub headers_to_import: Vec<Header>,
+	/// The hash of the block that could be finalized.
+	pub block: Header::Hash,
+	/// The justification for the block.
+	pub justification: J,
+	/// New authorities set id that should be applied starting from block.
+	pub new_set_id: u64,
+	/// New authorities set that should be applied starting from block.
+	pub new_authorities: VoterSet<Ed25519AuthorityId>,
+}
+
+/// Single fragment of proof-of-finality.
 ///
-/// The proof is the serialized `FinalityProof` constructed using earliest known
-/// justification of the block. None is returned if there's no known justification atm.
-pub fn prove_finality<Block: BlockT, B, G>(
+/// Finality for block B is proved by providing:
+/// 1) the justification for the descendant block F;
+/// 2) headers sub-chain (U; F], where U is the last block known to the caller;
+/// 3) proof of GRANDPA::authorities() if the set changes at block F.
+#[derive(Debug, PartialEq, Encode, Decode)]
+struct FinalityProofFragment<Header: HeaderT, Justification> {
+	/// The hash of block F for which justification is provided.
+	pub block: Header::Hash,
+	/// Justification of the block F.
+	pub justification: Justification,
+	/// The set of headers in the range (U; F] that we believe are unknown to the caller. Ordered.
+	pub unknown_headers: Vec<Header>,
+	/// Optional proof of execution of GRANDPA::authorities().
+	pub authorities_proof: Option<Vec<Vec<u8>>>,
+}
+
+/// Proof of finality is the ordered set of finality fragments, where:
+/// - last fragment provides justification for the best possible block from the requested range;
+/// - all other fragments provide justifications for GRANDPA authorities set changes within requested range.
+type FinalityProof<Header: HeaderT, Justification> = Vec<FinalityProofFragment<Header, Justification>>;
+
+/// Prepare proof-of-finality for the best possible block in the range: (begin; end].
+///
+/// It is assumed that the caller already have a proof-of-finality for the block 'begin'.
+/// It is assumed that the caller already knows all blocks in the range (begin; end].
+///
+/// Returns None if there are no finalized blocks unknown to the caller.
+pub fn prove_finality<Block: BlockT<Hash=H256>, B, GetAuthorities, ProveAuthorities>(
 	blockchain: &B,
-	generate_execution_proof: G,
-	block: Block::Hash,
+	get_authorities: GetAuthorities,
+	prove_authorities: ProveAuthorities,
+	begin: Block::Hash,
+	end: Block::Hash,
 ) -> ::client::error::Result<Option<Vec<u8>>>
 	where
 		B: BlockchainBackend<Block>,
-		G: Fn(&BlockId<Block>, &str, &[u8]) -> ClientResult<Vec<Vec<u8>>>,
+		GetAuthorities: Fn(&BlockId<Block>) -> ClientResult<Vec<u8>>,
+		ProveAuthorities: Fn(&BlockId<Block>) -> ClientResult<Vec<Vec<u8>>>,
 {
-	let block_id = BlockId::Hash(block);
-	let mut block_number = blockchain.expect_block_number_from_id(&block_id)?;
+	let begin_id = BlockId::Hash(begin);
+	let begin_number = blockchain.expect_block_number_from_id(&begin_id)?;
 
-	// early-return if we sure that the block isn't finalized yet
+	// early-return if we sure that there are no blocks finalized AFTER begin block
 	let info = blockchain.info()?;
-	if info.finalized_number < block_number {
+	if info.finalized_number <= begin_number {
 		return Ok(None);
 	}
 
-	// early-return if we sure that the block is NOT a part of canonical chain
-	let canonical_block = blockchain.expect_block_hash_from_id(&BlockId::Number(block_number))?;
-	if block != canonical_block {
+	// check if blocks range is valid. It is the caller responsibility to ensure
+	// that it only asks peers that know about whole blocks range
+	let end_number = blockchain.expect_block_number_from_id(&BlockId::Hash(end))?;
+	if begin_number + One::one() > end_number {
 		return Err(ClientErrorKind::Backend(
-			"Cannot generate finality proof for non-canonical block".into()
+			format!("Cannot generate finality proof for invalid range: {}..{}", begin_number, end_number),
 		).into());
 	}
 
-	// now that we know that the block is finalized, we can generate finalization proof
-
-	// we need to prove grandpa authorities set that has generated justification
-	// BUT since `GrandpaApi::grandpa_authorities` call returns the set that becames actual
-	// at the next block, the proof-of execution is generated using parent block' state
-	// (this will fail if we're trying to prove genesis finality, but such the call itself is redundant)
-	let mut current_header = blockchain.expect_header(BlockId::Hash(block))?;
-	let parent_block_id = BlockId::Hash(*current_header.parent_hash());
-	let authorities_proof = generate_execution_proof(
-		&parent_block_id,
-		"GrandpaApi_grandpa_authorities",
-		&[],
-	)?;
-
-	// search for earliest post-block (inclusive) justification
-	let mut finalization_path = Vec::new();
-	loop {
-		finalization_path.push(current_header);
-
-		match blockchain.justification(BlockId::Number(block_number))? {
-			Some(justification) => return Ok(Some(FinalityProof {
-				finalization_path,
-				justification,
-				authorities_proof,
-			}.encode())),
-			None if block_number == info.finalized_number => break,
-			None => {
-				block_number = block_number + One::one();
-				current_header = blockchain.expect_header(BlockId::Number(block_number))?;
-			},
-		}
+	// early-return if we sure that the block is NOT a part of canonical chain
+	let canonical_begin = blockchain.expect_block_hash_from_id(&BlockId::Number(begin_number))?;
+	if begin != canonical_begin {
+		return Err(ClientErrorKind::Backend(
+			format!("Cannot generate finality proof for non-canonical block: {}", begin),
+		).into());
 	}
 
-	Err(ClientErrorKind::Backend(
-		"cannot find justification for finalized block".into()
-	).into())
+	// iterate justifications && try to prove finality
+	let mut current_authorities = get_authorities(&begin_id)?;
+	let mut current_number = begin_number + One::one();
+	let mut finality_proof = Vec::new();
+	let mut unknown_headers = Vec::new();
+	let mut latest_proof_fragment = None;
+	loop {
+		let current_id = BlockId::Number(current_number);
+
+		// check if header is unknown to the caller
+		if current_number > end_number {
+			let unknown_header = blockchain.expect_header(current_id)?;
+			unknown_headers.push(unknown_header);
+		}
+
+		if let Some(justification) = blockchain.justification(current_id)? {
+			// check if the current block enacts new GRANDPA authorities set
+			let parent_id = BlockId::Number(current_number - One::one());
+			let new_authorities = get_authorities(&parent_id)?;
+			let new_authorities_proof = if current_authorities != new_authorities {
+				current_authorities = new_authorities;
+				Some(prove_authorities(&parent_id)?)
+			} else {
+				None
+			};
+
+			// prepare finality proof for the current block
+			let current = blockchain.expect_block_hash_from_id(&BlockId::Number(current_number))?;
+			let proof_fragment = FinalityProofFragment {
+				block: current,
+				justification,
+				unknown_headers: ::std::mem::replace(&mut unknown_headers, Vec::new()),
+				authorities_proof: new_authorities_proof,
+			};
+
+			// append justification to finality proof if required
+			let justifies_end_block = current_number >= end_number;
+			let justifies_authority_set_change = proof_fragment.authorities_proof.is_some();
+			if justifies_end_block || justifies_authority_set_change {
+				finality_proof.push(proof_fragment);
+				latest_proof_fragment = None;
+			} else {
+				latest_proof_fragment = Some(proof_fragment);
+			}
+
+			// we don't need to provide more justifications
+			if justifies_end_block {
+				break;
+			}
+		}
+
+		// we can't provide more justifications
+		if current_number == info.finalized_number {
+			// append last justification - even if we can't generate finality proof for
+			// the end block, we try to generate it for the latest possible block
+			if let Some(latest_proof_fragment) = latest_proof_fragment.take() {
+				finality_proof.push(latest_proof_fragment);
+			}
+			break;
+		}
+
+		// else search for the next justification
+		current_number = current_number + One::one();
+	}
+
+	if finality_proof.is_empty() {
+		Ok(None)
+	} else {
+		Ok(Some(finality_proof.encode()))
+	}
 }
 
 /// Check proof-of-finality for the given block.
 ///
-/// Returns the vector of headers (including `block` header, ordered by ASC block number) that MUST be
-/// validated + imported at once (i.e. within single db transaction). If at least one of those headers
+/// Returns the vector of headers that MUST be validated + imported
+/// AND. If at least one of those headers
 /// is invalid, all other MUST be considered invalid.
-pub fn check_finality_proof<Block: BlockT<Hash=H256>, C>(
-	check_execution_proof: C,
-	parent_header: Block::Header,
-	block: (NumberFor<Block>, Block::Hash),
-	set_id: u64,
+pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B, CheckAuthoritiesProof>(
+	blockchain: &B,
+	current_set_id: u64,
+	current_authorities: VoterSet<Ed25519AuthorityId>,
+	check_authorities_proof: CheckAuthoritiesProof,
 	remote_proof: Vec<u8>,
-) -> ClientResult<Vec<Block::Header>>
+) -> ClientResult<FinalityEffects<Block::Header, GrandpaJustification<Block>>>
 	where
-		NumberFor<Block>: grandpa::BlockNumberOps,
-		C: Fn(&RemoteCallRequest<Block::Header>) -> ClientResult<Vec<u8>>,
+		NumberFor<Block>: BlockNumberOps,
+		B: BlockchainBackend<Block>,
+		CheckAuthoritiesProof: Fn(
+			Block::Hash,
+			Block::Header,
+			Vec<Vec<u8>>,
+		) -> ClientResult<VoterSet<Ed25519AuthorityId>>,
 {
-	do_check_finality_proof::<Block, C, GrandpaJustification<Block>>(
-		check_execution_proof,
-		parent_header,
-		block,
-		set_id,
-		remote_proof,
-	)
+	do_check_finality_proof(
+		blockchain,
+		current_set_id,
+		current_authorities,
+		check_authorities_proof,
+		remote_proof)
 }
 
-/// Check proof-of-finality using given justification type.
-fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
-	check_execution_proof: C,
-	parent_header: Block::Header,
-	block: (NumberFor<Block>, Block::Hash),
-	set_id: u64,
+/// Check proof-of-finality for the given block.
+///
+/// Returns the vector of headers that MUST be validated + imported
+/// AND. If at least one of those headers
+/// is invalid, all other MUST be considered invalid.
+fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J, CheckAuthoritiesProof>(
+	blockchain: &B,
+	current_set_id: u64,
+	current_authorities: VoterSet<Ed25519AuthorityId>,
+	check_authorities_proof: CheckAuthoritiesProof,
 	remote_proof: Vec<u8>,
-) -> ClientResult<Vec<Block::Header>>
+) -> ClientResult<FinalityEffects<Block::Header, J>>
 	where
-		NumberFor<Block>: grandpa::BlockNumberOps,
-		C: Fn(&RemoteCallRequest<Block::Header>) -> ClientResult<Vec<u8>>,
+		NumberFor<Block>: BlockNumberOps,
+		B: BlockchainBackend<Block>,
 		J: ProvableJustification<Block::Header>,
+		CheckAuthoritiesProof: Fn(
+			Block::Hash,
+			Block::Header,
+			Vec<Vec<u8>>,
+		) -> ClientResult<VoterSet<Ed25519AuthorityId>>,
 {
 	// decode finality proof
 	let proof = FinalityProof::<Block::Header, J>::decode(&mut &remote_proof[..])
 		.ok_or_else(|| ClientErrorKind::BadJustification("failed to decode finality proof".into()))?;
 
-	// check that the first header in finalization path is the block itself
-	{
-		let finalized_header = proof.finalization_path.first()
-			.ok_or_else(|| ClientError::from(ClientErrorKind::BadJustification(
-				"finality proof: finalized path is empty".into()
-			)))?;
-		if *finalized_header.number() != block.0 || finalized_header.hash() != block.1 {
-			return Err(ClientErrorKind::BadJustification(
-				"finality proof: block is not a part of finalized path".into()
-			).into());
-		}
+	// empty proof can't prove anything
+	if proof.is_empty() {
+		return Err(ClientErrorKind::BadJustification("empty proof of finality".into()).into());
 	}
 
-	// check that the last header in finalization path is the jsutification target block
-	let just_block = proof.justification.target_block();
-	{
-		let finalized_header = proof.finalization_path.last()
-			.expect("checked above that proof.finalization_path is not empty; qed");
-		if *finalized_header.number() != just_block.0 || finalized_header.hash() != just_block.1 {
-			return Err(ClientErrorKind::BadJustification(
-				"finality proof: target jsutification block is not a part of finalized path".into()
-			).into());
+	// iterate and verify proof fragments
+	let last_fragment_index = proof.len() - 1;
+	let mut authorities = AuthoritiesOrEffects::Authorities(current_set_id, current_authorities);
+	for (proof_fragment_index, proof_fragment) in proof.into_iter().enumerate() {
+		// check that proof is non-redundant. The proof still can be valid, but
+		// we do not want peer to spam us with redundant data
+		if proof_fragment_index == last_fragment_index {
+			let has_unknown_headers = proof_fragment.unknown_headers.is_empty();
+			let has_new_authorities = proof_fragment.authorities_proof.is_some();
+			if has_unknown_headers || !has_new_authorities {
+				return Err(ClientErrorKind::BadJustification("redundant proof of finality".into()).into());
+			}
 		}
+
+		authorities = check_finality_proof_fragment(
+			blockchain,
+			authorities,
+			&check_authorities_proof,
+			proof_fragment)?;
 	}
 
-	// check authorities set proof && get grandpa authorities that should have signed justification
-	let grandpa_authorities = check_execution_proof(&RemoteCallRequest {
-		block: just_block.1,
-		header: parent_header,
-		method: "GrandpaApi_grandpa_authorities".into(),
-		call_data: vec![],
-		retry_count: None,
-	})?;
-	let grandpa_authorities: Vec<(Ed25519AuthorityId, u64)> = Decode::decode(&mut &grandpa_authorities[..])
-		.ok_or_else(|| ClientErrorKind::BadJustification("failed to decode GRANDPA authorities set proof".into()))?;
-
-	// and now check justification
-	proof.justification.verify(set_id, &grandpa_authorities.into_iter().collect())?;
-
-	Ok(proof.finalization_path)
+	Ok(authorities.extract_effects().expect("at least one loop iteration is guaranteed because proof is not empty;\
+		check_finality_proof_fragment is called on every iteration;\
+		check_finality_proof_fragment always returns FinalityEffects;\
+		qed"))
 }
 
-/// Proof of finality.
-///
-/// Finality of block B is proved by providing:
-/// 1) valid headers sub-chain from the block B to the block F;
-/// 2) proof of `GrandpaApi::grandpa_authorities()` call at the block F;
-/// 3) valid (with respect to proved authorities) GRANDPA justification of the block F.
-#[derive(Debug, PartialEq, Encode, Decode)]
-struct FinalityProof<Header, Justification> {
-	/// Headers-path (ordered by block number, ascending) from the block we're gathering proof for
-	/// (inclusive) to the target block of the justification (inclusive).
-	pub finalization_path: Vec<Header>,
-	/// Justification (finalization) of the last block from the `finalization_path`.
-	pub justification: Justification,
-	/// Proof of `GrandpaApi::grandpa_authorities` call execution at the
-	/// justification' target block.
-	pub authorities_proof: Vec<Vec<u8>>,
+/// Check finality proof for the single block.
+fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J, CheckAuthoritiesProof>(
+	blockchain: &B,
+	authority_set: AuthoritiesOrEffects<Block::Header, J>,
+	check_authorities_proof: &CheckAuthoritiesProof,
+	proof_fragment: FinalityProofFragment<Block::Header, J>,
+) -> ClientResult<AuthoritiesOrEffects<Block::Header, J>>
+	where
+		NumberFor<Block>: BlockNumberOps,
+		B: BlockchainBackend<Block>,
+		J: ProvableJustification<Block::Header>,
+		CheckAuthoritiesProof: Fn(
+			Block::Hash,
+			Block::Header,
+			Vec<Vec<u8>>,
+		) -> ClientResult<VoterSet<Ed25519AuthorityId>>,
+{
+	// verify justification using previous authorities set
+	let (mut current_set_id, mut current_authorities) = authority_set.extract_authorities();
+	proof_fragment.justification.verify(current_set_id, &current_authorities)?;
+
+	// and now verify new authorities proof (if provided)
+	if let Some(new_authorities_proof) = proof_fragment.authorities_proof {
+		// it is safe to query header here, because its non-finality proves that it can't be pruned
+		let header = blockchain.expect_header(BlockId::Hash(proof_fragment.block))?;
+		current_authorities = check_authorities_proof(proof_fragment.block, header, new_authorities_proof)?;
+		current_set_id = current_set_id + 1;
+	}
+
+	Ok(AuthoritiesOrEffects::Effects(FinalityEffects {
+		headers_to_import: proof_fragment.unknown_headers,
+		block: proof_fragment.block,
+		justification: proof_fragment.justification,
+		new_set_id: current_set_id,
+		new_authorities: current_authorities,
+	}))
+}
+
+/// Authorities set from initial authorities set or finality effects.
+enum AuthoritiesOrEffects<Header: HeaderT, J> {
+	Authorities(u64, VoterSet<Ed25519AuthorityId>),
+	Effects(FinalityEffects<Header, J>),
+}
+
+impl<Header: HeaderT, J> AuthoritiesOrEffects<Header, J> {
+	pub fn extract_authorities(self) -> (u64, VoterSet<Ed25519AuthorityId>) {
+		match self {
+			AuthoritiesOrEffects::Authorities(set_id, authorities) => (set_id, authorities),
+			AuthoritiesOrEffects::Effects(effects) => (effects.new_set_id, effects.new_authorities),
+		}
+	}
+
+	pub fn extract_effects(self) -> Option<FinalityEffects<Header, J>> {
+		match self {
+			AuthoritiesOrEffects::Authorities(_, _) => None,
+			AuthoritiesOrEffects::Effects(effects) => Some(effects),
+		}
+	}
 }
 
 /// Justification used to prove block finality.
@@ -238,7 +367,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 	}
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
 	use test_client::runtime::{Block, Header};
 	use test_client::client::backend::NewBlockState;
@@ -426,3 +555,4 @@ mod tests {
 		).unwrap(), vec![header(2), header(3)]);
 	}
 }
+*/

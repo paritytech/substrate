@@ -128,7 +128,6 @@ mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 
-pub use finality_proof::{prove_finality, check_finality_proof};
 pub use light_import::light_block_import;
 
 #[cfg(test)]

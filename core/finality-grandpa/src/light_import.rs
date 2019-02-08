@@ -20,6 +20,7 @@ use parking_lot::RwLock;
 use client::{
 	CallExecutor, Client, backend::Backend,
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
+	light::fetcher::{FetchChecker, RemoteCallRequest},
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
@@ -44,6 +45,7 @@ const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 /// Create light block importer.
 pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
+	fetch_checker: Arc<FetchChecker<Block>>,
 	api: Arc<PRA>,
 ) -> Result<GrandpaLightBlockImport<B, E, Block, RA>, ClientError>
 	where
@@ -81,6 +83,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 	Ok(GrandpaLightBlockImport {
 		client,
+		fetch_checker,
 		data: Arc::new(RwLock::new(LightImportData {
 			authority_set,
 			consensus_changes,
@@ -95,6 +98,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 /// - requiring GRANDPA justifications for blocks that are enacting consensus changes;
 pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
+	fetch_checker: Arc<FetchChecker<Block>>,
 	data: Arc<RwLock<LightImportData<Block>>>,
 }
 
@@ -185,6 +189,50 @@ impl<B, E, Block: BlockT<Hash=H256>, RA>
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 {
+	fn import_finality_proof(
+		&self,
+		_hash: Block::Hash,
+		_number: NumberFor<Block>,
+		finality_proof: Vec<u8>,
+	) -> Result<(), ConsensusError> {
+		// TODO: ensure that the proof is for non-finalzie block
+		let data = self.data.write();
+
+		let authority_set_id = data.authority_set.set_id();
+		let authorities = data.authority_set.authorities();
+		let finality_effects = ::finality_proof::check_finality_proof(
+			&*self.client.backend().blockchain(),
+			authority_set_id,
+			authorities,
+			|hash, header, authorities_proof| {
+				let request = RemoteCallRequest {
+					block: hash,
+					header,
+					method: "GrandpaApi_grandpa_authorities".into(),
+					call_data: vec![],
+					retry_count: None,
+				};
+				
+				self.fetch_checker.check_execution_proof(&request, authorities_proof)
+					.and_then(|authorities| {
+						let authorities: Vec<(Ed25519AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
+							.ok_or_else(|| ClientError::from(ClientErrorKind::CallResultDecode(
+								"failed to decode GRANDPA authorities set proof".into(),
+							)))?;
+						Ok(authorities.into_iter().collect())
+					})
+			},
+			finality_proof,
+		).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
+
+		for header_to_import in finality_effects.headers_to_import {
+			// import block
+		}
+
+		// import justification
+
+		// apply new authorities set
+	}
 
 	/// Import a block justification and finalize the block.
 	fn do_import_justification(
