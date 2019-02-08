@@ -18,18 +18,10 @@
 
 #[warn(missing_docs)]
 
-pub extern crate substrate_rpc as apis;
-
-extern crate jsonrpc_http_server as http;
-extern crate jsonrpc_pubsub as pubsub;
-extern crate jsonrpc_ws_server as ws;
-extern crate serde;
-extern crate sr_primitives;
-
-#[macro_use]
-extern crate log;
+pub use substrate_rpc as apis;
 
 use std::io;
+use log::error;
 use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 
 /// Maximal payload accepted by RPC servers

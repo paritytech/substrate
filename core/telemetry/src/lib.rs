@@ -27,6 +27,7 @@ use parking_lot::Mutex;
 use slog::{Drain, o};
 use log::trace;
 pub use slog_scope::with_logger;
+pub use slog;
 
 /// Configuration for telemetry.
 pub struct TelemetryConfig {
@@ -70,7 +71,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 /// Exactly equivalent to `slog_scope::info`, provided as a convenience.
 #[macro_export]
 macro_rules! telemetry {
-	( $($t:tt)* ) => { $crate::with_logger(|l| slog_info!(l, $($t)* )) }
+	( $($t:tt)* ) => { $crate::with_logger(|l| $crate::slog::slog_info!(l, $($t)* )) }
 }
 
 struct Connection<'a> {
