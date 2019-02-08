@@ -732,7 +732,7 @@ macro_rules! decl_module {
 				d.dispatch(origin)
 			}
 		}
-		__dispatch_impl_metadata! {
+		$crate::__dispatch_impl_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
 			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $(#[$codec_attr])* $param_name : $param )*); )*}
 		}
