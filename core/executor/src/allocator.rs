@@ -18,6 +18,7 @@
 //! See more details at https://github.com/paritytech/substrate/issues/1615.
 
 use log::trace;
+use wasmi::Error;
 use wasmi::MemoryRef;
 use wasmi::memory_units::Bytes;
 
@@ -97,16 +98,22 @@ impl FreeingBumpHeapAllocator {
 		let ptr: u32 = if self.heads[list_index] != 0 {
 			// Something from the free list
 			let item = self.heads[list_index];
-			self.heads[list_index] = FreeingBumpHeapAllocator::le_bytes_to_u32(self.get_heap_4bytes(item));
+			let four_bytes = self.get_heap_4bytes(item)
+				.expect("Pointer must be valid, as it is taken from the list of free items");
+			self.heads[list_index] = FreeingBumpHeapAllocator::le_bytes_to_u32(four_bytes);
 			item + 8
 		} else {
 			// Nothing to be freed. Bump.
 			self.bump(item_size + 8) + 8
 		};
 
-		for i in 1..8 { self.set_heap(ptr - i, 255); }
+		for i in 1..8 {
+			self.set_heap(ptr - i, 255)
+				.expect("Writing byte into heap at pointer prefix must be valid, as pointer is chosen from free list or free area");
+		}
 
-		self.set_heap(ptr - 8, list_index as u8);
+		self.set_heap(ptr - 8, list_index as u8)
+			.expect("Writing byte into heap at pointer must be valid, as pointer is chosen from free list or free area");
 
 		self.total_size = self.total_size + item_size + 8;
 		trace!(target: "wasm-heap", "Heap size is {} bytes after allocation", self.total_size);
@@ -117,15 +124,21 @@ impl FreeingBumpHeapAllocator {
 	/// Deallocates the space which was allocated for a pointer.
 	pub fn deallocate(&mut self, ptr: u32) {
 		let ptr = ptr - self.ptr_offset;
-
-		let list_index = self.get_heap_byte(ptr - 8) as usize;
-		for i in 1..8 { debug_assert!(self.get_heap_byte(ptr - i) == 255); }
+		let list_index = self.get_heap_byte(ptr - 8)
+			.expect("Getting single byte from heap at pointer must always be valid") as usize;
+		for i in 1..8 {
+			let heap_byte = self.get_heap_byte(ptr - i)
+				.expect("Writing single byte into heap at pointer must always be valid");
+			debug_assert!(heap_byte == 255)
+		}
 		let tail = self.heads[list_index];
 		self.heads[list_index] = ptr - 8;
 
-		let mut slice = self.get_heap_4bytes(ptr - 8);
+		let mut slice = self.get_heap_4bytes(ptr - 8)
+			.expect("Getting 4 bytes from heap at pointer must always be valid");
 		FreeingBumpHeapAllocator::write_u32_into_le_bytes(tail, &mut slice);
-		self.set_heap_4bytes(ptr - 8, slice);
+		self.set_heap_4bytes(ptr - 8, slice)
+			.expect("Writing 4 bytes into heap at pointer must always be valid");
 
 		let item_size = FreeingBumpHeapAllocator::get_item_size_from_index(list_index);
 		self.total_size = self.total_size.checked_sub(item_size as u32 + 8)
@@ -154,28 +167,24 @@ impl FreeingBumpHeapAllocator {
 		1 << 3 << index
 	}
 
-	fn get_heap_4bytes(&mut self, ptr: u32) -> [u8; 4] {
+	fn get_heap_4bytes(&mut self, ptr: u32) -> Result<[u8; 4], Error> {
 		let mut arr = [0u8; 4];
-		self.heap.get_into(self.ptr_offset + ptr, &mut arr)
-			.expect("Getting 4 bytes from heap at pointer must always be valid");
-		arr
+		self.heap.get_into(self.ptr_offset + ptr, &mut arr)?;
+		Ok(arr)
 	}
 
-	fn get_heap_byte(&mut self, ptr: u32) -> u8 {
+	fn get_heap_byte(&mut self, ptr: u32) -> Result<u8, Error> {
 		let mut arr = [0u8; 1];
-		self.heap.get_into(self.ptr_offset + ptr, &mut arr)
-			.expect("Getting single byte from heap at pointer must always be valid");
-		arr[0]
+		self.heap.get_into(self.ptr_offset + ptr, &mut arr)?;
+		Ok(arr[0])
 	}
 
-	fn set_heap(&mut self, ptr: u32, value: u8) {
+	fn set_heap(&mut self, ptr: u32, value: u8) -> Result<(), Error> {
 		self.heap.set(self.ptr_offset + ptr, &[value])
-			.expect("Writing single byte into heap at pointer must always be valid");
 	}
 
-	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) {
+	fn set_heap_4bytes(&mut self, ptr: u32, value: [u8; 4]) -> Result<(), Error> {
 		self.heap.set(self.ptr_offset + ptr, &value)
-			.expect("Writing 4 bytes into heap at pointer must always be valid");
 	}
 
 }
