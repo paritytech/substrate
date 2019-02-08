@@ -121,6 +121,7 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
+			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
