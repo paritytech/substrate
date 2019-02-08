@@ -363,6 +363,7 @@ where
 		syncing: cli.syncing_execution.into(),
 		importing: cli.importing_execution.into(),
 		block_construction: cli.block_construction_execution.into(),
+		other: cli.other_execution.into(),
 	}; 
 
 	config.roles = role;

@@ -337,7 +337,7 @@ where
 		method,
 		call_data,
 		use_native,
-		native_call.take(),
+		native_call,
 	);
 	let (storage_delta, changes_delta) = if compute_tx {
 		let (storage_delta, changes_delta) = externalities.transaction();
@@ -474,19 +474,25 @@ where
 		let orig_prospective = overlay.prospective.clone();
 		
 		let (result, storage_delta, changes_delta) = match manager {
-			ExecutionManager::Both(on_consensus_failure) =>
+			ExecutionManager::Both(on_consensus_failure) => {
+				println!("going to execute_call_with_both_strategy --------------------------");
 				execute_call_with_both_strategy(overlay, backend, changes_trie_storage, 
 					exec, method, call_data, compute_tx, native_call.take(),
-					orig_prospective, on_consensus_failure),
-			ExecutionManager::NativeElseWasm =>
+					orig_prospective, on_consensus_failure)
+			},
+			ExecutionManager::NativeElseWasm => {
+				println!("going to execute_call_with_native_else_wasm_strategy --------------------------");
 				execute_call_with_native_else_wasm_strategy(overlay, backend, changes_trie_storage, 
-					exec, method, call_data, compute_tx, native_call.take(), orig_prospective),
+					exec, method, call_data, compute_tx, native_call.take(), orig_prospective)
+			},
 			ExecutionManager::AlwaysWasm => {
+				println!("going to execute with alwaysWasm --------------------------");
 				let (result, _, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
 					exec, method, call_data, compute_tx, false, native_call);
 				(result, storage_delta, changes_delta)
 			},
 			ExecutionManager::NativeWhenPossible => {
+				println!("going to execute with nativeWhenPossible --------------------------");
 				let (result, _was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
 					exec, method, call_data, compute_tx, true, native_call);
 				(result, storage_delta, changes_delta)
