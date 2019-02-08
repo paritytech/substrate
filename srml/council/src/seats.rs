@@ -19,9 +19,8 @@
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
-use srml_support::{StorageValue, StorageMap, dispatch::Result};
+use srml_support::{StorageValue, StorageMap, dispatch::Result, traits::Currency};
 use democracy;
-use balances;
 use system::{self, ensure_signed};
 
 // no polynomial attacks:
@@ -80,6 +79,8 @@ use system::{self, ensure_signed};
 
 pub type VoteIndex = u32;
 
+type BalanceOf<T> = <<T as democracy::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+
 pub trait Trait: democracy::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -105,7 +106,7 @@ decl_module! {
 			if !<LastActiveOf<T>>::exists(&who) {
 				// not yet a voter - deduct bond.
 				// NOTE: this must be the last potential bailer, since it changes state.
-				<balances::Module<T>>::reserve(&who, Self::voting_bond())?;
+				T::Currency::reserve(&who, Self::voting_bond())?;
 
 				<Voters<T>>::put({
 					let mut v = Self::voters();
@@ -161,10 +162,10 @@ decl_module! {
 			if valid {
 				// This only fails if `reporter` doesn't exist, which it clearly must do since its the origin.
 				// Still, it's no more harmful to propagate any error at this point.
-				<balances::Module<T>>::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
+				T::Currency::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
 				Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 			} else {
-				<balances::Module<T>>::slash_reserved(&reporter, Self::voting_bond());
+				T::Currency::slash_reserved(&reporter, Self::voting_bond());
 				Self::deposit_event(RawEvent::BadReaperSlashed(reporter));
 			}
 		}
@@ -181,7 +182,7 @@ decl_module! {
 			ensure!(voters[index] == who, "retraction index mismatch");
 
 			Self::remove_voter(&who, index, voters);
-			<balances::Module<T>>::unreserve(&who, Self::voting_bond());
+			T::Currency::unreserve(&who, Self::voting_bond());
 		}
 
 		/// Submit oneself for candidacy.
@@ -200,7 +201,7 @@ decl_module! {
 				"invalid candidate slot"
 			);
 			// NOTE: This must be last as it has side-effects.
-			<balances::Module<T>>::reserve(&who, Self::candidacy_bond())
+			T::Currency::reserve(&who, Self::candidacy_bond())
 				.map_err(|_| "candidate has not enough funds")?;
 
 			<RegisterInfoOf<T>>::insert(&who, (Self::vote_index(), slot as u32));
@@ -220,7 +221,7 @@ decl_module! {
 		fn present_winner(
 			origin,
 			candidate: <T::Lookup as StaticLookup>::Source,
-			#[compact] total: T::Balance,
+			#[compact] total: BalanceOf<T>,
 			#[compact] index: VoteIndex
 		) -> Result {
 			let who = ensure_signed(origin)?;
@@ -231,8 +232,8 @@ decl_module! {
 			let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
 			let stakes = Self::snapshoted_stakes();
 			let voters = Self::voters();
-			let bad_presentation_punishment = Self::present_slash_per_voter() * T::Balance::sa(voters.len() as u64);
-			ensure!(<balances::Module<T>>::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
+			let bad_presentation_punishment = Self::present_slash_per_voter() * BalanceOf::<T>::sa(voters.len() as u64);
+			ensure!(T::Currency::can_slash(&who, bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
 			let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
 			ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
@@ -263,7 +264,7 @@ decl_module! {
 			} else {
 				// we can rest assured it will be Ok since we checked `can_slash` earlier; still
 				// better safe than sorry.
-				let _ = <balances::Module<T>>::slash(&who, bad_presentation_punishment);
+				let _ = T::Currency::slash(&who, bad_presentation_punishment);
 				Err(if dupe { "duplicate presentation" } else { "incorrect total" })
 			}
 		}
@@ -313,11 +314,11 @@ decl_storage! {
 
 		// parameters
 		/// How much should be locked up in order to submit one's candidacy.
-		pub CandidacyBond get(candidacy_bond) config(): T::Balance = T::Balance::sa(9);
+		pub CandidacyBond get(candidacy_bond) config(): BalanceOf<T> = BalanceOf::<T>::sa(9);
 		/// How much should be locked up in order to be able to submit votes.
-		pub VotingBond get(voting_bond) config(voter_bond): T::Balance;
+		pub VotingBond get(voting_bond) config(voter_bond): BalanceOf<T>;
 		/// The punishment, per voter, if you provide an invalid presentation.
-		pub PresentSlashPerVoter get(present_slash_per_voter) config(): T::Balance = T::Balance::sa(1);
+		pub PresentSlashPerVoter get(present_slash_per_voter) config(): BalanceOf<T> = BalanceOf::<T>::sa(1);
 		/// How many runners-up should have their approvals persist until the next vote.
 		pub CarryCount get(carry_count) config(): u32 = 2;
 		/// How long to give each top candidate to present themselves after the vote ends.
@@ -360,9 +361,9 @@ decl_storage! {
 		/// The accounts holding the seats that will become free on the next tally.
 		pub NextFinalise get(next_finalise): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
 		/// The stakes as they were at the point that the vote ended.
-		pub SnapshotedStakes get(snapshoted_stakes): Vec<T::Balance>;
+		pub SnapshotedStakes get(snapshoted_stakes): Vec<BalanceOf<T>>;
 		/// Get the leaderboard if we;re in the presentation phase.
-		pub Leaderboard get(leaderboard): Option<Vec<(T::Balance, T::AccountId)> >; // ORDERED low -> high
+		pub Leaderboard get(leaderboard): Option<Vec<(BalanceOf<T>, T::AccountId)> >; // ORDERED low -> high
 	}
 }
 
@@ -466,12 +467,12 @@ impl<T: Trait> Module<T> {
 			<NextFinalise<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
 
 			let voters = Self::voters();
-			let votes = voters.iter().map(<balances::Module<T>>::total_balance).collect::<Vec<_>>();
+			let votes = voters.iter().map(T::Currency::total_balance).collect::<Vec<_>>();
 			<SnapshotedStakes<T>>::put(votes);
 
 			// initialise leaderboard.
 			let leaderboard_size = empty_seats + Self::carry_count() as usize;
-			<Leaderboard<T>>::put(vec![(T::Balance::zero(), T::AccountId::default()); leaderboard_size]);
+			<Leaderboard<T>>::put(vec![(BalanceOf::<T>::zero(), T::AccountId::default()); leaderboard_size]);
 
 			Self::deposit_event(RawEvent::TallyStarted(empty_seats as u32));
 		}
@@ -485,7 +486,7 @@ impl<T: Trait> Module<T> {
 		<SnapshotedStakes<T>>::kill();
 		let (_, coming, expiring): (T::BlockNumber, u32, Vec<T::AccountId>) =
 			<NextFinalise<T>>::take().ok_or("finalise can only be called after a tally is started.")?;
-		let leaderboard: Vec<(T::Balance, T::AccountId)> = <Leaderboard<T>>::take().unwrap_or_default();
+		let leaderboard: Vec<(BalanceOf<T>, T::AccountId)> = <Leaderboard<T>>::take().unwrap_or_default();
 		let new_expiry = <system::Module<T>>::block_number() + Self::term_duration();
 
 		// return bond to winners.
@@ -496,7 +497,7 @@ impl<T: Trait> Module<T> {
 			.take(coming as usize)
 			.map(|(_, a)| a)
 			.cloned()
-			.inspect(|a| {<balances::Module<T>>::unreserve(a, candidacy_bond);})
+			.inspect(|a| {T::Currency::unreserve(a, candidacy_bond);})
 			.collect();
 		let active_council = Self::active_council();
 		let outgoing = active_council.iter().take(expiring.len()).map(|a| a.0.clone()).collect();

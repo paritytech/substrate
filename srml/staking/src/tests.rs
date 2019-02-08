@@ -21,6 +21,7 @@
 use super::*;
 use runtime_io::with_externalities;
 use mock::{Balances, Session, Staking, System, Timestamp, Test, new_test_ext, Origin};
+use runtime_support::traits::Currency;
 
 #[test]
 fn note_null_offline_should_work() {
