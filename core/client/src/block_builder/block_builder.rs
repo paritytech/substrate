@@ -64,7 +64,7 @@ where
 			Default::default()
 		);
 		let api = api.runtime_api();
-		api.initialise_block_with_context(block_id, &header, ExecutionContext::BlockConstruction)?;
+		api.initialise_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
@@ -83,7 +83,7 @@ where
 		let extrinsics = &mut self.extrinsics;
 
 		self.api.map_api_result(|api| {
-			match api.apply_extrinsic_with_context(block_id, xt.clone(), ExecutionContext::BlockConstruction)? {
+			match api.apply_extrinsic_with_context(block_id, ExecutionContext::BlockConstruction, xt.clone())? {
 				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
 					extrinsics.push(xt);
 					Ok(())

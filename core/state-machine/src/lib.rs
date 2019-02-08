@@ -322,7 +322,7 @@ fn execute_aux<H, B, T, Exec, R: Decode + Encode + PartialEq,
 	call_data: &[u8],
 	compute_tx: bool,
 	use_native: bool,
-	mut native_call: Option<NC>,
+	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>, Exec::Error>, bool, Option<B::Transaction>, Option<MemoryDB<H>>)
 where
 	H: Hasher,

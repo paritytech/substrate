@@ -18,7 +18,7 @@ use utils::{
 	unwrap_or_error, generate_crate_access, generate_hidden_includes,
 	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
 	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,
-	return_type_extract_type, generate_method_with_context
+	return_type_extract_type
 };
 
 use proc_macro;
@@ -469,14 +469,14 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				Err(e) => (Vec::new(), Some(e.to_compile_error())),
 			};
 
-			let execution_context: syn::FnArg = parse_quote!( #crate_::runtime_api::ExecutionContext::Other );
 			let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
 	
 			// Rewrite the input parameters.
 			input.sig.decl.inputs = parse_quote! {
-				&self, at: &#block_id, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>, #context_arg
+				&self, at: &#block_id, #context_arg, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
 			};
 
+			input.sig.ident = generate_method_runtime_api_impl_name(&input.sig.ident);
 			let ret_type = return_type_extract_type(&input.sig.decl.output);
 
 			// Generate the correct return type.
@@ -500,7 +500,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 								#( #param_tuple_access ),*
 							)
 						}),
-						#execution_context
+						context,
 					)
 				}
 			)
@@ -527,23 +527,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		// the feature `std` or `test`.
 		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
 
-		input = fold::fold_item_impl(self, input);
-
-		let mut methods_with_context = vec![];
-
-		for item in &mut input.items {
-			if let ImplItem::Method(ref mut method) = item {
-				let mut ctx_method = generate_method_with_context(method);
-				method.sig.ident = generate_method_runtime_api_impl_name(&method.sig.ident);
-				ctx_method.sig.ident = generate_method_runtime_api_impl_name(&ctx_method.sig.ident);
-				methods_with_context.push(ImplItem::Method(ctx_method));	
-			}
-		}
-
-		input.items.extend(methods_with_context);
-		input
+		fold::fold_item_impl(self, input)
 	}
-
 }
 
 /// Generate the implementations of the runtime apis for the `RuntimeApi` type.
@@ -639,7 +624,7 @@ pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
 	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
 	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
-	
+
 	quote!(
 		#hidden_includes
 

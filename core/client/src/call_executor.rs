@@ -163,8 +163,7 @@ where
 	fn call(&self,
 		id: &BlockId<Block>,
 		method: &str,
-		call_data: &[u8],
-		execution_strategy: ExecutionStrategy
+		call_data: &[u8]
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;

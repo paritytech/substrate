@@ -267,9 +267,9 @@ impl Core<Block> for RuntimeApi {
 	fn version_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
+		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-		_: ExecutionContext
 	) -> Result<NativeOrEncoded<RuntimeVersion>> {
 		unimplemented!("Not required for testing!")
 	}
@@ -277,9 +277,9 @@ impl Core<Block> for RuntimeApi {
 	fn authorities_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
+		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-		_: ExecutionContext
 	) -> Result<NativeOrEncoded<Vec<Ed25519AuthorityId>>> {
 		unimplemented!("Not required for testing!")
 	}
@@ -287,9 +287,9 @@ impl Core<Block> for RuntimeApi {
 	fn execute_block_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
+		_: ExecutionContext,
 		_: Option<(Block)>,
 		_: Vec<u8>,
-		_: ExecutionContext
 	) -> Result<NativeOrEncoded<()>> {
 		unimplemented!("Not required for testing!")
 	}
@@ -297,71 +297,10 @@ impl Core<Block> for RuntimeApi {
 	fn initialise_block_runtime_api_impl(
 		&self,
 		_: &BlockId<Block>,
-		_: Option<&<Block as BlockT>::Header>,
-		_: Vec<u8>,
-		_: ExecutionContext
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn version_with_context_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: Option<()>,
-		_: Vec<u8>,
-		_: ExecutionContext
-	) -> Result<NativeOrEncoded<RuntimeVersion>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn authorities_with_context_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: Option<()>,
-		_: Vec<u8>,
-		_: ExecutionContext
-	) -> Result<NativeOrEncoded<Vec<Ed25519AuthorityId>>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn execute_block_with_context_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: Option<(Block)>,
-		_: Vec<u8>,
-		_: ExecutionContext
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn initialise_block_with_context_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: Option<&<Block as BlockT>::Header>,
-		_: Vec<u8>,
-		_: ExecutionContext
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn version_with_context(&self, _: &BlockId<Block>, _: ExecutionContext) -> Result<RuntimeVersion> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn authorities_with_context(&self, _: &BlockId<Block>, _: ExecutionContext) -> Result<Vec<Ed25519AuthorityId>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn execute_block_with_context(&self, _: &BlockId<Block>, _: Block, _: ExecutionContext) -> Result<()> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn initialise_block_with_context(
-		&self,
-		_: &BlockId<Block>,
-		_: &<Block as BlockT>::Header,
 		_: ExecutionContext,
-	) -> Result<()> {
+		_: Option<&<Block as BlockT>::Header>,
+		_: Vec<u8>,
+	) -> Result<NativeOrEncoded<()>> {
 		unimplemented!("Not required for testing!")
 	}
 }
@@ -383,9 +322,9 @@ impl GrandpaApi<Block> for RuntimeApi {
 	fn grandpa_authorities_runtime_api_impl(
 		&self,
 		at: &BlockId<Block>,
+		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-		_: ExecutionContext
 	) -> Result<NativeOrEncoded<Vec<(Ed25519AuthorityId, u64)>>> {
 		if at == &BlockId::Number(0) {
 			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
@@ -397,9 +336,9 @@ impl GrandpaApi<Block> for RuntimeApi {
 	fn grandpa_pending_change_runtime_api_impl(
 		&self,
 		at: &BlockId<Block>,
+		_: ExecutionContext,
 		_: Option<(&DigestFor<Block>)>,
 		_: Vec<u8>,
-		_: ExecutionContext
 	) -> Result<NativeOrEncoded<Option<ScheduledChange<NumberFor<Block>>>>> {
 		let parent_hash = match at {
 			&BlockId::Hash(at) => at,
@@ -409,55 +348,6 @@ impl GrandpaApi<Block> for RuntimeApi {
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
 		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
-	}
-
-	fn grandpa_authorities_with_context_runtime_api_impl(
-		&self,
-		at: &BlockId<Block>,
-		_: Option<()>,
-		_: Vec<u8>,
-		_: ExecutionContext
-	) -> Result<NativeOrEncoded<Vec<(Ed25519AuthorityId, u64)>>> {
-		if at == &BlockId::Number(0) {
-			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
-		} else {
-			panic!("should generally only request genesis authorities")
-		}
-	}
-
-	fn grandpa_pending_change_with_context_runtime_api_impl(
-		&self,
-		at: &BlockId<Block>,
-		_: Option<(&DigestFor<Block>)>,
-		_: Vec<u8>,
-		_: ExecutionContext
-	) -> Result<NativeOrEncoded<Option<ScheduledChange<NumberFor<Block>>>>> {
-		let parent_hash = match at {
-			&BlockId::Hash(at) => at,
-			_ => panic!("not requested by block hash!!"),
-		};
-
-		// we take only scheduled changes at given block number where there are no
-		// extrinsics.
-		Ok(self.inner.scheduled_changes.lock().get(&parent_hash).map(|c| c.clone())).map(NativeOrEncoded::Native)
-	}
-
-	fn grandpa_authorities_with_context(
-		&self,
-		at: &BlockId<Block>,
-		_: ExecutionContext
-	) -> Result<Vec<(Ed25519AuthorityId, u64)>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn grandpa_pending_change_with_context(
-		&self,
-		at: &BlockId<Block>, 
-		_: &DigestFor<Block>,
-		_: ExecutionContext)
-		-> Result<Option<ScheduledChange<NumberFor<Block>>>>
-	{
-		unimplemented!("Not required for testing!")
 	}
 }
 

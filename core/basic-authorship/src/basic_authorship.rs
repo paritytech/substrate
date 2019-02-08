@@ -32,6 +32,7 @@ use primitives::{H256, Blake2Hasher};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
 };
+use runtime_primitives::ExecutionContext;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
@@ -98,7 +99,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		let runtime_api = self.runtime_api();
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		runtime_api.inherent_extrinsics(at, inherent_data)?
+		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
 			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
 		build_ctx(&mut block_builder);

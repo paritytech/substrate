@@ -336,30 +336,15 @@ struct ToClientSideDecl<'a> {
 impl<'a> ToClientSideDecl<'a> {
 	fn fold_item_trait_items(&mut self, items: Vec<TraitItem>) -> Vec<TraitItem> {
 		let mut result = Vec::new();
-		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-		let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
-		let context_other = quote!( #crate_::runtime_api::ExecutionContext::Other );
 
 		items.into_iter().for_each(|i| match i {
 			TraitItem::Method(method) => {
-				let (fn_decl, mut fn_impl) = self.fold_trait_item_method(method.clone(), context_other.clone());
+				let (fn_decl, fn_impl, fn_decl_ctx) = self.fold_trait_item_method(method.clone());
 				result.push(fn_decl.into());
-				
-				if let Some(mut fn_impl) = fn_impl {
-					fn_impl.sig.decl.inputs.push(context_arg.clone());
-					result.push(fn_impl.into());
-				}
-
-				let mut new_method = method.clone();
-				new_method.sig.ident = Ident::new(&format!("{}_with_context", &new_method.sig.ident), Span::call_site());
-				let (mut fn_decl_ctx, mut fn_impl_ctx) = self.fold_trait_item_method(new_method, quote!( context ));
-				fn_decl_ctx.sig.decl.inputs.push(context_arg.clone());
-
 				result.push(fn_decl_ctx.into());
-				
-				if let Some(mut fn_impl_ctx) = fn_impl_ctx {
-					fn_impl_ctx.sig.decl.inputs.push(context_arg.clone());
-					result.push(fn_impl_ctx.into());
+
+				if let Some(fn_impl) = fn_impl {
+					result.push(fn_impl.into());
 				}
 			},
 			r => result.push(r),
@@ -368,11 +353,25 @@ impl<'a> ToClientSideDecl<'a> {
 		result
 	}
 
-	fn fold_trait_item_method(&mut self, method: TraitItemMethod, context: TokenStream) -> (TraitItemMethod, Option<TraitItemMethod>) {
+	fn fold_trait_item_method(&mut self, method: TraitItemMethod)
+		-> (TraitItemMethod, Option<TraitItemMethod>, TraitItemMethod) {
+		let crate_ = self.crate_;
+		let context_other = quote!( #crate_::runtime_api::ExecutionContext::Other );
 		let fn_impl = self.create_method_runtime_api_impl(method.clone());
-		let fn_decl = self.create_method_decl(method, context);
+		let fn_decl = self.create_method_decl(method.clone(), context_other);
+		let fn_decl_ctx = self.create_method_decl_with_context(method);
 
-		(fn_decl, fn_impl)
+		(fn_decl, fn_impl, fn_decl_ctx)
+	}
+
+	fn create_method_decl_with_context(&mut self, method: TraitItemMethod) -> TraitItemMethod {
+		let crate_ = self.crate_;
+		let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
+		let mut fn_decl_ctx = self.create_method_decl(method, quote!( context ));
+		fn_decl_ctx.sig.ident = Ident::new(&format!("{}_with_context", &fn_decl_ctx.sig.ident), Span::call_site());
+		fn_decl_ctx.sig.decl.inputs.insert(2, context_arg);
+
+		fn_decl_ctx
 	}
 
 	/// Takes the given method and creates a `method_runtime_api_impl` method that will be
@@ -408,6 +407,7 @@ impl<'a> ToClientSideDecl<'a> {
 				fn #name(
 					&self,
 					at: &#block_id,
+					context: #crate_::runtime_api::ExecutionContext,
 					params: Option<( #( #param_types ),* )>,
 					params_encoded: Vec<u8>,
 				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>;
@@ -478,7 +478,7 @@ impl<'a> ToClientSideDecl<'a> {
 					let runtime_api_impl_params_encoded =
 						#crate_::runtime_api::Encode::encode(&( #( &#params ),* ));
 
-					self.#name_impl(at, #param_tuple, runtime_api_impl_params_encoded, #context)
+					self.#name_impl(at, #context, #param_tuple, runtime_api_impl_params_encoded)
 						.and_then(|r|
 							match r {
 								#crate_::runtime_api::NativeOrEncoded::Native(n) => {
@@ -741,6 +741,8 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_decls = generate_runtime_decls(&api_decls);
 	let client_side_decls = generate_client_side_decls(&api_decls);
+
+	// println!("generating this declaration:\n\n{}\n\n", quote!( #client_side_decls ));
 
 	quote!(
 		#hidden_includes

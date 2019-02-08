@@ -16,7 +16,7 @@
 
 use proc_macro2::{TokenStream, Span};
 use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned,
-	FnArg, Error, ImplItemMethod};
+	FnArg, Error};
 use quote::quote;
 use std::env;
 
@@ -147,20 +147,4 @@ pub fn extract_parameter_names_types_and_borrows(fn_decl: &FnDecl)
 /// Generates the name for the native call generator function.
 pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
 	Ident::new(&format!("{}_native_call_generator", fn_name.to_string()), Span::call_site())
-}
-
-/// Generates a method with a context argument from the input `method`.
-pub fn generate_method_with_context(method: &ImplItemMethod) -> ImplItemMethod {
-	let mut ctx_method = method.clone();
-	let mut stmt = ctx_method.block.stmts.pop().unwrap();
-	if let syn::Stmt::Expr(ref mut method_call) = stmt {
-		if let syn::Expr::MethodCall(ref mut expr) = method_call {
-			expr.args.pop();
-			let default_context = parse_quote!( context );
-			expr.args.push(default_context);
-		}
-	}
-	ctx_method.sig.ident = Ident::new(&format!("{}_with_context", &ctx_method.sig.ident), Span::call_site());
-	ctx_method.block.stmts.push(stmt);
-	ctx_method
 }
