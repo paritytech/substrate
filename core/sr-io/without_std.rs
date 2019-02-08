@@ -14,21 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-
-extern crate substrate_primitives as primitives;
-extern crate hash_db;
-
 #[doc(hidden)]
-pub extern crate sr_std as rstd;
-
+pub use parity_codec as codec;
 #[doc(hidden)]
-pub extern crate parity_codec as codec;
+pub use rstd;
+pub use rstd::{mem, slice};
 
 use core::intrinsics;
 use rstd::vec::Vec;
 use hash_db::Hasher;
 use primitives::Blake2Hasher;
-pub use rstd::{mem, slice};
 
 #[panic_handler]
 #[no_mangle]

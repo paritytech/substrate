@@ -28,6 +28,8 @@ extern crate sha2;
 #[cfg(feature = "std")]
 extern crate schnorrkel;
 
+/// Creates a vector of given pairs and calls `collect` on the iterator from it.
+/// Can be used to create a `HashMap`.
 #[macro_export]
 macro_rules! map {
 	($( $name:expr => $value:expr ),*) => (
