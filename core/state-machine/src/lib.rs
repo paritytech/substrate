@@ -374,6 +374,7 @@ where
 {
 	let (result, was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
 		exec, method, call_data, compute_tx, true, native_call.take());
+
 	if was_native {
 		overlay.prospective = orig_prospective.clone();
 		let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
@@ -410,9 +411,9 @@ where
 	T: ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
 {
-
 	let (result, was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
 		exec, method, call_data, compute_tx, true, native_call.take());
+
 	if !was_native || result.is_ok() {
 		(result, storage_delta, changes_delta)
 	} else {
@@ -475,24 +476,20 @@ where
 		
 		let (result, storage_delta, changes_delta) = match manager {
 			ExecutionManager::Both(on_consensus_failure) => {
-				println!("going to execute_call_with_both_strategy --------------------------");
 				execute_call_with_both_strategy(overlay, backend, changes_trie_storage, 
 					exec, method, call_data, compute_tx, native_call.take(),
 					orig_prospective, on_consensus_failure)
 			},
 			ExecutionManager::NativeElseWasm => {
-				println!("going to execute_call_with_native_else_wasm_strategy --------------------------");
 				execute_call_with_native_else_wasm_strategy(overlay, backend, changes_trie_storage, 
 					exec, method, call_data, compute_tx, native_call.take(), orig_prospective)
 			},
 			ExecutionManager::AlwaysWasm => {
-				println!("going to execute with alwaysWasm --------------------------");
 				let (result, _, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
 					exec, method, call_data, compute_tx, false, native_call);
 				(result, storage_delta, changes_delta)
 			},
 			ExecutionManager::NativeWhenPossible => {
-				println!("going to execute with nativeWhenPossible --------------------------");
 				let (result, _was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage, 
 					exec, method, call_data, compute_tx, true, native_call);
 				(result, storage_delta, changes_delta)

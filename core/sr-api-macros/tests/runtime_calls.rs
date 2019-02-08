@@ -60,23 +60,6 @@ fn calling_native_runtime_function_with_non_decodable_return_value() {
 }
 
 #[test]
-#[should_panic]
-fn calling_with_both_strategy_should_fail() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
-	assert_eq!(runtime_api.fail_on_wasm(&block_id).unwrap(), 1);
-}
-
-#[test]
-fn calling_with_native_else_wasm_should_return_right_result() {
-	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeElseWasm);
-	let runtime_api = client.runtime_api();
-	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
-	assert_eq!(runtime_api.fail_on_native(&block_id).unwrap(), 1);
-}
-
-#[test]
 fn calling_native_runtime_signature_changed_function() {
 	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeWhenPossible);
 	let runtime_api = client.runtime_api();
@@ -94,4 +77,38 @@ fn calling_wasm_runtime_signature_changed_old_function() {
 	#[allow(deprecated)]
 	let res = runtime_api.function_signature_changed_before_version_2(&block_id).unwrap();
 	assert_eq!(&res, &[1, 2]);
+}
+
+#[test]
+#[should_panic]
+fn calling_with_both_strategy_and_fail_on_wasm_should_panic() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	assert_eq!(runtime_api.fail_on_wasm(&block_id).unwrap(), 1);
+}
+
+#[test]
+fn calling_with_both_strategy_and_fail_on_native_should_work() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	assert_eq!(runtime_api.fail_on_native(&block_id).unwrap(), 1);
+}
+
+
+#[test]
+fn calling_with_native_else_wasm_and_faild_on_wasm_should_work() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeElseWasm);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	assert_eq!(runtime_api.fail_on_wasm(&block_id).unwrap(), 1);
+}
+
+#[test]
+fn calling_with_native_else_wasm_and_fail_on_native_should_work() {
+	let client = test_client::new_with_execution_strategy(ExecutionStrategy::NativeElseWasm);
+	let runtime_api = client.runtime_api();
+	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
+	assert_eq!(runtime_api.fail_on_native(&block_id).unwrap(), 1);
 }
