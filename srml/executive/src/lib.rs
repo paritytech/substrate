@@ -207,7 +207,10 @@ impl<
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
-		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
+		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
+			primitives::BLOCK_FULL => Err(internal::ApplyError::FullBlock),
+			e => Ok(internal::ApplyOutcome::Fail(e))
+		})
 	}
 
 	fn final_checks(header: &System::Header) {
