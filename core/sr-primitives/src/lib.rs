@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
-//! and depositing logs.
+//! Runtime Modules shared primitive types.
 
 #![warn(missing_docs)]
 
@@ -43,6 +42,16 @@ pub mod testing;
 pub mod traits;
 pub mod generic;
 pub mod transaction_validity;
+
+/// Full block error message.
+///
+/// This allows modules to indicate that given transaction is potentially valid
+/// in the future, but can't be executed in the current state.
+/// Note this error should be returned early in the execution to prevent DoS,
+/// cause the fees are not being paid if this error is returned.
+///
+/// Example: block gas limit is reached (the transaction can be retried in the next block though).
+pub const BLOCK_FULL: &str = "block size limit is reached";
 
 /// Justification type.
 pub type Justification = Vec<u8>;
