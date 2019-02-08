@@ -22,7 +22,7 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 use runtime_primitives::{
-    generic, traits::{Verify, BlakeTwo256, Sr25519Signature}, OpaqueExtrinsic
+    generic, traits::{Verify, BlakeTwo256}, Sr25519Signature, OpaqueExtrinsic
 };
 
 /// An index to a block.
