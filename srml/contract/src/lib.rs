@@ -57,6 +57,8 @@
 #[macro_use]
 extern crate parity_codec_derive;
 extern crate parity_codec as codec;
+#[macro_use]
+extern crate srml_support as runtime_support;
 
 #[macro_use]
 mod gas;
@@ -75,9 +77,8 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::Codec;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
-use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module,
-	decl_storage, decl_event, Serialize, Deserialize};
+use runtime_support::dispatch::{Result, Dispatchable};
+use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 use timestamp;
