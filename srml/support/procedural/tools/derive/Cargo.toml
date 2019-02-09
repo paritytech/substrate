@@ -2,6 +2,7 @@
 name = "srml-support-procedural-tools-derive"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [lib]
 proc-macro = true

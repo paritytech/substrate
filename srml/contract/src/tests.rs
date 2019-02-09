@@ -24,7 +24,7 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorit
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
-use runtime_support::{StorageMap, StorageDoubleMap};
+use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
 use {wabt, balances, consensus};
@@ -40,6 +40,7 @@ mod contract {
 	// needs to give a name for the current crate.
 	// This hack is required for `impl_outer_event!`.
 	pub use super::super::*;
+	use srml_support::impl_outer_event;
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {
@@ -347,7 +348,7 @@ const HASH_DISPATCH_CALL: [u8; 32] = hex!("49dfdcaf9c1553be10634467e95b8e71a3bc1
 fn dispatch_call() {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	let encoded = parity_codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
 	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL).unwrap();
