@@ -19,6 +19,7 @@ sandbox = { package = "sr-sandbox", path = "../../core/sr-sandbox", default-feat
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 balances = { package = "srml-balances", path = "../balances", default-features = false }
+timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 substrate-metadata = { path = "../../core/metadata", default-features = false }
 substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
@@ -26,6 +27,7 @@ substrate-metadata-derive = { path = "../../core/metadata-derive", default-featu
 wabt = "~0.7.4"
 assert_matches = "1.1"
 hex-literal = "0.1.0"
+consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 
 [features]
 default = ["std"]
@@ -41,6 +43,7 @@ std = [
 	"sandbox/std",
 	"srml-support/std",
 	"system/std",
+	"timestamp/std",
 	"parity-wasm/std",
 	"pwasm-utils/std",
 	"substrate-metadata/std",

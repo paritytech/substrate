@@ -14,33 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate environmental;
-
-#[cfg_attr(test, macro_use)]
-extern crate substrate_primitives as primitives;
-
-extern crate substrate_state_machine;
-extern crate substrate_trie as trie;
-extern crate hash_db;
-
-extern crate tiny_keccak;
-extern crate secp256k1;
-
 #[doc(hidden)]
-pub extern crate parity_codec as codec;
+pub use parity_codec as codec;
 // re-export hashing functions.
-pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
+pub use primitives::{blake2_256, twox_128, twox_256, ed25519, Blake2Hasher};
 pub use tiny_keccak::keccak256 as keccak_256;
-
-pub use primitives::{Blake2Hasher};
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
+
+use environmental::{environmental, thread_local_impl};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
 use hash_db::Hasher;
-
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
 
@@ -253,6 +239,7 @@ pub fn print<T: Printable + Sized>(value: T) {
 #[cfg(test)]
 mod std_tests {
 	use super::*;
+	use primitives::map;
 
 	#[test]
 	fn storage_works() {

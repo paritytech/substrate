@@ -63,7 +63,6 @@ use crate::genesis;
 use consensus;
 use substrate_telemetry::telemetry;
 
-use slog::slog_info;
 use log::{info, trace, warn};
 use error_chain::bail;
 
@@ -1301,6 +1300,27 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_authorities)
 		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+	}
+
+	/// Check block preconditions.
+	fn check_block(
+		&self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+		match self.backend.blockchain().status(BlockId::Hash(hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
+			blockchain::BlockStatus::Unknown => {},
+		}
+		Ok(ImportResult::Queued)
 	}
 }
 

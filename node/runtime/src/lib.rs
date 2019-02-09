@@ -66,8 +66,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 22,
-	impl_version: 22,
+	spec_version: 25,
+	impl_version: 25,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -142,11 +142,13 @@ impl session::Trait for Runtime {
 }
 
 impl staking::Trait for Runtime {
+	type Currency = balances::Module<Self>;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
 }
 
 impl democracy::Trait for Runtime {
+	type Currency = balances::Module<Self>;
 	type Proposal = Call;
 	type Event = Event;
 }
@@ -166,6 +168,7 @@ impl council::motions::Trait for Runtime {
 }
 
 impl treasury::Trait for Runtime {
+	type Currency = balances::Module<Self>;
 	type ApproveOrigin = council_motions::EnsureMembers<_4>;
 	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
