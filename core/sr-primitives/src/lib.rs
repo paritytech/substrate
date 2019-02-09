@@ -43,6 +43,9 @@ pub mod traits;
 pub mod generic;
 pub mod transaction_validity;
 
+/// A message indicating an invalid signature in extrinsic.
+pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
+
 /// Full block error message.
 ///
 /// This allows modules to indicate that given transaction is potentially valid

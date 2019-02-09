@@ -94,7 +94,7 @@ where
 				let payload = (index, self.function);
 				let signed = context.lookup(signed)?;
 				if !crate::verify_encoded_lazy(&signature, &payload, &signed) {
-					return Err("bad signature in extrinsic")
+					return Err(crate::BAD_SIGNATURE)
 				}
 				CheckedExtrinsic {
 					signed: Some((signed, payload.0)),
