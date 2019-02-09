@@ -31,8 +31,10 @@ use syn::{
 	parse::{
 		Error,
 		Result,
-	}
+	},
+	parse_macro_input,
 };
+use quote::quote;
 
 use super::*;
 

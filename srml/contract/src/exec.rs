@@ -21,7 +21,7 @@ use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 use rstd::prelude::*;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 use timestamp;
-use runtime_support::traits::EnsureAccountLiquid;
+use srml_support::traits::EnsureAccountLiquid;
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
