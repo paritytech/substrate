@@ -17,10 +17,14 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
+use serde_derive::Serialize;
+#[cfg(feature = "std")]
+use serde_derive::Deserialize;
 use std::{fmt::Debug, ops::Deref, fmt};
-use codec::{Codec, Encode, Decode};
-use traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
-use generic::DigestItem as GenDigestItem;
+use crate::codec::{Codec, Encode, Decode};
+use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
+use crate::generic::DigestItem as GenDigestItem;
+use parity_codec_derive::{Encode, Decode};
 
 pub use substrate_primitives::{H256, Ed25519AuthorityId};
 use substrate_primitives::U256;

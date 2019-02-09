@@ -48,7 +48,7 @@ use structopt::{StructOpt, clap::AppSettings};
 pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
-	NetworkConfigurationParams, SharedParams, MergeParameters
+	NetworkConfigurationParams, SharedParams, MergeParameters, TransactionPoolParams,
 };
 pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
@@ -103,7 +103,7 @@ fn generate_node_name() -> String {
 			break node_name
 		}
 	};
-	
+
 	result
 }
 
@@ -237,6 +237,23 @@ fn parse_node_key(key: Option<String>) -> error::Result<Option<Secret>> {
 	}
 }
 
+/// Fill the given `PoolConfiguration` by looking at the cli parameters.
+fn fill_transaction_pool_configuration<F: ServiceFactory>(
+	options: &mut FactoryFullConfiguration<F>,
+	params: TransactionPoolParams,
+) -> error::Result<()> {
+	// ready queue
+	options.transaction_pool.ready.count = params.pool_limit;
+	options.transaction_pool.ready.total_bytes = params.pool_kbytes * 1024;
+
+	// future queue
+	let factor = 10;
+	options.transaction_pool.future.count = params.pool_limit / factor;
+	options.transaction_pool.future.total_bytes = params.pool_kbytes * 1024 / factor;
+
+	Ok(())
+}
+
 /// Fill the given `NetworkConfiguration` by looking at the cli parameters.
 fn fill_network_configuration(
 	cli: NetworkConfigurationParams,
@@ -354,6 +371,11 @@ where
 		spec.id(),
 		&mut config.network,
 		client_id,
+	)?;
+
+	fill_transaction_pool_configuration::<F>(
+		&mut config,
+		cli.pool_config,
 	)?;
 
 	if let Some(key) = cli.key {
