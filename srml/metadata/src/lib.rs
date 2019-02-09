@@ -189,7 +189,7 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 pub struct OuterEventMetadata {
 	pub name: DecodeDifferentStr,
 	pub events: DecodeDifferentArray<
-		(&'static str, FnEncode<&'static [EventMetadata]>),
+		(&'static str, FnEncode<Vec<EventMetadata>>),
 		(StringBuf, Vec<EventMetadata>)
 	>,
 }
@@ -199,7 +199,7 @@ pub struct OuterEventMetadata {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct EventMetadata {
 	pub name: DecodeDifferentStr,
-	pub arguments: DecodeDifferentArray<&'static str, StringBuf>,
+	pub arguments: Vec<MetadataName>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
@@ -334,7 +334,7 @@ impl Decode for RuntimeMetadataDeprecated {
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV2 {
-	pub modules: DecodeDifferentArray<ModuleMetadata>,
+	pub modules: Vec<ModuleMetadata>,
 	pub type_registry: substrate_metadata::MetadataRegistry,
 }
 
@@ -344,12 +344,12 @@ pub struct RuntimeMetadataV2 {
 pub struct ModuleMetadata {
 	pub name: DecodeDifferentStr,
 	pub prefix: DecodeDifferent<FnEncode<&'static str>, StringBuf>,
-	pub storage: Option<DecodeDifferent<FnEncode<Vec<StorageFunctionMetadata>>, Vec<StorageFunctionMetadata>>>,
-	pub calls: Option<DecodeDifferent<FnEncode<Vec<FunctionMetadata>>, Vec<FunctionMetadata>>>,
+	pub storage: ODFnA<StorageFunctionMetadata>,
+	pub calls: ODFnA<FunctionMetadata>,
 	pub event: ODFnA<EventMetadata>,
 }
 
-type ODFnA<T> = Option<DecodeDifferent<FnEncode<&'static [T]>, Vec<T>>>;
+type ODFnA<T> = Option<DecodeDifferent<FnEncode<Vec<T>>, Vec<T>>>;
 
 impl Into<primitives::OpaqueMetadata> for RuntimeMetadataPrefixed {
 	fn into(self) -> primitives::OpaqueMetadata {

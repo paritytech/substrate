@@ -55,6 +55,7 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 			#[cfg_attr(feature = "cargo-clippy", allow(useless_attribute))]
 			#[allow(rust_2018_idioms)]
 			extern crate substrate_metadata as _substrate_metadata;
+			use _substrate_metadata::rstd::prelude::*;
 			#impl_block
 		};
 	};

@@ -568,6 +568,8 @@ dependencies = [
  "srml-timestamp 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1100,6 +1102,8 @@ dependencies = [
  "serde_derive 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",
  "sr-std 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1138,6 +1142,8 @@ dependencies = [
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
  "substrate-inherents 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -1153,6 +1159,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -1168,6 +1176,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-inherents 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1201,6 +1211,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1213,6 +1225,7 @@ dependencies = [
  "serde 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
+ "substrate-metadata 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1232,6 +1245,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1254,6 +1269,8 @@ dependencies = [
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1271,6 +1288,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-support-procedural 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1291,6 +1310,8 @@ dependencies = [
  "srml-metadata 0.1.0",
  "srml-support-procedural 0.1.0",
  "substrate-inherents 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -1336,6 +1357,8 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-support 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1354,6 +1377,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-inherents 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1466,6 +1491,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-metadata"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 0.1.0",
+]
+
+[[package]]
+name = "substrate-metadata-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2 0.4.26 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.15.26 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "substrate-panic-handler"
 version = "0.1.0"
 dependencies = [
@@ -1492,6 +1538,8 @@ dependencies = [
  "serde 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
  "twox-hash 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",

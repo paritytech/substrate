@@ -76,7 +76,7 @@ macro_rules! __runtime_modules_to_metadata {
 		$runtime:ident;
 		$( $metadata:expr ),*;
 	) => {
-		$crate::metadata::DecodeDifferent::Encode(&[ $( $metadata ),* ])
+		vec![ $( $metadata ),* ]
 	};
 }
 

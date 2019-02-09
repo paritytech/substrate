@@ -130,7 +130,7 @@ macro_rules! decl_event {
 		}
 		impl Event {
 			#[allow(dead_code)]
-			pub fn metadata() -> &'static [ $crate::event::EventMetadata ] {
+			pub fn metadata() -> $crate::rstd::vec::Vec<$crate::event::EventMetadata> {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
 		}
@@ -229,9 +229,9 @@ macro_rules! __decl_generic_event {
 		impl<$( $generic_param ),*> From<RawEvent<$( $generic_param ),*>> for () {
 			fn from(_: RawEvent<$( $generic_param ),*>) -> () { () }
 		}
-		impl<$( $generic_param ),*> RawEvent<$( $generic_param ),*> {
+		impl<$( $generic_param: $crate::substrate_metadata::EncodeMetadata),*> RawEvent<$( $generic_param ),*> {
 			#[allow(dead_code)]
-			pub fn metadata() -> &'static [$crate::event::EventMetadata] {
+			pub fn metadata() -> $crate::rstd::vec::Vec<$crate::event::EventMetadata> {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
 		}
@@ -247,13 +247,13 @@ macro_rules! __events_to_metadata {
 		$event:ident $( ( $( $param:path ),* ) )*,
 		$( $rest:tt )*
 	) => {
-		__events_to_metadata!(
+		$crate::__events_to_metadata!(
 			$( $metadata, )*
 			$crate::event::EventMetadata {
 				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),
-				arguments: $crate::event::DecodeDifferent::Encode(&[
-					$( $( stringify!($param) ),* )*
-				]),
+				arguments: vec![
+					$( $( <$param as $crate::substrate_metadata::EncodeMetadata>::type_name() ),* )*
+				],
 				documentation: $crate::event::DecodeDifferent::Encode(&[
 					$( $doc_attr ),*
 				]),
@@ -264,7 +264,7 @@ macro_rules! __events_to_metadata {
 	(
 		$( $metadata:expr ),*;
 	) => {
-		&[ $( $metadata ),* ]
+		vec![ $( $metadata ),* ]
 	}
 }
 
@@ -434,13 +434,13 @@ macro_rules! __impl_outer_event_json_metadata {
 				}
 			}
 			#[allow(dead_code)]
-			pub fn __module_events_system() -> &'static [$crate::event::EventMetadata] {
+			pub fn __module_events_system() -> $crate::rstd::vec::Vec<$crate::event::EventMetadata> {
 				system::Event::metadata()
 			}
 			$(
 				#[allow(dead_code)]
 				$crate::paste::item!{
-					pub fn [< __module_events_ $module_name >] () -> &'static [$crate::event::EventMetadata] {
+					pub fn [< __module_events_ $module_name >] () -> $crate::rstd::vec::Vec<$crate::event::EventMetadata> {
 						$module_name::Event $( ::<$generic_param> )* ::metadata()
 					}
 				}

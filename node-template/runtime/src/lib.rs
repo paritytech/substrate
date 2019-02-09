@@ -29,6 +29,7 @@ use client::{
 use version::RuntimeVersion;
 #[cfg(feature = "std")]
 use version::NativeVersion;
+use substrate_metadata_derive::EncodeMetadata;
 
 // A few exports that help ease life for downstream crates.
 #[cfg(any(feature = "std", test))]
@@ -38,7 +39,7 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
-pub use support::{StorageValue, construct_runtime};
+pub use srml_support::{StorageValue, construct_runtime};
 
 /// Alias to Ed25519 pubkey that identifies an account on the chain.
 pub type AccountId = primitives::H256;
@@ -60,7 +61,7 @@ pub mod opaque {
 	use super::*;
 
 	/// Opaque, encoded, unchecked extrinsic.
-	#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+	#[derive(PartialEq, Eq, Clone, Default, Encode, Decode, EncodeMetadata)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 	pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 	impl traits::Extrinsic for UncheckedExtrinsic {
