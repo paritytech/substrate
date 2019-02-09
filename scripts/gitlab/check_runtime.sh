@@ -1,23 +1,13 @@
 #!/bin/sh
-# 
-# 
-# check for any changes in the node/src/runtime, srml/ and core/sr_* trees. if 
-# there are any changes found, it should mark the PR breaksconsensus and 
-# "auto-fail" the PR in some way unless a) the runtime is rebuilt and b) there 
+#
+#
+# check for any changes in the node/src/runtime, srml/ and core/sr_* trees. if
+# there are any changes found, it should mark the PR breaksconsensus and
+# "auto-fail" the PR in some way unless a) the runtime is rebuilt and b) there
 # isn't a change in the runtime/src/lib.rs file that alters the version.
 
 set -e # fail on any error
 
-
-echo
-echo "# development of wasm rebuild automation"
-curl -sS -X POST \
-	-F "token=${CI_JOB_TOKEN}" \
-	-F "ref=master" \
-	-F "variables[REBUILD_WASM]=true" \
-	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
-	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
-exit 0 
 
 
 # give some context
@@ -60,7 +50,7 @@ do
 	then
 		cat <<-EOT
 		
-		changes to the runtime sources and changes in the spec version and wasm 
+		changes to the runtime sources and changes in the spec version and wasm
 		binary blob.
 	
 		${version}: ${sub_version} -> ${add_version}
@@ -96,10 +86,31 @@ curl -sS -X POST \
 	-F "variables[BREAKSAPI]=true" \
 	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
 	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
- 
 
 
 
+cat <<-EOT
+
+# wasm rebuild automation
+
+a job will be triggered in gitlab github-api project that will rebuild the
+wasm runtime for this pr and will then create a pull request to its feature
+branch.
+
+
+EOT
+
+curl -sS -X POST -o trigger.json \
+	-F "token=${CI_JOB_TOKEN}" \
+	-F "ref=master" \
+	-F "variables[REBUILD_WASM]=true" \
+	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
+	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+
+echo "see $(jq -r .web_url trigger.json)"
+echo
+
+rm -fv trigger.json
 exit 1
 
 # vim: noexpandtab

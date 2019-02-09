@@ -64,7 +64,6 @@ test:rust:stable:                  &test
     RUSTFLAGS: -Cdebug-assertions=y
     TARGET: native
   only:
-    - triggers
     - tags
     - master
     - schedules
