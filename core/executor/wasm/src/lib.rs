@@ -65,7 +65,7 @@ impl_stubs!(
 		// be possible to read an 8 byte prefix in front of
 		// the pointer. Our current allocator strategy
 		// requires such a prefix.
-		let invalid_ptr = 1u8 as *mut u8;
+		let invalid_ptr = 0u8 as *mut u8;
 		let layout = ::core::alloc::Layout::new::<u32>();
 		unsafe { alloc::alloc::dealloc(invalid_ptr, layout); }
 		Vec::new()
