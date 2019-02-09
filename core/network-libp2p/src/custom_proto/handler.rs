@@ -24,7 +24,7 @@ use libp2p::core::{
 	protocols_handler::ProtocolsHandlerUpgrErr,
 	upgrade::{InboundUpgrade, OutboundUpgrade}
 };
-use log::{trace, warn};
+use log::trace;
 use smallvec::SmallVec;
 use std::{fmt, io, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -127,6 +127,12 @@ pub enum CustomProtosHandlerOut {
 		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
 		messages: Vec<Bytes>,
+	},
+
+	/// An error has happened on the protocol level with this node.
+	ProtocolError {
+		/// The error that happened.
+		error: ProtocolsHandlerUpgrErr<io::Error>,
 	},
 }
 
@@ -286,8 +292,11 @@ where
 	fn inject_inbound_closed(&mut self) {}
 
 	#[inline]
-	fn inject_dial_upgrade_error(&mut self, _: Self::OutboundOpenInfo, err: ProtocolsHandlerUpgrErr<io::Error>) {
-		warn!(target: "sub-libp2p", "Error while opening custom protocol: {:?}", err);
+	fn inject_dial_upgrade_error(&mut self, _: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<io::Error>) {
+		if let State::Normal = self.state {
+			let event = CustomProtosHandlerOut::ProtocolError { error };
+			self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+		}
 
 		// Right now if the remote doesn't support one of the custom protocols, we shut down the
 		// entire connection. This is a hack-ish solution to the problem where we connect to nodes
