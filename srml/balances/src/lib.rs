@@ -145,10 +145,10 @@ decl_storage! {
 
 		// Payment stuff.
 
-		/// The fee to be paid for making a transaction; the base.
-		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
+//		/// The fee to be paid for making a transaction; the base.
+//		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
+//		/// The fee to be paid for making a transaction; the per-byte portion.
+//		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;

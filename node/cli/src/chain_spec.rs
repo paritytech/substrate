@@ -64,8 +64,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		system: None,
 		balances: Some(BalancesConfig {
 			balances: endowed_accounts.iter().map(|&k| (k, 10_000_000 * DOLLARS)).collect(),
-			transaction_base_fee: 1 * CENTS,
-			transaction_byte_fee: 10 * MILLICENTS,
 			existential_deposit: 1 * DOLLARS,
 			transfer_fee: 1 * CENTS,
 			creation_fee: 1 * CENTS,
@@ -195,8 +193,6 @@ pub fn testnet_genesis(
 			ids: endowed_accounts.iter().map(|x| x.0.into()).collect(),
 		}),
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
