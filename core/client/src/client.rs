@@ -63,7 +63,6 @@ use crate::genesis;
 use consensus;
 use substrate_telemetry::telemetry;
 
-use slog::slog_info;
 use log::{info, trace, warn};
 use error_chain::bail;
 

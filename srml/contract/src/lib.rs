@@ -79,6 +79,7 @@ use codec::Codec;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use runtime_support::dispatch::{Result, Dispatchable};
 use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
+use runtime_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 use timestamp;
@@ -369,7 +370,7 @@ impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	}
 }
 
-impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());

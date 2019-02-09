@@ -20,6 +20,8 @@
 
 #[cfg(test)]
 extern crate substrate_primitives;
+#[cfg(test)]
+extern crate srml_balances as balances;
 
 #[macro_use]
 extern crate parity_codec_derive;
@@ -30,13 +32,13 @@ extern crate srml_support;
 extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
-extern crate srml_balances as balances;
 extern crate srml_system as system;
 
 use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, As};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
+use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
@@ -77,7 +79,11 @@ impl Vote {
 	}
 }
 
-pub trait Trait: balances::Trait + Sized {
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+
+pub trait Trait: system::Trait + Sized {
+	type Currency: Currency<<Self as system::Trait>::AccountId>;
+
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -91,12 +97,12 @@ decl_module! {
 		fn propose(
 			origin,
 			proposal: Box<T::Proposal>,
-			#[compact] value: T::Balance
+			#[compact] value: BalanceOf<T>
 		) {
 			let who = ensure_signed(origin)?;
 
 			ensure!(value >= Self::minimum_deposit(), "value too low");
-			<balances::Module<T>>::reserve(&who, value)
+			T::Currency::reserve(&who, value)
 				.map_err(|_| "proposer's balance too low")?;
 
 			let index = Self::public_prop_count();
@@ -113,7 +119,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			let mut deposit = Self::deposit_of(proposal)
 				.ok_or("can only second an existing proposal")?;
-			<balances::Module<T>>::reserve(&who, deposit.0)
+			T::Currency::reserve(&who, deposit.0)
 				.map_err(|_| "seconder's balance too low")?;
 			deposit.1.push(who);
 			<DepositOf<T>>::insert(proposal, deposit);
@@ -125,7 +131,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			ensure!(vote.multiplier() <= Self::max_lock_periods(), "vote has too great a strength");
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-			ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
+			ensure!(!T::Currency::total_balance(&who).is_zero(),
 					"transactor must have balance to signal approval.");
 			if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
 				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
@@ -192,11 +198,11 @@ decl_storage! {
 		/// The public proposals. Unsorted.
 		pub PublicProps get(public_props): Vec<(PropIndex, T::Proposal, T::AccountId)>;
 		/// Those who have locked a deposit.
-		pub DepositOf get(deposit_of): map PropIndex => Option<(T::Balance, Vec<T::AccountId>)>;
+		pub DepositOf get(deposit_of): map PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 		/// How often (in blocks) new public referenda are launched.
 		pub LaunchPeriod get(launch_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
-		pub MinimumDeposit get(minimum_deposit) config(): T::Balance;
+		pub MinimumDeposit get(minimum_deposit) config(): BalanceOf<T>;
 		/// The delay before enactment for all public referenda.
 		pub PublicDelay get(public_delay) config(): T::BlockNumber;
 		/// The maximum number of additional lock periods a voter may offer to strengthen their vote. Multiples of `PublicDelay`.
@@ -229,7 +235,7 @@ decl_storage! {
 
 decl_event!(
 	/// An event in this module.
-	pub enum Event<T> where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId {
+	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
 		Tabled(PropIndex, Balance, Vec<AccountId>),
 		Started(ReferendumIndex, VoteThreshold),
 		Passed(ReferendumIndex),
@@ -244,8 +250,8 @@ impl<T: Trait> Module<T> {
 
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
 	/// index.
-	pub fn locked_for(proposal: PropIndex) -> Option<T::Balance> {
-		Self::deposit_of(proposal).map(|(d, l)| d * T::Balance::sa(l.len() as u64))
+	pub fn locked_for(proposal: PropIndex) -> Option<BalanceOf<T>> {
+		Self::deposit_of(proposal).map(|(d, l)| d * BalanceOf::<T>::sa(l.len() as u64))
 	}
 
 	/// Return true if `ref_index` is an on-going referendum.
@@ -273,17 +279,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Get the voters for the current proposal.
-	pub fn tally(ref_index: ReferendumIndex) -> (T::Balance, T::Balance, T::Balance) {
+	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		Self::voters_for(ref_index).iter()
 			.map(|voter| (
-				<balances::Module<T>>::total_balance(voter),
+				T::Currency::total_balance(voter),
 				Self::vote_of((ref_index, voter.clone())),
 			))
 			.map(|(bal, vote)|
 				if vote.is_aye() {
-					(bal * T::Balance::sa(vote.multiplier() as u64), Zero::zero(), bal)
+					(bal * BalanceOf::<T>::sa(vote.multiplier() as u64), Zero::zero(), bal)
 				} else {
-					(Zero::zero(), bal * T::Balance::sa(vote.multiplier() as u64), bal)
+					(Zero::zero(), bal * BalanceOf::<T>::sa(vote.multiplier() as u64), bal)
 				}
 			).fold((Zero::zero(), Zero::zero(), Zero::zero()), |(a, b, c), (d, e, f)| (a + d, b + e, c + f))
 	}
@@ -345,10 +351,10 @@ impl<T: Trait> Module<T> {
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 			<PublicProps<T>>::put(public_props);
 
-			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (T::Balance, Vec<T::AccountId>) =
+			if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (BalanceOf<T>, Vec<T::AccountId>) =
 				// refund depositors
 				for d in &depositors {
-					<balances::Module<T>>::unreserve(d, deposit);
+					T::Currency::unreserve(d, deposit);
 				}
 				Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
 				Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove, Self::public_delay())?;
@@ -360,7 +366,7 @@ impl<T: Trait> Module<T> {
 
 	fn bake_referendum(now: T::BlockNumber, index: ReferendumIndex, info: ReferendumInfo<T::BlockNumber, T::Proposal>) -> Result {
 		let (approve, against, capital) = Self::tally(index);
-		let total_issuance = <balances::Module<T>>::total_issuance();
+		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
 		let lock_period = Self::public_delay();
 
@@ -414,13 +420,13 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<Bondage<T>>::remove(who);
 	}
 }
 
-impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
+impl<T: Trait> EnsureAccountLiquid<T::AccountId> for Module<T> {
 	fn ensure_account_liquid(who: &T::AccountId) -> Result {
 		if Self::bondage(who) <= <system::Module<T>>::block_number() {
 			Ok(())
@@ -477,6 +483,7 @@ mod tests {
 		type Event = ();
 	}
 	impl Trait for Test {
+		type Currency = balances::Module<Self>;
 		type Proposal = Call;
 		type Event = ();
 	}

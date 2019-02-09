@@ -19,10 +19,10 @@
 use std::{sync::Arc, net::SocketAddr, marker::PhantomData, ops::Deref, ops::DerefMut};
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
-use chain_spec::ChainSpec;
+use crate::chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
-use {error, Service, maybe_start_server};
+use crate::{error, Service, maybe_start_server};
 use consensus_common::import_queue::ImportQueue;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -30,7 +30,7 @@ use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as 
 use runtime_primitives::{
 	BuildStorage, traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId
 };
-use config::Configuration;
+use crate::config::Configuration;
 use primitives::{Blake2Hasher, H256};
 use rpc::{self, apis::system::SystemInfo};
 use parking_lot::Mutex;
@@ -535,7 +535,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
+	use parity_codec::Encode;
 	use consensus_common::BlockOrigin;
 	use substrate_test_client::{
 		self,

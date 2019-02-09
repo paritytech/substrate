@@ -66,6 +66,7 @@ impl timestamp::Trait for Test {
 	type OnTimestampSet = ();
 }
 impl Trait for Test {
+	type Currency = balances::Module<Self>;
 	type OnRewardMinted = ();
 	type Event = ();
 }
