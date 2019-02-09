@@ -128,6 +128,10 @@ impl FreeingBumpHeapAllocator {
 	/// Deallocates the space which was allocated for a pointer.
 	pub fn deallocate(&mut self, ptr: u32) -> Result<(), UserError> {
 		let ptr = ptr - self.ptr_offset;
+		if ptr < 8 {
+			return Err(UserError("Invalid pointer for deallocation"));
+		}
+
 		let list_index = self.get_heap_byte(ptr - 8)
 			.map_err(|_| UserError("Unable to access pointer prefix"))? as usize;
 		for i in 1..8 {
