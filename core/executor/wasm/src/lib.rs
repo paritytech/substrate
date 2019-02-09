@@ -59,6 +59,17 @@ impl_stubs!(
 		b"all ok!".to_vec()
 	},
 	test_empty_return => |_| Vec::new(),
+	test_exhaust_heap => |_| Vec::with_capacity(16777216),
+	test_deallocate_undefined_pointer => |_| {
+		// Freeing this pointer is invalid, since it won't
+		// be possible to read an 8 byte prefix in front of
+		// the pointer. Our current allocator strategy
+		// requires such a prefix.
+		let invalid_ptr = 1u8 as *mut u8;
+		let layout = ::core::alloc::Layout::new::<u32>();
+		unsafe { alloc::alloc::dealloc(invalid_ptr, layout); }
+		Vec::new()
+	},
 	test_panic => |_| panic!("test panic"),
 	test_conditional_panic => |input: &[u8]| {
 		if input.len() > 0 {
