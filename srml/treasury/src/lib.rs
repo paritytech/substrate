@@ -37,6 +37,9 @@ extern crate serde;
 #[macro_use]
 extern crate parity_codec_derive;
 
+#[macro_use]
+extern crate substrate_metadata_derive;
+
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;

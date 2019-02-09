@@ -19,6 +19,7 @@
 use crate::rstd::result;
 use crate::codec::Codec;
 use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, As};
+use substrate_metadata::EncodeMetadata;
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -82,7 +83,7 @@ pub enum UpdateBalanceOutcome {
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default + EncodeMetadata;
 
 	// PUBLIC IMMUTABLES
 
