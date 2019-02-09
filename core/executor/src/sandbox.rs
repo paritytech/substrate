@@ -652,32 +652,6 @@ mod tests {
 	}
 
 	#[test]
-	fn sandbox_should_trap_on_invalid_deallocation() {
-		let mut ext = TestExternalities::<Blake2Hasher>::default();
-		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-
-		let code = wabt::wat2wasm(r#"
-		(module
-			(import "env" "assert" (func $assert (param i32)))
-			(func (export "call")
-				i32.const 0
-				call $assert
-			)
-		)
-		"#).unwrap();
-
-		let res = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_deallocate_undefined_pointer", &code);
-		assert_eq!(res.is_err(), true);
-		if let Err(err) = res {
-			let inner_err = err.iter().next().unwrap();
-			assert_eq!(
-				format!("{}", inner_err),
-				format!("{}", wasmi::Error::Trap(trap("Unable to access pointer prefix")))
-			);
-		}
-	}
-
-	#[test]
 	fn start_called() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
