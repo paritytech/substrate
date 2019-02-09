@@ -25,6 +25,7 @@ then
 	no changes to the runtime source code detected
 
 	EOT
+
 	exit 0
 fi
 
@@ -61,7 +62,15 @@ binary blob. This may break the api.
 
 EOT
 
-
+echo
+echo "# run github-api job for labelling it breaksapi"
+curl -sS -X POST \
+	-F "token=${CI_JOB_TOKEN}" \
+	-F "ref=master" \
+	-F "variables[BREAKSAPI]=true" \
+	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
+	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+ 
 
 
 

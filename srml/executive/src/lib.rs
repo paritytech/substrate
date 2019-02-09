@@ -19,7 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
-#[macro_use]
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]
@@ -208,7 +207,10 @@ impl<
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
-		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
+		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
+			primitives::BLOCK_FULL => Err(internal::ApplyError::FullBlock),
+			e => Ok(internal::ApplyOutcome::Fail(e))
+		})
 	}
 
 	fn final_checks(header: &System::Header) {
@@ -302,6 +304,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
+	use runtime_support::traits::Currency;
 	use system;
 
 	impl_outer_origin! {

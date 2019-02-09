@@ -16,11 +16,11 @@ ctrlc = { version = "3.0", features = ["termination"] }
 log = "0.4"
 tokio = "0.1"
 exit-future = "0.1"
-parking_lot = "0.4"
+parking_lot = "0.7.1"
 hex-literal = "0.1"
 slog = "^2"
 parity-codec = "3.0"
-trie-root = "0.9"
+trie-root = "0.11.0"
 sr-io = { path = "../core/sr-io" }
 substrate-cli = { path = "../core/cli" }
 primitives = { package = "substrate-primitives", path = "../core/primitives" }
