@@ -18,13 +18,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate srml_support as runtime_support;
-
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use runtime_support::storage::StorageValue;
+use srml_support::storage::StorageValue;
+use srml_support::{decl_storage, decl_module};
 use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
