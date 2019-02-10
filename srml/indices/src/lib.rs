@@ -19,16 +19,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// We need these `extern crate` to be placed here otherwise there will be errors.
-// TODO: https://github.com/paritytech/substrate/issues/1509
-#[macro_use]
-extern crate srml_support as runtime_support;
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-
 use rstd::{prelude::*, result, marker::PhantomData};
-use codec::{Encode, Decode, Codec, Input, Output};
-use runtime_support::{StorageValue, StorageMap, Parameter};
+use parity_codec::{Encode, Decode, Codec, Input, Output};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
 use system::{IsDeadAccount, OnNewAccount};
 

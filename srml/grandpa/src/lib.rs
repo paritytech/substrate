@@ -27,39 +27,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[allow(unused_imports)]
-#[macro_use]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
+// re-export since this is necessary for `impl_apis` in runtime.
+pub use substrate_finality_grandpa_primitives as fg_primitives;
 
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-extern crate parity_codec;
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate sr_primitives as primitives;
-extern crate parity_codec as codec;
-extern crate srml_system as system;
-extern crate srml_session as session;
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-
-// re-export since this is necessary for `impl_apis` in runtime.
-pub extern crate substrate_finality_grandpa_primitives as fg_primitives;
-
+use serde_derive::Serialize;
 use rstd::prelude::*;
+use parity_codec as codec;
+use parity_codec_derive::{Encode, Decode};
 use fg_primitives::ScheduledChange;
-use runtime_support::Parameter;
-use runtime_support::dispatch::Result;
-use runtime_support::storage::StorageValue;
-use runtime_support::storage::unhashed::StorageVec;
+use srml_support::{Parameter, decl_event, decl_storage, decl_module};
+use srml_support::dispatch::Result;
+use srml_support::storage::StorageValue;
+use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::{CurrentHeight, Convert};
 use substrate_primitives::Ed25519AuthorityId;
 use system::ensure_signed;
@@ -71,7 +51,7 @@ mod tests;
 struct AuthorityStorageVec<S: codec::Codec + Default>(rstd::marker::PhantomData<S>);
 impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 	type Item = (S, u64);
-	const PREFIX: &'static [u8] = ::fg_primitives::well_known_keys::AUTHORITY_PREFIX;
+	const PREFIX: &'static [u8] = crate::fg_primitives::well_known_keys::AUTHORITY_PREFIX;
 }
 
 /// The log type of this crate, projected from module trait type.
@@ -162,12 +142,12 @@ decl_storage! {
 			let auth_count = config.authorities.len() as u32;
 			config.authorities.iter().enumerate().for_each(|(i, v)| {
 				storage.insert((i as u32).to_keyed_vec(
-					::fg_primitives::well_known_keys::AUTHORITY_PREFIX),
+					crate::fg_primitives::well_known_keys::AUTHORITY_PREFIX),
 					v.encode()
 				);
 			});
 			storage.insert(
-				::fg_primitives::well_known_keys::AUTHORITY_COUNT.to_vec(),
+				crate::fg_primitives::well_known_keys::AUTHORITY_COUNT.to_vec(),
 				auth_count.encode(),
 			);
 		});
