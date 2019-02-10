@@ -18,16 +18,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate srml_support as runtime_support;
-
+#[cfg(feature = "std")]
+use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
 use codec::Encode;
 use parity_codec_derive::{Encode, Decode};
-use runtime_support::{storage, Parameter};
-use runtime_support::storage::StorageValue;
-use runtime_support::storage::unhashed::StorageVec;
+use srml_support::{storage, Parameter, decl_storage, decl_module};
+use srml_support::storage::StorageValue;
+use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, Member};
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
