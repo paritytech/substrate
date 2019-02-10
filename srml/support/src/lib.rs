@@ -78,7 +78,7 @@ macro_rules! fail {
 macro_rules! ensure {
 	( $x:expr, $y:expr ) => {{
 		if !$x {
-			fail!($y);
+			$crate::fail!($y);
 		}
 	}}
 }
@@ -88,7 +88,7 @@ macro_rules! ensure {
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
 		let h = runtime_io::storage_root();
-		assert_err!($x, $y);
+		$crate::assert_err!($x, $y);
 		assert_eq!(h, runtime_io::storage_root());
 	}
 }
