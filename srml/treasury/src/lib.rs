@@ -18,32 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate srml_balances as balances;
-
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-extern crate sr_primitives as runtime_primitives;
-extern crate srml_system as system;
-
+use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
-use runtime_support::{StorageValue, StorageMap};
-use runtime_support::traits::{Currency, OnDilution};
+use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
+use srml_support::traits::{Currency, OnDilution};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
+use parity_codec_derive::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -277,6 +258,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
+	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256, OnFinalise, IdentityLookup};

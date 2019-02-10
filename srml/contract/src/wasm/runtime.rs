@@ -23,7 +23,7 @@ use sandbox;
 use system;
 use rstd::prelude::*;
 use rstd::mem;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use runtime_primitives::traits::{As, CheckedMul, Bounded};
 
 /// Enumerates all possible *special* trap conditions.

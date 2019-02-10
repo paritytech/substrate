@@ -24,16 +24,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate srml_support as runtime_support;
-
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
-use runtime_support::{StorageValue, StorageMap, Parameter};
-use runtime_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero};
-use runtime_support::dispatch::Result;
+use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
+use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero};
+use srml_support::dispatch::Result;
 use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
 	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
