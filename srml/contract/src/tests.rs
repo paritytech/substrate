@@ -170,6 +170,7 @@ impl ExtBuilder {
 				existential_deposit: self.existential_deposit,
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
+				vesting: vec![],
 			}
 			.build_storage()
 			.unwrap()

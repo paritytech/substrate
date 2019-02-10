@@ -108,6 +108,7 @@ pub fn new_test_ext(
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,
+		vesting: vec![],
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,

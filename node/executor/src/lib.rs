@@ -269,6 +269,7 @@ mod tests {
 				existential_deposit: 0,
 				transfer_fee: 0,
 				creation_fee: 0,
+				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
