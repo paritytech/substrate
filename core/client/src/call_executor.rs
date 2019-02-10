@@ -19,7 +19,7 @@ use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, native_else_wasm
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, native_else_wasm, ExecutionStrategy
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
@@ -47,6 +47,7 @@ where
 		id: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
+		strategy: ExecutionStrategy,
 	) -> Result<Vec<u8>, error::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -163,7 +164,8 @@ where
 	fn call(&self,
 		id: &BlockId<Block>,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
+		strategy: ExecutionStrategy
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
@@ -176,7 +178,7 @@ where
 			&self.executor,
 			method,
 			call_data,
-			native_else_wasm(),
+			strategy.get_manager(),
 			false,
 			None,
 		)
