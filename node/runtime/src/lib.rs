@@ -66,8 +66,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 25,
-	impl_version: 25,
+	spec_version: 26,
+	impl_version: 26,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -257,10 +257,10 @@ impl_runtime_apis! {
 
 	impl client_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
-			// Runtime::metadata().into()
-			let metadata = Runtime::metadata();
-			println!("{:#?}", metadata);
-			metadata.into()
+			Runtime::metadata().into()
+			// let metadata = Runtime::metadata();
+			// println!("{:#?}", metadata);
+			// metadata.into()
 		}
 	}
 

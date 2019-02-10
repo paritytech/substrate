@@ -71,6 +71,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};

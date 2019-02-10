@@ -1496,6 +1496,8 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -1509,6 +1511,8 @@ dependencies = [
  "srml-consensus 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]

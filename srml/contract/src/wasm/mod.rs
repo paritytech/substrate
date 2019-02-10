@@ -24,6 +24,7 @@ use crate::gas::GasMeter;
 
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
 use sandbox;
 
 #[macro_use]

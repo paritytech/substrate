@@ -25,6 +25,7 @@ use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_eve
 use srml_support::traits::{Currency, OnDilution};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
