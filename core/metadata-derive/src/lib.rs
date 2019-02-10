@@ -9,24 +9,53 @@ extern crate quote;
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use syn::{DeriveInput, Generics, Ident};
+use syn::{DeriveInput, Generics, Ident, GenericParam};
 
 mod encode;
 
 
 #[proc_macro_derive(EncodeMetadata)]
 pub fn encode_derive(input: TokenStream) -> TokenStream {
-	let mut input: DeriveInput = match syn::parse(input) {
+	let input: DeriveInput = match syn::parse(input) {
 		Ok(input) => input,
 		Err(e) => return e.to_compile_error().into(),
 	};
 
-	if let Err(e) = add_trait_bounds(&mut input.generics, &input.data, parse_quote!(_substrate_metadata::EncodeMetadata)) {
-		return e.to_compile_error().into();
-	}
+	let generics = add_trait_bounds(input.generics, parse_quote!(_substrate_metadata::EncodeMetadata));
+
+	let generic_types = generics.params.iter().map(|param| {
+		if let GenericParam::Type(ref type_param) = *param {
+			Some(type_param.ident.clone())
+		} else {
+			None
+		}
+	})
+	.filter(Option::is_some)
+	.collect::<Vec<_>>();
 
 	let name = &input.ident;
-	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+	let impl_type_name = if generic_types.is_empty() {
+		quote! {
+			fn type_name() -> _substrate_metadata::MetadataName {
+				_substrate_metadata::MetadataName::Custom(module_path!().into(), stringify!(#name).into())
+			}
+		}
+	} else {
+		let generic_type_names = generic_types.into_iter().map(|t| {
+			quote! {
+				<#t as _substrate_metadata::EncodeMetadata>::type_name()
+			}
+		});
+		quote! {
+			fn type_name() -> _substrate_metadata::MetadataName {
+				_substrate_metadata::MetadataName::CustomWithGenerics(module_path!().into(), stringify!(#name).into(), vec![
+					#( #generic_type_names ),*
+				])
+			}
+		}
+	};
+
+	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
 	let registry = quote!(registry);
 
@@ -34,9 +63,7 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 
 	let impl_block = quote! {
 		impl #impl_generics _substrate_metadata::EncodeMetadata for #name #ty_generics #where_clause {
-			fn type_name() -> _substrate_metadata::MetadataName {
-				_substrate_metadata::MetadataName::Custom(module_path!().into(), stringify!(#name).into())
-			}
+			#impl_type_name
 
 			fn type_metadata_kind(registry: &mut _substrate_metadata::MetadataRegistry) -> _substrate_metadata::TypeMetadataKind {
 				#metadata_kind
@@ -63,48 +90,11 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 	generated.into()
 }
 
-fn add_trait_bounds(generics: &mut Generics, data: &syn::Data, bound: syn::Path) -> Result<(), syn::Error> {
-	if generics.params.is_empty() {
-		return Ok(());
+fn add_trait_bounds(mut generics: Generics, bounds: syn::TypeParamBound) -> Generics {
+	for param in &mut generics.params {
+		if let GenericParam::Type(ref mut type_param) = *param {
+			type_param.bounds.push(bounds.clone());
+		}
 	}
-
-	let types = collect_types(&data)?;
-	if !types.is_empty() {
-		let where_clause = generics.make_where_clause();
-
-		types.into_iter().for_each(|ty| where_clause.predicates.push(parse_quote!(#ty : #bound)));
-	}
-
-	Ok(())
+	generics
 }
-
-fn collect_types(data: &syn::Data) -> Result<Vec<syn::Type>, syn::Error> {
-	use syn::*;
-
-	let types = match *data {
-		Data::Struct(ref data) => match &data.fields {
-			| Fields::Named(FieldsNamed { named: fields , .. })
-			| Fields::Unnamed(FieldsUnnamed { unnamed: fields, .. }) => {
-				fields.iter().map(|f| f.ty.clone()).collect()
-			},
-
-			Fields::Unit => { Vec::new() },
-		},
-
-		Data::Enum(ref data) => data.variants.iter().flat_map(|variant| {
-			match &variant.fields {
-				| Fields::Named(FieldsNamed { named: fields , .. })
-				| Fields::Unnamed(FieldsUnnamed { unnamed: fields, .. }) => {
-					fields.iter().map(|f| f.ty.clone()).collect()
-				},
-
-				Fields::Unit => { Vec::new() },
-			}
-		}).collect(),
-
-		Data::Union(_) => return Err(Error::new(Span::call_site(), "Union types are not supported.")),
-	};
-
-	Ok(types)
-}
-

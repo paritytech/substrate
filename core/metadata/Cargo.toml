@@ -11,6 +11,9 @@ serde_derive = { version = "1.0", optional = true }
 sr-std = { path = "../sr-std", default-features = false }
 primitive-types = { version = "0.2", default-features = false, features = ["codec"] }
 
+[dev-dependencies]
+substrate-metadata-derive = { path = "../metadata-derive" }
+
 [features]
 default = ["std"]
 std = [

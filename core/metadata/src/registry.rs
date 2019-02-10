@@ -5,7 +5,7 @@ use rstd::prelude::*;
 #[derive(Encode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct MetadataRegistry {
-	list: Vec<TypeMetadata>,
+	pub list: Vec<TypeMetadata>,
 }
 
 impl MetadataRegistry {
@@ -20,20 +20,24 @@ impl MetadataRegistry {
 	>(&mut self, name: MetadataName, f: F) {
 		// simple primitive types are ignored to reduce storage usage
 		// and they are assumed to be decodable by all valid decoder implementations
-		// TODO: only save metadata with custom names. i.e. No need to save Vec<MyStruct> but MyStruct needs to be saved
 		let should_ignore = match name {
 			MetadataName::Custom(_, _) => false,
-			MetadataName::Array(_, _) => false,
-			MetadataName::Vector(_) => false,
-			MetadataName::Tuple(_) => false,
-			MetadataName::Option(_) => false,
-			MetadataName::Result(_, _) => false,
+			MetadataName::CustomWithGenerics(_, _, _) => false,
+			MetadataName::Array(_, _) |
+			MetadataName::Vector(_) |
+			MetadataName::Tuple(_) |
+			MetadataName::Option(_) |
+			MetadataName::Result(_, _) => {
+				// build-ins are also ignored but their sub-types are registered
+				f(self);
+				true
+			}
 			_ => true
 		};
 		if should_ignore {
 			return;
 		}
-		if self.get(&name).is_some() {
+		if self.exists(&name) {
 			return;
 		}
 		let m = TypeMetadata {
@@ -46,7 +50,7 @@ impl MetadataRegistry {
 		self.list[idx - 1].kind = f(self);
 	}
 
-	fn get(&self, name: &MetadataName) -> Option<TypeMetadata> {
-		self.list.iter().find(|m| m.name == *name).map(|m| m.clone())
+	fn exists(&self, name: &MetadataName) -> bool {
+		self.list.iter().find(|m| m.name == *name).is_some()
 	}
 }

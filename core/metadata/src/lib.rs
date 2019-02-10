@@ -34,6 +34,7 @@ pub type StringBuf = &'static str;
 pub enum MetadataName {
 	Unknown,
 	Custom(StringBuf, StringBuf),
+	CustomWithGenerics(StringBuf, StringBuf, Vec<MetadataName>),
 	Array(u32, Box<MetadataName>),
 	Vector(Box<MetadataName>),
 	Tuple(Vec<MetadataName>),
