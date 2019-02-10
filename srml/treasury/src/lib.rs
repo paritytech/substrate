@@ -308,6 +308,7 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			existential_deposit: 0,
+			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			proposal_bond: Permill::from_percent(5),
