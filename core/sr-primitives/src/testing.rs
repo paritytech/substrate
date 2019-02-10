@@ -32,7 +32,7 @@ use substrate_metadata::EncodeMetadata;
 use substrate_metadata_derive::EncodeMetadata;
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Decode, Encode, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Decode, Encode, Debug, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UintAuthorityId(pub u64);
 impl Into<Ed25519AuthorityId> for UintAuthorityId {
@@ -140,7 +140,7 @@ impl<'a> Deserialize<'a> for Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, EncodeMetadata)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
@@ -206,7 +206,7 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 }
 
 /// Test transaction
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
 impl<Call> Serialize for TestXt<Call> where TestXt<Call>: Encode
@@ -222,17 +222,17 @@ impl<Call> Debug for TestXt<Call> {
 	}
 }
 
-impl<Call: Codec + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
+impl<Call: Codec + EncodeMetadata + Sync + Send, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
-impl<Call: Codec + Sync + Send> traits::Extrinsic for TestXt<Call> {
+impl<Call: Codec + EncodeMetadata + Sync + Send> traits::Extrinsic for TestXt<Call> {
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}
 }
 impl<Call> Applyable for TestXt<Call> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug,
+	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + EncodeMetadata + Debug,
 {
 	type AccountId = u64;
 	type Index = u64;

@@ -34,6 +34,7 @@ use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent, StorageOf,
 	Trait, ComputeDispatchFee
 };
+use substrate_metadata_derive::EncodeMetadata;
 
 mod contract {
 	// Re-export contents of the root. This basically
@@ -57,7 +58,7 @@ impl_outer_dispatch! {
 	}
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, EncodeMetadata)]
 pub struct Test;
 impl system::Trait for Test {
 	type Origin = Origin;

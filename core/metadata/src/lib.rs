@@ -41,6 +41,7 @@ pub enum MetadataName {
 	Option(Box<MetadataName>),
 	Result(Box<MetadataName>, Box<MetadataName>),
 	Compact(Box<MetadataName>),
+	Str,
 	Unit,
 	Bool,
 	Usize, Isize,
@@ -287,3 +288,23 @@ impl EncodeMetadata for () {
 	}
 }
 
+impl EncodeMetadata for &str {
+	fn type_name() -> MetadataName {
+		MetadataName::Str
+	}
+
+	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
+		TypeMetadataKind::Primitive
+	}
+}
+
+#[cfg(feature = "std")]
+impl EncodeMetadata for String {
+	fn type_name() -> MetadataName {
+		MetadataName::Str
+	}
+
+	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
+		TypeMetadataKind::Primitive
+	}
+}

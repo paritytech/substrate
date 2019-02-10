@@ -20,6 +20,9 @@
 
 #[cfg(test)]
 extern crate parity_codec_derive;
+#[cfg(test)]
+#[macro_use]
+extern crate substrate_metadata_derive;
 
 #[cfg_attr(test, macro_use)]
 extern crate srml_support as runtime_support;
@@ -319,7 +322,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq)]
+	#[derive(Clone, Eq, PartialEq, EncodeMetadata)]
 	pub struct Runtime;
 	impl system::Trait for Runtime {
 		type Origin = Origin;

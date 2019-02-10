@@ -195,6 +195,8 @@ macro_rules! impl_outer_origin {
 
 #[cfg(test)]
 mod tests {
+	use substrate_metadata_derive::EncodeMetadata;
+
 	mod system {
 		pub trait Trait {
 			type AccountId;
@@ -231,7 +233,7 @@ mod tests {
 		}
 	}
 
-	#[derive(Clone, PartialEq, Eq, Debug)]
+	#[derive(Clone, PartialEq, Eq, Debug, EncodeMetadata)]
 	pub struct TestRuntime;
 
 	impl system::Trait for TestRuntime {

@@ -23,13 +23,14 @@ use srml_support::impl_outer_origin;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use crate::{Trait, Module};
+use substrate_metadata_derive::EncodeMetadata;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, EncodeMetadata)]
 pub struct Test;
 
 impl consensus::Trait for Test {

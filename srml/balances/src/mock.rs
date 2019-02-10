@@ -24,13 +24,14 @@ use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait};
+use substrate_metadata_derive::EncodeMetadata;
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, EncodeMetadata)]
 pub struct Runtime;
 impl system::Trait for Runtime {
 	type Origin = Origin;

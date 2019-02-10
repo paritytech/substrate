@@ -24,6 +24,7 @@ use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::Encode;
 use {system, GenesisConfig, Trait, Module, RawLog};
+use substrate_metadata_derive::EncodeMetadata;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -36,7 +37,7 @@ impl From<RawLog<u64, u64>> for DigestItem {
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug, Decode, Encode)]
+#[derive(Clone, PartialEq, Eq, Debug, Decode, Encode, EncodeMetadata)]
 pub struct Test;
 impl Trait for Test {
 	type Log = DigestItem;

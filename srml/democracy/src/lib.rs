@@ -464,7 +464,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug)]
+	#[derive(Clone, Eq, PartialEq, Debug, EncodeMetadata)]
 	pub struct Test;
 	impl system::Trait for Test {
 		type Origin = Origin;

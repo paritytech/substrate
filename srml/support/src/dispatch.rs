@@ -949,6 +949,7 @@ macro_rules! __dispatch_impl_metadata {
 			pub fn call_functions() -> $crate::rstd::vec::Vec<$crate::dispatch::FunctionMetadata> {
 				$crate::__call_to_functions!($($rest)*)
 			}
+			#[allow(unused_variables)]
 			pub fn call_metadata_register(registry: &mut $crate::substrate_metadata::MetadataRegistry) {
 				$crate::__call_metadata_register!(registry; $($rest)*);
 			}
@@ -1132,6 +1133,7 @@ macro_rules! __call_metadata_register_expand {
 mod tests {
 	use super::*;
 	use crate::runtime_primitives::traits::{OnInitialise, OnFinalise};
+	use substrate_metadata::*;
 
 	pub trait Trait {
 		type Origin;
@@ -1160,55 +1162,6 @@ mod tests {
 		}
 	}
 
-	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_0"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[
-						" Hi, this is a comment."
-					])
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_1"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("Compact<u32>")
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_2"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						},
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data2"),
-							ty: DecodeDifferent::Encode("String"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_3"),
-					arguments: DecodeDifferent::Encode(&[]),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				FunctionMetadata {
-					name: DecodeDifferent::Encode("aux_4"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("_data"),
-							ty: DecodeDifferent::Encode("i32"),
-						}
-					]),
-					documentation: DecodeDifferent::Encode(&[]),
-				}
-			];
-
 	struct TraitImpl {}
 
 	impl Trait for TraitImpl {
@@ -1218,8 +1171,57 @@ mod tests {
 
 	#[test]
 	fn module_json_metadata() {
+		let expected = vec![
+			FunctionMetadata {
+				name: DecodeDifferent::Encode("aux_0"),
+				arguments: Vec::new(),
+				documentation: DecodeDifferent::Encode(&[
+					" Hi, this is a comment."
+				])
+			},
+			FunctionMetadata {
+				name: DecodeDifferent::Encode("aux_1"),
+				arguments: vec![
+					FunctionArgumentMetadata {
+						name: DecodeDifferent::Encode("_data"),
+						ty: MetadataName::Compact(Box::new(MetadataName::U32)),
+					},
+				],
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			FunctionMetadata {
+				name: DecodeDifferent::Encode("aux_2"),
+				arguments: vec![
+					FunctionArgumentMetadata {
+						name: DecodeDifferent::Encode("_data"),
+						ty: MetadataName::I32,
+					},
+					FunctionArgumentMetadata {
+						name: DecodeDifferent::Encode("_data2"),
+						ty: MetadataName::Str,
+					}
+				],
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			FunctionMetadata {
+				name: DecodeDifferent::Encode("aux_3"),
+				arguments: Vec::new(),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			FunctionMetadata {
+				name: DecodeDifferent::Encode("aux_4"),
+				arguments: vec![
+					FunctionArgumentMetadata {
+						name: DecodeDifferent::Encode("_data"),
+						ty: MetadataName::I32,
+					}
+				],
+				documentation: DecodeDifferent::Encode(&[]),
+			}
+		];
+
 		let metadata = Module::<TraitImpl>::call_functions();
-		assert_eq!(EXPECTED_METADATA, metadata);
+		assert_eq!(expected, metadata);
 	}
 
 	#[test]

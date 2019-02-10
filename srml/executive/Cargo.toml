@@ -18,6 +18,8 @@ srml-system = { path = "../system", default-features = false }
 substrate-primitives = { path = "../../core/primitives" }
 srml-indices = { path = "../indices" }
 srml-balances = { path = "../balances" }
+substrate-metadata = { path = "../../core/metadata", default-features = false }
+substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [features]
 default = ["std"]

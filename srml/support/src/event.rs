@@ -470,6 +470,8 @@ mod tests {
 	use super::*;
 	use serde_derive::Serialize;
 	use parity_codec_derive::{Encode, Decode};
+	use substrate_metadata::*;
+	use substrate_metadata_derive::EncodeMetadata;
 
 	mod system {
 		pub trait Trait {
@@ -559,7 +561,7 @@ mod tests {
 		);
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, EncodeMetadata)]
 	pub struct TestRuntime;
 
 	impl_outer_event! {
@@ -570,7 +572,7 @@ mod tests {
 		}
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, EncodeMetadata)]
 	pub struct TestRuntime2;
 
 	impl_outer_event! {
@@ -583,13 +585,13 @@ mod tests {
 
 	impl event_module::Trait for TestRuntime {
 		type Origin = u32;
-		type Balance = u32;
+		type Balance = u64;
 		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
 		type Origin = u32;
-		type Balance = u32;
+		type Balance = u64;
 		type BlockNumber = u32;
 	}
 
@@ -600,13 +602,13 @@ mod tests {
 
 	impl event_module::Trait for TestRuntime2 {
 		type Origin = u32;
-		type Balance = u32;
+		type Balance = u64;
 		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime2 {
 		type Origin = u32;
-		type Balance = u32;
+		type Balance = u64;
 		type BlockNumber = u32;
 	}
 
@@ -620,50 +622,50 @@ mod tests {
 		events: DecodeDifferent::Encode(&[
 			(
 				"system",
-				FnEncode(|| &[
+				FnEncode(|| vec![
 					EventMetadata {
 						name: DecodeDifferent::Encode("SystemEvent"),
-						arguments: DecodeDifferent::Encode(&[]),
+						arguments: Vec::new(),
 						documentation: DecodeDifferent::Encode(&[]),
 					}
 				])
 			),
 			(
 				"event_module",
-				FnEncode(|| &[
+				FnEncode(|| vec![
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
+						arguments: vec![MetadataName::U64, MetadataName::U32],
 						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
 					},
 					EventMetadata {
 						name: DecodeDifferent::Encode("EventWithoutParams"),
-						arguments: DecodeDifferent::Encode(&[]),
+						arguments: Vec::new(),
 						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
 					},
 				])
 			),
 			(
 				"event_module2",
-				FnEncode(|| &[
+				FnEncode(|| vec![
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
+						arguments: vec![MetadataName::U64],
 						documentation: DecodeDifferent::Encode(&[])
 					},
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestOrigin"),
-						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
+						arguments: vec![MetadataName::U32],
 						documentation: DecodeDifferent::Encode(&[]),
 					},
 				])
 			),
 			(
 				"event_module3",
-				FnEncode(|| &[
+				FnEncode(|| vec![
 					EventMetadata {
 						name: DecodeDifferent::Encode("HiEvent"),
-						arguments: DecodeDifferent::Encode(&[]),
+						arguments: Vec::new(),
 						documentation: DecodeDifferent::Encode(&[])
 					}
 				])

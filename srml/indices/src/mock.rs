@@ -25,6 +25,7 @@ use primitives::testing::{Digest, DigestItem, Header};
 use substrate_primitives::{H256, Blake2Hasher};
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
+use substrate_metadata_derive::EncodeMetadata;
 
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -62,7 +63,7 @@ impl ResolveHint<u64, u64> for TestResolveHint {
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, EncodeMetadata)]
 pub struct Runtime;
 impl system::Trait for Runtime {
 	type Origin = Origin;
