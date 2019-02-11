@@ -29,7 +29,7 @@ pub mod transformation;
 /// Parsing usage only
 #[derive(Parse, ToTokens, Debug)]
 struct StorageDefinition {
-	pub hidden_crate: Option<SpecificHiddenCrate>,
+	pub hidden_crate: SpecificHiddenCrate,
 	pub visibility: syn::Visibility,
 	pub trait_token: Token![trait],
 	pub ident: Ident,

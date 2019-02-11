@@ -24,7 +24,7 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorit
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
-use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
+use runtime_support::{StorageMap, StorageDoubleMap, impl_outer_dispatch, impl_outer_origin, impl_outer_event, assert_ok};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
 use {wabt, balances, consensus};
@@ -40,7 +40,7 @@ mod contract {
 	// needs to give a name for the current crate.
 	// This hack is required for `impl_outer_event!`.
 	pub use super::super::*;
-	use srml_support::impl_outer_event;
+	use runtime_support::impl_outer_event;
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {

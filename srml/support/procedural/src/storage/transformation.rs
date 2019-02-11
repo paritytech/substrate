@@ -19,7 +19,7 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
+use srml_support_procedural_tools::clean_type_string;
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -52,7 +52,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	let def = parse_macro_input!(input as StorageDefinition);
 
 	let StorageDefinition {
-		hidden_crate,
+		hidden_crate: SpecificHiddenCrate { ident: ext::Parens { content: hidden_crate, ..}, ..},
 		visibility,
 		ident: storetype,
 		module_ident,
@@ -62,14 +62,8 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		extra_genesis,
 		..
 	} = def;
-	let hidden_crate_name = hidden_crate.map(|rc| rc.ident.content).map(|i| i.to_string())
-		.unwrap_or_else(|| "decl_storage".to_string());
-	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
-	let scrate_decl = generate_hidden_includes(
-		&hidden_crate_name,
-		"srml-support",
-		"srml_support",
-	);
+
+	let scrate: TokenStream2 = quote! { self::#hidden_crate }.into();
 
 	let (
 		traitinstance,
@@ -120,7 +114,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	);
 	let cratename_string = cratename.to_string();
 	let expanded = quote! {
-		#scrate_decl
 		#decl_storage_items
 		#visibility trait #storetype {
 			#decl_store_items
