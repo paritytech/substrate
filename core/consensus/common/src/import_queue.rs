@@ -153,7 +153,7 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Start(link))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
 		Ok(())
 	}
 
@@ -161,14 +161,14 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Clear)
-			.expect("Failed to send Clear");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
 	}
 
 	fn stop(&self) {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Stop)
-			.expect("Failed to send Stop");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
 	}
 
 	fn status(&self) -> ImportQueueStatus<B> {
@@ -176,8 +176,8 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Status(sender))
-			.expect("Failed to send Clear");
-		port.recv().expect("Failed to receive ImportQueueStatus")
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
+		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around")
 	}
 
 	fn is_importing(&self, hash: &B::Hash) -> bool {
@@ -185,8 +185,8 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::IsImporting(hash.clone(), sender))
-			.expect("Failed to send IsImporting");
-		port.recv().expect("Failed to receive IsImporting")
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
+		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around")
 	}
 
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
@@ -196,14 +196,14 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::ImportBlocks(origin, blocks))
-			.expect("Failed to send ImportBlocks to ImportQueue");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
 	}
 
 	fn import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::ImportJustification(who, hash, number, justification))
-			.expect("Failed to send IsImporting");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
 	}
 }
 
