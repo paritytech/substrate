@@ -26,17 +26,16 @@ extern crate runtime_primitives;
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
 #[cfg(feature = "std")]
-use srml_support::{Serialize, Deserialize};
-use srml_support::construct_runtime;
+use support::{Serialize, Deserialize};
+use support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
-use substrate_client::impl_runtime_apis;
-use substrate_client::{
+use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
-	runtime_api as client_api,
+	runtime_api as client_api, impl_runtime_apis
 };
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
@@ -58,7 +57,7 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
-pub use srml_support::StorageValue;
+pub use support::StorageValue;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {

@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
-use srml_support::{StorageValue, StorageMap, dispatch::Result, traits::Currency};
+use srml_support::{StorageValue, StorageMap, dispatch::Result, traits::Currency, decl_storage, decl_event, ensure};
 use democracy;
 use system::{self, ensure_signed};
 
@@ -76,6 +76,8 @@ use system::{self, ensure_signed};
 // the candidate list increases as needed, but the contents (though not really the capacity) reduce
 // after each vote as all but K entries are cleared. newly registering candidates must use cleared
 // entries before they increase the capacity.
+
+use srml_support::decl_module;
 
 pub type VoteIndex = u32;
 
@@ -547,7 +549,8 @@ impl<T: Trait> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ::tests::*;
+	use crate::tests::*;
+	use srml_support::{assert_ok, assert_noop, assert_err};
 
 	#[test]
 	fn params_should_work() {

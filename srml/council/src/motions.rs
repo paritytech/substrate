@@ -21,7 +21,7 @@ use rstd::result;
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Dispatchable, Parameter};
-use srml_support::{StorageValue, StorageMap};
+use srml_support::{StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::{self, ensure_signed};
 
@@ -202,10 +202,11 @@ impl<O, N: U32> EnsureOrigin<O> for EnsureMembers<N>
 mod tests {
 	use super::*;
 	use super::RawEvent;
-	use ::tests::*;
-	use ::tests::{Call, Origin, Event as OuterEvent};
-	use srml_support::Hashable;
+	use crate::tests::*;
+	use crate::tests::{Call, Origin, Event as OuterEvent};
+	use srml_support::{Hashable, assert_ok, assert_noop};
 	use system::{EventRecord, Phase};
+	use hex_literal::{hex, hex_impl};
 
 	#[test]
 	fn motions_basic_environment_works() {

@@ -23,6 +23,7 @@ use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use primitives::BuildStorage;
 use primitives::testing::{Digest, DigestItem, Header};
 use substrate_primitives::{H256, Blake2Hasher};
+use srml_support::impl_outer_origin;
 use {runtime_io, system};
 use crate::{GenesisConfig, Module, Trait, IsDeadAccount, OnNewAccount, ResolveHint};
 
