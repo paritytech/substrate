@@ -35,7 +35,7 @@ pub enum MetadataName {
 	Unknown,
 	Custom(StringBuf, StringBuf),
 	CustomWithGenerics(StringBuf, StringBuf, Vec<MetadataName>),
-	Array(u32, Box<MetadataName>),
+	Array(u16, Box<MetadataName>),
 	Vector(Box<MetadataName>),
 	Tuple(Vec<MetadataName>),
 	Option(Box<MetadataName>),
@@ -58,7 +58,7 @@ pub enum MetadataName {
 #[derive(Encode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum FieldName {
-	Unnamed(u32),
+	Unnamed(u16),
 	Named(StringBuf),
 }
 
@@ -73,7 +73,7 @@ pub struct FieldMetadata {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct EnumVariantMetadata {
 	pub name: StringBuf,
-	pub index: u32,
+	pub index: u16,
 	pub fields: Vec<FieldMetadata>
 }
 

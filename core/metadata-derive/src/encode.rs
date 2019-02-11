@@ -19,7 +19,7 @@ fn encode_fields(
 			_substrate_metadata::FieldName::Named(stringify!(#iden).into())
 		})
 		.unwrap_or(quote! {
-			_substrate_metadata::FieldName::Unnamed(#i as u32)
+			_substrate_metadata::FieldName::Unnamed(#i as u16)
 		});
 		let ty = &f.ty;
 		quote_spanned! { f.span() =>
@@ -89,7 +89,7 @@ pub fn quote(data: &Data, registry: &TokenStream) -> TokenStream {
 						quote_spanned! { f.span() =>
 							_substrate_metadata::EnumVariantMetadata {
 								name: stringify!(#name).into(),
-								index: #index as u32,
+								index: #index as u16,
 								fields: vec![#( #fields, )*]
 							}
 						}
@@ -111,7 +111,7 @@ pub fn quote(data: &Data, registry: &TokenStream) -> TokenStream {
 											<#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind
 										);
 										_substrate_metadata::FieldMetadata {
-											name: _substrate_metadata::FieldName::Unnamed(#i as u32),
+											name: _substrate_metadata::FieldName::Unnamed(#i as u16),
 											ty: type_name
 										}
 									}
@@ -121,7 +121,7 @@ pub fn quote(data: &Data, registry: &TokenStream) -> TokenStream {
 						quote_spanned! { f.span() =>
 							_substrate_metadata::EnumVariantMetadata {
 								name: stringify!(#name).into(),
-								index: #index as u32,
+								index: #index as u16,
 								fields: vec![#( #fields, )*]
 							}
 						}
@@ -130,7 +130,7 @@ pub fn quote(data: &Data, registry: &TokenStream) -> TokenStream {
 						quote_spanned! { f.span() =>
 							_substrate_metadata::EnumVariantMetadata {
 								name: stringify!(#name).into(),
-								index: #index as u32,
+								index: #index as u16,
 								fields: Vec::new()
 							}
 						}
