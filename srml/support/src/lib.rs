@@ -53,7 +53,7 @@ mod runtime;
 pub mod inherent;
 mod double_map;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
+pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, StorageLinkedMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use runtime_io::print;
@@ -138,24 +138,120 @@ macro_rules! for_each_tuple {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use runtime_io::{with_externalities, Blake2Hasher};
+	use runtime_primitives::BuildStorage;
 
 	pub trait Trait {
+		type BlockNumber;
+		type Origin;
 	}
 
-	decl_module! {
-		pub struct Module<T: Trait> for enum Call {
-			fn deposit_event<T>() = default;
+	mod module {
+		#![allow(dead_code)]
+
+		use super::Trait;
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+
+			}
 		}
 	}
+	use self::module::Module;
 
 	decl_storage! {
 		trait Store for Module<T: Trait> as Example {
-			pub Data get(data) build(|_| vec![(15, 42)]): map u32 => u64;
+			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
 		}
 	}
 
-	#[test]
-	fn should_work() {
-		assert_eq!(true, false);
+	struct Test;
+	impl Trait for Test {
+		type BlockNumber = u32;
+		type Origin = u32;
 	}
+
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+	}
+
+	type Map = Data<Test>;
+
+	#[test]
+	fn basic_insert_remove_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			// initialised during genesis
+			assert_eq!(Map::get(&15u32), 42u64);
+
+			// get / insert / take
+			let key = 17u32;
+			assert_eq!(Map::get(&key), 0u64);
+			Map::insert(key, 4u64);
+			assert_eq!(Map::get(&key), 4u64);
+			assert_eq!(Map::take(&key), 4u64);
+			assert_eq!(Map::get(&key), 0u64);
+
+			// mutate
+			Map::mutate(&key, |val| {
+				*val = 15;
+			});
+			assert_eq!(Map::get(&key), 15u64);
+
+			// remove
+			Map::remove(&key);
+			assert_eq!(Map::get(&key), 0u64);
+		});
+	}
+
+	#[test]
+	fn enumeration_and_head_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Map::head(), None);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+			// insert / remove
+			let key = 17u32;
+			Map::insert(key, 4u64);
+			assert_eq!(Map::head(), Some(key));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![4u64]);
+			assert_eq!(Map::take(&key), 4u64);
+			assert_eq!(Map::head(), None);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+
+			// Add couple of more elements
+			Map::insert(key, 42u64);
+			assert_eq!(Map::head(), Some(key));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![42u64]);
+			Map::insert(key + 1, 43u64);
+			assert_eq!(Map::head(), Some(key + 1));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![43u64, 42u64]);
+
+			// mutate
+			let key = key + 2;
+			Map::mutate(&key, |val| {
+				*val = 15;
+			});
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![15u64, 43u64, 42u64]);
+			assert_eq!(Map::head(), Some(key));
+			Map::mutate(&key, |val| {
+				*val = 17;
+			});
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![17u64, 43u64, 42u64]);
+
+			// remove first
+			Map::remove(&key);
+			assert_eq!(Map::head(), Some(key - 1));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![43u64, 42u64]);
+
+			// remove last from the list
+			Map::remove(&(key - 2));
+			assert_eq!(Map::head(), Some(key - 1));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![43u64]);
+
+			// remove the last element
+			Map::remove(&(key - 1));
+			assert_eq!(Map::head(), None);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+		});
+	}
+
 }

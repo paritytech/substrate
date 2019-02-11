@@ -335,6 +335,14 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMa
 		U::take(key.borrow(), &RuntimeStorage)
 	}
 }
+//
+// pub trait StorageLinkedMap<K: Codec, V: Codec>: StorageMap<K, V> {
+// 	/// Return current head element.
+// 	fn head() -> Option<K>;
+//
+// 	/// Enumerate all elements in the map.
+// 	fn enumerate() -> LinkedMapEnumerator<K, V>;
+// }
 
 /// A trait to conveniently store a vector of storable data.
 pub trait StorageVec {
