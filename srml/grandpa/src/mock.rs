@@ -21,9 +21,11 @@
 use primitives::{BuildStorage, traits::IdentityLookup, testing::{Digest, DigestItem, Header}};
 use primitives::generic::DigestItem as GenDigestItem;
 use runtime_io;
+use srml_support::{impl_outer_origin, impl_outer_event};
 use substrate_primitives::{H256, Blake2Hasher};
 use parity_codec::Encode;
-use {system, GenesisConfig, Trait, Module, RawLog};
+use parity_codec_derive::{Encode, Decode};
+use crate::{GenesisConfig, Trait, Module, RawLog};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -58,7 +60,7 @@ impl system::Trait for Test {
 }
 
 mod grandpa {
-	pub use ::Event;
+	pub use crate::Event;
 }
 
 impl_outer_event!{
