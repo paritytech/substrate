@@ -28,7 +28,6 @@ use tokio::timer::Interval;
 use primitives::blake2_256;
 use service::{
 	ServiceFactory,
-	ExecutionStrategy,
 	Configuration,
 	FactoryFullConfiguration,
 	FactoryChainSpec,
@@ -118,8 +117,7 @@ fn node_config<F: ServiceFactory> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
-		block_execution_strategy: ExecutionStrategy::NativeWhenPossible,
-		api_execution_strategy: ExecutionStrategy::NativeWhenPossible,
+		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
 		telemetry_url: None,

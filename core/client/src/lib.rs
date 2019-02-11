@@ -57,7 +57,7 @@ pub use crate::client::{
 	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	BlockImportNotification, Client, ClientInfo, ChainHead,
+	BlockImportNotification, Client, ClientInfo, ChainHead, ExecutionStrategies,
 };
 #[cfg(feature = "std")]
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};
