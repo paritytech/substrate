@@ -24,6 +24,7 @@ use rand::rngs::OsRng;
 use schnorrkel::{signing_context, Keypair, MiniSecretKey, PublicKey};
 use sha2::Sha512;
 use parity_codec_derive::{Encode, Decode};
+use crate::hash::H512;
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
@@ -32,7 +33,7 @@ use serde::{de, Deserialize, Deserializer, Serializer};
 const SIGNING_CTX: &'static [u8] = b"substrate transaction";
 
 /// Instead of importing it for the local module, alias it to be available as a public type
-pub type Signature = schnorrkel::Signature;
+pub type Signature = H512;
 
 /// A localized signature also contains sender information.
 /// NOTE: Encode and Decode traits are supported in ed25519 but not possible for now here.
@@ -192,7 +193,7 @@ impl Pair {
 	/// Sign a message.
 	pub fn sign(&self, message: &[u8]) -> Signature {
 		let context = signing_context(SIGNING_CTX);
-		self.0.sign(context.bytes(message))
+		Signature::from(self.0.sign(context.bytes(message)).to_bytes())
 	}
 
 	/// Get the public key.
@@ -204,10 +205,13 @@ impl Pair {
 }
 
 /// Verify a signature on a message. Returns true if the signature is good.
-/// FIXME: use `untrusted` crate here?
 pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: P) -> bool {
+	let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig[..]) {
+		Ok(some_signature) => some_signature,
+		Err(_) => return false
+	};
 	match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
-		Ok(pk) => pk.verify(signing_context(SIGNING_CTX).bytes(message), sig),
+		Ok(pk) => pk.verify(signing_context(SIGNING_CTX).bytes(message), &signature),
 		Err(_) => false,
 	}
 }
@@ -215,7 +219,7 @@ pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: 
 /// Verify a message without type checking the parameters' types for the right size.
 /// Returns true if both the pubkey and the signature is good.
 pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], pubkey: P) -> bool {
-	let signature = match Signature::from_bytes(sig) {
+	let signature = match schnorrkel::Signature::from_bytes(&sig[..]) {
 		Ok(sig) => sig,
 		Err(_) => return false,
 	};
@@ -284,7 +288,7 @@ mod test {
 		);
 		let message = b"";
 		let signature = pair.sign(message);
-		assert!(verify(&signature.to_bytes(), message, &public.0));
+		assert!(verify(&signature[..], message, &public.0));
 		assert!(verify_strong(&signature, &message[..], &public));
 	}
 
