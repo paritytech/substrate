@@ -339,7 +339,7 @@ impl<'a> ToClientSideDecl<'a> {
 
 		items.into_iter().for_each(|i| match i {
 			TraitItem::Method(method) => {
-				let (fn_decl, fn_impl, fn_decl_ctx) = self.fold_trait_item_method(method.clone());
+				let (fn_decl, fn_impl, fn_decl_ctx) = self.fold_trait_item_method(method);
 				result.push(fn_decl.into());
 				result.push(fn_decl_ctx.into());
 
@@ -741,8 +741,6 @@ pub fn decl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::Tok
 	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_decls = generate_runtime_decls(&api_decls);
 	let client_side_decls = generate_client_side_decls(&api_decls);
-
-	// println!("generating this declaration:\n\n{}\n\n", quote!( #client_side_decls ));
 
 	quote!(
 		#hidden_includes

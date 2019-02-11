@@ -15,8 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::{TokenStream, Span};
-use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned,
-	FnArg, Error};
+use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error};
 use quote::quote;
 use std::env;
 

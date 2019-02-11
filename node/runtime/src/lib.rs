@@ -54,7 +54,6 @@ use substrate_primitives::OpaqueMetadata;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
-pub use runtime_primitives::ExecutionContext;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
@@ -66,7 +65,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 27,
+	spec_version: 26,
 	impl_version: 27,
 	apis: RUNTIME_API_VERSIONS,
 };

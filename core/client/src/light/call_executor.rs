@@ -80,7 +80,7 @@ where
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8], strategy: ExecutionStrategy)
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8], _strategy: ExecutionStrategy)
 		-> ClientResult<Vec<u8>> {
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
