@@ -27,6 +27,7 @@ network = { package = "substrate-network", path = "../../core/network" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 service = { package = "substrate-service", path = "../../core/service" }
+state-machine = { package = "substrate-state-machine", path = "../../core/state-machine" }
 substrate-telemetry = { path = "../../core/telemetry" }
 names = "0.11.0"
 structopt = "0.2"

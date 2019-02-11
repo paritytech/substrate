@@ -20,8 +20,9 @@
 
 use super::*;
 use runtime_io::with_externalities;
+use srml_support::{assert_ok, assert_noop};
 use mock::{Balances, Session, Staking, System, Timestamp, Test, new_test_ext, Origin};
-use runtime_support::traits::Currency;
+use srml_support::traits::Currency;
 
 #[test]
 fn note_null_offline_should_work() {

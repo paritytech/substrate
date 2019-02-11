@@ -38,6 +38,7 @@ arg_enum! {
 		Native,
 		Wasm,
 		Both,
+		NativeElseWasm,
 	}
 }
 
@@ -47,6 +48,7 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Native => client::ExecutionStrategy::NativeWhenPossible,
 			ExecutionStrategy::Wasm => client::ExecutionStrategy::AlwaysWasm,
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
+			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
 		}
 	}
 }
@@ -175,18 +177,55 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL")]
 	pub telemetry_url: Option<String>,
 
-	/// The means of execution used when calling into the runtime. Can be either wasm, native or both.
+	/// The means of execution used when calling into the runtime while syncing blocks.
 	#[structopt(
-		long = "execution",
+		long = "syncing-execution",
 		value_name = "STRATEGY",
 		raw(
 			possible_values = "&ExecutionStrategy::variants()",
 			case_insensitive = "true",
-			default_value = r#""Both""#
+			default_value = r#""NativeElseWasm""#
 		)
 	)]
-	pub execution: ExecutionStrategy,
+	pub syncing_execution: ExecutionStrategy,
 
+	/// The means of execution used when calling into the runtime while importing blocks.
+	#[structopt(
+		long = "importing-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeElseWasm""#
+		)
+	)]
+	pub importing_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime while constructing blocks.
+	#[structopt(
+		long = "block-construction-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""Wasm""#
+		)
+	)]
+	pub block_construction_execution: ExecutionStrategy,
+
+	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
+	#[structopt(
+		long = "other-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""Wasm""#
+		)
+	)]
+	pub other_execution: ExecutionStrategy,
+
+	
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -254,31 +293,7 @@ pub struct ImportBlocksCmd {
 	#[structopt(parse(from_os_str))]
 	pub input: Option<PathBuf>,
 
-	/// The means of execution used when executing blocks. Can be either wasm, native or both.
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Both""#
-		)
-	)]
-	pub execution: ExecutionStrategy,
-
-	/// The means of execution used when calling into the runtime. Can be either wasm, native or both.
-	#[structopt(
-		long = "api-execution",
-		value_name = "STRATEGY",
-		raw(
-			possible_values = "&ExecutionStrategy::variants()",
-			case_insensitive = "true",
-			default_value = r#""Both""#
-		)
-	)]
-	pub api_execution: ExecutionStrategy,
-
-	/// The default number of 64KB pages to allocate for Wasm execution. Don't alter this unless you know what you're doing.
+	/// The default number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
 	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
