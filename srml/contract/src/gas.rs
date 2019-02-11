@@ -16,8 +16,9 @@
 
 use crate::{GasSpent, Module, Trait};
 use balances;
+use runtime_primitives::BLOCK_FULL;
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
-use runtime_support::StorageValue;
+use srml_support::StorageValue;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -206,7 +207,8 @@ pub fn buy_gas<T: Trait>(
 	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
 	let gas_available = <Module<T>>::block_gas_limit() - <Module<T>>::gas_spent();
 	if gas_limit > gas_available {
-		return Err("block gas limit is reached");
+		// gas limit reached, revert the transaction and retry again in the future
+		return Err(BLOCK_FULL);
 	}
 
 	// Buy the specified amount of gas.

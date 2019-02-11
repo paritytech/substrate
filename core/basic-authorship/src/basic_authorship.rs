@@ -20,7 +20,7 @@
 //
 use std::{self, time, sync::Arc};
 
-use log::{info, debug, trace};
+use log::{info, debug};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
@@ -190,10 +190,17 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	{
 		use runtime_primitives::traits::BlakeTwo256;
 
+		/// If the block is full we will attempt to push at most
+		/// this number of transactions before quitting for real.
+		/// It allows us to increase block utilisation.
+		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
+
 		let block = self.client.build_block(
 			&self.parent_id,
 			inherent_data,
 			|block_builder| {
+				let mut is_first = true;
+				let mut skipped = 0;
 				let mut unqueue_invalid = Vec::new();
 				let pending_iterator = self.transaction_pool.ready();
 
@@ -208,14 +215,27 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 							debug!("[{:?}] Pushed to the block.", pending.hash);
 						}
 						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
-							debug!("Block is full, proceed with proposing.");
-							break;
+							if is_first {
+								debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
+								unqueue_invalid.push(pending.hash.clone());
+							} else if skipped < MAX_SKIPPED_TRANSACTIONS {
+								skipped += 1;
+								debug!(
+									"Block seems full, but will try {} more transactions before quitting.",
+									MAX_SKIPPED_TRANSACTIONS - skipped
+								);
+							} else {
+								debug!("Block is full, proceed with proposing.");
+								break;
+							}
 						}
 						Err(e) => {
-							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+							debug!("[{:?}] Invalid transaction: {}", pending.hash, e);
 							unqueue_invalid.push(pending.hash.clone());
 						}
 					}
+
+					is_first = false;
 				}
 
 				self.transaction_pool.remove_invalid(&unqueue_invalid);

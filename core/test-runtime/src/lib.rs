@@ -104,10 +104,10 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				if ::runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				if runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err("bad signature")
+					Err(runtime_primitives::BAD_SIGNATURE)
 				}
 			},
 		}

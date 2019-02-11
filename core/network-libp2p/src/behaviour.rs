@@ -240,10 +240,6 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 				if !info.protocol_version.contains("substrate") {
 					warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
 				}
-				if info.listen_addrs.is_empty() {
-					warn!(target: "sub-libp2p", "Received identify response with empty list of \
-						addresses");
-				}
 				if info.listen_addrs.len() > 30 {
 					warn!(target: "sub-libp2p", "Node {:?} id reported more than 30 addresses",
 						peer_id);

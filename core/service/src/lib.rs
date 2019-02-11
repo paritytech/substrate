@@ -19,39 +19,6 @@
 
 #![warn(unused_extern_crates)]
 
-extern crate futures;
-extern crate exit_future;
-extern crate serde;
-extern crate serde_json;
-extern crate parking_lot;
-extern crate substrate_keystore as keystore;
-extern crate substrate_primitives as primitives;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_consensus_common as consensus_common;
-extern crate substrate_network as network;
-extern crate substrate_executor;
-extern crate substrate_client as client;
-extern crate substrate_client_db as client_db;
-extern crate parity_codec as codec;
-extern crate substrate_transaction_pool as transaction_pool;
-extern crate substrate_rpc_servers as rpc;
-extern crate target_info;
-extern crate tokio;
-
-#[macro_use]
-extern crate substrate_telemetry as tel;
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-extern crate substrate_test_client;
-
 mod components;
 mod error;
 mod chain_spec;
@@ -63,6 +30,7 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
+use log::{info, warn, debug};
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
@@ -72,7 +40,8 @@ use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
+use tel::telemetry;
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
