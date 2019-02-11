@@ -20,37 +20,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// Assert macros used in tests.
-extern crate sr_std;
-
-// Needed for tests (`with_externalities`).
-#[cfg(test)]
-extern crate sr_io;
-
-// Needed for the set of mock primitives used in our tests.
-#[cfg(test)]
-extern crate substrate_primitives;
-
-// Needed for various traits. In our case, `OnInitialise` and `OnFinalise` in our
-// tests.
-extern crate sr_primitives;
-
-// Needed for deriving `Encode` and `Decode` for `RawEvent`.
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-
-// Needed for type-safe access to storage DB.
-#[macro_use]
-extern crate srml_support as support;
-// `system` module provides us with all sorts of useful stuff and macros
-// depend on it being around.
-extern crate srml_system as system;
-// `balances` module is needed for our little example. It's not required in
-// general (though if you want your module to be able to work with tokens, then you
-// might find it useful).
-extern crate srml_balances as balances;
-
-use support::{StorageValue, dispatch::Result};
+use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -270,6 +240,7 @@ impl<T: Trait> Module<T> {
 mod tests {
 	use super::*;
 
+	use srml_support::{impl_outer_origin, assert_ok};
 	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures

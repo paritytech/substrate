@@ -20,36 +20,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_consensus as consensus;
-extern crate srml_session as session;
-extern crate srml_system as system;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-#[cfg(test)]
-extern crate srml_timestamp as timestamp;
-#[cfg(test)]
-extern crate srml_balances as balances;
-
 use rstd::{prelude::*, cmp};
-use codec::HasCompact;
-use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
-use runtime_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
+use parity_codec::HasCompact;
+use parity_codec_derive::{Encode, Decode};
+use srml_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
+use srml_support::{decl_module, decl_event, decl_storage, ensure};
+use srml_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
 use session::OnSessionChange;
 use primitives::Perbill;
 use primitives::traits::{Zero, One, Bounded, As, StaticLookup};

@@ -2,19 +2,22 @@
 name = "srml-sudo"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default-features = false }
 parity-codec = { version = "3.0", default-features = false }
 parity-codec-derive = { version = "3.0", default-features = false }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
-sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-support-procedural = { path = "../support/procedural" }
-srml-system = { path = "../system", default-features = false }
+system = { package = "srml-system", path = "../system", default-features = false }
+
+[dev-dependencies]
+sr-io = { path = "../../core/sr-io", default-features = false }
+substrate-primitives = { path = "../../core/primitives", default-features = false }
 
 [features]
 default = ["std"]
@@ -23,9 +26,7 @@ std = [
 	"parity-codec/std",
 	"parity-codec-derive/std",
 	"sr-std/std",
-	"sr-io/std",
 	"sr-primitives/std",
-	"substrate-primitives/std",
 	"srml-support/std",
-	"srml-system/std",
+	"system/std",
 ]
