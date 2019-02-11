@@ -141,18 +141,23 @@ fn many_nodes_connectivity() {
 			let mut num_connecs = 0;
 			stream::poll_fn(move || -> io::Result<_> {
 				loop {
+					const MAX_BANDWIDTH: u64 = NUM_NODES as u64 * 1024;		// 1kiB/s/node
+					assert!(node.average_download_per_sec() < MAX_BANDWIDTH);
+					assert!(node.average_upload_per_sec() < MAX_BANDWIDTH);
+
 					match try_ready!(node.poll()) {
 						Some(ServiceEvent::OpenedCustomProtocol { .. }) => {
 							num_connecs += 1;
+							assert!(num_connecs < NUM_NODES);
 							if num_connecs == NUM_NODES - 1 {
-								return Ok(Async::Ready(Some(())))
+								return Ok(Async::Ready(Some(true)))
 							}
 						}
 						Some(ServiceEvent::ClosedCustomProtocol { .. }) => {
-							// Only remove 1 if we haven't returned success yet, otherwise we
-							// will succeed the test multiple times.
-							if num_connecs < NUM_NODES - 1 {
-								num_connecs -= 1;
+							let was_success = num_connecs == NUM_NODES - 1;
+							num_connecs -= 1;
+							if was_success && num_connecs < NUM_NODES - 1 {
+								return Ok(Async::Ready(Some(false)))
 							}
 						}
 						_ => panic!(),
@@ -166,7 +171,8 @@ fn many_nodes_connectivity() {
 	let combined = future::poll_fn(move || -> io::Result<_> {
 		for node in futures.iter_mut() {
 			match node.poll()? {
-				Async::Ready(Some(_)) => successes += 1,
+				Async::Ready(Some(true)) => successes += 1,
+				Async::Ready(Some(false)) => successes -= 1,
 				Async::Ready(None) => unreachable!(),
 				Async::NotReady => ()
 			}
