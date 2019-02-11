@@ -242,9 +242,14 @@ impl<TSubstream> CustomProtos<TSubstream> {
 	/// Disconnects the given peer if we are connected to it and disables it for a little while.
 	pub fn ban_peer(&mut self, peer_id: PeerId) {
 		// Peer is already banned
-		if self.banned_peers.iter().any(|(p, _)| p == &peer_id) {
-			return
+		if let Some(pos) = self.banned_peers.iter().position(|(p, _)| p == &peer_id) {
+			if self.banned_peers[pos].1 > Instant::now() {
+				return
+			} else {
+				self.banned_peers.remove(pos);
+			}
 		}
+
 		self.banned_peers.push((peer_id.clone(), Instant::now() + PEER_DISABLE_DURATION));
 		if self.enabled_peers.remove(&peer_id).is_some() {
 			self.events.push(NetworkBehaviourAction::SendEvent {
@@ -565,6 +570,11 @@ where
 					messages,
 				}));
 			}
+			CustomProtosHandlerOut::ProtocolError { protocol_id, error } => {
+				warn!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
+					{:?}: {:?}", source, protocol_id, error);
+				self.ban_peer(source);
+			}
 		}
 	}
 
@@ -589,7 +599,7 @@ where
 		}
 
 		// Clean up `banned_peers`
-		self.banned_peers.retain(|(_, end)| *end < Instant::now());
+		self.banned_peers.retain(|(_, end)| *end > Instant::now());
 		self.banned_peers.shrink_to_fit();
 
 		if !self.events.is_empty() {
