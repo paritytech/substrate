@@ -98,6 +98,8 @@ decl_module! {
 			let mut props = Self::public_props();
 			props.push((index, (*proposal).clone(), who));
 			<PublicProps<T>>::put(props);
+
+			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
 
 		/// Propose a sensitive action to be taken.
@@ -222,6 +224,7 @@ decl_storage! {
 decl_event!(
 	/// An event in this module.
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
+		Proposed(PropIndex, Balance),
 		Tabled(PropIndex, Balance, Vec<AccountId>),
 		Started(ReferendumIndex, VoteThreshold),
 		Passed(ReferendumIndex),
