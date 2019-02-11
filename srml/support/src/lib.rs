@@ -52,12 +52,13 @@ mod runtime;
 #[macro_use]
 pub mod inherent;
 mod double_map;
+pub mod traits;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, StorageLinkedMap};
+pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::double_map::StorageDoubleMap;
 pub use runtime_io::print;
-pub use double_map::StorageDoubleMap;
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
@@ -73,7 +74,7 @@ macro_rules! fail {
 macro_rules! ensure {
 	( $x:expr, $y:expr ) => {{
 		if !$x {
-			fail!($y);
+			$crate::fail!($y);
 		}
 	}}
 }
@@ -83,7 +84,7 @@ macro_rules! ensure {
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
 		let h = runtime_io::storage_root();
-		assert_err!($x, $y);
+		$crate::assert_err!($x, $y);
 		assert_eq!(h, runtime_io::storage_root());
 	}
 }
@@ -112,9 +113,6 @@ macro_rules! assert_ok {
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Void {}
-
-#[doc(hidden)]
-pub use mashup::*;
 
 #[cfg(feature = "std")]
 #[doc(hidden)]
@@ -212,7 +210,7 @@ mod tests {
 			let key = 17u32;
 			Map::insert(key, 4u64);
 			assert_eq!(Map::head(), Some(key));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![4u64]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 4)]);
 			assert_eq!(Map::take(&key), 4u64);
 			assert_eq!(Map::head(), None);
 			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
@@ -220,32 +218,32 @@ mod tests {
 			// Add couple of more elements
 			Map::insert(key, 42u64);
 			assert_eq!(Map::head(), Some(key));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![42u64]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 42)]);
 			Map::insert(key + 1, 43u64);
 			assert_eq!(Map::head(), Some(key + 1));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![43u64, 42u64]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key + 1, 43), (key, 42)]);
 
 			// mutate
 			let key = key + 2;
 			Map::mutate(&key, |val| {
 				*val = 15;
 			});
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![15u64, 43u64, 42u64]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 15), (key - 1, 43), (key - 2, 42)]);
 			assert_eq!(Map::head(), Some(key));
 			Map::mutate(&key, |val| {
 				*val = 17;
 			});
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![17u64, 43u64, 42u64]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 17), (key - 1, 43), (key - 2, 42)]);
 
 			// remove first
 			Map::remove(&key);
 			assert_eq!(Map::head(), Some(key - 1));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![43u64, 42u64]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key - 1, 43), (key - 2, 42)]);
 
 			// remove last from the list
 			Map::remove(&(key - 2));
 			assert_eq!(Map::head(), Some(key - 1));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![43u64]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key - 1, 43)]);
 
 			// remove the last element
 			Map::remove(&(key - 1));

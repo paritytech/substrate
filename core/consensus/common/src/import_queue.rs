@@ -408,6 +408,44 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	let number = header.number().clone();
 	let hash = header.hash();
 	let parent = header.parent_hash().clone();
+
+	let import_error = |e| {
+		match e {
+			Ok(ImportResult::AlreadyInChain) => {
+				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
+				Ok(BlockImportResult::ImportedKnown(hash, number))
+			},
+			Ok(ImportResult::AlreadyQueued) => {
+				trace!(target: "sync", "Block already queued {}: {:?}", number, hash);
+				Ok(BlockImportResult::ImportedKnown(hash, number))
+			},
+			Ok(ImportResult::Queued) => {
+				Ok(BlockImportResult::ImportedUnknown(hash, number))
+			},
+			Ok(ImportResult::NeedsJustification) => {
+				trace!(target: "sync", "Block queued but requires justification {}: {:?}", number, hash);
+				Ok(BlockImportResult::ImportedUnjustified(hash, number))
+			},
+			Ok(ImportResult::UnknownParent) => {
+				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
+				Err(BlockImportError::UnknownParent)
+			},
+			Ok(ImportResult::KnownBad) => {
+				debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
+				Err(BlockImportError::BadBlock(peer))
+			},
+			Err(e) => {
+				debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
+				Err(BlockImportError::Error)
+			}
+		}
+	};
+
+	match import_error(import_handle.check_block(hash, parent))? {
+		BlockImportResult::ImportedUnknown(_, _) => (),
+		r @ _ => return Ok(r), // Any other successfull result means that the block is already imported.
+	}
+
 	let (import_block, new_authorities) = verifier.verify(block_origin, header, justification, block.body)
 		.map_err(|msg| {
 			if let Some(peer) = peer {
@@ -418,36 +456,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			BlockImportError::VerificationFailed(peer, msg)
 		})?;
 
-	match import_handle.import_block(import_block, new_authorities) {
-		Ok(ImportResult::AlreadyInChain) => {
-			trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
-			Ok(BlockImportResult::ImportedKnown(hash, number))
-		},
-		Ok(ImportResult::AlreadyQueued) => {
-			trace!(target: "sync", "Block already queued {}: {:?}", number, hash);
-			Ok(BlockImportResult::ImportedKnown(hash, number))
-		},
-		Ok(ImportResult::Queued) => {
-			trace!(target: "sync", "Block queued {}: {:?}", number, hash);
-			Ok(BlockImportResult::ImportedUnknown(hash, number))
-		},
-		Ok(ImportResult::NeedsJustification) => {
-			trace!(target: "sync", "Block queued but requires justification {}: {:?}", number, hash);
-			Ok(BlockImportResult::ImportedUnjustified(hash, number))
-		},
-		Ok(ImportResult::UnknownParent) => {
-			debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
-			Err(BlockImportError::UnknownParent)
-		},
-		Ok(ImportResult::KnownBad) => {
-			debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
-			Err(BlockImportError::BadBlock(peer))
-		},
-		Err(e) => {
-			debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-			Err(BlockImportError::Error)
-		}
-	}
+	import_error(import_handle.import_block(import_block, new_authorities))
 }
 
 /// Process single block import result.
@@ -472,13 +481,13 @@ pub fn process_import_result<B: BlockT>(
 		},
 		Err(BlockImportError::IncompleteHeader(who)) => {
 			if let Some(peer) = who {
-				link.useless_peer(peer, "Sent block with incomplete header to import");
+				link.note_useless_and_restart_sync(peer, "Sent block with incomplete header to import");
 			}
 			0
 		},
 		Err(BlockImportError::VerificationFailed(who, e)) => {
 			if let Some(peer) = who {
-				link.useless_peer(peer, &format!("Verification failed: {}", e));
+				link.note_useless_and_restart_sync(peer, &format!("Verification failed: {}", e));
 			}
 			0
 		},

@@ -18,7 +18,7 @@
 
 use std::net::SocketAddr;
 use transaction_pool;
-use chain_spec::ChainSpec;
+use crate::chain_spec::ChainSpec;
 pub use client::ExecutionStrategy;
 pub use client_db::PruningMode;
 pub use network::config::{NetworkConfiguration, Roles};

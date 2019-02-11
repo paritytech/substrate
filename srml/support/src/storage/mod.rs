@@ -274,6 +274,7 @@ impl<T: Codec, U> StorageList<T> for U where U: generator::StorageList<T> {
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
+	// TODO [ToDr] Prefix as const?
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
@@ -335,14 +336,32 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMa
 		U::take(key.borrow(), &RuntimeStorage)
 	}
 }
-//
-// pub trait StorageLinkedMap<K: Codec, V: Codec>: StorageMap<K, V> {
-// 	/// Return current head element.
-// 	fn head() -> Option<K>;
-//
-// 	/// Enumerate all elements in the map.
-// 	fn enumerate() -> LinkedMapEnumerator<K, V>;
-// }
+
+/// A storage map that can be enumerated.
+///
+/// Note that type is primarily useful for off-chain computations.
+/// Runtime implementors should avoid enumerating storage entries.
+pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+	type Enumerate: Iterator<Item = (K, V)>;
+
+	/// Return current head element.
+	fn head() -> Option<K>;
+
+	/// Enumerate all elements in the map.
+	fn enumerate() -> Self::Enumerate;
+}
+
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator::EnumerableStorageMap<K, V> {
+	type Enumerate = U::Enumerate;
+
+	fn head() -> Option<K> {
+		<U as generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
+	}
+
+	fn enumerate() -> Self::Enumerate {
+		<U as generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
+	}
+}
 
 /// A trait to conveniently store a vector of storable data.
 pub trait StorageVec {

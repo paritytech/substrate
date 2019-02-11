@@ -19,8 +19,9 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
+use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyword_impl};
 
-use syn::Ident;
+use syn::{Ident, Token};
 use syn::token::CustomKeyword;
 
 mod impls;
@@ -76,8 +77,7 @@ struct AddExtraGenesisLine {
 	pub extra_field: ext::Parens<Ident>,
 	pub coldot_token: Token![:],
 	pub extra_type: syn::Type,
-	// FIXME #1570: use a custom ext::Option instead (syn option on '=' fails)
-	pub default_value: ext::Seq<DeclStorageDefault>,
+	pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -93,8 +93,7 @@ struct DeclStorageLine {
 	pub build: Option<DeclStorageBuild>,
 	pub coldot_token: Token![:],
 	pub storage_type: DeclStorageType,
-	// FIXME #1570: use a custom ext::Option instead (syn option on '=' fails)
-	pub default_value: ext::Seq<DeclStorageDefault>,
+	pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
 

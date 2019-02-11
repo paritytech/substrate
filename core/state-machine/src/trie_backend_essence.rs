@@ -17,7 +17,6 @@
 //! Trie-based state machine backend essence used to read values
 //! from storage.
 
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 use log::{debug, warn};
@@ -106,7 +105,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			overlay: &mut read_overlay,
 		};
 
-		if let Err(e) = for_keys_in_child_trie::<H, _>(storage_key, &eph, &root, f) {
+		if let Err(e) = for_keys_in_child_trie::<H, _, Ephemeral<S, H>>(storage_key, &eph, &root, f) {
 			debug!(target: "trie", "Error while iterating child storage: {}", e);
 		}
 	}
@@ -152,6 +151,17 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: 'a + Hasher
+> hash_db::AsPlainDB<H::Out, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
+	fn as_plain_db<'b>(&'b self) -> &'b (hash_db::PlainDB<H::Out, DBValue> + 'b) { self }
+	fn as_plain_db_mut<'b>(&'b mut self) -> &'b mut (hash_db::PlainDB<H::Out, DBValue> + 'b) { self }
+}
+
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: 'a + Hasher
 > hash_db::AsHashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
@@ -172,48 +182,95 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 impl<'a,
 	S: 'a + TrieBackendStorage<H>,
 	H: Hasher
-> hash_db::HashDB<H, DBValue>
+> hash_db::PlainDB<H::Out, DBValue>
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn keys(&self) -> HashMap<H::Out, i32> {
-		self.overlay.keys()
-	}
-
 	fn get(&self, key: &H::Out) -> Option<DBValue> {
-		match self.overlay.raw(key) {
-			Some((val, i)) => {
-				if i <= 0 {
-					None
-				} else {
-					Some(val.clone())
-				}
-			}
-			None => match self.storage.get(&key) {
+		if let Some(val) = hash_db::PlainDB::get(self.overlay, key) {
+			Some(val)
+		} else {
+			match self.storage.get(&key) {
 				Ok(x) => x,
 				Err(e) => {
 					warn!(target: "trie", "Failed to read from DB: {}", e);
 					None
 				},
-			},
+			}
 		}
 	}
 
 	fn contains(&self, key: &H::Out) -> bool {
-		self.get(key).is_some()
-	}
-
-	fn insert(&mut self, value: &[u8]) -> H::Out {
-		self.overlay.insert(value)
+		hash_db::PlainDB::get(self, key).is_some()
 	}
 
 	fn emplace(&mut self, key: H::Out, value: DBValue) {
-		self.overlay.emplace(key, value)
+		hash_db::PlainDB::emplace(self.overlay, key, value)
 	}
 
 	fn remove(&mut self, key: &H::Out) {
-		self.overlay.remove(key)
+		hash_db::PlainDB::remove(self.overlay, key)
 	}
+}
+
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: Hasher
+> hash_db::PlainDBRef<H::Out, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
+	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::PlainDB::get(self, key) }
+	fn contains(&self, key: &H::Out) -> bool { hash_db::PlainDB::contains(self, key) }
+}
+
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: Hasher
+> hash_db::HashDB<H, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
+	fn get(&self, key: &H::Out) -> Option<DBValue> {
+		if let Some(val) = hash_db::HashDB::get(self.overlay, key) {
+			Some(val)
+		} else {
+			match self.storage.get(&key) {
+				Ok(x) => x,
+				Err(e) => {
+					warn!(target: "trie", "Failed to read from DB: {}", e);
+					None
+				},
+			}
+		}
+	}
+
+	fn contains(&self, key: &H::Out) -> bool {
+		hash_db::HashDB::get(self, key).is_some()
+	}
+
+	fn insert(&mut self, value: &[u8]) -> H::Out {
+		hash_db::HashDB::insert(self.overlay, value)
+	}
+
+	fn emplace(&mut self, key: H::Out, value: DBValue) {
+		hash_db::HashDB::emplace(self.overlay, key, value)
+	}
+
+	fn remove(&mut self, key: &H::Out) {
+		hash_db::HashDB::remove(self.overlay, key)
+	}
+}
+
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: Hasher
+> hash_db::HashDBRef<H, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
+	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::HashDB::get(self, key) }
+	fn contains(&self, key: &H::Out) -> bool { hash_db::HashDB::contains(self, key) }
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
@@ -232,7 +289,7 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
 // This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(<Self as hash_db::HashDB<H, DBValue>>::get(self, key))
+		Ok(hash_db::PlainDB::get(self, key))
 	}
 }
 

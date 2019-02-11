@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0", default-features = false }
+serde_derive = { version = "1.0", optional = true }
 pwasm-utils = { version = "0.6.1", default-features = false }
 parity-codec = { version = "3.0", default-features = false }
 parity-codec-derive = { version = "3.0", default-features = false }
@@ -18,16 +19,19 @@ sandbox = { package = "sr-sandbox", path = "../../core/sr-sandbox", default-feat
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 balances = { package = "srml-balances", path = "../balances", default-features = false }
+timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
 
 [dev-dependencies]
 wabt = "~0.7.4"
 assert_matches = "1.1"
 hex-literal = "0.1.0"
+consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"serde/std",
+	"serde_derive",
 	"parity-codec/std",
 	"parity-codec-derive/std",
 	"substrate-primitives/std",
@@ -38,6 +42,7 @@ std = [
 	"sandbox/std",
 	"srml-support/std",
 	"system/std",
+	"timestamp/std",
 	"parity-wasm/std",
 	"pwasm-utils/std",
 ]

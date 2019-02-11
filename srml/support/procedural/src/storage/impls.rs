@@ -15,8 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use proc_macro2::{TokenStream as TokenStream2};
-use storage::transformation::DeclStorageTypeInfos;
 use syn;
+use quote::quote;
+use crate::storage::transformation::DeclStorageTypeInfos;
 
 pub fn option_unwrap(is_option: bool) -> TokenStream2 {
 	if !is_option {
@@ -195,6 +196,7 @@ impl<'a> Impls<'a> {
 			&(<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key))[..]
 		};
 		let linkage = syn::Ident::new(&format!("Linkage{}", name), name.span());
+		let enumerator = syn::Ident::new(&format!("Enumerator{}", name), name.span());
 		let put_or_insert = quote! {
 			match linkage {
 				Some(linkage) => storage.put(key_for, &(val, linkage)),
@@ -263,10 +265,10 @@ impl<'a> Impls<'a> {
 					if let Some(head) = Self::read_head(storage) {
 						// update previous head
 						{
-							let (elem, mut linkage) = #linkage::read(storage, &head).expect("""
+							let (elem, mut linkage) = #linkage::read(storage, &head).expect(r#"
 								head is set when first element is inserted and unset when last element is removed;
 								if head is Some then it points to existing key; qed
-							""");
+							"#);
 							linkage.previous = Some(key.clone());
 							storage.put(&head, &(elem, linkage));
 						}
@@ -368,6 +370,28 @@ impl<'a> Impls<'a> {
 					let ret = f(&mut val);
 					#mutate_impl ;
 					ret
+				}
+			}
+
+			pub struct #enumerator;
+
+			impl Iterator for #enumerator {
+				type Item = (#kty, #typ);
+
+				fn next(&mut self) -> Option<Self::Item> {
+					unimplemented!()
+				}
+			}
+
+			impl<#traitinstance: #traittype> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance> {
+				type Enumerate = #enumerator;
+
+				fn head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
+					unimplemented!()
+				}
+
+				fn enumerate<S: #scrate::GenericStorage>(storage: &S) -> Self::Enumerate {
+					unimplemented!()
 				}
 			}
 		}

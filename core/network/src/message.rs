@@ -16,8 +16,10 @@
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
+use bitflags::bitflags;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use codec::{Encode, Decode, Input, Output};
+use parity_codec::{Encode, Decode, Input, Output};
+use parity_codec_derive::{Encode, Decode};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -124,7 +126,8 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use runtime_primitives::Justification;
-	use config::Roles;
+	use parity_codec_derive::{Encode, Decode};
+	use crate::config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
 		RequestId, Transactions, Direction

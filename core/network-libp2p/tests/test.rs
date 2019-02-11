@@ -124,7 +124,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	});
 
 	let combined = fut1.select(fut2).map_err(|(err, _)| err);
-	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
+	tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
 }
 
 #[test]
@@ -141,17 +141,25 @@ fn many_nodes_connectivity() {
 			let mut num_connecs = 0;
 			stream::poll_fn(move || -> io::Result<_> {
 				loop {
+					const MAX_BANDWIDTH: u64 = NUM_NODES as u64 * 1024;		// 1kiB/s/node
+					assert!(node.average_download_per_sec() < MAX_BANDWIDTH);
+					assert!(node.average_upload_per_sec() < MAX_BANDWIDTH);
+
 					match try_ready!(node.poll()) {
 						Some(ServiceEvent::OpenedCustomProtocol { .. }) => {
 							num_connecs += 1;
+							assert!(num_connecs < NUM_NODES);
 							if num_connecs == NUM_NODES - 1 {
-								return Ok(Async::Ready(Some(())))
+								return Ok(Async::Ready(Some(true)))
 							}
 						}
-						// TODO: we sometimes receive a closed connection event; maybe this is
-						//	benign, but it would be nice to figure out why
-						//	(https://github.com/libp2p/rust-libp2p/issues/844)
-						Some(ServiceEvent::ClosedCustomProtocol { .. }) => {}
+						Some(ServiceEvent::ClosedCustomProtocol { .. }) => {
+							let was_success = num_connecs == NUM_NODES - 1;
+							num_connecs -= 1;
+							if was_success && num_connecs < NUM_NODES - 1 {
+								return Ok(Async::Ready(Some(false)))
+							}
+						}
 						_ => panic!(),
 					}
 				}
@@ -163,7 +171,8 @@ fn many_nodes_connectivity() {
 	let combined = future::poll_fn(move || -> io::Result<_> {
 		for node in futures.iter_mut() {
 			match node.poll()? {
-				Async::Ready(Some(_)) => successes += 1,
+				Async::Ready(Some(true)) => successes += 1,
+				Async::Ready(Some(false)) => successes -= 1,
 				Async::Ready(None) => unreachable!(),
 				Async::NotReady => ()
 			}

@@ -16,9 +16,9 @@
 
 //! Specializations of the substrate network protocol to allow more complex forms of communication.
 
-use ::NodeIndex;
+use crate::NodeIndex;
 use runtime_primitives::traits::Block as BlockT;
-use protocol::Context;
+use crate::protocol::Context;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
@@ -26,13 +26,13 @@ pub trait NetworkSpecialization<B: BlockT>: Send + Sync + 'static {
 	fn status(&self) -> Vec<u8>;
 
 	/// Called when a peer successfully handshakes.
-	fn on_connect(&mut self, ctx: &mut Context<B>, who: NodeIndex, status: ::message::Status<B>);
+	fn on_connect(&mut self, ctx: &mut Context<B>, who: NodeIndex, status: crate::message::Status<B>);
 
 	/// Called when a peer is disconnected. If the peer ID is unknown, it should be ignored.
 	fn on_disconnect(&mut self, ctx: &mut Context<B>, who: NodeIndex);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(&mut self, ctx: &mut Context<B>, who: NodeIndex, message: &mut Option<::message::Message<B>>);
+	fn on_message(&mut self, ctx: &mut Context<B>, who: NodeIndex, message: &mut Option<crate::message::Message<B>>);
 
 	/// Called on abort.
 	fn on_abort(&mut self) { }

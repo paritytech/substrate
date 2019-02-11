@@ -1,0 +1,24 @@
+[package]
+name = "node-template-runtime-wasm"
+version = "0.9.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+node-template-runtime = { path = "..", default-features = false }
+
+[features]
+default = []
+std = [
+	"node-template-runtime/std",
+]
+
+[profile.release]
+panic = "abort"
+lto = true
+
+[workspace]
+members = []
