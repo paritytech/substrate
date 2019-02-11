@@ -25,6 +25,7 @@ mod block_builder_ext;
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
 pub use client;
+pub use client::ExecutionStrategies;
 pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
@@ -72,19 +73,25 @@ pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::Runti
 }
 
 /// Creates new client instance used for tests with the given api execution strategy.
-pub fn new_with_api_execution_strat(
-	api_execution_strategy: ExecutionStrategy
+pub fn new_with_execution_strategy(
+	execution_strategy: ExecutionStrategy
 ) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
 	let backend = Arc::new(Backend::new());
 	let executor = NativeExecutor::new(None);
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
 
+	let execution_strategies = ExecutionStrategies {
+		syncing: execution_strategy,
+		importing: execution_strategy,
+		block_construction: execution_strategy,
+		other: execution_strategy,
+	};
+
 	client::Client::new(
 		backend,
 		executor,
 		genesis_storage(false),
-		ExecutionStrategy::NativeWhenPossible,
-		api_execution_strategy
+		execution_strategies
 	).expect("Creates new client")
 }
 

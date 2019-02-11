@@ -19,7 +19,7 @@
 use std::net::SocketAddr;
 use transaction_pool;
 use crate::chain_spec::ChainSpec;
-pub use client::ExecutionStrategy;
+pub use client::ExecutionStrategies;
 pub use client_db::PruningMode;
 pub use network::config::{NetworkConfiguration, Roles};
 use runtime_primitives::BuildStorage;
@@ -57,10 +57,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub custom: C,
 	/// Node name.
 	pub name: String,
-	/// Block execution strategy.
-	pub block_execution_strategy: ExecutionStrategy,
-	/// Runtime API execution strategy.
-	pub api_execution_strategy: ExecutionStrategy,
+	/// Execution strategies.
+	pub execution_strategies: ExecutionStrategies,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
@@ -89,8 +87,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
-			block_execution_strategy: ExecutionStrategy::Both,
-			api_execution_strategy: ExecutionStrategy::Both,
+			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,
 			telemetry_url: None,
