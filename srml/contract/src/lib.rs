@@ -52,14 +52,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// We need these `extern crate` to be placed here otherwise there will be errors.
-// TODO: https://github.com/paritytech/substrate/issues/1509
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-#[macro_use]
-extern crate srml_support as runtime_support;
-
 #[macro_use]
 mod gas;
 
@@ -73,13 +65,16 @@ mod tests;
 use crate::exec::ExecutionContext;
 use crate::account_db::AccountDb;
 
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use codec::Codec;
+use parity_codec::Codec;
+use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
-use runtime_support::dispatch::{Result, Dispatchable};
-use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
-use runtime_support::traits::OnFreeBalanceZero;
+use srml_support::dispatch::{Result, Dispatchable};
+use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
+use srml_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
 use timestamp;

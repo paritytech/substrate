@@ -18,17 +18,11 @@
 //! Proc macro helpers for procedural macros
 // end::description[]
 
-extern crate syn;
-#[macro_use]
-extern crate quote;
-extern crate proc_macro2;
-
 extern crate proc_macro;
-
-#[macro_use] extern crate srml_support_procedural_tools_derive;
 
 // reexport proc macros
 pub use srml_support_procedural_tools_derive::*;
+pub use quote;
 
 pub mod syn_ext;
 
@@ -68,10 +62,10 @@ fn generate_hidden_includes_mod_name(unique_id: &str) -> Ident {
 /// Generates the access to the `subtrate_client` crate.
 pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	if ::std::env::var("CARGO_PKG_NAME").unwrap() == def_crate {
-		quote!( crate )
+		quote::quote!( crate )
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!( self::#mod_name::hidden_include )
+		quote::quote!( self::#mod_name::hidden_include )
 	}.into()
 }
 
@@ -82,7 +76,7 @@ pub fn generate_hidden_includes(unique_id: &str, def_crate: &str, crate_id: &str
 		TokenStream::new()
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!(
+		quote::quote!(
 			#[doc(hidden)]
 			mod #mod_name {
 				pub extern crate #crate_id as hidden_include;

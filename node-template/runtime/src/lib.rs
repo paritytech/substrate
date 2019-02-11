@@ -167,6 +167,12 @@ impl balances::Trait for Runtime {
 	type Event = Event;
 }
 
+impl fees::Trait for Runtime {
+	type Amount = u128;
+	type TransferAsset = Balances;
+	type Event = Event;
+}
+
 impl sudo::Trait for Runtime {
 	/// The uniquitous event type.
 	type Event = Event;

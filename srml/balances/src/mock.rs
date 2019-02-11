@@ -22,6 +22,7 @@ use primitives::BuildStorage;
 use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
+use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
@@ -102,6 +103,7 @@ impl ExtBuilder {
 			existential_deposit: self.existential_deposit,
 			transfer_fee: self.transfer_fee,
 			creation_fee: self.creation_fee,
+			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.into()
 	}

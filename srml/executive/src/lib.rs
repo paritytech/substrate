@@ -256,7 +256,7 @@ impl<
 			Err("invalid account index") => return TransactionValidity::Unknown(INVALID_INDEX),
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err("bad signature") => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+			Err(primitives::BAD_SIGNATURE) => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
@@ -360,6 +360,7 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
+			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(fees::GenesisConfig::<Runtime> {
 			transaction_base_fee: 10,
