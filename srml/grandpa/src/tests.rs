@@ -21,8 +21,9 @@
 use primitives::{testing, traits::OnFinalise};
 use primitives::traits::Header;
 use runtime_io::with_externalities;
-use mock::{Grandpa, System, new_test_ext};
+use crate::mock::{Grandpa, System, new_test_ext};
 use system::{EventRecord, Phase};
+use crate::{RawLog, RawEvent};
 use codec::{Decode, Encode};
 use super::*;
 

@@ -31,8 +31,10 @@ use syn::{
 	parse::{
 		Error,
 		Result,
-	}
+	},
+	parse_macro_input,
 };
+use quote::quote;
 
 use super::*;
 
@@ -66,7 +68,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	let scrate_decl = generate_hidden_includes(
 		&hidden_crate_name,
 		"srml-support",
-		"srml_support",
 	);
 
 	let (
@@ -203,7 +204,7 @@ fn decl_store_extra_genesis(
 			config_field.extend(quote!( pub #ident: #storage_type, ));
 			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
 				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance>| config.#ident.clone()) )));
-			let fielddefault = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d|
+			let fielddefault = default_value.inner.as_ref().map(|d| &d.expr).map(|d|
 				if type_infos.is_option {
 					quote!( #d.unwrap_or_default() )
 				} else {
@@ -270,7 +271,7 @@ fn decl_store_extra_genesis(
 					genesis_extrafields.extend(quote!{
 						#attrs pub #extrafield: #extra_type,
 					});
-					let extra_default = default_value.inner.get(0).map(|d| &d.expr).map(|e| quote!{ #e })
+					let extra_default = default_value.inner.as_ref().map(|d| &d.expr).map(|e| quote!{ #e })
 						.unwrap_or_else(|| quote!( Default::default() ));
 					genesis_extrafields_default.extend(quote!{
 						#extrafield: #extra_default,
@@ -403,7 +404,7 @@ fn decl_storage_items(
 
 		let type_infos = get_type_infos(storage_type);
 		let gettype = type_infos.full_type;
-		let fielddefault = default_value.inner.get(0).as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
+		let fielddefault = default_value.inner.as_ref().map(|d| &d.expr).map(|d| quote!( #d ))
 			.unwrap_or_else(|| quote!{ Default::default() });
 
 		let typ = type_infos.typ;
@@ -643,7 +644,7 @@ fn store_functions_to_metadata (
 				#scrate::storage::generator::StorageFunctionModifier::Default
 			}
 		};
-		let default = default_value.inner.get(0).as_ref().map(|d| &d.expr)
+		let default = default_value.inner.as_ref().map(|d| &d.expr)
 			.map(|d| {
 				quote!( #d )
 			})

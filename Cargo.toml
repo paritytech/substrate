@@ -79,6 +79,7 @@ members = [
 	"node/executor",
 	"node/primitives",
 	"node/runtime",
+	"node-template",
 	"subkey",
 ]
 exclude = [

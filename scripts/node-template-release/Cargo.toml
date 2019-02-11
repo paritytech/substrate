@@ -1,0 +1,17 @@
+[package]
+name = "node-template-release"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+toml = "0.4"
+tar = "0.4"
+glob = "0.2"
+structopt = "0.2"
+tempfile = "3"
+fs_extra = "1"
+git2 = "0.8"
+flate2 = "1.0"
+
+[workspace]

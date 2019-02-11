@@ -54,7 +54,7 @@ mod tests {
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	fn executor() -> executor::NativeExecutor<Executor> {
-		NativeExecutionDispatch::new()
+		NativeExecutionDispatch::new(None)
 	}
 
 	fn construct_block(
@@ -93,7 +93,7 @@ mod tests {
 			&executor(),
 			"Core_initialise_block",
 			&header.encode(),
-			ExecutionStrategy::NativeWhenPossible,
+			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 
 		for tx in transactions.iter() {
@@ -104,7 +104,7 @@ mod tests {
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
-				ExecutionStrategy::NativeWhenPossible,
+				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
 		}
 
@@ -115,7 +115,7 @@ mod tests {
 			&executor(),
 			"BlockBuilder_finalise_block",
 			&[],
-			ExecutionStrategy::NativeWhenPossible,
+			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
 		println!("root after: {:?}", header.extrinsics_root);
@@ -159,7 +159,7 @@ mod tests {
 			&executor(),
 			"Core_execute_block",
 			&b1data,
-			ExecutionStrategy::NativeWhenPossible,
+			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 	}
 
@@ -207,10 +207,10 @@ mod tests {
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
-			&Executor::new(),
+			&Executor::new(None),
 			"Core_execute_block",
 			&b1data,
-			ExecutionStrategy::NativeWhenPossible,
+			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 	}
 }

@@ -17,6 +17,7 @@
 //! Transaction validity interface.
 
 use rstd::prelude::*;
+use parity_codec_derive::{Encode, Decode};
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;

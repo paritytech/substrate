@@ -32,28 +32,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as runtime_primitives;
-extern crate srml_system as system;
-extern crate srml_consensus as consensus;
-extern crate parity_codec as codec;
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate substrate_inherents as inherents;
-
-use runtime_support::{StorageValue, Parameter};
+#[cfg(feature = "std")]
+use parity_codec_derive::Decode;
+use parity_codec_derive::Encode;
+use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
+use srml_support::for_each_tuple;
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, cmp};
-use runtime_support::for_each_tuple;
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
@@ -88,7 +74,7 @@ impl InherentError {
 	#[cfg(feature = "std")]
 	pub fn try_from(id: &InherentIdentifier, data: &[u8]) -> Option<Self> {
 		if id == &INHERENT_IDENTIFIER {
-			<InherentError as codec::Decode>::decode(&mut &data[..])
+			<InherentError as parity_codec::Decode>::decode(&mut &data[..])
 		} else {
 			None
 		}
@@ -268,6 +254,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 mod tests {
 	use super::*;
 
+	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;

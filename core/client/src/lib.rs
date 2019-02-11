@@ -20,6 +20,8 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
+extern crate parity_codec as codec;
+
 #[macro_use]
 pub mod runtime_api;
 #[cfg(feature = "std")]
@@ -55,7 +57,7 @@ pub use crate::client::{
 	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	BlockImportNotification, Client, ClientInfo, ChainHead,
+	BlockImportNotification, Client, ClientInfo, ChainHead, ExecutionStrategies,
 };
 #[cfg(feature = "std")]
 pub use crate::notifications::{StorageEventStream, StorageChangeSet};

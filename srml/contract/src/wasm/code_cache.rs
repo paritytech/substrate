@@ -30,7 +30,7 @@ use crate::wasm::{prepare, runtime::Env, PrefabWasmModule};
 use crate::{CodeHash, CodeStorage, PristineCode, Schedule, Trait};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul, Hash, Bounded};
-use runtime_support::StorageMap;
+use srml_support::StorageMap;
 
 /// Gas metering token that used for charging storing code into the code storage.
 ///

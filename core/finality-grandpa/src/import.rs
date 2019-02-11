@@ -20,7 +20,7 @@ use codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use client::{CallExecutor, Client, error::Error as ClientError};
+use client::{blockchain, CallExecutor, Client, error::Error as ClientError};
 use client::backend::Backend;
 use client::runtime_api::Core as CoreApi;
 use consensus_common::{
@@ -222,6 +222,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	{
 		use consensus_common::ForkChoiceStrategy;
 
+
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error or panic.
@@ -314,7 +315,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 				if *base == hash { return error(); }
 				if *base == parent_hash { return error(); }
 
-				let tree_route = ::client::blockchain::tree_route(
+				let tree_route = blockchain::tree_route(
 					self.inner.backend().blockchain(),
 					BlockId::Hash(parent_hash),
 					BlockId::Hash(*base),
@@ -397,8 +398,18 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
+		use client::blockchain::HeaderBackend;
+
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
+
+		// early exit if block already in chain, otherwise the check for
+		// authority changes will error when trying to re-import a change block
+		match self.inner.backend().blockchain().status(BlockId::Hash(hash)) {
+			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(blockchain::BlockStatus::Unknown) => {},
+			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+		}
 
 		let pending_changes = self.make_authorities_changes(&mut block, hash)?;
 
@@ -463,6 +474,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		}
 
 		Ok(import_result)
+	}
+
+	fn check_block(
+		&self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		self.inner.check_block(hash, parent_hash)
 	}
 }
 

@@ -96,21 +96,21 @@ impl NetworkConfiguration {
 }
 
 /// The severity of misbehaviour of a peer that is reported.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Severity<'a> {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Severity {
 	/// Peer is timing out. Could be bad connectivity of overload of work on either of our sides.
 	Timeout,
 	/// Peer has been notably useless. E.g. unable to answer a request that we might reasonably consider
 	/// it could answer.
-	Useless(&'a str),
+	Useless(String),
 	/// Peer has behaved in an invalid manner. This doesn't necessarily need to be Byzantine, but peer
 	/// must have taken concrete action in order to behave in such a way which is wantanly invalid.
-	Bad(&'a str),
+	Bad(String),
 }
 
-impl<'a> fmt::Display for Severity<'a> {
+impl fmt::Display for Severity {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
+		match self {
 			Severity::Timeout => write!(fmt, "Timeout"),
 			Severity::Useless(r) => write!(fmt, "Useless ({})", r),
 			Severity::Bad(r) => write!(fmt, "Bad ({})", r),
