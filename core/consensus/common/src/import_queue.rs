@@ -24,7 +24,7 @@
 //! The `BasicQueue` and `BasicVerifier` traits allow serial queues to be
 //! instantiated simply.
 
-use crate::block_import::{ImportBlock, BlockImport, JustificationImport, ImportResult, BlockOrigin};
+use crate::block_import::{ImportBlock, BlockImport, JustificationImport, FinalityProofImport, ImportResult, BlockOrigin};
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -41,6 +41,9 @@ pub type SharedBlockImport<B> = Arc<dyn BlockImport<B, Error=ConsensusError> + S
 
 /// Shared justification import struct used by the queue.
 pub type SharedJustificationImport<B> = Arc<dyn JustificationImport<B, Error=ConsensusError> + Send + Sync>;
+
+/// Shared finality proof import struct used by the queue.
+pub type SharedFinalityProofImport<B> = Arc<dyn FinalityProofImport<B, Error=ConsensusError> + Send + Sync>;
 
 /// Maps to the Origin used by the network.
 pub type Origin = usize;
@@ -98,6 +101,8 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
 	/// Import a block justification.
 	fn import_justification(&self, hash: B::Hash, number: NumberFor<B>, justification: Justification) -> bool;
+	/// Import block finality proof.
+	fn import_finality_proof(&self, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) -> bool;
 }
 
 /// Import queue status. It isn't completely accurate.
@@ -116,6 +121,7 @@ pub struct BasicQueue<B: BlockT, V: 'static + Verifier<B>> {
 	verifier: Arc<V>,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
+	finality_proof_import: Option<SharedFinalityProofImport<B>>,
 }
 
 /// Locks order: queue, queue_blocks, best_importing_number
@@ -129,13 +135,19 @@ pub struct AsyncImportQueueData<B: BlockT> {
 
 impl<B: BlockT, V: Verifier<B>> BasicQueue<B, V> {
 	/// Instantiate a new basic queue, with given verifier and justification import.
-	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>, justification_import: Option<SharedJustificationImport<B>>) -> Self {
+	pub fn new(
+		verifier: Arc<V>,
+		block_import: SharedBlockImport<B>,
+		justification_import: Option<SharedJustificationImport<B>>,
+		finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	) -> Self {
 		Self {
 			handle: Mutex::new(None),
 			data: Arc::new(AsyncImportQueueData::new()),
 			verifier,
 			block_import,
 			justification_import,
+			finality_proof_import,
 		}
 	}
 }
@@ -234,6 +246,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 	fn import_justification(&self, hash: B::Hash, number: NumberFor<B>, justification: Justification) -> bool {
 		self.justification_import.as_ref().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification).is_ok()
+		}).unwrap_or(false)
+	}
+
+	fn import_finality_proof(&self, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) -> bool {
+		self.finality_proof_import.as_ref().map(|finality_proof_import| {
+			finality_proof_import.import_finality_proof(hash, number, finality_proof).is_ok()
 		}).unwrap_or(false)
 	}
 }

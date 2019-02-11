@@ -167,3 +167,19 @@ pub trait JustificationImport<B: BlockT> {
 		justification: Justification,
 	) -> Result<(), Self::Error>;
 }
+
+/// Finality proof import trait.
+pub trait FinalityProofImport<B: BlockT> {
+	type Error: ::std::error::Error + Send + 'static;
+
+	/// Called by the import queue when it is started.
+	fn on_start(&self, _link: &crate::import_queue::Link<B>) { }
+
+	/// Import a Block justification and finalize the given block.
+	fn import_finality_proof(
+		&self,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		finality_proof: Vec<u8>,
+	) -> Result<(), Self::Error>;
+}

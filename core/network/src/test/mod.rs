@@ -40,7 +40,7 @@ use keyring::Keyring;
 use codec::Encode;
 use consensus::{BlockOrigin, ImportBlock, JustificationImport, ForkChoiceStrategy, Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
-use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
+use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport, Verifier};
 use specialization::NetworkSpecialization;
 use consensus_gossip::ConsensusGossip;
 use service::ExecuteInContext;
@@ -121,18 +121,25 @@ pub struct SyncImportQueue<B: BlockT, V: Verifier<B>> {
 	link: ImportCB<B>,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
+	finality_proof_import: Option<SharedFinalityProofImport<B>>,
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
 impl<B: 'static + BlockT, V: 'static + Verifier<B>> SyncImportQueue<B, V> {
 	/// Create a new SyncImportQueue wrapping the given Verifier and block import
 	/// handle.
-	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>, justification_import: Option<SharedJustificationImport<B>>) -> Self {
+	pub fn new(
+		verifier: Arc<V>,
+		block_import: SharedBlockImport<B>,
+		justification_import: Option<SharedJustificationImport<B>>,
+		finality_proof_import: Option<SharedFinalityProofImport<B>>,
+	) -> Self {
 		let queue = SyncImportQueue {
 			verifier,
 			link: ImportCB::new(),
 			block_import,
 			justification_import,
+			finality_proof_import,
 		};
 
 		let v = queue.verifier.clone();
@@ -201,6 +208,18 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 		self.justification_import.as_ref().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification).is_ok()
 		}).unwrap_or(false)
+	}
+
+	fn import_finality_proof(
+		&self,
+		hash: B::Hash,
+		number: NumberFor<B>,
+		finality_proof: Vec<u8>,
+	) -> bool {
+		self.finality_proof_import.as_ref().map(|finality_proof_import| {
+			finality_proof_import.import_finality_proof(hash, number, finality_proof).is_ok()
+		}).unwrap_or(false)
+
 	}
 }
 
@@ -555,7 +574,7 @@ pub trait TestNetFactory: Sized {
 		let verifier = self.make_verifier(client.clone(), config);
 		let (block_import, justification_import, data) = self.make_block_import(client.clone());
 
-		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import, justification_import));
+		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import, justification_import, None));
 		let specialization = DummySpecialization { };
 		let sync = Protocol::new(
 			config.clone(),

@@ -20,7 +20,7 @@ use protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use consensus::import_queue::ImportQueue;
 use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use message::{self, Message, generic::Message as GenericMessage};
 use sync::{PeerSync, PeerSyncState};
 
@@ -301,11 +301,21 @@ impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence {
 	type Response = Option<Vec<u8>>;
 
 	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B> {
-		unimplemented!()
+		GenericMessage::FinalityProofRequest(message::generic::FinalityProofRequest {
+			block: request.0,
+		})
 	}
 
-	fn accept_response(&self, request: ExtraRequest<B>, import_queue: &ImportQueue<B>, response: Option<Justification>) -> ExtraResponseKind {
-		unimplemented!()
+	fn accept_response(&self, request: ExtraRequest<B>, import_queue: &ImportQueue<B>, response: Option<Vec<u8>>) -> ExtraResponseKind {
+		if let Some(finality_proof) = response {
+			if import_queue.import_finality_proof(request.0, request.1, finality_proof) {
+				ExtraResponseKind::Accepted
+			} else {
+				ExtraResponseKind::Invalid
+			}
+		} else {
+			ExtraResponseKind::Missing
+		}
 	}
 
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B> {

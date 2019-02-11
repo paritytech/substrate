@@ -137,6 +137,42 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> JustificationImport<Block>
 	}
 }
 
+impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
+	for GrandpaLightBlockImport<B, E, Block, RA> where
+		NumberFor<Block>: grandpa::BlockNumberOps,
+		B: Backend<Block, Blake2Hasher> + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		DigestFor<Block>: Encode,
+		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		RA: Send + Sync,
+{
+	type Error = ConsensusError;
+
+	fn on_start(&self, link: &::consensus_common::import_queue::Link<Block>) {
+/*		let chain_info = match self.client.info() {
+			Ok(info) => info.chain,
+			_ => return,
+		};
+
+		let data = self.data.read();
+		for (pending_number, pending_hash) in data.consensus_changes.pending_changes() {
+			if *pending_number > chain_info.finalized_number && *pending_number <= chain_info.best_number {
+				link.request_justification(pending_hash, *pending_number);
+			}
+		}*/
+	}
+
+	fn import_finality_proof(
+		&self,
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+		finality_proof: Vec<u8>,
+	) -> Result<(), Self::Error> {
+//		self.do_import_justification(hash, number, justification)
+unimplemented!()
+	}
+}
+
 impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 	for GrandpaLightBlockImport<B, E, Block, RA> where
 		NumberFor<Block>: grandpa::BlockNumberOps,
