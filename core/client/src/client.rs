@@ -38,7 +38,7 @@ use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
