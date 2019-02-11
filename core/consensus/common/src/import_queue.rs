@@ -64,7 +64,7 @@ pub struct IncomingBlock<B: BlockT> {
 }
 
 /// Verify a justification of a block
-pub trait Verifier<B: BlockT>: Send + Sync + Sized {
+pub trait Verifier<B: BlockT>: Send + Sync {
 	/// Verify the given data and return the ImportBlock and an optional
 	/// new set of validators to import. If not, err with an Error-Message
 	/// presented to the User in the logs.
@@ -251,7 +251,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 
 	fn import_finality_proof(&self, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) -> bool {
 		self.finality_proof_import.as_ref().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof).is_ok()
+			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier).is_ok()
 		}).unwrap_or(false)
 	}
 }

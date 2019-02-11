@@ -217,7 +217,7 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 		finality_proof: Vec<u8>,
 	) -> bool {
 		self.finality_proof_import.as_ref().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof).is_ok()
+			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier).is_ok()
 		}).unwrap_or(false)
 
 	}

@@ -20,6 +20,8 @@ use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, DigestItemFor,
 use runtime_primitives::Justification;
 use std::borrow::Cow;
 
+use crate::import_queue::Verifier;
+
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
@@ -181,5 +183,6 @@ pub trait FinalityProofImport<B: BlockT> {
 		hash: B::Hash,
 		number: NumberFor<B>,
 		finality_proof: Vec<u8>,
+		verifier: &Verifier<B>,
 	) -> Result<(), Self::Error>;
 }
