@@ -53,6 +53,8 @@ use crate::rstd::vec::Vec;
 pub use crate::rstd::borrow::Borrow;
 #[doc(hidden)]
 pub use crate::rstd::marker::PhantomData;
+#[doc(hidden)]
+pub use crate::rstd::boxed::Box;
 
 pub use srml_metadata::{
 	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
@@ -97,6 +99,7 @@ pub trait Storage {
 }
 
 // We use a construct like this during when genesis storage is being built.
+#[cfg(feature = "std")]
 impl<S: sr_primitives::BuildStorage> Storage for (RefCell<&mut sr_primitives::StorageOverlay>, PhantomData<S>) {
 	fn exists(&self, key: &[u8]) -> bool {
 		self.0.borrow().contains_key(S::hash(key).as_ref())

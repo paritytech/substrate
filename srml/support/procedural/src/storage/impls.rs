@@ -402,8 +402,8 @@ impl<'a> Impls<'a> {
 					#linkage::read_head(storage)
 				}
 
-				fn enumerate<'a, S: #scrate::GenericStorage>(storage: &'a S) -> Box<Iterator<Item = (#kty, #typ)> + 'a> {
-					Box::new(#enumerator {
+				fn enumerate<'a, S: #scrate::GenericStorage>(storage: &'a S) -> #scrate::storage::generator::Box<Iterator<Item = (#kty, #typ)> + 'a> {
+					#scrate::storage::generator::Box::new(#enumerator {
 						next: #linkage::read_head(storage),
 						storage,
 					})
