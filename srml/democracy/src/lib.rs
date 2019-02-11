@@ -18,26 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate srml_balances as balances;
-
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate sr_std as rstd;
-#[macro_use]
-extern crate srml_support;
-
-extern crate parity_codec as codec;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-
 use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, As};
+use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
+use srml_support::{decl_module, decl_storage, decl_event, ensure};
 use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
@@ -440,6 +426,7 @@ impl<T: Trait> EnsureAccountLiquid<T::AccountId> for Module<T> {
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
+	use srml_support::{impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok};
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};

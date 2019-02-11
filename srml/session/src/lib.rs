@@ -19,28 +19,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-extern crate parity_codec_derive;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_consensus as consensus;
-extern crate srml_system as system;
-extern crate srml_timestamp as timestamp;
-
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, Convert};
-use runtime_support::{StorageValue, StorageMap};
-use runtime_support::dispatch::Result;
-use runtime_support::for_each_tuple;
+use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
+use srml_support::dispatch::Result;
 use system::ensure_signed;
 use rstd::ops::Mul;
 
@@ -231,6 +213,7 @@ impl<T: Trait> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use srml_support::{impl_outer_origin, assert_ok};
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
