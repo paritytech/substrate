@@ -19,7 +19,7 @@ use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, native_else_wasm, ExecutionStrategy
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;

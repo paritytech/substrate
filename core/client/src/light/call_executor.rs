@@ -509,7 +509,7 @@ mod tests {
 		let local_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![1])));
 		let remote_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![2])));
 		let remote_or_local = RemoteOrLocalCallExecutor::new(backend, remote_executor, local_executor);
-		assert_eq!(remote_or_local.call(&BlockId::Number(0), "test_method", &[]).unwrap(), vec![1]);
-		assert_eq!(remote_or_local.call(&BlockId::Number(1), "test_method", &[]).unwrap(), vec![2]);
+		assert_eq!(remote_or_local.call(&BlockId::Number(0), "test_method", &[], ExecutionStrategy::NativeElseWasm).unwrap(), vec![1]);
+		assert_eq!(remote_or_local.call(&BlockId::Number(1), "test_method", &[], ExecutionStrategy::NativeElseWasm).unwrap(), vec![2]);
 	}
 }

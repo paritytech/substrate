@@ -80,12 +80,11 @@ fn calling_wasm_runtime_signature_changed_old_function() {
 }
 
 #[test]
-#[should_panic(expected = "Failing because we are on wasm")]
-fn calling_with_both_strategy_and_fail_on_wasm_should_panic() {
+fn calling_with_both_strategy_and_fail_on_wasm_should_return_error() {
 	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
 	let runtime_api = client.runtime_api();
 	let block_id = BlockId::Number(client.info().unwrap().chain.best_number);
-	assert_eq!(runtime_api.fail_on_wasm(&block_id).unwrap(), 1);
+	assert!(runtime_api.fail_on_wasm(&block_id).is_err());
 }
 
 #[test]
