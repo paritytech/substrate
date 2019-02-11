@@ -204,13 +204,14 @@ mod tests {
 	#[test]
 	fn enumeration_and_head_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Map::head(), None);
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+			assert_eq!(Map::head(), Some(15));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(15, 42)]);
 			// insert / remove
 			let key = 17u32;
 			Map::insert(key, 4u64);
 			assert_eq!(Map::head(), Some(key));
-			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 4)]);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 4), (15, 42)]);
+			assert_eq!(Map::take(&15), 42u64);
 			assert_eq!(Map::take(&key), 4u64);
 			assert_eq!(Map::head(), None);
 			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);

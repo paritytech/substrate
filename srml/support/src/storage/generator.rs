@@ -217,13 +217,11 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 
 /// A `StorageMap` with enumerable entries.
 pub trait EnumerableStorageMap<K: codec::Codec, V: codec::Codec>: StorageMap<K, V> {
-	type Enumerate: Iterator<Item = (K, V)>;
-
 	/// Return current head element.
 	fn head<S: Storage>(storage: &S) -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate<S: Storage>(storage: &S) -> Self::Enumerate;
+	fn enumerate<'a, S: Storage>(storage: &'a S) -> Box<Iterator<Item = (K, V)> + 'a>;
 }
 
 // FIXME #1466 Remove this in favour of `decl_storage` macro.

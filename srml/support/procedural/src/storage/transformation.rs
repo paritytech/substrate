@@ -432,9 +432,7 @@ fn decl_storage_items(
 				i.map(key_type)
 			},
 			DeclStorageTypeInfosKind::Map { key_type, is_linked: true } => {
-				let imp = i.linked_map(key_type);
-				println!("Implementation:\n{}", imp);
-				imp
+				i.linked_map(key_type)
 			},
 		};
 		impls.extend(implementation)

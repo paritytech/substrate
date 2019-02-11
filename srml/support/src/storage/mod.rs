@@ -342,23 +342,19 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMa
 /// Note that type is primarily useful for off-chain computations.
 /// Runtime implementors should avoid enumerating storage entries.
 pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
-	type Enumerate: Iterator<Item = (K, V)>;
-
 	/// Return current head element.
 	fn head() -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate() -> Self::Enumerate;
+	fn enumerate() -> Box<Iterator<Item = (K, V)>>;
 }
 
 impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator::EnumerableStorageMap<K, V> {
-	type Enumerate = U::Enumerate;
-
 	fn head() -> Option<K> {
 		<U as generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
 
-	fn enumerate() -> Self::Enumerate {
+	fn enumerate() -> Box<Iterator<Item = (K, V)>> {
 		<U as generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
 	}
 }
