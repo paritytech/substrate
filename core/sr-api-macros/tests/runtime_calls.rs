@@ -80,7 +80,7 @@ fn calling_wasm_runtime_signature_changed_old_function() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "Failing because we are on wasm")]
 fn calling_with_both_strategy_and_fail_on_wasm_should_panic() {
 	let client = test_client::new_with_execution_strategy(ExecutionStrategy::Both);
 	let runtime_api = client.runtime_api();

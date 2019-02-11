@@ -333,7 +333,7 @@ cfg_if! {
 				}
 
 				fn fail_on_native() -> u64 {
-					panic!()
+					panic!("Failing because we are on native")
 				}
 				fn fail_on_wasm() -> u64 {
 					1
@@ -431,7 +431,7 @@ cfg_if! {
 				}
 
 				fn fail_on_wasm() -> u64 {
-					panic!()
+					panic!("Failing because we are on wasm")
 				}
 			}
 
