@@ -24,7 +24,7 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
-use consensus_common::{BlockImport, JustificationImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
+use consensus_common::{BlockImport, JustificationImport, FinalityProofImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
 use grandpa::VoterSet;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
@@ -268,6 +268,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA>
 		// import justification
 
 		// apply new authorities set
+
+		unimplemented!("TODO")
 	}
 
 	/// Import a block justification and finalize the block.

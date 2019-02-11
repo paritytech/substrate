@@ -34,7 +34,7 @@ use parity_codec::Encode;
 use consensus_common::{
 	Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy
 };
-use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
+use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport};
 use client::ChainHead;
 use client::block_builder::api::BlockBuilder as BlockBuilderApi;
 use consensus_common::{ImportBlock, BlockOrigin};
@@ -659,6 +659,7 @@ pub fn import_queue<B, C, E>(
 	slot_duration: SlotDuration,
 	block_import: SharedBlockImport<B>,
 	justification_import: Option<SharedJustificationImport<B>>,
+	finality_proof_import: Option<SharedFinalityProofImport<B>>,
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
@@ -674,7 +675,7 @@ pub fn import_queue<B, C, E>(
 	let verifier = Arc::new(
 		AuraVerifier { client: client.clone(), extra, inherent_data_providers }
 	);
-	Ok(BasicQueue::new(verifier, block_import, justification_import))
+	Ok(BasicQueue::new(verifier, block_import, justification_import, finality_proof_import))
 }
 
 #[cfg(test)]

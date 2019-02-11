@@ -151,6 +151,11 @@ impl<B: BlockT, E> OnDemand<B, E> where
 		}
 	}
 
+	/// Get checker reference.
+	pub fn checker(&self) -> &Arc<FetchChecker<B>> {
+		&self.checker
+	}
+
 	/// Sets weak reference to network service.
 	pub fn set_service_link(&self, service: Weak<E>) {
 		self.core.lock().service = service;
