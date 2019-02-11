@@ -210,10 +210,8 @@ impl<D> Peer<D> {
 
 	/// Whether this peer is done syncing (has no messages to send).
 	fn is_done(&self) -> bool {
-		if self.import_queue.status().importing_count > 0 {
-			return false;
-		}
-		self.network_port.lock().receiver().is_empty()
+		if self.import_queue.status().importing_count == 0 &&
+			self.network_port.lock().receiver().is_empty()
 	}
 
 	/// Execute a "sync step". This is called for each peer after it sends a packet.
