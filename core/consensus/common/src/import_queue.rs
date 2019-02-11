@@ -338,7 +338,10 @@ impl<B: BlockT> BlockImporter<B> {
 
 			let link = match self.link.as_ref() {
 				Some(link) => link,
-				None => unreachable!("1. The import-queue is started when instantiating the network service, 2. any import message are sent after that step"),
+				None => {
+					trace!(target:"sync", "Received import result for {} while import-queue has no link", hash);
+					return true
+				},
 			};
 
 			match result {
