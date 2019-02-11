@@ -21,9 +21,11 @@ use rstd::{self, result, marker::PhantomData};
 use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
 use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
-use codec::{Codec, Encode, HasCompact};
+use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{
@@ -189,7 +191,7 @@ pub trait As<T> {
 	/// Convert forward (ala `Into::into`).
 	fn as_(self) -> T;
 	/// Convert backward (ala `From::from`).
-	fn sa(T) -> Self;
+	fn sa(_: T) -> Self;
 }
 
 macro_rules! impl_numerics {
@@ -293,11 +295,25 @@ pub trait OnFinalise<BlockNumber> {
 
 impl<N> OnFinalise<N> for () {}
 
+/// The block initialisation trait. Implementing this lets you express what should happen
+/// for your module when the block is beginning (right before the first extrinsic is executed).
+pub trait OnInitialise<BlockNumber> {
+	/// The block is being initialised. Implement to have something happen.
+	fn on_initialise(_n: BlockNumber) {}
+}
+
+impl<N> OnInitialise<N> for () {}
+
 macro_rules! tuple_impl {
 	($one:ident,) => {
 		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
 			fn on_finalise(n: Number) {
 				$one::on_finalise(n);
+			}
+		}
+		impl<Number: Copy, $one: OnInitialise<Number>> OnInitialise<Number> for ($one,) {
+			fn on_initialise(n: Number) {
+				$one::on_initialise(n);
 			}
 		}
 	};
@@ -310,6 +326,16 @@ macro_rules! tuple_impl {
 			fn on_finalise(n: Number) {
 				$first::on_finalise(n);
 				$($rest::on_finalise(n);)+
+			}
+		}
+		impl<
+			Number: Copy,
+			$first: OnInitialise<Number>,
+			$($rest: OnInitialise<Number>),+
+		> OnInitialise<Number> for ($first, $($rest),+) {
+			fn on_initialise(n: Number) {
+				$first::on_initialise(n);
+				$($rest::on_initialise(n);)+
 			}
 		}
 		tuple_impl!($($rest,)+);
@@ -536,29 +562,29 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 	/// Returns a reference to the header number.
 	fn number(&self) -> &Self::Number;
 	/// Sets the header number.
-	fn set_number(&mut self, Self::Number);
+	fn set_number(&mut self, number: Self::Number);
 
 	/// Returns a reference to the extrinsics root.
 	fn extrinsics_root(&self) -> &Self::Hash;
 	/// Sets the extrinsic root.
-	fn set_extrinsics_root(&mut self, Self::Hash);
+	fn set_extrinsics_root(&mut self, root: Self::Hash);
 
 	/// Returns a reference to the state root.
 	fn state_root(&self) -> &Self::Hash;
 	/// Sets the state root.
-	fn set_state_root(&mut self, Self::Hash);
+	fn set_state_root(&mut self, root: Self::Hash);
 
 	/// Returns a reference to the parent hash.
 	fn parent_hash(&self) -> &Self::Hash;
 	/// Sets the parent hash.
-	fn set_parent_hash(&mut self, Self::Hash);
+	fn set_parent_hash(&mut self, hash: Self::Hash);
 
 	/// Returns a reference to the digest.
 	fn digest(&self) -> &Self::Digest;
 	/// Get a mutable reference to the digest.
 	fn digest_mut(&mut self) -> &mut Self::Digest;
 	/// Sets the digest.
-	fn set_digest(&mut self, Self::Digest);
+	fn set_digest(&mut self, digest: Self::Digest);
 
 	/// Returns the hash of the header.
 	fn hash(&self) -> Self::Hash {
@@ -694,7 +720,7 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	/// `ChangesTrieRoot` payload.
 	type Hash: Member;
 	/// `AuthorityChange` payload.
-	type AuthorityId: Member + MaybeHash + codec::Encode + codec::Decode;
+	type AuthorityId: Member + MaybeHash + crate::codec::Encode + crate::codec::Decode;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;

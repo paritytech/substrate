@@ -21,14 +21,13 @@
 #![recursion_limit="256"]
 
 #[macro_use]
-extern crate srml_support;
-#[macro_use]
 extern crate runtime_primitives;
 
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
 #[cfg(feature = "std")]
 use srml_support::{Serialize, Deserialize};
+use srml_support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
@@ -66,8 +65,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 18,
-	impl_version: 18,
+	spec_version: 26,
+	impl_version: 26,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -148,11 +147,13 @@ impl session::Trait for Runtime {
 }
 
 impl staking::Trait for Runtime {
+	type Currency = balances::Module<Self>;
 	type OnRewardMinted = Treasury;
 	type Event = Event;
 }
 
 impl democracy::Trait for Runtime {
+	type Currency = balances::Module<Self>;
 	type Proposal = Call;
 	type Event = Event;
 }
@@ -172,6 +173,7 @@ impl council::motions::Trait for Runtime {
 }
 
 impl treasury::Trait for Runtime {
+	type Currency = balances::Module<Self>;
 	type ApproveOrigin = council_motions::EnsureMembers<_4>;
 	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
@@ -209,7 +211,7 @@ construct_runtime!(
 		Indices: indices,
 		Balances: balances,
 		Session: session,
-		Staking: staking,
+		Staking: staking::{default, OfflineWorker},
 		Democracy: democracy,
 		Council: council::{Module, Call, Storage, Event<T>},
 		CouncilVoting: council_voting,

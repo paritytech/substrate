@@ -18,11 +18,12 @@
 
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, Secret};
 
-use chain::Client;
-use codec;
-use on_demand::OnDemandService;
+use bitflags::bitflags;
+use crate::chain::Client;
+use parity_codec;
+use crate::on_demand::OnDemandService;
 use runtime_primitives::traits::{Block as BlockT};
-use service::{ExHashT, TransactionPool};
+use crate::service::{ExHashT, TransactionPool};
 use std::sync::Arc;
 
 /// Service initialization parameters.
@@ -70,14 +71,14 @@ bitflags! {
 	}
 }
 
-impl codec::Encode for Roles {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+impl parity_codec::Encode for Roles {
+	fn encode_to<T: parity_codec::Output>(&self, dest: &mut T) {
 		dest.push_byte(self.bits())
 	}
 }
 
-impl codec::Decode for Roles {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+impl parity_codec::Decode for Roles {
+	fn decode<I: parity_codec::Input>(input: &mut I) -> Option<Self> {
 		Self::from_bits(input.read_byte()?)
 	}
 }

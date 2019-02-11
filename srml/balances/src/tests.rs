@@ -21,6 +21,7 @@
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System};
 use runtime_io::with_externalities;
+use srml_support::{assert_noop, assert_ok, assert_err};
 
 #[test]
 fn default_indexing_on_new_accounts_should_not_work2() {

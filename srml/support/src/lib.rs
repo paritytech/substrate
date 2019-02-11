@@ -52,12 +52,13 @@ mod runtime;
 #[macro_use]
 pub mod inherent;
 mod double_map;
+pub mod traits;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::double_map::StorageDoubleMap;
 pub use runtime_io::print;
-pub use double_map::StorageDoubleMap;
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
@@ -73,7 +74,7 @@ macro_rules! fail {
 macro_rules! ensure {
 	( $x:expr, $y:expr ) => {{
 		if !$x {
-			fail!($y);
+			$crate::fail!($y);
 		}
 	}}
 }
@@ -83,7 +84,7 @@ macro_rules! ensure {
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
 		let h = runtime_io::storage_root();
-		assert_err!($x, $y);
+		$crate::assert_err!($x, $y);
 		assert_eq!(h, runtime_io::storage_root());
 	}
 }
@@ -112,9 +113,6 @@ macro_rules! assert_ok {
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Void {}
-
-#[doc(hidden)]
-pub use mashup::*;
 
 #[cfg(feature = "std")]
 #[doc(hidden)]

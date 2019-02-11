@@ -32,7 +32,7 @@ mod tests {
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
-	use runtime_support::{Hashable, StorageValue, StorageMap};
+	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{
 		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue
@@ -101,7 +101,7 @@ mod tests {
 	}
 
 	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
-		::substrate_executor::NativeExecutor::new()
+		::substrate_executor::NativeExecutor::new(None)
 	}
 
 	#[test]
@@ -269,6 +269,7 @@ mod tests {
 				existential_deposit: 0,
 				transfer_fee: 0,
 				creation_fee: 0,
+				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
@@ -346,9 +347,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("cc63808897a07869d3b9103df5ad92f9be2f865ece506df5de0a87b2a95131d5").into()
+				hex!("d8fff70a10e0a00641458190ec32ca5681e1db38c0da9c18bb5abd76b645bb84").into()
 			} else {
-				hex!("fe5275f4d9f8130c8e80d0132f0a718ae0eeea2872c841843192720ad5c3f05a").into()
+				hex!("f1f00968e622ec6f47be5653b741186ef764653c82c42dab4b80d43d3226fa27").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
@@ -374,7 +375,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("45b6655508fb524467b5c24184a7509b9ae07db4f95e16052ed425af182f39a8").into(),
+			hex!("fb05600153a562a78fe12cbbfd97aa18ddf4085505bcacbcfd1d2c0c36bba5ce").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -403,7 +404,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("ec00658cc2826d3499dde2954e399f0a0b2596eec1b0da9b76bc72394161dc99").into(),
+			hex!("cd856b66ec5416b8c81d480fa7ed8b8a851afff03fc09c87920f975ae913a581").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -674,7 +675,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("6a4da4ed61c4d9eba0477aa67024d573693df781176dfe7fe903d1088b38b266").into(),
+			hex!("2c024da59dcdb62f43669081355830f074c32b3bddab7aebd8bcab14d24353b7").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -729,7 +730,7 @@ mod tests {
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		Executor::new().call::<_, NeverNativeValue, fn() -> _>(
+		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1big().0,
@@ -743,7 +744,7 @@ mod tests {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
-			Executor::new().call::<_, NeverNativeValue, fn() -> _>(
+			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
 				&block1big().0,
@@ -805,7 +806,7 @@ mod tests {
 	#[test]
 	fn full_native_block_import_works_with_changes_trie() {
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		Executor::new().call::<_, NeverNativeValue, fn() -> _>(
+		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
 			&block1(true).0,

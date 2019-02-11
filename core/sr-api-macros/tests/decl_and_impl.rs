@@ -28,6 +28,8 @@ decl_runtime_apis! {
 	#[api_version(2)]
 	pub trait ApiWithCustomVersion {
 		fn same_name();
+		#[changed_in(2)]
+		fn same_name() -> String;
 	}
 }
 
@@ -77,6 +79,11 @@ fn test_client_side_function_signature() {
 	let _something_with_block:
 		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>, Block) -> Result<Block> =
 			RuntimeApiImpl::<TestClient>::something_with_block;
+
+	#[allow(deprecated)]
+	let _same_name_before_version_2:
+		fn(&RuntimeApiImpl<TestClient>, &BlockId<Block>) -> Result<String> =
+			RuntimeApiImpl::<TestClient>::same_name_before_version_2;
 }
 
 #[test]

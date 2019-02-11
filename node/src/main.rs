@@ -60,6 +60,7 @@ fn run() -> cli::error::Result<()> {
 		executable_name: "substrate",
 		author: "Parity Technologies <admin@parity.io>",
 		description: "Generic substrate node",
+		support_url: "https://github.com/paritytech/substrate/issues/new",
 	};
 	cli::run(::std::env::args(), Exit, version)
 }
