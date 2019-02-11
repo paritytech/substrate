@@ -47,7 +47,6 @@
 //! ```
 
 use crate::codec;
-use crate::rstd::cell::RefCell;
 use crate::rstd::vec::Vec;
 #[doc(hidden)]
 pub use crate::rstd::borrow::Borrow;
@@ -100,7 +99,7 @@ pub trait Storage {
 
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
-impl<S: sr_primitives::BuildStorage> Storage for (RefCell<&mut sr_primitives::StorageOverlay>, PhantomData<S>) {
+impl<S: sr_primitives::BuildStorage> Storage for (crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay>, PhantomData<S>) {
 	fn exists(&self, key: &[u8]) -> bool {
 		self.0.borrow().contains_key(S::hash(key).as_ref())
 	}
