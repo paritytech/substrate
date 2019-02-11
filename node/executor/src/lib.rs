@@ -308,15 +308,10 @@ mod tests {
 		}.build_storage().unwrap().0)
 	}
 
-	fn changes_trie_log(changes_root: Hash) -> Log {
-		Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root))
-	}
-
 	fn construct_block(
 		env: &mut TestExternalities<Blake2Hasher>,
 		number: BlockNumber,
 		parent_hash: Hash,
-		logs: Vec<Log>,
 		extrinsics: Vec<CheckedExtrinsic>,
 	) -> (Vec<u8>, Hash) {
 		use trie::ordered_trie_root;
@@ -329,11 +324,6 @@ mod tests {
 				extrinsics.iter().map(Encode::encode)
 			).to_fixed_bytes()
 			.into();
-
-		let mut digest = generic::Digest::<Log>::default();
-		for item in logs {
-			digest.push(item);
-		}
 
 		let header = Header {
 			parent_hash,
@@ -373,15 +363,8 @@ mod tests {
 			NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
 		};
 
-		println!("Original: {:?}", header);
-		println!("Corrected: {:?}", correct_header);
-
-		correct_header.extrinsics_root = header.extrinsics_root;
-
-		assert_eq!(correct_header.digest, digest);
 
 		let hash = correct_header.blake2_256();
-
 		(Block { header: correct_header, extrinsics }.encode(), hash.into())
 	}
 
@@ -390,9 +373,6 @@ mod tests {
 			&mut new_test_ext(COMPACT_CODE, true),
 			1,
 			GENESIS_HASH.into(),
-			vec![changes_trie_log(
-				hex!("febd557de949d5b89230843be7927ae22de80bc4ed597065ab8b3a9c91fd84e4").into(),
-			)],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -415,7 +395,6 @@ mod tests {
 			&mut t,
 			1,
 			GENESIS_HASH.into(),
-			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -431,13 +410,6 @@ mod tests {
 			&mut t,
 			2,
 			block1.1.clone(),
-			vec![ // session changes here, so we add a grandpa change signal log.
-				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-					(Keyring::One.to_raw_public().into(), 1),
-					(Keyring::Two.to_raw_public().into(), 1),
-					([3u8; 32].into(), 1),
-				]))
-			],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -453,6 +425,15 @@ mod tests {
 				}
 			]
 		);
+
+		let mut digest = generic::Digest::<Log>::default();
+		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
+			(Keyring::One.to_raw_public().into(), 1),
+			(Keyring::Two.to_raw_public().into(), 1),
+			([3u8; 32].into(), 1),
+		])));
+		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
+
 		(block1, block2)
 	}
 
@@ -461,7 +442,6 @@ mod tests {
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
-			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -504,15 +484,15 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::NewAccount(
-						hex!["82c8cee554334c184f2ba41cb817de39714664ed84b50e9399975d62ccd12651"].into(),
+						bob().into(),
 						69
 					))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::Transfer(
-						hex!["787d6f7e9572e21656f61d3d897c343c80c81b774b1d76e5c8c72552b7ccbc25"].into(),
-						hex!["82c8cee554334c184f2ba41cb817de39714664ed84b50e9399975d62ccd12651"].into(),
+						alice().into(),
+						bob().into(),
 						69,
 						0
 					))
@@ -556,8 +536,8 @@ mod tests {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
-							hex!["82c8cee554334c184f2ba41cb817de39714664ed84b50e9399975d62ccd12651"].into(),
-							hex!["787d6f7e9572e21656f61d3d897c343c80c81b774b1d76e5c8c72552b7ccbc25"].into(),
+							bob().into(),
+							alice().into(),
 							5,
 							0
 						)
@@ -571,8 +551,8 @@ mod tests {
 					phase: Phase::ApplyExtrinsic(2),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
-							hex!["787d6f7e9572e21656f61d3d897c343c80c81b774b1d76e5c8c72552b7ccbc25"].into(),
-							hex!["82c8cee554334c184f2ba41cb817de39714664ed84b50e9399975d62ccd12651"].into(),
+							alice().into(),
+							bob().into(),
 							15,
 							0
 						)
@@ -735,7 +715,6 @@ mod tests {
 			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
-			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
