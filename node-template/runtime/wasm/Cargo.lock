@@ -736,6 +736,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro-crate"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "toml 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "proc-macro-hack"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1066,6 +1074,7 @@ name = "sr-api-macros"
 version = "0.1.0"
 dependencies = [
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro-crate 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 0.4.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 0.15.26 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1300,6 +1309,7 @@ dependencies = [
 name = "srml-support-procedural-tools"
 version = "0.1.0"
 dependencies = [
+ "proc-macro-crate 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2 0.4.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "srml-support-procedural-tools-derive 0.1.0",
@@ -1736,6 +1746,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "serde 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "trie-db"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1987,6 +2005,7 @@ dependencies = [
 "checksum percent-encoding 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "31010dd2e1ac33d5b46a5b413495239882813e0369f8ed8a5e266f173602f831"
 "checksum pkg-config 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)" = "676e8eb2b1b4c9043511a9b7bea0915320d7e502b0a079fb03f9635a5252b18c"
 "checksum primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "edb92f1ebfc177432c03287b15d48c202e6e2c95993a7af3ba039abb43b1492e"
+"checksum proc-macro-crate 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "4c6cf4e5b00300d151dfffae39f529dfa5188f42eeb14201229aa420d6aad10c"
 "checksum proc-macro-hack 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2c725b36c99df7af7bf9324e9c999b9e37d92c8f8caf106d82e1d7953218d2d8"
 "checksum proc-macro-hack 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)" = "3e90aa19cd73dedc2d0e1e8407473f073d735fef0ab521438de6da8ee449ab66"
 "checksum proc-macro-hack-impl 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2b753ad9ed99dd8efeaa7d2fb8453c8f6bc3e54b97966d35f1bc77ca6865254a"
@@ -2046,6 +2065,7 @@ dependencies = [
 "checksum tokio-timer 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "4f37f0111d76cc5da132fe9bc0590b9b9cfd079bc7e75ac3846278430a299ff8"
 "checksum tokio-udp 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "66268575b80f4a4a710ef83d087fdfeeabdce9b74c797535fbac18a2cb906e92"
 "checksum tokio-uds 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)" = "037ffc3ba0e12a0ab4aca92e5234e0dedeb48fddf6ccd260f1f150a36a9f2445"
+"checksum toml 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)" = "758664fc71a3a69038656bee8b6be6477d2a6c315a6b81f7081f591bffa4111f"
 "checksum trie-db 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3c7319e28ca295f27359d944a682f7f65b419158bf1590c92cadc0000258d788"
 "checksum trie-root 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e3c6fef2705af3258ec46a7e22286090394a44216201a1cf7d04b78db825e543"
 "checksum twox-hash 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "555cd4909480122bbbf21e34faac4cb08a171f324775670447ed116726c474af"
