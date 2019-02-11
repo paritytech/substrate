@@ -35,6 +35,7 @@ use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, As, NumberFor};
 use runtime_version::RuntimeVersion;
+use state_machine::ExecutionStrategy;
 
 use crate::subscriptions::Subscriptions;
 
@@ -297,7 +298,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 			.executor()
 			.call(
 				&BlockId::Hash(block),
-				&method, &data.0
+				&method, &data.0, ExecutionStrategy::NativeElseWasm
 			)?;
 		Ok(Bytes(return_data))
 	}

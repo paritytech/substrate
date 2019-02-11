@@ -25,7 +25,7 @@ use primitives::H256;
 use runtime_primitives::generic::BlockId;
 use crate::runtime_api::Core;
 use crate::error;
-use runtime_primitives::ApplyOutcome;
+use runtime_primitives::{ApplyOutcome, ExecutionContext};
 
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
@@ -56,7 +56,6 @@ where
 
 		let parent_hash = api.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
-
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
@@ -64,10 +63,8 @@ where
 			parent_hash,
 			Default::default()
 		);
-
 		let api = api.runtime_api();
-		api.initialise_block(block_id, &header)?;
-
+		api.initialise_block_with_context(block_id, ExecutionContext::BlockConstruction, &header)?;
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
@@ -86,7 +83,7 @@ where
 		let extrinsics = &mut self.extrinsics;
 
 		self.api.map_api_result(|api| {
-			match api.apply_extrinsic(block_id, xt.clone())? {
+			match api.apply_extrinsic_with_context(block_id, ExecutionContext::BlockConstruction, xt.clone())? {
 				Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
 					extrinsics.push(xt);
 					Ok(())
@@ -100,7 +97,7 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.api.finalise_block(&self.block_id)?;
+		self.header = self.api.finalise_block_with_context(&self.block_id, ExecutionContext::BlockConstruction)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),

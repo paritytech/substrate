@@ -27,7 +27,7 @@ use executor::RuntimeInfo;
 use primitives::{H256, Blake2Hasher};
 use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{CodeExecutor, ExecutionStrategy};
+use state_machine::CodeExecutor;
 
 use crate::call_executor::LocalCallExecutor;
 use crate::client::Client;
@@ -75,7 +75,7 @@ pub fn new_light<B, S, F, GS, RA, E>(
 	let remote_executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
 	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor);
 	let executor = RemoteOrLocalCallExecutor::new(backend.clone(), remote_executor, local_executor);
-	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, executor, genesis_storage, Default::default())
 }
 
 /// Create an instance of fetch data checker.
