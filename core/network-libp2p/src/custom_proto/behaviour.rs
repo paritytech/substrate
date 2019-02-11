@@ -570,8 +570,9 @@ where
 					messages,
 				}));
 			}
-			CustomProtosHandlerOut::ProtocolError { error } => {
-				warn!(target: "sub-libp2p", "Network misbehaviour from {:?}: {:?}", source, error);
+			CustomProtosHandlerOut::ProtocolError { protocol_id, error } => {
+				warn!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
+					{:?}: {:?}", source, protocol_id, error);
 				self.ban_peer(source);
 			}
 		}
