@@ -319,6 +319,10 @@ impl<TSubstream> CustomProtos<TSubstream> {
 
 		// We're done with reserved node; return early if there's nothing more to do.
 		if self.reserved_only {
+			// We set a timeout to 60 seconds for trying to connect again, however in practice
+			// a round will happen as soon as we fail to dial, disconnect from a node, allow
+			// unreserved nodes, and so on.
+			self.next_connect_to_nodes.reset(Instant::now() + Duration::from_secs(60));
 			return
 		}
 
