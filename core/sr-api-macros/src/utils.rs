@@ -18,6 +18,7 @@ use proc_macro2::{TokenStream, Span};
 use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error};
 use quote::quote;
 use std::env;
+use proc_macro_crate::crate_name;
 
 /// Unwrap the given result, if it is an error, `compile_error!` will be generated.
 pub fn unwrap_or_error(res: Result<TokenStream>) -> TokenStream {
@@ -34,12 +35,22 @@ pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
 		TokenStream::new()
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!(
-			#[doc(hidden)]
-			mod #mod_name {
-				pub extern crate substrate_client as sr_api_client;
+		match crate_name("substrate-client") {
+			Ok(client_name) => {
+				let client_name = Ident::new(&client_name, Span::call_site());
+				quote!(
+					#[doc(hidden)]
+					mod #mod_name {
+						pub extern crate #client_name as sr_api_client;
+					}
+				)
+			},
+			Err(e) => {
+				let err = Error::new(Span::call_site(), &e).to_compile_error();
+				quote!( #err )
 			}
-		)
+		}
+
 	}.into()
 }
 
