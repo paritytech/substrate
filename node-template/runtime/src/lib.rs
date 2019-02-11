@@ -167,6 +167,12 @@ impl balances::Trait for Runtime {
 	type Event = Event;
 }
 
+impl fees::Trait for Runtime {
+	type Amount = u128;
+	type TransferAsset = Balances;
+	type Event = Event;
+}
+
 impl sudo::Trait for Runtime {
 	/// The uniquitous event type.
 	type Event = Event;
@@ -186,6 +192,7 @@ construct_runtime!(
 		Indices: indices,
 		Balances: balances,
 		Sudo: sudo,
+		Fees: fees::{Module, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -204,7 +211,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Nonce, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, Context, Fees, AllModules>;
 
 // Implement our runtime API endpoints. This is just a bunch of proxying.
 impl_runtime_apis! {

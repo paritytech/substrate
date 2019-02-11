@@ -2013,6 +2013,7 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
  "srml-executive 0.1.0",
+ "srml-fees 0.1.0",
  "srml-indices 0.1.0",
  "srml-sudo 0.1.0",
  "srml-support 0.1.0",
