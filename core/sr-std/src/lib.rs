@@ -41,13 +41,13 @@ include!("../without_std.rs");
 ///
 /// This should include only things which are in the normal std prelude.
 pub mod prelude {
-	pub use ::vec::Vec;
-	pub use ::boxed::Box;
-	pub use ::cmp::{Eq, PartialEq};
-	pub use ::clone::Clone;
+	pub use crate::vec::Vec;
+	pub use crate::boxed::Box;
+	pub use crate::cmp::{Eq, PartialEq};
+	pub use crate::clone::Clone;
 
 	// Re-export `vec!` macro here, but not in `std` mode, since
 	// std's prelude already brings `vec!` into the scope.
 	#[cfg(not(feature = "std"))]
-	pub use ::vec;
+	pub use crate::vec;
 }

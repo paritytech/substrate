@@ -20,9 +20,10 @@
 
 use untrusted;
 use blake2_rfc;
-use ring::{rand, signature};
-use {hash::H512, Ed25519AuthorityId};
+use ring::{rand, signature, signature::KeyPair};
+use crate::{hash::H512, Ed25519AuthorityId};
 use base58::{ToBase58, FromBase58};
+use parity_codec_derive::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Deserializer, Deserialize};
@@ -190,7 +191,7 @@ impl ::std::fmt::Display for Public {
 impl ::std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", ::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 }
 
@@ -199,9 +200,11 @@ impl Pair {
 	pub fn generate_with_pkcs8() -> (Self, [u8; PKCS_LEN]) {
 		let rng = rand::SystemRandom::new();
 		let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng).expect("system randomness is available; qed");
-		let pair = Self::from_pkcs8(&pkcs8_bytes).expect("just-generated pkcs#8 data is valid; qed");
+		let pair = Self::from_pkcs8(&pkcs8_bytes.as_ref()).expect("just-generated pkcs#8 data is valid; qed");
 
-		(pair, pkcs8_bytes)
+		let mut out = [0; PKCS_LEN];
+		out.copy_from_slice(pkcs8_bytes.as_ref());
+		(pair, out)
 	}
 
 	/// Generate new secure (random) key pair.
@@ -211,7 +214,7 @@ impl Pair {
 	}
 
 	/// Generate from pkcs#8 bytes.
-	pub fn from_pkcs8(pkcs8_bytes: &[u8]) -> Result<Self, ::ring::error::Unspecified> {
+	pub fn from_pkcs8(pkcs8_bytes: &[u8]) -> Result<Self, ::ring::error::KeyRejected> {
 		signature::Ed25519KeyPair::from_pkcs8(untrusted::Input::from(&pkcs8_bytes)).map(Pair)
 	}
 
@@ -234,7 +237,7 @@ impl Pair {
 	/// Get the public key.
 	pub fn public(&self) -> Public {
 		let mut r = [0u8; 32];
-		let pk = self.0.public_key_bytes();
+		let pk = self.0.public_key().as_ref();
 		r.copy_from_slice(pk);
 		Public(r)
 	}
@@ -293,10 +296,11 @@ pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok
 #[cfg(test)]
 mod test {
 	use super::*;
+	use hex_literal::{hex, hex_impl};
 
 	fn _test_primitives_signature_and_local_the_same() {
 		fn takes_two<T>(_: T, _: T) { }
-		takes_two(Signature::default(), ::Signature::default())
+		takes_two(Signature::default(), crate::Signature::default())
 	}
 
 	#[test]
@@ -321,7 +325,7 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-		use ::hexdisplay::HexDisplay;
+		use crate::hexdisplay::HexDisplay;
 
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();

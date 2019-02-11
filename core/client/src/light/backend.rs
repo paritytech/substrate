@@ -501,6 +501,7 @@ mod tests {
 		}
 	}
 
+	#[test]
 	fn light_aux_store_is_updated_via_non_importing_op() {
 		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 		let mut op = ClientBackend::<Block, Blake2Hasher>::begin_operation(&backend).unwrap();

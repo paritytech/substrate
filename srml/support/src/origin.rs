@@ -17,7 +17,7 @@
 //! Macros that define an Origin type. Every function call to your runtime has an origin which
 //! specifies where the extrinsic was generated from.
 
-/// Constructs an Origin type for a runtime. This is usually called automatically by the 
+/// Constructs an Origin type for a runtime. This is usually called automatically by the
 /// construct_runtime macro. See also __create_decl_macro.
 #[macro_export]
 macro_rules! impl_outer_origin {
@@ -31,7 +31,7 @@ macro_rules! impl_outer_origin {
 			$( $module:ident $( <$generic:ident> )* ),* $(,)*
 		}
 	) => {
-		impl_outer_origin! {
+		$crate::impl_outer_origin! {
 			$(#[$attr])*
 			pub enum $name for $runtime where system = system {
 				$( $module $( <$generic> )*, )*
@@ -42,7 +42,7 @@ macro_rules! impl_outer_origin {
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident where system = $system:ident {}
 	) => {
-		impl_outer_origin!(
+		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -58,7 +58,7 @@ macro_rules! impl_outer_origin {
 			$( $rest_module:ident $( <$rest_generic:ident> )* ),* $(,)*
 		}
 	) => {
-		impl_outer_origin!(
+		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -74,7 +74,7 @@ macro_rules! impl_outer_origin {
 			$( $rest_module:ident $( <$rest_generic:ident> )* ),* $(,)*
 		}
 	) => {
-		impl_outer_origin!(
+		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -94,7 +94,7 @@ macro_rules! impl_outer_origin {
 		};
 		$( $parsed_module:ident $( <$generic_param:ident> )* ),*;
 	) => {
-		impl_outer_origin!(
+		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;
@@ -114,7 +114,7 @@ macro_rules! impl_outer_origin {
 		};
 		$( $parsed_module:ident $( <$generic_param:ident> )* ),*;
 	) => {
-		impl_outer_origin!(
+		$crate::impl_outer_origin!(
 			$( #[$attr] )*;
 			$name;
 			$runtime;

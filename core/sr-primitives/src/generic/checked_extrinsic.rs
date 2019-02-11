@@ -17,7 +17,7 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with

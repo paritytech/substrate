@@ -86,6 +86,8 @@ pub struct PruneStatus<Hash, Ex> {
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
+	/// Number of bytes encoding of the transaction requires.
+	pub bytes: usize,
 	/// Transaction hash (unique)
 	pub hash: Hash,
 	/// Transaction priority (higher = better)
@@ -136,7 +138,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 		tx: Transaction<Hash, Ex>,
 	) -> error::Result<Imported<Hash, Ex>> {
 		if self.future.contains(&tx.hash) || self.ready.contains(&tx.hash) {
-			bail!(error::ErrorKind::AlreadyImported)
+			bail!(error::ErrorKind::AlreadyImported(Box::new(tx.hash.clone())))
 		}
 
 		let tx = WaitingTransaction::new(tx, self.ready.provided_tags());
@@ -243,6 +245,58 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 			.collect()
 	}
 
+	/// Makes sure that the transactions in the queues stay within provided limits.
+	///
+	/// Removes and returns worst transactions from the queues and all transactions that depend on them.
+	/// Technically the worst transaction should be evaluated by computing the entire pending set.
+	/// We use a simplified approach to remove the transaction that occupies the pool for the longest time.
+	pub fn enforce_limits(&mut self, ready: &Limit, future: &Limit) -> Vec<Arc<Transaction<Hash, Ex>>> {
+		let mut removed = vec![];
+
+		while ready.is_exceeded(self.ready.len(), self.ready.bytes()) {
+			// find the worst transaction
+			let minimal = self.ready
+				.fold(|minimal, current| {
+					let transaction = &current.transaction;
+					match minimal {
+						None => Some(transaction.clone()),
+						Some(ref tx) if tx.insertion_id > transaction.insertion_id => {
+							Some(transaction.clone())
+						},
+						other => other,
+					}
+				});
+
+			if let Some(minimal) = minimal {
+				removed.append(&mut self.remove_invalid(&[minimal.transaction.hash.clone()]))
+			} else {
+				break;
+			}
+		}
+
+		while future.is_exceeded(self.future.len(), self.future.bytes()) {
+			// find the worst transaction
+			let minimal = self.future
+				.fold(|minimal, current| {
+					match minimal {
+						None => Some(current.clone()),
+						Some(ref tx) if tx.imported_at > current.imported_at => {
+							Some(current.clone())
+						},
+						other => other,
+					}
+				});
+
+			if let Some(minimal) = minimal {
+				removed.append(&mut self.remove_invalid(&[minimal.transaction.hash.clone()]))
+			} else {
+				break;
+			}
+		}
+
+		removed
+	}
+
 	/// Removes all transactions represented by the hashes and all other transactions
 	/// that depend on them.
 	///
@@ -298,7 +352,9 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 	pub fn status(&self) -> Status {
 		Status {
 			ready: self.ready.len(),
+			ready_bytes: self.ready.bytes(),
 			future: self.future.len(),
+			future_bytes: self.future.bytes(),
 		}
 	}
 }
@@ -307,14 +363,34 @@ impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash
 pub struct Status {
 	/// Number of transactions in the ready queue.
 	pub ready: usize,
+	/// Sum of bytes of ready transaction encodings.
+	pub ready_bytes: usize,
 	/// Number of transactions in the future queue.
 	pub future: usize,
+	/// Sum of bytes of ready transaction encodings.
+	pub future_bytes: usize,
 }
 
 impl Status {
 	/// Returns true if the are no transactions in the pool.
 	pub fn is_empty(&self) -> bool {
 		self.ready == 0 && self.future == 0
+	}
+}
+
+/// Queue limits
+#[derive(Debug, Clone)]
+pub struct Limit {
+	/// Maximal number of transactions in the queue.
+	pub count: usize,
+	/// Maximal size of encodings of all transactions in the queue.
+	pub total_bytes: usize,
+}
+
+impl Limit {
+	/// Returns true if any of the provided values exceeds the limit.
+	pub fn is_exceeded(&self, count: usize, bytes: usize) -> bool {
+		self.count < count || self.total_bytes < bytes
 	}
 }
 
@@ -336,6 +412,7 @@ mod tests {
 		// when
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1u64,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -356,6 +433,7 @@ mod tests {
 		// when
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -364,6 +442,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -385,6 +464,7 @@ mod tests {
 		// when
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -395,6 +475,7 @@ mod tests {
 		assert_eq!(pool.ready.len(), 0);
 		pool.import(Transaction {
 			data: vec![2u8],
+			bytes: 1,
 			hash: 2,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -415,6 +496,7 @@ mod tests {
 		// when
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -423,6 +505,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
+			bytes: 1,
 			hash: 3,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -431,6 +514,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
+			bytes: 1,
 			hash: 2,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -439,6 +523,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
+			bytes: 1,
 			hash: 4,
 			priority: 1_000u64,
 			valid_till: 64u64,
@@ -450,6 +535,7 @@ mod tests {
 
 		let res = pool.import(Transaction {
 			data: vec![5u8],
+			bytes: 1,
 			hash: 5,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -480,6 +566,7 @@ mod tests {
 		let mut pool = pool();
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -488,6 +575,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
+			bytes: 1,
 			hash: 3,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -500,6 +588,7 @@ mod tests {
 		// when
 		pool.import(Transaction {
 			data: vec![2u8],
+			bytes: 1,
 			hash: 2,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -518,6 +607,7 @@ mod tests {
 		// let's close the cycle with one additional transaction
 		let res = pool.import(Transaction {
 			data: vec![4u8],
+			bytes: 1,
 			hash: 4,
 			priority: 50u64,
 			valid_till: 64u64,
@@ -545,6 +635,7 @@ mod tests {
 		let mut pool = pool();
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -553,6 +644,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
+			bytes: 1,
 			hash: 3,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -565,6 +657,7 @@ mod tests {
 		// when
 		pool.import(Transaction {
 			data: vec![2u8],
+			bytes: 1,
 			hash: 2,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -583,6 +676,7 @@ mod tests {
 		// let's close the cycle with one additional transaction
 		let err = pool.import(Transaction {
 			data: vec![4u8],
+			bytes: 1,
 			hash: 4,
 			priority: 1u64, // lower priority than Tx(2)
 			valid_till: 64u64,
@@ -605,6 +699,7 @@ mod tests {
 		let mut pool = pool();
 		pool.import(Transaction {
 			data: vec![5u8],
+			bytes: 1,
 			hash: 5,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -613,6 +708,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -621,6 +717,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
+			bytes: 1,
 			hash: 3,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -629,6 +726,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
+			bytes: 1,
 			hash: 2,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -637,6 +735,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
+			bytes: 1,
 			hash: 4,
 			priority: 1_000u64,
 			valid_till: 64u64,
@@ -646,6 +745,7 @@ mod tests {
 		// future
 		pool.import(Transaction {
 			data: vec![6u8],
+			bytes: 1,
 			hash: 6,
 			priority: 1_000u64,
 			valid_till: 64u64,
@@ -671,6 +771,7 @@ mod tests {
 		// future (waiting for 0)
 		pool.import(Transaction {
 			data: vec![5u8],
+			bytes: 1,
 			hash: 5,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -680,6 +781,7 @@ mod tests {
 		// ready
 		pool.import(Transaction {
 			data: vec![1u8],
+			bytes: 1,
 			hash: 1,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -688,6 +790,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![2u8],
+			bytes: 1,
 			hash: 2,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -696,6 +799,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![3u8],
+			bytes: 1,
 			hash: 3,
 			priority: 5u64,
 			valid_till: 64u64,
@@ -704,6 +808,7 @@ mod tests {
 		}).unwrap();
 		pool.import(Transaction {
 			data: vec![4u8],
+			bytes: 1,
 			hash: 4,
 			priority: 1_000u64,
 			valid_till: 64u64,
