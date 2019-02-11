@@ -21,13 +21,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(feature = "std")]
-extern crate rand;
-#[cfg(feature = "std")]
-extern crate sha2;
-#[cfg(feature = "std")]
-extern crate schnorrkel;
-
+/// Initalise a key-value collection from array.
+///
 /// Creates a vector of given pairs and calls `collect` on the iterator from it.
 /// Can be used to create a `HashMap`.
 #[macro_export]

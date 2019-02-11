@@ -94,18 +94,12 @@ macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
 		pub enum Event<$evt_generic_param:ident> where
-			$( $( $generic_rename:ident = )* <$generic:ident as $trait:path>::$trait_type:ident ),*
-		{
-			$(
-				$events:tt
-			)*
-		}
+			$( $tt:tt )*
 	) => {
 		$crate::__decl_generic_event!(
 			$( #[ $attr ] )*;
 			$evt_generic_param;
-			$( $( $generic_rename = )* <$generic as $trait>::$trait_type ),*;
-			Events { $( $events )* };
+			{ $( $tt )* };
 		);
 	};
 	(
@@ -139,84 +133,102 @@ macro_rules! decl_event {
 
 #[macro_export]
 #[doc(hidden)]
+// This parsing to retrieve last ident on unnamed generic could be improved.
+// but user can still name it if the parsing fails. And improving parsing seems difficult.
 macro_rules! __decl_generic_event {
 	(
 		$(#[$attr:meta])*;
 		$event_generic_param:ident;
-		$generic_rename:ident = <$generic:ident as $trait:path>::$trait_type:ident
-			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
-		Events { $( $events:tt )* };
+		{ $( $tt:tt )* };
 	) => {
-		$crate::__decl_generic_event!(
+		$crate::__decl_generic_event!(@format_generic
 			$( #[ $attr ] )*;
 			$event_generic_param;
-			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
-			Events { $( $events )* };
-			$generic_rename;
-			<$generic as $trait>::$trait_type;
+			{ $( $tt )* };
+			{};
 		);
 	};
-	(
+	// Parse named
+	(@format_generic
 		$(#[$attr:meta])*;
 		$event_generic_param:ident;
-		$generic_rename:ident = <$generic:ident as $trait:path>::$trait_type:ident
-			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
-		Events { $( $events:tt )* };
-		$( $parsed_generic_params:ident ),*;
-		$( <$parsed_generic:ident as $parsed_trait:path>::$parsed_trait_type:ident ),*;
+		{ $generic_rename:ident = $generic_type:ty, $($rest:tt)* };
+		{$( $parsed:tt)*};
 	) => {
-		$crate::__decl_generic_event!(
+		$crate::__decl_generic_event!(@format_generic
 			$( #[ $attr ] )*;
 			$event_generic_param;
-			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
-			Events { $( $events )* };
-			$( $parsed_generic_params ),*, $generic_rename;
-			$( <$parsed_generic as $parsed_trait>::$parsed_trait_type ),*, <$generic as $trait>::$trait_type;
+			{ $($rest)* };
+			{ $($parsed)*, $generic_rename = $generic_type };
 		);
 	};
-	(
+	// Parse unnamed
+	(@format_generic
 		$(#[$attr:meta])*;
 		$event_generic_param:ident;
-		<$generic:ident as $trait:path>::$trait_type:ident
-			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
-		Events { $( $events:tt )* };
+		{ <$generic:ident as $trait:path>::$trait_type:ident, $($rest:tt)* };
+		{$($parsed:tt)*};
 	) => {
-		$crate::__decl_generic_event!(
+		$crate::__decl_generic_event!(@format_generic
 			$( #[ $attr ] )*;
 			$event_generic_param;
-			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
-			Events { $( $events )* };
-			$trait_type;
-			<$generic as $trait>::$trait_type;
+			{ $($rest)* };
+			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type };
 		);
 	};
-	(
+	// Unnamed type can't be parsed
+	(@format_generic
 		$(#[$attr:meta])*;
 		$event_generic_param:ident;
-		<$generic:ident as $trait:path>::$trait_type:ident
-			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
-		Events { $( $events:tt )* };
-		$( $parsed_generic_params:ident ),*;
-		$( <$parsed_generic:ident as $parsed_trait:path>::$parsed_trait_type:ident ),*;
+		{ $generic_type:ty, $($rest:tt)* };
+		{$($parsed:tt)*};
 	) => {
-		$crate::__decl_generic_event!(
+		$crate::__decl_generic_event!(@cannot_parse $generic_type);
+	};
+	// Finish formatting on an unnamed one
+	(@format_generic
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		{ <$generic:ident as $trait:path>::$trait_type:ident { $( $events:tt )* } };
+		{$( $parsed:tt)*};
+	) => {
+		$crate::__decl_generic_event!(@generate
 			$( #[ $attr ] )*;
 			$event_generic_param;
-			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
-			Events { $( $events )* };
-			$( $parsed_generic_params ),*, $trait_type;
-			$( <$parsed_generic as $parsed_trait>::$parsed_trait_type ),*, <$generic as $trait>::$trait_type;
+			{ $($events)* };
+			{ $($parsed)*, $trait_type = <$generic as $trait>::$trait_type};
 		);
 	};
-	(
+	// Finish formatting on a named one
+	(@format_generic
 		$(#[$attr:meta])*;
 		$event_generic_param:ident;
-		;
-		Events { $( $events:tt )* };
-		$( $generic_param:ident ),*;
-		$( <$generic:ident as $trait:path>::$trait_type:ident ),*;
+		{ $generic_rename:ident = $generic_type:ty { $( $events:tt )* } };
+		{$( $parsed:tt)*};
 	) => {
-		pub type Event<$event_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
+		$crate::__decl_generic_event!(@generate
+			$(#[$attr])*;
+			$event_generic_param;
+			{ $($events)* };
+			{ $($parsed)*, $generic_rename = $generic_type};
+		);
+	};
+	// Final unnamed type can't be parsed
+	(@format_generic
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		{ $generic_type:ty { $( $events:tt )* } };
+		{$( $parsed:tt)*};
+	) => {
+		$crate::__decl_generic_event!(@cannot_parse $generic_type);
+	};
+	(@generate
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		{ $( $events:tt )* };
+		{ ,$( $generic_param:ident = $generic_type:ty ),* };
+	) => {
+		pub type Event<$event_generic_param> = RawEvent<$( $generic_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
@@ -235,6 +247,9 @@ macro_rules! __decl_generic_event {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}
 		}
+	};
+	(@cannot_parse $ty:ty) => {
+		compile_error!(concat!("The type `", stringify!($ty), "` can't be parsed as an unnamed one, please name it `Name = ", stringify!($ty), "`"));
 	}
 }
 

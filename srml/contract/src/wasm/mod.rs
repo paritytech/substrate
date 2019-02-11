@@ -23,6 +23,7 @@ use crate::exec::{Ext, EmptyOutputBuf, VmExecResult};
 use crate::gas::GasMeter;
 
 use rstd::prelude::*;
+use parity_codec_derive::{Encode, Decode};
 use sandbox;
 
 #[macro_use]

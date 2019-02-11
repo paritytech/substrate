@@ -18,36 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(test)]
-#[macro_use]
-extern crate parity_codec_derive;
-
-#[cfg_attr(test, macro_use)]
-extern crate srml_support as runtime_support;
-
-extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
-extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate srml_balances as balances;
-
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	OnInitialise, MakePayment, Hash, As, Digest};
-use runtime_support::Dispatchable;
-use codec::{Codec, Encode};
+use srml_support::Dispatchable;
+use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
@@ -208,7 +185,10 @@ impl<
 		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
-		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
+		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
+			primitives::BLOCK_FULL => Err(internal::ApplyError::FullBlock),
+			e => Ok(internal::ApplyOutcome::Fail(e))
+		})
 	}
 
 	fn final_checks(header: &System::Header) {
@@ -252,7 +232,7 @@ impl<
 			Err("invalid account index") => return TransactionValidity::Unknown(INVALID_INDEX),
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err("bad signature") => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
+			Err(primitives::BAD_SIGNATURE) => return TransactionValidity::Invalid(ApplyError::BadSignature as i8),
 			Err(_) => return TransactionValidity::Invalid(UNKNOWN_ERROR),
 		};
 
@@ -302,7 +282,9 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
+	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
+	use hex_literal::{hex, hex_impl};
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime {
@@ -352,6 +334,7 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
+			vesting: vec![],
 		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);

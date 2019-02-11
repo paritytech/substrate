@@ -37,8 +37,8 @@ use runtime_primitives::{
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType
-	}
+		GetNodeBlockType, GetRuntimeBlockType,
+	},
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
@@ -104,10 +104,10 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				if ::runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				if runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err("bad signature")
+					Err(runtime_primitives::BAD_SIGNATURE)
 				}
 			},
 		}
@@ -215,6 +215,8 @@ cfg_if! {
 				fn function_signature_changed() -> Vec<u64>;
 				/// The new signature.
 				fn function_signature_changed() -> u64;
+				fn fail_on_native() -> u64;
+				fn fail_on_wasm() -> u64;
 			}
 		}
 	} else {
@@ -233,6 +235,8 @@ cfg_if! {
 				fn fail_convert_return_value() -> DecodeFails<Block>;
 				/// In wasm we just emulate the old behavior.
 				fn function_signature_changed() -> Vec<u64>;
+				fn fail_on_native() -> u64;
+				fn fail_on_wasm() -> u64;
 			}
 		}
 	}
@@ -327,6 +331,13 @@ cfg_if! {
 				fn function_signature_changed() -> u64 {
 					1
 				}
+
+				fn fail_on_native() -> u64 {
+					panic!("Failing because we are on native")
+				}
+				fn fail_on_wasm() -> u64 {
+					1
+				}
 			}
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
@@ -413,6 +424,14 @@ cfg_if! {
 					vec.push(1);
 					vec.push(2);
 					vec
+				}
+
+				fn fail_on_native() -> u64 {
+					1
+				}
+
+				fn fail_on_wasm() -> u64 {
+					panic!("Failing because we are on wasm")
 				}
 			}
 

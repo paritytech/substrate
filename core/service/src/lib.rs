@@ -49,7 +49,7 @@ pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{
 	self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError
 };
-pub use client::{ExecutionStrategy, FinalityNotifications};
+pub use client::FinalityNotifications;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,

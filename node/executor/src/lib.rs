@@ -32,7 +32,7 @@ mod tests {
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::sr25519::Keyring;
-	use runtime_support::{Hashable, StorageValue, StorageMap};
+	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{
 		twox_128, Blake2Hasher, ChangesTrieConfiguration, sr25519::{Public, Pair}, NeverNativeValue,
@@ -271,6 +271,7 @@ mod tests {
 				existential_deposit: 0,
 				transfer_fee: 0,
 				creation_fee: 0,
+				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
