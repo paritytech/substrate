@@ -38,6 +38,9 @@ pub enum ImportResult {
 	/// Added to the import queue but must be justified
 	/// (usually required to safely enact consensus changes).
 	NeedsJustification,
+	/// Added to the import queue but finality proof is required
+	/// (usually required to safely enact consensus changes).
+	NeedsFinalityProof,
 }
 
 /// Block data origin.

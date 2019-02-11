@@ -338,6 +338,8 @@ pub enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debu
 	ImportedUnknown(H, N),
 	/// Imported unjustified block that requires one.
 	ImportedUnjustified(H, N),
+	/// Imported block without required finality proof.
+	ImportedWithoutFinalityProof(H, N),
 }
 
 /// Block import error.
@@ -455,6 +457,10 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 			trace!(target: "sync", "Block queued but requires justification {}: {:?}", number, hash);
 			Ok(BlockImportResult::ImportedUnjustified(hash, number))
 		},
+		Ok(ImportResult::NeedsFinalityProof) => {
+			trace!(target: "sync", "Block queued but requires finality proof {}: {:?}", number, hash);
+			Ok(BlockImportResult::ImportedWithoutFinalityProof(hash, number))
+		},
 		Ok(ImportResult::UnknownParent) => {
 			debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 			Err(BlockImportError::UnknownParent)
@@ -488,6 +494,11 @@ pub fn process_import_result<B: BlockT>(
 		Ok(BlockImportResult::ImportedUnjustified(hash, number)) => {
 			link.block_imported(&hash, number);
 			link.request_justification(&hash, number);
+			1
+		},
+		Ok(BlockImportResult::ImportedWithoutFinalityProof(hash, number)) => {
+			link.block_imported(&hash, number);
+			link.request_finality_proof(&hash, number);
 			1
 		},
 		Err(BlockImportError::IncompleteHeader(who)) => {

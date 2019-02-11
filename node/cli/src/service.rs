@@ -163,7 +163,7 @@ construct_service_factory! {
 				import_queue(
 					SlotDuration::get_or_compute(&*client)?,
 					block_import.clone(),
-					Some(block_import.clone()),
+					None,
 					Some(block_import),
 					client,
 					NothingExtra,

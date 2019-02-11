@@ -29,8 +29,6 @@
 //! The caller should track the `set_id`. The most straightforward way is to fetch finality
 //! proofs ONLY for blocks on the tip of the chain and track the latest known `set_id`.
 
-use grandpa::VoterSet;
-
 use client::{
 	blockchain::Backend as BlockchainBackend,
 	error::{ErrorKind as ClientErrorKind, Result as ClientResult},
@@ -56,7 +54,7 @@ pub struct FinalityEffects<Header: HeaderT, J> {
 	/// New authorities set id that should be applied starting from block.
 	pub new_set_id: u64,
 	/// New authorities set that should be applied starting from block.
-	pub new_authorities: VoterSet<Ed25519AuthorityId>,
+	pub new_authorities: Vec<(Ed25519AuthorityId, u64)>,
 }
 
 /// Single fragment of proof-of-finality.
@@ -206,7 +204,7 @@ pub fn prove_finality<Block: BlockT<Hash=H256>, B, GetAuthorities, ProveAuthorit
 pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B, CheckAuthoritiesProof>(
 	blockchain: &B,
 	current_set_id: u64,
-	current_authorities: VoterSet<Ed25519AuthorityId>,
+	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	check_authorities_proof: CheckAuthoritiesProof,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header, GrandpaJustification<Block>>>
@@ -217,7 +215,7 @@ pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B, CheckAuthorities
 			Block::Hash,
 			Block::Header,
 			Vec<Vec<u8>>,
-		) -> ClientResult<VoterSet<Ed25519AuthorityId>>,
+		) -> ClientResult<Vec<(Ed25519AuthorityId, u64)>>,
 {
 	do_check_finality_proof(
 		blockchain,
@@ -235,7 +233,7 @@ pub(crate) fn check_finality_proof<Block: BlockT<Hash=H256>, B, CheckAuthorities
 fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J, CheckAuthoritiesProof>(
 	blockchain: &B,
 	current_set_id: u64,
-	current_authorities: VoterSet<Ed25519AuthorityId>,
+	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	check_authorities_proof: CheckAuthoritiesProof,
 	remote_proof: Vec<u8>,
 ) -> ClientResult<FinalityEffects<Block::Header, J>>
@@ -247,7 +245,7 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, B, J, CheckAuthoritiesProof
 			Block::Hash,
 			Block::Header,
 			Vec<Vec<u8>>,
-		) -> ClientResult<VoterSet<Ed25519AuthorityId>>,
+		) -> ClientResult<Vec<(Ed25519AuthorityId, u64)>>,
 {
 	// decode finality proof
 	let proof = FinalityProof::<Block::Header, J>::decode(&mut &remote_proof[..])
@@ -300,7 +298,7 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J, CheckAuthoritie
 			Block::Hash,
 			Block::Header,
 			Vec<Vec<u8>>,
-		) -> ClientResult<VoterSet<Ed25519AuthorityId>>,
+		) -> ClientResult<Vec<(Ed25519AuthorityId, u64)>>,
 {
 	// verify justification using previous authorities set
 	let (mut current_set_id, mut current_authorities) = authority_set.extract_authorities();
@@ -325,12 +323,12 @@ fn check_finality_proof_fragment<Block: BlockT<Hash=H256>, B, J, CheckAuthoritie
 
 /// Authorities set from initial authorities set or finality effects.
 enum AuthoritiesOrEffects<Header: HeaderT, J> {
-	Authorities(u64, VoterSet<Ed25519AuthorityId>),
+	Authorities(u64, Vec<(Ed25519AuthorityId, u64)>),
 	Effects(FinalityEffects<Header, J>),
 }
 
 impl<Header: HeaderT, J> AuthoritiesOrEffects<Header, J> {
-	pub fn extract_authorities(self) -> (u64, VoterSet<Ed25519AuthorityId>) {
+	pub fn extract_authorities(self) -> (u64, Vec<(Ed25519AuthorityId, u64)>) {
 		match self {
 			AuthoritiesOrEffects::Authorities(set_id, authorities) => (set_id, authorities),
 			AuthoritiesOrEffects::Effects(effects) => (effects.new_set_id, effects.new_authorities),
@@ -351,7 +349,7 @@ trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	fn target_block(&self) -> (Header::Number, Header::Hash);
 
 	/// Verify justification with respect to authorities set and authorities set id.
-	fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()>;
+	fn verify(&self, set_id: u64, authorities: &[(Ed25519AuthorityId, u64)]) -> ClientResult<()>;
 }
 
 impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJustification<Block>
@@ -362,8 +360,8 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 		(self.commit.target_number, self.commit.target_hash)
 	}
 
-	fn verify(&self, set_id: u64, authorities: &VoterSet<Ed25519AuthorityId>) -> ClientResult<()> {
-		GrandpaJustification::verify(self, set_id, authorities)
+	fn verify(&self, set_id: u64, authorities: &[(Ed25519AuthorityId, u64)]) -> ClientResult<()> {
+		GrandpaJustification::verify(self, set_id, &authorities.iter().cloned().collect())
 	}
 }
 
