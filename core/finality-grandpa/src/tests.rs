@@ -30,7 +30,7 @@ use client::{
 };
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
-use consensus_common::BlockOrigin;
+use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportBlock, ImportResult};
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -772,8 +772,6 @@ fn sync_justifications_on_change_blocks() {
 
 #[test]
 fn doesnt_vote_on_the_tip_of_the_chain() {
-	::env_logger::init();
-
 	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let voters = make_ids(peers_a);
 	let api = TestApi::new(voters);
@@ -793,4 +791,47 @@ fn doesnt_vote_on_the_tip_of_the_chain() {
 
 	// the highest block to be finalized will be 3/4 deep in the unfinalized chain
 	assert_eq!(highest, 75);
+}
+
+#[test]
+fn allows_reimporting_change_blocks() {
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers_b = &[Keyring::Alice, Keyring::Bob];
+	let voters = make_ids(peers_a);
+	let api = TestApi::new(voters);
+	let net = GrandpaTestNet::new(api.clone(), 3);
+
+	let client = net.peer(0).client().clone();
+	let (block_import, ..) = net.make_block_import(client.clone());
+
+	let builder = client.new_block_at(&BlockId::Number(0)).unwrap();
+	let block = builder.bake().unwrap();
+	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
+		next_authorities: make_ids(peers_b),
+		delay: 0,
+	});
+
+	let block = || {
+		let block = block.clone();
+		ImportBlock {
+			origin: BlockOrigin::File,
+			header: block.header,
+			justification: None,
+			post_digests: Vec::new(),
+			body: Some(block.extrinsics),
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		}
+	};
+
+	assert_eq!(
+		block_import.import_block(block(), None).unwrap(),
+		ImportResult::NeedsJustification
+	);
+
+	assert_eq!(
+		block_import.import_block(block(), None).unwrap(),
+		ImportResult::AlreadyInChain
+	);
 }
