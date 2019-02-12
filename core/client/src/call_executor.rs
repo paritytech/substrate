@@ -237,6 +237,11 @@ where
 			native_call,
 		).map(|(result, _, _)| result)?;
 
+		// If the method is `initialise_block` we need to set the `initialised_block`
+		if method == "Core_initialise_block" {
+			*initialised_block = Some(*at);
+		}
+
 		self.backend.destroy_state(state)?;
 		Ok(result)
 	}
