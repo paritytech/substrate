@@ -19,36 +19,22 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate substrate_primitives;
-
-#[macro_use]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-#[macro_use]
-extern crate substrate_metadata_derive;
-
-extern crate parity_codec as codec;
-extern crate substrate_metadata;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as primitives;
-extern crate safe_mix;
-
+#[cfg(feature = "std")]
+use serde_derive::Serialize;
 use rstd::prelude::*;
+#[cfg(any(feature = "std", test))]
+use rstd::map;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
 use substrate_primitives::storage::well_known_keys;
-use runtime_support::{storage, StorageValue, StorageMap, Parameter};
+use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use safe_mix::TripletMix;
+use parity_codec_derive::{Encode, Decode};
+use substrate_metadata_derive::EncodeMetadata;
 
 #[cfg(any(feature = "std", test))]
-use codec::Encode;
+use parity_codec::Encode;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -79,8 +65,8 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
+pub fn extrinsics_root<H: Hash, E: parity_codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(parity_codec::Encode::encode).collect())
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
@@ -230,7 +216,7 @@ decl_storage! {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 
 		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
-			use codec::Encode;
+			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
@@ -470,6 +456,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
+	use srml_support::impl_outer_origin;
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}

@@ -68,7 +68,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	let scrate_decl = generate_hidden_includes(
 		&hidden_crate_name,
 		"srml-support",
-		"srml_support",
 	);
 
 	let (

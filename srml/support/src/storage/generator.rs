@@ -527,6 +527,7 @@ mod tests {
 	use super::*;
 	use crate::rstd::marker::PhantomData;
 	use substrate_metadata::*;
+	use substrate_metadata_derive::EncodeMetadata;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
 		fn exists(&self, key: &[u8]) -> bool {
@@ -916,6 +917,8 @@ mod tests {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test2 {
+	use substrate_metadata_derive::EncodeMetadata;
+
 	pub trait Trait {
 		type Origin;
 		type BlockNumber;
@@ -952,6 +955,8 @@ mod test2 {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test3 {
+	use substrate_metadata_derive::EncodeMetadata;
+
 	pub trait Trait {
 		type Origin;
 		type BlockNumber;

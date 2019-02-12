@@ -474,6 +474,8 @@ mod tests {
 	use substrate_metadata_derive::EncodeMetadata;
 
 	mod system {
+		use substrate_metadata_derive::EncodeMetadata;
+
 		pub trait Trait {
 			type Origin;
 			type BlockNumber;
@@ -491,6 +493,8 @@ mod tests {
 	}
 
 	mod system_renamed {
+		use substrate_metadata_derive::EncodeMetadata;
+
 		pub trait Trait {
 			type Origin;
 			type BlockNumber;
@@ -508,6 +512,8 @@ mod tests {
 	}
 
 	mod event_module {
+		use substrate_metadata_derive::EncodeMetadata;
+
 		pub trait Trait {
 			type Origin;
 			type Balance;
@@ -531,6 +537,8 @@ mod tests {
 	}
 
 	mod event_module2 {
+		use substrate_metadata_derive::EncodeMetadata;
+
 		pub trait Trait {
 			type Origin;
 			type Balance;

@@ -19,7 +19,7 @@ use std::sync::Arc;
 use codec::Encode;
 use futures::sync::mpsc;
 
-use client::{CallExecutor, Client};
+use client::{blockchain, CallExecutor, Client};
 use client::backend::Backend;
 use consensus_common::{
 	BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind,
@@ -124,9 +124,18 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		-> Result<ImportResult, Self::Error>
 	{
 		use authorities::PendingChange;
+		use client::blockchain::HeaderBackend;
 
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
+
+		// early exit if block already in chain, otherwise the check for
+		// authority changes will error when trying to re-import a change block
+		match self.inner.backend().blockchain().status(BlockId::Hash(hash)) {
+			Ok(blockchain::BlockStatus::InChain) => return Ok(ImportResult::AlreadyInChain),
+			Ok(blockchain::BlockStatus::Unknown) => {},
+			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+		}
 
 		let maybe_change = self.api.runtime_api().grandpa_pending_change(
 			&BlockId::hash(*block.header.parent_hash()),
@@ -156,7 +165,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				if *base == hash { return error(); }
 				if *base == parent_hash { return error(); }
 
-				let tree_route = ::client::blockchain::tree_route(
+				let tree_route = blockchain::tree_route(
 					self.inner.backend().blockchain(),
 					BlockId::Hash(parent_hash),
 					BlockId::Hash(*base),

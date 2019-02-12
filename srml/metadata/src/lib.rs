@@ -22,22 +22,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-extern crate sr_std as rstd;
-extern crate substrate_primitives as primitives;
-extern crate substrate_metadata;
-
 #[cfg(feature = "std")]
-extern crate serde;
+use serde_derive::Serialize;
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-use codec::{Encode, Output};
+use parity_codec::{Decode, Input};
 #[cfg(feature = "std")]
-use codec::{Decode, Input};
+use parity_codec_derive::Decode;
+use parity_codec::{Encode, Output};
+use parity_codec_derive::Encode;
 use rstd::vec::Vec;
 
 use substrate_metadata::MetadataName;

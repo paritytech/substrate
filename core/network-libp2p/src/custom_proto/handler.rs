@@ -24,7 +24,7 @@ use libp2p::core::{
 	protocols_handler::ProtocolsHandlerUpgrErr,
 	upgrade::{InboundUpgrade, OutboundUpgrade}
 };
-use log::{trace, warn};
+use log::trace;
 use smallvec::SmallVec;
 use std::{fmt, io, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -50,7 +50,7 @@ pub struct CustomProtosHandler<TSubstream> {
 	substreams: SmallVec<[RegisteredProtocolSubstream<TSubstream>; 6]>,
 
 	/// Queue of events to send to the outside.
-	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol, (), CustomProtosHandlerOut>; 16]>,
+	events_queue: SmallVec<[ProtocolsHandlerEvent<RegisteredProtocol, ProtocolId, CustomProtosHandlerOut>; 16]>,
 }
 
 /// State of the handler.
@@ -128,6 +128,14 @@ pub enum CustomProtosHandlerOut {
 		/// Copy of the messages that are within the buffer, for further diagnostic.
 		messages: Vec<Bytes>,
 	},
+
+	/// An error has happened on the protocol level with this node.
+	ProtocolError {
+		/// Protocol for which the error happened.
+		protocol_id: ProtocolId,
+		/// The error that happened.
+		error: ProtocolsHandlerUpgrErr<io::Error>,
+	},
 }
 
 impl<TSubstream> CustomProtosHandler<TSubstream>
@@ -191,7 +199,7 @@ where
 	type Error = Void;
 	type InboundProtocol = RegisteredProtocols;
 	type OutboundProtocol = RegisteredProtocol;
-	type OutboundOpenInfo = ();
+	type OutboundOpenInfo = ProtocolId;
 
 	#[inline]
 	fn listen_protocol(&self) -> Self::InboundProtocol {
@@ -258,7 +266,7 @@ where
 
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							upgrade: protocol.clone(),
-							info: (),
+							info: protocol.id(),
 						});
 					}
 				}
@@ -286,8 +294,11 @@ where
 	fn inject_inbound_closed(&mut self) {}
 
 	#[inline]
-	fn inject_dial_upgrade_error(&mut self, _: Self::OutboundOpenInfo, err: ProtocolsHandlerUpgrErr<io::Error>) {
-		warn!(target: "sub-libp2p", "Error while opening custom protocol: {:?}", err);
+	fn inject_dial_upgrade_error(&mut self, protocol_id: Self::OutboundOpenInfo, error: ProtocolsHandlerUpgrErr<io::Error>) {
+		if let State::Normal = self.state {
+			let event = CustomProtosHandlerOut::ProtocolError { protocol_id, error };
+			self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+		}
 
 		// Right now if the remote doesn't support one of the custom protocols, we shut down the
 		// entire connection. This is a hack-ish solution to the problem where we connect to nodes

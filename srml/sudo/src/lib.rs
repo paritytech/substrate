@@ -19,28 +19,11 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate sr_std;
-#[cfg(test)]
-extern crate sr_io;
-#[cfg(test)]
-extern crate substrate_primitives;
-extern crate sr_primitives;
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-#[macro_use]
-extern crate srml_support as support;
-
-extern crate substrate_metadata;
-#[macro_use]
-extern crate substrate_metadata_derive;
-
-extern crate srml_system as system;
-
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
-use support::{StorageValue, Parameter, Dispatchable};
+use srml_support::{StorageValue, Parameter, Dispatchable, decl_module, decl_event, decl_storage, ensure};
 use system::ensure_signed;
+use substrate_metadata_derive::EncodeMetadata;
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.

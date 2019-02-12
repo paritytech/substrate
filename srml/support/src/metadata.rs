@@ -262,6 +262,8 @@ mod tests {
 	use substrate_metadata_derive::EncodeMetadata;
 
 	mod system {
+		use substrate_metadata_derive::EncodeMetadata;
+
 		pub trait Trait {
 			type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 			type AccountId;
@@ -299,6 +301,7 @@ mod tests {
 
 	mod event_module {
 		use crate::dispatch::Result;
+		use substrate_metadata_derive::EncodeMetadata;
 
 		pub trait Trait {
 			type Origin;
@@ -322,6 +325,8 @@ mod tests {
 	}
 
 	mod event_module2 {
+		use substrate_metadata_derive::EncodeMetadata;
+
 		pub trait Trait {
 			type Origin;
 			type Balance;

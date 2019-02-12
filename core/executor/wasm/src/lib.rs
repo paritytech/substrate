@@ -59,6 +59,7 @@ impl_stubs!(
 		b"all ok!".to_vec()
 	},
 	test_empty_return => |_| Vec::new(),
+	test_exhaust_heap => |_| Vec::with_capacity(16777216),
 	test_panic => |_| panic!("test panic"),
 	test_conditional_panic => |input: &[u8]| {
 		if input.len() > 0 {

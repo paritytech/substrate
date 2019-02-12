@@ -21,10 +21,11 @@ use rstd::borrow::Borrow;
 use primitives::traits::{Hash, As, Zero};
 use runtime_io::print;
 use srml_support::dispatch::Result;
-use srml_support::{StorageValue, StorageMap, IsSubType};
+use srml_support::{StorageValue, StorageMap, IsSubType, decl_module, decl_storage, decl_event, ensure};
 use {system, democracy};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::ensure_signed;
+use substrate_metadata_derive::EncodeMetadata;
 
 pub trait Trait: CouncilTrait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -232,9 +233,9 @@ impl<T: Trait> Module<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ::tests::*;
-	use ::tests::{Call, Origin};
-	use srml_support::Hashable;
+	use crate::tests::*;
+	use crate::tests::{Call, Origin};
+	use srml_support::{Hashable, assert_ok, assert_noop};
 	use democracy::{ReferendumInfo, VoteThreshold};
 
 	#[test]

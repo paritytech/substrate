@@ -1134,6 +1134,7 @@ mod tests {
 	use super::*;
 	use crate::runtime_primitives::traits::{OnInitialise, OnFinalise};
 	use substrate_metadata::*;
+	use substrate_metadata_derive::EncodeMetadata;
 
 	pub trait Trait {
 		type Origin;
@@ -1162,6 +1163,7 @@ mod tests {
 		}
 	}
 
+	#[derive(EncodeMetadata)]
 	struct TraitImpl {}
 
 	impl Trait for TraitImpl {

@@ -75,10 +75,10 @@ impl<'e, E: Externalities<Blake2Hasher>> sandbox::SandboxCapabilities for Functi
 	fn store_mut(&mut self) -> &mut sandbox::Store {
 		&mut self.sandbox_store
 	}
-	fn allocate(&mut self, len: u32) -> u32 {
+	fn allocate(&mut self, len: u32) -> ::std::result::Result<u32, UserError> {
 		self.heap.allocate(len)
 	}
-	fn deallocate(&mut self, ptr: u32) {
+	fn deallocate(&mut self, ptr: u32) -> ::std::result::Result<(), UserError> {
 		self.heap.deallocate(ptr)
 	}
 	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), UserError> {
@@ -133,12 +133,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
-		let r = this.heap.allocate(size);
+		let r = this.heap.allocate(size)?;
 		debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
 		Ok(r)
 	},
 	ext_free(addr: *mut u8) => {
-		this.heap.deallocate(addr);
+		this.heap.deallocate(addr)?;
 		debug_trace!(target: "sr-io", "free {}", addr);
 		Ok(())
 	},
@@ -252,7 +252,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		);
 
 		if let Some(value) = maybe_value {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_storage"))?;
@@ -291,7 +291,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		);
 
 		if let Some(value) = maybe_value {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_child_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_child_storage"))?;
@@ -373,7 +373,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let r = this.ext.child_storage_root(&storage_key);
 		if let Some(value) = r {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
@@ -677,7 +677,7 @@ impl WasmExecutor {
 		let used_mem = memory.used_size();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 		let size = data.len() as u32;
-		let offset = fec.heap.allocate(size);
+		let offset = fec.heap.allocate(size).map_err(|_| ErrorKind::Runtime)?;
 		memory.set(offset, &data)?;
 
 		let result = module_instance.invoke_export(
