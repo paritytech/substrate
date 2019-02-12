@@ -182,7 +182,7 @@ impl Pair {
 
 	/// Make a new key pair from a seed phrase.
 	/// This is generated using schnorrkel's Mini-Secret-Keys.
-	/// A MiniSecretKey is lieterally what Ed25519 calls a SecreyKey, which is just 32 random bytes.
+	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
 	pub fn from_seed(seed: &[u8; 32]) -> Pair {
 		let mini_key: MiniSecretKey = MiniSecretKey::from_bytes(seed)
 			.expect("32 bytes can always build a key; qed");
