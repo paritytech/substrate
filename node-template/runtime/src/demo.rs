@@ -5,7 +5,9 @@
 /// both `decl_module` and `decl_storage` are imported in line 7 below
 
 /// additionally import `decl_event` to declare events for your module
+
 /// feel free to remove or edit this file, as needed
+/// in case you remove this file, also make sure to remove line numbers 42, 178, 194 from `../runtime/src/lib.rs`
 
 use support::{decl_module, decl_storage, StorageValue, dispatch::Result};
 
