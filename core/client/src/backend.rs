@@ -44,6 +44,14 @@ impl NewBlockState {
 			NewBlockState::Normal => false,
 		}
 	}
+
+	/// Whether this block is considered final.
+	pub fn is_final(self) -> bool {
+		match self {
+			NewBlockState::Final => true,
+			NewBlockState::Best | NewBlockState::Normal => false,
+		}
+	}
 }
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
@@ -81,6 +89,8 @@ pub trait BlockImportOperation<Block, H> where
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 	/// Mark a block as finalized.
 	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
+	/// Mark a block as new head. If both block import and set head are specified, set head overrides block import's best block rule.
+	fn mark_head(&mut self, id: BlockId<Block>) -> error::Result<()>;
 }
 
 /// Provides access to an auxiliary database.

@@ -50,6 +50,7 @@ pub struct ImportOperation<Block: BlockT, S, F, H> {
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
+	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryState<H>>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
@@ -120,6 +121,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
+			set_head: None,
 			storage_update: None,
 			_phantom: Default::default(),
 		})
@@ -163,6 +165,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
 				}
 			}
+		}
+
+		if let Some(set_head) = operation.set_head {
+			self.blockchain.storage().set_head(set_head)?;
 		}
 
 		Ok(())
@@ -292,6 +298,11 @@ where
 
 	fn mark_finalized(&mut self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
 		self.finalized_blocks.push(block);
+		Ok(())
+	}
+
+	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
+		self.set_head = Some(block);
 		Ok(())
 	}
 }
