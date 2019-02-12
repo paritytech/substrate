@@ -22,7 +22,6 @@ use runtime_io::print;
 use srml_support::{StorageValue, StorageMap, dispatch::Result, traits::Currency, decl_storage, decl_event, ensure};
 use democracy;
 use system::{self, ensure_signed};
-use substrate_metadata_derive::EncodeMetadata;
 
 // no polynomial attacks:
 //

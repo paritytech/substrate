@@ -24,7 +24,6 @@ use srml_support::dispatch::{Dispatchable, Parameter};
 use srml_support::{StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::{self, ensure_signed};
-use substrate_metadata_derive::EncodeMetadata;
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;

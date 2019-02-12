@@ -25,7 +25,6 @@ use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_e
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 use rstd::ops::Mul;
-use substrate_metadata_derive::EncodeMetadata;
 
 /// A session has changed.
 pub trait OnSessionChange<T> {

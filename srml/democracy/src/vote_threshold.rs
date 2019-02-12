@@ -22,7 +22,6 @@ use parity_codec_derive::{Encode, Decode};
 use substrate_metadata_derive::EncodeMetadata;
 use primitives::traits::{Zero, IntegerSquareRoot};
 use rstd::ops::{Add, Mul, Div, Rem};
-use rstd::prelude::*;
 
 /// A means of determining if a vote is past pass threshold.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, EncodeMetadata)]

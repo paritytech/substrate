@@ -43,7 +43,6 @@ use rstd::{result, ops::{Mul, Div}, cmp, prelude::*};
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
-use substrate_metadata_derive::EncodeMetadata;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";

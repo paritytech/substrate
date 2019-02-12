@@ -25,7 +25,6 @@ use srml_support::{StorageValue, StorageMap, IsSubType, decl_module, decl_storag
 use {system, democracy};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::ensure_signed;
-use substrate_metadata_derive::EncodeMetadata;
 
 pub trait Trait: CouncilTrait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
