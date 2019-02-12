@@ -227,8 +227,7 @@ impl Stream for NetworkStream {
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		if let Some(ref mut inner) = self.inner {
-			return inner
-				.poll()
+			return inner.poll()
 		}
 		if let Ok(futures::Async::Ready(mut inner)) = self.outer.poll() {
 			let poll_result = inner.poll();
@@ -307,7 +306,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 			let inner_rx = gossip.messages_for(message_topic::<B>(round, set_id));
 			let _ = tx.send(inner_rx);
 		});
-		NetworkStream { outer: rx, inner: None }
+		NetworkStream{outer: rx, inner: None}
 	}
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
@@ -331,7 +330,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 			let inner_rx = gossip.messages_for(commit_topic::<B>(set_id));
 			let _ = tx.send(inner_rx);
 		});
-		NetworkStream { outer: rx, inner: None }
+		NetworkStream{outer: rx, inner: None}
 	}
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
