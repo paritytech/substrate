@@ -218,6 +218,11 @@ fn decl_store_extra_genesis(
 		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
 			is_trait_needed = true;
+			let error_message = format!(
+				"Genesis parameters encoding of {} does not match the expected type ({:?}).",
+				name,
+				type_infos.value_type,
+			);
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
@@ -227,7 +232,7 @@ fn decl_store_extra_genesis(
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
 						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-							.expect("Genesis parameters encoding does not match the expected type.");
+							.expect(#error_message);
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
@@ -240,7 +245,7 @@ fn decl_store_extra_genesis(
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
 							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-								.expect("Genesis parameters encoding does not match the expected type.");
+								.expect(#error_message);
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
@@ -537,7 +542,6 @@ fn store_functions_to_metadata (
 				}
 			},
 			DeclStorageTypeInfosKind::Map { key_type, .. } => {
-				// TODO [ToDr] should it be part of metadata?
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Map {
