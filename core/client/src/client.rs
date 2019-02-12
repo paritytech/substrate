@@ -650,6 +650,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		result
 	}
 
+	/// Set a block as best block.
+	pub fn set_head(
+		&self,
+		id: BlockId<Block>
+	) -> error::Result<()> {
+		self.lock_import_and_run(|operation| {
+			self.apply_head(operation, id)
+		})
+	}
+
+	/// Set a block as best block, and apply it to an operation.
+	pub fn apply_head(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+	) -> error::Result<()> {
+		operation.op.mark_head(id)
+	}
+
 	/// Apply a checked and validated block to an operation. If a justification is provided
 	/// then `finalized` *must* be true.
 	pub fn apply_block(
