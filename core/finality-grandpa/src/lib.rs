@@ -229,12 +229,15 @@ impl Stream for NetworkStream {
 		if let Some(ref mut inner) = self.inner {
 			return inner.poll()
 		}
-		if let Ok(futures::Async::Ready(mut inner)) = self.outer.poll() {
-			let poll_result = inner.poll();
-			self.inner = Some(inner);
-			return poll_result
+		match self.outer.poll() {
+			Ok(futures::Async::Ready(mut inner)) => {
+				let poll_result = inner.poll();
+				self.inner = Some(inner);
+				poll_result
+			},
+			Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
+			Err(_) => Err(())
 		}
-		Ok(futures::Async::NotReady)
 	}
 }
 
