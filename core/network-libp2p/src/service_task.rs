@@ -342,8 +342,8 @@ where TMessage: CustomMessage + Send + 'static {
 
 	/// Get debug info for a given peer.
 	pub fn peer_debug_info(&self, who: NodeIndex) -> String {
-		if let (Some(peer_id), Some(addr)) = (self.peer_id_of_node(who), self.node_endpoint(who)) {
-			format!("{:?} through {:?}", peer_id, addr)
+		if let Some(info) = self.nodes_info.get(&who) {
+			format!("{:?} (version: {:?}) through {:?}", info.peer_id, info.client_version, info.endpoint)
 		} else {
 			"unknown".to_string()
 		}
