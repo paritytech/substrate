@@ -128,6 +128,7 @@ mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 
+pub use finality_proof::FinalityProofProvider;
 pub use light_import::light_block_import;
 
 #[cfg(test)]
@@ -1444,8 +1445,6 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 				from genesis on what appears to be first startup.");
 
 			// no authority set on disk: fetch authorities from genesis state.
-			// if genesis state is not available, we may be a light client, but these
-			// are unsupported for following GRANDPA directly.
 			let genesis_authorities = api.runtime_api()
 				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
 

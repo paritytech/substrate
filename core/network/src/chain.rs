@@ -70,6 +70,12 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	) -> Result<ChangesProof<Block::Header>, Error>;
 }
 
+/// 
+pub trait FinalityProofProvider<Block: BlockT>: Send + Sync {
+	///
+	fn prove_finality(&self, last_finalized: Block::Hash, for_block: Block::Hash) -> Result<Option<Vec<u8>>, Error>;
+}
+
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,

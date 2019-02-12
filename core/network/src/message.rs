@@ -22,6 +22,7 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
+	FinalityProofRequest, FinalityProofResponse,
 	FromBlock
 };
 
@@ -331,6 +332,8 @@ pub mod generic {
 	pub struct FinalityProofRequest<H> {
 		/// Hash of the block to request proof for.
 		pub block: H,
+		/// Hash of the last known finalized block.
+		pub last_finalized: H,
 	}
 
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]

@@ -91,7 +91,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 };
 use components::{StartRPC, MaintainTransactionPool};
 #[doc(hidden)]
-pub use network::OnDemand;
+pub use network::{FinalityProofProvider, OnDemand};
 
 const DEFAULT_PROTOCOL_ID: &'static str = "sup";
 
@@ -155,6 +155,7 @@ impl<Components: components::Components> Service<Components> {
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let import_queue = Arc::new(Components::build_import_queue(&mut config, client.clone())?);
+		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
@@ -175,6 +176,7 @@ impl<Components: components::Components> Service<Components> {
 			config: network::config::ProtocolConfig { roles: config.roles },
 			network_config: config.network.clone(),
 			chain: client.clone(),
+			finality_proof_provider,
 			on_demand: on_demand.as_ref().map(|d| d.clone() as _),
 			transaction_pool: transaction_pool_adapter.clone() as _,
 			specialization: network_protocol,
@@ -538,6 +540,7 @@ macro_rules! construct_service_factory {
 				{ $( $full_import_queue_init:tt )* },
 			LightImportQueue = $light_import_queue:ty
 				{ $( $light_import_queue_init:tt )* },
+			FinalityProofProvider = { $( $finality_proof_provider_init:tt )* },
 		}
 	) => {
 		$( #[$attr] )*
@@ -592,6 +595,12 @@ macro_rules! construct_service_factory {
 				client: Arc<$crate::LightClient<Self>>,
 			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
+			}
+
+			fn build_finality_proof_provider(
+				client: Arc<$crate::FullClient<Self>>
+			) -> Result<Option<Arc<$crate::FinalityProofProvider<Self::Block>>>, $crate::Error> {
+				( $( $finality_proof_provider_init )* ) (client)
 			}
 
 			fn new_light(

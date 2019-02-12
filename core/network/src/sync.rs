@@ -360,6 +360,40 @@ impl<B: BlockT> ChainSync<B> {
 		self.maintain_sync(protocol);
 	}
 
+	/// Handle new finality proof data.
+	pub(crate) fn on_block_finality_proof_data(
+		&mut self,
+		protocol: &mut Context<B>,
+		who: NodeIndex,
+		response: message::FinalityProofResponse<B::Hash>,
+	) {
+		if let Some(ref mut peer) = self.peers.get_mut(&who) {
+			if let PeerSyncState::DownloadingFinalityProof(hash) = peer.state {
+				peer.state = PeerSyncState::Available;
+
+				if hash != response.block {
+					let msg = format!(
+						"Invalid block finality data provided: requested: {:?} got: {:?}",
+						hash,
+						response.block,
+					);
+
+					protocol.report_peer(who, Severity::Bad(&msg));
+					return;
+				}
+
+				self.extra_requests.on_finality_proof(
+					who,
+					response.proof,
+					protocol,
+					&*self.import_queue,
+				);
+			}
+		}
+
+		self.maintain_sync(protocol);
+	}
+
 	/// Maintain the sync process (download new blocks, fetch justifications).
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
 		let peers: Vec<NodeIndex> = self.peers.keys().map(|p| *p).collect();
@@ -379,8 +413,6 @@ impl<B: BlockT> ChainSync<B> {
 	/// Queues a new justification request and tries to dispatch all pending requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.extra_requests.request_justification(&(*hash, number), &mut self.peers, protocol);
-/*		self.justifications.queue_request(&(*hash, number));
-		self.justifications.dispatch(&mut self.peers, protocol);*/
 	}
 
 	/// Request a finality_proof for the given block.
@@ -388,8 +420,6 @@ impl<B: BlockT> ChainSync<B> {
 	/// Queues a new finality proof request and tries to dispatch all pending requests.
 	pub fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
 		self.extra_requests.request_finality_proof(&(*hash, number), &mut self.peers, protocol);
-		/*self.finality_proofs.queue_request(&(*hash, number));
-		self.finality_proofs.dispatch(&mut self.peers, protocol);*/
 	}
 
 	/// Notify about successful import of the given block.

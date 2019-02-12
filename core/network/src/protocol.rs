@@ -34,7 +34,7 @@ use specialization::NetworkSpecialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
 use service::{TransactionPool, ExHashT};
 use config::{ProtocolConfig, Roles};
-use chain::Client;
+use chain::{Client, FinalityProofProvider};
 use client::light::fetcher::ChangesProof;
 use on_demand::OnDemandService;
 use io::SyncIo;
@@ -202,6 +202,7 @@ pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: RwLock<HashMap<NodeIndex, Peer<B, H>>>,
 	pub chain: Arc<Client<B>>,
+	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
@@ -209,6 +210,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	pub fn new<I: 'static + ImportQueue<B>>(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
+		finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 		import_queue: Arc<I>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
@@ -223,6 +225,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			context_data: ContextData {
 				peers: RwLock::new(HashMap::new()),
 				chain,
+				finality_proof_provider,
 			},
 			on_demand,
 			genesis_hash: info.chain.genesis_hash,
@@ -366,6 +369,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
+			GenericMessage::FinalityProofRequest(request) => self.on_finality_proof_request(io, who, request),
+			GenericMessage::FinalityProofResponse(response) => self.on_finality_proof_response(io, who, response),
 			GenericMessage::Consensus(topic, msg, broadcast) => {
 				self.consensus_gossip.write().on_incoming(&mut ProtocolContext::new(&self.context_data, io), who, topic, msg, broadcast);
 			},
@@ -886,6 +891,34 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.on_demand.as_ref().map(|s| s.on_remote_changes_response(io, who, response));
 	}
 
+	fn on_finality_proof_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::FinalityProofRequest<B::Hash>) {
+		trace!(target: "sync", "Finality proof request from {} for {}", who, request.block);
+		let finality_proof = self.context_data.finality_proof_provider.as_ref()
+			.ok_or_else(|| String::from("Finality provider is not configured"))
+			.and_then(|provider| provider.prove_finality(request.last_finalized, request.block)
+				.map_err(|e| e.to_string()));
+		let finality_proof = match finality_proof {
+			Ok(finality_proof) => finality_proof,
+			Err(error) => {
+				trace!(target: "sync", "Finality proof request from {} for {} failed with: {}",
+					who, request.block, error);
+				None
+			},
+		};
+ 		self.send_message(io, who, GenericMessage::FinalityProofResponse(message::FinalityProofResponse {
+			block: request.block,
+			proof: finality_proof,
+		}));
+	}
+
+	fn on_finality_proof_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::FinalityProofResponse<B::Hash>) {
+		trace!(target: "sync", "Finality proof response from {} for {}", who, response.block);
+		self.sync.write().on_block_finality_proof_data(
+			&mut ProtocolContext::new(&self.context_data, io),
+			who,
+			response,
+		);
+	}
 
 	/// Execute a closure with access to a network context and specialization.
 	pub fn with_spec<F, U>(&self, io: &mut SyncIo, f: F) -> U

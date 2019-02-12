@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use client;
 use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
-use grandpa;
+use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
 use node_executor;
 use primitives::ed25519::Pair;
 use node_primitives::Block;
@@ -170,6 +170,9 @@ construct_service_factory! {
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			}},
+		FinalityProofProvider = { |client: Arc<FullClient<Self>>| {
+			Ok(Some(Arc::new(GrandpaFinalityProofProvider::new(client)) as _))
+		}},
 	}
 }
 

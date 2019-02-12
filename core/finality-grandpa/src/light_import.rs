@@ -18,14 +18,18 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use client::{
-	CallExecutor, Client, backend::Backend,
+	CallExecutor, Client,
+	backend::Backend,
+	blockchain::HeaderBackend,
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
 	light::fetcher::{FetchChecker, RemoteCallRequest},
 };
-use client::blockchain::HeaderBackend;
 use codec::{Encode, Decode};
-use consensus_common::{import_queue::Verifier, BlockOrigin, BlockImport, JustificationImport, FinalityProofImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult};
-use grandpa::VoterSet;
+use consensus_common::{
+	import_queue::Verifier,
+	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult,
+	Error as ConsensusError, ErrorKind as ConsensusErrorKind
+};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, ProvideRuntimeApi,
@@ -61,9 +65,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			info!(target: "afg", "Loading GRANDPA authorities \
 				from genesis on what appears to be first startup.");
 
-			// no authority set on disk: fetch authorities from genesis state.
-			// if genesis state is not available, we may be a light client, but these
-			// are unsupported for following GRANDPA directly.
+			// no authority set on disk: fetch authorities from genesis state
 			let genesis_authorities = api.runtime_api().grandpa_authorities(&BlockId::number(Zero::zero()))?;
 
 			let authority_set = LightAuthoritySet::genesis(genesis_authorities);
@@ -93,9 +95,9 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 /// A light block-import handler for GRANDPA.
 ///
-/// It is responsible for
+/// It is responsible for:
 /// - checking GRANDPA justifications;
-/// - requiring GRANDPA justifications for blocks that are enacting consensus changes;
+/// - fetching finality proofs for blocks that are enacting consensus changes.
 pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
 	fetch_checker: Arc<FetchChecker<Block>>,
@@ -126,7 +128,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
+	fn import_block(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		do_import_block(&*self.client, &mut *self.data.write(), block, new_authorities)
@@ -292,7 +294,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 	for header_to_import in finality_effects.headers_to_import {
 		let (block_to_import, new_authorities) = verifier.verify(block_origin, header_to_import, None, None)?;
 		assert!(block_to_import.justification.is_none(), "We have passed None as justification to verifier.verify");
-		do_import_block(client, data, block_to_import, new_authorities);
+		do_import_block(client, data, block_to_import, new_authorities)?;
 	}
 
 	// try to import latest justification

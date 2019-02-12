@@ -150,6 +150,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>, H: ExHashT> Service<B, S,
 		let handler = Arc::new(Protocol::new(
 			params.config,
 			params.chain,
+			params.finality_proof_provider,
 			import_queue.clone(),
 			params.on_demand,
 			params.transaction_pool,

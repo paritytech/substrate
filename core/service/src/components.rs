@@ -24,7 +24,7 @@ use client_db;
 use client::{self, Client, runtime_api::{Metadata, TaggedTransactionQueue}};
 use {error, Service, maybe_start_server};
 use consensus_common::import_queue::ImportQueue;
-use network::{self, OnDemand};
+use network::{self, OnDemand, FinalityProofProvider};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{
@@ -294,6 +294,11 @@ pub trait ServiceFactory: 'static + Sized {
 	fn build_network_protocol(config: &FactoryFullConfiguration<Self>)
 		-> Result<Self::NetworkProtocol, error::Error>;
 
+	/// Build finality proof provider for serving network requests on full node.
+	fn build_finality_proof_provider(
+		client: Arc<FullClient<Self>>
+	) -> Result<Option<Arc<FinalityProofProvider<Self::Block>>>, error::Error>;
+
 	/// Build full service.
 	fn new_full(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
 		-> Result<Self::FullService, error::Error>;
@@ -377,6 +382,11 @@ pub trait Components: Sized + 'static {
 		config: &mut FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error>;
+
+	/// Finality proof provider for serving network requests.
+	fn build_finality_proof_provider(
+		client: Arc<ComponentClient<Self>>
+	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error>;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -458,6 +468,12 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_full_import_queue(config, client)
 	}
+
+	fn build_finality_proof_provider(
+		client: Arc<ComponentClient<Self>>
+	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+		Factory::build_finality_proof_provider(client)
+	}
 }
 
 /// A struct that implement `Components` for the light client.
@@ -533,6 +549,12 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		client: Arc<ComponentClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)
+	}
+
+	fn build_finality_proof_provider(
+		_client: Arc<ComponentClient<Self>>
+	) -> Result<Option<Arc<FinalityProofProvider<<Self::Factory as ServiceFactory>::Block>>>, error::Error> {
+		Ok(None)
 	}
 }
 

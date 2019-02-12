@@ -18,7 +18,7 @@
 
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, Secret};
 
-use chain::Client;
+use chain::{Client, FinalityProofProvider};
 use codec;
 use on_demand::OnDemandService;
 use runtime_primitives::traits::{Block as BlockT};
@@ -33,6 +33,8 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub network_config: NetworkConfiguration,
 	/// Substrate relay chain access point.
 	pub chain: Arc<Client<B>>,
+	/// Finality proof provider.
+	pub finality_proof_provider: Option<Arc<FinalityProofProvider<B>>>,
 	/// On-demand service reference.
 	pub on_demand: Option<Arc<OnDemandService<B>>>,
 	/// Transaction pool.

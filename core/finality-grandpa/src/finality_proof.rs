@@ -29,9 +29,11 @@
 //! The caller should track the `set_id`. The most straightforward way is to fetch finality
 //! proofs ONLY for blocks on the tip of the chain and track the latest known `set_id`.
 
+use std::sync::Arc;
+
 use client::{
-	blockchain::Backend as BlockchainBackend,
-	error::{ErrorKind as ClientErrorKind, Result as ClientResult},
+	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
+	error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult},
 };
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
@@ -39,9 +41,40 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, One,
 };
-use substrate_primitives::{Ed25519AuthorityId, H256};
+use substrate_primitives::{Ed25519AuthorityId, H256, Blake2Hasher};
 
 use GrandpaJustification;
+
+/// Finality proof provider for serving network requests.
+pub struct FinalityProofProvider<B, E, Block: BlockT<Hash=H256>, RA>(Arc<Client<B, E, Block, RA>>);
+
+impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofProvider<B, E, Block, RA>
+	where
+		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		RA: Send + Sync,
+{
+	pub fn new(client: Arc<Client<B, E, Block, RA>>) -> Self {
+		FinalityProofProvider(client)
+	}
+}
+
+impl<B, E, Block: BlockT<Hash=H256>, RA> network::FinalityProofProvider<Block> for FinalityProofProvider<B, E, Block, RA>
+	where
+		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
+		RA: Send + Sync,
+{
+	fn prove_finality(&self, last_finalized: Block::Hash, for_block: Block::Hash) -> Result<Option<Vec<u8>>, ClientError> {
+		prove_finality(
+			&*self.0.backend().blockchain(),
+			|block| self.0.executor().call(block, "GrandpaApi_grandpa_authorities", &[]),
+			|block| self.0.execution_proof(block, "GrandpaApi_grandpa_authorities", &[]).map(|(_, proof)| proof),
+			last_finalized,
+			for_block,
+		)
+	}
+}
 
 /// The effects of block finality.
 pub struct FinalityEffects<Header: HeaderT, J> {
@@ -78,7 +111,7 @@ struct FinalityProofFragment<Header: HeaderT, Justification> {
 /// Proof of finality is the ordered set of finality fragments, where:
 /// - last fragment provides justification for the best possible block from the requested range;
 /// - all other fragments provide justifications for GRANDPA authorities set changes within requested range.
-type FinalityProof<Header: HeaderT, Justification> = Vec<FinalityProofFragment<Header, Justification>>;
+type FinalityProof<Header, Justification> = Vec<FinalityProofFragment<Header, Justification>>;
 
 /// Prepare proof-of-finality for the best possible block in the range: (begin; end].
 ///

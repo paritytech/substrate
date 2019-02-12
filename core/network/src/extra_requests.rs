@@ -35,7 +35,7 @@ trait ExtraRequestsEssence<B: BlockT> {
 	type Response;
 
 	/// Prepare network message corresponding to the request.
-	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B>;
+	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B>;
 	/// Accept response.
 	fn accept_response(&self, request: ExtraRequest<B>, import_queue: &ImportQueue<B>, response: Self::Response) -> ExtraResponseKind;
 	///
@@ -70,6 +70,10 @@ impl<B: BlockT> ExtraRequestsAggregator<B> {
 
 	pub fn on_justification(&mut self, who: NodeIndex, justification: Option<Justification>, protocol: &mut Context<B>, import_queue: &ImportQueue<B>) {
 		self.justifications.on_response(who, justification, protocol, import_queue);
+	}
+
+	pub fn on_finality_proof(&mut self, who: NodeIndex, finality_proof: Option<Vec<u8>>, protocol: &mut Context<B>, import_queue: &ImportQueue<B>) {
+		self.finality_proofs.on_response(who, finality_proof, protocol, import_queue);
 	}
 
 	pub fn dispatch(&mut self, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
@@ -135,6 +139,14 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		let mut last_peer = available_peers.back().map(|p| p.0);
 		let mut unhandled_requests = VecDeque::new();
 
+		let last_finalzied_hash = match protocol.client().info() {
+			Ok(info) => info.chain.finalized_hash,
+			Err(e) => {
+				debug!(target:"sync", "Cannot dispatch extra requests: error {:?} when reading blockchain", e);
+				return;
+			},
+		};
+
 		loop {
 			let (peer, peer_best_number) = match available_peers.pop_front() {
 				Some(p) => p,
@@ -185,7 +197,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 				.state = self.essence.peer_downloading_state(request.0);
 
 			trace!(target: "sync", "Requesting extra for block #{} from {}", request.0, peer);
-			let request = self.essence.into_network_request(request);
+			let request = self.essence.into_network_request(request, last_finalzied_hash);
 
 			protocol.send_message(peer, request);
 		}
@@ -267,7 +279,7 @@ struct JustificationsRequestsEssence;
 impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 	type Response = Option<Justification>;
 
-	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B> {
+	fn into_network_request(&self, request: ExtraRequest<B>, _last_finalzied_hash: B::Hash) -> Message<B> {
 		GenericMessage::BlockRequest(message::generic::BlockRequest {
 			id: 0,
 			fields: message::BlockAttributes::JUSTIFICATION,
@@ -300,9 +312,10 @@ struct FinalityProofRequestsEssence;
 impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence {
 	type Response = Option<Vec<u8>>;
 
-	fn into_network_request(&self, request: ExtraRequest<B>) -> Message<B> {
+	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B> {
 		GenericMessage::FinalityProofRequest(message::generic::FinalityProofRequest {
 			block: request.0,
+			last_finalized: last_finalzied_hash,
 		})
 	}
 

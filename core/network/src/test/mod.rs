@@ -579,6 +579,7 @@ pub trait TestNetFactory: Sized {
 		let sync = Protocol::new(
 			config.clone(),
 			client.clone(),
+			None,
 			import_queue.clone(),
 			None,
 			tx_pool,
