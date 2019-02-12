@@ -140,7 +140,7 @@ where
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
-		let encoded_len = codec::Encode::encode(&call).len();
+		let encoded_len = parity_codec::Encode::encode(&call).len();
 		let base_fee = <fees::Module<T>>::transaction_base_fee();
 		let byte_fee = <fees::Module<T>>::transaction_byte_fee();
 		<T::Balance as As<u64>>::sa(base_fee.as_() + byte_fee.as_() * encoded_len as u64)

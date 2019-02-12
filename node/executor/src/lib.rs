@@ -349,9 +349,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("d8fff70a10e0a00641458190ec32ca5681e1db38c0da9c18bb5abd76b645bb84").into()
+				hex!("7faa0e9695554fd2032abcbbe8c8f755de44e6d9f28976fa6abc4be9272f39fd").into()
 			} else {
-				hex!("f1f00968e622ec6f47be5653b741186ef764653c82c42dab4b80d43d3226fa27").into()
+				hex!("5b416ab606ba43913d42df620707a8b1f3e24c83a0f19eaadf69e3acda8e35e1").into()
 			},
 			if support_changes_trie {
 				vec![changes_trie_log(
@@ -377,7 +377,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("fb05600153a562a78fe12cbbfd97aa18ddf4085505bcacbcfd1d2c0c36bba5ce").into(),
+			hex!("60c3847e1d5ae65a231cc4418bc4a34d2073e476610f9280f9c037d197c6cb00").into(),
 			vec![ // session changes here, so we add a grandpa change signal log.
 				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 					(Keyring::One.to_raw_public().into(), 1),
@@ -406,7 +406,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("cd856b66ec5416b8c81d480fa7ed8b8a851afff03fc09c87920f975ae913a581").into(),
+			hex!("55b44ac3b3eff719b0d8c248c77c1b2662be04ad53050edbcaf9f7e2de8f2f65").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {
@@ -476,6 +476,10 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::fees(fees::RawEvent::Charged(1, 1))
 				}
 			]);
 		});
@@ -553,6 +557,14 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::fees(fees::RawEvent::Charged(1, 1))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::fees(fees::RawEvent::Charged(2, 1))
 				}
 			]);
 		});
@@ -677,7 +689,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("2c024da59dcdb62f43669081355830f074c32b3bddab7aebd8bcab14d24353b7").into(),
+			hex!("f1d72089c389b2110c531c5c48fd1918c010586f85acc234de569ce016ef9dd0").into(),
 			vec![],
 			vec![
 				CheckedExtrinsic {

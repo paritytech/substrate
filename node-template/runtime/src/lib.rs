@@ -179,12 +179,6 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-impl fees::Trait for Runtime {
-	type Event = Event;
-	type Amount = u128;
-	type TransferAsset = balances::Module<Runtime>;
-}
-
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, Ed25519AuthorityId>) where
 		Block = Block,
