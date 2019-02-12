@@ -24,6 +24,7 @@ use runtime_primitives::traits::{OnFinalise};
 use system::{EventRecord, Phase};
 
 use mock::{Fees, System, ExtBuilder};
+use srml_support::{assert_ok, assert_err};
 
 #[test]
 fn charge_base_bytes_fee_should_work() {

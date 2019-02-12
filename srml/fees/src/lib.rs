@@ -19,10 +19,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-use runtime_support::{Parameter, dispatch::Result, StorageMap};
+use srml_support::{dispatch::Result, Parameter, StorageMap, decl_event, decl_storage, decl_module};
 use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee,
 	TransferAsset, CheckedAdd, CheckedSub, CheckedMul, Zero};
 use system;
@@ -49,12 +46,10 @@ decl_module! {
 			let extrinsic_count = <system::Module<T>>::extrinsic_count();
 			(0..extrinsic_count).for_each(|index| {
 				// Deposit `Charged` event if some amount of fee charged.
-				let fee = Self::current_transaction_fee(index.clone());
+				let fee = <CurrentTransactionFee<T>>::take(index.clone());
 				if !fee.is_zero() {
 					Self::deposit_event(RawEvent::Charged(index.clone(), fee));
 				}
-				// Remove transaction fee records of current block.
-				<CurrentTransactionFee<T>>::remove(index);
 			});
 		}
 	}
