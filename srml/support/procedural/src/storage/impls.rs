@@ -196,6 +196,7 @@ impl<'a> Impls<'a> {
 		let key_for = syn::Ident::new(&format!("key_for_{}", name_lowercase), name.span());
 		let internal_module = syn::Ident::new(&format!("__internal_do_not_use_{}", name_lowercase), name.span());
 		let linkage = syn::Ident::new(&format!("Linkage{}", name), name.span());
+		let borrowing_linkage = syn::Ident::new(&format!("Borrowing{}", linkage), name.span());
 		let enumerator = syn::Ident::new(&format!("Enumerator{}", name), name.span());
 		let put_or_insert = quote! {
 			match linkage {
@@ -226,6 +227,15 @@ impl<'a> Impls<'a> {
 					previous: Option<#kty>,
 					/// Next element key in storage (None for the last element)
 					next: Option<#kty>,
+				}
+
+				/// A helper struct to avoid unnecessary key cloning.
+				///
+				/// NOTE It has to have exact same parity-codec encoding as #linkage!
+				#[derive(parity_codec_derive::Encode)]
+				struct #borrowing_linkage<'a> {
+					previous: Option<&'a #kty>,
+					next: Option<&'a #kty>,
 				}
 
 				impl #linkage {
@@ -270,28 +280,30 @@ impl<'a> Impls<'a> {
 					/// Takes care of updating head and previous head's pointer.
 					pub fn insert_new_head<S: #scrate::GenericStorage>(
 						storage: &S,
-						key: #kty,
+						key: &#kty,
 					) -> Self {
 						if let Some(head) = Self::read_head(storage) {
 							// update previous head predecessor
 							{
 								let head_key = #key_for(&head);
-								let mut res = Self::read(storage, &*head_key).expect(r#"
+								let (data, linkage) = Self::read(storage, &*head_key).expect(r#"
 									head is set when first element is inserted and unset when last element is removed;
 									if head is Some then it points to existing key; qed
 								"#);
-								res.1.previous = Some(key);
-								storage.put(&*head_key, &res);
+								storage.put(&*head_key, &(data, #borrowing_linkage {
+									next: linkage.next.as_ref(),
+									previous: Some(key),
+								}));
 							}
 							// update to current head
-							Self::write_head(storage, Some(&key));
+							Self::write_head(storage, Some(key));
 							// return linkage with pointer to previous head
 							let mut linkage = Self::default();
 							linkage.next = Some(head);
 							linkage
 						} else {
 							// we are first - update the head and produce empty linkage
-							Self::write_head(storage, Some(&key));
+							Self::write_head(storage, Some(key));
 							Self::default()
 						}
 					}
@@ -381,7 +393,7 @@ impl<'a> Impls<'a> {
 						// overwrite but reuse existing linkage
 						Some((_data, linkage)) => linkage,
 						// create new linkage
-						None => self::#internal_module::#linkage::insert_new_head(storage, key.clone()),
+						None => self::#internal_module::#linkage::insert_new_head(storage, key),
 					};
 					storage.put(key_for, &(*val, linkage))
 				}

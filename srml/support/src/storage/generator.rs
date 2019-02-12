@@ -67,34 +67,34 @@ pub trait Storage {
 	fn exists(&self, key: &[u8]) -> bool;
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: codec::Codec>(&self, key: &[u8]) -> Option<T>;
+	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T>;
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
 	/// it's not there.
-	fn require<T: codec::Codec>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
+	fn require<T: codec::Decode>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
 	/// default is returned if it's not there.
-	fn get_or_default<T: codec::Codec + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
+	fn get_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
 
 	/// Put a value in under a key.
-	fn put<T: codec::Codec>(&self, key: &[u8], val: &T);
+	fn put<T: codec::Encode>(&self, key: &[u8], val: &T);
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]);
 
 	/// Take a value from storage, deleting it after reading.
-	fn take<T: codec::Codec>(&self, key: &[u8]) -> Option<T> {
+	fn take<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
 		let value = self.get(key);
 		self.kill(key);
 		value
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_panic<T: codec::Codec>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+	fn take_or_panic<T: codec::Decode>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_default<T: codec::Codec + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
 }
 
 // We use a construct like this during when genesis storage is being built.
@@ -104,12 +104,12 @@ impl<S: sr_primitives::BuildStorage> Storage for (crate::rstd::cell::RefCell<&mu
 		self.0.borrow().contains_key(S::hash(key).as_ref())
 	}
 
-	fn get<T: codec::Codec>(&self, key: &[u8]) -> Option<T> {
+	fn get<T: codec::Decode>(&self, key: &[u8]) -> Option<T> {
 		self.0.borrow().get(S::hash(key).as_ref())
 			.map(|x| codec::Decode::decode(&mut x.as_slice()).expect("Unable to decode expected type."))
 	}
 
-	fn put<T: codec::Codec>(&self, key: &[u8], val: &T) {
+	fn put<T: codec::Encode>(&self, key: &[u8], val: &T) {
 		self.0.borrow_mut().insert(S::hash(key).to_vec(), codec::Encode::encode(val));
 	}
 
@@ -555,7 +555,7 @@ macro_rules! __handle_wrap_internal {
 mod tests {
 	use std::collections::HashMap;
 	use std::cell::RefCell;
-	use codec::Codec;
+	use codec::{Decode, Encode};
 	use super::*;
 	use crate::rstd::marker::PhantomData;
 
@@ -564,11 +564,11 @@ mod tests {
 			self.borrow_mut().get(key).is_some()
 		}
 
-		fn get<T: Codec>(&self, key: &[u8]) -> Option<T> {
+		fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
 			self.borrow_mut().get(key).map(|v| T::decode(&mut &v[..]).unwrap())
 		}
 
-		fn put<T: Codec>(&self, key: &[u8], val: &T) {
+		fn put<T: Encode>(&self, key: &[u8], val: &T) {
 			self.borrow_mut().insert(key.to_owned(), val.encode());
 		}
 
