@@ -39,7 +39,7 @@ use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
 use srml_support::for_each_tuple;
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
-use rstd::{result, ops::{Mul, Div}, cmp};
+use rstd::{result, ops::{Mul, Div}, cmp, prelude::*};
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
 #[cfg(feature = "std")]
 use inherents::ProvideInherentData;
