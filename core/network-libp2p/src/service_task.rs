@@ -330,6 +330,15 @@ impl Service {
 		}
 	}
 
+	/// Get debug info for a given peer.
+	pub fn peer_debug_info(&self, who: NodeIndex) -> String {
+		if let Some(info) = self.nodes_info.get(&who) {
+			format!("{:?} (version: {:?}) through {:?}", info.peer_id, info.client_version, info.endpoint)
+		} else {
+			"unknown".to_string()
+		}
+	}
+
 	/// Returns the `NodeIndex` of a peer, or assigns one if none exists.
 	fn index_of_peer_or_assign(&mut self, peer: PeerId, endpoint: ConnectedPoint) -> NodeIndex {
 		match self.index_by_id.entry(peer) {

@@ -70,10 +70,6 @@ impl<'s> SyncIo for NetSyncIo<'s> {
 
 	fn peer_debug_info(&self, who: NodeIndex) -> String {
 		let net = self.network.lock();
-		if let (Some(peer_id), Some(addr)) = (net.peer_id_of_node(who), net.node_endpoint(who)) {
-			format!("{:?} through {:?}", peer_id, addr)
-		} else {
-			"unknown".to_string()
-		}
+		net.peer_debug_info(who)
 	}
 }
