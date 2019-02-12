@@ -24,7 +24,7 @@ extern crate srml_support as runtime_support;
 
 use runtime_support::{Parameter, dispatch::Result, StorageMap};
 use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee,
-	TransferAsset, CheckedAdd, CheckedSub, CheckedMul};
+	TransferAsset, CheckedAdd, CheckedSub, CheckedMul, Zero};
 use system;
 
 mod mock;
@@ -50,7 +50,7 @@ decl_module! {
 			(0..extrinsic_count).for_each(|index| {
 				// Deposit `Charged` event if some amount of fee charged.
 				let fee = Self::current_transaction_fee(index.clone());
-				if fee.as_() != 0 {
+				if !fee.is_zero() {
 					Self::deposit_event(RawEvent::Charged(index.clone(), fee));
 				}
 				// Remove transaction fee records of current block.
@@ -102,8 +102,6 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 	type Amount = T::Amount;
 
 	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		T::TransferAsset::remove_from(transactor, amount)?;
-
 		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
 			Some(i) => i,
 			None => return Err("no extrinsic index found"),
@@ -113,13 +111,14 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 			Some(f) => f,
 			None => return Err("fee got overflow after charge"),
 		};
+
+		T::TransferAsset::remove_from(transactor, amount)?;
+
 		<CurrentTransactionFee<T>>::insert(extrinsic_index, new_fee);
 		Ok(())
 	}
 
 	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		T::TransferAsset::add_to(transactor, amount)?;
-
 		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
 			Some(i) => i,
 			None => return Err("no extrinsic index found"),
@@ -129,6 +128,9 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 			Some(f) => f,
 			None => return Err("fee got underflow after refund"),
 		};
+
+		T::TransferAsset::add_to(transactor, amount)?;
+
 		<CurrentTransactionFee<T>>::insert(extrinsic_index, new_fee);
 		Ok(())
 	}

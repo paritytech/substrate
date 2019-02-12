@@ -154,14 +154,6 @@ decl_storage! {
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
-
-
-		// Payment stuff.
-
-//		/// The fee to be paid for making a transaction; the base.
-//		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
-//		/// The fee to be paid for making a transaction; the per-byte portion.
-//		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
