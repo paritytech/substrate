@@ -34,7 +34,6 @@ use srml_support::dispatch::Result;
 use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
 	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
-use substrate_metadata_derive::EncodeMetadata;
 
 mod mock;
 mod tests;

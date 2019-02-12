@@ -23,7 +23,6 @@ use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
 use srml_support::{StorageValue, decl_module, decl_event, decl_storage, ensure};
 use system::ensure_signed;
-use substrate_metadata_derive::EncodeMetadata;
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The overarching event type.
