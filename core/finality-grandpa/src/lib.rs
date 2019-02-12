@@ -227,7 +227,7 @@ impl Stream for NetworkStream {
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		if let Some(ref mut inner) = self.inner {
-			return inner.poll()
+			return inner.poll();
 		}
 		match self.outer.poll() {
 			Ok(futures::Async::Ready(mut inner)) => {
