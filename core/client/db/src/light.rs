@@ -770,7 +770,7 @@ pub(crate) mod tests {
 
 		let (hash2, hash6) = {
 			// first few blocks are instantly finalized
-			// B0(None) -> B1(None) -> B2(1) -> B3(1) -> B4(1, 2) -> B5(1, 2) -> B6(None)
+			// B0(None) -> B1(None) -> B2(1) -> B3(1) -> B4(1, 2) -> B5(1, 2) -> B6(1, 2)
 			let checks = vec![
 				(0, None),
 				(1, None),
@@ -778,8 +778,7 @@ pub(crate) mod tests {
 				(3, Some(vec![[1u8; 32].into()])),
 				(4, Some(vec![[1u8; 32].into(), [2u8; 32].into()])),
 				(5, Some(vec![[1u8; 32].into(), [2u8; 32].into()])),
-				(6, None),
-				(7, None), // block will work for 'future' block too
+				(6, Some(vec![[1u8; 32].into(), [2u8; 32].into()])),
 			];
 
 			let hash0 = insert_final_block(&db, None, || default_header(&Default::default(), 0));
@@ -795,7 +794,7 @@ pub(crate) mod tests {
 			let hash5 = insert_final_block(&db, Some(vec![[1u8; 32].into(), [2u8; 32].into()]), || default_header(&hash4, 5));
 			run_checks(&db, 5, &checks);
 			let hash6 = insert_final_block(&db, None, || default_header(&hash5, 6));
-			run_checks(&db, 7, &checks);
+			run_checks(&db, 6, &checks);
 
 			(hash2, hash6)
 		};
@@ -818,32 +817,32 @@ pub(crate) mod tests {
 			//                     \> B6_1_2(6) -> B6_1_3(7)
 
 			let hash7 = insert_block(&db, Some(vec![[3u8; 32].into()]), || default_header(&hash6, 7));
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			let hash8 = insert_block(&db, Some(vec![[3u8; 32].into()]), || default_header(&hash7, 8));
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			let hash6_1 = insert_block(&db, Some(vec![[4u8; 32].into()]), || default_header(&hash6, 7));
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
 			let hash6_1_1 = insert_non_best_block(&db, Some(vec![[5u8; 32].into()]), || default_header(&hash6_1, 8));
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_1)), Some(vec![[5u8; 32].into()]));
 			let hash6_1_2 = insert_non_best_block(&db, Some(vec![[6u8; 32].into()]), || default_header(&hash6_1, 8));
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_1)), Some(vec![[5u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1_2)), Some(vec![[6u8; 32].into()]));
 			let hash6_2 = insert_block(&db, Some(vec![[4u8; 32].into()]), || default_header(&hash6_1, 8));
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), Some(vec![[3u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
@@ -857,7 +856,7 @@ pub(crate) mod tests {
 		{
 			// finalize block hash6_1
 			db.finalize_header(BlockId::Hash(hash6_1)).unwrap();
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
@@ -866,7 +865,7 @@ pub(crate) mod tests {
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_2)), Some(vec![[4u8; 32].into()]));
 			// finalize block hash6_2
 			db.finalize_header(BlockId::Hash(hash6_2)).unwrap();
-			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), None);
+			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6)), Some(vec![[1u8; 32].into(), [2u8; 32].into()]));
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash7)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash8)), None);
 			assert_eq!(db.cache().authorities_at(BlockId::Hash(hash6_1)), Some(vec![[4u8; 32].into()]));
