@@ -274,7 +274,6 @@ impl<T: Codec, U> StorageList<T> for U where U: generator::StorageList<T> {
 pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
-	// TODO [ToDr] Prefix as const?
 
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
