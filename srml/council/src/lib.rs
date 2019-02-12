@@ -36,6 +36,7 @@ mod tests {
 	pub use primitives::testing::{Digest, DigestItem, Header};
 	pub use substrate_primitives::{Blake2Hasher};
 	pub use {seats, motions, voting};
+	use substrate_metadata_derive::EncodeMetadata;
 
 	impl_outer_origin! {
 		pub enum Origin for Test {
