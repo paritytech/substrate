@@ -22,7 +22,8 @@ use primitives::{traits::IdentityLookup, BuildStorage, Perbill};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
+use srml_support::impl_outer_origin;
+use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}

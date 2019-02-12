@@ -18,37 +18,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(test)]
-extern crate parity_codec_derive;
-
-#[cfg_attr(test, macro_use)]
-extern crate srml_support as runtime_support;
-
-extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
-extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_system as system;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate srml_balances as balances;
-#[cfg(test)]
-extern crate srml_fees as fees;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	OnInitialise, ChargeBytesFee, Hash, As, Digest};
-use runtime_support::Dispatchable;
-use codec::{Codec, Encode};
+use srml_support::Dispatchable;
+use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
@@ -306,8 +283,10 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
-	use runtime_support::traits::Currency;
+	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
+	use fees;
+	use hex_literal::{hex, hex_impl};
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime {

@@ -9,8 +9,6 @@
 #[macro_use]
 extern crate serde_derive;
 
-use substrate_client as client;
-
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -38,7 +36,7 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
-pub use srml_support::{StorageValue, construct_runtime};
+pub use support::{StorageValue, construct_runtime};
 
 /// Alias to Ed25519 pubkey that identifies an account on the chain.
 pub type AccountId = primitives::H256;
