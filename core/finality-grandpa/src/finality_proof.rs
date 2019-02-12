@@ -17,17 +17,17 @@
 //! GRANDPA block finality proof generation and check.
 //!
 //! Finality of block B is proved by providing:
-//! 1) valid headers sub-chain from the block B to the block F;
-//! 2) valid (with respect to proved authorities) GRANDPA justification of the block F;
-//! 3) proof-of-execution of the `grandpa_authorities` call at the block F.
+//! 1) the justification for the descendant block F;
+//! 2) headers sub-chain (U; F], where U is the last block known to the caller;
+//! 3) proof of GRANDPA::authorities() if the set changes at block F.
 //!
 //! Since earliest possible justification is returned, the GRANDPA authorities set
 //! at the block F is guaranteed to be the same as in the block B (this is because block
 //! that enacts new GRANDPA authorities set always comes with justification). It also
 //! means that the `set_id` is the same at blocks B and F.
 //!
-//! The caller should track the `set_id`. The most straightforward way is to fetch finality
-//! proofs ONLY for blocks on the tip of the chain and track the latest known `set_id`.
+//! If authorities set changes several times in the (U; F] interval, multiple finality
+//! proof fragments are returned && each should be verified separately.
 
 use std::sync::Arc;
 
@@ -59,13 +59,18 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofProvider<B, E, Block, RA>
 	}
 }
 
-impl<B, E, Block: BlockT<Hash=H256>, RA> network::FinalityProofProvider<Block> for FinalityProofProvider<B, E, Block, RA>
+impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofProvider<B, E, Block, RA>
 	where
+		Block: BlockT<Hash=H256>,
 		B: Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 {
-	fn prove_finality(&self, last_finalized: Block::Hash, for_block: Block::Hash) -> Result<Option<Vec<u8>>, ClientError> {
+	fn prove_finality(
+		&self,
+		last_finalized: Block::Hash,
+		for_block: Block::Hash,
+	) -> Result<Option<Vec<u8>>, ClientError> {
 		prove_finality(
 			&*self.0.backend().blockchain(),
 			|block| self.0.executor().call(block, "GrandpaApi_grandpa_authorities", &[]),
@@ -421,11 +426,23 @@ mod tests {
 	}
 
 	fn side_header(number: u64) -> Header {
-		Header::new(number, H256::from_low_u64_be(0), H256::from_low_u64_be(1), header(number - 1).hash(), Default::default())
+		Header::new(
+			number,
+			H256::from_low_u64_be(0),
+			H256::from_low_u64_be(1),
+			header(number - 1).hash(),
+			Default::default(),
+		)
 	}
 
 	fn second_side_header(number: u64) -> Header {
-		Header::new(number, H256::from_low_u64_be(0), H256::from_low_u64_be(1), side_header(number - 1).hash(), Default::default())
+		Header::new(
+			number,
+			H256::from_low_u64_be(0),
+			H256::from_low_u64_be(1),
+			side_header(number - 1).hash(),
+			Default::default(),
+		)
 	}
 
 	fn test_blockchain() -> InMemoryBlockchain<Block> {
@@ -476,7 +493,8 @@ mod tests {
 		let blockchain = test_blockchain();
 		blockchain.insert(header(4).hash(), header(4), None, None, NewBlockState::Best).unwrap();
 		blockchain.insert(side_header(4).hash(), side_header(4), None, None, NewBlockState::Best).unwrap();
-		blockchain.insert(second_side_header(5).hash(), second_side_header(5), None, None, NewBlockState::Best).unwrap();
+		blockchain.insert(second_side_header(5).hash(), second_side_header(5), None, None, NewBlockState::Best)
+			.unwrap();
 		blockchain.insert(header(5).hash(), header(5), Some(vec![5]), None, NewBlockState::Final).unwrap();
 
 		// chain is 1 -> 2 -> 3 -> 4 -> 5
