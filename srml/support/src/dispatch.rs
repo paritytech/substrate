@@ -607,7 +607,7 @@ macro_rules! decl_module {
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
-		#[derive($crate::substrate_metadata_derive::EncodeMetadata)]
+		#[derive(EncodeMetadata)]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::std::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::std::marker::PhantomData<$trait_instance>),
@@ -619,7 +619,7 @@ macro_rules! decl_module {
 
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
-		#[derive($crate::substrate_metadata_derive::EncodeMetadata)]
+		#[derive(EncodeMetadata)]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::core::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::core::marker::PhantomData<$trait_instance>),
@@ -882,7 +882,7 @@ macro_rules! impl_outer_dispatch {
 		}
 	) => {
 		$(#[$attr])*
-		#[derive(Clone, PartialEq, Eq, $crate::substrate_metadata_derive::EncodeMetadata)]
+		#[derive(Clone, PartialEq, Eq, EncodeMetadata)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum $call_type {
 			$(

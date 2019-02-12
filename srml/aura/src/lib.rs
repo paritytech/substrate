@@ -33,6 +33,7 @@ use parity_codec_derive::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
+use substrate_metadata_derive::EncodeMetadata;
 
 mod mock;
 mod tests;

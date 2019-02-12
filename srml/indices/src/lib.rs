@@ -32,6 +32,7 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
 use system::{IsDeadAccount, OnNewAccount};
 use substrate_metadata::EncodeMetadata;
+use substrate_metadata_derive::EncodeMetadata;
 
 use self::address::Address as RawAddress;
 
