@@ -266,6 +266,24 @@ impl From<H512> for Ed25519Signature {
 	}
 }
 
+/// Sr25519 signature verify.
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Sr25519Signature(pub H512);
+
+impl Verify for Sr25519Signature {
+	type Signer = H256;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::sr25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
+	}
+}
+
+impl From<H512> for Sr25519Signature {
+	fn from(h: H512) -> Sr25519Signature {
+		Sr25519Signature(h)
+	}
+}
+
 /// Context for executing a call into the runtime.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]

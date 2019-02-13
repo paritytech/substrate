@@ -31,11 +31,12 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::Keyring;
+	use keyring::ed25519::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{
-		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue
+		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue,
+		NativeOrEncoded
 	};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
@@ -72,10 +73,12 @@ mod tests {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
-				let signature = payload.using_encoded(|b| if b.len() > 256 {
-					pair.sign(&runtime_io::blake2_256(b))
-				} else {
-					pair.sign(b)
+				let signature = payload.using_encoded(|b| {
+					if b.len() > 256 {
+						pair.sign(&runtime_io::blake2_256(b))
+					} else {
+						pair.sign(b)
+					}
 				}).into();
 				UncheckedExtrinsic {
 					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
@@ -245,7 +248,6 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
 		TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
@@ -273,12 +275,12 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
+				validators: vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three],
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				intentions: vec![alice(), bob(), Charlie.to_raw_public().into()],
+				intentions: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
@@ -287,7 +289,7 @@ mod tests {
 				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
-				invulnerables: vec![alice(), bob(), Charlie.to_raw_public().into()],
+				invulnerables: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -298,66 +300,79 @@ mod tests {
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(Alice.to_raw_public().into(), 1),
-					(Bob.to_raw_public().into(), 1),
-					(Charlie.to_raw_public().into(), 1),
+					(Keyring::Alice.to_raw_public().into(), 1),
+					(Keyring::Bob.to_raw_public().into(), 1),
+					(Keyring::Charlie.to_raw_public().into(), 1),
 				],
 			}),
 		}.build_storage().unwrap().0)
 	}
 
-	fn changes_trie_log(changes_root: Hash) -> Log {
-		Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root))
-	}
-
 	fn construct_block(
+		env: &mut TestExternalities<Blake2Hasher>,
 		number: BlockNumber,
 		parent_hash: Hash,
-		state_root: Hash,
-		logs: Vec<Log>,
-		extrinsics: Vec<CheckedExtrinsic>
+		extrinsics: Vec<CheckedExtrinsic>,
 	) -> (Vec<u8>, Hash) {
 		use trie::ordered_trie_root;
 
+		// sign extrinsics.
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter()
-			.map(Encode::encode))
-			.to_fixed_bytes()
-			.into();
 
-		let mut digest = generic::Digest::<Log>::default();
-		for item in logs {
-			digest.push(item);
-		}
+		// calculate the header fields that we can.
+		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(
+				extrinsics.iter().map(Encode::encode)
+			).to_fixed_bytes()
+			.into();
 
 		let header = Header {
 			parent_hash,
 			number,
-			state_root,
 			extrinsics_root,
-			digest,
+			state_root: Default::default(),
+			digest: Default::default(),
 		};
-		let hash = header.blake2_256();
 
-		(Block { header, extrinsics }.encode(), hash.into())
+		// execute the block to get the real header.
+		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			env,
+			"Core_initialise_block",
+			&header.encode(),
+			true,
+			None,
+		).0.unwrap();
+
+		for i in extrinsics.iter() {
+			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+				env,
+				"BlockBuilder_apply_extrinsic",
+				&i.encode(),
+				true,
+				None,
+			).0.unwrap();
+		}
+
+		let mut correct_header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			env,
+			"BlockBuilder_finalise_block",
+			&[0u8;0],
+			true,
+			None,
+		).0.unwrap() {
+			NativeOrEncoded::Native(_) => unreachable!(),
+			NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
+		};
+
+
+		let hash = correct_header.blake2_256();
+		(Block { header: correct_header, extrinsics }.encode(), hash.into())
 	}
 
-	fn block1(support_changes_trie: bool) -> (Vec<u8>, Hash) {
+	fn changes_trie_block() -> (Vec<u8>, Hash) {
 		construct_block(
+			&mut new_test_ext(COMPACT_CODE, true),
 			1,
 			GENESIS_HASH.into(),
-			if support_changes_trie {
-				hex!("d8fff70a10e0a00641458190ec32ca5681e1db38c0da9c18bb5abd76b645bb84").into()
-			} else {
-				hex!("f1f00968e622ec6f47be5653b741186ef764653c82c42dab4b80d43d3226fa27").into()
-			},
-			if support_changes_trie {
-				vec![changes_trie_log(
-					hex!("f254b62df0bfef049e010a7a0d6f176d73cc5d9710fa945b4e48f519c8d3a291").into(),
-				)]
-			} else {
-				vec![]
-			},
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -371,18 +386,30 @@ mod tests {
 		)
 	}
 
-	fn block2() -> (Vec<u8>, Hash) {
-		construct_block(
+	// block 1 and 2 must be created together to ensure transactions are only signed once (since they
+	// are not guaranteed to be deterministic) and to ensure that the correct state is propagated
+	// from block1's execution to block2 to derive the correct storage_root.
+	fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
+		let mut t = new_test_ext(COMPACT_CODE, false);
+		let block1 = construct_block(
+			&mut t,
+			1,
+			GENESIS_HASH.into(),
+			vec![
+				CheckedExtrinsic {
+					signed: None,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((alice(), 0)),
+					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+				},
+			]
+		);
+		let block2 = construct_block(
+			&mut t,
 			2,
-			block1(false).1,
-			hex!("fb05600153a562a78fe12cbbfd97aa18ddf4085505bcacbcfd1d2c0c36bba5ce").into(),
-			vec![ // session changes here, so we add a grandpa change signal log.
-				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-					(Keyring::One.to_raw_public().into(), 1),
-					(Keyring::Two.to_raw_public().into(), 1),
-					([3u8; 32].into(), 1),
-				]))
-			],
+			block1.1.clone(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -397,15 +424,24 @@ mod tests {
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
 				}
 			]
-		)
+		);
+
+		let mut digest = generic::Digest::<Log>::default();
+		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
+			(Keyring::One.to_raw_public().into(), 1),
+			(Keyring::Two.to_raw_public().into(), 1),
+			([3u8; 32].into(), 1),
+		])));
+		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
+
+		(block1, block2)
 	}
 
-	fn block1big() -> (Vec<u8>, Hash) {
+	fn big_block() -> (Vec<u8>, Hash) {
 		construct_block(
+			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
-			hex!("cd856b66ec5416b8c81d480fa7ed8b8a851afff03fc09c87920f975ae913a581").into(),
-			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -423,10 +459,12 @@ mod tests {
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
+		let (block1, block2) = blocks();
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block1(false).0,
+			&block1.0,
 			true,
 			None,
 		).0.unwrap();
@@ -446,15 +484,15 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::NewAccount(
-						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						bob().into(),
 						69
 					))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::Transfer(
-						hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
-						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						alice().into(),
+						bob().into(),
 						69,
 						0
 					))
@@ -477,11 +515,11 @@ mod tests {
 				}
 			]);
 		});
-
+		
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block2().0,
+			&block2.0,
 			true,
 			None,
 		).0.unwrap();
@@ -498,8 +536,8 @@ mod tests {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
-							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
-							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							bob().into(),
+							alice().into(),
 							5,
 							0
 						)
@@ -513,8 +551,8 @@ mod tests {
 					phase: Phase::ApplyExtrinsic(2),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
-							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
-							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							alice().into(),
+							bob().into(),
 							15,
 							0
 						)
@@ -560,14 +598,16 @@ mod tests {
 	fn full_wasm_block_import_works() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1(false).0).unwrap();
+		let (block1, block2) = blocks();
+
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 41);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2().0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 30);
@@ -661,7 +701,6 @@ mod tests {
 
 	#[test]
 	fn deploying_wasm_contract_should_work() {
-		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
@@ -673,10 +712,9 @@ mod tests {
 		);
 
 		let b = construct_block(
+			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
-			hex!("2c024da59dcdb62f43669081355830f074c32b3bddab7aebd8bcab14d24353b7").into(),
-			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -703,6 +741,8 @@ mod tests {
 			]
 		);
 
+		let mut t = new_test_ext(COMPACT_CODE, false);
+
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE,"Core_execute_block", &b.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
@@ -721,7 +761,7 @@ mod tests {
 				8,
 				COMPACT_CODE,
 				"Core_execute_block",
-				&block1big().0
+				&big_block().0
 			).is_err()
 		);
 	}
@@ -733,7 +773,7 @@ mod tests {
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block1big().0,
+			&big_block().0,
 			true,
 			None,
 		).0.unwrap();
@@ -747,7 +787,7 @@ mod tests {
 			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
-				&block1big().0,
+				&big_block().0,
 				false,
 				None,
 			).0.is_err()
@@ -805,11 +845,15 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works_with_changes_trie() {
+		let block1 = changes_trie_block();
+		let block_data = block1.0;
+		let block = Block::decode(&mut &block_data[..]).unwrap();
+
 		let mut t = new_test_ext(COMPACT_CODE, true);
 		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block1(true).0,
+			&block.encode(),
 			true,
 			None,
 		).0.unwrap();
@@ -819,8 +863,10 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works_with_changes_trie() {
+		let block1 = changes_trie_block();
+		
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1(true).0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(Default::default(), 0).is_some());
 	}
@@ -832,10 +878,12 @@ mod tests {
 
 		#[bench]
 		fn wasm_execute_block(b: &mut Bencher) {
+			let (block1, block2) = blocks();
+
 			b.iter(|| {
 				let mut t = new_test_ext(COMPACT_CODE, false);
-				WasmExecutor::new().call(&mut t, "Core_execute_block", &block1(false).0).unwrap();
-				WasmExecutor::new().call(&mut t, "Core_execute_block", &block2().0).unwrap();
+				WasmExecutor::new().call(&mut t, "Core_execute_block", &block1.0).unwrap();
+				WasmExecutor::new().call(&mut t, "Core_execute_block", &block2.0).unwrap();
 			});
 		}
 	}
