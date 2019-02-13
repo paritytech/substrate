@@ -54,7 +54,7 @@ impl<K, V> ChildrenMap<K, V> where
 
 		let raw_val = match raw_val_opt {
 			Some(val) => val,
-			None => return Ok(vec![]),
+			None => return Ok(Vec::new()),
 		};
 
 		let children: Vec<V> = match Decode::decode(&mut &raw_val[..]) {

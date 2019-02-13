@@ -862,7 +862,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				let displaced_leaf = leaves.import(hash, number, parent_hash);
 				leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 				
-				let mut children = self.blockchain().children.write();
+				let mut children = self.blockchain.children.write();
 				children.import(parent_hash, hash);
 				children.prepare_transaction(&*self.storage.db, &mut transaction, columns::META, meta_keys::CHILD_PREFIX)?;
 
