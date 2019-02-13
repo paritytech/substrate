@@ -15,70 +15,66 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 
-use std::collections::BTreeMap;
-use std::cmp::Ord;
+use std::collections::HashMap;
 use kvdb::{KeyValueDB, DBTransaction};
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use crate::error;
 use std::hash::Hash;
-use std::fmt::Debug;
 
 
 /// Map of children blocks stored in memory for fast access.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChildrenMap<K, V> where 
-	K: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
-	V: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
+	K: Eq + Hash + Clone + Encode + Decode,
+	V: Eq + Hash + Clone + Encode + Decode,
 {
-	storage: BTreeMap<K, Vec<V>>,
+	storage: HashMap<K, Vec<V>>,
 }
 
 impl<K, V> ChildrenMap<K, V> where
-	K: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
-	V: Ord + Eq + Hash + Clone + Encode + Decode + Debug,
+	K: Eq + Hash + Clone + Encode + Decode,
+	V: Eq + Hash + Clone + Encode + Decode,
 {
 	/// Creates an empty children map.
 	pub fn new() -> Self {
 		Self {
-			storage: BTreeMap::new(),
+			storage: HashMap::new(),
 		}
 	}
 
 	/// Returns the hashes of the children blocks of the block with `parent_hash`.
-	pub fn hashes(&self, db: &KeyValueDB, column: Option<u32>, prefix: &[u8],
-		parent_hash: K) -> error::Result<Vec<V>> {
-		
+	pub fn hashes(&self, db: &KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> error::Result<Vec<V>> {
 		let mut buf = prefix.to_vec();
 		parent_hash.using_encoded(|s| buf.extend(s));
-		let raw_val = match db.get(column, &buf[..]).unwrap() {
+
+		let raw_val_opt = match db.get(column, &buf[..]) {
+			Ok(raw_val_opt) => raw_val_opt,
+			Err(_) => return Err(error::ErrorKind::Backend("Error reading value from database".into()).into()),
+		};
+
+		let raw_val = match raw_val_opt {
 			Some(val) => val,
 			None => return Ok(vec![]),
 		};
+
 		let children: Vec<V> = match Decode::decode(&mut &raw_val[..]) {
 			Some(children) => children,
 			None => return Err(error::ErrorKind::Backend("Error decoding children".into()).into()),
 		};
+
 		Ok(children)
 	}
 
 	/// Returns the hashes of the children blocks of the block with `parent_hash`.
 	/// It doesn't read the database.
 	pub fn hashes_from_mem(&self, parent_hash: K) -> Vec<V> {
-		match self.storage.get(&parent_hash) {
-			Some(children) => children.clone(),
-			None => vec![],
-		}
+		self.storage.get(&parent_hash).cloned().unwrap_or_default()
 	}
 
 	/// Import the hash `child_hash` as child of `parent_hash`.
 	/// It doesn't save changes to database.
 	pub fn import(&mut self, parent_hash: K, child_hash: V) {
-		match self.storage.get_mut(&parent_hash) {
-			Some(children) => children.push(child_hash),
-			None => { 
-				self.storage.insert(parent_hash, vec![child_hash]);
-			}
-		}
+		self.storage.entry(parent_hash).or_insert_with(Vec::new).push(child_hash);
 	}
 
 	/// Prepare the transaction `tx` that saves the content of the ChildrenMap to database.

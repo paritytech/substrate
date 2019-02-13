@@ -346,7 +346,7 @@ macro_rules! tuple_impl {
 tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,);
 
 /// Abstraction around hashing
-pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq + PartialOrd + Ord {	// Stupid bug in the Rust compiler believes derived
+pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]> + PartialEq + Eq + PartialOrd + Ord;

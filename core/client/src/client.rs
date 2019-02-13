@@ -1230,48 +1230,43 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(None)
 	}
 
-	fn get_descendants(&self, target: Block::Hash, maybe_skip: Option<Block::Hash>) -> error::Result<Vec<Block::Hash>> {
+	fn get_children(&self, target: Block::Hash, maybe_skip: Option<Block::Hash>) -> error::Result<Vec<Block::Hash>> {
 		let mut children = self.backend.blockchain().children(target)?;
 		if let Some(skip) = maybe_skip {
 			children.retain(|&c| c != skip);
 		}
-		let mut descendants = Vec::new();
-		for child in children {
-			descendants.push(child);
-			let d = self.get_descendants(child, None)?;
-			descendants.extend(d);
-		}
-		Ok(descendants)
+		Ok(children)
 	}
 
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
-	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>)
-		-> error::Result<Option<Vec<Block::Hash>>>
-	{
-		let load_header = |id: Block::Hash| {
-			match self.backend.blockchain().header(BlockId::Hash(id)) {
-				Ok(Some(hdr)) => Ok(hdr),
-				Ok(None) => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", id)).into()),
-				Err(e) => Err(e),
+	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Hash>> {
+		let load_header = |id: Block::Hash| -> error::Result<Block::Header> {
+			match self.backend.blockchain().header(BlockId::Hash(id))? {
+				Some(hdr) => Ok(hdr),
+				None => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", id)).into()),
 			}
 		};
 
-		let genesis_hash = self.backend.blockchain().info().unwrap().genesis_hash;
-		let genesis = load_header(genesis_hash)?;
-		let mut current = load_header(target_hash)?;
-		let mut uncles = vec![];
+		let genesis_hash = self.backend.blockchain().info()?.genesis_hash;
+		if genesis_hash == target_hash { return Ok(Vec::new()); }
 
-		if genesis == current { return Ok(Some(uncles)); }
-		let mut ancestor = load_header(*current.parent_hash())?;
+		let mut current_hash = target_hash;
+		let mut current = load_header(current_hash)?;
+		let mut ancestor_hash = *current.parent_hash();
+		let mut ancestor = load_header(ancestor_hash)?;
+		let mut uncles = Vec::new();
 
 		for _generation in 0..max_generation.as_() {
-			uncles.extend(self.get_descendants(ancestor.hash(), Some(current.hash()))?);
+			let children = self.get_children(ancestor_hash, Some(current_hash))?;
+			uncles.extend(children);
+			current_hash = ancestor_hash;
+			if genesis_hash == current_hash { break; }
 			current = ancestor;
-			if genesis == current { break; }
-			ancestor = load_header(*current.parent_hash())?;
+			ancestor_hash = *current.parent_hash();
+			ancestor = load_header(ancestor_hash)?;
 		}
 
-		Ok(Some(uncles))
+		Ok(uncles)
 	}
 
 	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
@@ -1750,7 +1745,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn uncles_with_genesis_block() {
+	fn uncles_with_only_ancestors() {
 		// block tree:
 		// G -> A1 -> A2
 
@@ -1764,7 +1759,7 @@ pub(crate) mod tests {
 		let a2 = client.new_block().unwrap().bake().unwrap();
 		client.import(BlockOrigin::Own, a2.clone()).unwrap();
 		let v: Vec<H256> = Vec::new();
-		assert_eq!(v, client.uncles(a2.hash(), 3).unwrap().unwrap());
+		assert_eq!(v, client.uncles(a2.hash(), 3).unwrap());
 	}
 
 	#[test]
@@ -1843,22 +1838,22 @@ pub(crate) mod tests {
 		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
-		let uncles1 = client.uncles(a4.hash(), 10).unwrap().unwrap();
-		assert_eq!(vec![b2.hash(), b3.hash(), b4.hash(), c3.hash(), d2.hash()].len(), uncles1.len());
+		let uncles1 = client.uncles(a4.hash(), 10).unwrap();
+		assert_eq!(2, uncles1.len());
 
-		let uncles2 = client.uncles(a4.hash(), 0).unwrap().unwrap();
+		let uncles2 = client.uncles(a4.hash(), 0).unwrap();
 		assert_eq!(0, uncles2.len());
 
-		let uncles3 = client.uncles(a1.hash(), 10).unwrap().unwrap();
+		let uncles3 = client.uncles(a1.hash(), 10).unwrap();
 		assert_eq!(0, uncles3.len());
 
-		let uncles4 = client.uncles(genesis_hash, 10).unwrap().unwrap();
+		let uncles4 = client.uncles(genesis_hash, 10).unwrap();
 		assert_eq!(0, uncles4.len());
 
-		let uncles5 = client.uncles(d2.hash(), 10).unwrap().unwrap();
-		assert_eq!(8, uncles5.len());
+		let uncles5 = client.uncles(d2.hash(), 10).unwrap();
+		assert_eq!(2, uncles5.len());
 
-		let uncles6 = client.uncles(b3.hash(), 1).unwrap().unwrap();
+		let uncles6 = client.uncles(b3.hash(), 1).unwrap();
 		assert_eq!(1, uncles6.len());
 	}
 
