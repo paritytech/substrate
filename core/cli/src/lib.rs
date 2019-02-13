@@ -364,7 +364,7 @@ where
 		importing: cli.importing_execution.into(),
 		block_construction: cli.block_construction_execution.into(),
 		other: cli.other_execution.into(),
-	}; 
+	};
 
 	config.roles = role;
 	let client_id = config.client_id();
@@ -650,8 +650,9 @@ fn init_logger(pattern: &str) {
 	let enable_color = isatty;
 
 	builder.format(move |buf, record| {
+		let now = time::now();
 		let timestamp =
-			time::strftime("%Y-%m-%d %H:%M:%S", &time::now())
+			time::strftime("%Y-%m-%d %H:%M:%S", &now)
 				.expect("Error formatting log timestamp");
 
 		let mut output = if log::max_level() <= log::LevelFilter::Info {
@@ -660,6 +661,8 @@ fn init_logger(pattern: &str) {
 			let name = ::std::thread::current()
 				.name()
 				.map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
+			let millis = (now.tm_nsec as f32 / 1000000.0).round() as usize;
+			let timestamp = format!("{}.{:03}", timestamp, millis);
 			format!(
 				"{} {} {} {}  {}",
 				Colour::Black.bold().paint(timestamp),
