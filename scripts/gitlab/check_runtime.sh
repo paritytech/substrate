@@ -105,8 +105,8 @@ else
 	cat <<-EOT
 
 	wasm source files changed but not the spec/impl version and the runtime
-	binary blob. If changes made do not alter logic, just bump `impl_version`.
-	If they do change logic, bump `spec_version` and rebuild wasm.
+	binary blob. If changes made do not alter logic, just bump 'impl_version'.
+	If they do change logic, bump 'spec_version' and rebuild wasm.
 
 	source file directories:
 	- node/src/runtime

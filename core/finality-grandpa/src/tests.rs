@@ -152,7 +152,7 @@ impl MessageRouting {
 	fn drop_messages(&self, topic: Hash) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-        peer.consensus_gossip_collect_garbage_for(topic);
+		peer.consensus_gossip_collect_garbage_for_topic(topic);
 	}
 }
 
