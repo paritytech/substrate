@@ -19,7 +19,7 @@
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
-use crate::codec::{Codec, Decode, KeyedVec, Input};
+use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
 
 #[macro_use]
 pub mod generator;
@@ -39,7 +39,7 @@ impl<'a> Input for IncrementalInput<'a> {
 }
 
  /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
+pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
 	runtime_io::read_storage(&key[..], &mut [0; 0][..], 0).map(|_| {
 		let mut input = IncrementalInput {
@@ -52,29 +52,29 @@ pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
-pub fn get_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
+pub fn get_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
 	get(key).unwrap_or_else(Default::default)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry.
-pub fn get_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
+pub fn get_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
 	get(key).unwrap_or(default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
-pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
+pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
 	get(key).unwrap_or_else(default_value)
 }
 
 /// Put `value` in storage under `key`.
-pub fn put<T: Codec>(key: &[u8], value: &T) {
+pub fn put<T: Encode>(key: &[u8], value: &T) {
 	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-pub fn take<T: Codec + Sized>(key: &[u8]) -> Option<T> {
+pub fn take<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	let r = get(key);
 	if r.is_some() {
 		kill(key);
@@ -84,19 +84,19 @@ pub fn take<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
-pub fn take_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
+pub fn take_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
 	take(key).unwrap_or_else(Default::default)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
+pub fn take_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
 	take(key).unwrap_or(default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
+pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
 	take(key).unwrap_or_else(default_value)
 }
 
@@ -129,12 +129,12 @@ impl crate::GenericStorage for RuntimeStorage {
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: Codec>(&self, key: &[u8]) -> Option<T> {
+	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
 		super::storage::get(key)
 	}
 
 	/// Put a value in under a key.
-	fn put<T: Codec>(&self, key: &[u8], val: &T) {
+	fn put<T: Encode>(&self, key: &[u8], val: &T) {
 		super::storage::put(key, val)
 	}
 
@@ -144,7 +144,7 @@ impl crate::GenericStorage for RuntimeStorage {
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take<T: Codec>(&self, key: &[u8]) -> Option<T> {
+	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
 		super::storage::take(key)
 	}
 }
@@ -333,6 +333,28 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMa
 
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
 		U::take(key.borrow(), &RuntimeStorage)
+	}
+}
+
+/// A storage map that can be enumerated.
+///
+/// Note that type is primarily useful for off-chain computations.
+/// Runtime implementors should avoid enumerating storage entries.
+pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
+	/// Return current head element.
+	fn head() -> Option<K>;
+
+	/// Enumerate all elements in the map.
+	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>>;
+}
+
+impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator::EnumerableStorageMap<K, V> {
+	fn head() -> Option<K> {
+		<U as generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
+	}
+
+	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> {
+		<U as generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
 	}
 }
 

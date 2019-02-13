@@ -45,6 +45,9 @@ pub trait Storage<Block: BlockT>: AuxStore + BlockchainHeaderBackend<Block> {
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
 
+	/// Set an existing block as new best block.
+	fn set_head(&self, block: BlockId<Block>) -> ClientResult<()>;
+
 	/// Mark historic header as finalized.
 	fn finalize_header(&self, block: BlockId<Block>) -> ClientResult<()>;
 
@@ -244,6 +247,10 @@ pub mod tests {
 			_aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) -> ClientResult<()> {
 			Ok(())
+		}
+
+		fn set_head(&self, _block: BlockId<Block>) -> ClientResult<()> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
 		fn finalize_header(&self, _block: BlockId<Block>) -> ClientResult<()> {
