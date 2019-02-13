@@ -19,6 +19,7 @@ use std::fmt;
 #[derive(Clone, PartialEq)]
 pub enum Error<E> {
 	Duplicate,
+	UnfinalizedRoot,
 	Client(E),
 }
 
@@ -26,6 +27,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match *self {
 			Error::Duplicate => write!(f, "Hash already exists in DAG"),
+			Error::UnfinalizedRoot => write!(f, "Finalized descendent of DAG root without finalizing root first"),
 			Error::Client(ref err) => fmt::Debug::fmt(err, f),
 		}
 	}
@@ -90,7 +92,7 @@ impl<H, N, V> Dag<H, N, V> where
 		self.roots.iter().map(|node| (&node.hash, &node.number))
 	}
 
-	pub fn apply(&mut self, hash: &H) -> Option<V> {
+	pub fn finalize_root(&mut self, hash: &H) -> Option<V> {
 		if let Some(position) = self.roots.iter().position(|node| node.hash == *hash) {
 			let node = self.roots.swap_remove(position);
 			self.roots = node.children;
@@ -98,6 +100,37 @@ impl<H, N, V> Dag<H, N, V> where
 		}
 
 		None
+	}
+
+	pub fn finalize<F, E>(
+		&mut self,
+		hash: &H,
+		number: &N,
+		is_descendent_of: &F,
+	) -> Result<(), Error<E>>
+		where E: fmt::Debug,
+			  F: Fn(&H, &H) -> Result<bool, E>
+	{
+		// check if one of the current roots is being finalized
+		if let Some(_) = self.finalize_root(hash) {
+			return Ok(());
+		}
+
+		// make sure we're not finalizing a descendent of any root
+		for root in self.roots.iter() {
+			if *number > root.number && is_descendent_of(&root.hash, hash)? {
+				return Err(Error::UnfinalizedRoot);
+			}
+		}
+
+		// we finalized a block earlier than any existing root (or possibly
+		// another fork not part of the dag). make sure to only keep roots that
+		// are part of the finalized branch
+		self.roots.retain(|root| {
+			root.number > *number && is_descendent_of(hash, &root.hash).unwrap_or(false)
+		});
+
+		Ok(())
 	}
 }
 
@@ -206,8 +239,8 @@ mod test {
 	}
 
 	#[test]
-	fn it_works() {
-		let apply_a = || {
+	fn finalize_root_works() {
+		let finalize_a = || {
 			let mut dag = test_dag();
 
 			assert_eq!(
@@ -215,8 +248,8 @@ mod test {
 				vec![("A", 1)],
 			);
 
-			// applying "A" opens up three possible forks
-			dag.apply(&"A");
+			// finalizing "A" opens up three possible forks
+			dag.finalize_root(&"A");
 
 			assert_eq!(
 				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
@@ -227,10 +260,10 @@ mod test {
 		};
 
 		{
-			let mut dag = apply_a();
+			let mut dag = finalize_a();
 
-			// applying "B" will progress on its fork and remove any other competing forks
-			dag.apply(&"B");
+			// finalizing "B" will progress on its fork and remove any other competing forks
+			dag.finalize_root(&"B");
 
 			assert_eq!(
 				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
@@ -242,10 +275,10 @@ mod test {
 		}
 
 		{
-			let mut dag = apply_a();
+			let mut dag = finalize_a();
 
-			// applying "J" will progress on its fork and remove any other competing forks
-			dag.apply(&"J");
+			// finalizing "J" will progress on its fork and remove any other competing forks
+			dag.finalize_root(&"J");
 
 			assert_eq!(
 				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
