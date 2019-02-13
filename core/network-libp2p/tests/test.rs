@@ -16,12 +16,14 @@
 
 use futures::{future, stream, prelude::*, try_ready};
 use std::{io, iter};
-use substrate_network_libp2p::{ServiceEvent, multiaddr};
+use substrate_network_libp2p::{CustomMessage, ServiceEvent, multiaddr};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
-fn build_nodes(num: usize) -> Vec<substrate_network_libp2p::Service> {
-	let mut result: Vec<substrate_network_libp2p::Service> = Vec::with_capacity(num);
+fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
+	where TMsg: CustomMessage + Send + 'static
+{
+	let mut result: Vec<substrate_network_libp2p::Service<_>> = Vec::with_capacity(num);
 
 	for _ in 0 .. num {
 		let mut boot_nodes = Vec::new();
@@ -47,7 +49,7 @@ fn build_nodes(num: usize) -> Vec<substrate_network_libp2p::Service> {
 #[test]
 fn basic_two_nodes_connectivity() {
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes(2).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -86,7 +88,7 @@ fn two_nodes_transfer_lots_of_packets() {
 	const NUM_PACKETS: u32 = 20000;
 
 	let (mut service1, mut service2) = {
-		let mut l = build_nodes(2).into_iter();
+		let mut l = build_nodes::<Vec<u8>>(2).into_iter();
 		let a = l.next().unwrap();
 		let b = l.next().unwrap();
 		(a, b)
@@ -110,9 +112,9 @@ fn two_nodes_transfer_lots_of_packets() {
 		loop {
 			match try_ready!(service2.poll()) {
 				Some(ServiceEvent::OpenedCustomProtocol { .. }) => {},
-				Some(ServiceEvent::CustomMessage { data, .. }) => {
-					assert_eq!(data.len(), 1);
-					assert_eq!(u32::from(data[0]), packet_counter % 256);
+				Some(ServiceEvent::CustomMessage { message, .. }) => {
+					assert_eq!(message.len(), 1);
+					assert_eq!(u32::from(message[0]), packet_counter % 256);
 					packet_counter += 1;
 					if packet_counter == NUM_PACKETS {
 						return Ok(Async::Ready(()))
@@ -135,7 +137,7 @@ fn many_nodes_connectivity() {
 	// increased in the `NetworkConfiguration`.
 	const NUM_NODES: usize = 25;
 
-	let mut futures = build_nodes(NUM_NODES)
+	let mut futures = build_nodes::<Vec<u8>>(NUM_NODES)
 		.into_iter()
 		.map(move |mut node| {
 			let mut num_connecs = 0;

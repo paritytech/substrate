@@ -16,10 +16,9 @@
 
 use crate::custom_proto::handler::{CustomProtosHandler, CustomProtosHandlerOut, CustomProtosHandlerIn};
 use crate::custom_proto::topology::NetTopology;
-use crate::custom_proto::upgrade::RegisteredProtocols;
+use crate::custom_proto::upgrade::{CustomMessage, RegisteredProtocols};
 use crate::{NetworkConfiguration, NonReservedPeerMode, ProtocolId};
 use crate::parse_str_addr;
-use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::prelude::*;
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
@@ -36,9 +35,9 @@ const NODES_FILE: &str = "nodes.json";
 const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
-pub struct CustomProtos<TSubstream> {
+pub struct CustomProtos<TMessage, TSubstream> {
 	/// List of protocols to open with peers. Never modified.
-	registered_protocols: RegisteredProtocols,
+	registered_protocols: RegisteredProtocols<TMessage>,
 
 	/// Topology of the network.
 	topology: NetTopology,
@@ -77,7 +76,7 @@ pub struct CustomProtos<TSubstream> {
 	next_connect_to_nodes: Delay,
 
 	/// Events to produce from `poll()`.
-	events: SmallVec<[NetworkBehaviourAction<CustomProtosHandlerIn, CustomProtosOut>; 4]>,
+	events: SmallVec<[NetworkBehaviourAction<CustomProtosHandlerIn<TMessage>, CustomProtosOut<TMessage>>; 4]>,
 
 	/// Marker to pin the generics.
 	marker: PhantomData<TSubstream>,
@@ -85,7 +84,7 @@ pub struct CustomProtos<TSubstream> {
 
 /// Event that can be emitted by the `CustomProtos`.
 #[derive(Debug)]
-pub enum CustomProtosOut {
+pub enum CustomProtosOut<TMessage> {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
 		/// Identifier of the protocol.
@@ -114,25 +113,25 @@ pub enum CustomProtosOut {
 		peer_id: PeerId,
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
-		/// Data that has been received.
-		data: Bytes,
+		/// Message that has been received.
+		message: TMessage,
 	},
 
 	/// The substream used by the protocol is pretty large. We should print avoid sending more
-	/// data on it if possible.
+	/// messages on it if possible.
 	Clogged {
 		/// Id of the peer which is clogged.
 		peer_id: PeerId,
 		/// Protocol which has a problem.
 		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Bytes>,
+		messages: Vec<TMessage>,
 	},
 }
 
-impl<TSubstream> CustomProtos<TSubstream> {
+impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 	/// Creates a `CustomProtos`.
-	pub fn new(config: &NetworkConfiguration, local_peer_id: &PeerId, registered_protocols: RegisteredProtocols) -> Self {
+	pub fn new(config: &NetworkConfiguration, local_peer_id: &PeerId, registered_protocols: RegisteredProtocols<TMessage>) -> Self {
 		// Initialize the topology of the network.
 		let mut topology = if let Some(ref path) = config.net_config_path {
 			let path = Path::new(path).join(NODES_FILE);
@@ -265,12 +264,12 @@ impl<TSubstream> CustomProtos<TSubstream> {
 	///
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
-	pub fn send_packet(&mut self, target: &PeerId, protocol_id: ProtocolId, data: impl Into<Bytes>) {
+	pub fn send_packet(&mut self, target: &PeerId, protocol_id: ProtocolId, message: TMessage) {
 		self.events.push(NetworkBehaviourAction::SendEvent {
 			peer_id: target.clone(),
 			event: CustomProtosHandlerIn::SendCustomMessage {
 				protocol: protocol_id,
-				data: data.into(),
+				message,
 			}
 		});
 	}
@@ -369,12 +368,13 @@ impl<TSubstream> CustomProtos<TSubstream> {
 	}
 }
 
-impl<TSubstream> NetworkBehaviour for CustomProtos<TSubstream>
+impl<TMessage, TSubstream> NetworkBehaviour for CustomProtos<TMessage, TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
+	TMessage: CustomMessage,
 {
-	type ProtocolsHandler = CustomProtosHandler<TSubstream>;
-	type OutEvent = CustomProtosOut;
+	type ProtocolsHandler = CustomProtosHandler<TMessage, TSubstream>;
+	type OutEvent = CustomProtosOut<TMessage>;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		CustomProtosHandler::new(self.registered_protocols.clone())
@@ -550,14 +550,14 @@ where
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 				}
 			}
-			CustomProtosHandlerOut::CustomMessage { protocol_id, data } => {
+			CustomProtosHandlerOut::CustomMessage { protocol_id, message } => {
 				debug_assert!(self.open_protocols.iter().any(|(s, p)|
 					s == &source && p == &protocol_id
 				));
 				let event = CustomProtosOut::CustomMessage {
 					peer_id: source,
 					protocol_id,
-					data,
+					message,
 				};
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));

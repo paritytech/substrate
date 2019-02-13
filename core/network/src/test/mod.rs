@@ -28,7 +28,6 @@ use std::time::Duration;
 use log::trace;
 use client;
 use client::block_builder::BlockBuilder;
-use parity_codec::{Decode, Encode};
 use crate::config::ProtocolConfig;
 use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
@@ -39,7 +38,9 @@ use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use keyring::Keyring;
-use network_libp2p::{NodeIndex, ProtocolId, Severity};
+use crate::message::Message;
+use network_libp2p::{NodeIndex, ProtocolId};
+use parity_codec::Encode;
 use parking_lot::Mutex;
 use primitives::{H256, Ed25519AuthorityId};
 use crate::protocol::{Context, Protocol, ProtocolMsg, ProtocolStatus};
@@ -236,9 +237,9 @@ pub type PeersClient = client::Client<test_client::Backend, test_client::Executo
 pub struct Peer<V: 'static + Verifier<Block>, D> {
 	client: Arc<PeersClient>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
-	network_port: Mutex<NetworkPort>,
+	network_port: Mutex<NetworkPort<Block>>,
 	import_queue: Arc<SyncImportQueue<Block, V>>,
-	network_sender: NetworkChan,
+	network_sender: NetworkChan<Block>,
 	pub data: D,
 }
 
@@ -247,8 +248,8 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		client: Arc<PeersClient>,
 		import_queue: Arc<SyncImportQueue<Block, V>>,
 		protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
-		network_sender: NetworkChan,
-		network_port: NetworkPort,
+		network_sender: NetworkChan<Block>,
+		network_port: NetworkPort<Block>,
 		data: D,
 	) -> Self {
 		let network_port = Mutex::new(network_port);
@@ -304,24 +305,14 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
-	fn receive_message(&self, from: NodeIndex, msg: Vec<u8>) {
-		match Decode::decode(&mut (&msg as &[u8])) {
-			Some(m) => {
-				let _ = self
-					.protocol_sender
-					.send(ProtocolMsg::CustomMessage(from, m));
-			}
-			None => {
-				let _ = self.network_sender.send(NetworkMsg::ReportPeer(
-					from,
-					Severity::Bad("Peer sent us a packet with invalid format".to_string()),
-				));
-			}
-		}
+	fn receive_message(&self, from: NodeIndex, msg: Message<Block>) {
+		let _ = self
+			.protocol_sender
+			.send(ProtocolMsg::CustomMessage(from, msg));
 	}
 
 	/// Produce the next pending message to send to another peer.
-	fn pending_message(&self) -> Option<NetworkMsg> {
+	fn pending_message(&self) -> Option<NetworkMsg<Block>> {
 		select! {
 			recv(self.network_port.lock().receiver()) -> msg => return msg.ok(),
 			// If there are no messages ready, give protocol a change to send one.
@@ -330,7 +321,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	}
 
 	/// Produce the next pending message to send to another peer, without waiting.
-	fn pending_message_fast(&self) -> Option<NetworkMsg> {
+	fn pending_message_fast(&self) -> Option<NetworkMsg<Block>> {
 		self.network_port.lock().receiver().try_recv().ok()
 	}
 

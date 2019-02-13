@@ -89,6 +89,8 @@ extern "C" {
 	fn ext_keccak_256(data: *const u8, len: u32, out: *mut u8);
 	/// Note: ext_ed25519_verify returns 0 if the signature is correct, nonzero otherwise.
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+	/// Note: ext_sr25519_verify returns 0 if the signature is correct, nonzero otherwise.
+	fn ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
 	/// Note: ext_secp256k1_ecdsa_recover returns 0 if the signature is correct, nonzero otherwise.
 	fn ext_secp256k1_ecdsa_recover(msg_data: *const u8, sig_data: *const u8, pubkey_data: *mut u8) -> u32;
 }
@@ -368,6 +370,13 @@ pub fn twox_128(data: &[u8]) -> [u8; 16] {
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	unsafe {
 		ext_ed25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
+	}
+}
+
+/// Verify a sr25519 signature.
+pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	unsafe {
+		ext_sr25519_verify(msg.as_ptr(), msg.len() as u32, sig.as_ptr(), pubkey.as_ref().as_ptr()) == 0
 	}
 }
 
