@@ -26,7 +26,7 @@ use crate::codec::{Decode, Encode, Codec, Input};
 use crate::traits::{self, Member, DigestItem as DigestItemT, MaybeHash};
 
 use substrate_primitives::hash::H512 as Signature;
-use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind};
+use substrate_metadata::EncodeMetadata;
 use substrate_metadata_derive::EncodeMetadata;
 
 /// Generic header digest.
@@ -224,16 +224,6 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 		}
 
 		v
-	}
-}
-
-impl<'a, Hash: EncodeMetadata, AuthorityId: EncodeMetadata> EncodeMetadata for DigestItemRef<'a, Hash, AuthorityId> {
-	fn type_name() -> MetadataName {
-		MetadataName::Custom(module_path!().into(), "DigestItem".into())
-	}
-	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
-		// TODO: implement this
-		TypeMetadataKind::Primitive
 	}
 }
 

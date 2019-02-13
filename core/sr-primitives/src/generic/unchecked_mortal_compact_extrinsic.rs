@@ -25,13 +25,14 @@ use crate::codec::{Decode, Encode, Input, Compact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
 use super::{CheckedExtrinsic, Era};
-use substrate_metadata::{MetadataName, EncodeMetadata, TypeMetadataKind, MetadataRegistry};
+use substrate_metadata::EncodeMetadata;
+use substrate_metadata_derive::EncodeMetadata;
 
 const TRANSACTION_VERSION: u8 = 1;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, EncodeMetadata)]
 pub struct UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature> {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
@@ -163,23 +164,6 @@ where
 			}
 			self.function.encode_to(v);
 		})
-	}
-}
-
-impl<Address, Index, Call, Signature> EncodeMetadata
-	for UncheckedMortalCompactExtrinsic<Address, Index, Call, Signature>
-where
-	Address: Encode,
-	Signature: Encode,
-	Compact<Index>: Encode,
-	Call: Encode,
-{
-	fn type_name() -> MetadataName {
-		MetadataName::Custom(module_path!().into(), "UncheckedMortalCompactExtrinsic".into())
-	}
-	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
-		// TODO: implement this
-		TypeMetadataKind::Primitive
 	}
 }
 

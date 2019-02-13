@@ -22,10 +22,11 @@ use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef
 use crate::traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
 use crate::generic::Digest;
-use substrate_metadata::{EncodeMetadata, MetadataName, MetadataRegistry, TypeMetadataKind};
+use substrate_metadata::EncodeMetadata;
+use substrate_metadata_derive::EncodeMetadata;
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -81,21 +82,6 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 		dest.push(&self.state_root);
 		dest.push(&self.extrinsics_root);
 		dest.push(&self.digest);
-	}
-}
-
-impl<Number, Hash, DigestItem> EncodeMetadata for Header<Number, Hash, DigestItem> where
-	Number: HasCompact + Copy + Into<u128>,
-	Hash: HashT,
-	Hash::Output: Encode,
-	DigestItem: DigestItemT + Encode,
-{
-	fn type_name() -> MetadataName {
-		MetadataName::Custom(module_path!().into(), "Header".into())
-	}
-	fn type_metadata_kind(_registry: &mut MetadataRegistry) -> TypeMetadataKind {
-		// TODO: implement this
-		TypeMetadataKind::Primitive
 	}
 }
 
