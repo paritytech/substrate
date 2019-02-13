@@ -22,7 +22,7 @@ use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
-use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
+use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
@@ -268,11 +268,11 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> ClientResult<H::Out> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> ClientResult<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<Vec<u8>>, StorageMap> = HashMap::new();
+		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
 		storage.insert(None, top);
 		for (child_key, child_storage) in children {
 			storage.insert(Some(child_key), child_storage);
