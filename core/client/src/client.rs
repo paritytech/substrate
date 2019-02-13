@@ -1230,14 +1230,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(None)
 	}
 
-	fn get_children(&self, target: Block::Hash, maybe_skip: Option<Block::Hash>) -> error::Result<Vec<Block::Hash>> {
-		let mut children = self.backend.blockchain().children(target)?;
-		if let Some(skip) = maybe_skip {
-			children.retain(|&c| c != skip);
-		}
-		Ok(children)
-	}
-
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> error::Result<Block::Header> {
@@ -1257,8 +1249,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		let mut uncles = Vec::new();
 
 		for _generation in 0..max_generation.as_() {
-			let children = self.get_children(ancestor_hash, Some(current_hash))?;
-			uncles.extend(children);
+			let children = self.backend.blockchain().children(ancestor_hash)?;
+			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
 			current_hash = ancestor_hash;
 			if genesis_hash == current_hash { break; }
 			current = ancestor;
