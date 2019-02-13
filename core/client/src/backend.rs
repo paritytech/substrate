@@ -18,7 +18,7 @@
 
 use crate::error;
 use primitives::ChangesTrieConfiguration;
-use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
+use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
@@ -42,6 +42,14 @@ impl NewBlockState {
 		match self {
 			NewBlockState::Best | NewBlockState::Final => true,
 			NewBlockState::Normal => false,
+		}
+	}
+
+	/// Whether this block is considered final.
+	pub fn is_final(self) -> bool {
+		match self {
+			NewBlockState::Final => true,
+			NewBlockState::Best | NewBlockState::Normal => false,
 		}
 	}
 }
@@ -71,7 +79,7 @@ pub trait BlockImportOperation<Block, H> where
 	/// Inject storage data into the database.
 	fn update_db_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out>;
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out>;
 	/// Set top level storage changes.
 	fn update_storage(&mut self, update: Vec<(Vec<u8>, Option<Vec<u8>>)>) -> error::Result<()>;
 	/// Inject changes trie data into the database.
@@ -81,6 +89,8 @@ pub trait BlockImportOperation<Block, H> where
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 	/// Mark a block as finalized.
 	fn mark_finalized(&mut self, id: BlockId<Block>, justification: Option<Justification>) -> error::Result<()>;
+	/// Mark a block as new head. If both block import and set head are specified, set head overrides block import's best block rule.
+	fn mark_head(&mut self, id: BlockId<Block>) -> error::Result<()>;
 }
 
 /// Provides access to an auxiliary database.

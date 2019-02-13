@@ -28,7 +28,7 @@ substrate-executor = { path = "../core/executor" }
 substrate-service = { path = "../core/service" }
 inherents = { package = "substrate-inherents", path = "../core/inherents" }
 transaction-pool = { package = "substrate-transaction-pool", path = "../core/transaction-pool" }
-substrate-network = { path = "../core/network" }
+network = { package = "substrate-network", path = "../core/network" }
 consensus = { package = "substrate-consensus-aura", path = "../core/consensus/aura" }
 substrate-client = {  path = "../core/client" }
 basic-authorship = { package = "substrate-basic-authorship", path = "../core/basic-authorship" }

@@ -136,7 +136,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(authorities): Vec<(T::SessionKey, u64)>;
 
-		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			use codec::{Encode, KeyedVec};
 
 			let auth_count = config.authorities.len() as u32;

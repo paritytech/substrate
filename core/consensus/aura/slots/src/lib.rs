@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate parity_codec as codec;
-
 mod slots;
 
 pub use slots::{Slots, SlotInfo};
@@ -220,7 +218,7 @@ impl SlotDuration {
 		C: ProvideRuntimeApi,
 		C::Api: AuraApi<B>,
 	{
-		use parity_codec::Decode;
+		use codec::Decode;
 		const SLOT_KEY: &[u8] = b"aura_slot_duration";
 
 		match client.get_aux(SLOT_KEY)? {

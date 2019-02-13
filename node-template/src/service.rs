@@ -3,6 +3,7 @@
 #![warn(unused_extern_crates)]
 
 use std::sync::Arc;
+use log::info;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_template_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{
@@ -16,6 +17,9 @@ use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, Nothing
 use substrate_client as client;
 use primitives::ed25519::Pair;
 use inherents::InherentDataProviders;
+use network::construct_simple_protocol;
+use substrate_executor::native_executor_instance;
+use substrate_service::construct_service_factory;
 
 pub use substrate_executor::NativeExecutor;
 // Our native executor instance.

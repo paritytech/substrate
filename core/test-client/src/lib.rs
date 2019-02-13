@@ -36,7 +36,7 @@ pub use consensus;
 use std::sync::Arc;
 use futures::future::FutureResult;
 use primitives::Blake2Hasher;
-use runtime_primitives::StorageMap;
+use runtime_primitives::StorageOverlay;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use keyring::Keyring;
@@ -171,7 +171,7 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 	], 1000)
 }
 
-fn genesis_storage(support_changes_trie: bool) -> StorageMap {
+fn genesis_storage(support_changes_trie: bool) -> StorageOverlay {
 	let mut storage = genesis_config(support_changes_trie).genesis_map();
 	let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(storage.clone().into_iter());
 	let block: runtime::Block = client::genesis::construct_genesis_block(state_root);

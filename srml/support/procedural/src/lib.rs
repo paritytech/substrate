@@ -51,7 +51,7 @@ use proc_macro::TokenStream;
 /// 	}
 ///		add_extra_genesis {
 ///			config(genesis_field): GenesisFieldType;
-///			build(|_: &mut StorageMap, _: &mut ChildrenStorageMap, _: &GenesisConfig<T>| {
+///			build(|_: &mut StorageOverlay, _: &mut ChildrenStorageOverlay, _: &GenesisConfig<T>| {
 ///			})
 ///		}
 /// }

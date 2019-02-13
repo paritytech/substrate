@@ -7,6 +7,7 @@ use substrate_cli::{informant, parse_and_execute, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use crate::chain_spec;
 use std::ops::Deref;
+use log::info;
 
 /// Parse command line arguments into service configuration.
 pub fn run<I, T, E>(args: I, exit: E, version: VersionInfo) -> error::Result<()> where

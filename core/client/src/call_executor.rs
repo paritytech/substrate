@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{sync::Arc, cmp::Ord, panic::UnwindSafe, result};
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
@@ -236,6 +236,11 @@ where
 			false,
 			native_call,
 		).map(|(result, _, _)| result)?;
+
+		// If the method is `initialise_block` we need to set the `initialised_block`
+		if method == "Core_initialise_block" {
+			*initialised_block = Some(*at);
+		}
 
 		self.backend.destroy_state(state)?;
 		Ok(result)
