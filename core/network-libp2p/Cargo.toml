@@ -1,11 +1,11 @@
 [package]
 description = "libp2p implementation of the ethcore network library"
-edition = "2018"
 homepage = "http://parity.io"
 license = "GPL-3.0"
 name = "substrate-network-libp2p"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 bytes = "0.4"

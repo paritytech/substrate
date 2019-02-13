@@ -16,7 +16,7 @@
 
 use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
-use codec::Encode;
+use parity_codec::Encode;
 use crate::blockchain::HeaderBackend;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef

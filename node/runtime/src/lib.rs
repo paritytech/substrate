@@ -20,9 +20,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-#[macro_use]
-extern crate runtime_primitives;
-
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
 #[cfg(feature = "std")]
@@ -37,9 +34,8 @@ use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::ApplyResult;
+use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::generic;
 use runtime_primitives::traits::{
 	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };

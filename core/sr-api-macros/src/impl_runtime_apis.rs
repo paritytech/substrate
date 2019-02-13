@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use utils::{
+use crate::utils::{
 	unwrap_or_error, generate_crate_access, generate_hidden_includes,
 	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
 	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,

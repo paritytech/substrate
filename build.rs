@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate vergen;
-
 use vergen::{ConstantsFlags, generate_cargo_keys};
 
 const ERROR_MSG: &'static str = "Failed to generate metadata files";
