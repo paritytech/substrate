@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,8 +20,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use srml_support::{dispatch::Result, Parameter, StorageMap, decl_event, decl_storage, decl_module};
-use runtime_primitives::traits::{As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee,
-	TransferAsset, CheckedAdd, CheckedSub, CheckedMul, Zero};
+use runtime_primitives::traits::{
+	As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee,
+	TransferAsset, CheckedAdd, CheckedSub, CheckedMul, Zero
+};
 use system;
 
 mod mock;
@@ -46,9 +48,9 @@ decl_module! {
 			let extrinsic_count = <system::Module<T>>::extrinsic_count();
 			(0..extrinsic_count).for_each(|index| {
 				// Deposit `Charged` event if some amount of fee charged.
-				let fee = <CurrentTransactionFee<T>>::take(index.clone());
+				let fee = <CurrentTransactionFee<T>>::take(index);
 				if !fee.is_zero() {
-					Self::deposit_event(RawEvent::Charged(index.clone(), fee));
+					Self::deposit_event(RawEvent::Charged(index, fee));
 				}
 			});
 		}
@@ -79,16 +81,10 @@ decl_storage! {
 
 impl<T: Trait> ChargeBytesFee<T::AccountId> for Module<T> {
 	fn charge_base_bytes_fee(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let bytes_fee = match Self::transaction_byte_fee().checked_mul(
+		let bytes_fee = Self::transaction_byte_fee().checked_mul(
 			&<T::Amount as As<u64>>::sa(encoded_len as u64)
-		) {
-			Some(f) => f,
-			None => return Err("bytes fee overflow"),
-		};
-		let overall = match Self::transaction_base_fee().checked_add(&bytes_fee) {
-			Some(f) => f,
-			None => return Err("bytes fee overflow"),
-		};
+		).ok_or_else(|| "bytes fee overflow")?;
+		let overall = Self::transaction_base_fee().checked_add(&bytes_fee).ok_or_else(|| "bytes fee overflow")?;
 		Self::charge_fee(transactor, overall)
 	}
 }
@@ -97,15 +93,9 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 	type Amount = T::Amount;
 
 	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
-			Some(i) => i,
-			None => return Err("no extrinsic index found"),
-		};
+		let extrinsic_index = <system::Module<T>>::extrinsic_index().ok_or_else(|| "no extrinsic index found")?;
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
-		let new_fee = match current_fee.checked_add(&amount) {
-			Some(f) => f,
-			None => return Err("fee got overflow after charge"),
-		};
+		let new_fee = current_fee.checked_add(&amount).ok_or_else(|| "fee got overflow after charge")?;
 
 		T::TransferAsset::remove_from(transactor, amount)?;
 
@@ -114,15 +104,9 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 	}
 
 	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
-		let extrinsic_index = match <system::Module<T>>::extrinsic_index() {
-			Some(i) => i,
-			None => return Err("no extrinsic index found"),
-		};
+		let extrinsic_index = <system::Module<T>>::extrinsic_index().ok_or_else(|| "no extrinsic index found")?;
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
-		let new_fee = match current_fee.checked_sub(&amount) {
-			Some(f) => f,
-			None => return Err("fee got underflow after refund"),
-		};
+		let new_fee = current_fee.checked_sub(&amount).ok_or_else(|| "fee got underflow after refund")?;
 
 		T::TransferAsset::add_to(transactor, amount)?;
 
