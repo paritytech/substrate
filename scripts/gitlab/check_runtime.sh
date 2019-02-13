@@ -32,60 +32,104 @@ fi
 
 
 
-# check for version updates
-for version in spec_version impl_version
-do
-	add_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
-		| sed -n -r "s/^\+[[:space:]]+${version}: +([0-9]+),$/\1/p")"
-	sub_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
-		| sed -n -r "s/^\-[[:space:]]+${version}: +([0-9]+),$/\1/p")"
-	
-	
-	# see if the version and the binary blob changed
+# check for spec_version updates: if the spec versions changed, then there is
+# consensus-critical logic that has changed. the runtime wasm blobs must be
+# rebuilt.
+
+add_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	| sed -n -r "s/^\+[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
+sub_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+	| sed -n -r "s/^\-[[:space:]]+spec_version: +([0-9]+),$/\1/p")"
+
+
+# see if the version and the binary blob changed
+if [ "${add_spec_version}" != "${sub_spec_version}" ]
+then
+	echo
+	echo "# run github-api job for labelling it breaksapi"
+	curl -sS -X POST \
+		-F "token=${CI_JOB_TOKEN}" \
+		-F "ref=master" \
+		-F "variables[BREAKSAPI]=true" \
+		-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
+		${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+
 	if git diff --name-only origin/master...${CI_COMMIT_SHA} \
-		| grep -q "${RUNTIME}" && \
-		[ "${add_version}" != "${sub_version}" ]
+		| grep -q "${RUNTIME}"
+	then
+		cat <<-EOT
+			
+			changes to the runtime sources and changes in the spec version. Wasm 
+			binary blob is rebuilt. Looks good.
+		
+			spec_version: ${sub_spec_version} -> ${add_spec_version}
+		
+		EOT
+		exit 0
+	else 
+		cat <<-EOT
+			
+			changes to the runtime sources and changes in the spec version. Wasm
+			binary blob needs rebuilding!
+		
+			spec_version: ${sub_spec_version} -> ${add_spec_version}
+		
+		EOT
+
+		# drop through into pushing `gotissues` and exit 1...
+	fi
+else
+	# check for impl_version updates: if only the impl versions changed, we assume
+	# there is no consensus-critical logic that has changed.
+
+	add_impl_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+		| sed -n -r 's/^\+[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
+	sub_impl_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
+		| sed -n -r 's/^\-[[:space:]]+impl_version: +([0-9]+),$/\1/p')"
+
+
+	# see if the impl version changed
+	if [ "${add_impl_version}" != "${sub_impl_version}" ]
 	then
 		cat <<-EOT
 		
-		changes to the runtime sources and changes in the spec version and wasm 
-		binary blob.
-	
-		${version}: ${sub_version} -> ${add_version}
-	
+		changes to the runtime sources and changes in the impl version.
+
+		impl_version: ${sub_impl_version} -> ${add_impl_version}
+
 		EOT
 		exit 0
 	fi
-done
 
 
+	cat <<-EOT
 
+	wasm source files changed but not the spec/impl version and the runtime
+	binary blob. If changes made do not alter logic, just bump `impl_version`.
+	If they do change logic, bump `spec_version` and rebuild wasm.
 
-cat <<-EOT
+	source file directories:
+	- node/src/runtime
+	- srml
+	- core/sr-*
 
-wasm source files changed but not the spec version and the runtime
-binary blob. This may break the api.
+	versions file: ${VERSIONS_FILE}
 
-source file directories:
- - node/src/runtime
- - srml
- - core/sr-*
+	EOT
 
-versions file: ${VERSIONS_FILE}
+	# drop through into pushing `gotissues` and exit 1...
+fi
 
-
-EOT
+# dropped through. there's something wrong; mark `gotissues` and exit 1.
 
 echo
-echo "# run github-api job for labelling it breaksapi"
+echo "# run github-api job for labelling it gotissues"
 curl -sS -X POST \
 	-F "token=${CI_JOB_TOKEN}" \
 	-F "ref=master" \
-	-F "variables[BREAKSAPI]=true" \
+	-F "variables[GOTISSUES]=true" \
 	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
 	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
- 
-
 
 
 exit 1
