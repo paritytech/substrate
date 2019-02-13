@@ -100,7 +100,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(ids): Vec<T::AccountId>;
-		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			for i in 0..(config.ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
 				storage.insert(GenesisConfig::<T>::hash(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
 					config.ids[i * ENUM_SET_SIZE..config.ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());

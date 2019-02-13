@@ -20,7 +20,7 @@
 use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::PhantomData};
 use futures::{IntoFuture, Future};
 
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};

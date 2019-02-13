@@ -18,13 +18,6 @@
 
 #![warn(missing_docs)]
 
-extern crate node_cli as cli;
-extern crate ctrlc;
-extern crate futures;
-
-#[macro_use]
-extern crate error_chain;
-
 use cli::VersionInfo;
 use futures::sync::oneshot;
 use futures::{future, Future};
@@ -50,7 +43,7 @@ impl cli::IntoExit for Exit {
 	}
 }
 
-quick_main!(run);
+error_chain::quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
 	let version = VersionInfo {

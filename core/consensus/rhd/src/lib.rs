@@ -1318,8 +1318,6 @@ mod tests {
 	use primitives::H256;
 	use self::keyring::Keyring;
 
-	extern crate substrate_keyring as keyring;
-
 	type TestBlock = GenericTestBlock<()>;
 
 	struct FakeClient {

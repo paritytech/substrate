@@ -3,17 +3,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-#[macro_use]
-extern crate error_chain;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate substrate_network as network;
-#[macro_use]
-extern crate substrate_executor;
-#[macro_use]
-extern crate substrate_service;
-
 mod chain_spec;
 mod service;
 mod cli;
@@ -33,4 +22,4 @@ fn run() -> cli::error::Result<()> {
 	cli::run(::std::env::args(), cli::Exit, version)
 }
 
-quick_main!(run);
+error_chain::quick_main!(run);

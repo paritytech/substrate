@@ -6,12 +6,8 @@
 #![recursion_limit="256"]
 
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
+use serde_derive::{Serialize, Deserialize};
+use parity_codec_derive::{Encode, Decode};
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;
