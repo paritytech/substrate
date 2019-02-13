@@ -229,7 +229,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		if let Some(request) = self.peer_requests.remove(&who) {
 			if let Some(justification) = justification {
 				if import_queue.import_justification(request.0, request.1, justification) {
-					if self.justifications.apply(&request.0).is_none() {
+					if self.justifications.finalize_root(&request.0).is_none() {
 						warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the DAG: {:?}",
 							request.0,
 							request.1,
@@ -262,11 +262,25 @@ impl<B: BlockT> PendingJustifications<B> {
 
 	/// Removes any pending justification requests for blocks lower than the
 	/// given best finalized.
-	fn collect_garbage(&mut self, best_finalized_hash: &B::Hash, best_finalized_number: NumberFor<B>) {
-		// FIXME: cleanup dag
-		self.pending_requests.retain(|(_, n)| *n > best_finalized_number);
-		self.peer_requests.retain(|_, (_, n)| *n > best_finalized_number);
-		self.previous_requests.retain(|(_, n), _| *n > best_finalized_number);
+	fn on_block_finalized<F>(
+		&mut self,
+		best_finalized_hash: &B::Hash,
+		best_finalized_number: NumberFor<B>,
+		is_descendent_of: F,
+	) -> Result<(), dag::Error<ClientError>>
+		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
+	{
+		use std::collections::HashSet;
+
+		self.justifications.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+
+		let roots = self.justifications.roots().collect::<HashSet<_>>();
+
+		self.pending_requests.retain(|(h, n)| roots.contains(&(h, n)));
+		self.peer_requests.retain(|_, (h, n)| roots.contains(&(h, n)));
+		self.previous_requests.retain(|(h, n), _| roots.contains(&(h, n)));
+
+		Ok(())
 	}
 }
 
@@ -615,8 +629,14 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Notify about finalization of the given block.
-	pub fn block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.justifications.collect_garbage(hash, number);
+	pub fn on_block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
+		if let Err(err) = self.justifications.on_block_finalized(
+			hash,
+			number,
+			|base, block| protocol.client().is_descendent_of(base, block),
+		) {
+			warn!(target: "sync", "Error cleaning up pending justification requests: {:?}", err);
+		};
 	}
 
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
