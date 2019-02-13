@@ -1,11 +1,9 @@
-/// module for demonstration purposes and with necessary imports
+/// A runtime module template with necessary imports
 
-/// in order to create your runtime module, you need `decl_module` macro imported
-/// import `decl_storage` to declare and initialize storage for your module
-/// additionally import `decl_event` to declare events for your module
+/// Feel free to remove or edit this file as needed.
+/// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
+/// If you remove this file, you can remove those references
 
-/// feel free to remove or edit this file, as needed
-/// in case you remove this file, also make sure to remove its references from runtime/src/lib.rs
 
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/gav-template/srml/example/src/lib.rs
@@ -25,8 +23,8 @@ pub trait Trait: system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as TemplateModule {
 		// Just a dummy storage item. 
-    	// Here we are declaring a StorageValue, `Something` as a Option<u32>
-    	// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
+		// Here we are declaring a StorageValue, `Something` as a Option<u32>
+		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
 		Something get(something): Option<u32>;
 	}
 }

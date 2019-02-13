@@ -38,9 +38,6 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
 
-// remove this if you are removing the template module file (template.rs)
-mod template;
-
 /// Alias to Ed25519 pubkey that identifies an account on the chain.
 pub type AccountId = primitives::H256;
 
@@ -52,6 +49,9 @@ pub type BlockNumber = u64;
 
 /// Index of an account's extrinsic in the chain.
 pub type Nonce = u64;
+
+/// Used for the module template in `./template.rs`
+mod template;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -174,7 +174,7 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-// remove this if you are removing the template module file (template.rs)
+/// Used for the module template in `./template.rs`
 impl template::Trait for Runtime { 
 	type Event = Event;
 }
@@ -192,7 +192,7 @@ construct_runtime!(
 		Indices: indices,
 		Balances: balances,
 		Sudo: sudo,
-		// remove this if you are removing the template module file (template.rs)
+		/// Used for the module template in `./template.rs`
 		TemplateModule: template::{Module, Call, Storage, Event<T>},
 	}
 );
