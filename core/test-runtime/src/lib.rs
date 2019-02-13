@@ -214,6 +214,8 @@ cfg_if! {
 				fn function_signature_changed() -> u64;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
+				fn benchmark_indirect_call() -> u64;
+				fn benchmark_direct_call() -> u64;
 			}
 		}
 	} else {
@@ -234,6 +236,8 @@ cfg_if! {
 				fn function_signature_changed() -> Vec<u64>;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
+				fn benchmark_indirect_call() -> u64;
+				fn benchmark_direct_call() -> u64;
 			}
 		}
 	}
@@ -247,6 +251,12 @@ impl GetNodeBlockType for Runtime {
 
 impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
+}
+
+/// Adds one to the given input and returns the final result.
+#[inline(never)]
+fn benchmark_add_one(i: u64) -> u64 {
+	i + 1
 }
 
 cfg_if! {
@@ -334,6 +344,13 @@ cfg_if! {
 				}
 				fn fail_on_wasm() -> u64 {
 					1
+				}
+				fn benchmark_indirect_call() -> u64 {
+					let function = benchmark_add_one;
+					(0..1000).fold(0, |p, i| p + function(i))
+				}
+				fn benchmark_direct_call() -> u64 {
+					(0..1000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
 			}
 
@@ -429,6 +446,15 @@ cfg_if! {
 
 				fn fail_on_wasm() -> u64 {
 					panic!("Failing because we are on wasm")
+				}
+
+				fn benchmark_indirect_call() -> u64 {
+					let function = benchmark_add_one;
+					(0..10000).fold(0, |p, i| p + function(i))
+				}
+
+				fn benchmark_direct_call() -> u64 {
+					(0..10000).fold(0, |p, i| p + benchmark_add_one(i))
 				}
 			}
 
