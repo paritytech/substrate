@@ -1,6 +1,6 @@
 [[bin]]
 name = "substrate"
-path = "node/src/main.rs"
+path = "node/src/chaos.rs"
 
 [package]
 name = "substrate"
@@ -10,10 +10,12 @@ build = "build.rs"
 edition = "2018"
 
 [dependencies]
+backtrace = "0.3"
+ctrlc = { version = "3.0", features = ["termination"] }
 error-chain = "0.12"
 cli = { package = "node-cli", path = "node/cli" }
+libc = "0.2.48"
 futures = "0.1"
-ctrlc = { version = "3.0", features = ["termination"] }
 
 [build-dependencies]
 vergen = "3"
@@ -99,3 +101,6 @@ is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[features]
+chaos = []

@@ -22,6 +22,7 @@ use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
+use libc;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, multiaddr};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
@@ -115,9 +116,13 @@ where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
 		}
 	}
 
+	unsafe {
+		let pid = libc::getpid() as u32;
+		libc::srand(pid);
+	}
+
 	debug!(target: "sub-libp2p", "Topology started with {} entries",
 		swarm.num_topology_peers());
-
 	Ok(Service {
 		swarm,
 		bandwidth,
@@ -473,6 +478,25 @@ impl<TMessage> Stream for Service<TMessage> where TMessage: CustomMessage + Send
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		if !self.injected_events.is_empty() {
 			return Ok(Async::Ready(Some(self.injected_events.remove(0))));
+		}
+
+		#[cfg(feature = "chaos")]
+		unsafe {
+			use std::thread;
+			let random = libc::rand();
+			if  random < 499999 {
+				let pid = libc::getpid();
+				println!("[{:?}] Stopping network for {:?} secs", pid, random / 1000);
+				let mut secs = 0;
+				loop {
+					thread::sleep(Duration::new(10, 0));
+					if secs > random / 1000 {
+						break;
+					}
+					secs = secs + 10;
+					println!("[{:?}] has been disconnected from network for {:?} secs", pid, secs);
+				}
+			}
 		}
 
 		match self.poll_swarm()? {

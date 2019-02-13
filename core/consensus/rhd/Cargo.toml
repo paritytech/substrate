@@ -12,6 +12,7 @@ parity-codec-derive = { version = "3.0" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 consensus = { package = "substrate-consensus-common", path = "../common" }
 client = { package = "substrate-client", path = "../../client" }
+libc = "0.2"
 transaction_pool = { package = "substrate-transaction-pool", path = "../../transaction-pool" }
 runtime_support = { package = "srml-support", path = "../../../srml/support" }
 srml-system = { path = "../../../srml/system" }

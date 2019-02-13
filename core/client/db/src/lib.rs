@@ -526,13 +526,20 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block, Blake2Hasher>,
 }
 
+impl<Block: BlockT> Drop for Backend<Block> {
+	fn drop(&mut self) {
+		println!("Backend drops");
+	}
+}
+
 impl<Block: BlockT<Hash=H256>> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
+		println!("Getting DB");
 		let db = open_database(&config, columns::META, "full")?;
-
+		println!("Getting DB");
 		Backend::from_kvdb(db as Arc<_>, config.pruning, canonicalization_delay)
 	}
 

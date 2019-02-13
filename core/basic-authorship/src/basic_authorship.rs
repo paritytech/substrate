@@ -21,6 +21,7 @@
 use std::{self, time, sync::Arc};
 
 use log::{info, debug};
+use libc;
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
@@ -135,7 +136,11 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 
 		let id = BlockId::hash(parent_hash);
 
-		info!("Starting consensus session on top of parent {:?}", parent_hash);
+		let pid = unsafe {
+			libc::getpid()
+		};
+
+		info!("[{:?}] Starting consensus session on top of parent {:?}", pid, parent_hash);
 
 		let proposer = Proposer {
 			client: self.client.clone(),

@@ -119,8 +119,9 @@ fn run_until_exit<T, C, E>(
 
 	let executor = runtime.executor();
 	cli::informant::start(&service, exit.clone(), executor.clone());
-
+	println!("start block");
 	let _ = runtime.block_on(e.into_exit());
+	println!("Received exit");
 	exit_send.fire();
 
 	// we eagerly drop the service so that the internal exit future is fired,
@@ -130,6 +131,6 @@ fn run_until_exit<T, C, E>(
 
 	// TODO [andre]: timeout this future #1318
 	let _ = runtime.shutdown_on_idle().wait();
-
+	println!("Fully exited");
 	Ok(())
 }

@@ -684,7 +684,7 @@ fn init_logger(pattern: &str) {
 		writeln!(buf, "{}", output)
 	});
 
-	builder.init();
+	let _ = builder.try_init();
 }
 
 fn kill_color(s: &str) -> String {

@@ -3609,9 +3609,11 @@ dependencies = [
 name = "substrate"
 version = "0.10.0"
 dependencies = [
+ "backtrace 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "ctrlc 3.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-cli 0.1.0",
  "vergen 3.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3620,6 +3622,7 @@ dependencies = [
 name = "substrate-basic-authorship"
 version = "0.1.0"
 dependencies = [
+ "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
@@ -3799,6 +3802,7 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3953,6 +3957,7 @@ dependencies = [
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.2.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",

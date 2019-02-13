@@ -15,6 +15,7 @@ futures = "0.1"
 libp2p = { version = "0.3.1", default-features = false, features = ["secio-secp256k1", "libp2p-websocket"] }
 parking_lot = "0.7.1"
 lazy_static = "1.2"
+libc = "0.2"
 log = "0.4"
 rand = "0.6"
 serde = "1.0.70"

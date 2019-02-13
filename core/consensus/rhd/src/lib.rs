@@ -981,7 +981,12 @@ impl<N, C, A> consensus::Environment<<C as AuthoringApi>::Block> for ProposerFac
 		let validators = self.client.validators(&id)?;
 		self.offline.write().note_new_block(&validators[..]);
 
-		info!("Starting consensus session on top of parent {:?}", parent_hash);
+		use libc;
+		let pid = unsafe {
+			libc::getpid()
+		};
+
+		info!("[{:?}] Starting consensus session on top of parent {:?}", pid, parent_hash);
 
 		let local_id = sign_with.public().0.into();
 		let (input, output) = self.network.communication_for(
