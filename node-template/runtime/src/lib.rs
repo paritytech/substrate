@@ -38,8 +38,8 @@ pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
 
-// remove this if you are removing the demo module file (demo.rs)
-mod demo;
+// remove this if you are removing the template module file (template.rs)
+mod template;
 
 /// Alias to Ed25519 pubkey that identifies an account on the chain.
 pub type AccountId = primitives::H256;
@@ -174,8 +174,10 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-// remove this if you are removing the demo module file (demo.rs)
-impl demo::Trait for Runtime { }
+// remove this if you are removing the template module file (template.rs)
+impl template::Trait for Runtime { 
+	type Event = Event;
+}
 
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, Ed25519AuthorityId>) where
@@ -190,8 +192,8 @@ construct_runtime!(
 		Indices: indices,
 		Balances: balances,
 		Sudo: sudo,
-		// remove the line below if you are removing the demo module file (demo.rs)
-		Demo: demo::{Module, Call, Storage},
+		// remove this if you are removing the template module file (template.rs)
+		TemplateModule: template::{Module, Call, Storage, Event<T>},
 	}
 );
 
