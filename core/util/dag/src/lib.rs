@@ -208,9 +208,9 @@ impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 
 #[cfg(test)]
 mod test {
-	use super::Dag;
+	use super::{Dag, Error};
 
-	fn test_dag<'a>() -> Dag<&'a str, u64, ()> {
+	fn test_dag<'a>() -> (Dag<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, ()>)  {
 		let mut dag = Dag::empty();
 
 		//
@@ -236,7 +236,8 @@ mod test {
 				("I", _) => Ok(false),
 				("J", b) => Ok(b == "K"),
 				("K", _) => Ok(false),
-				_ => unreachable!(),
+				("0", _) => Ok(true),
+				_ => Ok(false),
 			}
 		};
 
@@ -256,13 +257,55 @@ mod test {
 		dag.import("J", 2, (), &is_descendent_of).unwrap();
 		dag.import("K", 3, (), &is_descendent_of).unwrap();
 
-		dag
+		(dag, is_descendent_of)
+	}
+
+	#[test]
+	fn import_doesnt_revert() {
+		let (mut dag, is_descendent_of) = test_dag();
+
+		dag.finalize_root(&"A");
+
+		assert_eq!(
+			dag.best_finalized_number,
+			Some(1),
+		);
+
+		assert_eq!(
+			dag.import("A", 1, (), &is_descendent_of),
+			Err(Error::Revert),
+		);
+	}
+
+	#[test]
+	fn import_doesnt_add_duplicates() {
+		let (mut dag, is_descendent_of) = test_dag();
+
+		assert_eq!(
+			dag.import("A", 1, (), &is_descendent_of),
+			Err(Error::Duplicate),
+		);
+
+		assert_eq!(
+			dag.import("I", 4, (), &is_descendent_of),
+			Err(Error::Duplicate),
+		);
+
+		assert_eq!(
+			dag.import("G", 3, (), &is_descendent_of),
+			Err(Error::Duplicate),
+		);
+
+		assert_eq!(
+			dag.import("K", 3, (), &is_descendent_of),
+			Err(Error::Duplicate),
+		);
 	}
 
 	#[test]
 	fn finalize_root_works() {
 		let finalize_a = || {
-			let mut dag = test_dag();
+			let (mut dag, ..) = test_dag();
 
 			assert_eq!(
 				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
@@ -309,5 +352,53 @@ mod test {
 			// all the other forks have been pruned
 			assert!(dag.roots.len() == 1);
 		}
+	}
+
+	#[test]
+	fn finalize_works() {
+		let (mut dag, is_descendent_of) = test_dag();
+
+		let original_roots = dag.roots.clone();
+
+		// finalizing a block prior to any in the node doesn't change the dag
+		dag.finalize(&"0", 0, &is_descendent_of).unwrap();
+		assert_eq!(dag.roots, original_roots);
+
+		// finalizing "A" opens up three possible forks
+		dag.finalize(&"A", 1, &is_descendent_of).unwrap();
+		assert_eq!(
+			dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![("B", 2), ("F", 2), ("J", 2)],
+		);
+
+		// finalizing anything lower than what we observed will fail
+		assert_eq!(
+			dag.best_finalized_number,
+			Some(1),
+		);
+
+		assert_eq!(
+			dag.finalize(&"Z", 1, &is_descendent_of),
+			Err(Error::Revert),
+		);
+
+		// trying to finalize a node without finalizing its ancestors first will fail
+		assert_eq!(
+			dag.finalize(&"H", 3, &is_descendent_of),
+			Err(Error::UnfinalizedRoot),
+		);
+
+		// after finalizing "F" we can finalize "H"
+		dag.finalize(&"F", 2, &is_descendent_of).unwrap();
+		dag.finalize(&"H", 3, &is_descendent_of).unwrap();
+
+		assert_eq!(
+			dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![("I", 4)],
+		);
+
+		// finalizing a node from another fork that isn't part of the dag clears the dag
+		dag.finalize(&"Z", 5, &is_descendent_of).unwrap();
+		assert!(dag.roots.is_empty());
 	}
 }
