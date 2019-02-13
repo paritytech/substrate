@@ -20,6 +20,7 @@ use std::fmt;
 pub enum Error<E> {
 	Duplicate,
 	UnfinalizedRoot,
+	Revert,
 	Client(E),
 }
 
@@ -28,6 +29,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 		match *self {
 			Error::Duplicate => write!(f, "Hash already exists in DAG"),
 			Error::UnfinalizedRoot => write!(f, "Finalized descendent of DAG root without finalizing root first"),
+			Error::Revert => write!(f, "Tried to import or finalize hash that is an ancestor of a previously finalized node"),
 			Error::Client(ref err) => fmt::Debug::fmt(err, f),
 		}
 	}
@@ -42,6 +44,7 @@ impl<E: fmt::Debug> From<E> for Error<E> {
 #[derive(Debug)]
 pub struct Dag<H, N, V> {
 	roots: Vec<Node<H, N, V>>,
+	best_finalized_number: Option<N>,
 }
 
 impl<H, N, V> Dag<H, N, V> where
@@ -49,10 +52,12 @@ impl<H, N, V> Dag<H, N, V> where
 	N: Ord
 {
 	pub fn empty() -> Dag<H, N, V> {
-		Dag { roots: Vec::new() }
+		Dag {
+			roots: Vec::new(),
+			best_finalized_number: None,
+		}
 	}
 
-	// FIXME: don't import <= `best_finalized`
 	pub fn import<F, E>(
 		&mut self,
 		mut hash: H,
@@ -63,6 +68,12 @@ impl<H, N, V> Dag<H, N, V> where
 		where E: fmt::Debug,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 	{
+		if let Some(ref best_finalized_number) = self.best_finalized_number {
+			if number <= *best_finalized_number {
+				return Err(Error::Revert);
+			}
+		}
+
 		for root in self.roots.iter_mut() {
 			if root.hash == hash {
 				return Err(Error::Duplicate);
@@ -96,6 +107,7 @@ impl<H, N, V> Dag<H, N, V> where
 		if let Some(position) = self.roots.iter().position(|node| node.hash == *hash) {
 			let node = self.roots.swap_remove(position);
 			self.roots = node.children;
+			self.best_finalized_number = Some(node.number);
 			return Some(node.data);
 		}
 
@@ -105,12 +117,18 @@ impl<H, N, V> Dag<H, N, V> where
 	pub fn finalize<F, E>(
 		&mut self,
 		hash: &H,
-		number: &N,
+		number: N,
 		is_descendent_of: &F,
 	) -> Result<(), Error<E>>
 		where E: fmt::Debug,
 			  F: Fn(&H, &H) -> Result<bool, E>
 	{
+		if let Some(ref best_finalized_number) = self.best_finalized_number {
+			if number <= *best_finalized_number {
+				return Err(Error::Revert);
+			}
+		}
+
 		// check if one of the current roots is being finalized
 		if let Some(_) = self.finalize_root(hash) {
 			return Ok(());
@@ -118,7 +136,7 @@ impl<H, N, V> Dag<H, N, V> where
 
 		// make sure we're not finalizing a descendent of any root
 		for root in self.roots.iter() {
-			if *number > root.number && is_descendent_of(&root.hash, hash)? {
+			if number > root.number && is_descendent_of(&root.hash, hash)? {
 				return Err(Error::UnfinalizedRoot);
 			}
 		}
@@ -127,14 +145,17 @@ impl<H, N, V> Dag<H, N, V> where
 		// another fork not part of the dag). make sure to only keep roots that
 		// are part of the finalized branch
 		self.roots.retain(|root| {
-			root.number > *number && is_descendent_of(hash, &root.hash).unwrap_or(false)
+			root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false)
 		});
+
+		self.best_finalized_number = Some(number);
 
 		Ok(())
 	}
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone, PartialEq))]
 struct Node<H, N, V> {
 	hash: H,
 	number: N,
@@ -153,6 +174,10 @@ impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 		where E: fmt::Debug,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 	{
+		if self.hash == hash {
+			return Err(Error::Duplicate);
+		};
+
 		if number <= self.number { return Ok(Some((hash, number, data))); }
 
 		for node in self.children.iter_mut() {
@@ -165,10 +190,6 @@ impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 				None => return Ok(None),
 			}
 		}
-
-		if self.hash == hash {
-			return Err(Error::Duplicate);
-		};
 
 		if is_descendent_of(&self.hash, &hash)? {
 			self.children.push(Node {
