@@ -52,14 +52,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// We need these `extern crate` to be placed here otherwise there will be errors.
-// TODO: https://github.com/paritytech/substrate/issues/1509
-#[macro_use]
-extern crate parity_codec_derive;
-extern crate parity_codec as codec;
-#[macro_use]
-extern crate srml_support as runtime_support;
-
 #[macro_use]
 mod gas;
 
@@ -73,14 +65,19 @@ mod tests;
 use crate::exec::ExecutionContext;
 use crate::account_db::AccountDb;
 
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use codec::Codec;
+use parity_codec::Codec;
+use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
-use runtime_support::dispatch::{Result, Dispatchable};
-use runtime_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap};
+use srml_support::dispatch::{Result, Dispatchable};
+use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
+use srml_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
+use timestamp;
 
 pub type CodeHash<T> = <T as system::Trait>::Hash;
 
@@ -94,7 +91,7 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
-pub trait Trait: balances::Trait {
+pub trait Trait: balances::Trait + timestamp::Trait {
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
 
@@ -142,7 +139,7 @@ where
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
-		let encoded_len = codec::Encode::encode(&call).len();
+		let encoded_len = parity_codec::Encode::encode(&call).len();
 		let base_fee = <balances::Module<T>>::transaction_base_fee();
 		let byte_fee = <balances::Module<T>>::transaction_byte_fee();
 		base_fee + byte_fee * <T::Balance as As<u64>>::sa(encoded_len as u64)
@@ -368,7 +365,7 @@ impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 	}
 }
 
-impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());

@@ -275,7 +275,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 	Ok(quote!( #( #result )* ))
 }
 
-/// Generate the decleration of the trait for the runtime.
+/// Generate the declaration of the trait for the runtime.
 fn generate_runtime_decls(decls: &[ItemTrait]) -> TokenStream {
 	let mut result = Vec::new();
 
@@ -339,8 +339,9 @@ impl<'a> ToClientSideDecl<'a> {
 
 		items.into_iter().for_each(|i| match i {
 			TraitItem::Method(method) => {
-				let (fn_decl, fn_impl) = self.fold_trait_item_method(method);
+				let (fn_decl, fn_impl, fn_decl_ctx) = self.fold_trait_item_method(method);
 				result.push(fn_decl.into());
+				result.push(fn_decl_ctx.into());
 
 				if let Some(fn_impl) = fn_impl {
 					result.push(fn_impl.into());
@@ -352,11 +353,25 @@ impl<'a> ToClientSideDecl<'a> {
 		result
 	}
 
-	fn fold_trait_item_method(&mut self, method: TraitItemMethod) -> (TraitItemMethod, Option<TraitItemMethod>) {
+	fn fold_trait_item_method(&mut self, method: TraitItemMethod)
+		-> (TraitItemMethod, Option<TraitItemMethod>, TraitItemMethod) {
+		let crate_ = self.crate_;
+		let context_other = quote!( #crate_::runtime_api::ExecutionContext::Other );
 		let fn_impl = self.create_method_runtime_api_impl(method.clone());
-		let fn_decl = self.create_method_decl(method);
+		let fn_decl = self.create_method_decl(method.clone(), context_other);
+		let fn_decl_ctx = self.create_method_decl_with_context(method);
 
-		(fn_decl, fn_impl)
+		(fn_decl, fn_impl, fn_decl_ctx)
+	}
+
+	fn create_method_decl_with_context(&mut self, method: TraitItemMethod) -> TraitItemMethod {
+		let crate_ = self.crate_;
+		let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
+		let mut fn_decl_ctx = self.create_method_decl(method, quote!( context ));
+		fn_decl_ctx.sig.ident = Ident::new(&format!("{}_with_context", &fn_decl_ctx.sig.ident), Span::call_site());
+		fn_decl_ctx.sig.decl.inputs.insert(2, context_arg);
+
+		fn_decl_ctx
 	}
 
 	/// Takes the given method and creates a `method_runtime_api_impl` method that will be
@@ -392,8 +407,9 @@ impl<'a> ToClientSideDecl<'a> {
 				fn #name(
 					&self,
 					at: &#block_id,
+					context: #crate_::runtime_api::ExecutionContext,
 					params: Option<( #( #param_types ),* )>,
-					params_encoded: Vec<u8>
+					params_encoded: Vec<u8>,
 				) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>;
 			}
 		)
@@ -402,7 +418,7 @@ impl<'a> ToClientSideDecl<'a> {
 	/// Takes the method declared by the user and creates the declaration we require for the runtime
 	/// api client side. This method will call by default the `method_runtime_api_impl` for doing
 	/// the actual call into the runtime.
-	fn create_method_decl(&mut self, mut method: TraitItemMethod) -> TraitItemMethod {
+	fn create_method_decl(&mut self, mut method: TraitItemMethod, context: TokenStream) -> TraitItemMethod {
 		let params = match extract_parameter_names_types_and_borrows(&method.sig.decl) {
 			Ok(res) => res.into_iter().map(|v| v.0).collect::<Vec<_>>(),
 			Err(e) => {
@@ -462,7 +478,7 @@ impl<'a> ToClientSideDecl<'a> {
 					let runtime_api_impl_params_encoded =
 						#crate_::runtime_api::Encode::encode(&( #( &#params ),* ));
 
-					self.#name_impl(at, #param_tuple, runtime_api_impl_params_encoded)
+					self.#name_impl(at, #context, #param_tuple, runtime_api_impl_params_encoded)
 						.and_then(|r|
 							match r {
 								#crate_::runtime_api::NativeOrEncoded::Native(n) => {
@@ -571,7 +587,7 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	let (impl_generics, ty_generics, where_clause) = trait_.generics.split_for_impl();
 
 	quote!(
-		 #[cfg(any(feature = "std", test))]
+		#[cfg(any(feature = "std", test))]
 		impl #impl_generics #crate_::runtime_api::RuntimeApiInfo
 			for #trait_name #ty_generics #where_clause
 		{
@@ -593,7 +609,7 @@ fn get_api_version(found_attributes: &HashMap<&'static str, Attribute>) -> Resul
 	found_attributes.get(&API_VERSION_ATTRIBUTE).map(parse_runtime_api_version).unwrap_or(Ok(1))
 }
 
-/// Generate the decleration of the trait for the client side.
+/// Generate the declaration of the trait for the client side.
 fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 	let mut result = Vec::new();
 

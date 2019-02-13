@@ -25,7 +25,7 @@ pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
 pub use runtime_primitives::{
 	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
-	generic::BlockId, transaction_validity::TransactionValidity
+	generic::BlockId, transaction_validity::TransactionValidity, ExecutionContext,
 };
 #[doc(hidden)]
 pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
@@ -99,6 +99,7 @@ pub trait CallRuntimeAt<Block: BlockT> {
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
+		context: ExecutionContext
 	) -> error::Result<NativeOrEncoded<R>>;
 
 	/// Returns the runtime version at the given block.

@@ -11,7 +11,6 @@ log = { version = "0.4", optional = true }
 parking_lot = { version = "0.7.1", optional = true }
 hex = { package = "hex-literal", version = "0.1", optional = true }
 futures = { version = "0.1.17", optional = true }
-slog = { version = "^2", optional = true }
 heapsize = { version = "0.4", optional = true }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common", optional = true }
 executor = { package = "substrate-executor", path = "../executor", optional = true }
@@ -19,7 +18,7 @@ state-machine = { package = "substrate-state-machine", path = "../state-machine"
 keyring = { package = "substrate-keyring", path = "../keyring", optional = true }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
 substrate-telemetry = { path = "../telemetry", optional = true }
-hash-db = { version = "0.9" , optional = true }
+hash-db = { version = "0.11", optional = true }
 kvdb = { git = "https://github.com/paritytech/parity-common", optional = true, rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
 
 parity-codec = { version = "3.0", default-features = false }
@@ -49,7 +48,6 @@ std = [
 	"log",
 	"hex",
 	"futures",
-	"slog",
 	"heapsize",
 	"executor",
 	"runtime-primitives/std",

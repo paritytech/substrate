@@ -20,37 +20,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-extern crate sr_primitives as primitives;
-extern crate srml_balances as balances;
-extern crate srml_consensus as consensus;
-extern crate srml_session as session;
-extern crate srml_system as system;
-
-#[cfg(test)]
-extern crate substrate_primitives;
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-#[cfg(test)]
-extern crate srml_timestamp as timestamp;
-
 use rstd::{prelude::*, cmp};
-use codec::HasCompact;
-use runtime_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
+use parity_codec::HasCompact;
+use parity_codec_derive::{Encode, Decode};
+use srml_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
+use srml_support::{decl_module, decl_event, decl_storage, ensure};
+use srml_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
 use session::OnSessionChange;
-use primitives::{Perbill, traits::{Zero, One, Bounded, As, StaticLookup}};
-use balances::OnDilution;
+use primitives::Perbill;
+use primitives::traits::{Zero, One, Bounded, As, StaticLookup};
 use system::ensure_signed;
 
 mod mock;
@@ -137,9 +115,14 @@ impl<AccountId> Default for Capacity<AccountId> {
 	}
 }
 
-pub trait Trait: balances::Trait + session::Trait {
+type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+
+pub trait Trait: system::Trait + session::Trait {
+	/// The staking balance.
+	type Currency: Currency<Self::AccountId>;
+
 	/// Some tokens minted.
-	type OnRewardMinted: OnDilution<<Self as balances::Trait>::Balance>;
+	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -172,10 +155,10 @@ decl_storage! {
 		/// Map from all locked "stash" accounts to the controller account.
 		pub Bonded get(bonded): map T::AccountId => Option<T::AccountId>;
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
-		pub Ledger get(ledger): map T::AccountId => Option<StakingLedger<T::AccountId, T::Balance, T::BlockNumber>>;
+		pub Ledger get(ledger): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// Preferences that a validator has.
-		pub ValidatorPreferences get(validator_preferences): map T::AccountId => ValidatorPrefs<T::Balance>;
+		pub ValidatorPreferences get(validator_preferences): map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		//==============================================================================================================================
 
@@ -202,9 +185,9 @@ decl_storage! {
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
 
 		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub CurrentSessionReward get(current_session_reward) config(): T::Balance;
+		pub CurrentSessionReward get(current_session_reward) config(): BalanceOf<T>;
 		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub CurrentOfflineSlash get(current_offline_slash) config(): T::Balance;
+		pub CurrentOfflineSlash get(current_offline_slash) config(): BalanceOf<T>;
 
 		/// The next value of sessions per era.
 		pub NextSessionsPerEra get(next_sessions_per_era): Option<T::BlockNumber>;
@@ -212,7 +195,7 @@ decl_storage! {
 		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
 
 		/// The highest and lowest staked validator slashable balances.
-		pub StakeRange get(stake_range): PairOf<T::Balance>;
+		pub StakeRange get(stake_range): PairOf<BalanceOf<T>>;
 
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
 		pub SlashCount get(slash_count): map T::AccountId => u32;
@@ -231,7 +214,7 @@ decl_module! {
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will be the
 		/// account that controls it.
-		fn bond_stash(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: T::Balance) {
+		fn bond_stash(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
 			if Self::bond(&stash).is_some() {
@@ -256,7 +239,7 @@ decl_module! {
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than 
 		/// <balances::Module<T>>::existential_deposit(), then it is increased to the full amount.
-		fn unlock(origin, #[compact] value: T::Balance) {
+		fn unlock(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 
@@ -399,7 +382,7 @@ decl_module! {
 		fn register_preferences(
 			origin,
 			#[compact] intentions_index: u32,
-			prefs: ValidatorPrefs<T::Balance>
+			prefs: ValidatorPrefs<BalanceOf<T>>
 		) {
 			let who = ensure_signed(origin)?;
 
@@ -445,7 +428,7 @@ decl_module! {
 
 /// An event in this module.
 decl_event!(
-	pub enum Event<T> where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId {
+	pub enum Event<T> where Balance = BalanceOf<T>, <T as system::Trait>::AccountId {
 		/// All validators have been rewarded by the given balance.
 		Reward(Balance),
 		/// One validator (and their nominators) has been given a offline-warning (they're still
@@ -471,15 +454,15 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Balance of a (potential) validator that includes all nominators.
-	pub fn nomination_balance(who: &T::AccountId) -> T::Balance {
+	pub fn nomination_balance(who: &T::AccountId) -> BalanceOf<T> {
 		Self::nominators_for(who).iter()
-			.map(<balances::Module<T>>::total_balance)
+			.map(T::Currency::total_balance)
 			.fold(Zero::zero(), |acc, x| acc + x)
 	}
 
 	/// The total balance that can be slashed from an account for any activity
 	/// henceforth.
-	pub fn backing_balance(who: &T::AccountId) -> T::Balance {
+	pub fn backing_balance(who: &T::AccountId) -> BalanceOf<T> {
 		Self::nominators_for(who).iter()
 			.map(Self::ledger)
 			.map(|ledger| ledger.active)
@@ -488,10 +471,10 @@ impl<T: Trait> Module<T> {
 
 	/// The total balance that can be slashed from an account.
 	/// XXXXXX
-	pub fn slashable_balance(who: &T::AccountId) -> T::Balance {
+	pub fn slashable_balance(who: &T::AccountId) -> BalanceOf<T> {
 		Self::nominators_for(who).iter()
-			.map(<balances::Module<T>>::total_balance)
-			.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
+			.map(T::Currency::total_balance)
+			.fold(T::Currency::total_balance(who), |acc, x| acc + x)
 	}
 
 	/// The block at which the `who`'s funds become entirely liquid.
@@ -513,20 +496,20 @@ impl<T: Trait> Module<T> {
 
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
 	/// and reduces the nominators' balance if needed.
-	fn slash_validator(v: &T::AccountId, slash: T::Balance) {
+	fn slash_validator(v: &T::AccountId, slash: BalanceOf<T>) {
 		// skip the slash in degenerate case of having only 4 staking participants despite having a larger
 		// desired number of validators (validator_count).
 		if Self::intentions().len() <= Self::minimum_validator_count() as usize {
 			return
 		}
 
-		if let Some(rem) = <balances::Module<T>>::slash(v, slash) {
+		if let Some(rem) = T::Currency::slash(v, slash) {
 			let noms = Self::current_nominators_for(v);
-			let total = noms.iter().map(<balances::Module<T>>::total_balance).fold(T::Balance::zero(), |acc, x| acc + x);
+			let total = noms.iter().map(T::Currency::total_balance).fold(BalanceOf::<T>::zero(), |acc, x| acc + x);
 			if !total.is_zero() {
 				let safe_mul_rational = |b| b * rem / total;// FIXME #1572 avoid overflow
 				for n in noms.iter() {
-					let _ = <balances::Module<T>>::slash(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));	// best effort - not much that can be done on fail.
+					let _ = T::Currency::slash(n, safe_mul_rational(T::Currency::total_balance(n)));	// best effort - not much that can be done on fail.
 				}
 			}
 		}
@@ -534,7 +517,7 @@ impl<T: Trait> Module<T> {
 
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
 	/// balance, pro-rata.
-	fn reward_validator(who: &T::AccountId, reward: T::Balance) {
+	fn reward_validator(who: &T::AccountId, reward: BalanceOf<T>) {
 		let off_the_table = reward.min(Self::validator_preferences(who).validator_payment);
 		let reward = reward - off_the_table;
 		let validator_cut = if reward.is_zero() {
@@ -542,16 +525,16 @@ impl<T: Trait> Module<T> {
 		} else {
 			let noms = Self::current_nominators_for(who);
 			let total = noms.iter()
-				.map(<balances::Module<T>>::total_balance)
-				.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
+				.map(T::Currency::total_balance)
+				.fold(T::Currency::total_balance(who), |acc, x| acc + x)
 				.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for n in noms.iter() {
-				let _ = <balances::Module<T>>::reward(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));
+				let _ = T::Currency::reward(n, safe_mul_rational(T::Currency::total_balance(n)));
 			}
-			safe_mul_rational(<balances::Module<T>>::total_balance(who))
+			safe_mul_rational(T::Currency::total_balance(who))
 		};
-		let _ = <balances::Module<T>>::reward(who, validator_cut + off_the_table);
+		let _ = T::Currency::reward(who, validator_cut + off_the_table);
 	}
 
 	/// Actually carry out the unstake operation.
@@ -570,13 +553,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Get the reward for the session, assuming it ends with this block.
-	fn this_session_reward(actual_elapsed: T::Moment) -> T::Balance {
+	fn this_session_reward(actual_elapsed: T::Moment) -> BalanceOf<T> {
 		let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
 		if ideal_elapsed.is_zero() {
 			return Self::current_session_reward();
 		}
 		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-		Self::current_session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64)
+		Self::current_session_reward() * BalanceOf::<T>::sa(per65536) / BalanceOf::<T>::sa(65536u64)
 	}
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
@@ -590,8 +573,8 @@ impl<T: Trait> Module<T> {
 				Self::reward_validator(v, reward);
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
-			let total_minted = reward * <T::Balance as As<usize>>::sa(validators.len());
-			let total_rewarded_stake = Self::stake_range().1 * <T::Balance as As<usize>>::sa(validators.len());
+			let total_minted = reward * <BalanceOf<T> as As<usize>>::sa(validators.len());
+			let total_rewarded_stake = Self::stake_range().1 * <BalanceOf<T> as As<usize>>::sa(validators.len());
 			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
 		}
 
@@ -701,7 +684,7 @@ impl<T: Trait> Module<T> {
 				let base_slash = Self::current_offline_slash();
 				let instances = slash_count - grace;
 
-				let mut total_slash = T::Balance::default();
+				let mut total_slash = BalanceOf::<T>::default();
 				for i in instances..(instances + count as u32) {
 					if let Some(total) = base_slash.checked_shl(i)
 							.and_then(|slash| total_slash.checked_add(&slash)) {
@@ -755,7 +738,7 @@ impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 	}
 }
 
-impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
+impl<T: Trait> EnsureAccountLiquid<T::AccountId> for Module<T> {
 	fn ensure_account_can_transfer(who: &T::AccountId) -> Result {
 		if <Bonded<T>>::exists(who) {
 			Err("stash accounts are frozen")
@@ -769,7 +752,7 @@ impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(controller) = <Bonded<T>>::take(who) {
 			<Ledger<T>>::kill(&controller);

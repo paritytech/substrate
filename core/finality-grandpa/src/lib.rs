@@ -84,7 +84,7 @@ extern crate env_logger;
 extern crate parity_codec_derive;
 
 use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::sync::{self, mpsc, oneshot};
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
 	error::Error as ClientError,
@@ -102,8 +102,7 @@ use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
 
-use network::{Service as NetworkService, ExHashT};
-use network::consensus_gossip::ConsensusMessage;
+use network::Service as NetworkService;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -216,6 +215,32 @@ impl From<ClientError> for Error {
 	}
 }
 
+/// A stream used by NetworkBridge in its implementation of Network.
+pub struct NetworkStream {
+	inner: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
+	outer: oneshot::Receiver<mpsc::UnboundedReceiver<Vec<u8>>>
+}
+
+impl Stream for NetworkStream {
+	type Item = Vec<u8>;
+	type Error = ();
+
+	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+		if let Some(ref mut inner) = self.inner {
+			return inner.poll();
+		}
+		match self.outer.poll() {
+			Ok(futures::Async::Ready(mut inner)) => {
+				let poll_result = inner.poll();
+				self.inner = Some(inner);
+				poll_result
+			},
+			Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
+			Err(_) => Err(())
+		}
+	}
+}
+
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
 ///
@@ -249,18 +274,18 @@ pub trait Network<Block: BlockT>: Clone {
 }
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
-pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> {
-	service: Arc<NetworkService<B, S, H>>
+pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>> {
+	service: Arc<NetworkService<B, S>>
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>> NetworkBridge<B, S> {
 	/// Create a new NetworkBridge to the given NetworkService
-	pub fn new(service: Arc<NetworkService<B, S, H>>) -> Self {
+	pub fn new(service: Arc<NetworkService<B, S>>) -> Self {
 		NetworkBridge { service }
 	}
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Clone for NetworkBridge<B, S, H> {
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Clone for NetworkBridge<B, S> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
 			service: Arc::clone(&self.service)
@@ -276,10 +301,15 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
 }
 
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT> Network<B> for NetworkBridge<B, S, H> {
-	type In = mpsc::UnboundedReceiver<ConsensusMessage>;
+impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B> for NetworkBridge<B, S> {
+	type In = NetworkStream;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.service.consensus_gossip().write().messages_for(message_topic::<B>(round, set_id))
+		let (tx, rx) = sync::oneshot::channel();
+		self.service.with_gossip(move |gossip, _| {
+			let inner_rx = gossip.messages_for(message_topic::<B>(round, set_id));
+			let _ = tx.send(inner_rx);
+		});
+		NetworkStream { outer: rx, inner: None }
 	}
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
@@ -289,16 +319,21 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>, H: ExHashT
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.consensus_gossip().write().collect_garbage_for_topic(topic);
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.consensus_gossip().write().collect_garbage_for_topic(topic);
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.service.consensus_gossip().write().messages_for(commit_topic::<B>(set_id))
+		let (tx, rx) = sync::oneshot::channel();
+		self.service.with_gossip(move |gossip, _| {
+			let inner_rx = gossip.messages_for(commit_topic::<B>(set_id));
+			let _ = tx.send(inner_rx);
+		});
+		NetworkStream { outer: rx, inner: None }
 	}
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {

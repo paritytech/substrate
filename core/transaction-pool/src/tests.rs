@@ -68,8 +68,9 @@ impl txpool::ChainApi for TestApi {
 		})
 	}
 
-	fn hash(&self, ex: &txpool::ExtrinsicFor<Self>) -> Self::Hash {
-		BlakeTwo256::hash(&ex.encode())
+	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+		let encoded = ex.encode();
+		(BlakeTwo256::hash(&encoded), encoded.len())
 	}
 
 }

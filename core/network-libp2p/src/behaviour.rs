@@ -16,14 +16,13 @@
 
 use crate::custom_proto::{CustomProtos, CustomProtosOut, RegisteredProtocols};
 use crate::{NetworkConfiguration, ProtocolId};
-use bytes::Bytes;
 use futures::prelude::*;
 use libp2p::NetworkBehaviour;
-use libp2p::core::{PeerId, ProtocolsHandler};
+use libp2p::core::{Multiaddr, PeerId, ProtocolsHandler, PublicKey};
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction};
 use libp2p::core::swarm::{NetworkBehaviourEventProcess, PollParameters};
 use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
-use libp2p::kad::{Kademlia, KademliaOut, KademliaTopology};
+use libp2p::kad::{Kademlia, KademliaOut, KadConnectionType};
 use libp2p::ping::{Ping, PingEvent};
 use log::{debug, trace, warn};
 use std::{cmp, io, time::Duration, time::Instant};
@@ -33,12 +32,12 @@ use void;
 
 /// General behaviour of the network.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "BehaviourOut", poll_method = "poll")]
-pub struct Behaviour<TSubstream> {
+#[behaviour(out_event = "BehaviourOut<TMessage>", poll_method = "poll")]
+pub struct Behaviour<TMessage, TSubstream> {
 	/// Periodically ping nodes, and close the connection if it's unresponsive.
 	ping: Ping<TSubstream>,
 	/// Custom protocols (dot, bbq, sub, etc.).
-	custom_protocols: CustomProtos<TSubstream>,
+	custom_protocols: CustomProtos<TMessage, TSubstream>,
 	/// Discovers nodes of the network. Defined below.
 	discovery: DiscoveryBehaviour<TSubstream>,
 	/// Periodically identifies the remote and responds to incoming requests.
@@ -46,22 +45,25 @@ pub struct Behaviour<TSubstream> {
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
-	events: Vec<BehaviourOut>,
+	events: Vec<BehaviourOut<TMessage>>,
 }
 
-impl<TSubstream> Behaviour<TSubstream> {
+impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	/// Builds a new `Behaviour`.
-	// TODO: redundancy between config and local_peer_id (https://github.com/libp2p/rust-libp2p/issues/745)
-	pub fn new(config: &NetworkConfiguration, local_peer_id: PeerId, protocols: RegisteredProtocols) -> Self {
+	// TODO: redundancy between config and local_public_key (https://github.com/libp2p/rust-libp2p/issues/745)
+	pub fn new(config: &NetworkConfiguration, local_public_key: PublicKey, protocols: RegisteredProtocols<TMessage>) -> Self {
 		let identify = {
 			let proto_version = "/substrate/1.0".to_string();
 			let user_agent = format!("{} ({})", config.client_version, config.node_name);
-			Identify::new(proto_version, user_agent)
+			Identify::new(proto_version, user_agent, local_public_key.clone())
 		};
+
+		let local_peer_id = local_public_key.into_peer_id();
+		let custom_protocols = CustomProtos::new(config, &local_peer_id, protocols);
 
 		Behaviour {
 			ping: Ping::new(),
-			custom_protocols: CustomProtos::new(config, protocols),
+			custom_protocols,
 			discovery: DiscoveryBehaviour::new(local_peer_id),
 			identify,
 			events: Vec::new(),
@@ -75,13 +77,30 @@ impl<TSubstream> Behaviour<TSubstream> {
 	/// Also note that even we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
 	#[inline]
-	pub fn send_custom_message(&mut self, target: &PeerId, protocol_id: ProtocolId, data: impl Into<Bytes>) {
+	pub fn send_custom_message(&mut self, target: &PeerId, protocol_id: ProtocolId, data: TMessage) {
 		self.custom_protocols.send_packet(target, protocol_id, data)
 	}
 
+	/// Returns the number of peers in the topology.
+	pub fn num_topology_peers(&self) -> usize {
+		self.custom_protocols.num_topology_peers()
+	}
+
+	/// Flushes the topology to the disk.
+	pub fn flush_topology(&mut self) -> Result<(), io::Error> {
+		self.custom_protocols.flush_topology()
+	}
+
+	/// Perform a cleanup pass, removing all obsolete addresses and peers.
+	///
+	/// This should be done from time to time.
+	pub fn cleanup(&mut self) {
+		self.custom_protocols.cleanup();
+	}
+
 	/// Try to add a reserved peer.
-	pub fn add_reserved_peer(&mut self, peer_id: PeerId) {
-		self.custom_protocols.add_reserved_peer(peer_id)
+	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
+		self.custom_protocols.add_reserved_peer(peer_id, addr)
 	}
 
 	/// Try to remove a reserved peer.
@@ -127,7 +146,7 @@ impl<TSubstream> Behaviour<TSubstream> {
 
 /// Event that can be emitted by the behaviour.
 #[derive(Debug)]
-pub enum BehaviourOut {
+pub enum BehaviourOut<TMessage> {
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
 		/// Identifier of the protocol.
@@ -156,8 +175,8 @@ pub enum BehaviourOut {
 		peer_id: PeerId,
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
-		/// Data that has been received.
-		data: Bytes,
+		/// Message that has been received.
+		message: TMessage,
 	},
 
 	/// A substream with a remote is clogged. We should avoid sending more data to it if possible.
@@ -167,7 +186,7 @@ pub enum BehaviourOut {
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Bytes>,
+		messages: Vec<TMessage>,
 	},
 
 	/// We have obtained debug information from a peer.
@@ -179,8 +198,8 @@ pub enum BehaviourOut {
 	},
 }
 
-impl From<CustomProtosOut> for BehaviourOut {
-	fn from(other: CustomProtosOut) -> BehaviourOut {
+impl<TMessage> From<CustomProtosOut<TMessage>> for BehaviourOut<TMessage> {
+	fn from(other: CustomProtosOut<TMessage>) -> BehaviourOut<TMessage> {
 		match other {
 			CustomProtosOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint } => {
 				BehaviourOut::CustomProtocolOpen { protocol_id, version, peer_id, endpoint }
@@ -188,8 +207,8 @@ impl From<CustomProtosOut> for BehaviourOut {
 			CustomProtosOut::CustomProtocolClosed { protocol_id, peer_id, result } => {
 				BehaviourOut::CustomProtocolClosed { protocol_id, peer_id, result }
 			}
-			CustomProtosOut::CustomMessage { protocol_id, peer_id, data } => {
-				BehaviourOut::CustomMessage { protocol_id, peer_id, data }
+			CustomProtosOut::CustomMessage { protocol_id, peer_id, message } => {
+				BehaviourOut::CustomMessage { protocol_id, peer_id, message }
 			}
 			CustomProtosOut::Clogged { protocol_id, peer_id, messages } => {
 				BehaviourOut::Clogged { protocol_id, peer_id, messages }
@@ -198,26 +217,41 @@ impl From<CustomProtosOut> for BehaviourOut {
 	}
 }
 
-impl<TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviour<TSubstream> {
+impl<TMessage, TSubstream> NetworkBehaviourEventProcess<void::Void> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
 	}
 }
 
-impl<TSubstream> NetworkBehaviourEventProcess<CustomProtosOut> for Behaviour<TSubstream> {
-	fn inject_event(&mut self, event: CustomProtosOut) {
+impl<TMessage, TSubstream> NetworkBehaviourEventProcess<CustomProtosOut<TMessage>> for Behaviour<TMessage, TSubstream> {
+	fn inject_event(&mut self, event: CustomProtosOut<TMessage>) {
 		self.events.push(event.into());
 	}
 }
 
-impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubstream> {
+impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, event: IdentifyEvent) {
 		match event {
-			IdentifyEvent::Identified { peer_id, info, .. } => {
+			IdentifyEvent::Identified { peer_id, mut info, .. } => {
 				trace!(target: "sub-libp2p", "Identified {:?} => {:?}", peer_id, info);
 				// TODO: ideally we would delay the first identification to when we open the custom
 				//	protocol, so that we only report id info to the service about the nodes we
 				//	care about (https://github.com/libp2p/rust-libp2p/issues/876)
+				if !info.protocol_version.contains("substrate") {
+					warn!(target: "sub-libp2p", "Connected to a non-Substrate node: {:?}", info);
+				}
+				if info.listen_addrs.len() > 30 {
+					warn!(target: "sub-libp2p", "Node {:?} id reported more than 30 addresses",
+						peer_id);
+					info.listen_addrs.truncate(30);
+				}
+				for addr in &info.listen_addrs {
+					self.discovery.kademlia.add_address(&peer_id, addr.clone());
+				}
+				self.custom_protocols.add_discovered_addrs(
+					&peer_id,
+					info.listen_addrs.iter().map(|addr| (addr.clone(), true))
+				);
 				self.events.push(BehaviourOut::Identified { peer_id, info });
 			}
 			IdentifyEvent::Error { .. } => {}
@@ -225,12 +259,15 @@ impl<TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behaviour<TSubs
 	}
 }
 
-impl<TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behaviour<TSubstream> {
+impl<TMessage, TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, out: KademliaOut) {
-		// We only ever use Kademlia for discovering nodes, and nodes discovered by Kademlia are
-		// automatically added to the topology. Therefore we don't need to perform any further
-		// action.
 		match out {
+			KademliaOut::Discovered { peer_id, addresses, ty } => {
+				self.custom_protocols.add_discovered_addrs(
+					&peer_id,
+					addresses.into_iter().map(|addr| (addr, ty == KadConnectionType::Connected))
+				);
+			}
 			KademliaOut::FindNodeResult { key, closer_peers } => {
 				trace!(target: "sub-libp2p", "Kademlia query for {:?} yielded {:?} results",
 					key, closer_peers.len());
@@ -244,7 +281,7 @@ impl<TSubstream> NetworkBehaviourEventProcess<KademliaOut> for Behaviour<TSubstr
 	}
 }
 
-impl<TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TSubstream> {
+impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TMessage, TSubstream> {
 	fn inject_event(&mut self, event: PingEvent) {
 		match event {
 			PingEvent::PingSuccess { peer, time } => {
@@ -254,8 +291,8 @@ impl<TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour<TSubstrea
 	}
 }
 
-impl<TSubstream> Behaviour<TSubstream> {
-	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, BehaviourOut>> {
+impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
+	fn poll<TEv>(&mut self) -> Async<NetworkBehaviourAction<TEv, BehaviourOut<TMessage>>> {
 		if !self.events.is_empty() {
 			return Async::Ready(NetworkBehaviourAction::GenerateEvent(self.events.remove(0)))
 		}
@@ -284,24 +321,31 @@ impl<TSubstream> DiscoveryBehaviour<TSubstream> {
 	}
 }
 
-impl<TSubstream, TTopology> NetworkBehaviour<TTopology> for DiscoveryBehaviour<TSubstream>
+impl<TSubstream> NetworkBehaviour for DiscoveryBehaviour<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite,
-	TTopology: KademliaTopology,
 {
-	type ProtocolsHandler = <Kademlia<TSubstream> as NetworkBehaviour<TTopology>>::ProtocolsHandler;
-	type OutEvent = <Kademlia<TSubstream> as NetworkBehaviour<TTopology>>::OutEvent;
+	type ProtocolsHandler = <Kademlia<TSubstream> as NetworkBehaviour>::ProtocolsHandler;
+	type OutEvent = <Kademlia<TSubstream> as NetworkBehaviour>::OutEvent;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NetworkBehaviour::<TTopology>::new_handler(&mut self.kademlia)
+		NetworkBehaviour::new_handler(&mut self.kademlia)
+	}
+
+	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
+		self.kademlia.addresses_of_peer(peer_id)
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		NetworkBehaviour::<TTopology>::inject_connected(&mut self.kademlia, peer_id, endpoint)
+		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id, endpoint)
 	}
 
 	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		NetworkBehaviour::<TTopology>::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
+		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
+	}
+
+	fn inject_replaced(&mut self, peer_id: PeerId, closed: ConnectedPoint, opened: ConnectedPoint) {
+		NetworkBehaviour::inject_replaced(&mut self.kademlia, peer_id, closed, opened)
 	}
 
 	fn inject_node_event(
@@ -309,12 +353,12 @@ where
 		peer_id: PeerId,
 		event: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
 	) {
-		NetworkBehaviour::<TTopology>::inject_node_event(&mut self.kademlia, peer_id, event)
+		NetworkBehaviour::inject_node_event(&mut self.kademlia, peer_id, event)
 	}
 
 	fn poll(
 		&mut self,
-		params: &mut PollParameters<TTopology>,
+		params: &mut PollParameters,
 	) -> Async<
 		NetworkBehaviourAction<
 			<Self::ProtocolsHandler as ProtocolsHandler>::InEvent,

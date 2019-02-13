@@ -38,7 +38,7 @@ macro_rules! impl_runtime_metadata {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
 				$crate::metadata::RuntimeMetadata::V1 (
 					$crate::metadata::RuntimeMetadataV1 {
-						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+						modules: $crate::__runtime_modules_to_metadata!($runtime;; $( $rest )*),
 					}
 				).into()
 			}
@@ -55,14 +55,14 @@ macro_rules! __runtime_modules_to_metadata {
 		$mod:ident::$module:ident $(with)+ $($kw:ident)*,
 		$( $rest:tt )*
 	) => {
-		__runtime_modules_to_metadata!(
+		$crate::__runtime_modules_to_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::ModuleMetadata {
 				name: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
-				prefix: __runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
-				storage: __runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
-				calls: __runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
-				event: __runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
+				prefix: $crate::__runtime_modules_to_metadata_calls_storagename!($mod, $module, $runtime, $(with $kw)*),
+				storage: $crate::__runtime_modules_to_metadata_calls_storage!($mod, $module, $runtime, $(with $kw)*),
+				calls: $crate::__runtime_modules_to_metadata_calls_call!($mod, $module, $runtime, $(with $kw)*),
+				event: $crate::__runtime_modules_to_metadata_calls_event!($mod, $module, $runtime, $(with $kw)*),
 			};
 			$( $rest )*
 		)
@@ -83,7 +83,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		system,
 		$skip_module: ident,
 		$skip_runtime: ident,
-		with Call 
+		with Call
 		$(with $kws:ident)*
 	) => {
 		None
@@ -92,7 +92,7 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Call 
+		with Call
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
@@ -105,10 +105,10 @@ macro_rules! __runtime_modules_to_metadata_calls_call {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
- 		__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
+ 		$crate::__runtime_modules_to_metadata_calls_call!( $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
@@ -127,7 +127,7 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Event 
+		with Event
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
@@ -142,10 +142,10 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		__runtime_modules_to_metadata_calls_event!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_event!( $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
@@ -163,7 +163,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Storage 
+		with Storage
 		$(with $kws:ident)*
 	) => {
 		$crate::metadata::DecodeDifferent::Encode(
@@ -176,10 +176,10 @@ macro_rules! __runtime_modules_to_metadata_calls_storagename {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		__runtime_modules_to_metadata_calls_storagename!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_storagename!( $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,
@@ -199,7 +199,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with Storage 
+		with Storage
 		$(with $kws:ident)*
 	) => {
 		Some($crate::metadata::DecodeDifferent::Encode(
@@ -212,10 +212,10 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 		$mod: ident,
 		$module: ident,
 		$runtime: ident,
-		with $_:ident 
+		with $_:ident
 		$(with $kws:ident)*
 	) => {
-		__runtime_modules_to_metadata_calls_storage!( $mod, $module, $runtime, $(with $kws)* );
+		$crate::__runtime_modules_to_metadata_calls_storage!( $mod, $module, $runtime, $(with $kws)* );
 	};
 	(
 		$mod: ident,

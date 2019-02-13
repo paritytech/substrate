@@ -18,10 +18,8 @@ use crate::{
 	behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key_from_config,
 	transport
 };
-use crate::custom_proto::{RegisteredProtocol, RegisteredProtocols};
-use crate::topology::NetTopology;
+use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols};
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
-use bytes::Bytes;
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, multiaddr};
@@ -37,17 +35,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_timer::Interval;
 
-// File where the network topology is stored.
-const NODES_FILE: &str = "nodes.json";
-
 /// Starts the substrate libp2p service.
 ///
 /// Returns a stream that must be polled regularly in order for the networking to function.
-pub fn start_service<TProtos>(
+pub fn start_service<TProtos, TMessage>(
 	config: NetworkConfiguration,
 	registered_custom: TProtos,
-) -> Result<Service, Error>
-where TProtos: IntoIterator<Item = RegisteredProtocol> {
+) -> Result<Service<TMessage>, Error>
+where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
+	TMessage: CustomMessage + Send + 'static {
 
 	if let Some(ref path) = config.net_config_path {
 		fs::create_dir_all(Path::new(path))?;
@@ -58,25 +54,12 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
 
-	// Initialize the topology of the network.
-	let mut topology = if let Some(ref path) = config.net_config_path {
-		let path = Path::new(path).join(NODES_FILE);
-		debug!(target: "sub-libp2p", "Initializing peer store for JSON file {:?}", path);
-		NetTopology::from_file(local_public_key, path)
-	} else {
-		debug!(target: "sub-libp2p", "No peers file configured ; peers won't be saved");
-		NetTopology::memory(local_public_key)
-	};
-
-	// Register the external addresses provided by the user as our own.
-	topology.add_external_addrs(config.public_addresses.clone().into_iter());
-
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let registered_custom = RegisteredProtocols(registered_custom.into_iter().collect());
-		let behaviour = Behaviour::new(&config, local_peer_id.clone(), registered_custom);
+		let behaviour = Behaviour::new(&config, local_public_key.clone(), registered_custom);
 		let (transport, bandwidth) = transport::build_transport(local_private_key);
-		(Swarm::new(transport, behaviour, topology), bandwidth)
+		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
 
 	// Listen on multiaddresses.
@@ -90,11 +73,15 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 		}
 	}
 
-	// Add the bootstrap nodes to the topology and connect to them.
+	// Add external addresses.
+	for addr in &config.public_addresses {
+		Swarm::add_external_address(&mut swarm, addr.clone());
+	}
+
+	// Connect to the bootnodes.
 	for bootnode in config.boot_nodes.iter() {
 		match parse_str_addr(bootnode) {
-			Ok((peer_id, addr)) => {
-				Swarm::topology_mut(&mut swarm).add_bootstrap_addr(&peer_id, addr.clone());
+			Ok((peer_id, _)) => {
 				Swarm::dial(&mut swarm, peer_id);
 			},
 			Err(_) => {
@@ -121,8 +108,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	// Initialize the reserved peers.
 	for reserved in config.reserved_nodes.iter() {
 		if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
-			Swarm::topology_mut(&mut swarm).add_bootstrap_addr(&peer_id, addr);
-			swarm.add_reserved_peer(peer_id.clone());
+			swarm.add_reserved_peer(peer_id.clone(), addr);
 			Swarm::dial(&mut swarm, peer_id);
 		} else {
 			warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved);
@@ -130,7 +116,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	}
 
 	debug!(target: "sub-libp2p", "Topology started with {} entries",
-		Swarm::topology_mut(&mut swarm).num_peers());
+		swarm.num_topology_peers());
 
 	Ok(Service {
 		swarm,
@@ -145,7 +131,7 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 
 /// Event produced by the service.
 #[derive(Debug)]
-pub enum ServiceEvent {
+pub enum ServiceEvent<TMessage> {
 	/// A custom protocol substream has been opened with a node.
 	OpenedCustomProtocol {
 		/// Index of the node.
@@ -154,6 +140,8 @@ pub enum ServiceEvent {
 		protocol: ProtocolId,
 		/// Version of the protocol that was opened.
 		version: u8,
+		/// Node debug info
+		debug_info: String,
 	},
 
 	/// A custom protocol substream has been closed.
@@ -162,6 +150,8 @@ pub enum ServiceEvent {
 		node_index: NodeIndex,
 		/// Protocol that has been closed.
 		protocol: ProtocolId,
+		/// Node debug info
+		debug_info: String,
 	},
 
 	/// Sustom protocol substreams has been closed.
@@ -172,6 +162,8 @@ pub enum ServiceEvent {
 		node_index: NodeIndex,
 		/// Protocols that have been closed.
 		protocols: Vec<ProtocolId>,
+		/// Node debug info
+		debug_info: String,
 	},
 
 	/// Receives a message on a custom protocol stream.
@@ -180,8 +172,8 @@ pub enum ServiceEvent {
 		node_index: NodeIndex,
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
-		/// Data that has been received.
-		data: Bytes,
+		/// Message that has been received.
+		message: TMessage,
 	},
 
 	/// The substream with a node is clogged. We should avoid sending data to it if possible.
@@ -191,14 +183,14 @@ pub enum ServiceEvent {
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
 		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Bytes>,
+		messages: Vec<TMessage>,
 	},
 }
 
 /// Network service. Must be polled regularly in order for the networking to work.
-pub struct Service {
+pub struct Service<TMessage> where TMessage: CustomMessage {
 	/// Stream of events of the swarm.
-	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<Substream<StreamMuxerBox>>, NetTopology>,
+	swarm: Swarm<Boxed<(PeerId, StreamMuxerBox), IoError>, Behaviour<TMessage, Substream<StreamMuxerBox>>>,
 
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
@@ -217,7 +209,7 @@ pub struct Service {
 	cleanup: Interval,
 
 	/// Events to produce on the Stream.
-	injected_events: Vec<ServiceEvent>,
+	injected_events: Vec<ServiceEvent<TMessage>>,
 }
 
 /// Information about a node we're connected to.
@@ -231,7 +223,8 @@ struct NodeInfo {
 	client_version: Option<String>,
 }
 
-impl Service {
+impl<TMessage> Service<TMessage>
+where TMessage: CustomMessage + Send + 'static {
 	/// Returns an iterator that produces the list of addresses we're listening on.
 	#[inline]
 	pub fn listeners(&self) -> impl Iterator<Item = &Multiaddr> {
@@ -264,8 +257,7 @@ impl Service {
 
 	/// Try to add a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
-		Swarm::topology_mut(&mut self.swarm).add_bootstrap_addr(&peer_id, addr);
-		self.swarm.add_reserved_peer(peer_id);
+		self.swarm.add_reserved_peer(peer_id, addr);
 	}
 
 	/// Try to remove a reserved peer.
@@ -314,10 +306,10 @@ impl Service {
 		&mut self,
 		node_index: NodeIndex,
 		protocol: ProtocolId,
-		data: Vec<u8>
+		message: TMessage
 	) {
 		if let Some(peer_id) = self.nodes_info.get(&node_index).map(|info| &info.peer_id) {
-			self.swarm.send_custom_message(peer_id, protocol, data);
+			self.swarm.send_custom_message(peer_id, protocol, message);
 		} else {
 			warn!(target: "sub-libp2p", "Tried to send message to unknown node: {:}", node_index);
 		}
@@ -348,6 +340,15 @@ impl Service {
 		}
 	}
 
+	/// Get debug info for a given peer.
+	pub fn peer_debug_info(&self, who: NodeIndex) -> String {
+		if let Some(info) = self.nodes_info.get(&who) {
+			format!("{:?} (version: {:?}) through {:?}", info.peer_id, info.client_version, info.endpoint)
+		} else {
+			"unknown".to_string()
+		}
+	}
+
 	/// Returns the `NodeIndex` of a peer, or assigns one if none exists.
 	fn index_of_peer_or_assign(&mut self, peer: PeerId, endpoint: ConnectedPoint) -> NodeIndex {
 		match self.index_by_id.entry(peer) {
@@ -375,7 +376,7 @@ impl Service {
 	}
 
 	/// Polls for what happened on the network.
-	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent>, IoError> {
+	fn poll_swarm(&mut self) -> Poll<Option<ServiceEvent<TMessage>>, IoError> {
 		loop {
 			match self.swarm.poll() {
 				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { protocol_id, peer_id, version, endpoint }))) => {
@@ -385,6 +386,7 @@ impl Service {
 						node_index,
 						protocol: protocol_id,
 						version,
+						debug_info: self.peer_debug_info(node_index),
 					})))
 				}
 				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolClosed { protocol_id, peer_id, result }))) => {
@@ -393,14 +395,15 @@ impl Service {
 					break Ok(Async::Ready(Some(ServiceEvent::ClosedCustomProtocol {
 						node_index,
 						protocol: protocol_id,
+						debug_info: self.peer_debug_info(node_index),
 					})))
 				}
-				Ok(Async::Ready(Some(BehaviourOut::CustomMessage { protocol_id, peer_id, data }))) => {
+				Ok(Async::Ready(Some(BehaviourOut::CustomMessage { protocol_id, peer_id, message }))) => {
 					let node_index = *self.index_by_id.get(&peer_id).expect("index_by_id is always kept in sync with the state of the behaviour");
 					break Ok(Async::Ready(Some(ServiceEvent::CustomMessage {
 						node_index,
 						protocol_id,
-						data,
+						message,
 					})))
 				}
 				Ok(Async::Ready(Some(BehaviourOut::Clogged { protocol_id, peer_id, messages }))) => {
@@ -429,19 +432,19 @@ impl Service {
 	}
 
 	/// Polls the stream that fires when we need to cleanup and flush the topology.
-	fn poll_cleanup(&mut self) -> Poll<Option<ServiceEvent>, IoError> {
+	fn poll_cleanup(&mut self) -> Poll<Option<ServiceEvent<TMessage>>, IoError> {
 		loop {
 			match self.cleanup.poll() {
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
 				Ok(Async::Ready(Some(_))) => {
 					debug!(target: "sub-libp2p", "Cleaning and flushing topology");
-					Swarm::topology_mut(&mut self.swarm).cleanup();
-					if let Err(err) = Swarm::topology_mut(&mut self.swarm).flush_to_disk() {
+					self.swarm.cleanup();
+					if let Err(err) = self.swarm.flush_topology() {
 						warn!(target: "sub-libp2p", "Failed to flush topology: {:?}", err);
 					}
 					debug!(target: "sub-libp2p", "Topology now contains {} nodes",
-						Swarm::topology_mut(&mut self.swarm).num_peers());
-				},
+						self.swarm.num_topology_peers());
+				}
 				Ok(Async::Ready(None)) => {
 					warn!(target: "sub-libp2p", "Topology flush stream ended unexpectedly");
 					return Ok(Async::Ready(None))
@@ -455,16 +458,16 @@ impl Service {
 	}
 }
 
-impl Drop for Service {
+impl<TMessage> Drop for Service<TMessage> where TMessage: CustomMessage {
 	fn drop(&mut self) {
-		if let Err(err) = Swarm::topology_mut(&mut self.swarm).flush_to_disk() {
+		if let Err(err) = self.swarm.flush_topology() {
 			warn!(target: "sub-libp2p", "Failed to flush topology: {:?}", err);
 		}
 	}
 }
 
-impl Stream for Service {
-	type Item = ServiceEvent;
+impl<TMessage> Stream for Service<TMessage> where TMessage: CustomMessage + Send + 'static {
+	type Item = ServiceEvent<TMessage>;
 	type Error = IoError;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {

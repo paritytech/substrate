@@ -19,11 +19,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// Needed for type-safe access to storage DB.
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-use runtime_support::{StorageValue, StorageMap, Parameter};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage, ensure};
 use primitives::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
 use system::ensure_signed;
 
@@ -131,6 +127,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
+	use srml_support::{impl_outer_origin, assert_ok, assert_noop};
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.

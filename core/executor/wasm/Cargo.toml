@@ -18,13 +18,3 @@ lto = true
 
 [workspace]
 members = []
-
-[patch.crates-io]
-hash-db = { git = "https://github.com/paritytech/trie" }
-hash256-std-hasher = { git = "https://github.com/paritytech/trie" }
-keccak-hasher = { git = "https://github.com/paritytech/trie" }
-memory-db = { git = "https://github.com/paritytech/trie" }
-trie-bench = { git = "https://github.com/paritytech/trie" }
-trie-db = { git = "https://github.com/paritytech/trie" }
-trie-root = { git = "https://github.com/paritytech/trie" }
-trie-standardmap = { git = "https://github.com/paritytech/trie" }

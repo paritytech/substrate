@@ -75,7 +75,9 @@ impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 		Ok(self.client.block_hash_from_id(at)?)
 	}
 
-	fn hash(&self, ex: &txpool::ExtrinsicFor<Self>) -> Self::Hash {
-		Blake2Hasher::hash(&ex.encode())
+	fn hash_and_length(&self, ex: &txpool::ExtrinsicFor<Self>) -> (Self::Hash, usize) {
+		ex.using_encoded(|x| {
+			(Blake2Hasher::hash(x), x.len())
+		})
 	}
 }

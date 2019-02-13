@@ -21,16 +21,6 @@
 #![recursion_limit="256"]
 
 extern crate proc_macro;
-extern crate proc_macro2;
-
-#[macro_use]
-extern crate syn;
-
-#[macro_use]
-extern crate quote;
-
-#[macro_use]
-extern crate srml_support_procedural_tools;
 
 mod storage;
 
@@ -61,7 +51,7 @@ use proc_macro::TokenStream;
 /// 	}
 ///		add_extra_genesis {
 ///			config(genesis_field): GenesisFieldType;
-///			build(|_: &mut StorageMap, _: &mut ChildrenStorageMap, _: &GenesisConfig<T>| {
+///			build(|_: &mut StorageOverlay, _: &mut ChildrenStorageOverlay, _: &GenesisConfig<T>| {
 ///			})
 ///		}
 /// }
