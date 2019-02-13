@@ -54,8 +54,6 @@ then
 		-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
 		${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
 
-	exit 0
-
 	if git diff --name-only origin/master...${CI_COMMIT_SHA} \
 		| grep -q "${RUNTIME}"
 	then
