@@ -16,8 +16,10 @@
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
+use bitflags::bitflags;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use codec::{Encode, Decode, Input, Output};
+use parity_codec::{Encode, Decode, Input, Output};
+use parity_codec_derive::{Encode, Decode};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -124,8 +126,11 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
+	use parity_codec::{Encode, Decode};
+	use network_libp2p::CustomMessage;
 	use runtime_primitives::Justification;
-	use config::Roles;
+	use parity_codec_derive::{Encode, Decode};
+	use crate::config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
 		RequestId, Transactions, Direction
@@ -197,6 +202,18 @@ pub mod generic {
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
+	}
+
+	impl<Header, Hash, Number, Extrinsic> CustomMessage for Message<Header, Hash, Number, Extrinsic>
+		where Self: Decode + Encode
+	{
+		fn into_bytes(self) -> Vec<u8> {
+			self.encode()
+		}
+
+		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
+			Decode::decode(&mut &bytes[..]).ok_or(())
+		}
 	}
 
 	/// Status sent on connection.

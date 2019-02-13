@@ -17,7 +17,9 @@
 //! Contract execution data.
 
 #[cfg(feature = "std")]
-use bytes;
+use serde_derive::{Serialize, Deserialize};
+#[cfg(feature = "std")]
+use crate::bytes;
 use rstd::vec::Vec;
 
 /// Contract storage key.
@@ -70,6 +72,9 @@ pub mod well_known_keys {
 
 	/// Current extrinsic index (u32) is stored under this key.
 	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
+
+	/// Sum of all lengths of executed extrinsics (u32).
+	pub const ALL_EXTRINSICS_LEN: &'static [u8] = b":all_extrinsics_len";
 
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";

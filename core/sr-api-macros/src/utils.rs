@@ -18,6 +18,7 @@ use proc_macro2::{TokenStream, Span};
 use syn::{Result, Ident, FnDecl, parse_quote, Type, Pat, spanned::Spanned, FnArg, Error};
 use quote::quote;
 use std::env;
+use proc_macro_crate::crate_name;
 
 /// Unwrap the given result, if it is an error, `compile_error!` will be generated.
 pub fn unwrap_or_error(res: Result<TokenStream>) -> TokenStream {
@@ -34,12 +35,22 @@ pub fn generate_hidden_includes(unique_id: &'static str) -> TokenStream {
 		TokenStream::new()
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
-		quote!(
-			#[doc(hidden)]
-			mod #mod_name {
-				pub extern crate substrate_client as sr_api_client;
+		match crate_name("substrate-client") {
+			Ok(client_name) => {
+				let client_name = Ident::new(&client_name, Span::call_site());
+				quote!(
+					#[doc(hidden)]
+					mod #mod_name {
+						pub extern crate #client_name as sr_api_client;
+					}
+				)
+			},
+			Err(e) => {
+				let err = Error::new(Span::call_site(), &e).to_compile_error();
+				quote!( #err )
 			}
-		)
+		}
+
 	}.into()
 }
 
@@ -58,6 +69,19 @@ pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
 	Ident::new(&format!("runtime_decl_for_{}", trait_.to_string()), Span::call_site())
 }
 
+/// Generates a name for a method that needs to be implemented in the runtime for the client side.
+pub fn generate_method_runtime_api_impl_name(method: &Ident) -> Ident {
+	Ident::new(&format!("{}_runtime_api_impl", method.to_string()), Span::call_site())
+}
+
+/// Get the type of a `syn::ReturnType`.
+pub fn return_type_extract_type(rt: &syn::ReturnType) -> Type {
+	match rt {
+		syn::ReturnType::Default => parse_quote!( () ),
+		syn::ReturnType::Type(_, ref ty) => *ty.clone(),
+	}
+}
+
 /// Fold the given `FnDecl` to make it usable on the client side.
 pub fn fold_fn_decl_for_client_side(
 	mut input: FnDecl,
@@ -70,14 +94,8 @@ pub fn fold_fn_decl_for_client_side(
 
 	// Wrap the output in a `Result`
 	input.output = {
-		let generate_result = |ty: &Type| {
-			parse_quote!( -> ::std::result::Result<#ty, #crate_::error::Error> )
-		};
-
-		match &input.output {
-			syn::ReturnType::Default => generate_result(&parse_quote!( () )),
-			syn::ReturnType::Type(_, ref ty) => generate_result(&ty),
-		}
+		let ty = return_type_extract_type(&input.output);
+		parse_quote!( -> ::std::result::Result<#ty, #crate_::error::Error> )
 	};
 
 	input

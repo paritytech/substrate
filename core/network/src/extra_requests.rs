@@ -16,13 +16,14 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
-use protocol::Context;
-use network_libp2p::{Severity, NodeIndex};
+use log::{trace, debug};
 use consensus::import_queue::ImportQueue;
+use network_libp2p::{Severity, NodeIndex};
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use message::{self, Message, generic::Message as GenericMessage};
-use sync::{PeerSync, PeerSyncState};
+use crate::message::{self, Message, generic::Message as GenericMessage};
+use crate::protocol::Context;
+use crate::sync::{PeerSync, PeerSyncState};
 
 // Time to wait before trying to get the same extra data from the same peer.
 const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);
@@ -122,6 +123,8 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 			return;
 		}
 
+		let initial_pending_requests = self.pending_requests.len();
+
 		// clean up previous failed requests so we can retry again
 		for (_, requests) in self.previous_requests.iter_mut() {
 			requests.retain(|(_, instant)| instant.elapsed() < EXTRA_RETRY_WAIT);
@@ -203,6 +206,11 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		}
 
 		self.pending_requests.append(&mut unhandled_requests);
+
+		trace!(target: "sync", "Dispatched {} justification requests ({} pending)",
+			initial_pending_requests - self.pending_requests.len(),
+			self.pending_requests.len(),
+		);
 	}
 
 	/// Queue a justification request (without dispatching it).
@@ -243,7 +251,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 				ExtraResponseKind::Invalid => {
 					protocol.report_peer(
 						who,
-						Severity::Bad(&format!("Invalid extra data provided for #{}", request.0)),
+						Severity::Bad(format!("Invalid extra data provided for #{}", request.0)),
 					);
 				},
 				ExtraResponseKind::Missing => {

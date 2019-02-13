@@ -18,12 +18,12 @@
 
 use hash_db::Hasher;
 use hash256_std_hasher::Hash256StdHasher;
-use hash::H256;
+use crate::hash::H256;
 
 pub mod blake2 {
 	use super::{Hasher, Hash256StdHasher, H256};
 	#[cfg(feature = "std")]
-	use hashing::blake2_256;
+	use crate::hashing::blake2_256;
 
 	#[cfg(not(feature = "std"))]
 	extern "C" {

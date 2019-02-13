@@ -2,22 +2,23 @@
 name = "srml-metadata"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 parity-codec = { version = "3.0", default-features = false }
 parity-codec-derive = { version = "3.0", default-features = false }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
-sr-std = { path = "../../core/sr-std", default-features = false }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
+primitives = { package = "substrate-primitives", path = "../../core/primitives", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"parity-codec/std",
 	"parity-codec-derive/std",
-	"sr-std/std",
-	"substrate-primitives/std",
+	"rstd/std",
+	"primitives/std",
 	"serde",
 	"serde_derive"
 ]

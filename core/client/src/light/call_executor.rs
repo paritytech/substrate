@@ -17,14 +17,14 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
-use std::{collections::HashSet, sync::Arc, panic::UnwindSafe};
+use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::PhantomData};
 use futures::{IntoFuture, Future};
 
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
-use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges,
+use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges, ExecutionStrategy,
 	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionManager};
 use hash_db::Hasher;
 
@@ -52,7 +52,7 @@ pub struct RemoteOrLocalCallExecutor<Block: BlockT<Hash=H256>, B, R, L> {
 	backend: Arc<B>,
 	remote: R,
 	local: L,
-	_block: ::std::marker::PhantomData<Block>,
+	_block: PhantomData<Block>,
 }
 
 impl<B, F> Clone for RemoteCallExecutor<B, F> {
@@ -80,7 +80,8 @@ where
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<Vec<u8>> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8], _strategy: ExecutionStrategy)
+		-> ClientResult<Vec<u8>> {
 		let block_hash = self.blockchain.expect_block_hash_from_id(id)?;
 		let block_header = self.blockchain.expect_header(id.clone())?;
 
@@ -109,7 +110,7 @@ where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		_prepare_environment_block: PB,
-		_manager: ExecutionManager<EM>,
+		execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// it is only possible to execute contextual call if changes are empty
@@ -117,11 +118,11 @@ where
 			return Err(ClientErrorKind::NotAvailableOnLightClient.into());
 		}
 
-		self.call(at, method, call_data).map(NativeOrEncoded::Encoded)
+		self.call(at, method, call_data, (&execution_manager).into()).map(NativeOrEncoded::Encoded)
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		let call_result = self.call(id, "version", &[])?;
+		let call_result = self.call(id, "version", &[], ExecutionStrategy::NativeElseWasm)?;
 		RuntimeVersion::decode(&mut call_result.as_slice())
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
@@ -133,7 +134,7 @@ where
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R,
+		NC: FnOnce() -> result::Result<R, &'static str>,
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
@@ -200,10 +201,11 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<Vec<u8>> {
+	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8], strategy: ExecutionStrategy)
+		-> ClientResult<Vec<u8>> {
 		match self.backend.is_local_state_available(id) {
-			true => self.local.call(id, method, call_data),
-			false => self.remote.call(id, method, call_data),
+			true => self.local.call(id, method, call_data, strategy),
+			false => self.remote.call(id, method, call_data, strategy),
 		}
 	}
 
@@ -214,7 +216,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -285,7 +287,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> R + UnwindSafe,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(&self,
 		state: &S,
 		changes: &mut OverlayedChanges,
@@ -450,7 +452,7 @@ mod tests {
 			).unwrap();
 
 			// check remote execution proof locally
-			let local_executor = test_client::LocalExecutor::new();
+			let local_executor = test_client::LocalExecutor::new(None);
 			let local_result = check_execution_proof(&local_executor, &RemoteCallRequest {
 				block: test_client::runtime::Hash::default(),
 				header: test_client::runtime::Header {
@@ -507,7 +509,7 @@ mod tests {
 		let local_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![1])));
 		let remote_executor = RemoteCallExecutor::new(Arc::new(backend.blockchain().clone()), Arc::new(OkCallFetcher::new(vec![2])));
 		let remote_or_local = RemoteOrLocalCallExecutor::new(backend, remote_executor, local_executor);
-		assert_eq!(remote_or_local.call(&BlockId::Number(0), "test_method", &[]).unwrap(), vec![1]);
-		assert_eq!(remote_or_local.call(&BlockId::Number(1), "test_method", &[]).unwrap(), vec![2]);
+		assert_eq!(remote_or_local.call(&BlockId::Number(0), "test_method", &[], ExecutionStrategy::NativeElseWasm).unwrap(), vec![1]);
+		assert_eq!(remote_or_local.call(&BlockId::Number(1), "test_method", &[], ExecutionStrategy::NativeElseWasm).unwrap(), vec![2]);
 	}
 }

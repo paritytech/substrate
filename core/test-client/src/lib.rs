@@ -25,6 +25,7 @@ mod block_builder_ext;
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
 pub use client;
+pub use client::ExecutionStrategies;
 pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
@@ -34,10 +35,12 @@ pub use consensus;
 
 use std::sync::Arc;
 use primitives::Blake2Hasher;
-use runtime_primitives::StorageMap;
+use runtime_primitives::StorageOverlay;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use keyring::Keyring;
+use state_machine::ExecutionStrategy;
+use client::LocalCallExecutor;
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -69,6 +72,29 @@ pub fn new() -> client::Client<Backend, Executor, runtime::Block, runtime::Runti
 	new_with_backend(Arc::new(Backend::new()), false)
 }
 
+/// Creates new client instance used for tests with the given api execution strategy.
+pub fn new_with_execution_strategy(
+	execution_strategy: ExecutionStrategy
+) -> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi> {
+	let backend = Arc::new(Backend::new());
+	let executor = NativeExecutor::new(None);
+	let executor = LocalCallExecutor::new(backend.clone(), executor);
+
+	let execution_strategies = ExecutionStrategies {
+		syncing: execution_strategy,
+		importing: execution_strategy,
+		block_construction: execution_strategy,
+		other: execution_strategy,
+	};
+
+	client::Client::new(
+		backend,
+		executor,
+		genesis_storage(false),
+		execution_strategies
+	).expect("Creates new client")
+}
+
 /// Creates new test client instance that suports changes trie creation.
 pub fn new_with_changes_trie()
 	-> client::Client<Backend, Executor, runtime::Block, runtime::RuntimeApi>
@@ -76,7 +102,7 @@ pub fn new_with_changes_trie()
 	new_with_backend(Arc::new(Backend::new()), true)
 }
 
-/// Creates new client instance used for tests with an explicitely provided backend.
+/// Creates new client instance used for tests with an explicitly provided backend.
 /// This is useful for testing backend implementations.
 pub fn new_with_backend<B>(
 	backend: Arc<B>,
@@ -88,7 +114,7 @@ pub fn new_with_backend<B>(
 	runtime::RuntimeApi
 > where B: backend::LocalBackend<runtime::Block, Blake2Hasher>
 {
-	let executor = NativeExecutor::new();
+	let executor = NativeExecutor::new(None);
 	client::new_with_backend(backend, executor, genesis_storage(support_changes_trie)).unwrap()
 }
 
@@ -100,7 +126,7 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 	], 1000)
 }
 
-fn genesis_storage(support_changes_trie: bool) -> StorageMap {
+fn genesis_storage(support_changes_trie: bool) -> StorageOverlay {
 	let mut storage = genesis_config(support_changes_trie).genesis_map();
 	let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(storage.clone().into_iter());
 	let block: runtime::Block = client::genesis::construct_genesis_block(state_root);

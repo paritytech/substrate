@@ -34,6 +34,7 @@ use std::sync::Arc;
 use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
 	error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult},
+	ExecutionStrategy,
 };
 use codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
@@ -43,7 +44,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Ed25519AuthorityId, H256, Blake2Hasher};
 
-use GrandpaJustification;
+use justification::GrandpaJustification;
 
 /// Finality proof provider for serving network requests.
 pub struct FinalityProofProvider<B, E, Block: BlockT<Hash=H256>, RA>(Arc<Client<B, E, Block, RA>>);
@@ -73,8 +74,13 @@ impl<B, E, Block, RA> network::FinalityProofProvider<Block> for FinalityProofPro
 	) -> Result<Option<Vec<u8>>, ClientError> {
 		prove_finality(
 			&*self.0.backend().blockchain(),
-			|block| self.0.executor().call(block, "GrandpaApi_grandpa_authorities", &[]),
-			|block| self.0.execution_proof(block, "GrandpaApi_grandpa_authorities", &[]).map(|(_, proof)| proof),
+			|block| self.0.executor().call(
+				block,
+				"GrandpaApi_grandpa_authorities",
+				&[],
+				ExecutionStrategy::NativeElseWasm,
+			),
+			|block| self.0.execution_proof(block, "GrandpaApi_grandpa_authorities",&[]).map(|(_, proof)| proof),
 			last_finalized,
 			for_block,
 		)

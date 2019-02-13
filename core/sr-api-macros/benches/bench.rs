@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018 - 2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -13,12 +13,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
-
-#[macro_use]
-extern crate criterion;
-extern crate substrate_client;
-extern crate substrate_test_client as test_client;
-extern crate sr_primitives as runtime_primitives;
 
 use criterion::Criterion;
 use test_client::runtime::TestAPI;

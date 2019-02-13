@@ -16,12 +16,8 @@
 
 //! Macros for declaring and implementing runtime apis.
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 extern crate proc_macro;
-extern crate proc_macro2;
-extern crate quote;
-extern crate syn;
-extern crate blake2_rfc;
 
 use proc_macro::TokenStream;
 
@@ -50,13 +46,13 @@ mod compile_fail_tests;
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_client;
+/// extern crate client;
 /// extern crate sr_version as version;
 ///
 /// use version::create_runtime_str;
-/// # extern crate substrate_test_client as test_client;
-/// # extern crate sr_primitives as runtime_primitives;
-/// # extern crate substrate_primitives as primitives;
+/// # extern crate test_client;
+/// # extern crate runtime_primitives;
+/// # extern crate substrate_primitives;
 /// #
 /// # use runtime_primitives::traits::GetNodeBlockType;
 /// # use test_client::runtime::Block;
@@ -132,7 +128,7 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_client;
+/// extern crate client;
 ///
 /// decl_runtime_apis! {
 ///     /// Declare the api trait.
@@ -159,11 +155,15 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// To support versioning of the traits, the macro supports the attribute `#[api_version(1)]`.
 /// The attribute supports any `u32` as version. By default, each trait is at version `1`, if no
-/// version is provided.
+/// version is provided. We also support chaning the signature of a method. This signature
+/// change is highlighted with the `#[changed_in(2)]` attribute above a method. A method that is
+/// tagged with this attribute is callable by the name `METHOD_before_version_VERSION`. This
+/// method will only support calling into wasm, trying to call into native will fail (change the
+/// spec version!). Such a method also does not need to be implemented in the runtime.
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_client;
+/// extern crate client;
 ///
 /// decl_runtime_apis! {
 ///     /// Declare the api trait.
@@ -171,8 +171,13 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///     pub trait Balance {
 ///         /// Get the balance.
 ///         fn get_balance() -> u64;
-///         /// Set the balance.
+///         /// Set balance.
 ///         fn set_balance(val: u64);
+///         /// Set balance, old version.
+///         ///
+///         /// Is callable by `set_balance_before_version_2`.
+///         #[changed_in(2)]
+///         fn set_balance(val: u8);
 ///         /// In version 2, we added this new function.
 ///         fn increase_balance(val: u64);
 ///     }

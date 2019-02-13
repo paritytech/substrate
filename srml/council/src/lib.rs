@@ -18,36 +18,18 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
-
-extern crate parity_codec as codec;
-#[macro_use] extern crate parity_codec_derive;
-extern crate substrate_primitives;
-#[cfg_attr(not(feature = "std"), macro_use)]
-extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
-#[macro_use] extern crate srml_support;
-extern crate sr_primitives as primitives;
-extern crate srml_balances as balances;
-extern crate srml_democracy as democracy;
-extern crate srml_system as system;
-
 pub mod voting;
 pub mod motions;
 pub mod seats;
 
-pub use seats::{Trait, Module, RawEvent, Event, VoteIndex};
+pub use crate::seats::{Trait, Module, RawEvent, Event, VoteIndex};
 
 #[cfg(test)]
 mod tests {
 	// These re-exports are here for a reason, edit with care
 	pub use super::*;
 	pub use runtime_io::with_externalities;
+	use srml_support::{impl_outer_origin, impl_outer_event, impl_outer_dispatch};
 	pub use substrate_primitives::H256;
 	pub use primitives::BuildStorage;
 	pub use primitives::traits::{BlakeTwo256, IdentityLookup};
@@ -98,6 +80,7 @@ mod tests {
 		type Event = Event;
 	}
 	impl democracy::Trait for Test {
+		type Currency = balances::Module<Self>;
 		type Proposal = Call;
 		type Event = Event;
 	}
@@ -122,6 +105,7 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
+			vesting: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,

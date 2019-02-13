@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use utils::{
+use crate::utils::{
 	unwrap_or_error, generate_crate_access, generate_hidden_includes,
-	generate_runtime_mod_name_for_trait, fold_fn_decl_for_client_side, generate_unique_pattern,
-	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name
+	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
+	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,
+	return_type_extract_type
 };
 
 use proc_macro;
@@ -28,7 +29,7 @@ use quote::quote;
 use syn::{
 	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, MethodSig, Path,
 	ImplItem, parse::{Parse, ParseStream, Result, Error}, PathArguments, GenericArgument, TypePath,
-	fold::{self, Fold}, FnDecl, parse_quote, FnArg
+	fold::{self, Fold}, parse_quote
 };
 
 use std::{collections::HashSet, iter};
@@ -300,11 +301,11 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 				res
 			}
 
-			fn has_api<A: #crate_::runtime_api::RuntimeApiInfo + ?Sized>(
+			fn runtime_version_at(
 				&self,
 				at: &#block_id
-			) -> #crate_::error::Result<bool> where Self: Sized {
-				self.call.runtime_version_at(at).map(|r| r.has_api::<A>())
+			) -> #crate_::error::Result<#crate_::runtime_api::RuntimeVersion> {
+				self.call.runtime_version_at(at)
 			}
 		}
 
@@ -330,14 +331,15 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 		impl<C: #crate_::runtime_api::CallRuntimeAt<#block>> RuntimeApiImpl<C> {
 			fn call_api_at<
 				R: #crate_::runtime_api::Encode + #crate_::runtime_api::Decode + PartialEq,
-				NC: FnOnce() -> R + ::std::panic::UnwindSafe,
+				NC: FnOnce() -> ::std::result::Result<R, &'static str> + ::std::panic::UnwindSafe,
 			>(
 				&self,
 				at: &#block_id,
 				function: &'static str,
 				args: Vec<u8>,
-				native_call: NC,
-			) -> #crate_::error::Result<R> {
+				native_call: Option<NC>,
+				context: #crate_::runtime_api::ExecutionContext
+			) -> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<R>> {
 				let res = unsafe {
 					self.call.call_api_at(
 						at,
@@ -345,21 +347,8 @@ fn generate_runtime_api_base_structures(impls: &[ItemImpl]) -> Result<TokenStrea
 						args,
 						&mut *self.changes.borrow_mut(),
 						&mut *self.initialised_block.borrow_mut(),
-						Some(native_call),
-					).and_then(|r|
-						match r {
-							#crate_::runtime_api::NativeOrEncoded::Native(n) => {
-								Ok(n)
-							},
-							#crate_::runtime_api::NativeOrEncoded::Encoded(r) => {
-								R::decode(&mut &r[..])
-									.ok_or_else(||
-										#crate_::error::ErrorKind::CallResultDecode(
-											function
-										).into()
-									)
-							}
-						}
+						native_call,
+						context
 					)
 				};
 
@@ -446,50 +435,72 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		fold::fold_type_path(self, new_ty_path)
 	}
 
-	fn fold_fn_decl(&mut self, input: FnDecl) -> FnDecl {
-		let input = fold_fn_decl_for_client_side(
-			input,
-			&self.node_block_id,
-			&generate_crate_access(HIDDEN_INCLUDES_ID)
-		);
-
-		fold::fold_fn_decl(self, input)
-	}
-
 	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
 		let block = {
-			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-			let mut generated_name_counter = 0;
-			// Replace `_` with unique patterns and collect all patterns.
-			let arg_names = input.sig.decl.inputs.iter_mut().filter_map(|i| match i {
-				FnArg::Captured(ref mut arg) => Some(&mut arg.pat),
-				_ => None,
-			}).map(|p| {
-				*p = generate_unique_pattern(p.clone(), &mut generated_name_counter);
-				p.clone()
-			}).collect::<Vec<_>>();
-
 			let runtime_mod_path = self.runtime_mod_path;
 			let runtime = self.runtime_type;
-			let arg_names2 = arg_names.clone();
 			let fn_name = prefix_function_with_trait(self.impl_trait_ident, &input.sig.ident);
 			let native_call_generator_ident =
 				generate_native_call_generator_fn_name(&input.sig.ident);
 			let trait_generic_arguments = self.trait_generic_arguments;
 			let node_block = self.node_block;
+			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+			let block_id = self.node_block_id;
+
+			// Generate the access to the native parameters
+			let param_tuple_access = if input.sig.decl.inputs.len() == 1 {
+				vec![ quote!( p ) ]
+			} else {
+				input.sig.decl.inputs.iter().enumerate().map(|(i, _)| {
+					let i = syn::Index::from(i);
+					quote!( p.#i )
+				}).collect::<Vec<_>>()
+			};
+
+			let (param_types, error) = match extract_parameter_names_types_and_borrows(&input.sig.decl) {
+				Ok(res) => (
+					res.into_iter().map(|v| {
+						let ty = v.1;
+						let borrow = v.2;
+						quote!( #borrow #ty )
+					}).collect::<Vec<_>>(),
+					None
+				),
+				Err(e) => (Vec::new(), Some(e.to_compile_error())),
+			};
+
+			let context_arg: syn::FnArg = parse_quote!( context: #crate_::runtime_api::ExecutionContext );
+	
+			// Rewrite the input parameters.
+			input.sig.decl.inputs = parse_quote! {
+				&self, at: &#block_id, #context_arg, params: Option<( #( #param_types ),* )>, params_encoded: Vec<u8>
+			};
+
+			input.sig.ident = generate_method_runtime_api_impl_name(&input.sig.ident);
+			let ret_type = return_type_extract_type(&input.sig.decl.output);
+
+			// Generate the correct return type.
+			input.sig.decl.output = parse_quote!(
+				-> #crate_::error::Result<#crate_::runtime_api::NativeOrEncoded<#ret_type>>
+			);
 
 			// Generate the new method implementation that calls into the runime.
 			parse_quote!(
 				{
-					let args = #crate_::runtime_api::Encode::encode(&( #( &#arg_names ),* ));
+					// Get the error to the user (if we have one).
+					#( #error )*
+
 					self.call_api_at(
 						at,
 						#fn_name,
-						args,
-						#runtime_mod_path #native_call_generator_ident ::
-							<#runtime, #node_block #(, #trait_generic_arguments )*> (
-							#( #arg_names2 ),*
-						)
+						params_encoded,
+						params.map(|p| {
+							#runtime_mod_path #native_call_generator_ident ::
+								<#runtime, #node_block #(, #trait_generic_arguments )*> (
+								#( #param_tuple_access ),*
+							)
+						}),
+						context,
 					)
 				}
 			)
@@ -556,7 +567,6 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
 	}
-
 	Ok(quote!( #( #result )* ))
 }
 
@@ -606,13 +616,14 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 pub fn impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
+	
 	let dispatch_impl = unwrap_or_error(generate_dispatch_function(&api_impls));
-	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
-	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
 	let api_impls_for_runtime = unwrap_or_error(generate_api_impl_for_runtime(&api_impls));
-	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
+	let base_runtime_api = unwrap_or_error(generate_runtime_api_base_structures(&api_impls));
+	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let runtime_api_versions = unwrap_or_error(generate_runtime_api_versions(&api_impls));
+	let wasm_interface = unwrap_or_error(generate_wasm_interface(&api_impls));
+	let api_impls_for_runtime_api = unwrap_or_error(generate_api_impl_for_runtime_api(&api_impls));
 
 	quote!(
 		#hidden_includes

@@ -18,26 +18,24 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate srml_support as runtime_support;
-
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
-use rstd::prelude::*;
-use parity_codec::{Encode, Decode};
+use rstd::{prelude::*, marker::PhantomData};
+use parity_codec::{Encode, Decode, Input};
 use parity_codec_derive::{Encode, Decode};
 
-use substrate_client::{runtime_api as client_api, block_builder::api as block_builder_api,
-	decl_runtime_apis, impl_runtime_apis,
+use substrate_client::{
+	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
+	impl_runtime_apis,
 };
 use runtime_primitives::{
 	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType
-	}
+		GetNodeBlockType, GetRuntimeBlockType,
+	},
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
@@ -45,6 +43,7 @@ use primitives::{Ed25519AuthorityId, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
+use cfg_if::cfg_if;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -102,10 +101,10 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer(transfer, signature) => {
-				if ::runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+				if runtime_primitives::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
 					Ok(Extrinsic::Transfer(transfer, signature))
 				} else {
-					Err("bad signature")
+					Err(runtime_primitives::BAD_SIGNATURE)
 				}
 			},
 		}
@@ -164,14 +163,79 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
-decl_runtime_apis! {
-	pub trait TestAPI {
-		fn balance_of(id: AccountId) -> u64;
-		/// A benchmkark function that adds one to the given value and returns the result.
-		fn benchmark_add_one(val: &u64) -> u64;
-		/// A benchmark function that adds one to each value in the given vector and returns the
-		/// result.
-		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
+/// A type that can not be decoded.
+#[derive(PartialEq)]
+pub struct DecodeFails<B: BlockT> {
+	_phantom: PhantomData<B>,
+}
+
+impl<B: BlockT> Encode for DecodeFails<B> {
+	fn encode(&self) -> Vec<u8> {
+		Vec::new()
+	}
+}
+
+impl<B: BlockT> DecodeFails<B> {
+	/// Create a new instance.
+	pub fn new() -> DecodeFails<B> {
+		DecodeFails {
+			_phantom: Default::default(),
+		}
+	}
+}
+
+impl<B: BlockT> Decode for DecodeFails<B> {
+	fn decode<I: Input>(_: &mut I) -> Option<Self> {
+		// decoding always fails
+		None
+	}
+}
+
+cfg_if! {
+	if #[cfg(feature = "std")] {
+		decl_runtime_apis! {
+			#[api_version(2)]
+			pub trait TestAPI {
+				/// Return the balance of the given account id.
+				fn balance_of(id: AccountId) -> u64;
+				/// A benchmkark function that adds one to the given value and returns the result.
+				fn benchmark_add_one(val: &u64) -> u64;
+				/// A benchmark function that adds one to each value in the given vector and returns the
+				/// result.
+				fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
+				/// A function that always fails to convert a parameter between runtime and node.
+				fn fail_convert_parameter(param: DecodeFails<Block>);
+				/// A function that always fails to convert its return value between runtime and node.
+				fn fail_convert_return_value() -> DecodeFails<Block>;
+				/// A function for that the signature changed in version `2`.
+				#[changed_in(2)]
+				fn function_signature_changed() -> Vec<u64>;
+				/// The new signature.
+				fn function_signature_changed() -> u64;
+				fn fail_on_native() -> u64;
+				fn fail_on_wasm() -> u64;
+			}
+		}
+	} else {
+		decl_runtime_apis! {
+			pub trait TestAPI {
+				/// Return the balance of the given account id.
+				fn balance_of(id: AccountId) -> u64;
+				/// A benchmkark function that adds one to the given value and returns the result.
+				fn benchmark_add_one(val: &u64) -> u64;
+				/// A benchmark function that adds one to each value in the given vector and returns the
+				/// result.
+				fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64>;
+				/// A function that always fails to convert a parameter between runtime and node.
+				fn fail_convert_parameter(param: DecodeFails<Block>);
+				/// A function that always fails to convert its return value between runtime and node.
+				fn fail_convert_return_value() -> DecodeFails<Block>;
+				/// In wasm we just emulate the old behavior.
+				fn function_signature_changed() -> Vec<u64>;
+				fn fail_on_native() -> u64;
+				fn fail_on_wasm() -> u64;
+			}
+		}
 	}
 }
 
@@ -185,76 +249,192 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-impl_runtime_apis! {
-	impl client_api::Core<Block> for Runtime {
-		fn version() -> RuntimeVersion {
-			version()
-		}
+cfg_if! {
+	if #[cfg(feature = "std")] {
+		impl_runtime_apis! {
+			impl client_api::Core<Block> for Runtime {
+				fn version() -> RuntimeVersion {
+					version()
+				}
 
-		fn authorities() -> Vec<Ed25519AuthorityId> {
-			system::authorities()
-		}
+				fn authorities() -> Vec<Ed25519AuthorityId> {
+					system::authorities()
+				}
 
-		fn execute_block(block: Block) {
-			system::execute_block(block)
-		}
+				fn execute_block(block: Block) {
+					system::execute_block(block)
+				}
 
-		fn initialise_block(header: &<Block as BlockT>::Header) {
-			system::initialise_block(header)
-		}
-	}
+				fn initialise_block(header: &<Block as BlockT>::Header) {
+					system::initialise_block(header)
+				}
+			}
 
-	impl client_api::Metadata<Block> for Runtime {
-		fn metadata() -> OpaqueMetadata {
-			unimplemented!()
-		}
-	}
+			impl client_api::Metadata<Block> for Runtime {
+				fn metadata() -> OpaqueMetadata {
+					unimplemented!()
+				}
+			}
 
-	impl client_api::TaggedTransactionQueue<Block> for Runtime {
-		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-			system::validate_transaction(utx)
-		}
-	}
+			impl client_api::TaggedTransactionQueue<Block> for Runtime {
+				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					system::validate_transaction(utx)
+				}
+			}
 
-	impl block_builder_api::BlockBuilder<Block> for Runtime {
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
-			system::execute_transaction(extrinsic)
-		}
+			impl block_builder_api::BlockBuilder<Block> for Runtime {
+				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+					system::execute_transaction(extrinsic)
+				}
 
-		fn finalise_block() -> <Block as BlockT>::Header {
-			system::finalise_block()
-		}
+				fn finalise_block() -> <Block as BlockT>::Header {
+					system::finalise_block()
+				}
 
-		fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-			unimplemented!()
-		}
+				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+					vec![]
+				}
 
-		fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
-			CheckInherentsResult::new()
-		}
+				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
+					CheckInherentsResult::new()
+				}
 
-		fn random_seed() -> <Block as BlockT>::Hash {
-			unimplemented!()
-		}
-	}
+				fn random_seed() -> <Block as BlockT>::Hash {
+					unimplemented!()
+				}
+			}
 
-	impl self::TestAPI<Block> for Runtime {
-		fn balance_of(id: AccountId) -> u64 {
-			system::balance_of(id)
-		}
+			impl self::TestAPI<Block> for Runtime {
+				fn balance_of(id: AccountId) -> u64 {
+					system::balance_of(id)
+				}
 
-		fn benchmark_add_one(val: &u64) -> u64 {
-			val + 1
-		}
+				fn benchmark_add_one(val: &u64) -> u64 {
+					val + 1
+				}
 
-		fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64> {
-			let mut vec = vec.clone();
-			vec.iter_mut().for_each(|v| *v += 1);
-			vec
-		}
-	}
+				fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64> {
+					let mut vec = vec.clone();
+					vec.iter_mut().for_each(|v| *v += 1);
+					vec
+				}
 
-	impl consensus_aura::AuraApi<Block> for Runtime {
-		fn slot_duration() -> u64 { 1 }
+				fn fail_convert_parameter(_: DecodeFails<Block>) {}
+
+				fn fail_convert_return_value() -> DecodeFails<Block> {
+					DecodeFails::new()
+				}
+
+				fn function_signature_changed() -> u64 {
+					1
+				}
+
+				fn fail_on_native() -> u64 {
+					panic!("Failing because we are on native")
+				}
+				fn fail_on_wasm() -> u64 {
+					1
+				}
+			}
+
+			impl consensus_aura::AuraApi<Block> for Runtime {
+				fn slot_duration() -> u64 { 1 }
+			}
+		}
+	} else {
+		impl_runtime_apis! {
+			impl client_api::Core<Block> for Runtime {
+				fn version() -> RuntimeVersion {
+					version()
+				}
+
+				fn authorities() -> Vec<Ed25519AuthorityId> {
+					system::authorities()
+				}
+
+				fn execute_block(block: Block) {
+					system::execute_block(block)
+				}
+
+				fn initialise_block(header: &<Block as BlockT>::Header) {
+					system::initialise_block(header)
+				}
+			}
+
+			impl client_api::Metadata<Block> for Runtime {
+				fn metadata() -> OpaqueMetadata {
+					unimplemented!()
+				}
+			}
+
+			impl client_api::TaggedTransactionQueue<Block> for Runtime {
+				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+					system::validate_transaction(utx)
+				}
+			}
+
+			impl block_builder_api::BlockBuilder<Block> for Runtime {
+				fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+					system::execute_transaction(extrinsic)
+				}
+
+				fn finalise_block() -> <Block as BlockT>::Header {
+					system::finalise_block()
+				}
+
+				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+					vec![]
+				}
+
+				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
+					CheckInherentsResult::new()
+				}
+
+				fn random_seed() -> <Block as BlockT>::Hash {
+					unimplemented!()
+				}
+			}
+
+			impl self::TestAPI<Block> for Runtime {
+				fn balance_of(id: AccountId) -> u64 {
+					system::balance_of(id)
+				}
+
+				fn benchmark_add_one(val: &u64) -> u64 {
+					val + 1
+				}
+
+				fn benchmark_vector_add_one(vec: &Vec<u64>) -> Vec<u64> {
+					let mut vec = vec.clone();
+					vec.iter_mut().for_each(|v| *v += 1);
+					vec
+				}
+
+				fn fail_convert_parameter(_: DecodeFails<Block>) {}
+
+				fn fail_convert_return_value() -> DecodeFails<Block> {
+					DecodeFails::new()
+				}
+
+				fn function_signature_changed() -> Vec<u64> {
+					let mut vec = Vec::new();
+					vec.push(1);
+					vec.push(2);
+					vec
+				}
+
+				fn fail_on_native() -> u64 {
+					1
+				}
+
+				fn fail_on_wasm() -> u64 {
+					panic!("Failing because we are on wasm")
+				}
+			}
+
+			impl consensus_aura::AuraApi<Block> for Runtime {
+				fn slot_duration() -> u64 { 1 }
+			}
+		}
 	}
 }

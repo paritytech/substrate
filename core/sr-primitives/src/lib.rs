@@ -14,43 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
-//! and depositing logs.
+//! Runtime Modules shared primitive types.
 
 #![warn(missing_docs)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate num_traits;
-extern crate integer_sqrt;
-extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
 #[doc(hidden)]
-pub extern crate parity_codec as codec;
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate serde_json;
+pub use parity_codec as codec;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use serde_derive;
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
 use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
+use parity_codec_derive::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use substrate_primitives::hexdisplay::ascii_format;
@@ -62,6 +43,19 @@ pub mod traits;
 pub mod generic;
 pub mod transaction_validity;
 
+/// A message indicating an invalid signature in extrinsic.
+pub const BAD_SIGNATURE: &str = "bad signature in extrinsic";
+
+/// Full block error message.
+///
+/// This allows modules to indicate that given transaction is potentially valid
+/// in the future, but can't be executed in the current state.
+/// Note this error should be returned early in the execution to prevent DoS,
+/// cause the fees are not being paid if this error is returned.
+///
+/// Example: block gas limit is reached (the transaction can be retried in the next block though).
+pub const BLOCK_FULL: &str = "block size limit is reached";
+
 /// Justification type.
 pub type Justification = Vec<u8>;
 
@@ -70,6 +64,7 @@ use traits::{Verify, Lazy};
 /// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(feature = "std")]
 pub type RuntimeString = ::std::borrow::Cow<'static, str>;
+/// A String that is a `&'static str` on `no_std` and a `Cow<'static, str>` on `std`.
 #[cfg(not(feature = "std"))]
 pub type RuntimeString = &'static str;
 
@@ -79,6 +74,8 @@ pub type RuntimeString = &'static str;
 macro_rules! create_runtime_str {
 	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
 }
+
+/// Create a const [RuntimeString].
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! create_runtime_str {
@@ -87,14 +84,16 @@ macro_rules! create_runtime_str {
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
+#[cfg(feature = "std")]
+use serde_derive::{Serialize, Deserialize};
 
 /// A set of key value pairs for storage.
 #[cfg(feature = "std")]
-pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
+pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
 
 /// A set of key value pairs for children storage;
 #[cfg(feature = "std")]
-pub type ChildrenStorageMap = HashMap<Vec<u8>, StorageMap>;
+pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -104,16 +103,16 @@ pub trait BuildStorage {
 	/// Default to xx128 hashing.
 	fn hash(data: &[u8]) -> [u8; 16] {
 		let r = runtime_io::twox_128(data);
-		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
+		log::trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
 		r
 	}
 	/// Build the storage out of this builder.
-	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String>;
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String>;
 }
 
 #[cfg(feature = "std")]
-impl BuildStorage for StorageMap {
-	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String> {
+impl BuildStorage for StorageOverlay {
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
 	}
 }
@@ -267,6 +266,39 @@ impl From<H512> for Ed25519Signature {
 	}
 }
 
+/// Sr25519 signature verify.
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct Sr25519Signature(pub H512);
+
+impl Verify for Sr25519Signature {
+	type Signer = H256;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::sr25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
+	}
+}
+
+impl From<H512> for Sr25519Signature {
+	fn from(h: H512) -> Sr25519Signature {
+		Sr25519Signature(h)
+	}
+}
+
+/// Context for executing a call into the runtime.
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[repr(u8)]
+pub enum ExecutionContext {
+	/// Context for general importing (including own blocks).
+	Importing,
+	/// Context used when syncing the blockchain.
+	Syncing,
+	/// Context used for block construction.
+	BlockConstruction,
+	/// Context used for other calls.
+	Other,
+}
+
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
@@ -297,6 +329,8 @@ pub enum ApplyError {
 	Future = 2,
 	/// Sending account had too low a balance.
 	CantPay = 3,
+	/// Block is full, no more extrinsics can be applied.
+	FullBlock = 255,
 }
 
 impl codec::Encode for ApplyError {
@@ -332,6 +366,7 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 	)
 }
 
+/// Helper macro for `impl_outer_config`
 #[macro_export]
 macro_rules! __impl_outer_config_types {
 	(
@@ -339,7 +374,7 @@ macro_rules! __impl_outer_config_types {
 	) => {
 		#[cfg(any(feature = "std", test))]
 		pub type $config = $snake::GenesisConfig<$concrete>;
-		__impl_outer_config_types! {$concrete $($rest)*}
+		$crate::__impl_outer_config_types! {$concrete $($rest)*}
 	};
 	(
 		$concrete:ident $config:ident $snake:ident $( $rest:tt )*
@@ -364,7 +399,7 @@ macro_rules! impl_outer_config {
 			$( $config:ident => $snake:ident $( < $generic:ident > )*, )*
 		}
 	) => {
-		__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
+		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
 		#[cfg(any(feature = "std", test))]
 		#[derive(Serialize, Deserialize)]
 		#[serde(rename_all = "camelCase")]
@@ -376,9 +411,9 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
-			fn build_storage(self) -> ::std::result::Result<($crate::StorageMap, $crate::ChildrenStorageMap), String> {
-				let mut top = $crate::StorageMap::new();
-				let mut children = $crate::ChildrenStorageMap::new();
+			fn build_storage(self) -> ::std::result::Result<($crate::StorageOverlay, $crate::ChildrenStorageOverlay), String> {
+				let mut top = $crate::StorageOverlay::new();
+				let mut children = $crate::ChildrenStorageOverlay::new();
 				$(
 					if let Some(extra) = self.$snake {
 						let (other_top, other_children) = extra.build_storage()?;
@@ -420,7 +455,7 @@ macro_rules! impl_outer_log {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
 		/// `Encode`/`Decode` implementations with the corresponding `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub struct $name($internal);
@@ -428,7 +463,7 @@ macro_rules! impl_outer_log {
 		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
 		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+		#[cfg_attr(feature = "std", derive(Debug, $crate::serde_derive::Serialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
@@ -537,7 +572,7 @@ pub struct OpaqueExtrinsic(pub Vec<u8>);
 #[cfg(feature = "std")]
 impl ::serde::Serialize for OpaqueExtrinsic {
 	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		::codec::Encode::using_encoded(&self.0, |bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
+		codec::Encode::using_encoded(&self.0, |bytes| ::substrate_primitives::bytes::serialize(bytes, seq))
 	}
 }
 
@@ -550,8 +585,9 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;
-	use codec::{Encode as EncodeHidden, Decode as DecodeHidden};
-	use traits::DigestItem;
+	use crate::codec::{Encode as EncodeHidden, Decode as DecodeHidden};
+	use parity_codec_derive::{Encode, Decode};
+	use crate::traits::DigestItem;
 
 	pub trait RuntimeT {
 		type AuthorityId;
@@ -565,6 +601,8 @@ mod tests {
 
 	mod a {
 		use super::RuntimeT;
+		use parity_codec_derive::{Encode, Decode};
+		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -573,6 +611,8 @@ mod tests {
 
 	mod b {
 		use super::RuntimeT;
+		use parity_codec_derive::{Encode, Decode};
+		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
 		#[derive(Serialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
@@ -630,24 +670,24 @@ mod tests {
 	fn compact_permill_perbill_encoding() {
 		let tests = [(0u32, 1usize), (63, 1), (64, 2), (16383, 2), (16384, 4), (1073741823, 4), (1073741824, 5), (u32::max_value(), 5)];
 		for &(n, l) in &tests {
-			let compact: codec::Compact<super::Permill> = super::Permill(n).into();
+			let compact: crate::codec::Compact<super::Permill> = super::Permill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
+			let decoded = <crate::codec::Compact<super::Permill>>::decode(&mut & encoded[..]).unwrap();
 			let permill: super::Permill = decoded.into();
 			assert_eq!(permill, super::Permill(n));
 
-			let compact: codec::Compact<super::Perbill> = super::Perbill(n).into();
+			let compact: crate::codec::Compact<super::Perbill> = super::Perbill(n).into();
 			let encoded = compact.encode();
 			assert_eq!(encoded.len(), l);
-			let decoded = <codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
+			let decoded = <crate::codec::Compact<super::Perbill>>::decode(&mut & encoded[..]).unwrap();
 			let perbill: super::Perbill = decoded.into();
 			assert_eq!(perbill, super::Perbill(n));
 		}
 	}
 
 	#[derive(Encode, Decode, PartialEq, Eq, Debug)]
-	struct WithCompact<T: codec::HasCompact> {
+	struct WithCompact<T: crate::codec::HasCompact> {
 		data: T,
 	}
 

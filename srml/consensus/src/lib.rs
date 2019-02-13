@@ -18,30 +18,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-extern crate parity_codec;
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate sr_primitives as primitives;
-extern crate parity_codec as codec;
-extern crate srml_system as system;
-extern crate substrate_primitives;
-
-#[cfg(test)]
-extern crate sr_io as runtime_io;
-
-extern crate substrate_inherents as inherents;
-
+#[cfg(feature = "std")]
+use serde_derive::Serialize;
 use rstd::prelude::*;
-use parity_codec::Encode;
-use runtime_support::{storage, Parameter};
-use runtime_support::storage::StorageValue;
-use runtime_support::storage::unhashed::StorageVec;
+use parity_codec as codec;
+use codec::Encode;
+use parity_codec_derive::{Encode, Decode};
+use srml_support::{storage, Parameter, decl_storage, decl_module};
+use srml_support::storage::StorageValue;
+use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, Member};
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
@@ -183,7 +168,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			use codec::{Encode, KeyedVec};
 
 			let auth_count = config.authorities.len() as u32;

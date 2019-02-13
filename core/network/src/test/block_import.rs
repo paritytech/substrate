@@ -129,8 +129,9 @@ fn process_import_result_works() {
 
 	let link = TestLink::new();
 	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteHeader(Some(0)))), 0);
-	assert_eq!(link.total(), 1);
+	assert_eq!(link.total(), 2);
 	assert_eq!(link.disconnects.get(), 1);
+	assert_eq!(link.restarts.get(), 1);
 
 	let link = TestLink::new();
 	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::UnknownParent)), 0);
@@ -141,6 +142,12 @@ fn process_import_result_works() {
 	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::Error)), 0);
 	assert_eq!(link.total(), 1);
 	assert_eq!(link.restarts.get(), 1);
+
+	let link = TestLink::new();
+	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::VerificationFailed(Some(0), String::new()))), 0);
+	assert_eq!(link.total(), 2);
+	assert_eq!(link.restarts.get(), 1);
+	assert_eq!(link.disconnects.get(), 1);
 }
 
 #[test]

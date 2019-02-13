@@ -22,20 +22,22 @@ use std::{
 	sync::Arc,
 };
 
+use error_chain::bail;
+use log::{warn, trace};
 use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
-use jsonrpc_macros::Trailing;
-use jsonrpc_macros::pubsub;
-use jsonrpc_pubsub::SubscriptionId;
+use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use primitives::{H256, Blake2Hasher, Bytes};
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{self, StorageKey, StorageData, StorageChangeSet};
-use rpc::Result as RpcResult;
-use rpc::futures::{stream, Future, Sink, Stream};
+use crate::rpc::Result as RpcResult;
+use crate::rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi, As, NumberFor};
 use runtime_version::RuntimeVersion;
+use state_machine::ExecutionStrategy;
 
-use subscriptions::Subscriptions;
+use crate::subscriptions::Subscriptions;
 
 mod error;
 #[cfg(test)]
@@ -43,66 +45,72 @@ mod tests;
 
 use self::error::Result;
 
-build_rpc_trait! {
-	/// Substrate state API
-	pub trait StateApi<Hash> {
-		type Metadata;
+/// Substrate state API
+#[rpc]
+pub trait StateApi<Hash> {
+	/// RPC Metadata
+	type Metadata;
 
-		/// Call a contract at a block's state.
-		#[rpc(name = "state_call", alias = ["state_callAt", ])]
-		fn call(&self, String, Bytes, Trailing<Hash>) -> Result<Bytes>;
+	/// Call a contract at a block's state.
+	#[rpc(name = "state_call", alias("state_callAt"))]
+	fn call(&self, name: String, bytes: Bytes, hash: Option<Hash>) -> Result<Bytes>;
 
-		/// Returns the keys with prefix, leave empty to get all the keys
-		#[rpc(name = "state_getKeys")]
-		fn storage_keys(&self, StorageKey, Trailing<Hash>) -> Result<Vec<StorageKey>>;
+	/// Returns the keys with prefix, leave empty to get all the keys
+	#[rpc(name = "state_getKeys")]
+	fn storage_keys(&self, key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>>;
 
-		/// Returns a storage entry at a specific block's state.
-		#[rpc(name = "state_getStorage", alias = ["state_getStorageAt", ])]
-		fn storage(&self, StorageKey, Trailing<Hash>) -> Result<Option<StorageData>>;
+	/// Returns a storage entry at a specific block's state.
+	#[rpc(name = "state_getStorage", alias("state_getStorageAt"))]
+	fn storage(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<StorageData>>;
 
-		/// Returns the hash of a storage entry at a block's state.
-		#[rpc(name = "state_getStorageHash", alias = ["state_getStorageHashAt", ])]
-		fn storage_hash(&self, StorageKey, Trailing<Hash>) -> Result<Option<Hash>>;
+	/// Returns the hash of a storage entry at a block's state.
+	#[rpc(name = "state_getStorageHash", alias("state_getStorageHashAt"))]
+	fn storage_hash(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<Hash>>;
 
-		/// Returns the size of a storage entry at a block's state.
-		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
-		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
+	/// Returns the size of a storage entry at a block's state.
+	#[rpc(name = "state_getStorageSize", alias("state_getStorageSizeAt"))]
+	fn storage_size(&self, key: StorageKey, hash: Option<Hash>) -> Result<Option<u64>>;
 
-		/// Returns the runtime metadata as an opaque blob.
-		#[rpc(name = "state_getMetadata")]
-		fn metadata(&self, Trailing<Hash>) -> Result<Bytes>;
+	/// Returns the runtime metadata as an opaque blob.
+	#[rpc(name = "state_getMetadata")]
+	fn metadata(&self, hash: Option<Hash>) -> Result<Bytes>;
 
-		/// Get the runtime version.
-		#[rpc(name = "state_getRuntimeVersion", alias = ["chain_getRuntimeVersion", ])]
-		fn runtime_version(&self, Trailing<Hash>) -> Result<RuntimeVersion>;
+	/// Get the runtime version.
+	#[rpc(name = "state_getRuntimeVersion", alias("chain_getRuntimeVersion"))]
+	fn runtime_version(&self, hash: Option<Hash>) -> Result<RuntimeVersion>;
 
-		/// Query historical storage entries (by key) starting from a block given as the second parameter.
-		///
-		/// NOTE This first returned result contains the initial state of storage for all keys.
-		/// Subsequent values in the vector represent changes to the previous state (diffs).
-		#[rpc(name = "state_queryStorage")]
-		fn query_storage(&self, Vec<StorageKey>, Hash, Trailing<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
+	/// Query historical storage entries (by key) starting from a block given as the second parameter.
+	///
+	/// NOTE This first returned result contains the initial state of storage for all keys.
+	/// Subsequent values in the vector represent changes to the previous state (diffs).
+	#[rpc(name = "state_queryStorage")]
+	fn query_storage(&self, keys: Vec<StorageKey>, block: Hash, hash: Option<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
 
-		#[pubsub(name = "state_runtimeVersion")] {
-			/// New runtime version subscription
-			#[rpc(name = "state_subscribeRuntimeVersion", alias = ["chain_subscribeRuntimeVersion", ])]
-			fn subscribe_runtime_version(&self, Self::Metadata, pubsub::Subscriber<RuntimeVersion>);
+	/// New runtime version subscription
+	#[pubsub(
+		subscription = "state_runtimeVersion",
+		subscribe,
+		name = "state_subscribeRuntimeVersion",
+		alias("chain_subscribeRuntimeVersion")
+	)]
+	fn subscribe_runtime_version(&self, metadata: Self::Metadata, subscriber: Subscriber<RuntimeVersion>);
 
-			/// Unsubscribe from runtime version subscription
-			#[rpc(name = "state_unsubscribeRuntimeVersion", alias = ["chain_unsubscribeRuntimeVersion", ])]
-			fn unsubscribe_runtime_version(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
-		}
+	/// Unsubscribe from runtime version subscription
+	#[pubsub(
+		subscription = "state_runtimeVersion",
+		unsubscribe,
+		name = "state_unsubscribeRuntimeVersion",
+		alias("chain_unsubscribeRuntimeVersion")
+	)]
+	fn unsubscribe_runtime_version(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 
-		#[pubsub(name = "state_storage")] {
-			/// New storage subscription
-			#[rpc(name = "state_subscribeStorage")]
-			fn subscribe_storage(&self, Self::Metadata, pubsub::Subscriber<StorageChangeSet<Hash>>, Trailing<Vec<StorageKey>>);
+	/// New storage subscription
+	#[pubsub(subscription = "state_storage", subscribe, name = "state_subscribeStorage")]
+	fn subscribe_storage(&self, metadata: Self::Metadata, subscriber: Subscriber<StorageChangeSet<Hash>>, keys: Option<Vec<StorageKey>>);
 
-			/// Unsubscribe from storage subscription
-			#[rpc(name = "state_unsubscribeStorage")]
-			fn unsubscribe_storage(&self, Option<Self::Metadata>, SubscriptionId) -> RpcResult<bool>;
-		}
-	}
+	/// Unsubscribe from storage subscription
+	#[pubsub(subscription = "state_storage", unsubscribe, name = "state_unsubscribeStorage")]
+	fn unsubscribe_storage(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool>;
 }
 
 /// State API with subscriptions support.
@@ -146,7 +154,7 @@ impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> where
 	fn split_query_storage_range(
 		&self,
 		from: Block::Hash,
-		to: Trailing<Block::Hash>
+		to: Option<Block::Hash>
 	) -> Result<QueryStorageRange<Block>> {
 		let to = self.unwrap_or_best(to)?;
 		let from_hdr = self.client.header(&BlockId::hash(from))?;
@@ -268,8 +276,8 @@ impl<B, E, Block, RA> State<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 {
-	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
-		::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
+	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Result<Block::Hash> {
+		crate::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
 	}
 }
 
@@ -281,42 +289,42 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	Client<B, E, Block, RA>: ProvideRuntimeApi,
 	<Client<B, E, Block, RA> as ProvideRuntimeApi>::Api: Metadata<Block>
 {
-	type Metadata = ::metadata::Metadata;
+	type Metadata = crate::metadata::Metadata;
 
-	fn call(&self, method: String, data: Bytes, block: Trailing<Block::Hash>) -> Result<Bytes> {
+	fn call(&self, method: String, data: Bytes, block: Option<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;
 		trace!(target: "rpc", "Calling runtime at {:?} for method {} ({})", block, method, HexDisplay::from(&data.0));
 		let return_data = self.client
 			.executor()
 			.call(
 				&BlockId::Hash(block),
-				&method, &data.0
+				&method, &data.0, ExecutionStrategy::NativeElseWasm
 			)?;
 		Ok(Bytes(return_data))
 	}
 
-	fn storage_keys(&self, key_prefix: StorageKey, block: Trailing<Block::Hash>) -> Result<Vec<StorageKey>> {
+	fn storage_keys(&self, key_prefix: StorageKey, block: Option<Block::Hash>) -> Result<Vec<StorageKey>> {
 		let block = self.unwrap_or_best(block)?;
 		trace!(target: "rpc", "Querying storage keys at {:?}", block);
 		Ok(self.client.storage_keys(&BlockId::Hash(block), &key_prefix)?)
 	}
 
-	fn storage(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<StorageData>> {
+	fn storage(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<StorageData>> {
 		let block = self.unwrap_or_best(block)?;
 		trace!(target: "rpc", "Querying storage at {:?} for key {}", block, HexDisplay::from(&key.0));
 		Ok(self.client.storage(&BlockId::Hash(block), &key)?)
 	}
 
-	fn storage_hash(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<Block::Hash>> {
+	fn storage_hash(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<Block::Hash>> {
 		use runtime_primitives::traits::{Hash, Header as HeaderT};
 		Ok(self.storage(key, block)?.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0)))
 	}
 
-	fn storage_size(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<u64>> {
+	fn storage_size(&self, key: StorageKey, block: Option<Block::Hash>) -> Result<Option<u64>> {
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
+	fn metadata(&self, block: Option<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;
 		self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Into::into).map_err(Into::into)
 	}
@@ -325,7 +333,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		&self,
 		keys: Vec<StorageKey>,
 		from: Block::Hash,
-		to: Trailing<Block::Hash>
+		to: Option<Block::Hash>
 	) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
 		let range = self.split_query_storage_range(from, to)?;
 		let mut changes = Vec::new();
@@ -337,8 +345,8 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	fn subscribe_storage(
 		&self,
 		_meta: Self::Metadata,
-		subscriber: pubsub::Subscriber<StorageChangeSet<Block::Hash>>,
-		keys: Trailing<Vec<StorageKey>>
+		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
+		keys: Option<Vec<StorageKey>>
 	) {
 		let keys = Into::<Option<Vec<_>>>::into(keys);
 		let stream = match self.client.storage_changes_notification_stream(keys.as_ref().map(|x| &**x)) {
@@ -383,12 +391,12 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 		Ok(self.subscriptions.cancel(id))
 	}
 
-	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
+	fn runtime_version(&self, at: Option<Block::Hash>) -> Result<RuntimeVersion> {
 		let at = self.unwrap_or_best(at)?;
 		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
 	}
 
-	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<RuntimeVersion>) {
+	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: Subscriber<RuntimeVersion>) {
 		let stream = match self.client.storage_changes_notification_stream(Some(&[StorageKey(storage::well_known_keys::CODE.to_vec())])) {
 			Ok(stream) => stream,
 			Err(err) => {

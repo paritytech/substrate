@@ -16,18 +16,19 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use protocol::Context;
+use log::{trace, debug};
+use crate::protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
-use blocks::BlockCollection;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
+use crate::blocks::BlockCollection;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
 use runtime_primitives::generic::BlockId;
-use extra_requests::ExtraRequestsAggregator;
-use message::{self, generic::Message as GenericMessage};
-use config::Roles;
+use crate::message::{self, generic::Message as GenericMessage};
+use crate::config::Roles;
+use crate::extra_requests::ExtraRequestsAggregator;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -87,6 +88,8 @@ pub struct Status<B: BlockT> {
 	pub state: SyncState,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
+	/// Number of peers participating in syncing.
+	pub num_peers: u32,
 }
 
 impl<B: BlockT> Status<B> {
@@ -97,6 +100,11 @@ impl<B: BlockT> Status<B> {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		}
+	}
+
+	/// Are we all alone?
+	pub fn is_offline(&self) -> bool {
+		self.num_peers == 0
 	}
 }
 
@@ -139,6 +147,7 @@ impl<B: BlockT> ChainSync<B> {
 		Status {
 			state: state,
 			best_seen_block: best_seen,
+			num_peers: self.peers.len() as u32,
 		}
 	}
 
@@ -148,13 +157,16 @@ impl<B: BlockT> ChainSync<B> {
 			match (block_status(&*protocol.client(), &*self.import_queue, info.best_hash), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
-					protocol.report_peer(who, Severity::Useless(&format!("Error legimimately reading blockchain status: {:?}", e)));
+					let reason = format!("Error legimimately reading blockchain status: {:?}", e);
+					protocol.report_peer(who, Severity::Useless(reason));
 				},
 				(Ok(BlockStatus::KnownBad), _) => {
-					protocol.report_peer(who, Severity::Bad(&format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number)));
+					let reason = format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who, Severity::Bad(reason));
 				},
-				(Ok(BlockStatus::Unknown), b) if b.is_zero() => {
-					protocol.report_peer(who, Severity::Bad(&format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number)));
+				(Ok(BlockStatus::Unknown), b) if b == As::sa(0) => {
+					let reason = format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who, Severity::Bad(reason));
 				},
 				(Ok(BlockStatus::Unknown), _) if self.import_queue.status().importing_count > MAJOR_SYNC_BLOCKS => {
 					// when actively syncing the common point moves too fast.
@@ -273,18 +285,19 @@ impl<B: BlockT> ChainSync<B> {
 								},
 								Ok(_) => { // genesis mismatch
 									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
-									protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer"));
+									protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
 									return None;
 								},
 								Err(e) => {
-									protocol.report_peer(who, Severity::Useless(&format!("Error answering legitimate blockchain query: {:?}", e)));
+									let reason = format!("Error answering legitimate blockchain query: {:?}", e);
+									protocol.report_peer(who, Severity::Useless(reason));
 									return None;
 								}
 							}
 						},
 						None => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
-							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor"));
+							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
 							return None;
 						}
 					}
@@ -333,7 +346,7 @@ impl<B: BlockT> ChainSync<B> {
 								response.hash,
 							);
 
-							protocol.report_peer(who, Severity::Bad(&msg));
+							protocol.report_peer(who, Severity::Bad(msg));
 							return;
 						}
 
@@ -345,12 +358,12 @@ impl<B: BlockT> ChainSync<B> {
 						);
 					},
 					None => {
-						let msg = format!(
-							"Provided empty response for justification request {:?}",
+						// we might have asked the peer for a justification on a block that we thought it had
+						// (regardless of whether it had a justification for it or not).
+						trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}",
+							who,
 							hash,
 						);
-
-						protocol.report_peer(who, Severity::Useless(&msg));
 						return;
 					},
 				}
@@ -378,7 +391,7 @@ impl<B: BlockT> ChainSync<B> {
 						response.block,
 					);
 
-					protocol.report_peer(who, Severity::Bad(&msg));
+					protocol.report_peer(who, Severity::Bad(msg));
 					return;
 				}
 
@@ -642,7 +655,7 @@ impl<B: BlockT> ChainSync<B> {
 
 /// Get block status, taking into account import queue.
 fn block_status<B: BlockT>(
-	chain: &::chain::Client<B>,
+	chain: &crate::chain::Client<B>,
 	queue: &ImportQueue<B>,
 	hash: B::Hash) -> Result<BlockStatus, ClientError>
 {

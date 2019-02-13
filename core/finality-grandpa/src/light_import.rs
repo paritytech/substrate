@@ -39,7 +39,10 @@ use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
-use {load_consensus_changes, canonical_at_height, ConsensusChanges, GrandpaJustification};
+use crate::consensus_changes::ConsensusChanges;
+use crate::environment::canonical_at_height;
+use crate::justification::GrandpaJustification;
+use crate::load_consensus_changes;
 
 /// LightAuthoritySet is saved under this key in aux storage.
 const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
@@ -128,10 +131,20 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 {
 	type Error = ConsensusError;
 
-	fn import_block(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
-		-> Result<ImportResult, Self::Error>
-	{
+	fn import_block(
+		&self,
+		block: ImportBlock<Block>,
+		new_authorities: Option<Vec<Ed25519AuthorityId>>,
+	) -> Result<ImportResult, Self::Error> {
 		do_import_block(&*self.client, &mut *self.data.write(), block, new_authorities)
+	}
+
+	fn check_block(
+		&self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		self.client.check_block(hash, parent_hash)
 	}
 }
 

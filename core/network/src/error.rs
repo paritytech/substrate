@@ -20,6 +20,7 @@
 // https://github.com/paritytech/substrate/issues/1547
 #![allow(deprecated)]
 
+use error_chain::*;
 use std::io::Error as IoError;
 use network_libp2p::Error as NetworkError;
 use client;

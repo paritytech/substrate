@@ -19,32 +19,21 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate substrate_primitives;
-
-#[cfg_attr(any(feature = "std", test), macro_use)]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate srml_support as runtime_support;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate parity_codec as codec;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as primitives;
-extern crate safe_mix;
-
+#[cfg(feature = "std")]
+use serde_derive::Serialize;
 use rstd::prelude::*;
+#[cfg(any(feature = "std", test))]
+use rstd::map;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
 use substrate_primitives::storage::well_known_keys;
-use runtime_support::{storage, StorageValue, StorageMap, Parameter};
+use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use safe_mix::TripletMix;
+use parity_codec_derive::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
-use codec::Encode;
+use parity_codec::Encode;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
@@ -75,8 +64,8 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
+pub fn extrinsics_root<H: Hash, E: parity_codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(parity_codec::Encode::encode).collect())
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
@@ -210,6 +199,7 @@ decl_storage! {
 		pub AccountNonce get(account_nonce): map T::AccountId => T::Index;
 
 		ExtrinsicCount: Option<u32>;
+		AllExtrinsicsLen: Option<u32>;
 		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), [69u8; 32])]): map T::BlockNumber => T::Hash;
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
 		RandomSeed get(random_seed) build(|_| [0u8; 32]): T::Hash;
@@ -224,8 +214,8 @@ decl_storage! {
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 
-		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
-			use codec::Encode;
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
@@ -283,6 +273,11 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
+	/// Gets a total length of all executed extrinsics.
+	pub fn all_extrinsics_len() -> u32 {
+		<AllExtrinsicsLen<T>>::get().unwrap_or_default()
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
@@ -299,6 +294,7 @@ impl<T: Trait> Module<T> {
 	pub fn finalise() -> T::Header {
 		<RandomSeed<T>>::kill();
 		<ExtrinsicCount<T>>::kill();
+		<AllExtrinsicsLen<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -385,19 +381,25 @@ impl<T: Trait> Module<T> {
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
+	///
+	/// NOTE this function is called only when the block is being constructed locally.
+	/// `execute_block` doesn't note any extrinsics.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
 		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>) {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
+		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
+
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
+		<AllExtrinsicsLen<T>>::put(&total_length);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -453,6 +455,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
+	use srml_support::impl_outer_origin;
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
@@ -500,8 +503,8 @@ mod tests {
 
 			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()));
-			System::note_applied_extrinsic(&Err(""));
+			System::note_applied_extrinsic(&Ok(()), 0);
+			System::note_applied_extrinsic(&Err(""), 0);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalise();

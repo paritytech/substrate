@@ -19,6 +19,7 @@ use super::*;
 use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
 use network::config::Roles;
 use test_client::runtime::Block;
+use assert_matches::assert_matches;
 
 #[derive(Default)]
 struct Status {
@@ -33,6 +34,7 @@ impl network::SyncProvider<Block> for Status {
 			sync: SyncStatus {
 				state: if self.is_syncing { SyncState::Downloading } else { SyncState::Idle },
 				best_seen_block: None,
+				num_peers: self.peers as u32,
 			},
 			num_peers: self.peers,
 			num_active_peers: 0,

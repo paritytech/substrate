@@ -24,8 +24,8 @@ mod traits;
 mod params;
 pub mod error;
 pub mod informant;
-mod panic_hook;
 
+use client::ExecutionStrategies;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -49,7 +49,7 @@ use structopt::{StructOpt, clap::AppSettings};
 pub use structopt::clap::App;
 use params::{
 	RunCmd, PurgeChainCmd, RevertCmd, ImportBlocksCmd, ExportBlocksCmd, BuildSpecCmd,
-	NetworkConfigurationParams, SharedParams, MergeParameters
+	NetworkConfigurationParams, SharedParams, MergeParameters, TransactionPoolParams,
 };
 pub use params::{NoCustom, CoreParams};
 pub use traits::{GetLogFilter, AugmentClap};
@@ -76,6 +76,8 @@ pub struct VersionInfo {
 	pub description: &'static str,
 	/// Executable file author.
 	pub author: &'static str,
+	/// Support URL.
+	pub support_url: &'static str,
 }
 
 /// Something that can be converted into an exit signal.
@@ -102,7 +104,7 @@ fn generate_node_name() -> String {
 			break node_name
 		}
 	};
-	
+
 	result
 }
 
@@ -189,7 +191,7 @@ where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
-	panic_hook::set();
+	panic_handler::set(version.support_url);
 
 	let full_version = service::config::full_version_from_strs(
 		version.version,
@@ -234,6 +236,23 @@ fn parse_node_key(key: Option<String>) -> error::Result<Option<Secret>> {
 		Some(Err(err)) => Err(create_input_err(format!("Error parsing node key: {}", err))),
 		None => Ok(None),
 	}
+}
+
+/// Fill the given `PoolConfiguration` by looking at the cli parameters.
+fn fill_transaction_pool_configuration<F: ServiceFactory>(
+	options: &mut FactoryFullConfiguration<F>,
+	params: TransactionPoolParams,
+) -> error::Result<()> {
+	// ready queue
+	options.transaction_pool.ready.count = params.pool_limit;
+	options.transaction_pool.ready.total_bytes = params.pool_kbytes * 1024;
+
+	// future queue
+	let factor = 10;
+	options.transaction_pool.future.count = params.pool_limit / factor;
+	options.transaction_pool.future.total_bytes = params.pool_kbytes * 1024 / factor;
+
+	Ok(())
 }
 
 /// Fill the given `NetworkConfiguration` by looking at the cli parameters.
@@ -333,17 +352,19 @@ where
 
 	let role =
 		if cli.light {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
 		} else if cli.validator || cli.shared_params.dev {
-			config.block_execution_strategy = service::ExecutionStrategy::Both;
 			service::Roles::AUTHORITY
 		} else {
-			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::FULL
 		};
 
-	config.block_execution_strategy = cli.execution.into();
+	config.execution_strategies = ExecutionStrategies {
+		syncing: cli.syncing_execution.into(),
+		importing: cli.importing_execution.into(),
+		block_construction: cli.block_construction_execution.into(),
+		other: cli.other_execution.into(),
+	}; 
 
 	config.roles = role;
 	let client_id = config.client_id();
@@ -353,6 +374,11 @@ where
 		spec.id(),
 		&mut config.network,
 		client_id,
+	)?;
+
+	fill_transaction_pool_configuration::<F>(
+		&mut config,
+		cli.pool_config,
 	)?;
 
 	if let Some(key) = cli.key {
@@ -513,10 +539,7 @@ where
 	E: IntoExit,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
-	let mut config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
-
-	config.block_execution_strategy = cli.execution.into();
-	config.api_execution_strategy = cli.api_execution.into();
+	let config = create_config_with_db_path::<F, _>(spec_factory, &cli.shared_params, version)?;
 
 	let file: Box<Read> = match cli.input {
 		Some(filename) => Box::new(File::open(filename)?),

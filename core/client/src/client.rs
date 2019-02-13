@@ -16,7 +16,7 @@
 
 //! Substrate Client
 
-use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe};
+use std::{marker::PhantomData, collections::{HashSet, BTreeMap}, sync::Arc, panic::UnwindSafe, result};
 use crate::error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -33,12 +33,12 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
-use runtime_primitives::BuildStorage;
+use runtime_primitives::{BuildStorage, ExecutionContext};
 use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::{Encode, Decode, KeyedVec};
+use parity_codec::{Encode, Decode, KeyedVec};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
@@ -63,7 +63,6 @@ use crate::genesis;
 use consensus;
 use substrate_telemetry::telemetry;
 
-use slog::slog_info;
 use log::{info, trace, warn};
 use error_chain::bail;
 
@@ -76,6 +75,30 @@ pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotifica
 type StorageUpdate<B, Block> = <<<B as backend::Backend<Block, Blake2Hasher>>::BlockImportOperation as BlockImportOperation<Block, Blake2Hasher>>::State as state_machine::Backend<Blake2Hasher>>::Transaction;
 type ChangesUpdate = trie::MemoryDB<Blake2Hasher>;
 
+/// Execution strategies settings.
+#[derive(Debug, Clone)]
+pub struct ExecutionStrategies {
+	/// Execution strategy used when syncing.
+	pub syncing: ExecutionStrategy,
+	/// Execution strategy used when importing blocks.
+	pub importing: ExecutionStrategy,
+	/// Execution strategy used when constructing blocks.
+	pub block_construction: ExecutionStrategy,
+	/// Execution strategy used in other cases.
+	pub other: ExecutionStrategy,
+}
+
+impl Default for ExecutionStrategies {
+	fn default() -> ExecutionStrategies {
+		ExecutionStrategies {
+			syncing: ExecutionStrategy::NativeElseWasm,
+			importing: ExecutionStrategy::NativeElseWasm,
+			block_construction: ExecutionStrategy::AlwaysWasm,
+			other: ExecutionStrategy::NativeElseWasm,
+		}
+	}
+}
+
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
@@ -86,8 +109,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	import_lock: Mutex<()>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
-	block_execution_strategy: ExecutionStrategy,
-	api_execution_strategy: ExecutionStrategy,
+	execution_strategies: ExecutionStrategies,
 	_phantom: PhantomData<RA>,
 }
 
@@ -237,7 +259,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, call_executor, build_genesis_storage, Default::default())
 }
 
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
@@ -250,8 +272,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
-		block_execution_strategy: ExecutionStrategy,
-		api_execution_strategy: ExecutionStrategy,
+		execution_strategies: ExecutionStrategies
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
@@ -293,10 +314,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			finality_notification_sinks: Default::default(),
 			import_lock: Default::default(),
 			importing_block: Default::default(),
-			block_execution_strategy,
-			api_execution_strategy,
+			execution_strategies,
 			_phantom: Default::default(),
 		})
+	}
+
+	/// Get a reference to the execution strategies.
+	pub fn execution_strategies(&self) -> &ExecutionStrategies {
+		&self.execution_strategies
 	}
 
 	/// Get a reference to the state at a given block.
@@ -332,7 +357,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityIdFor<Block>>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "Core_authorities", &[])
+			None => self.executor.call(id, "Core_authorities", &[], ExecutionStrategy::NativeElseWasm)
 				.and_then(|r| Vec::<AuthorityIdFor<Block>>::decode(&mut &r[..])
 					.ok_or_else(|| error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
@@ -641,6 +666,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		result
 	}
 
+	/// Set a block as best block.
+	pub fn set_head(
+		&self,
+		id: BlockId<Block>
+	) -> error::Result<()> {
+		self.lock_import_and_run(|operation| {
+			self.apply_head(operation, id)
+		})
+	}
+
+	/// Set a block as best block, and apply it to an operation.
+	pub fn apply_head(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+	) -> error::Result<()> {
+		operation.op.mark_head(id)
+	}
+
 	/// Apply a checked and validated block to an operation. If a justification is provided
 	/// then `finalized` *must* be true.
 	pub fn apply_block(
@@ -820,16 +864,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> NeverNativeValue>(
-					transaction_state,
-					&mut overlay,
-					"Core_execute_block",
-					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
-					match (origin, self.block_execution_strategy) {
-						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
-							ExecutionManager::NativeWhenPossible,
-						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
-						_ => ExecutionManager::Both(|wasm_result, native_result| {
+				let get_execution_manager = |execution_strategy: ExecutionStrategy| {
+					match execution_strategy {
+						ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
+						ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+						ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+						ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
 							let header = import_headers.post();
 							warn!("Consensus error between wasm and native block execution at block {}", hash);
 							warn!("   Header {:?}", header);
@@ -842,6 +882,16 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							);
 							wasm_result
 						}),
+					}
+				};
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
+					transaction_state,
+					&mut overlay,
+					"Core_execute_block",
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.unwrap_or_default()).encode(),
+					match origin {
+						BlockOrigin::NetworkInitialSync => get_execution_manager(self.execution_strategies().syncing),
+						_ => get_execution_manager(self.execution_strategies().importing),
 					},
 					None,
 				)?;
@@ -1260,7 +1310,9 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>
 {
-	fn call_api_at<R: Encode + Decode + PartialEq, NC: FnOnce() -> R + UnwindSafe>(
+	fn call_api_at<
+		R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+	>(
 		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
@@ -1268,27 +1320,22 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
+		context: ExecutionContext
 	) -> error::Result<NativeOrEncoded<R>> {
-		let execution_manager = match self.api_execution_strategy {
-			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-				warn!("   Function {:?}", function);
-				warn!("   Native result {:?}", native_result);
-				warn!("   Wasm result {:?}", wasm_result);
-				wasm_result
-			}),
+		let manager = match context {
+			ExecutionContext::BlockConstruction => self.execution_strategies.block_construction.get_manager(),
+			ExecutionContext::Syncing => self.execution_strategies.syncing.get_manager(),
+			ExecutionContext::Importing => self.execution_strategies.importing.get_manager(),
+			ExecutionContext::Other => self.execution_strategies.other.get_manager(),
 		};
-
-		self.executor.contextual_call(
+		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
 			at,
 			function,
 			&args,
 			changes,
 			initialised_block,
 			|| self.prepare_environment_block(at),
-			execution_manager,
+			manager,
 			native_call,
 		)
 	}
@@ -1315,6 +1362,27 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 		self.lock_import_and_run(|operation| {
 			self.apply_block(operation, import_block, new_authorities)
 		}).map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()).into())
+	}
+
+	/// Check block preconditions.
+	fn check_block(
+		&self,
+		hash: Block::Hash,
+		parent_hash: Block::Hash,
+	) -> Result<ImportResult, Self::Error> {
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+		match self.backend.blockchain().status(BlockId::Hash(hash))
+			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
+		{
+			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
+			blockchain::BlockStatus::Unknown => {},
+		}
+		Ok(ImportResult::Queued)
 	}
 }
 
@@ -1440,7 +1508,7 @@ pub(crate) mod tests {
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use consensus::BlockOrigin;
-	use test_client::client::{backend::Backend as TestBackend, runtime_api::ApiExt};
+	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, RuntimeApi, TestAPI};
 
@@ -1534,17 +1602,6 @@ pub(crate) mod tests {
 				Keyring::Ferdie.to_raw_public().into()
 			).unwrap(),
 			0
-		);
-	}
-
-	#[test]
-	fn runtime_api_has_test_api() {
-		let client = test_client::new();
-
-		assert!(
-			client.runtime_api().has_api::<TestAPI<Block>>(
-				&BlockId::Number(client.info().unwrap().chain.best_number),
-			).unwrap()
 		);
 	}
 

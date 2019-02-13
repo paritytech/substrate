@@ -34,9 +34,14 @@ use crate::error;
 use crate::future::WaitingTransaction;
 use crate::base_pool::Transaction;
 
+/// An in-pool transaction reference.
+///
+/// Should be cheap to clone.
 #[derive(Debug)]
-struct TransactionRef<Hash, Ex> {
+pub struct TransactionRef<Hash, Ex> {
+	/// The actual transaction data.
 	pub transaction: Arc<Transaction<Hash, Ex>>,
+	/// Unique id when transaction was inserted into the pool.
 	pub insertion_id: u64,
 }
 
@@ -71,7 +76,7 @@ impl<Hash, Ex> PartialEq for TransactionRef<Hash, Ex> {
 impl<Hash, Ex> Eq for TransactionRef<Hash, Ex> {}
 
 #[derive(Debug)]
-struct ReadyTx<Hash, Ex> {
+pub struct ReadyTx<Hash, Ex> {
 	/// A reference to a transaction
 	pub transaction: TransactionRef<Hash, Ex>,
 	/// A list of transactions that get unlocked by this one
@@ -152,6 +157,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	///
 	/// The transaction needs to have all tags satisfied (be ready) by transactions
 	/// that are in this queue.
+	/// Returns transactions that were replaced by the one imported.
 	pub fn import(
 		&mut self,
 		tx: WaitingTransaction<Hash, Ex>,
@@ -202,6 +208,14 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		});
 
 		Ok(replaced)
+	}
+
+	/// Fold a list of ready transactions to compute a single value.
+	pub fn fold<R, F: FnMut(Option<R>, &ReadyTx<Hash, Ex>) -> Option<R>>(&mut self, f: F) -> Option<R> {
+		self.ready
+			.read()
+			.values()
+			.fold(None, f)
 	}
 
 	/// Returns true if given hash is part of the queue.
@@ -401,6 +415,10 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		self.ready.read().len()
 	}
 
+	/// Returns sum of encoding lengths of all transactions in this queue.
+	pub fn bytes(&self) -> usize {
+		self.ready.read().values().fold(0, |acc, tx| acc + tx.transaction.transaction.bytes)
+	}
 }
 
 pub struct BestIterator<Hash, Ex> {
@@ -476,6 +494,7 @@ mod tests {
 	fn tx(id: u8) -> Transaction<u64, Vec<u8>> {
 		Transaction {
 			data: vec![id],
+			bytes: 1,
 			hash: id as u64,
 			priority: 1,
 			valid_till: 2,
@@ -534,6 +553,7 @@ mod tests {
 		tx4.provides = vec![];
 		let tx5 = Transaction {
 			data: vec![5],
+			bytes: 1,
 			hash: 5,
 			priority: 1,
 			valid_till: u64::max_value(),	// use the max_value() here for testing.

@@ -20,37 +20,19 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(feature = "std")]
-pub extern crate serde;
-
+pub use serde;
 #[doc(hidden)]
-pub extern crate sr_std as rstd;
-extern crate sr_io as runtime_io;
+pub use sr_std as rstd;
 #[doc(hidden)]
-pub extern crate sr_primitives as runtime_primitives;
-extern crate srml_metadata;
-
-extern crate mashup;
-#[cfg_attr(test, macro_use)]
-extern crate srml_support_procedural;
-extern crate substrate_inherents as inherents;
-
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
-#[cfg(feature = "std")]
-extern crate serde_derive;
-#[cfg(test)]
-#[macro_use]
-extern crate parity_codec_derive;
-
+pub use parity_codec as codec;
 #[doc(hidden)]
-pub extern crate parity_codec as codec;
-
+pub use parity_codec_derive;
 #[cfg(feature = "std")]
 #[doc(hidden)]
-pub extern crate once_cell;
-
-pub extern crate paste;
+pub use once_cell;
+#[doc(hidden)]
+pub use paste;
+pub use sr_primitives as runtime_primitives;
 
 pub use self::storage::generator::Storage as GenericStorage;
 
@@ -70,12 +52,13 @@ mod runtime;
 #[macro_use]
 pub mod inherent;
 mod double_map;
+pub mod traits;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
+pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::double_map::StorageDoubleMap;
 pub use runtime_io::print;
-pub use double_map::StorageDoubleMap;
 
 #[doc(inline)]
 pub use srml_support_procedural::decl_storage;
@@ -91,7 +74,7 @@ macro_rules! fail {
 macro_rules! ensure {
 	( $x:expr, $y:expr ) => {{
 		if !$x {
-			fail!($y);
+			$crate::fail!($y);
 		}
 	}}
 }
@@ -101,7 +84,7 @@ macro_rules! ensure {
 macro_rules! assert_noop {
 	( $x:expr , $y:expr ) => {
 		let h = runtime_io::storage_root();
-		assert_err!($x, $y);
+		$crate::assert_err!($x, $y);
 		assert_eq!(h, runtime_io::storage_root());
 	}
 }
@@ -131,9 +114,6 @@ macro_rules! assert_ok {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Void {}
 
-#[doc(hidden)]
-pub use mashup::*;
-
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde_derive::*;
@@ -151,4 +131,126 @@ macro_rules! for_each_tuple {
 		$m! { $h $($t)* }
 		for_each_tuple! { @IMPL $m !! $($t,)* }
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_io::{with_externalities, Blake2Hasher};
+	use runtime_primitives::BuildStorage;
+
+	pub trait Trait {
+		type BlockNumber;
+		type Origin;
+	}
+
+	mod module {
+		#![allow(dead_code)]
+
+		use super::Trait;
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+
+			}
+		}
+	}
+	use self::module::Module;
+
+	decl_storage! {
+		trait Store for Module<T: Trait> as Example {
+			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
+		}
+	}
+
+	struct Test;
+	impl Trait for Test {
+		type BlockNumber = u32;
+		type Origin = u32;
+	}
+
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
+	}
+
+	type Map = Data<Test>;
+
+	#[test]
+	fn basic_insert_remove_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			// initialised during genesis
+			assert_eq!(Map::get(&15u32), 42u64);
+
+			// get / insert / take
+			let key = 17u32;
+			assert_eq!(Map::get(&key), 0u64);
+			Map::insert(key, 4u64);
+			assert_eq!(Map::get(&key), 4u64);
+			assert_eq!(Map::take(&key), 4u64);
+			assert_eq!(Map::get(&key), 0u64);
+
+			// mutate
+			Map::mutate(&key, |val| {
+				*val = 15;
+			});
+			assert_eq!(Map::get(&key), 15u64);
+
+			// remove
+			Map::remove(&key);
+			assert_eq!(Map::get(&key), 0u64);
+		});
+	}
+
+	#[test]
+	fn enumeration_and_head_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Map::head(), Some(15));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(15, 42)]);
+			// insert / remove
+			let key = 17u32;
+			Map::insert(key, 4u64);
+			assert_eq!(Map::head(), Some(key));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 4), (15, 42)]);
+			assert_eq!(Map::take(&15), 42u64);
+			assert_eq!(Map::take(&key), 4u64);
+			assert_eq!(Map::head(), None);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+
+			// Add couple of more elements
+			Map::insert(key, 42u64);
+			assert_eq!(Map::head(), Some(key));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 42)]);
+			Map::insert(key + 1, 43u64);
+			assert_eq!(Map::head(), Some(key + 1));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key + 1, 43), (key, 42)]);
+
+			// mutate
+			let key = key + 2;
+			Map::mutate(&key, |val| {
+				*val = 15;
+			});
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 15), (key - 1, 43), (key - 2, 42)]);
+			assert_eq!(Map::head(), Some(key));
+			Map::mutate(&key, |val| {
+				*val = 17;
+			});
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key, 17), (key - 1, 43), (key - 2, 42)]);
+
+			// remove first
+			Map::remove(&key);
+			assert_eq!(Map::head(), Some(key - 1));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key - 1, 43), (key - 2, 42)]);
+
+			// remove last from the list
+			Map::remove(&(key - 2));
+			assert_eq!(Map::head(), Some(key - 1));
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(key - 1, 43)]);
+
+			// remove the last element
+			Map::remove(&(key - 1));
+			assert_eq!(Map::head(), None);
+			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
+		});
+	}
+
 }
