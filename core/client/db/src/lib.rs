@@ -468,7 +468,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 	fn root(&self, anchor: &state_machine::ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
 		// check API requirement: we can't get NEXT block(s) based on anchor
 		if block > anchor.number {
-			return Err(format!("Can't get CT root at {} using anchor at {}", block, anchor.number));
+			return Err(format!("Can't get changes trie root at {} using anchor at {}", block, anchor.number));
 		}
 
 		// we need to get hash of the block to resolve changes trie root
