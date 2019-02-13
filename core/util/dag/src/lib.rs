@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::fmt;
+use parity_codec_derive::{Decode, Encode};
 
 #[derive(Clone, PartialEq)]
 pub enum Error<E> {
@@ -41,7 +42,7 @@ impl<E: fmt::Debug> From<E> for Error<E> {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Decode, Encode)]
 pub struct Dag<H, N, V> {
 	roots: Vec<Node<H, N, V>>,
 	best_finalized_number: Option<N>,
@@ -49,7 +50,7 @@ pub struct Dag<H, N, V> {
 
 impl<H, N, V> Dag<H, N, V> where
 	H: PartialEq,
-	N: Ord
+	N: Ord,
 {
 	pub fn empty() -> Dag<H, N, V> {
 		Dag {
@@ -154,7 +155,7 @@ impl<H, N, V> Dag<H, N, V> where
 	}
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Decode, Encode)]
 #[cfg_attr(test, derive(Clone, PartialEq))]
 struct Node<H, N, V> {
 	hash: H,

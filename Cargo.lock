@@ -649,6 +649,10 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
+dependencies = [
+ "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "data-encoding"
