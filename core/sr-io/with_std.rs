@@ -17,7 +17,7 @@
 #[doc(hidden)]
 pub use parity_codec as codec;
 // re-export hashing functions.
-pub use primitives::{blake2_256, twox_128, twox_256, ed25519, Blake2Hasher};
+pub use primitives::{blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519};
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
@@ -187,6 +187,11 @@ where
 /// Verify a ed25519 signature.
 pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
 	ed25519::verify(sig, msg, pubkey)
+}
+
+/// Verify an sr25519 signature.
+pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> bool {
+	sr25519::verify(sig, msg, pubkey)
 }
 
 /// Verify and recover a SECP256k1 ECDSA signature.
