@@ -58,25 +58,93 @@ extern "C" {
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
 
-	/// Host storage access and verification
+	/// Set value for key in storage.
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
-	fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+	/// Remove key and value from storage.
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
-	fn ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32);
+	/// Checks if the given key exists in the storage.
+	///
+	/// # Returns
+	///
+	/// - `1` if the value exists.
+	/// - `0` if the value does not exists.
 	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
-	fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
+	/// Remove storage entries which key starts with given prefix.
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
-	fn ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32);
-	/// Host-side result allocation
+	/// Gets the value of the given key from storage.
+	///
+	/// The host allocates the memory for storing the value.
+	///
+	/// # Returns
+	///
+	/// - `0` if no value exists to the given key. `written_out` is set to `u32::max_value()`.
+	///
+	/// - Otherwise, pointer to the value in memory. `written_out` contains the length of the value.
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
-	/// Host-side result allocation
-	fn ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
+	/// Gets the value of the given key from storage.
+	///
+	/// The value is written into `value` starting at `value_offset`.
+	///
+	/// If the value length is greater than `value_len - value_offset`, the value is written partially.
+	///
+	/// # Returns
+	///
+	/// - `u32::max_value()` if the value does not exists.
+	///
+	/// - Otherwise, the number of bytes written for value.
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
-	fn ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+	/// Gets the trie root of the storage.
 	fn ext_storage_root(result: *mut u8);
-	/// Host-side result allocation
-	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
+	/// Get the change trie root of the current storage overlay at a block with given parent.
+	///
+	/// # Returns
+	///
+	/// - `0` if the change trie root was found.
+	/// - `1` if the change trie root was not found.
 	fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_num: u64, result: *mut u8) -> u32;
+
+	/// A child storage function.
+	///
+	/// See [`ext_set_storage`] for details.
+	///
+	/// A child storage is used e.g. by a contract.
+	fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+	/// A child storage function.
+	///
+	/// See [`ext_clear_storage`] for details.
+	///
+	/// A child storage is used e.g. by a contract.
+	fn ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32);
+	/// A child storage function.
+	///
+	/// See [`ext_exists_storage`] for details.
+	///
+	/// A child storage is used e.g. by a contract.
+	fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
+	/// A child storage function.
+	///
+	/// See [`ext_kill_storage`] for details.
+	///
+	/// A child storage is used e.g. by a contract.
+	fn ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32);
+	/// A child storage function.
+	///
+	/// See [`ext_get_allocated_storage`] for details.
+	///
+	/// A child storage is used e.g. by a contract.
+	fn ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
+	/// A child storage function.
+	///
+	/// See [`ext_get_storage_into`] for details.
+	///
+	/// A child storage is used e.g. by a contract.
+	fn ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+	/// A child storage function.
+	///
+	/// See [`ext_storage_root`] for details.
+	///
+	/// A child storage is used e.g. by a contract.
+	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
 
 	/// The current relay chain identifier.
 	fn ext_chain_id() -> u64;
