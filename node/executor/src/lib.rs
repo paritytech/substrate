@@ -31,11 +31,11 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::ed25519::Keyring;
+	use keyring::sr25519::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{
-		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue,
+		twox_128, Blake2Hasher, ChangesTrieConfiguration, sr25519::{Public, Pair}, NeverNativeValue,
 		NativeOrEncoded
 	};
 	use node_primitives::{Hash, BlockNumber, AccountId};
