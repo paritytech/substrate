@@ -112,18 +112,6 @@ pub struct Exposure<AccountId, Balance> {
 	pub others: Vec<(AccountId, Balance)>,
 }
 
-/// Capacity in which a bonded account is participating.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum Capacity<AccountId> {
-	/// Do nothing.
-	Idle,
-	/// We are nominating.
-	Nominator(Vec<AccountId>),
-	/// We want to be a validator.
-	Validator,
-}
-
 impl<AccountId> Default for Capacity<AccountId> {
 	fn default() -> Self {
 		Capacity::Nominator(vec![])
@@ -173,13 +161,17 @@ decl_storage! {
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 		pub Ledger get(ledger): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
-		/// Preferences that a validator has.
-		pub ValidatorPreferences get(validator_preferences): map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
-
 		//==============================================================================================================================
 
-		// The desired capacity in which a controller wants to operate.
-		pub Desired get(desired): linked_map AccountId => Capacity<T::AccountId>;
+		/// The set of keys are all controllers that want to validate.
+		/// 
+		/// The value are the preferences that a validator has.
+		pub Validators get(validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
+
+		/// The set of keys are all controllers that want to nominate.
+		/// 
+		/// The value are the nominations.
+		pub Nominators get(nominators): linked_map AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
@@ -322,10 +314,11 @@ decl_module! {
 		/// Declare the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn validate(origin) {
+		fn validate(origin, prefs: ValidatorPrefs) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			Desired<T>::insert(controller, Capacity::Validator);
+			Nominators<T>::remove(&controller);
+			Validators<T>::insert(controller, prefs);
 		}
 
 		/// Declare the desire to nominate `targets` for the origin controller.
@@ -334,12 +327,14 @@ decl_module! {
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			ensure!(!targets.is_empty(), "targets cannot be empty");
 			let targets = target.into_iter()
 				.take(MAX_NOMINATIONS)
 				.map(T::Lookup::lookup)
 				.collect::<Result<Vec<T::AccountId>, &'static str>>()?;
 
-			Desired<T>::insert(controller, Capacity::Nominator(targets));
+			Validators<T>::remove(&controller);
+			Nominators<T>::insert(controller, targets);
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -348,21 +343,8 @@ decl_module! {
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			Desired<T>::insert(controller, Capacity::Idle);
-		}
-
-		/// Set the given account's preference for slashing behaviour should they be a validator.
-		///
-		/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
-		fn register_preferences(
-			origin,
-			#[compact] intentions_index: u32,
-			prefs: ValidatorPrefs<BalanceOf<T>>
-		) {
-			let controller = ensure_signed(origin)?;
-			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-
-			<ValidatorPreferences<T>>::insert(controller, prefs);
+			Validators<T>::remove(&controller);
+			Nominators<T>::remove(&controller);
 		}
 
 		/// Set the number of sessions in an era.
@@ -482,7 +464,7 @@ impl<T: Trait> Module<T> {
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
 	/// balance, pro-rata based on their exposure, after having removed the validator's pre-payout cut.
 	fn reward_validator(who: &T::AccountId, reward: BalanceOf<T>) {
-		let off_the_table = reward.min(Self::validator_preferences(who).validator_payment);
+		let off_the_table = reward.min(Self::validators(who).validator_payment);
 		let reward = reward - off_the_table;
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
@@ -496,12 +478,6 @@ impl<T: Trait> Module<T> {
 			safe_mul_rational(exposure.own)
 		};
 		let _ = T::Currency::reward(who, validator_cut + off_the_table);
-	}
-
-	/// Actually carry out the unvalidate operation.
-	/// Assumes `intentions()[intentions_index] == who`.
-	fn apply_unvalidate(who: &T::AccountId) {
-		<Desired<T>>::insert(who, Capacity::Idle);
 	}
 
 	/// Get the reward for the session, assuming it ends with this block.
@@ -564,36 +540,27 @@ impl<T: Trait> Module<T> {
 
 		// TODO: Can probably pre-process a lot of complexity out of these two for-loops,
 		// particularly the need to keep everything in a BTreeMap.
+		// May be reasonable to split the two tries Validator 
 
 		// Map of (would-be) validator account to amount of stake backing it.
 		let mut candidates: Vec<(T::AccountId, Exposure)> = Default::default();
-		for (who, capacity) in <Desired<T>>::enumerate() {
-			match capacity {
-				Validator => {
-					let stash_balance = Self::stash_balance(&who);
-					candidates.push((who, Exposure { total: stash_balance, own: stash_balance, others: vec![] }));
-				}
-				_ => {}
-			}
+		for (who, _) in <Validators<T>>::enumerate() {
+			let stash_balance = Self::stash_balance(&who);
+			candidates.push((who, Exposure { total: stash_balance, own: stash_balance, others: vec![] }));
 		}
 		canidates.sort_unstable_by_key(|i| &i.0);
-		for (who, capacity) in <Desired<T>>::enumerate() {
-			match capacity {
-				Nominator(nominees) => {
-					// For this trivial nominator mapping, we just assume that nominators always
-					// have themselves assigned to the first validator in their list.
-					let chosen = if nominees.len() > 0 {
-						candidates[0]
-					} else {
-						continue
-					};
-					if let Ok(index) = candidates.binary_search_by_key(&who, |i| &i.0) {
-						let stash_balance = Self::stash_balance(&who);
-						candidates[index].1.total += stash_balance;
-						candidates[index].1.others.push((who, stash_balance));
-					}
-				}
-				_ => {}
+		for (who, nominees) in <Nominators<T>>::enumerate() {
+			// For this trivial nominator mapping, we just assume that nominators always
+			// have themselves assigned to the first validator in their list.
+			let chosen = if nominees.len() > 0 {
+				candidates[0]
+			} else {
+				continue
+			};
+			if let Ok(index) = candidates.binary_search_by_key(&who, |i| &i.0) {
+				let stash_balance = Self::stash_balance(&who);
+				candidates[index].1.total += stash_balance;
+				candidates[index].1.others.push((who, stash_balance));
 			}
 		}
 
@@ -606,15 +573,19 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
+		// Get the new staker set by sorting by total backing stake and truncating.
 		candidates.sort_unstable_by(|(a, b)| a.1.total > b.1.total);
 		candidates.truncate(Self::validator_count() as usize);
 
+		// Figure out the minimum stake behind a slot.
 		let slot_stake = candidates.last().map(|i| i.1.total).unwrap_or_default();
 		<SlotStake<T>>::put(&slot_stake);
 
+		// Populate Stakers.
 		for (who, exposure) in &candidates {
 			<Stakers<T>>::insert(who, exposure);
 		}
+		// Set the new validator set.
 		<session::Module<T>>::set_validators(
 			candidates.into_iter().map(|i| i.0).collect::<Vec<_>>()
 		);
@@ -657,50 +628,17 @@ impl<T: Trait> Module<T> {
 			});
 		}
 
-		let event = if new_slash_count > grace {
-			let slash = {
-				let base_slash = Self::current_offline_slash();
-				let instances = slash_count - grace;
+		let prefs = Self::validators(&v);
 
-				let mut total_slash = BalanceOf::<T>::default();
-				for i in instances..(instances + count as u32) {
-					if let Some(total) = base_slash.checked_shl(i)
-							.and_then(|slash| total_slash.checked_add(&slash)) {
-						total_slash = total;
-					} else {
-						// reset slash count only up to the current
-						// instance. the total slash overflows the unit for
-						// balance in the system therefore we can slash all
-						// the slashable balance for the account
-						<SlashCount<T>>::insert(v.clone(), slash_count + i);
-						total_slash = Self::slashable_balance(&v);
-						break;
-					}
-				}
-
-				total_slash
-			};
-
+		let event = if new_slash_count > grace + prefs.unstake_threshold {
+			// They're bailing.
+			let slash = Self::current_offline_slash()
+				.checked_shl(prefs.unstake_threshold)
+				.unwrap_or_else(Self::slot_stake);
 			let _ = Self::slash_validator(&v, slash);
-
-			let next_slash = match slash.checked_shl(1) {
-				Some(slash) => slash,
-				None => Self::slashable_balance(&v),
-			};
-
-			let instances = new_slash_count - grace;
-			if instances > Self::validator_preferences(&v).unstake_threshold
-				|| Self::slashable_balance(&v) < next_slash
-				|| next_slash <= slash
-			{
-				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
-					Self::apply_unvalidate(&v, pos)
-						.expect("pos derived correctly from Self::intentions(); \
-								 apply_unvalidate can only fail if pos wrong; \
-								 Self::intentions() doesn't change; qed");
-				}
-				let _ = Self::apply_force_new_era(false);
-			}
+			<Validators<T>>::remove(&v);
+			let _ = Self::apply_force_new_era(false);
+			
 			RawEvent::OfflineSlash(v.clone(), slash)
 		} else {
 			RawEvent::OfflineWarning(v.clone(), slash_count)
@@ -733,10 +671,10 @@ impl<T: Trait> EnsureAccountLiquid<T::AccountId> for Module<T> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(controller) = <Bonded<T>>::take(who) {
-			<Ledger<T>>::kill(&controller);
-			<ValidatorPreferences<T>>::remove(&controller);
+			<Ledger<T>>::remove(&controller);
+			<Validators<T>>::remove(&controller);
 			<SlashCount<T>>::remove(&controller);
-			<Desired<T>>::remove(&controller);
+			<Nominators<T>>::remove(&controller);
 		}
 	}
 }
