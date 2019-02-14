@@ -551,6 +551,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		set_id: authority_set.set_id(),
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
+		last_completed: ::environment::LastCompletedRound::new(set_state.round()),
 	});
 
 	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
@@ -589,7 +590,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					last_finalized,
 				))
 			}
-			VoterSetState::Paused(r, s) => None,
+			VoterSetState::Paused(_, _) => None,
 		};
 
 		// needs to be combined with another future otherwise it can deadlock.
@@ -607,6 +608,9 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let handle_voter_command = move |command: VoterCommand<_, _>, voter_commands_rx| {
 			match command {
 				VoterCommand::ChangeAuthorities(new) => {
+					// start the new authority set using the block where the
+					// set changed (not where the signal happened!) as the base.
+					let genesis_state = RoundState::genesis((new.canon_hash, new.canon_number));
 					let env = Arc::new(Environment {
 						inner: client,
 						config,
@@ -615,18 +619,31 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						network,
 						authority_set,
 						consensus_changes,
+						last_completed: ::environment::LastCompletedRound::new(
+							(0, genesis_state.clone())
+						),
 					});
 
-					// start the new authority set using the block where the
-					// set changed (not where the signal happened!) as the base.
+
 					let set_state = VoterSetState::Live(
 						0, // always start at round 0 when changing sets.
-						RoundState::genesis((new.canon_hash, new.canon_number)),
+						genesis_state,
 					);
 
 					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
 				}
-				VoterCommand::Pause(_) => unimplemented!(),
+				VoterCommand::Pause(reason) => {
+					info!("Pausing old validator set: {}", reason);
+
+					// not racing because old voter is shut down.
+					let (last_round_number, last_round_state) = env.last_completed.read();
+					let set_state = VoterSetState::Paused(
+						last_round_number,
+						last_round_state,
+					);
+
+					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
+				},
 			}
 		};
 

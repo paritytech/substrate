@@ -43,6 +43,16 @@ pub enum VoterSetState<H, N> {
 	Live(u64, RoundState<H, N>),
 }
 
+impl<H: Clone, N: Clone> VoterSetState<H, N> {
+	/// Yields the current state.
+	pub(crate) fn round(&self) -> (u64, RoundState<H, N>) {
+		match *self {
+			VoterSetState::Paused(n, ref s) => (n, s.clone()),
+			VoterSetState::Live(n, ref s) => (n, s.clone()),
+		}
+	}
+}
+
 type V0VoterSetState<H, N> = (u64, RoundState<H, N>);
 
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
@@ -64,7 +74,6 @@ impl<H, N> Into<AuthoritySet<H, N>> for V0AuthoritySet<H, N> {
 	fn into(self) -> AuthoritySet<H, N> {
 		AuthoritySet {
 			current_authorities: self.current_authorities,
-			paused: false,
 			set_id: self.set_id,
 			pending_changes: self.pending_changes.into_iter().map(|old_change| PendingChange {
 				next_authorities: old_change.next_authorities,
@@ -109,7 +118,7 @@ pub(crate) fn load_persistent<B, H, N, G>(
 		N: Decode + Encode + Clone,
 		G: FnOnce() -> ClientResult<Vec<(Ed25519AuthorityId, u64)>>
 {
-	let version: Option<u64> = load_decode(backend, VERSION_KEY)?;
+	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;
 	let consensus_changes = load_decode(backend, CONSENSUS_CHANGES_KEY)?
 		.unwrap_or_else(ConsensusChanges::<H, N>::empty);
 
@@ -232,4 +241,11 @@ pub(crate) fn update_consensus_changes<H, N, F, R>(
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
 	write_aux(&[(CONSENSUS_CHANGES_KEY, set.encode().as_slice())])
+}
+
+#[cfg(test)]
+pub(crate) fn load_authorities<B: AuxStore, H: Decode, N: Decode>(backend: &B)
+	-> Option<AuthoritySet<H, N>> {
+	load_decode::<_, AuthoritySet<H, N>>(backend, AUTHORITY_SET_KEY)
+		.expect("backend error")
 }

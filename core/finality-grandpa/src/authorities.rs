@@ -38,13 +38,6 @@ impl<H, N> Clone for SharedAuthoritySet<H, N> {
 }
 
 impl<H, N> SharedAuthoritySet<H, N> {
-	/// The genesis authority set.
-	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
-		SharedAuthoritySet {
-			inner: Arc::new(RwLock::new(AuthoritySet::genesis(initial)))
-		}
-	}
-
 	/// Acquire a reference to the inner read-write lock.
 	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
 		&*self.inner
@@ -93,7 +86,6 @@ pub(crate) struct AuthoritySet<H, N> {
 	pub(crate) current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	pub(crate) set_id: u64,
 	pub(crate) pending_changes: Vec<PendingChange<H, N>>,
-	pub(crate) paused: bool,
 }
 
 impl<H, N> AuthoritySet<H, N> {
@@ -103,7 +95,6 @@ impl<H, N> AuthoritySet<H, N> {
 			current_authorities: initial,
 			set_id: 0,
 			pending_changes: Vec::new(),
-			paused: false,
 		}
 	}
 
@@ -194,7 +185,6 @@ where
 					new_set = Some(AuthoritySet {
 						current_authorities: change.next_authorities.clone(),
 						set_id: self.set_id + 1,
-						paused: false,
 						pending_changes: Vec::new(), // new set, new changes.
 					});
 

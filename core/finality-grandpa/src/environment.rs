@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use codec::Encode;
 use futures::prelude::*;
 use tokio::timer::Delay;
+use parking_lot::RwLock;
 
 use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
@@ -43,6 +44,33 @@ use consensus_changes::SharedConsensusChanges;
 use justification::GrandpaJustification;
 use until_imported::UntilVoteTargetImported;
 
+/// Data about a completed round.
+pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
+
+/// A read-only view of the last completed round.
+pub(crate) struct LastCompletedRound<H, N> {
+	inner: RwLock<CompletedRound<H, N>>,
+}
+
+impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
+	/// Create a new tracker based on some starting last-completed round.
+	pub(crate) fn new(round: CompletedRound<H, N>) -> Self {
+		LastCompletedRound { inner: RwLock::new(round) }
+	}
+
+	/// Read the last completed round.
+	pub(crate) fn read(&self) -> CompletedRound<H, N> {
+		self.inner.read().clone()
+	}
+
+	// NOTE: not exposed outside of this module intentionally.
+	fn with<F, R>(&self, f: F) -> R
+		where F: FnOnce(&mut CompletedRound<H, N>) -> R
+	{
+		f(&mut *self.inner.write())
+	}
+}
+
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) inner: Arc<Client<B, E, Block, RA>>,
@@ -52,6 +80,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) network: N,
 	pub(crate) set_id: u64,
+	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
 }
 
 impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
@@ -248,7 +277,11 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.finalized.as_ref().map(|e| e.1),
 		);
 
-		::aux_schema::complete_round(&**self.inner.backend(), round, state).map_err(Into::into)
+		self.last_completed.with(|last_completed| {
+			::aux_schema::complete_round(&**self.inner.backend(), round, state.clone())?;
+			*last_completed = (round, state); // after writing to DB successfully.
+			Ok(())
+		})
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
@@ -362,6 +395,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				return Err(e.into());
 			}
 		}
+
 		// NOTE: this code assumes that honest voters will never vote past a
 		// transition block, thus we don't have to worry about the case where
 		// we have a transition with `effective_block = N`, but we finalize
@@ -407,7 +441,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		client.finalize_block(BlockId::Hash(hash), justification, true).map_err(|e| {
+		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
 			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;

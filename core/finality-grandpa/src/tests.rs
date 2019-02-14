@@ -40,6 +40,7 @@ use runtime_primitives::ExecutionContext;
 use substrate_primitives::NativeOrEncoded;
 
 use authorities::AuthoritySet;
+use consensus_changes::ConsensusChanges;
 
 type PeerData =
 	Mutex<
@@ -462,6 +463,7 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 
 #[test]
 fn finalize_3_voters_no_observers() {
+	::env_logger::init();
 	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let voters = make_ids(peers);
 
@@ -579,8 +581,9 @@ fn transition_3_voters_twice_1_observer() {
 		assert_eq!(peer.client().info().unwrap().chain.best_number, 1,
 					"Peer #{} failed to sync", i);
 
-		let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
-		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
+		let set: AuthoritySet<Hash, BlockNumber> = ::aux_schema::load_authorities(
+			&**peer.client().backend()
+		).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
 		assert_eq!(set.pending_changes().len(), 0);
@@ -665,8 +668,9 @@ fn transition_3_voters_twice_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &30))
 				.for_each(move |_| Ok(()))
 				.map(move |()| {
-					let set_raw = client.backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
-					let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
+					let set: AuthoritySet<Hash, BlockNumber> = ::aux_schema::load_authorities(
+						&**client.backend()
+					).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
 					assert!(set.pending_changes().is_empty());
@@ -872,8 +876,9 @@ fn force_change_to_new_set() {
 			assert_eq!(peer.client().info().unwrap().chain.best_number, 26,
 					"Peer #{} failed to sync", i);
 
-			let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
-			let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
+			let set: AuthoritySet<Hash, BlockNumber> = ::aux_schema::load_authorities(
+				&**peer.client().backend()
+			).unwrap();
 
 			assert_eq!(set.current(), (1, voters.as_slice()));
 			assert_eq!(set.pending_changes().len(), 0);

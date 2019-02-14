@@ -268,6 +268,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 {
 	inner
 		.filter_map(|raw| {
+			println!("got incoming message");
 			let decoded = SignedMessage::<Block>::decode(&mut &raw[..]);
 			if decoded.is_none() {
 				debug!(target: "afg", "Skipping malformed message {:?}", raw);
