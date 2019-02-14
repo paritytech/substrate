@@ -259,6 +259,16 @@ fn benchmark_add_one(i: u64) -> u64 {
 	i + 1
 }
 
+/// A `Cell` that is tagged as sync, as we know that it is not modified by multiple threads.
+#[cfg(not(feature = "std"))]
+struct SyncCell<T>(rstd::cell::Cell<T>);
+#[cfg(not(feature = "std"))]
+unsafe impl<T> Sync for SyncCell<T> {}
+
+/// The `benchmark_add_one` function as function pointer.
+#[cfg(not(feature = "std"))]
+static BENCHMARK_ADD_ONE: SyncCell<fn(u64) -> u64> = SyncCell(rstd::cell::Cell::new(benchmark_add_one));
+
 cfg_if! {
 	if #[cfg(feature = "std")] {
 		impl_runtime_apis! {
@@ -449,8 +459,7 @@ cfg_if! {
 				}
 
 				fn benchmark_indirect_call() -> u64 {
-					let function = benchmark_add_one;
-					(0..10000).fold(0, |p, i| p + function(i))
+					(0..10000).fold(0, |p, i| p + BENCHMARK_ADD_ONE.0.get()(i))
 				}
 
 				fn benchmark_direct_call() -> u64 {
