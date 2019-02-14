@@ -214,7 +214,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 
-		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			use parity_codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());

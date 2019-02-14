@@ -26,7 +26,7 @@ use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
-use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
+use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
 use crate::blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
@@ -490,7 +490,7 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, mut top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out> {
+	fn reset_storage(&mut self, mut top: StorageOverlay, children: ChildrenStorageOverlay) -> error::Result<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
 		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
@@ -753,7 +753,7 @@ pub fn cache_authorities_at<Block: BlockT>(
 }
 
 /// Check that genesis storage is valid.
-pub fn check_genesis_storage(top: &StorageMap, children: &ChildrenStorageMap) -> error::Result<()> {
+pub fn check_genesis_storage(top: &StorageOverlay, children: &ChildrenStorageOverlay) -> error::Result<()> {
 	if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
 		return Err(error::ErrorKind::GenesisInvalid.into());
 	}
