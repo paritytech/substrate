@@ -66,6 +66,7 @@ impl Vote {
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type VoteCount = Vote;
 
 pub trait Trait: system::Trait + Sized {
 	type Currency: Currency<<Self as system::Trait>::AccountId>;
@@ -154,6 +155,14 @@ decl_module! {
 				runtime_io::print(e);
 			}
 		}
+
+		/// Delegation voting methods.
+		pub fn delegate(origin, to: T::AccountId, maximum_periods: LockPeriods) -> Result {
+			let who = ensure_signed(origin)?;
+			<Delegations<T>>::insert(&who, (to.clone(), maximum_periods));
+			Self::deposit_event(RawEvent::Delegated(who, to));
+			Ok(())
+		}
 	}
 }
 
@@ -218,6 +227,11 @@ decl_storage! {
 		/// voter when called with the referendum (you'll get the default `Vote` value otherwise). If you don't want to check
 		/// `voters_for`, then you can also check for simple existence with `VoteOf::exists` first.
 		pub VoteOf get(vote_of): map (ReferendumIndex, T::AccountId) => Vote;
+
+		/// Store for delegation voting.
+		pub Delegations get(delegations): map T::AccountId => (T::AccountId, LockPeriods);
+		pub DelegatorCount get(delegator_count): map T::AccountId => u32;
+		pub SubscriptionVotes get(subscription_votes): map (T::AccountId, ReferendumIndex) => VoteCount;
 	}
 }
 
@@ -231,6 +245,8 @@ decl_event!(
 		NotPassed(ReferendumIndex),
 		Cancelled(ReferendumIndex),
 		Executed(ReferendumIndex, bool),
+		/// Delegation voting events.
+		Delegated(AccountId, AccountId),
 	}
 );
 
