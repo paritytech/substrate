@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use utils::{
+use crate::utils::{
 	generate_crate_access, generate_hidden_includes, generate_runtime_mod_name_for_trait,
 	fold_fn_decl_for_client_side, unwrap_or_error, extract_parameter_names_types_and_borrows,
 	generate_native_call_generator_fn_name, return_type_extract_type,
@@ -241,7 +241,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 
 		let (impl_generics, ty_generics, where_clause) = decl.generics.split_for_impl();
 		// We need to parse them again, to get an easy access to the actual parameters.
-		let mut impl_generics: Generics = parse_quote!(#impl_generics);
+		let impl_generics: Generics = parse_quote!(#impl_generics);
 		let impl_generics_params = impl_generics.params.iter().map(|p| {
 			match p {
 				GenericParam::Type(ref ty) => {
@@ -614,7 +614,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> TokenStream {
 	let mut result = Vec::new();
 
 	for decl in decls {
-		let mut decl = decl.clone();
+		let decl = decl.clone();
 
 		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 		let block_id = quote!( #crate_::runtime_api::BlockId<Block> );

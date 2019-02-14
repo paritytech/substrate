@@ -20,7 +20,7 @@ mod declaring_own_block {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate sr_primitives as runtime_primitives;
 
 		use runtime_primitives::traits::Block as BlockT;
@@ -40,7 +40,7 @@ mod declaring_own_block_with_different_name {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate sr_primitives as runtime_primitives;
 
 		use runtime_primitives::traits::Block as BlockT;
@@ -60,7 +60,7 @@ mod adding_self_parameter {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate sr_primitives as runtime_primitives;
 
 		decl_runtime_apis! {
@@ -78,7 +78,7 @@ mod adding_at_parameter {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate sr_primitives as runtime_primitives;
 
 		decl_runtime_apis! {
@@ -96,7 +96,7 @@ mod invalid_api_version {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate sr_primitives as runtime_primitives;
 
 		decl_runtime_apis! {
@@ -115,7 +115,7 @@ mod invalid_api_version_2 {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate sr_primitives as runtime_primitives;
 
 		decl_runtime_apis! {
@@ -134,7 +134,7 @@ mod invalid_api_version_3 {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate sr_primitives as runtime_primitives;
 
 		decl_runtime_apis! {
@@ -153,7 +153,7 @@ mod missing_block_generic_parameter {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate substrate_test_client as test_client;
 		extern crate sr_primitives as runtime_primitives;
 		extern crate substrate_primitives as primitives;
@@ -191,7 +191,7 @@ mod missing_path_for_trait {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate substrate_test_client as test_client;
 		extern crate sr_primitives as runtime_primitives;
 		extern crate substrate_primitives as primitives;
@@ -229,7 +229,7 @@ mod empty_impl_runtime_apis_call {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate substrate_test_client as test_client;
 		extern crate sr_primitives as runtime_primitives;
 		extern crate substrate_primitives as primitives;
@@ -261,7 +261,7 @@ mod type_reference_in_impl_runtime_apis_call {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate substrate_test_client as test_client;
 		extern crate sr_primitives as runtime_primitives;
 		extern crate substrate_primitives as primitives;
@@ -299,7 +299,7 @@ mod impl_incorrect_method_signature {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate substrate_test_client as test_client;
 		extern crate sr_primitives as runtime_primitives;
 		extern crate substrate_primitives as primitives;
@@ -335,7 +335,7 @@ mod impl_two_traits_with_same_name {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate substrate_test_client as test_client;
 		extern crate sr_primitives as runtime_primitives;
 		extern crate substrate_primitives as primitives;
@@ -383,7 +383,7 @@ mod changed_at_unknown_version {
 	/*!
 	```compile_fail
 		#[macro_use]
-		extern crate substrate_client;
+		extern crate client;
 		extern crate substrate_test_client as test_client;
 		extern crate sr_primitives as runtime_primitives;
 		extern crate substrate_primitives as primitives;

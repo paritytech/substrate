@@ -18,11 +18,6 @@
 
 #![recursion_limit = "512"]
 extern crate proc_macro;
-extern crate proc_macro2;
-extern crate quote;
-extern crate syn;
-extern crate blake2_rfc;
-extern crate proc_macro_crate;
 
 use proc_macro::TokenStream;
 
@@ -51,13 +46,13 @@ mod compile_fail_tests;
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_client;
+/// extern crate client;
 /// extern crate sr_version as version;
 ///
 /// use version::create_runtime_str;
-/// # extern crate substrate_test_client as test_client;
-/// # extern crate sr_primitives as runtime_primitives;
-/// # extern crate substrate_primitives as primitives;
+/// # extern crate test_client;
+/// # extern crate runtime_primitives;
+/// # extern crate substrate_primitives;
 /// #
 /// # use runtime_primitives::traits::GetNodeBlockType;
 /// # use test_client::runtime::Block;
@@ -133,7 +128,7 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_client;
+/// extern crate client;
 ///
 /// decl_runtime_apis! {
 ///     /// Declare the api trait.
@@ -168,7 +163,7 @@ pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_client;
+/// extern crate client;
 ///
 /// decl_runtime_apis! {
 ///     /// Declare the api trait.

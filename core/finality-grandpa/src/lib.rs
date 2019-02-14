@@ -319,12 +319,12 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage_for_topic(topic));
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage_for_topic(topic));
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {

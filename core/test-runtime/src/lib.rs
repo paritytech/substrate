@@ -18,9 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[macro_use]
-extern crate srml_support as runtime_support;
-
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 

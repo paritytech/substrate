@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use std::cmp::{Ord, Ordering};
 use kvdb::{KeyValueDB, DBTransaction};
 use runtime_primitives::traits::SimpleArithmetic;
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use crate::error;
 
 /// helper wrapper type to keep a list of block hashes ordered

@@ -58,6 +58,7 @@ pub struct ExtBuilder {
 	transfer_fee: u64,
 	creation_fee: u64,
 	monied: bool,
+	vesting: bool,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
@@ -66,6 +67,7 @@ impl Default for ExtBuilder {
 			transfer_fee: 0,
 			creation_fee: 0,
 			monied: false,
+			vesting: false,
 		}
 	}
 }
@@ -87,6 +89,10 @@ impl ExtBuilder {
 		self.monied = monied;
 		self
 	}
+	pub fn vesting(mut self, vesting: bool) -> Self {
+		self.vesting = vesting;
+		self
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		let balance_factor = if self.existential_deposit > 0 {
@@ -105,7 +111,11 @@ impl ExtBuilder {
 			existential_deposit: self.existential_deposit,
 			transfer_fee: self.transfer_fee,
 			creation_fee: self.creation_fee,
-			vesting: vec![],
+			vesting: if self.vesting && self.monied {
+				vec![(1, 0, 10), (2, 10, 20)]
+			} else {
+				vec![]
+			},
 		}.build_storage().unwrap().0);
 		t.into()
 	}
