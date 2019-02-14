@@ -17,7 +17,7 @@
 use std::fmt;
 use parity_codec_derive::{Decode, Encode};
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Error<E> {
 	Duplicate,
 	UnfinalizedRoot,
@@ -25,18 +25,29 @@ pub enum Error<E> {
 	Client(E),
 }
 
-impl<E: fmt::Debug> fmt::Debug for Error<E> {
+impl<E: std::error::Error> fmt::Display for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			Error::Duplicate => write!(f, "Hash already exists in DAG"),
-			Error::UnfinalizedRoot => write!(f, "Finalized descendent of DAG root without finalizing root first"),
-			Error::Revert => write!(f, "Tried to import or finalize hash that is an ancestor of a previously finalized node"),
-			Error::Client(ref err) => fmt::Debug::fmt(err, f),
-		}
+		use std::error::Error;
+		write!(f, "{}", self.description())
 	}
 }
 
-impl<E: fmt::Debug> From<E> for Error<E> {
+impl<E: std::error::Error> std::error::Error for Error<E> {
+	fn description(&self) -> &str {
+		match *self {
+			Error::Duplicate => "Hash already exists in DAG",
+			Error::UnfinalizedRoot => "Finalized descendent of DAG root without finalizing root first",
+			Error::Revert => "Tried to import or finalize hash that is an ancestor of a previously finalized node",
+			Error::Client(ref err) => err.description(),
+		}
+	}
+
+	fn cause(&self) -> Option<&std::error::Error> {
+		None
+	}
+}
+
+impl<E: std::error::Error> From<E> for Error<E> {
 	fn from(err: E) -> Error<E> {
 		Error::Client(err)
 	}
@@ -66,7 +77,7 @@ impl<H, N, V> Dag<H, N, V> where
 		mut data: V,
 		is_descendent_of: &F,
 	) -> Result<bool, Error<E>>
-		where E: fmt::Debug,
+		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>,
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
@@ -156,7 +167,7 @@ impl<H, N, V> Dag<H, N, V> where
 }
 
 #[derive(Clone, Debug, Decode, Encode)]
-#[cfg_attr(test, derive(Clone, PartialEq))]
+#[cfg_attr(test, derive(PartialEq))]
 struct Node<H, N, V> {
 	hash: H,
 	number: N,
@@ -165,7 +176,7 @@ struct Node<H, N, V> {
 }
 
 impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
-	fn import<F, E: fmt::Debug>(
+	fn import<F, E: std::error::Error>(
 		&mut self,
 		mut hash: H,
 		mut number: N,
