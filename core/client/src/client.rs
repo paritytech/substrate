@@ -619,9 +619,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Lock the import lock, and run operations inside.
-	pub fn lock_import_and_run<R, F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> error::Result<R>>(
-		&self, f: F
-	) -> error::Result<R> {
+	pub fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
+		F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> Result<R, Err>,
+		Err: From<error::Error>,
+	{
 		let inner = || {
 			let _import_lock = self.import_lock.lock();
 
