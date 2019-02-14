@@ -52,6 +52,7 @@
 //! any signaled changes based on whether the signaling block is included in the
 //! newly-finalized chain.
 
+extern crate dag;
 extern crate finality_grandpa as grandpa;
 extern crate futures;
 extern crate substrate_client as client;
@@ -199,6 +200,8 @@ pub enum Error {
 	Blockchain(String),
 	/// Could not complete a round on disk.
 	Client(ClientError),
+	/// An invariant has been violated (e.g. not finalizing pending change blocks in-order)
+	Safety(String),
 	/// A timer failed to fire.
 	Timer(::tokio::timer::Error),
 }

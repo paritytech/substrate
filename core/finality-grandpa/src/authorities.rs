@@ -16,6 +16,7 @@
 
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
+use dag::Dag;
 use parking_lot::RwLock;
 use substrate_primitives::Ed25519AuthorityId;
 use grandpa::VoterSet;
@@ -36,7 +37,10 @@ impl<H, N> Clone for SharedAuthoritySet<H, N> {
 	}
 }
 
-impl<H, N> SharedAuthoritySet<H, N> {
+impl<H, N> SharedAuthoritySet<H, N>
+where H: PartialEq,
+	  N: Ord,
+{
 	/// The genesis authority set.
 	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
 		SharedAuthoritySet {
@@ -51,9 +55,8 @@ impl<H, N> SharedAuthoritySet<H, N> {
 }
 
 impl<H: Eq, N> SharedAuthoritySet<H, N>
-where
-	N: Add<Output=N> + Ord + Clone + Debug,
-	H: Debug
+where N: Add<Output=N> + Ord + Clone + Debug,
+	  H: Clone + Debug
 {
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
@@ -91,16 +94,19 @@ pub(crate) struct Status<H, N> {
 pub(crate) struct AuthoritySet<H, N> {
 	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	set_id: u64,
-	pending_changes: Vec<PendingChange<H, N>>,
+	pending_changes: Dag<H, N, PendingChange<H, N>>,
 }
 
-impl<H, N> AuthoritySet<H, N> {
+impl<H, N> AuthoritySet<H, N>
+where H: PartialEq,
+	  N: Ord,
+{
 	/// Get a genesis set with given authorities.
 	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
-			pending_changes: Vec::new(),
+			pending_changes: Dag::empty(),
 		}
 	}
 
@@ -113,51 +119,49 @@ impl<H, N> AuthoritySet<H, N> {
 impl<H: Eq, N> AuthoritySet<H, N>
 where
 	N: Add<Output=N> + Ord + Clone + Debug,
-	H: Debug
+	H: Clone + Debug
 {
 	/// Note an upcoming pending transition. This makes sure that there isn't
 	/// already any pending change for the same chain. Multiple pending changes
 	/// are allowed but they must be signalled in different forks. The closure
 	/// should return an error if the pending change block is equal to or a
 	/// descendent of the given block.
-	pub(crate) fn add_pending_change<F, E: Debug>(
+	pub(crate) fn add_pending_change<F, E: std::error::Error>(
 		&mut self,
 		pending: PendingChange<H, N>,
-		is_equal_or_descendent_of: F,
-	) -> Result<(), E> where
-		F: Fn(&H) -> Result<(), E>,
+		is_descendent_of: &F,
+	) -> Result<(), dag::Error<E>> where
+		F: Fn(&H, &H) -> Result<bool, E>,
 	{
-		for change in self.pending_changes.iter() {
-			is_equal_or_descendent_of(&change.canon_hash)?;
-		}
+		let hash = pending.canon_hash.clone();
+		let number = pending.canon_height.clone();
 
-		// ordered first by effective number and then by signal-block number.
-		let key = (pending.effective_number(), pending.canon_height.clone());
-		let idx = self.pending_changes
-			.binary_search_by_key(&key, |change| (
-				change.effective_number(),
-				change.canon_height.clone(),
-			))
-			.unwrap_or_else(|i| i);
+		self.pending_changes.import(
+			hash.clone(),
+			number.clone(),
+			pending,
+			is_descendent_of,
+		)?;
 
 		debug!(target: "afg", "Inserting potential set change at block {:?}.",
-			(&pending.canon_height, &pending.canon_hash));
+			   (&number, &hash));
 
-		self.pending_changes.insert(idx, pending);
-
-		debug!(target: "afg", "There are now {} pending changes.", self.pending_changes.len());
+		// debug!(target: "afg", "There are now {} pending changes.", self.pending_changes.len());
 
 		Ok(())
 	}
 
 	/// Inspect pending changes.
-	pub(crate) fn pending_changes(&self) -> &[PendingChange<H, N>] {
-		&self.pending_changes
-	}
+	// FIXME
+	// pub(crate) fn pending_changes(&self) -> &[PendingChange<H, N>] {
+	// 	&self.pending_changes
+	// }
 
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
-		self.pending_changes.get(0).map(|change| change.effective_number().clone())
+		self.pending_changes.roots()
+			.min_by_key(|&(_, _, c)| c.effective_number())
+			.map(|(_, _, c)| c.effective_number())
 	}
 
 	/// Apply or prune any pending transitions. Provide a closure that can be used to check for the
@@ -165,59 +169,43 @@ where
 	///
 	/// When the set has changed, the return value will be `Ok(Some((H, N)))` which is the canonical
 	/// block where the set last changed.
-	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
-		-> Result<Status<H, N>, E>
-		where F: FnMut(N) -> Result<Option<H>, E>
+	pub(crate) fn apply_changes<F, E>(
+		&mut self,
+		finalized_hash: H,
+		finalized_number: N,
+		is_descendent_of: &F,
+	) -> Result<Status<H, N>, dag::Error<E>>
+	where F: Fn(&H, &H) -> Result<bool, E>,
+		  E: std::error::Error,
 	{
 		let mut status = Status {
 			changed: false,
 			new_set_block: None,
 		};
-		loop {
-			let remove_up_to = match self.pending_changes.first() {
-				None => break,
-				Some(change) => {
-					let effective_number = change.effective_number();
-					if effective_number > just_finalized { break }
 
-					// check if the block that signalled the change is canonical in
-					// our chain.
-					let canonical_hash = canonical(change.canon_height.clone())?;
-					let effective_hash = canonical(effective_number.clone())?;
+		match self.pending_changes.finalize_if(
+			&finalized_hash,
+			finalized_number.clone(),
+			is_descendent_of,
+			|change| change.effective_number() <= finalized_number
+		)? {
+			dag::FinalizationResult::Changed(change) => {
+				status.changed = true;
 
-					debug!(target: "afg", "Evaluating potential set change at block {:?}. Our canonical hash is {:?}",
-						(&change.canon_height, &change.canon_hash), canonical_hash);
+				if let Some(change) = change {
+					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
+						  change.canon_height);
 
-					match (canonical_hash, effective_hash) {
-						(Some(canonical_hash), Some(effective_hash)) => {
-							if canonical_hash == change.canon_hash {
-								// apply this change: make the set canonical
-								info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
-									  change.canon_height);
+					self.current_authorities = change.next_authorities;
+					self.set_id += 1;
 
-								self.current_authorities = change.next_authorities.clone();
-								self.set_id += 1;
-
-								status.new_set_block = Some((
-									effective_hash,
-									effective_number.clone(),
-								));
-
-								// discard all signalled changes since they're
-								// necessarily from other forks
-								self.pending_changes.len()
-							} else {
-								1 // prune out this entry; it's no longer relevant.
-							}
-						},
-						_ => 1, // prune out this entry; it's no longer relevant.
-					}
+					status.new_set_block = Some((
+						finalized_hash,
+						finalized_number,
+					));
 				}
-			};
-
-			let remove_up_to = ::std::cmp::min(remove_up_to, self.pending_changes.len());
-			self.pending_changes.drain(..remove_up_to);
-			status.changed = true; // always changed because we strip at least the first change.
+			},
+			dag::FinalizationResult::Unchanged => {},
 		}
 
 		Ok(status)
@@ -226,25 +214,21 @@ where
 	/// Check whether the given finalized block number enacts any authority set
 	/// change (without triggering it). Provide a closure that can be used to
 	/// check for the canonical block with a given number.
-	pub fn enacts_change<F, E>(&self, just_finalized: N, mut canonical: F)
-		-> Result<bool, E>
-		where F: FnMut(N) -> Result<Option<H>, E>
+	pub fn enacts_change<F, E>(
+		&self,
+		finalized_hash: H,
+		finalized_number: N,
+		is_descendent_of: &F,
+	) -> Result<bool, dag::Error<E>>
+	where F: Fn(&H, &H) -> Result<bool, E>,
+		  E: std::error::Error,
 	{
-		for change in self.pending_changes.iter() {
-			if change.effective_number() > just_finalized { break };
-
-			if change.effective_number() == just_finalized {
-				// check if the block that signalled the change is canonical in
-				// our chain.
-				match canonical(change.canon_height.clone())? {
-					Some(ref canonical_hash) if *canonical_hash == change.canon_hash =>
-						return Ok(true),
-					_ => (),
-				}
-			}
-		}
-
-		Ok(false)
+		self.pending_changes.finalizes_if(
+			&finalized_hash,
+			finalized_number.clone(),
+			is_descendent_of,
+			|change| change.effective_number() <= finalized_number
+		)
 	}
 }
 
