@@ -120,9 +120,9 @@ pub struct Peer<D> {
 	client: Arc<PeersClient>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
 
-	network_port: Mutex<NetworkPort>,
+	network_port: Mutex<NetworkPort<Block>>,
 	pub import_queue: Box<ImportQueue<Block>>,
-	network_sender: NetworkChan,
+	network_sender: NetworkChan<Block>,
 	pub data: D,
 }
 
