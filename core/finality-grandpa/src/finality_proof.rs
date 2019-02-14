@@ -36,7 +36,8 @@ use client::{
 	error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult},
 	light::fetcher::RemoteCallRequest,
 };
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
+use parity_codec_derive::{Encode, Decode};
 use grandpa::BlockNumberOps;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -44,7 +45,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Ed25519AuthorityId, H256};
 
-use justification::GrandpaJustification;
+use crate::justification::GrandpaJustification;
 
 /// Prepare proof-of-finality for the given block.
 ///

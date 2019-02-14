@@ -1918,7 +1918,6 @@ dependencies = [
 name = "node-executor"
 version = "0.1.0"
 dependencies = [
- "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
