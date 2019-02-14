@@ -36,10 +36,11 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
-use crate::{AUTHORITY_SET_KEY, Error};
+use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
+use aux_schema::AUTHORITY_SET_KEY;
 use consensus_changes::SharedConsensusChanges;
-use environment::{canonical_at_height, finalize_block, ExitOrError, NewAuthoritySet};
+use environment::{canonical_at_height, finalize_block};
 use justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.
@@ -54,7 +55,7 @@ use justification::GrandpaJustification;
 pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, RA, PRA> {
 	inner: Arc<Client<B, E, Block, RA>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	authority_set_change: mpsc::UnboundedSender<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
+	send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	api: Arc<PRA>,
 }
@@ -130,15 +131,17 @@ struct PendingSetChanges<'a, Block: 'a + BlockT> {
 		RwLockWriteGuard<'a, AuthoritySet<Block::Hash, NumberFor<Block>>>,
 	)>,
 	applied_changes: AppliedChanges<Block::Hash, NumberFor<Block>>,
+	do_pause: bool,
 }
 
 impl<'a, Block: 'a + BlockT> PendingSetChanges<'a, Block> {
 	// revert the pending set change explicitly.
 	fn revert(self) { }
 
-	fn defuse(mut self) -> AppliedChanges<Block::Hash, NumberFor<Block>> {
+	fn defuse(mut self) -> (AppliedChanges<Block::Hash, NumberFor<Block>>, bool) {
 		self.just_in_case = None;
-		::std::mem::replace(&mut self.applied_changes, AppliedChanges::None)
+		let applied_changes = ::std::mem::replace(&mut self.applied_changes, AppliedChanges::None);
+		(applied_changes, self.do_pause)
 	}
 }
 
@@ -296,6 +299,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 			old: None,
 		};
 
+		// whether to pause the old authority set -- happens after import
+		// of a forced change block.
+		let mut do_pause = false;
+
 		// add any pending changes.
 		if let Some(change) = maybe_change {
 			let parent_hash = *block.header.parent_hash();
@@ -334,6 +341,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 
 				Ok(())
 			};
+
+			if let DelayKind::Best = change.delay_kind {
+				do_pause = true;
+			}
 
 			guard.as_mut().add_pending_change(
 				change,
@@ -378,7 +389,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		if let Some((_, ref authorities)) = just_in_case {
 			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
 		}
-		Ok(PendingSetChanges { just_in_case, applied_changes })
+		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
 	}
 }
 
@@ -434,7 +445,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			}
 		};
 
-		let applied_changes = pending_changes.defuse();
+		let (applied_changes, do_pause) = pending_changes.defuse();
+
+		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
+		let _ = self.send_voter_commands.unbounded_send(VoterCommand::Pause(format!("Forced change scheduled after inactivity")));
 
 		let needs_justification = applied_changes.needs_justification();
 		if let AppliedChanges::Forced(new) = applied_changes {
@@ -443,7 +457,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			// TODO: figure out if this is right...the new set will finalize this block as
 			// well so we should probably only reject justifications from the old set.
 			justification = None;
-			let _ = self.authority_set_change.unbounded_send(new);
+			let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
 		}
 
 		if !needs_justification && !enacts_consensus_change {
@@ -489,14 +503,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	pub(crate) fn new(
 		inner: Arc<Client<B, E, Block, RA>>,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-		authority_set_change: mpsc::UnboundedSender<NewAuthoritySet<Block::Hash, NumberFor<Block>>>,
+		send_voter_commands: mpsc::UnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		api: Arc<PRA>,
 	) -> GrandpaBlockImport<B, E, Block, RA, PRA> {
 		GrandpaBlockImport {
 			inner,
 			authority_set,
-			authority_set_change,
+			send_voter_commands,
 			consensus_changes,
 			api,
 		}
@@ -544,13 +558,15 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 		);
 
 		match result {
-			Err(ExitOrError::AuthoritiesChanged(new)) => {
-				info!(target: "finality", "Imported justification for block #{} that enacts authority set change, signalling voter.", number);
-				if let Err(e) = self.authority_set_change.unbounded_send(new) {
+			Err(CommandOrError::VoterCommand(command)) => {
+				info!(target: "finality", "Imported justification for block #{} that triggers \
+					command {}, signalling voter.", number, command);
+
+				if let Err(e) = self.send_voter_commands.unbounded_send(command) {
 					return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
 				}
 			},
-			Err(ExitOrError::Error(e)) => {
+			Err(CommandOrError::Error(e)) => {
 				return Err(match e {
 					Error::Grandpa(error) => ConsensusErrorKind::ClientImport(error.to_string()),
 					Error::Network(error) => ConsensusErrorKind::ClientImport(error),

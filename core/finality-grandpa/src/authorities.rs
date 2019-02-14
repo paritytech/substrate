@@ -90,9 +90,10 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
-	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
-	set_id: u64,
-	pending_changes: Vec<PendingChange<H, N>>,
+	pub(crate) current_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	pub(crate) set_id: u64,
+	pub(crate) pending_changes: Vec<PendingChange<H, N>>,
+	pub(crate) paused: bool,
 }
 
 impl<H, N> AuthoritySet<H, N> {
@@ -102,6 +103,7 @@ impl<H, N> AuthoritySet<H, N> {
 			current_authorities: initial,
 			set_id: 0,
 			pending_changes: Vec::new(),
+			paused: false,
 		}
 	}
 
@@ -192,6 +194,7 @@ where
 					new_set = Some(AuthoritySet {
 						current_authorities: change.next_authorities.clone(),
 						set_id: self.set_id + 1,
+						paused: false,
 						pending_changes: Vec::new(), // new set, new changes.
 					});
 
@@ -556,42 +559,6 @@ mod tests {
 		// block 16 is already past the change, we assume 15 will be finalized
 		// first and enact the change
 		assert!(!authorities.enacts_standard_change(16, canonical).unwrap());
-	}
-
-	#[test]
-	fn old_delay_kind_migrates() {
-		use codec::Encode;
-
-		#[derive(Debug, Clone, Encode, Decode, PartialEq)]
-		struct OldPendingChange<H, N> {
-			next_authorities: Vec<(Ed25519AuthorityId, u64)>,
-			delay: N,
-			canon_height: N,
-			canon_hash: H,
-		}
-
-		let old_change: OldPendingChange<Vec<u8>, u32> = OldPendingChange {
-			next_authorities: vec![([1; 32].into(), 5), ([2; 32].into(), 100)],
-			delay: 1000,
-			canon_height: 123,
-			canon_hash: b"hash_a".to_vec(),
-		};
-
-		let encoded = old_change.encode();
-		let mut new_change: PendingChange<Vec<u8>, u32>
-			= PendingChange::decode(&mut &encoded[..]).unwrap();
-
-		assert_eq!(new_change.delay_kind, DelayKind::Finalized);
-
-		assert_eq!(new_change.next_authorities, old_change.next_authorities);
-		assert_eq!(new_change.delay, old_change.delay);
-		assert_eq!(new_change.canon_height, old_change.canon_height);
-		assert_eq!(new_change.canon_hash, old_change.canon_hash);
-
-		new_change.delay_kind = DelayKind::Best;
-		let encoded = new_change.encode();
-		let decoded: PendingChange<Vec<u8>, u32> = Decode::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(new_change, decoded);
 	}
 
 	#[test]
