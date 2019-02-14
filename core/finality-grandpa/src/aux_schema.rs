@@ -25,14 +25,14 @@ use substrate_primitives::Ed25519AuthorityId;
 use authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use std::sync::Arc;
+use {NewAuthoritySet};
 
-pub(crate) const VERSION_KEY: &[u8] = b"grandpa_schema_version";
-pub(crate) const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
-pub(crate) const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
-pub(crate) const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
+const VERSION_KEY: &[u8] = b"grandpa_schema_version";
+const SET_STATE_KEY: &[u8] = b"grandpa_completed_round";
+const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
+const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
 const CURRENT_VERSION: u32 = 1;
-const INITIAL_VERSION: u32 = 0;
 
 /// The voter set state.
 #[derive(Clone, Encode, Decode)]
@@ -125,7 +125,7 @@ pub(crate) fn load_persistent<B, H, N, G>(
 				let new_set: AuthoritySet<H, N> = old_set.into();
 				backend.insert_aux(&[(AUTHORITY_SET_KEY, new_set.encode().as_slice())], &[])?;
 
-				let set_state = match load_decode::<_, V0VoterSetState<H, N>>(backend, LAST_COMPLETED_KEY)? {
+				let set_state = match load_decode::<_, V0VoterSetState<H, N>>(backend, SET_STATE_KEY)? {
 					Some((number, state)) => VoterSetState::Live(number, state),
 					None => VoterSetState::Live(0, make_genesis_round()),
 				};
@@ -139,7 +139,7 @@ pub(crate) fn load_persistent<B, H, N, G>(
 		}
 		Some(1) => {
 			if let Some(set) = load_decode::<_, AuthoritySet<H, N>>(backend, AUTHORITY_SET_KEY)? {
-				let set_state = match load_decode::<_, VoterSetState<H, N>>(backend, LAST_COMPLETED_KEY)? {
+				let set_state = match load_decode::<_, VoterSetState<H, N>>(backend, SET_STATE_KEY)? {
 					Some(state) => state,
 					None => VoterSetState::Live(0, make_genesis_round()),
 				};
@@ -165,7 +165,7 @@ pub(crate) fn load_persistent<B, H, N, G>(
 	backend.insert_aux(
 		&[
 			(AUTHORITY_SET_KEY, genesis_set.encode().as_slice()),
-			(LAST_COMPLETED_KEY, genesis_state.encode().as_slice()),
+			(SET_STATE_KEY, genesis_state.encode().as_slice()),
 		],
 		&[],
 	)?;
@@ -177,15 +177,59 @@ pub(crate) fn load_persistent<B, H, N, G>(
 	})
 }
 
-/// Execute a closure with the
-pub(crate) fn authority_set_update<H: Encode, N: Encode, F>(set: &AuthoritySet<H, N>, f: F)
-	where F: FnOnce(&[u8], &[u8])
+/// Update the authority set on disk after a change.
+pub(crate) fn update_authority_set<H, N, F, R>(
+	set: &AuthoritySet<H, N>,
+	new_set: Option<&NewAuthoritySet<H, N>>,
+	write_aux: F
+) -> R where
+	H: Encode + Clone,
+	N: Encode + Clone,
+	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
-	f(AUTHORITY_SET_KEY, set.encode().as_slice())
+	// write new authority set state to disk.
+	let encoded_set = set.encode();
+
+	if let Some(new_set) = new_set {
+		// we also overwrite the "last completed round" entry with a blank slate
+		// because from the perspective of the finality gadget, the chain has
+		// reset.
+		let round_state = RoundState::genesis((
+			new_set.canon_hash.clone(),
+			new_set.canon_number.clone(),
+		));
+		let set_state = VoterSetState::Live(0, round_state);
+		let encoded = set_state.encode();
+
+		write_aux(&[
+			(AUTHORITY_SET_KEY, &encoded_set[..]),
+			(SET_STATE_KEY, &encoded[..]),
+		])
+	} else {
+		write_aux(&[(AUTHORITY_SET_KEY, &encoded_set[..])])
+	}
 }
 
-pub(crate) fn set_state_update<H: Encode, N: Encode, F>(set_state: &VoterSetState<H, N>, f: F)
-	where F: FnOnce(&[u8], &[u8])
+/// Update the authority set on disk.
+pub(crate) fn complete_round<B, H, N>(backend: &B, round_number: u64, state: RoundState<H, N>)
+	-> ClientResult<()>
+	where B: AuxStore, H: Encode, N: Encode
 {
-	f(LAST_COMPLETED_KEY, set_state.encode().as_slice())
+	let state = VoterSetState::Live(round_number, state);
+	backend.insert_aux(
+		&[(SET_STATE_KEY, state.encode().as_slice())],
+		&[]
+	)
+}
+
+/// Update the consensus changes.
+pub(crate) fn update_consensus_changes<H, N, F, R>(
+	set: &ConsensusChanges<H, N>,
+	write_aux: F
+) -> R where
+	H: Encode + Clone,
+	N: Encode + Clone,
+	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
+{
+	write_aux(&[(CONSENSUS_CHANGES_KEY, set.encode().as_slice())])
 }

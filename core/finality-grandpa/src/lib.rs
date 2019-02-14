@@ -125,7 +125,6 @@ mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService};
 
-use authorities::SharedAuthoritySet;
 use aux_schema::{PersistentData, VoterSetState};
 use environment::Environment;
 pub use finality_proof::{prove_finality, check_finality_proof};

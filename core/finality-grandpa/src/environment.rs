@@ -39,12 +39,9 @@ use crate::{
 };
 
 use authorities::SharedAuthoritySet;
-use aux_schema::{AUTHORITY_SET_KEY, CONSENSUS_CHANGES_KEY, LAST_COMPLETED_KEY};
 use consensus_changes::SharedConsensusChanges;
 use justification::GrandpaJustification;
 use until_imported::UntilVoteTargetImported;
-
-type LastCompleted<H, N> = (u64, RoundState<H, N>);
 
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
@@ -251,14 +248,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.finalized.as_ref().map(|e| e.1),
 		);
 
-		let encoded_state = (round, state).encode();
-		let res = Backend::insert_aux(&**self.inner.backend(), &[(LAST_COMPLETED_KEY, &encoded_state[..])], &[]);
-		if let Err(e) = res {
-			warn!(target: "afg", "Shutting down voter due to error bookkeeping last completed round in DB: {:?}", e);
-			Err(Error::Client(e).into())
-		} else {
-			Ok(())
-		}
+		::aux_schema::complete_round(&**self.inner.backend(), round, state).map_err(Into::into)
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
@@ -353,38 +343,6 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
 		let status = authority_set.apply_standard_changes(number, &canon_at_height)?;
 
-		if status.changed {
-			// write new authority set state to disk.
-			let encoded_set = authority_set.encode();
-
-			let write_result = if let Some((ref canon_hash, ref canon_number)) = status.new_set_block {
-				// we also overwrite the "last completed round" entry with a blank slate
-				// because from the perspective of the finality gadget, the chain has
-				// reset.
-				let round_state = RoundState::genesis((*canon_hash, *canon_number));
-				let last_completed: LastCompleted<_, _> = (0, round_state);
-				let encoded = last_completed.encode();
-
-				client.apply_aux(
-					import_op,
-					&[
-						(AUTHORITY_SET_KEY, &encoded_set[..]),
-						(LAST_COMPLETED_KEY, &encoded[..]),
-					],
-					&[]
-				)
-			} else {
-				client.apply_aux(import_op, &[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
-			};
-
-			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
-
-				return Err(e.into());
-			}
-		}
-
 		// check if this is this is the first finalization of some consensus changes
 		let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
 			.finalize((number, hash), &canon_at_height)?;
@@ -392,8 +350,11 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		if alters_consensus_changes {
 			old_consensus_changes = Some(consensus_changes.clone());
 
-			let encoded = consensus_changes.encode();
-			let write_result = client.apply_aux(import_op, &[(CONSENSUS_CHANGES_KEY, &encoded[..])], &[]);
+			let write_result = ::aux_schema::update_consensus_changes(
+				&*consensus_changes,
+				|insert| client.apply_aux(import_op, insert, &[]),
+			);
+
 			if let Err(e) = write_result {
 				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
 				warn!(target: "finality", "Node is in a potentially inconsistent state.");
@@ -451,7 +412,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 			e
 		})?;
 
-		if let Some((canon_hash, canon_number)) = status.new_set_block {
+		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
 			let (new_id, set_ref) = authority_set.current();
 
@@ -461,15 +422,32 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
 
-			Ok(Some(VoterCommand::ChangeAuthorities(NewAuthoritySet {
+			Some(NewAuthoritySet {
 				canon_hash,
 				canon_number,
 				set_id: new_id,
 				authorities: set_ref.to_vec(),
-			})))
+			})
 		} else {
-			Ok(None)
+			None
+		};
+
+		if status.changed {
+			let write_result = ::aux_schema::update_authority_set(
+				&authority_set,
+				new_authorities.as_ref(),
+				|insert| client.apply_aux(import_op, insert, &[]),
+			);
+
+			if let Err(e) = write_result {
+				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
+				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+
+				return Err(e.into());
+			}
 		}
+
+		Ok(new_authorities.map(VoterCommand::ChangeAuthorities))
 	});
 
 	match update_res {

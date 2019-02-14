@@ -38,7 +38,6 @@ use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
-use aux_schema::AUTHORITY_SET_KEY;
 use consensus_changes::SharedConsensusChanges;
 use environment::{canonical_at_height, finalize_block};
 use justification::GrandpaJustification;
@@ -225,7 +224,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	{
 		use consensus_common::ForkChoiceStrategy;
 
-
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error or panic.
@@ -360,6 +358,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 			if let Some(new_set) = forced_change_set {
 				let new_authorities = {
 					let (set_id, new_authorities) = new_set.current();
+
+					// TODO: use a different canon hash! probably the signal
+					// block.
 					NewAuthoritySet {
 						canon_number: number,
 						canon_hash: hash,
@@ -384,10 +385,22 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 			}
 		};
 
-		// consume the guard safely.
+		// consume the guard safely and write necessary changes.
 		let just_in_case = guard.consume();
 		if let Some((_, ref authorities)) = just_in_case {
-			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
+			let authorities_change = match applied_changes {
+				AppliedChanges::Forced(ref new) => Some(new),
+				AppliedChanges::Standard => None, // the change isn't actually applied yet.
+				AppliedChanges::None => None,
+			};
+
+			::aux_schema::update_authority_set(
+				authorities,
+				authorities_change,
+				|insert| block.auxiliary.extend(
+					insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				)
+			);
 		}
 		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
 	}
@@ -448,7 +461,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let (applied_changes, do_pause) = pending_changes.defuse();
 
 		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
-		let _ = self.send_voter_commands.unbounded_send(VoterCommand::Pause(format!("Forced change scheduled after inactivity")));
+		if do_pause {
+			let _ = self.send_voter_commands.unbounded_send(
+				VoterCommand::Pause(format!("Forced change scheduled after inactivity"))
+			);
+		}
 
 		let needs_justification = applied_changes.needs_justification();
 		if let AppliedChanges::Forced(new) = applied_changes {
