@@ -14,36 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-
-use std::collections::HashMap;
 use kvdb::{KeyValueDB, DBTransaction};
 use parity_codec::{Encode, Decode};
 use crate::error;
 use std::hash::Hash;
 
 
-/// Map of children blocks stored in memory for fast access.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChildrenMap<K, V> where 
-	K: Eq + Hash + Clone + Encode + Decode,
-	V: Eq + Hash + Clone + Encode + Decode,
-{
-	storage: HashMap<K, Vec<V>>,
-}
+/// Map of father to children blocks.
+pub struct ChildrenMap;
 
-impl<K, V> ChildrenMap<K, V> where
-	K: Eq + Hash + Clone + Encode + Decode,
-	V: Eq + Hash + Clone + Encode + Decode,
-{
-	/// Creates an empty children map.
-	pub fn new() -> Self {
-		Self {
-			storage: HashMap::new(),
-		}
-	}
-
+impl ChildrenMap {
 	/// Returns the hashes of the children blocks of the block with `parent_hash`.
-	pub fn hashes(&self, db: &KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> error::Result<Vec<V>> {
+	pub fn children_hashes<
+		K: Eq + Hash + Clone + Encode + Decode,
+		V: Eq + Hash + Clone + Encode + Decode,
+	>(db: &KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> error::Result<Vec<V>> {
 		let mut buf = prefix.to_vec();
 		parent_hash.using_encoded(|s| buf.extend(s));
 
@@ -65,30 +50,23 @@ impl<K, V> ChildrenMap<K, V> where
 		Ok(children)
 	}
 
-	/// Returns the hashes of the children blocks of the block with `parent_hash`.
-	/// It doesn't read the database.
-	pub fn hashes_from_mem(&self, parent_hash: K) -> Vec<V> {
-		self.storage.get(&parent_hash).cloned().unwrap_or_default()
-	}
-
-	/// Import the hash `child_hash` as child of `parent_hash`.
-	/// It doesn't save changes to database.
-	pub fn import(&mut self, parent_hash: K, child_hash: V) {
-		self.storage.entry(parent_hash).or_insert_with(Vec::new).push(child_hash);
-	}
-
-	/// Prepare the transaction `tx` that saves the content of the ChildrenMap to database.
-	/// It clears the content of ChildrenMap.
-	pub fn prepare_transaction(&mut self, db: &KeyValueDB, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8])
-		-> error::Result<()> {
-		for (parent_hash, children) in self.storage.iter() {
-			let mut children_db = self.hashes(db, column, prefix, parent_hash.clone())?;
-			children_db.extend(children.iter().cloned());
-			let mut buf = prefix.to_vec();
-			parent_hash.using_encoded(|s| buf.extend(s));
-			tx.put_vec(column, &buf[..], children_db.encode());
-		}
-		self.storage.clear();
+	/// Prepare the database transaction `tx` that adds `child_hash` to the children of `parent_hash`.
+	pub fn prepare_transaction<
+		K: Eq + Hash + Clone + Encode + Decode,
+		V: Eq + Hash + Clone + Encode + Decode,
+	>(
+		db: &KeyValueDB,
+		tx: &mut DBTransaction,
+		column: Option<u32>,
+		prefix: &[u8],
+		parent_hash: K,
+		child_hash: V,
+	) -> error::Result<()> {
+		let mut children_db = Self::children_hashes(db, column, prefix, parent_hash.clone())?;
+		children_db.push(child_hash);
+		let mut buf = prefix.to_vec();
+		parent_hash.using_encoded(|s| buf.extend(s));
+		tx.put_vec(column, &buf[..], children_db.encode());
 		Ok(())
 	}
 }

@@ -99,7 +99,7 @@ struct BlockchainStorage<Block: BlockT> {
 	header_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
-	children: ChildrenMap<Block::Hash, Block::Hash>,
+	children: HashMap<Block::Hash, Vec<Block::Hash>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
 }
 
@@ -150,7 +150,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				header_cht_roots: HashMap::new(),
 				changes_trie_cht_roots: HashMap::new(),
 				leaves: LeafSet::new(),
-				children: ChildrenMap::new(),
+				children: HashMap::new(),
 				aux: HashMap::new(),
 			}));
 		Blockchain {
@@ -367,7 +367,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	}
 
 	fn children(&self, parent_hash: Block::Hash) -> error::Result<Vec<Block::Hash>> {
-		Ok(self.storage.read().children.hashes_from_mem(parent_hash))
+		Ok(self.storage.read().children.get(&parent_hash).cloned().unwrap_or_default())
 	}
 }
 

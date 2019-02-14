@@ -131,18 +131,15 @@ pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
-	children: RwLock<ChildrenMap<Block::Hash, Block::Hash>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
 		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
-		let children = ChildrenMap::new();
 		Ok(BlockchainDb {
 			db,
 			leaves: RwLock::new(leaves),
-			children: RwLock::new(children),
 			meta: Arc::new(RwLock::new(meta)),
 		})
 	}
@@ -255,7 +252,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	}
 
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>, client::error::Error> {
-		self.children.read().hashes(&*self.db, columns::META, meta_keys::CHILD_PREFIX, parent_hash)
+		ChildrenMap::children_hashes(&*self.db, columns::META, meta_keys::CHILD_PREFIX, parent_hash)
 	}
 }
 
@@ -861,10 +858,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				let mut leaves = self.blockchain.leaves.write();
 				let displaced_leaf = leaves.import(hash, number, parent_hash);
 				leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-				
-				let mut children = self.blockchain.children.write();
-				children.import(parent_hash, hash);
-				children.prepare_transaction(&*self.storage.db, &mut transaction, columns::META, meta_keys::CHILD_PREFIX)?;
+				ChildrenMap::prepare_transaction(&*self.storage.db, &mut transaction, columns::META, meta_keys::CHILD_PREFIX, parent_hash, hash)?;
 
 				displaced_leaf
 			};
