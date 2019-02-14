@@ -59,6 +59,12 @@ pub struct Dag<H, N, V> {
 	best_finalized_number: Option<N>,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum FinalizationResult<V> {
+	Changed(Option<V>),
+	Unchanged,
+}
+
 impl<H, N, V> Dag<H, N, V> where
 	H: PartialEq,
 	N: Ord,
@@ -111,8 +117,8 @@ impl<H, N, V> Dag<H, N, V> where
 		Ok(true)
 	}
 
-	pub fn roots(&self) -> impl Iterator<Item=(&H, &N)> {
-		self.roots.iter().map(|node| (&node.hash, &node.number))
+	pub fn roots(&self) -> impl Iterator<Item=(&H, &N, &V)> {
+		self.roots.iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
 	pub fn finalize_root(&mut self, hash: &H) -> Option<V> {
@@ -131,8 +137,8 @@ impl<H, N, V> Dag<H, N, V> where
 		hash: &H,
 		number: N,
 		is_descendent_of: &F,
-	) -> Result<(), Error<E>>
-		where E: fmt::Debug,
+	) -> Result<FinalizationResult<V>, Error<E>>
+		where E: std::error::Error,
 			  F: Fn(&H, &H) -> Result<bool, E>
 	{
 		if let Some(ref best_finalized_number) = self.best_finalized_number {
@@ -142,8 +148,8 @@ impl<H, N, V> Dag<H, N, V> where
 		}
 
 		// check if one of the current roots is being finalized
-		if let Some(_) = self.finalize_root(hash) {
-			return Ok(());
+		if let Some(root) = self.finalize_root(hash) {
+			return Ok(FinalizationResult::Changed(Some(root)));
 		}
 
 		// make sure we're not finalizing a descendent of any root
@@ -156,13 +162,123 @@ impl<H, N, V> Dag<H, N, V> where
 		// we finalized a block earlier than any existing root (or possibly
 		// another fork not part of the dag). make sure to only keep roots that
 		// are part of the finalized branch
+		let mut changed = false;
 		self.roots.retain(|root| {
-			root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false)
+			let retain = root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false);
+
+			if !retain {
+				changed = true;
+			}
+
+			retain
 		});
 
 		self.best_finalized_number = Some(number);
 
-		Ok(())
+		if changed {
+			Ok(FinalizationResult::Changed(None))
+		} else {
+			Ok(FinalizationResult::Unchanged)
+		}
+	}
+
+	pub fn finalizes_if<F, P, E>(
+		&self,
+		hash: &H,
+		number: N,
+		is_descendent_of: &F,
+		predicate: P,
+	) -> Result<bool, Error<E>>
+		where E: std::error::Error,
+			  F: Fn(&H, &H) -> Result<bool, E>,
+			  P: Fn(&V) -> bool,
+	{
+		if let Some(ref best_finalized_number) = self.best_finalized_number {
+			if number <= *best_finalized_number {
+				return Err(Error::Revert);
+			}
+		}
+
+		// check if the given hash is equal or a a descendent of any root, if we
+		// find a valid root that passes the predicate then we must ensure that
+		// we're not finalizing past any children node.
+		for root in self.roots.iter() {
+			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
+				if predicate(&root.data) {
+					if root.children.iter().any(|n| n.number <= number) {
+						return Err(Error::UnfinalizedRoot);
+					}
+
+					return Ok(true);
+				}
+			}
+		}
+
+		Ok(false)
+	}
+
+	pub fn finalize_if<F, P, E>(
+		&mut self,
+		hash: &H,
+		number: N,
+		is_descendent_of: &F,
+		predicate: P,
+	) -> Result<FinalizationResult<V>, Error<E>>
+		where E: std::error::Error,
+			  F: Fn(&H, &H) -> Result<bool, E>,
+			  P: Fn(&V) -> bool,
+	{
+		if let Some(ref best_finalized_number) = self.best_finalized_number {
+			if number <= *best_finalized_number {
+				return Err(Error::Revert);
+			}
+		}
+
+		// check if the given hash is equal or a a descendent of any root, if we
+		// find a valid root that passes the predicate then we must ensure that
+		// we're not finalizing past any children node.
+		let mut position = None;
+		for (i, root) in self.roots.iter().enumerate() {
+			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
+				if predicate(&root.data) {
+					if root.children.iter().any(|n| n.number <= number) {
+						return Err(Error::UnfinalizedRoot);
+					}
+
+					position = Some(i);
+					break;
+				}
+			}
+		}
+
+		if let Some(position) = position {
+			let node = self.roots.swap_remove(position);
+			self.roots = node.children;
+			self.best_finalized_number = Some(node.number);
+			return Ok(FinalizationResult::Changed(Some(node.data)));
+		}
+
+		// we finalized a block earlier than any existing root (or possibly
+		// another fork not part of the dag). make sure to only keep roots that
+		// are part of the finalized branch
+		let mut changed = false;
+		self.roots.retain(|root| {
+			let retain = root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false);
+
+			if !retain {
+				changed = true;
+			}
+
+			retain
+		});
+
+		self.best_finalized_number = Some(number);
+
+		if changed {
+			Ok(FinalizationResult::Changed(None))
+		} else {
+			Ok(FinalizationResult::Unchanged)
+		}
 	}
 }
 

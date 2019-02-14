@@ -241,7 +241,7 @@ impl<B: BlockT> PendingJustifications<B> {
 					self.previous_requests.clear();
 					self.peer_requests.clear();
 					self.pending_requests =
-						self.justifications.roots().map(|(h, n)| (h.clone(), n.clone())).collect();
+						self.justifications.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
 					return;
 				} else {
 					protocol.report_peer(
@@ -276,9 +276,9 @@ impl<B: BlockT> PendingJustifications<B> {
 
 		let roots = self.justifications.roots().collect::<HashSet<_>>();
 
-		self.pending_requests.retain(|(h, n)| roots.contains(&(h, n)));
-		self.peer_requests.retain(|_, (h, n)| roots.contains(&(h, n)));
-		self.previous_requests.retain(|(h, n), _| roots.contains(&(h, n)));
+		self.pending_requests.retain(|(h, n)| roots.contains(&(h, n, &())));
+		self.peer_requests.retain(|_, (h, n)| roots.contains(&(h, n, &())));
+		self.previous_requests.retain(|(h, n), _| roots.contains(&(h, n, &())));
 
 		Ok(())
 	}
