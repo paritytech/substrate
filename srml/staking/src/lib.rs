@@ -23,7 +23,7 @@
 use rstd::{prelude::*, cmp};
 use parity_codec::HasCompact;
 use parity_codec_derive::{Encode, Decode};
-use srml_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
+use srml_support::{Parameter, StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
 use session::OnSessionChange;
@@ -37,6 +37,7 @@ mod tests;
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
+const MAX_NOMINATIONS = 16;
 
 #[derive(PartialEq, Clone)]
 #[cfg_attr(test, derive(Debug))]
@@ -99,10 +100,24 @@ pub struct StakingLedger<AccountId, Balance, BlockNumber> {
 	pub inactive: Vec<(Balance, BlockNumber)>,
 }
 
+/// A snapshot of the stake backing a single validator in the system.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Exposure<AccountId, Balance> {
+	/// The total balance backing this validator.
+	pub total: Balance,
+	/// The validator's own stash that is exposed.
+	pub own: Balance,
+	/// The portions of nominators stashes that are exposed.
+	pub others: Vec<(AccountId, Balance)>,
+}
+
 /// Capacity in which a bonded account is participating.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Capacity<AccountId> {
+	/// Do nothing.
+	Idle,
 	/// We are nominating.
 	Nominator(Vec<AccountId>),
 	/// We want to be a validator.
@@ -128,8 +143,6 @@ pub trait Trait: system::Trait + session::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-pub type PairOf<T> = (T, T);
-
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
@@ -148,9 +161,12 @@ decl_storage! {
 		/// The length of the bonding duration in blocks.
 		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 
+		// TODO: remove once Alex/CC updated #1785
+		pub Invulerables get(invulerables) config(): Vec<T::AccountId>;
+
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialise
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
-		pub Invulerables get(invulnerables) config(): Vec<T::AccountId>;
+		pub Invulnerables get(invulnerables) config(): Vec<T::AccountId>;
 
 		/// Map from all locked "stash" accounts to the controller account.
 		pub Bonded get(bonded): map T::AccountId => Option<T::AccountId>;
@@ -162,22 +178,21 @@ decl_storage! {
 
 		//==============================================================================================================================
 
-		/// The desired capacity in which a controller wants to operate.
-//		pub Desired get(desired): map AccountId => Capacity<T::AccountId>;
+		// The desired capacity in which a controller wants to operate.
+		pub Desired get(desired): linked_map AccountId => Capacity<T::AccountId>;
 
-		/// All the accounts with a desire to stake.
-		pub Intentions get(intentions) config(): Vec<T::AccountId>;
+		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
+		/// but you can find them in the `sessions` module.
+		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
-		/// All nominator -> nominee relationships.
-		/// TODO: should be Vec<T::AccountId>.
-		pub Nominating get(nominating): map T::AccountId => Option<T::AccountId>;
-
-		/// Nominators for a particular account.
-		/// TODO: Might need to be removed.
-		pub NominatorsFor get(nominators_for): map T::AccountId => Vec<T::AccountId>;
-
-		/// Nominators for a particular account that is in action right now.
-		pub CurrentNominatorsFor get(current_nominators_for): map T::AccountId => Vec<T::AccountId>;
+		// The historical validators and their nominations for a given era. Stored as a hash of the encoded
+		// `(T::AccountId, Vec<(T::AccountId, BalanceOf<T>)>)`, which is the key and value of the `CurrentNominatorsFor`,
+		// under a key that is the tuple of `era` and `validator index`.
+		// 
+		// Every era change, this will be appended with the contents of `CurrentNominatorsFor`, and the oldest entry removed down to
+		// a specific number of entries (probably around 90 for a 3 month history). To remove all items for era N, just start at
+		// validator index 0: (N, 0) and remove the item, incrementing the index until it's a `None`.
+//		pub HistoricalStakers get(historical_stakers): map (T::BlockNumber, u32) => Option<H256>;
 
 		//==============================================================================================================================
 
@@ -189,13 +204,17 @@ decl_storage! {
 		/// Slash, per validator that is taken for the first time they are found to be offline.
 		pub CurrentOfflineSlash get(current_offline_slash) config(): BalanceOf<T>;
 
+		/// The accumulated reward for the current era. Reset to zero at the beginning of the era and
+		/// increased for every successfully finished session.
+		pub CurrentEraReward get(current_era_reward) config(): BalanceOf<T>;
+
 		/// The next value of sessions per era.
 		pub NextSessionsPerEra get(next_sessions_per_era): Option<T::BlockNumber>;
 		/// The session index at which the era length last changed.
 		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
 
 		/// The highest and lowest staked validator slashable balances.
-		pub StakeRange get(stake_range): PairOf<BalanceOf<T>>;
+		pub SlotStake get(slot_range): BalanceOf<T>;
 
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
 		pub SlashCount get(slash_count): map T::AccountId => u32;
@@ -221,7 +240,7 @@ decl_module! {
 				return Err("stash already bonded")
 			}
 
-			// Your auto-bonded forever, here. We might improve this by only bonding when
+			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate.
 			<Bonded<T>>::insert(&stash, controller.clone());
 
@@ -300,80 +319,36 @@ decl_module! {
 			}
 		}
 
-		// ***************
-		// TODO: all of the following should be made to work given that the 
-
 		/// Declare the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
 		fn validate(origin) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			ensure!(Self::nominating(&who).is_none(), "Cannot validate if already nominating.");
-
-			let mut intentions = <Intentions<T>>::get();
-			// can't be in the list twice.
-			ensure!(intentions.iter().find(|&t| t == &controller).is_none(), "Cannot validate if already validating.");
-
-			<Bondage<T>>::insert(&controller, T::BlockNumber::max_value());
-			intentions.push(controller);
-			<Intentions<T>>::put(intentions);
+			Desired<T>::insert(controller, Capacity::Validator);
 		}
 
-		/// Retract the desire to validate for the origin controller.
+		/// Declare the desire to nominate `targets` for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn unvalidate(origin, #[compact] intentions_index: u32) -> Result {
+		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let targets = target.into_iter()
+				.take(MAX_NOMINATIONS)
+				.map(T::Lookup::lookup)
+				.collect::<Result<Vec<T::AccountId>, &'static str>>()?;
 
-			// unstake fails in degenerate case of having too few existing staked parties
-			if Self::intentions().len() <= Self::minimum_validator_count() as usize {
-				return Err("cannot unvalidate when there are too few validating participants")
-			}
-			Self::apply_unvalidate(&controller, intentions_index as usize)
+			Desired<T>::insert(controller, Capacity::Nominator(targets));
 		}
 
-		/// Declare the desire to nominate `target` for the origin controller.
-		fn nominate(origin, target: <T::Lookup as StaticLookup>::Source) {
-			let who = ensure_signed(origin)?;
-			let target = T::Lookup::lookup(target)?;
-
-			let mut _ledger = Self::ledger(&who).ok_or("not a controller")?;
-
-			ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
-			ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already validating.");
-
-			// update nominators_for
-			let mut t = Self::nominators_for(&target);
-			t.push(who.clone());
-			<NominatorsFor<T>>::insert(&target, t);
-
-			// update nominating
-			<Nominating<T>>::insert(&who, &target);
-		}
-
-		/// Will panic if called when source isn't currently nominating target.
-		/// Updates Nominating, NominatorsFor and NominationBalance.
-		fn unnominate(origin, #[compact] target_index: u32) {
-			let source = ensure_signed(origin)?;
-			let target_index = target_index as usize;
-
-			let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
-
-			let mut t = Self::nominators_for(&target);
-			if t.get(target_index) != Some(&source) {
-				return Err("Invalid target index")
-			}
-
-			// Ok - all valid.
-
-			// update nominators_for
-			t.swap_remove(target_index);
-			<NominatorsFor<T>>::insert(&target, t);
-
-			// update nominating
-			<Nominating<T>>::remove(&source);
+		/// Declare no desire to either validate or nominate.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		fn chill(origin) {
+			let controller = ensure_signed(origin)?;
+			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			Desired<T>::insert(controller, Capacity::Idle);
 		}
 
 		/// Set the given account's preference for slashing behaviour should they be a validator.
@@ -384,13 +359,10 @@ decl_module! {
 			#[compact] intentions_index: u32,
 			prefs: ValidatorPrefs<BalanceOf<T>>
 		) {
-			let who = ensure_signed(origin)?;
+			let controller = ensure_signed(origin)?;
+			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 
-			if Self::intentions().get(intentions_index as usize) != Some(&who) {
-				return Err("Invalid index")
-			}
-
-			<ValidatorPreferences<T>>::insert(who, prefs);
+			<ValidatorPreferences<T>>::insert(controller, prefs);
 		}
 
 		/// Set the number of sessions in an era.
@@ -421,7 +393,7 @@ decl_module! {
 
 		/// Set the validators who cannot be slashed (if any).
 		fn set_invulnerables(validators: Vec<T::AccountId>) {
-			<Invulerables<T>>::put(validators);
+			<Invulnerables<T>>::put(validators);
 		}
 	}
 }
@@ -460,31 +432,17 @@ impl<T: Trait> Module<T> {
 			.fold(Zero::zero(), |acc, x| acc + x)
 	}
 
-	/// The total balance that can be slashed from an account for any activity
-	/// henceforth.
-	pub fn backing_balance(who: &T::AccountId) -> BalanceOf<T> {
-		Self::nominators_for(who).iter()
-			.map(Self::ledger)
-			.map(|ledger| ledger.active)
-			.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
+	/// The stashed funds whose staking activities are controlled by `controller` and
+	/// which are actively in stake right now.
+	pub fn stash_balance(controller: &T::AccountId) -> BalanceOf<T> {
+		Self::ledger(controller)
+			.map_or_else(Zero::zero, |l| l.active)
 	}
 
-	/// The total balance that can be slashed from an account.
-	/// XXXXXX
+	/// The total balance that can be slashed from a validator controller account as of
+	/// right now.
 	pub fn slashable_balance(who: &T::AccountId) -> BalanceOf<T> {
-		Self::nominators_for(who).iter()
-			.map(T::Currency::total_balance)
-			.fold(T::Currency::total_balance(who), |acc, x| acc + x)
-	}
-
-	/// The block at which the `who`'s funds become entirely liquid.
-	/// XXXXXX
-	pub fn unlock_block(who: &T::AccountId) -> LockStatus<T::BlockNumber> {
-		match Self::bondage(who) {
-			i if i == T::BlockNumber::max_value() => LockStatus::Bonded,
-			i if i <= <system::Module<T>>::block_number() => LockStatus::Liquid,
-			i => LockStatus::LockedUntil(i),
-		}
+		Self::stakers(who).total
 	}
 
 	/// Get the current validators.
@@ -493,63 +451,57 @@ impl<T: Trait> Module<T> {
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
+	
+	// TODO: switch out `backing_balance` for `Stakers`.
 
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
 	/// and reduces the nominators' balance if needed.
 	fn slash_validator(v: &T::AccountId, slash: BalanceOf<T>) {
-		// skip the slash in degenerate case of having only 4 staking participants despite having a larger
-		// desired number of validators (validator_count).
-		if Self::intentions().len() <= Self::minimum_validator_count() as usize {
-			return
-		}
+		// The exposure (backing stake) information of the validator to be slashed.
+		let exposure = Self::stakers(v);
+		// The amount we are actually going to slash (can't be bigger than thair total exposure)
+		let slash = slash.min(exposure.total);
+		// The amount we'll slash from the validator's stash directly.
+		let own_slash = exposure.own.min(slash);
+		let own_slash = own_slash - T::Currency::slash(v, own_slash).unwrap_or_default();
+		// The amount remaining that we can't slash from the validator, that must be taken from the nominators.
+		let rest_slash = slash - own_slash;
 
-		if let Some(rem) = T::Currency::slash(v, slash) {
-			let noms = Self::current_nominators_for(v);
-			let total = noms.iter().map(T::Currency::total_balance).fold(BalanceOf::<T>::zero(), |acc, x| acc + x);
+		if !rest.is_zero() {
+			// The total to be slashed from the nominators.
+			let total = exposure.total - exposure.own;
 			if !total.is_zero() {
-				let safe_mul_rational = |b| b * rem / total;// FIXME #1572 avoid overflow
-				for n in noms.iter() {
-					let _ = T::Currency::slash(n, safe_mul_rational(T::Currency::total_balance(n)));	// best effort - not much that can be done on fail.
+				let safe_mul_rational = |b| b * rest / total;// FIXME #1572 avoid overflow
+				for (them, their_exposure) in exposure.others.iter() {
+					let _ = T::Currency::slash(them, safe_mul_rational(their_exposure));	// best effort - not much that can be done on fail.
 				}
 			}
 		}
 	}
 
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
-	/// balance, pro-rata.
+	/// balance, pro-rata based on their exposure, after having removed the validator's pre-payout cut.
 	fn reward_validator(who: &T::AccountId, reward: BalanceOf<T>) {
 		let off_the_table = reward.min(Self::validator_preferences(who).validator_payment);
 		let reward = reward - off_the_table;
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
 		} else {
-			let noms = Self::current_nominators_for(who);
-			let total = noms.iter()
-				.map(T::Currency::total_balance)
-				.fold(T::Currency::total_balance(who), |acc, x| acc + x)
-				.max(One::one());
+			let exposure = Self::stakers(who);
+			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
-			for n in noms.iter() {
-				let _ = T::Currency::reward(n, safe_mul_rational(T::Currency::total_balance(n)));
+			for (them, their_exposure) in exposure.others.iter() {
+				let _ = T::Currency::reward(them, safe_mul_rational(their_exposure));
 			}
-			safe_mul_rational(T::Currency::total_balance(who))
+			safe_mul_rational(exposure.own)
 		};
 		let _ = T::Currency::reward(who, validator_cut + off_the_table);
 	}
 
-	/// Actually carry out the unstake operation.
+	/// Actually carry out the unvalidate operation.
 	/// Assumes `intentions()[intentions_index] == who`.
-	fn apply_unvalidate(who: &T::AccountId, intentions_index: usize) -> Result {
-		let mut intentions = Self::intentions();
-		if intentions.get(intentions_index) != Some(who) {
-			return Err("Invalid index");
-		}
-		intentions.swap_remove(intentions_index);
-		<Intentions<T>>::put(intentions);
-		<ValidatorPreferences<T>>::remove(who);
-		<SlashCount<T>>::remove(who);
-		<Bondage<T>>::insert(who, <system::Module<T>>::block_number() + Self::bonding_duration());
-		Ok(())
+	fn apply_unvalidate(who: &T::AccountId) {
+		<Desired<T>>::insert(who, Capacity::Idle);
 	}
 
 	/// Get the reward for the session, assuming it ends with this block.
@@ -566,16 +518,9 @@ impl<T: Trait> Module<T> {
 	/// move to a new era.
 	fn new_session(actual_elapsed: T::Moment, should_reward: bool) {
 		if should_reward {
-			// apply good session reward
+			// accumulate good session reward
 			let reward = Self::this_session_reward(actual_elapsed);
-			let validators = <session::Module<T>>::validators();
-			for v in validators.iter() {
-				Self::reward_validator(v, reward);
-			}
-			Self::deposit_event(RawEvent::Reward(reward));
-			let total_minted = reward * <BalanceOf<T> as As<usize>>::sa(validators.len());
-			let total_rewarded_stake = Self::stake_range().1 * <BalanceOf<T> as As<usize>>::sa(validators.len());
-			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
+			<CurrentEraReward<T>>::mutate(|r| r += reward);
 		}
 
 		let session_index = <session::Module<T>>::current_index();
@@ -591,6 +536,19 @@ impl<T: Trait> Module<T> {
 	/// NOTE: This always happens immediately before a session change to ensure that new validators
 	/// get a chance to set their session keys.
 	fn new_era() {
+		// Payout
+		let reward = <CurrentEraReward<T>>::take();
+		if !reward.is_zero() {
+			let validators = <session::Module<T>>::validators();
+			for v in validators.iter() {
+				Self::reward_validator(v, reward);
+			}
+			Self::deposit_event(RawEvent::Reward(reward));
+			let total_minted = reward * <BalanceOf<T> as As<usize>>::sa(validators.len());
+			let total_rewarded_stake = Self::slot_stake() * <BalanceOf<T> as As<usize>>::sa(validators.len());
+			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
+		}
+
 		// Increment current era.
 		<CurrentEra<T>>::put(&(<CurrentEra<T>>::get() + One::one()));
 
@@ -602,52 +560,68 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// evaluate desired staking amounts and nominations and optimise to find the best
-		// combination of validators, then use session::internal::set_validators().
-		// for now, this just orders would-be stakers by their balances and chooses the top-most
-		// <ValidatorCount<T>>::get() of them.
-		// FIXME #1571 this is not sound. this should be moved to an off-chain solution mechanism.
-		let mut intentions = Self::intentions()
-			.into_iter()
-			.map(|v| (Self::slashable_balance(&v), v))
-			.collect::<Vec<_>>();
+		// Reassign all Stakers.
 
-		// Avoid reevaluate validator set if it would leave us with fewer than the minimum
-		// needed validators
-		if intentions.len() < Self::minimum_validator_count() as usize {
-			return
+		// TODO: Can probably pre-process a lot of complexity out of these two for-loops,
+		// particularly the need to keep everything in a BTreeMap.
+
+		// Map of (would-be) validator account to amount of stake backing it.
+		let mut candidates: Vec<(T::AccountId, Exposure)> = Default::default();
+		for (who, capacity) in <Desired<T>>::enumerate() {
+			match capacity {
+				Validator => {
+					let stash_balance = Self::stash_balance(&who);
+					candidates.push((who, Exposure { total: stash_balance, own: stash_balance, others: vec![] }));
+				}
+				_ => {}
+			}
+		}
+		canidates.sort_unstable_by_key(|i| &i.0);
+		for (who, capacity) in <Desired<T>>::enumerate() {
+			match capacity {
+				Nominator(nominees) => {
+					// For this trivial nominator mapping, we just assume that nominators always
+					// have themselves assigned to the first validator in their list.
+					let chosen = if nominees.len() > 0 {
+						candidates[0]
+					} else {
+						continue
+					};
+					if let Ok(index) = candidates.binary_search_by_key(&who, |i| &i.0) {
+						let stash_balance = Self::stash_balance(&who);
+						candidates[index].1.total += stash_balance;
+						candidates[index].1.others.push((who, stash_balance));
+					}
+				}
+				_ => {}
+			}
 		}
 
-		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
-
-		let desired_validator_count = <ValidatorCount<T>>::get() as usize;
-		let stake_range = if !intentions.is_empty() {
-			let n = cmp::min(desired_validator_count, intentions.len());
-			(intentions[0].0, intentions[n - 1].0)
-		} else {
-			(Zero::zero(), Zero::zero())
-		};
-		<StakeRange<T>>::put(&stake_range);
-
-		let vals = &intentions.into_iter()
-			.map(|(_, v)| v)
-			.take(desired_validator_count)
-			.collect::<Vec<_>>();
+		// Clear Stakers.
 		for v in <session::Module<T>>::validators().iter() {
-			<CurrentNominatorsFor<T>>::remove(v);
+			<Stakers<T>>::remove(v);
 			let slash_count = <SlashCount<T>>::take(v);
 			if slash_count > 1 {
 				<SlashCount<T>>::insert(v, slash_count - 1);
 			}
 		}
-		for v in vals.iter() {
-			<CurrentNominatorsFor<T>>::insert(v, Self::nominators_for(v));
+
+		candidates.sort_unstable_by(|(a, b)| a.1.total > b.1.total);
+		candidates.truncate(Self::validator_count() as usize);
+
+		let slot_stake = candidates.last().map(|i| i.1.total).unwrap_or_default();
+		<SlotStake<T>>::put(&slot_stake);
+
+		for (who, exposure) in &candidates {
+			<Stakers<T>>::insert(who, exposure);
 		}
-		<session::Module<T>>::set_validators(vals);
+		<session::Module<T>>::set_validators(
+			candidates.into_iter().map(|i| i.0).collect::<Vec<_>>()
+		);
 
 		// Update the balances for slashing/rewarding according to the stakes.
-		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * stake_range.1);
-		<CurrentSessionReward<T>>::put(Self::session_reward() * stake_range.1);
+		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * slot_stake);
+		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the
@@ -657,6 +631,10 @@ impl<T: Trait> Module<T> {
 
 		// Early exit if validator is invulnerable.
 		if Self::invulnerables().contains(&v) {
+			return
+		}
+		// TODO: remove once Alex/CC updated #1785
+		if Self::invulerables().contains(&v) {
 			return
 		}
 
@@ -756,6 +734,9 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(controller) = <Bonded<T>>::take(who) {
 			<Ledger<T>>::kill(&controller);
+			<ValidatorPreferences<T>>::remove(&controller);
+			<SlashCount<T>>::remove(&controller);
+			<Desired<T>>::remove(&controller);
 		}
 	}
 }

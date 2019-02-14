@@ -517,7 +517,6 @@ fn deducting_balance_when_bonded_should_not_work() {
 		Balances::set_free_balance(&1, 111);
 		<Bondage<Test>>::insert(1, 2);
 		System::set_block_number(1);
-		assert_eq!(Staking::unlock_block(&1), LockStatus::LockedUntil(2));
 		assert_noop!(Balances::reserve(&1, 69), "cannot transfer illiquid funds");
 	});
 }
