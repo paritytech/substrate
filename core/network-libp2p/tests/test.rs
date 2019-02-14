@@ -187,5 +187,5 @@ fn many_nodes_connectivity() {
 		}
 	});
 
-	tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
+	tokio::runtime::current_thread::Runtime::new().unwrap().block_on(combined).unwrap();
 }
