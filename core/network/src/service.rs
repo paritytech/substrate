@@ -25,8 +25,8 @@ use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, S
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
+use crate::message::Message;
 use crate::protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
-use parity_codec::Decode;
 use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use crate::error::Error;
@@ -72,7 +72,7 @@ pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 	/// The protocol sender
 	pub(crate) protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// The network sender
-	pub(crate) network_sender: NetworkChan,
+	pub(crate) network_sender: NetworkChan<B>,
 }
 
 impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
@@ -108,7 +108,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	/// Network service
-	network: Arc<Mutex<NetworkService>>,
+	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Protocol sender
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
 	/// Sender for messages to the background service task, and handle for the background thread.
@@ -123,7 +123,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: Arc<I>,
-	) -> Result<(Arc<Service<B, S>>, NetworkChan), Error> {
+	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
 		let protocol_sender = Protocol::new(
 			network_chan.clone(),
@@ -139,7 +139,6 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let (thread, network) = start_thread(
 			protocol_sender.clone(),
 			network_port,
-			network_chan.clone(),
 			params.network_config,
 			registered,
 		)?;
@@ -332,7 +331,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 
 
 /// Create a NetworkPort/Chan pair.
-pub fn network_channel(protocol_id: ProtocolId) -> (NetworkChan, NetworkPort) {
+pub fn network_channel<B: BlockT + 'static>(protocol_id: ProtocolId) -> (NetworkChan<B>, NetworkPort<B>) {
 	let (network_sender, network_receiver) = channel::unbounded();
 	let task_notify = Arc::new(AtomicTask::new());
 	let network_port = NetworkPort::new(network_receiver, protocol_id, task_notify.clone());
@@ -343,14 +342,14 @@ pub fn network_channel(protocol_id: ProtocolId) -> (NetworkChan, NetworkPort) {
 
 /// A sender of NetworkMsg that notifies a task when a message has been sent.
 #[derive(Clone)]
-pub struct NetworkChan {
-	sender: Sender<NetworkMsg>,
+pub struct NetworkChan<B: BlockT + 'static> {
+	sender: Sender<NetworkMsg<B>>,
 	task_notify: Arc<AtomicTask>,
 }
 
-impl NetworkChan {
+impl<B: BlockT + 'static> NetworkChan<B> {
 	/// Create a new network chan.
-	pub fn new(sender: Sender<NetworkMsg>, task_notify: Arc<AtomicTask>) -> Self {
+	pub fn new(sender: Sender<NetworkMsg<B>>, task_notify: Arc<AtomicTask>) -> Self {
 		 NetworkChan {
 			sender,
 			task_notify,
@@ -358,13 +357,13 @@ impl NetworkChan {
 	}
 
 	/// Send a messaging, to be handled on a stream. Notify the task handling the stream.
-	pub fn send(&self, msg: NetworkMsg) {
+	pub fn send(&self, msg: NetworkMsg<B>) {
 		let _ = self.sender.send(msg);
 		self.task_notify.notify();
 	}
 }
 
-impl Drop for NetworkChan {
+impl<B: BlockT + 'static> Drop for NetworkChan<B> {
 	/// Notifying the task when a sender is dropped(when all are dropped, the stream is finished).
 	fn drop(&mut self) {
 		self.task_notify.notify();
@@ -373,15 +372,15 @@ impl Drop for NetworkChan {
 
 
 /// A receiver of NetworkMsg that makes the protocol-id available with each message.
-pub struct NetworkPort {
-	receiver: Receiver<NetworkMsg>,
+pub struct NetworkPort<B: BlockT + 'static> {
+	receiver: Receiver<NetworkMsg<B>>,
 	protocol_id: ProtocolId,
 	task_notify: Arc<AtomicTask>,
 }
 
-impl NetworkPort {
+impl<B: BlockT + 'static> NetworkPort<B> {
 	/// Create a new network port for a given protocol-id.
-	pub fn new(receiver: Receiver<NetworkMsg>, protocol_id: ProtocolId, task_notify: Arc<AtomicTask>) -> Self {
+	pub fn new(receiver: Receiver<NetworkMsg<B>>, protocol_id: ProtocolId, task_notify: Arc<AtomicTask>) -> Self {
 		Self {
 			receiver,
 			protocol_id,
@@ -391,7 +390,7 @@ impl NetworkPort {
 
 	/// Receive a message, if any is currently-enqueued.
 	/// Register the current tokio task for notification when a new message is available.
-	pub fn take_one_message(&self) -> Result<Option<(ProtocolId, NetworkMsg)>, ()> {
+	pub fn take_one_message(&self) -> Result<Option<(ProtocolId, NetworkMsg<B>)>, ()> {
 		self.task_notify.register();
 		match self.receiver.try_recv() {
 			Ok(msg) => Ok(Some((self.protocol_id.clone(), msg))),
@@ -402,18 +401,18 @@ impl NetworkPort {
 
 	/// Get a reference to the underlying crossbeam receiver.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn receiver(&self) -> &Receiver<NetworkMsg> {
+	pub fn receiver(&self) -> &Receiver<NetworkMsg<B>> {
 		&self.receiver
 	}
 }
 
 /// Messages to be handled by NetworkService.
 #[derive(Debug)]
-pub enum NetworkMsg {
+pub enum NetworkMsg<B: BlockT + 'static> {
 	/// Ask network to convert a list of nodes, to a list of peers.
 	PeerIds(Vec<NodeIndex>, Sender<Vec<(NodeIndex, Option<PeerId>)>>),
 	/// Send an outgoing custom message.
-	Outgoing(NodeIndex, Vec<u8>),
+	Outgoing(NodeIndex, Message<B>),
 	/// Report a peer.
 	ReportPeer(NodeIndex, Severity),
 	/// Get a peer id.
@@ -423,11 +422,10 @@ pub enum NetworkMsg {
 /// Starts the background thread that handles the networking.
 fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
-	network_port: NetworkPort,
-	network_sender: NetworkChan,
+	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
-	registered: RegisteredProtocol,
-) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService>>), Error> {
+	registered: RegisteredProtocol<Message<B>>,
+) -> Result<((oneshot::Sender<()>, thread::JoinHandle<()>), Arc<Mutex<NetworkService<Message<B>>>>), Error> {
 	let protocol_id = registered.id();
 
 	// Start the main service.
@@ -447,7 +445,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 	let service_clone = service.clone();
 	let mut runtime = Runtime::new()?;
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
-		let fut = run_thread(protocol_sender, service_clone, network_sender, network_port, protocol_id)
+		let fut = run_thread(protocol_sender, service_clone, network_port, protocol_id)
 			.select(close_rx.then(|_| Ok(())))
 			.map(|(val, _)| val)
 			.map_err(|(err,_ )| err);
@@ -466,9 +464,8 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 /// Runs the background thread that handles the networking.
 fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 	protocol_sender: Sender<ProtocolMsg<B, S>>,
-	network_service: Arc<Mutex<NetworkService>>,
-	network_sender: NetworkChan,
-	network_port: NetworkPort,
+	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
+	network_port: NetworkPort<B>,
 	protocol_id: ProtocolId,
 ) -> impl Future<Item = (), Error = io::Error> {
 
@@ -538,28 +535,15 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 			NetworkServiceEvent::ClosedCustomProtocol { node_index, debug_info, .. } => {
 				let _ = protocol_sender.send(ProtocolMsg::PeerDisconnected(node_index, debug_info));
 			}
-			NetworkServiceEvent::CustomMessage { node_index, data, .. } => {
-				if let Some(m) = Decode::decode(&mut (&data as &[u8])) {
-					let _ = protocol_sender.send(ProtocolMsg::CustomMessage(node_index, m));
-					return Ok(())
-				}
-				let _ = network_sender.send(
-					NetworkMsg::ReportPeer(
-						node_index,
-						Severity::Bad("Peer sent us a packet with invalid format".to_string())
-					)
-				);
+			NetworkServiceEvent::CustomMessage { node_index, message, .. } => {
+				let _ = protocol_sender.send(ProtocolMsg::CustomMessage(node_index, message));
+				return Ok(())
 			}
 			NetworkServiceEvent::Clogged { node_index, messages, .. } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
-				for msg_bytes in messages.iter().take(5) {
-					if let Some(msg) = Decode::decode(&mut (&msg_bytes as &[u8])) {
-						debug!(target: "sync", "{:?}", msg);
-						let _ = protocol_sender.send(ProtocolMsg::PeerClogged(node_index, Some(msg)));
-					} else {
-						debug!(target: "sync", "{:?}", msg_bytes);
-						let _ = protocol_sender.send(ProtocolMsg::PeerClogged(node_index, None));
-					}
+				for msg in messages.into_iter().take(5) {
+					debug!(target: "sync", "{:?}", msg);
+					let _ = protocol_sender.send(ProtocolMsg::PeerClogged(node_index, Some(msg)));
 				}
 			}
 		};

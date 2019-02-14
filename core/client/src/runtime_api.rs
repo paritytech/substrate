@@ -33,7 +33,7 @@ pub use runtime_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
 pub use rstd::{slice, mem};
 #[cfg(feature = "std")]
 use rstd::result;
-pub use codec::{Encode, Decode};
+pub use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use crate::error;
 use rstd::vec::Vec;

@@ -189,6 +189,61 @@ impl<Block: BlockT> LightStorage<Block> {
 					.cloned()))
 	}
 
+	/// Handle setting head within a transaction. `route_to` should be the last
+	/// block that existed in the database. `best_to` should be the best block
+	/// to be set.
+	///
+	/// In the case where the new best block is a block to be imported, `route_to`
+	/// should be the parent of `best_to`. In the case where we set an existing block
+	/// to be best, `route_to` should equal to `best_to`.
+	fn set_head_with_transaction(&self, transaction: &mut DBTransaction, route_to: Block::Hash, best_to: (NumberFor<Block>, Block::Hash)) -> Result<(), client::error::Error> {
+		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1);
+
+		// handle reorg.
+		let meta = self.meta.read();
+		if meta.best_hash != Default::default() {
+			let tree_route = ::client::blockchain::tree_route(
+				self,
+				BlockId::Hash(meta.best_hash),
+				BlockId::Hash(route_to),
+			)?;
+
+			// update block number to hash lookup entries.
+			for retracted in tree_route.retracted() {
+				if retracted.hash == meta.finalized_hash {
+					// TODO: can we recover here?
+					warn!("Safety failure: reverting finalized block {:?}",
+						  (&retracted.number, &retracted.hash));
+				}
+
+				utils::remove_number_to_key_mapping(
+					transaction,
+					columns::KEY_LOOKUP,
+					retracted.number
+				);
+			}
+
+			for enacted in tree_route.enacted() {
+				utils::insert_number_to_key_mapping(
+					transaction,
+					columns::KEY_LOOKUP,
+					enacted.number,
+					enacted.hash
+				);
+			}
+		}
+
+		transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
+		utils::insert_number_to_key_mapping(
+			transaction,
+			columns::KEY_LOOKUP,
+			best_to.0,
+			best_to.1,
+		);
+
+		Ok(())
+	}
+
 	// Note that a block is finalized. Only call with child of last finalized block.
 	fn note_finalized(
 		&self,
@@ -325,51 +380,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		}
 
 		// blocks are keyed by number + hash.
-		let lookup_key = utils::number_and_hash_to_lookup_key(number, hash);
+		let lookup_key = utils::number_and_hash_to_lookup_key(number, &hash);
 
 		if leaf_state.is_best() {
-			// handle reorg.
-			{
-				let meta = self.meta.read();
-				if meta.best_hash != Default::default() {
-					let tree_route = ::client::blockchain::tree_route(
-						self,
-						BlockId::Hash(meta.best_hash),
-						BlockId::Hash(parent_hash),
-					)?;
-
-					// update block number to hash lookup entries.
-					for retracted in tree_route.retracted() {
-						if retracted.hash == meta.finalized_hash {
-							warn!("Safety failure: reverting finalized block {:?}",
-								(&retracted.number, &retracted.hash));
-						}
-
-						utils::remove_number_to_key_mapping(
-							&mut transaction,
-							columns::KEY_LOOKUP,
-							retracted.number
-						);
-					}
-
-					for enacted in tree_route.enacted() {
-						utils::insert_number_to_key_mapping(
-							&mut transaction,
-							columns::KEY_LOOKUP,
-							enacted.number,
-							enacted.hash
-						);
-					}
-				}
-			}
-
-			transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
-			utils::insert_number_to_key_mapping(
-				&mut transaction,
-				columns::KEY_LOOKUP,
-				number,
-				hash,
-			);
+			self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?;
 		}
 
 		utils::insert_hash_to_key_mapping(
@@ -424,6 +438,20 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		self.update_meta(hash, number, leaf_state.is_best(), finalized);
 
 		Ok(())
+	}
+
+	fn set_head(&self, id: BlockId<Block>) -> ClientResult<()> {
+		if let Some(header) = self.header(id)? {
+			let hash = header.hash();
+			let number = header.number();
+
+			let mut transaction = DBTransaction::new();
+			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
+			self.db.write(transaction).map_err(db_err)?;
+			Ok(())
+		} else {
+			Err(ClientErrorKind::UnknownBlock(format!("Cannot set head {:?}", id)).into())
+		}
 	}
 
 	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {

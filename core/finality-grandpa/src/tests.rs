@@ -29,7 +29,6 @@ use client::{
 	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
-use codec::Decode;
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportBlock, ImportResult};
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
@@ -153,7 +152,7 @@ impl MessageRouting {
 	fn drop_messages(&self, topic: Hash) {
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-        peer.consensus_gossip_collect_garbage_for(topic);
+		peer.consensus_gossip_collect_garbage_for_topic(topic);
 	}
 }
 

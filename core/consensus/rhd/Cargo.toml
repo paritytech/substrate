@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 futures = "0.1.17"
-parity-codec = { version = "3.0" }
+codec = { package = "parity-codec", version = "3.0" }
 parity-codec-derive = { version = "3.0" }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 consensus = { package = "substrate-consensus-common", path = "../common" }
@@ -27,8 +27,7 @@ rhododendron = { version = "0.5.0", features = ["codec"] }
 exit-future = "0.1"
 
 [dev-dependencies]
-substrate-keyring = { path = "../../keyring" }
-substrate-executor = { path = "../../executor" }
+keyring = { package = "substrate-keyring", path = "../../keyring" }
 
 [features]
 default = ["std"]

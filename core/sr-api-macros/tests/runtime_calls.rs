@@ -14,11 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate substrate_client;
-extern crate substrate_test_client as test_client;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_state_machine as state_machine;
-
 use test_client::runtime::{TestAPI, DecodeFails};
 use runtime_primitives::{generic::BlockId, traits::ProvideRuntimeApi};
 use state_machine::ExecutionStrategy;
