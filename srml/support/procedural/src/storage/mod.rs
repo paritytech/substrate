@@ -24,6 +24,8 @@ use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyw
 use syn::{Ident, Token};
 use syn::token::CustomKeyword;
 
+mod impls;
+
 pub mod transformation;
 
 /// Parsing usage only
@@ -116,12 +118,21 @@ struct DeclStorageBuild {
 #[derive(Parse, ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
+	LinkedMap(DeclStorageLinkedMap),
 	Simple(syn::Type),
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: ext::CustomToken<MapKeyword>,
+	pub key: syn::Type,
+	pub ass_keyword: Token![=>],
+	pub value: syn::Type,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageLinkedMap {
+	pub map_keyword: ext::CustomToken<LinkedMapKeyword>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -141,3 +152,4 @@ custom_keyword_impl!(DeclStorageBuild, "build", "storage build config");
 custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesis");
 custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
+custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");

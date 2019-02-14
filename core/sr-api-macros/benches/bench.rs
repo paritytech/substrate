@@ -14,12 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use]
-extern crate criterion;
-extern crate substrate_client;
-extern crate substrate_test_client as test_client;
-extern crate sr_primitives as runtime_primitives;
-
 use criterion::Criterion;
 use test_client::runtime::TestAPI;
 use runtime_primitives::{generic::BlockId, traits::ProvideRuntimeApi};

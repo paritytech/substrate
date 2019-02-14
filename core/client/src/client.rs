@@ -38,7 +38,7 @@ use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
@@ -648,6 +648,25 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		*self.importing_block.write() = None;
 
 		result
+	}
+
+	/// Set a block as best block.
+	pub fn set_head(
+		&self,
+		id: BlockId<Block>
+	) -> error::Result<()> {
+		self.lock_import_and_run(|operation| {
+			self.apply_head(operation, id)
+		})
+	}
+
+	/// Set a block as best block, and apply it to an operation.
+	pub fn apply_head(
+		&self,
+		operation: &mut ClientImportOperation<Block, Blake2Hasher, B>,
+		id: BlockId<Block>,
+	) -> error::Result<()> {
+		operation.op.mark_head(id)
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
