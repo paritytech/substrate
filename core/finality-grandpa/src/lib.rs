@@ -136,6 +136,9 @@ const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
+const GRANDPA_ROUND_MESSAGE: u32 = 0x1001;
+const GRANDPA_COMMIT_MESSAGE: u32 = 0x1002;
+
 /// round-number, round-state
 type LastCompleted<H, N> = (u64, RoundState<H, N>);
 
@@ -314,17 +317,15 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, message, false);
+		self.service.gossip_consensus_message(topic, GRANDPA_ROUND_MESSAGE, message, false);
 	}
 
-	fn drop_round_messages(&self, round: u64, set_id: u64) {
-		let topic = message_topic::<B>(round, set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
+	fn drop_round_messages(&self, _round: u64, _set_id: u64) {
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
 	}
 
-	fn drop_set_messages(&self, set_id: u64) {
-		let topic = commit_topic::<B>(set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
+	fn drop_set_messages(&self, _set_id: u64) {
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
@@ -338,7 +339,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, message, false);
+		self.service.gossip_consensus_message(topic, GRANDPA_COMMIT_MESSAGE, message, false);
 	}
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {

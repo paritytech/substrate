@@ -33,7 +33,7 @@ use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
-use crate::consensus_gossip::{ConsensusGossip, ConsensusMessage};
+use crate::consensus_gossip::ConsensusGossip;
 use crossbeam_channel::{self as channel, Sender, select};
 use futures::Future;
 use futures::sync::{mpsc, oneshot};
@@ -366,21 +366,21 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
-	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, data: Vec<u8>, broadcast: bool) {
+	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, kind: u32, data: Vec<u8>, broadcast: bool) {
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessage(topic, data, broadcast));
+			.send(ProtocolMsg::GossipConsensusMessage(topic, kind, data, broadcast));
 	}
 
-	pub fn consensus_gossip_collect_garbage_for(&self, topic: <Block as BlockT>::Hash) {
-		self.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic))
+	pub fn consensus_gossip_collect_garbage_for(&self, _topic: <Block as BlockT>::Hash) {
+		self.with_gossip(move |gossip, _| gossip.collect_garbage())
 	}
 
 	/// access the underlying consensus gossip handler
 	pub fn consensus_gossip_messages_for(
 		&self,
 		topic: <Block as BlockT>::Hash,
-	) -> mpsc::UnboundedReceiver<ConsensusMessage> {
+	) -> mpsc::UnboundedReceiver<Vec<u8>> {
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(topic);

@@ -134,8 +134,14 @@ pub mod generic {
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
 		RequestId, Transactions, Direction
 	};
-	/// Consensus is opaque to us
-	pub type ConsensusMessage = Vec<u8>;
+	/// Consensus is mostly opaque to us
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	pub struct ConsensusMessage {
+		/// Identifies message structure.
+		pub kind: u32,
+		/// Message payload.
+		pub data: Vec<u8>,
+	}
 
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -177,7 +183,7 @@ pub mod generic {
 		/// Transactions.
 		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
-		Consensus(Hash, ConsensusMessage, bool), // topic, opaque Vec<u8>, broadcast
+		Consensus(ConsensusMessage),
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.
@@ -216,6 +222,8 @@ pub mod generic {
 	pub struct Status<Hash, Number> {
 		/// Protocol version.
 		pub version: u32,
+		/// Minimum supported version.
+		pub min_supported_version: u32,
 		/// Supported roles.
 		pub roles: Roles,
 		/// Best block number.
