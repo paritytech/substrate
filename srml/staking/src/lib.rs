@@ -37,7 +37,8 @@ mod tests;
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
-const MAX_NOMINATIONS = 16;
+const MAX_NOMINATIONS: usize = 16;
+const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
 #[derive(PartialEq, Clone)]
 #[cfg_attr(test, derive(Debug))]
@@ -564,7 +565,7 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// Clear Stakers.
+		// Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
 			<Stakers<T>>::remove(v);
 			let slash_count = <SlashCount<T>>::take(v);
@@ -629,8 +630,10 @@ impl<T: Trait> Module<T> {
 		}
 
 		let prefs = Self::validators(&v);
+		let unstake_threshold = prefs.unstake_threshold.min(MAX_UNSTAKE_THRESHOLD);
+		let max_slashes = grace + unstake_threshold;
 
-		let event = if new_slash_count > grace + prefs.unstake_threshold {
+		let event = if new_slash_count > max_slashes {
 			// They're bailing.
 			let slash = Self::current_offline_slash()
 				.checked_shl(prefs.unstake_threshold)
@@ -672,8 +675,8 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(controller) = <Bonded<T>>::take(who) {
 			<Ledger<T>>::remove(&controller);
-			<Validators<T>>::remove(&controller);
 			<SlashCount<T>>::remove(&controller);
+			<Validators<T>>::remove(&controller);
 			<Nominators<T>>::remove(&controller);
 		}
 	}
