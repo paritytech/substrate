@@ -102,7 +102,7 @@ pub struct StakingLedger<AccountId, Balance, BlockNumber> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Exposure<AccountId, Balance> {
 	/// The total balance backing this validator.
@@ -539,31 +539,57 @@ impl<T: Trait> Module<T> {
 
 		// Reassign all Stakers.
 
-		// TODO: Can probably pre-process a lot of complexity out of these two for-loops,
-		// particularly the need to keep everything in a BTreeMap.
-		// May be reasonable to split the two tries Validator 
-
 		// Map of (would-be) validator account to amount of stake backing it.
-		let mut candidates: Vec<(T::AccountId, Exposure)> = Default::default();
-		for (who, _) in <Validators<T>>::enumerate() {
-			let stash_balance = Self::stash_balance(&who);
-			candidates.push((who, Exposure { total: stash_balance, own: stash_balance, others: vec![] }));
-		}
-		canidates.sort_unstable_by_key(|i| &i.0);
+		
+		// First, we pull all validators, together with their stash balance into a Vec (cpu=O(V), mem=O(V))
+		let mut candidates = <Validators<T>>::enumerate()
+			.map(|(who, _)| {
+				let stash_balance = Self::stash_balance(&who);
+				(who, Exposure { total: stash_balance, own: stash_balance, others: vec![] })
+			})
+			.collect::<Vec<(T::AccountId, Exposure)>>();
+		// Second, we sort by accountid (cpu=O(V.log(V)))
+		candidates.sort_unstable_by_key(|i| &i.0);
+		// Third, iterate through nominators and add their balance to the first validator in their approval
+		// list. cpu=O(N.log(V))
 		for (who, nominees) in <Nominators<T>>::enumerate() {
 			// For this trivial nominator mapping, we just assume that nominators always
 			// have themselves assigned to the first validator in their list.
-			let chosen = if nominees.len() > 0 {
-				candidates[0]
-			} else {
-				continue
-			};
-			if let Ok(index) = candidates.binary_search_by_key(&who, |i| &i.0) {
+			if nominees.is_empty() {
+				// Not possible, but we protect against it anyway.
+				continue;
+			}
+			if let Ok(index) = candidates.binary_search_by_key(&nominees[0], |i| &i.0) {
 				let stash_balance = Self::stash_balance(&who);
 				candidates[index].1.total += stash_balance;
 				candidates[index].1.others.push((who, stash_balance));
 			}
 		}
+
+		// Get the new staker set by sorting by total backing stake and truncating.
+		// cpu=O(V.log(s)) average, O(V.s) worst.
+		let count = Self::validator_count() as usize;
+		let candidates = if candidates.len() <= count {
+			candidates
+		} else {
+			let mut winners = [(AccountId::default(), Exposure::default()); count];
+			for i in 0..count { x[i] = candidates[i] }
+			winners.sort_unstable_by_key(|i| i.1.total);
+			candidates.into_iter()
+				.enumerate()
+				.skip(count)
+				.scan(winners, |winners, (index, entry)| {
+					let insert_point = winners.binary_search_by_key(&entry, |i| i.1.total);
+					if insert_point > 0 {
+						// Big enough to be considered: insert at beginning and swap up to relevant point.
+						winners[0] = entry;
+						for i in 0..(insert_point - 1) {
+							winners.swap(i, i + 1)
+						}
+					}
+				});
+			winners
+		};
 
 		// Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
@@ -573,10 +599,6 @@ impl<T: Trait> Module<T> {
 				<SlashCount<T>>::insert(v, slash_count - 1);
 			}
 		}
-
-		// Get the new staker set by sorting by total backing stake and truncating.
-		candidates.sort_unstable_by(|(a, b)| a.1.total > b.1.total);
-		candidates.truncate(Self::validator_count() as usize);
 
 		// Figure out the minimum stake behind a slot.
 		let slot_stake = candidates.last().map(|i| i.1.total).unwrap_or_default();
