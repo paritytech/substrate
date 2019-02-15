@@ -273,7 +273,7 @@ where
 mod test {
 	use super::*;
 	use hex_literal::{hex, hex_impl};
-
+	
 	#[test]
 	fn sr_test_vector_should_work() {
 		let pair: Pair = Pair::from_seed(&hex!(
@@ -332,5 +332,15 @@ mod test {
 		let k = "5CGavy93sZgPPjHyziRohwVumxiHXMGmQLyuqQP4ZFx5vRU9";
 		let enc = hex!["090fa15cb5b1666222fff584b4cc2b1761fe1e238346b340491b37e25ea183ff"];
 		assert_eq!(Public::from_ss58check(k).unwrap(), Public::from_raw(enc));
+	}
+
+	#[test]
+	fn verify_from_wasm_works() {
+		// The values in this testcases are compared to the output of ./pkg/node-test.js in schnorrkel-js
+		// This is to make sure that the wasm library in compatible
+		let pk = Pair::from_seed(&hex!("0000000000000000000000000000000000000000000000000000000000000000")); 
+		let public = pk.public();
+		let js_signature = Signature::from(&hex!("c072a48a17597166462a05b65ba9d122ea351021ccf6503a9570cdeabaa354019ae587bc007ce98e89d9507d02b6bf763452efdb7b9187cf6ee3b343d94d9105"));
+		assert!(verify_strong(&js_signature, b"SUBSTRATE", public));
 	}
 }
