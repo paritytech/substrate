@@ -658,7 +658,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
 				}
 				VoterCommand::Pause(reason) => {
-					info!("Pausing old validator set: {}", reason);
+					info!(target: "afg", "Pausing old validator set: {}", reason);
 
 					// not racing because old voter is shut down.
 					let (last_round_number, last_round_state) = env.last_completed.read();
@@ -666,6 +666,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						last_round_number,
 						last_round_state,
 					);
+
+					::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
 				},

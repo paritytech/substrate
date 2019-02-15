@@ -219,12 +219,11 @@ pub(crate) fn update_authority_set<H, N, F, R>(
 	}
 }
 
-/// Update the authority set on disk.
-pub(crate) fn complete_round<B, H, N>(backend: &B, round_number: u64, state: RoundState<H, N>)
+/// Write voter set state.
+pub(crate) fn write_voter_set_state<B, H, N>(backend: &B, state: &VoterSetState<H, N>)
 	-> ClientResult<()>
 	where B: AuxStore, H: Encode, N: Encode
 {
-	let state = VoterSetState::Live(round_number, state);
 	backend.insert_aux(
 		&[(SET_STATE_KEY, state.encode().as_slice())],
 		&[]

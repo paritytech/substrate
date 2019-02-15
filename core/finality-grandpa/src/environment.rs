@@ -278,7 +278,9 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		);
 
 		self.last_completed.with(|last_completed| {
-			::aux_schema::complete_round(&**self.inner.backend(), round, state.clone())?;
+			let set_state = ::aux_schema::VoterSetState::Live(round, state.clone());
+			::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+
 			*last_completed = (round, state); // after writing to DB successfully.
 			Ok(())
 		})
