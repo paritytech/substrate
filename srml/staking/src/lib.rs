@@ -20,7 +20,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use rstd::{prelude::*, cmp};
+use rstd::{prelude::*, result};
 use parity_codec::HasCompact;
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{Parameter, StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
@@ -28,7 +28,7 @@ use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Zero, One, Bounded, As, StaticLookup};
+use primitives::traits::{Zero, One, As, StaticLookup};
 use system::ensure_signed;
 
 mod mock;
@@ -102,7 +102,7 @@ pub struct StakingLedger<AccountId, Balance, BlockNumber> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Exposure<AccountId, Balance> {
 	/// The total balance backing this validator.
@@ -111,12 +111,6 @@ pub struct Exposure<AccountId, Balance> {
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
 	pub others: Vec<(AccountId, Balance)>,
-}
-
-impl<AccountId> Default for Capacity<AccountId> {
-	fn default() -> Self {
-		Capacity::Nominator(vec![])
-	}
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -172,7 +166,7 @@ decl_storage! {
 		/// The set of keys are all controllers that want to nominate.
 		/// 
 		/// The value are the nominations.
-		pub Nominators get(nominators): linked_map AccountId => Vec<T::AccountId>;
+		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
@@ -207,7 +201,7 @@ decl_storage! {
 		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
 
 		/// The highest and lowest staked validator slashable balances.
-		pub SlotStake get(slot_range): BalanceOf<T>;
+		pub SlotStake get(slot_stake): BalanceOf<T>;
 
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
 		pub SlashCount get(slash_count): map T::AccountId => u32;
@@ -229,15 +223,17 @@ decl_module! {
 		fn bond_stash(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
-			if Self::bond(&stash).is_some() {
+			if <Bonded<T>>::exists(&stash) {
 				return Err("stash already bonded")
 			}
+
+			let controller = T::Lookup::lookup(controller)?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate.
 			<Bonded<T>>::insert(&stash, controller.clone());
 
-			let stash_balance = <balances::Module<T>>::free_balance(&stash);
+			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			let remaining_free = stash_balance - value;
 			let inactive = match remaining_free.is_zero() {
@@ -245,12 +241,12 @@ decl_module! {
 				true => vec![],
 			};
 
-			<Ledger<T>>::insert(&T::Lookup::lookup(controller), StakingLedger { stash, active: value, inactive });
+			<Ledger<T>>::insert(&controller, StakingLedger { stash, active: value, inactive });
 		}
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than 
-		/// <balances::Module<T>>::existential_deposit(), then it is increased to the full amount.
+		/// T::Currency::existential_deposit(), then it is increased to the full amount.
 		fn unlock(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -260,8 +256,8 @@ decl_module! {
 			if !value.is_zero() {
 				ledger.active -= value;
 
-				/// Avoid there being a dust balance left in the staking system.
-				let ed = <balances::Module<T>>::existential_deposit();
+				// Avoid there being a dust balance left in the staking system.
+				let ed = T::Currency::minimum_balance();
 				if ledger.active - value < ed {
 					value += ledger.active;
 					ledger.active = Zero::zero();
@@ -281,17 +277,17 @@ decl_module! {
 			let now = <system::Module<T>>::block_number();
 
 			let mut total = Zero::zero();
-			l.inactive = l.inactive.iter()
-				.filter(|(how_much, when)| if now < when {
+			ledger.inactive = ledger.inactive.into_iter()
+				.filter(|(how_much, when)| if now < *when {
 					true
 				} else {
-					total += how_much;
+					total += *how_much;
 					false
 				})
 				.collect();
 
-			<balances::Module<T>>::decrease_free_balance(&l.stash, total)?;
-			<balances::Module<T>>::increase_free_balance_creating(&T::Lookup::lookup(destination), total);
+			T::Currency::decrease_free_balance(&ledger.stash, total)?;
+			T::Currency::increase_free_balance_creating(&T::Lookup::lookup(destination)?, total);
 			<Ledger<T>>::insert(&controller, ledger);
 		}
 
@@ -301,8 +297,8 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 
-			let stash_balance = <balances::Module<T>>::free_balance(&stash);
-			let inactive_balance = ledger.inactive.iter().map(|(v, _)| v).sum();
+			let stash_balance = T::Currency::free_balance(&ledger.stash);
+			let inactive_balance = ledger.inactive.iter().fold(Zero::zero(), |acc, &(ref v, _)| acc + *v);
 
 			if stash_balance > inactive_balance + ledger.active {
 				let extra = stash_balance - inactive_balance - ledger.active;
@@ -315,11 +311,11 @@ decl_module! {
 		/// Declare the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		fn validate(origin, prefs: ValidatorPrefs) {
+		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			Nominators<T>::remove(&controller);
-			Validators<T>::insert(controller, prefs);
+			<Nominators<T>>::remove(&controller);
+			<Validators<T>>::insert(controller, prefs);
 		}
 
 		/// Declare the desire to nominate `targets` for the origin controller.
@@ -329,13 +325,13 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			ensure!(!targets.is_empty(), "targets cannot be empty");
-			let targets = target.into_iter()
+			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
 				.map(T::Lookup::lookup)
-				.collect::<Result<Vec<T::AccountId>, &'static str>>()?;
+				.collect::<result::Result<Vec<T::AccountId>, &'static str>>()?;
 
-			Validators<T>::remove(&controller);
-			Nominators<T>::insert(controller, targets);
+			<Validators<T>>::remove(&controller);
+			<Nominators<T>>::insert(controller, targets);
 		}
 
 		/// Declare no desire to either validate or nominate.
@@ -344,8 +340,8 @@ decl_module! {
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			Validators<T>::remove(&controller);
-			Nominators<T>::remove(&controller);
+			<Validators<T>>::remove(&controller);
+			<Nominators<T>>::remove(&controller);
 		}
 
 		/// Set the number of sessions in an era.
@@ -408,13 +404,6 @@ impl<T: Trait> Module<T> {
 		Self::sessions_per_era() * <session::Module<T>>::length()
 	}
 
-	/// Balance of a (potential) validator that includes all nominators.
-	pub fn nomination_balance(who: &T::AccountId) -> BalanceOf<T> {
-		Self::nominators_for(who).iter()
-			.map(T::Currency::total_balance)
-			.fold(Zero::zero(), |acc, x| acc + x)
-	}
-
 	/// The stashed funds whose staking activities are controlled by `controller` and
 	/// which are actively in stake right now.
 	pub fn stash_balance(controller: &T::AccountId) -> BalanceOf<T> {
@@ -426,11 +415,6 @@ impl<T: Trait> Module<T> {
 	/// right now.
 	pub fn slashable_balance(who: &T::AccountId) -> BalanceOf<T> {
 		Self::stakers(who).total
-	}
-
-	/// Get the current validators.
-	pub fn validators() -> Vec<T::AccountId> {
-		session::Module::<T>::validators()
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -450,12 +434,12 @@ impl<T: Trait> Module<T> {
 		// The amount remaining that we can't slash from the validator, that must be taken from the nominators.
 		let rest_slash = slash - own_slash;
 
-		if !rest.is_zero() {
+		if !rest_slash.is_zero() {
 			// The total to be slashed from the nominators.
 			let total = exposure.total - exposure.own;
 			if !total.is_zero() {
-				let safe_mul_rational = |b| b * rest / total;// FIXME #1572 avoid overflow
-				for (them, their_exposure) in exposure.others.iter() {
+				let safe_mul_rational = |b| b * rest_slash / total;// FIXME #1572 avoid overflow
+				for &(ref them, their_exposure) in exposure.others.iter() {
 					let _ = T::Currency::slash(them, safe_mul_rational(their_exposure));	// best effort - not much that can be done on fail.
 				}
 			}
@@ -473,7 +457,7 @@ impl<T: Trait> Module<T> {
 			let exposure = Self::stakers(who);
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
-			for (them, their_exposure) in exposure.others.iter() {
+			for &(ref them, their_exposure) in exposure.others.iter() {
 				let _ = T::Currency::reward(them, safe_mul_rational(their_exposure));
 			}
 			safe_mul_rational(exposure.own)
@@ -488,7 +472,7 @@ impl<T: Trait> Module<T> {
 			return Self::current_session_reward();
 		}
 		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-		Self::current_session_reward() * BalanceOf::<T>::sa(per65536) / BalanceOf::<T>::sa(65536u64)
+		Self::current_session_reward() * <BalanceOf<T>>::sa(per65536) / <BalanceOf<T>>::sa(65536u64)
 	}
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
@@ -497,7 +481,7 @@ impl<T: Trait> Module<T> {
 		if should_reward {
 			// accumulate good session reward
 			let reward = Self::this_session_reward(actual_elapsed);
-			<CurrentEraReward<T>>::mutate(|r| r += reward);
+			<CurrentEraReward<T>>::mutate(|r| *r += reward);
 		}
 
 		let session_index = <session::Module<T>>::current_index();
@@ -547,9 +531,9 @@ impl<T: Trait> Module<T> {
 				let stash_balance = Self::stash_balance(&who);
 				(who, Exposure { total: stash_balance, own: stash_balance, others: vec![] })
 			})
-			.collect::<Vec<(T::AccountId, Exposure)>>();
+			.collect::<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>();
 		// Second, we sort by accountid (cpu=O(V.log(V)))
-		candidates.sort_unstable_by_key(|i| &i.0);
+		candidates.sort_unstable_by_key(|i| i.0.clone());
 		// Third, iterate through nominators and add their balance to the first validator in their approval
 		// list. cpu=O(N.log(V))
 		for (who, nominees) in <Nominators<T>>::enumerate() {
@@ -559,7 +543,7 @@ impl<T: Trait> Module<T> {
 				// Not possible, but we protect against it anyway.
 				continue;
 			}
-			if let Ok(index) = candidates.binary_search_by_key(&nominees[0], |i| &i.0) {
+			if let Ok(index) = candidates.binary_search_by(|i| i.0.cmp(&nominees[0])) {
 				let stash_balance = Self::stash_balance(&who);
 				candidates[index].1.total += stash_balance;
 				candidates[index].1.others.push((who, stash_balance));
@@ -572,14 +556,10 @@ impl<T: Trait> Module<T> {
 		let candidates = if candidates.len() <= count {
 			candidates
 		} else {
-			let mut winners = [(AccountId::default(), Exposure::default()); count];
-			for i in 0..count { x[i] = candidates[i] }
-			winners.sort_unstable_by_key(|i| i.1.total);
-			candidates.into_iter()
-				.enumerate()
-				.skip(count)
-				.scan(winners, |winners, (index, entry)| {
-					let insert_point = winners.binary_search_by_key(&entry, |i| i.1.total);
+			let mut winners = (0..count).map(|i| candidates[i]).collect::<Vec<_>>();
+			winners.sort_unstable_by_key(|&i| i.1.total);
+			for (index, entry) in candidates.into_iter().enumerate().skip(count) {
+				if let Err(insert_point) = winners.binary_search_by_key(&entry.1.total, |i| i.1.total) {
 					if insert_point > 0 {
 						// Big enough to be considered: insert at beginning and swap up to relevant point.
 						winners[0] = entry;
@@ -587,7 +567,8 @@ impl<T: Trait> Module<T> {
 							winners.swap(i, i + 1)
 						}
 					}
-				});
+				}
+			}
 			winners
 		};
 
@@ -610,7 +591,7 @@ impl<T: Trait> Module<T> {
 		}
 		// Set the new validator set.
 		<session::Module<T>>::set_validators(
-			candidates.into_iter().map(|i| i.0).collect::<Vec<_>>()
+			&candidates.into_iter().map(|i| i.0).collect::<Vec<_>>()
 		);
 
 		// Update the balances for slashing/rewarding according to the stakes.
@@ -621,7 +602,7 @@ impl<T: Trait> Module<T> {
 	/// Call when a validator is determined to be offline. `count` is the
 	/// number of offences the validator has committed.
 	pub fn on_offline_validator(v: T::AccountId, count: usize) {
-		use primitives::traits::{CheckedAdd, CheckedShl};
+		use primitives::traits::CheckedShl;
 
 		// Early exit if validator is invulnerable.
 		if Self::invulnerables().contains(&v) {

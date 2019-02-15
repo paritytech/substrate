@@ -106,7 +106,11 @@ pub trait Currency<AccountId> {
 	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool;
 
 	/// The total amount of stake on the system.
-	fn total_issuance() -> Self:: Balance;
+	fn total_issuance() -> Self::Balance;
+
+	/// The minimum balance any single account may have. This is equivalent to Balances module's
+	/// Existential Deposit.
+	fn minimum_balance() -> Self::Balance;
 
 	/// The 'free' balance of a given account.
 	///
@@ -157,6 +161,13 @@ pub trait Currency<AccountId> {
 	///
 	/// NOTE: This assumes that the total stake remains unchanged after this operation.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
+
+	/// Substrates `value` from the free balance of `who`. If the whole amount cannot be
+	/// deducted, an error is returned.
+	///
+	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
+	/// you mean to actually burn value out of existence, then use `slash` instead.
+	fn decrease_free_balance(who: &AccountId, value: Self::Balance) -> result::Result<UpdateBalanceOutcome, &'static str>;
 
 	/// Moves `value` from balance to reserved balance.
 	///

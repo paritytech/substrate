@@ -276,34 +276,6 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
-	///
-	/// This is a sensitive function since it circumvents any fees associated with account
-	/// setup. Ensure it is only called by trusted code.
-	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
-	/// you mean to actually mint value into existence, then use `reward` instead.
-	pub fn increase_free_balance_creating(who: &T::AccountId, value: T::Balance) -> UpdateBalanceOutcome {
-		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
-	}
-
-	/// Substrates `value` from the free balance of `who`. If the whole amount cannot be
-	/// deducted, an error is returned.
-	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
-	/// you mean to actually burn value out of existence, then use `slash` instead.
-	pub fn decrease_free_balance(
-		who: &T::AccountId,
-		value: T::Balance
-	) -> result::Result<UpdateBalanceOutcome, &'static str> {
-		T::EnsureAccountLiquid::ensure_account_can_transfer(who)?;
-		let b = Self::free_balance(who);
-		if b < value {
-			return Err("account has too few funds")
-		}
-		Ok(Self::set_free_balance(who, b - value))
-	}
-
 	/// Transfer some liquid free balance to another staker.
 	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
 		let from_balance = Self::free_balance(transactor);
@@ -413,8 +385,12 @@ where
 		}
 	}
 
-	fn total_issuance() -> Self:: Balance {
+	fn total_issuance() -> Self::Balance {
 		Self::total_issuance()
+	}
+
+	fn minimum_balance() -> Self::Balance {
+		Self::existential_deposit()
 	}
 
 	fn free_balance(who: &T::AccountId) -> Self::Balance {
@@ -448,6 +424,18 @@ where
 
 	fn increase_free_balance_creating(who: &T::AccountId, value: Self::Balance) -> UpdateBalanceOutcome {
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
+	}
+
+	fn decrease_free_balance(
+		who: &T::AccountId,
+		value: T::Balance
+	) -> result::Result<UpdateBalanceOutcome, &'static str> {
+		T::EnsureAccountLiquid::ensure_account_can_transfer(who)?;
+		let b = Self::free_balance(who);
+		if b < value {
+			return Err("account has too few funds")
+		}
+		Ok(Self::set_free_balance(who, b - value))
 	}
 
 	fn reserve(who: &T::AccountId, value: Self::Balance) -> result::Result<(), &'static str> {
