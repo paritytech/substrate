@@ -207,9 +207,9 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 /// A type for performing slashing based on aura reports.
 pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
-impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
+impl<T: session::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
-		let validators = staking::Module::<T>::validators();
+		let validators = session::Module::<T>::validators();
 
 		report.punish(
 			validators.len(),
