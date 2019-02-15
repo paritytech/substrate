@@ -52,45 +52,15 @@
 //! any signaled changes based on whether the signaling block is included in the
 //! newly-finalized chain.
 
-extern crate finality_grandpa as grandpa;
-extern crate futures;
-extern crate substrate_client as client;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_consensus_common as consensus_common;
-extern crate substrate_network as network;
-extern crate substrate_primitives;
-extern crate tokio;
-extern crate parking_lot;
-extern crate parity_codec as codec;
-extern crate substrate_finality_grandpa_primitives as fg_primitives;
-extern crate rand;
-
-#[macro_use]
-extern crate log;
-
-#[cfg(feature="service-integration")]
-extern crate substrate_service as service;
-
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-
-#[cfg(test)]
-extern crate env_logger;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
 use futures::prelude::*;
+use log::{debug, info, warn};
 use futures::sync::{self, mpsc, oneshot};
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
 	error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
-use codec::Encode;
+use parity_codec::Encode;
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 	DigestItemFor, DigestItem,
@@ -507,7 +477,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 {
 	// verification stream
-	let commit_in = ::communication::checked_commit_stream::<Block, _>(
+	let commit_in = crate::communication::checked_commit_stream::<Block, _>(
 		set_id,
 		network.commit_messages(set_id),
 		voters.clone(),
@@ -524,7 +494,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		.map(|pair| voters.contains_key(&pair.public().into()))
 		.unwrap_or(false);
 
-	let commit_out = ::communication::CommitsOut::<Block, _>::new(
+	let commit_out = crate::communication::CommitsOut::<Block, _>::new(
 		network.clone(),
 		set_id,
 		is_voter,
@@ -576,7 +546,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		set_id: authority_set.set_id(),
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
-		last_completed: ::environment::LastCompletedRound::new(set_state.round()),
+		last_completed: environment::LastCompletedRound::new(set_state.round()),
 	});
 
 	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
@@ -644,7 +614,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						network,
 						authority_set,
 						consensus_changes,
-						last_completed: ::environment::LastCompletedRound::new(
+						last_completed: environment::LastCompletedRound::new(
 							(0, genesis_state.clone())
 						),
 					});
@@ -667,7 +637,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						last_round_state,
 					);
 
-					::aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
+					aux_schema::write_voter_set_state(&**client.backend(), &set_state)?;
 
 					Ok(FutureLoop::Continue((env, set_state, voter_commands_rx)))
 				},

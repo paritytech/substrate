@@ -17,7 +17,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use codec::Encode;
+use log::{debug, warn, info};
+use parity_codec::Encode;
 use futures::prelude::*;
 use tokio::timer::Delay;
 use parking_lot::RwLock;
@@ -39,10 +40,10 @@ use crate::{
 	CommandOrError, NewAuthoritySet, VoterCommand,
 };
 
-use authorities::SharedAuthoritySet;
-use consensus_changes::SharedConsensusChanges;
-use justification::GrandpaJustification;
-use until_imported::UntilVoteTargetImported;
+use crate::authorities::SharedAuthoritySet;
+use crate::consensus_changes::SharedConsensusChanges;
+use crate::justification::GrandpaJustification;
+use crate::until_imported::UntilVoteTargetImported;
 
 /// Data about a completed round.
 pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
@@ -227,7 +228,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let incoming = ::communication::checked_message_stream::<Block, _>(
+		let incoming = crate::communication::checked_message_stream::<Block, _>(
 			round,
 			self.set_id,
 			self.network.messages_for(round, self.set_id),
@@ -237,7 +238,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let local_key = self.config.local_key.as_ref()
 			.filter(|pair| self.voters.contains_key(&pair.public().into()));
 
-		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
+		let (out_rx, outgoing) = crate::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
 			local_key.cloned(),
@@ -278,8 +279,8 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		);
 
 		self.last_completed.with(|last_completed| {
-			let set_state = ::aux_schema::VoterSetState::Live(round, state.clone());
-			::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+			let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
 
 			*last_completed = (round, state); // after writing to DB successfully.
 			Ok(())
@@ -385,7 +386,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		if alters_consensus_changes {
 			old_consensus_changes = Some(consensus_changes.clone());
 
-			let write_result = ::aux_schema::update_consensus_changes(
+			let write_result = crate::aux_schema::update_consensus_changes(
 				&*consensus_changes,
 				|insert| client.apply_aux(import_op, insert, &[]),
 			);
@@ -469,7 +470,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 		};
 
 		if status.changed {
-			let write_result = ::aux_schema::update_authority_set(
+			let write_result = crate::aux_schema::update_authority_set(
 				&authority_set,
 				new_authorities.as_ref(),
 				|insert| client.apply_aux(import_op, insert, &[]),

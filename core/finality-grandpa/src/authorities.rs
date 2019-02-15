@@ -19,7 +19,9 @@
 use parking_lot::RwLock;
 use substrate_primitives::Ed25519AuthorityId;
 use grandpa::VoterSet;
-use codec::Decode;
+use parity_codec::Decode;
+use parity_codec_derive::{Encode, Decode};
+use log::{debug, info};
 
 use std::cmp::Ord;
 use std::fmt::Debug;
@@ -318,7 +320,7 @@ pub(crate) struct PendingChange<H, N> {
 }
 
 impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {
-	fn decode<I: ::codec::Input>(value: &mut I) -> Option<Self> {
+	fn decode<I: parity_codec::Input>(value: &mut I) -> Option<Self> {
 		let next_authorities = Decode::decode(value)?;
 		let delay = Decode::decode(value)?;
 		let canon_height = Decode::decode(value)?;
@@ -347,7 +349,7 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 mod tests {
 	use super::*;
 
-	fn ignore_existing_changes<A>(_a: &A) -> Result<(), ::Error> {
+	fn ignore_existing_changes<A>(_a: &A) -> Result<(), crate::Error> {
 		Ok(())
 	}
 

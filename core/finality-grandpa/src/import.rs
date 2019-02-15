@@ -16,7 +16,8 @@
 
 use std::sync::Arc;
 
-use codec::Encode;
+use log::{debug, trace, info};
+use parity_codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
@@ -37,10 +38,10 @@ use runtime_primitives::traits::{
 use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
-use authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
-use consensus_changes::SharedConsensusChanges;
-use environment::{canonical_at_height, finalize_block};
-use justification::GrandpaJustification;
+use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
+use crate::consensus_changes::SharedConsensusChanges;
+use crate::environment::{canonical_at_height, finalize_block};
+use crate::justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.
 ///
@@ -394,7 +395,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 				AppliedChanges::None => None,
 			};
 
-			::aux_schema::update_authority_set(
+			crate::aux_schema::update_authority_set(
 				authorities,
 				authorities_change,
 				|insert| block.auxiliary.extend(

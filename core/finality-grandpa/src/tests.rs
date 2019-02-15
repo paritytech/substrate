@@ -399,7 +399,7 @@ fn run_to_completion_with<F: FnOnce()>(
 	for (peer_id, key) in peers.iter().enumerate() {
 		let highest_finalized = highest_finalized.clone();
 		let (client, link) = {
-			let mut net = net.lock();
+			let net = net.lock();
 			// temporary needed for some reason
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
@@ -503,7 +503,7 @@ fn finalize_3_voters_1_observer() {
 
 	for (peer_id, local_key) in all_peers.enumerate() {
 		let (client, link) = {
-			let mut net = net.lock();
+			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
 				net.peers[peer_id].client().clone(),
@@ -580,7 +580,7 @@ fn transition_3_voters_twice_1_observer() {
 		assert_eq!(peer.client().info().unwrap().chain.best_number, 1,
 					"Peer #{} failed to sync", i);
 
-		let set: AuthoritySet<Hash, BlockNumber> = ::aux_schema::load_authorities(
+		let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
 			&**peer.client().backend()
 		).unwrap();
 
@@ -655,7 +655,7 @@ fn transition_3_voters_twice_1_observer() {
 
 	for (peer_id, local_key) in all_peers {
 		let (client, link) = {
-			let mut net = net.lock();
+			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
 				net.peers[peer_id].client().clone(),
@@ -667,7 +667,7 @@ fn transition_3_voters_twice_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &30))
 				.for_each(move |_| Ok(()))
 				.map(move |()| {
-					let set: AuthoritySet<Hash, BlockNumber> = ::aux_schema::load_authorities(
+					let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
 						&**client.backend()
 					).unwrap();
 
@@ -875,7 +875,7 @@ fn force_change_to_new_set() {
 			assert_eq!(peer.client().info().unwrap().chain.best_number, 26,
 					"Peer #{} failed to sync", i);
 
-			let set: AuthoritySet<Hash, BlockNumber> = ::aux_schema::load_authorities(
+			let set: AuthoritySet<Hash, BlockNumber> = crate::aux_schema::load_authorities(
 				&**peer.client().backend()
 			).unwrap();
 

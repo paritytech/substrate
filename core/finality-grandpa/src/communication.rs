@@ -23,11 +23,12 @@ use std::sync::Arc;
 use grandpa::VoterSet;
 use futures::prelude::*;
 use futures::sync::mpsc;
-use codec::{Encode, Decode};
+use log::{debug, trace};
+use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Ed25519AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
-use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
+use crate::{Error, Network, Message, SignedMessage, Commit, CompactCommit};
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
@@ -245,9 +246,9 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 	round: u64,
 	set_id: u64,
 ) -> Result<(), ()> {
-	let as_public = ::ed25519::Public::from_raw(id.0);
+	let as_public = ed25519::Public::from_raw(id.0);
 	let encoded_raw = localized_payload(round, set_id, message);
-	if ::ed25519::verify_strong(signature, &encoded_raw, as_public) {
+	if ed25519::verify_strong(signature, &encoded_raw, as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);

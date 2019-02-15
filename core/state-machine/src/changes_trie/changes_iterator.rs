@@ -40,6 +40,9 @@ pub fn key_changes<'a, S: Storage<H>, H: Hasher>(
 	max: u64,
 	key: &'a [u8],
 ) -> Result<DrilldownIterator<'a, S, S, H>, String> where H::Out: HeapSizeOf {
+	// we can't query any roots before root
+	let max = ::std::cmp::min(max, end.number);
+
 	Ok(DrilldownIterator {
 		essence: DrilldownIteratorEssence {
 			key,
@@ -67,6 +70,9 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher>(
 	max: u64,
 	key: &[u8],
 ) -> Result<Vec<Vec<u8>>, String> where H::Out: HeapSizeOf {
+	// we can't query any roots before root
+	let max = ::std::cmp::min(max, end.number);
+
 	let mut iter = ProvingDrilldownIterator {
 		essence: DrilldownIteratorEssence {
 			key,
@@ -104,6 +110,9 @@ pub fn key_changes_proof_check<S: RootsStorage<H>, H: Hasher>(
 	max: u64,
 	key: &[u8]
 ) -> Result<Vec<(u64, u32)>, String> where H::Out: HeapSizeOf {
+	// we can't query any roots before root
+	let max = ::std::cmp::min(max, end.number);
+
 	let mut proof_db = MemoryDB::<H>::default();
 	for item in proof {
 		proof_db.insert(&item);
