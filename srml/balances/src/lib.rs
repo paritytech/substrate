@@ -493,7 +493,7 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	}
 
 	fn remove_from(who: &T::AccountId, value: T::Balance) -> Result {
-		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		T::EnsureAccountLiquid::ensure_account_can_transfer(who)?;
 		let b = Self::free_balance(who);
 		ensure!(b >= value, "account has too few funds");
 		Self::set_free_balance(who, b - value);

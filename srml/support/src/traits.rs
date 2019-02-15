@@ -164,6 +164,8 @@ pub trait Currency<AccountId> {
 
 	/// Substrates `value` from the free balance of `who`. If the whole amount cannot be
 	/// deducted, an error is returned.
+	/// 
+	/// This does *not* check for spendability, e.g. using `EnsureAccountLiquid` trait.
 	///
 	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
 	/// you mean to actually burn value out of existence, then use `slash` instead.

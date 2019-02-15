@@ -87,30 +87,56 @@ impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 	}
 }
 
+/// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct UnlockChunk<Balance: HasCompact, BlockNumber: HasCompact> {
+	/// Amount of funds to be unlocked.
+	#[codec(compact)]
+	value: Balance,
+	/// Era number at which point it'll be unlocked.
+	#[codec(compact)]
+	era: BlockNumber,
+}
+
 /// The ledger of a (bonded) stash.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct StakingLedger<AccountId, Balance, BlockNumber> {
+pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
+	#[codec(compact)]
 	pub active: Balance,
 	/// Any balance that is becoming (or has become) free, which may be transferred out
 	/// of the stash.
-	pub inactive: Vec<(Balance, BlockNumber)>,
+	pub inactive: Vec<UnlockChunk<Balance, BlockNumber>>,
+}
+
+/// The amount of exposure (to slashing) than an individual nominator has.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct IndividualExposure<AccountId, Balance: HasCompact> {
+	/// Which nominator.
+	who: AccountId,
+	/// Amount of funds exposed.
+	#[codec(compact)]
+	value: Balance,
 }
 
 /// A snapshot of the stake backing a single validator in the system.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub struct Exposure<AccountId, Balance> {
+pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The total balance backing this validator.
+	#[codec(compact)]
 	pub total: Balance,
 	/// The validator's own stash that is exposed.
+	#[codec(compact)]
 	pub own: Balance,
 	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<(AccountId, Balance)>,
+	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -145,23 +171,37 @@ decl_storage! {
 		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 
 		// TODO: remove once Alex/CC updated #1785
-		pub Invulerables get(invulerables) config(): Vec<T::AccountId>;
+		pub Invulerables get(invulerables): Vec<T::AccountId>;
 
 		/// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're easy to initialise
 		/// and the performance hit is minimal (we expect no more than four invulnerables) and restricted to testnets.
 		pub Invulnerables get(invulnerables) config(): Vec<T::AccountId>;
 
 		/// Map from all locked "stash" accounts to the controller account.
-		pub Bonded get(bonded): map T::AccountId => Option<T::AccountId>;
+		pub Bonded get(bonded) build(|config: &GenesisConfig<T>| {
+			config.stakers.iter().map(|(stash, controller, _)| (stash.clone(), controller.clone())).collect::<Vec<_>>()
+		}): map T::AccountId => Option<T::AccountId>;
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
-		pub Ledger get(ledger): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
-
-		//==============================================================================================================================
+		pub Ledger get(ledger) build(|config: &GenesisConfig<T>| {
+			config.stakers.iter().map(|(stash, controller, value)| (
+				controller.clone(),
+				StakingLedger {
+					stash: stash.clone(),
+					active: *value,
+					inactive: Vec::<UnlockChunk<BalanceOf<T>, T::BlockNumber>>::new(),
+				},
+			)).collect::<Vec<_>>()
+		}): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// The set of keys are all controllers that want to validate.
 		/// 
-		/// The value are the preferences that a validator has.
-		pub Validators get(validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
+		/// The values are the preferences that a validator has.
+		pub Validators get(validators) build(|config: &GenesisConfig<T>| {
+			config.stakers.iter().map(|(_stash, controller, _value)| (
+				controller.clone(),
+				ValidatorPrefs::<BalanceOf<T>>::default(),
+			)).collect::<Vec<_>>()
+		}): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The set of keys are all controllers that want to nominate.
 		/// 
@@ -170,18 +210,24 @@ decl_storage! {
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
-		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+		pub Stakers get(stakers) build(|config: &GenesisConfig<T>| {
+			config.stakers.iter().map(|(_stash, controller, value)| (
+				controller.clone(),
+				Exposure {
+					total: *value,
+					own: *value,
+					others: Vec::<IndividualExposure<T::AccountId, _>>::new(),
+				},
+			)).collect::<Vec<_>>()
+		}): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
-		// The historical validators and their nominations for a given era. Stored as a hash of the encoded
-		// `(T::AccountId, Vec<(T::AccountId, BalanceOf<T>)>)`, which is the key and value of the `CurrentNominatorsFor`,
-		// under a key that is the tuple of `era` and `validator index`.
+		// The historical validators and their nominations for a given era. Stored as a trie root of the mapping
+		// `T::AccountId` => `Exposure<T::AccountId, BalanceOf<T>>`, which is just the contents of `Stakers`,
+		// under a key that is the `era`.
 		// 
-		// Every era change, this will be appended with the contents of `CurrentNominatorsFor`, and the oldest entry removed down to
-		// a specific number of entries (probably around 90 for a 3 month history). To remove all items for era N, just start at
-		// validator index 0: (N, 0) and remove the item, incrementing the index until it's a `None`.
-//		pub HistoricalStakers get(historical_stakers): map (T::BlockNumber, u32) => Option<H256>;
-
-		//==============================================================================================================================
+		// Every era change, this will be appended with the trie root of the contents of `Stakers`, and the oldest
+		// entry removed down to a specific number of entries (probably around 90 for a 3 month history).
+//		pub HistoricalStakers get(historical_stakers): map T::BlockNumber => Option<H256>;
 
 		/// The current era index.
 		pub CurrentEra get(current_era) config(): T::BlockNumber;
@@ -193,7 +239,7 @@ decl_storage! {
 
 		/// The accumulated reward for the current era. Reset to zero at the beginning of the era and
 		/// increased for every successfully finished session.
-		pub CurrentEraReward get(current_era_reward) config(): BalanceOf<T>;
+		pub CurrentEraReward get(current_era_reward): BalanceOf<T>;
 
 		/// The next value of sessions per era.
 		pub NextSessionsPerEra get(next_sessions_per_era): Option<T::BlockNumber>;
@@ -201,7 +247,9 @@ decl_storage! {
 		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
 
 		/// The highest and lowest staked validator slashable balances.
-		pub SlotStake get(slot_stake): BalanceOf<T>;
+		pub SlotStake get(slot_stake) build(|config: &GenesisConfig<T>| {
+			config.stakers.iter().map(|&(_, _, value)| value).min()
+		}): BalanceOf<T>;
 
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
 		pub SlashCount get(slash_count): map T::AccountId => u32;
@@ -211,6 +259,9 @@ decl_storage! {
 
 		/// Most recent `RECENT_OFFLINE_COUNT` instances. (who it was, when it was reported, how many instances they were offline for).
 		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
+	}
+	add_extra_genesis {
+		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>)>;
 	}
 }
 
@@ -237,7 +288,7 @@ decl_module! {
 			let value = value.min(stash_balance);
 			let remaining_free = stash_balance - value;
 			let inactive = match remaining_free.is_zero() {
-				false => vec![(remaining_free, <system::Module<T>>::block_number())],
+				false => vec![UnlockChunk { value: remaining_free, era: Self::current_era()}],
 				true => vec![],
 			};
 
@@ -263,8 +314,8 @@ decl_module! {
 					ledger.active = Zero::zero();
 				}
 
-				let now = <system::Module<T>>::block_number();
-				ledger.inactive.push((value, now + Self::bonding_duration()));
+				let era = Self::current_era() + Self::bonding_duration();
+				ledger.inactive.push(UnlockChunk { value, era });
 				<Ledger<T>>::insert(&controller, ledger);
 			}
 		}
@@ -274,14 +325,13 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 
-			let now = <system::Module<T>>::block_number();
-
+			let current_era = Self::current_era();
 			let mut total = Zero::zero();
 			ledger.inactive = ledger.inactive.into_iter()
-				.filter(|(how_much, when)| if now < *when {
+				.filter(|UnlockChunk { value, era }| if current_era < *era {
 					true
 				} else {
-					total += *how_much;
+					total += *value;
 					false
 				})
 				.collect();
@@ -298,12 +348,11 @@ decl_module! {
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 
 			let stash_balance = T::Currency::free_balance(&ledger.stash);
-			let inactive_balance = ledger.inactive.iter().fold(Zero::zero(), |acc, &(ref v, _)| acc + *v);
+			let inactive_balance = ledger.inactive.iter().fold(Zero::zero(), |acc, uc| acc + uc.value);
 
 			if stash_balance > inactive_balance + ledger.active {
 				let extra = stash_balance - inactive_balance - ledger.active;
-				let now = <system::Module<T>>::block_number();
-				ledger.inactive.push((extra, now));
+				ledger.inactive.push(UnlockChunk { value: extra, era: Self::current_era() });
 				<Ledger<T>>::insert(&controller, ledger);
 			}
 		}
@@ -439,8 +488,8 @@ impl<T: Trait> Module<T> {
 			let total = exposure.total - exposure.own;
 			if !total.is_zero() {
 				let safe_mul_rational = |b| b * rest_slash / total;// FIXME #1572 avoid overflow
-				for &(ref them, their_exposure) in exposure.others.iter() {
-					let _ = T::Currency::slash(them, safe_mul_rational(their_exposure));	// best effort - not much that can be done on fail.
+				for i in exposure.others.iter() {
+					let _ = T::Currency::slash(&i.who, safe_mul_rational(i.value));	// best effort - not much that can be done on fail.
 				}
 			}
 		}
@@ -457,8 +506,8 @@ impl<T: Trait> Module<T> {
 			let exposure = Self::stakers(who);
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
-			for &(ref them, their_exposure) in exposure.others.iter() {
-				let _ = T::Currency::reward(them, safe_mul_rational(their_exposure));
+			for i in exposure.others.iter() {
+				let _ = T::Currency::reward(&i.who, safe_mul_rational(i.value));
 			}
 			safe_mul_rational(exposure.own)
 		};
@@ -546,7 +595,7 @@ impl<T: Trait> Module<T> {
 			if let Ok(index) = candidates.binary_search_by(|i| i.0.cmp(&nominees[0])) {
 				let stash_balance = Self::stash_balance(&who);
 				candidates[index].1.total += stash_balance;
-				candidates[index].1.others.push((who, stash_balance));
+				candidates[index].1.others.push(IndividualExposure { who, value: stash_balance });
 			}
 		}
 
@@ -556,7 +605,7 @@ impl<T: Trait> Module<T> {
 		let candidates = if candidates.len() <= count {
 			candidates
 		} else {
-			candidates.into_iter().fold(vec![], |mut winners, entry| {
+			candidates.into_iter().fold(vec![], |mut winners: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>, entry| {
 				if let Err(insert_point) = winners.binary_search_by_key(&entry.1.total, |i| i.1.total) {
 					if winners.len() < count {
 						winners.insert(insert_point, entry)
