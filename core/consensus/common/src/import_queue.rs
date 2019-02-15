@@ -131,6 +131,21 @@ impl<B: BlockT> ImportQueueClone<B> for BasicQueue<B> {
 	}
 }
 
+/// "BasicQueue" is a wrapper around a channel sender to the "BlockImporter".
+/// "BasicQueue" itself does not keep any state or do any importing work, and can therefore be send to other threads.
+///
+/// "BasiqQueue" implements "ImportQueue" by sending messages to the "BlockImporter", which runs in it's own thread.
+///
+/// The "BlockImporter" is responsible for handling incoming requests from the "BasicQueue",
+/// some of these requests are handled by the "BlockImporter" itself, such as "is_importing" or "status",
+/// and justifications are also imported by the "BlockImporter".
+///
+/// The "import block" work will be offloaded to a single "BlockImportWorker", running in another thread.
+/// Offloading the work is done via a channel,
+/// ensuring blocks in this implementation are imported sequentially and in order(as received by the "BlockImporter")
+///
+/// As long as the "BasicQueue" is not dropped, the "BlockImporter" will keep running.
+/// The "BlockImporter" owns a sender to the "BlockImportWorker", ensuring that the worker is kept alive until that sender is dropped.
 impl<B: BlockT> BasicQueue<B> {
 	/// Instantiate a new basic queue, with given verifier.
 	pub fn new<V: 'static + Verifier<B>>(
