@@ -153,7 +153,7 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Start(link))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
 		Ok(())
 	}
 
@@ -161,14 +161,14 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Clear)
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
 	}
 
 	fn stop(&self) {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Stop)
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
 	}
 
 	fn status(&self) -> ImportQueueStatus<B> {
@@ -176,8 +176,8 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::Status(sender))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
-		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around")
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
+		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed")
 	}
 
 	fn is_importing(&self, hash: &B::Hash) -> bool {
@@ -185,8 +185,8 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::IsImporting(hash.clone(), sender))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
-		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around")
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
+		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed")
 	}
 
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
@@ -196,14 +196,14 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::ImportBlocks(origin, blocks))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
 	}
 
 	fn import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		let _ = self
 			.sender
 			.send(BlockImportMsg::ImportJustification(who, hash, number, justification))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around");
+			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
 	}
 }
 
@@ -280,7 +280,7 @@ impl<B: BlockT> BlockImporter<B> {
 			},
 			recv(self.result_port) -> msg => {
 				match msg {
-					Err(_) => unreachable!("1. We hold a sender to the Worker, 2. it should not quit until that sender is dropped"),
+					Err(_) => unreachable!("1. We hold a sender to the Worker, 2. it should not quit until that sender is dropped; qed"),
 					Ok(msg) => ImportMsgType::FromWorker(msg),
 				}
 			}
@@ -321,7 +321,7 @@ impl<B: BlockT> BlockImporter<B> {
 	fn handle_worker_msg(&mut self, msg: BlockImportWorkerMsg<B>) -> bool {
 		let results = match msg {
 			BlockImportWorkerMsg::Imported(results) => (results),
-			_ => unreachable!("Import Worker does not send ImportBlocks message"),
+			_ => unreachable!("Import Worker does not send ImportBlocks message; qed"),
 		};
 		let mut has_error = false;
 		for (result, hash) in results {
@@ -422,7 +422,7 @@ impl<B: BlockT> BlockImporter<B> {
 		}
 		self.worker_sender
 			.send(BlockImportWorkerMsg::ImportBlocks(origin, blocks))
-			.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held");
+			.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held; qed");
 	}
 }
 
@@ -453,7 +453,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 						BlockImportWorkerMsg::ImportBlocks(origin, blocks) => {
 							worker.import_a_batch_of_blocks(origin, blocks)
 						}
-						_ => unreachable!("Import Worker does not receive the Imported message"),
+						_ => unreachable!("Import Worker does not receive the Imported message; qed"),
 					}
 				}
 			})
