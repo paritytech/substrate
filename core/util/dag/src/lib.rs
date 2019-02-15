@@ -59,6 +59,21 @@ pub struct Dag<H, N, V> {
 	best_finalized_number: Option<N>,
 }
 
+struct DagIterator<'a, H, N, V> {
+	stack: Vec<&'a Node<H, N, V>>,
+}
+
+impl<'a, H, N, V> Iterator for DagIterator<'a, H, N, V> {
+	type Item = (&'a H, &'a N, &'a V);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.stack.pop().map(|node| {
+			self.stack.extend(node.children.iter());
+			(&node.hash, &node.number, &node.data)
+		})
+	}
+}
+
 #[derive(Debug, PartialEq)]
 pub enum FinalizationResult<V> {
 	Changed(Option<V>),
@@ -119,6 +134,11 @@ impl<H, N, V> Dag<H, N, V> where
 
 	pub fn roots(&self) -> impl Iterator<Item=(&H, &N, &V)> {
 		self.roots.iter().map(|node| (&node.hash, &node.number, &node.data))
+	}
+
+	/// Iterates the DAG in pre-order.
+	pub fn iter(&self) -> impl Iterator<Item=(&H, &N, &V)> {
+		DagIterator { stack: self.roots.iter().collect() }
 	}
 
 	pub fn finalize_root(&mut self, hash: &H) -> Option<V> {
@@ -338,7 +358,18 @@ impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 mod test {
 	use super::{Dag, Error};
 
-	fn test_dag<'a>() -> (Dag<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, ()>)  {
+	#[derive(Debug, PartialEq)]
+	struct TestError;
+
+	impl std::fmt::Display for TestError {
+		fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+			write!(f, "TestError")
+		}
+	}
+
+	impl std::error::Error for TestError {}
+
+	fn test_dag<'a>() -> (Dag<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, TestError>)  {
 		let mut dag = Dag::empty();
 
 		//
@@ -350,7 +381,7 @@ mod test {
 		//  \
 		//   — J - K
 		//
-		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, ()> {
+		let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
 			let letters = vec!["B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
 			match (*base, *block) {
 				("A", b) => Ok(letters.into_iter().any(|n| n == b)),
@@ -436,7 +467,7 @@ mod test {
 			let (mut dag, ..) = test_dag();
 
 			assert_eq!(
-				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("A", 1)],
 			);
 
@@ -444,7 +475,7 @@ mod test {
 			dag.finalize_root(&"A");
 
 			assert_eq!(
-				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("B", 2), ("F", 2), ("J", 2)],
 			);
 
@@ -458,7 +489,7 @@ mod test {
 			dag.finalize_root(&"B");
 
 			assert_eq!(
-				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("C", 3)],
 			);
 
@@ -473,7 +504,7 @@ mod test {
 			dag.finalize_root(&"J");
 
 			assert_eq!(
-				dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("K", 3)],
 			);
 
@@ -495,7 +526,7 @@ mod test {
 		// finalizing "A" opens up three possible forks
 		dag.finalize(&"A", 1, &is_descendent_of).unwrap();
 		assert_eq!(
-			dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![("B", 2), ("F", 2), ("J", 2)],
 		);
 
@@ -521,12 +552,27 @@ mod test {
 		dag.finalize(&"H", 3, &is_descendent_of).unwrap();
 
 		assert_eq!(
-			dag.roots().map(|(h, n)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![("I", 4)],
 		);
 
 		// finalizing a node from another fork that isn't part of the dag clears the dag
 		dag.finalize(&"Z", 5, &is_descendent_of).unwrap();
 		assert!(dag.roots.is_empty());
+	}
+
+	#[test]
+	fn iter_iterates_in_preorder() {
+		let (dag, ..) = test_dag();
+		assert_eq!(
+			dag.iter().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![
+				("A", 1),
+				("J", 2), ("K", 3),
+				("F", 2), ("H", 3), ("I", 4),
+				("G", 3),
+				("B", 2), ("C", 3), ("D", 4), ("E", 5),
+			],
+		);
 	}
 }
