@@ -110,6 +110,13 @@ impl WaitLink {
 	}
 }
 
+impl<B: Block> Link<B> for WaitLink {
+	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {
+		self.wait_send.send(())
+			.expect("Unable to notify main process; if the main process panicked then this thread would already be dead as well. qed.");
+	}
+}
+
 /// Import blocks from a binary stream.
 pub fn import_blocks<F, E, R>(
 	mut config: FactoryFullConfiguration<F>,
@@ -123,11 +130,6 @@ pub fn import_blocks<F, E, R>(
 	let queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone())?;
 
 	let (wait_send, wait_recv) = std::sync::mpsc::channel();
-	impl<B: Block> Link<B> for WaitLink {
-		fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {
-			self.wait_send.send(()).expect("Unable to notify about imported block");
-		}
-	}
 	let wait_link = WaitLink::new(wait_send);
 	queue.start(wait_link)?;
 
@@ -178,7 +180,8 @@ pub fn import_blocks<F, E, R>(
 
 	let mut blocks_imported = 0;
 	while blocks_imported < count {
-		wait_recv.recv().expect("Unable to receive info about imported block");
+		wait_recv.recv()
+			.expect("Importing thread has panicked. Then the main process will die before this can be reached. qed.");
 		blocks_imported += 1;
 	}
 
