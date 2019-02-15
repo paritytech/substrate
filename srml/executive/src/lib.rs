@@ -18,11 +18,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	OnInitialise, MakePayment, Hash, As, Digest};
+	OnInitialise, ChargeBytesFee, Hash, As, Digest};
 use srml_support::Dispatchable;
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -58,7 +59,7 @@ impl<
 	Context: Default,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Payment: MakePayment<System::AccountId>,
+	Payment: ChargeBytesFee<System::AccountId>,
 	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -166,7 +167,7 @@ impl<
 			) }
 
 			// pay any fees.
-			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
+			Payment::charge_base_bytes_fee(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -238,7 +239,7 @@ impl<
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
-			if Payment::make_payment(sender, encoded_len).is_err() {
+			if Payment::charge_base_bytes_fee(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 
@@ -284,6 +285,7 @@ mod tests {
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use srml_support::{traits::Currency, impl_outer_origin, impl_outer_event};
 	use system;
+	use fees;
 	use hex_literal::{hex, hex_impl};
 
 	impl_outer_origin! {
@@ -293,7 +295,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
-			balances<T>,
+			balances<T>, fees<T>,
 		}
 	}
 
@@ -320,21 +322,28 @@ mod tests {
 		type EnsureAccountLiquid = ();
 		type Event = MetaEvent;
 	}
+	impl fees::Trait for Runtime {
+		type Event = MetaEvent;
+		type Amount = u64;
+		type TransferAsset = balances::Module<Runtime>;
+	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, system::ChainContext<Runtime>, fees::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
-			transaction_base_fee: 10,
-			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			vesting: vec![],
+		}.build_storage().unwrap().0);
+		t.extend(fees::GenesisConfig::<Runtime> {
+			transaction_base_fee: 10,
+			transaction_byte_fee: 0,
 		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2, 69));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
@@ -360,7 +369,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
+					state_root: hex!("6651861f40a8f42c033b3e937cb3513e6dbaf4be6bafb1561a19f884be3f58dd").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -394,7 +403,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("49cd58a254ccf6abc4a023d9a22dcfc421e385527a250faec69f8ad0d8ed3e48").into(),
+					state_root: hex!("6651861f40a8f42c033b3e937cb3513e6dbaf4be6bafb1561a19f884be3f58dd").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
