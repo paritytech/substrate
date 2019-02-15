@@ -77,7 +77,7 @@ struct PendingJustifications<B: BlockT> {
 impl<B: BlockT> PendingJustifications<B> {
 	fn new() -> PendingJustifications<B> {
 		PendingJustifications {
-			justifications: ForkTree::empty(),
+			justifications: ForkTree::new(),
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),

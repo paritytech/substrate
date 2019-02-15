@@ -14,14 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Utility library for managing tree-like ordered data with logic for pruning
+//! the tree while finalizing nodes.
+
+#![warn(missing_docs)]
+
 use std::fmt;
 use parity_codec_derive::{Decode, Encode};
 
+/// Error occured when interating with the tree.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error<E> {
+	/// Adding duplicate node to tree.
 	Duplicate,
+	/// Finalizing descendent of tree node without finalizing ancestor(s).
 	UnfinalizedAncestor,
+	/// Imported or finalized node that is an ancestor of previously finalized node.
 	Revert,
+	/// Error throw by client when checking for node ancestry.
 	Client(E),
 }
 
@@ -53,12 +63,22 @@ impl<E: std::error::Error> From<E> for Error<E> {
 	}
 }
 
+/// Result of finalizing a node (that could be a part of the tree or not).
 #[derive(Debug, PartialEq)]
 pub enum FinalizationResult<V> {
+	/// The tree has changed, optionally return the value associated with the finalized node.
 	Changed(Option<V>),
+	/// The tree has not changed.
 	Unchanged,
 }
 
+/// A tree data structure that stores several nodes across multiple branches.
+/// Top-level branches are called roots. The tree has functionality for
+/// finalizing nodes, which means that that node is traversed, and all competing
+/// branches are pruned. It also guarantees that nodes in the tree are finalized
+/// in order. Each node is uniquely identified by its hash but can be ordered by
+/// its number. In order to build the tree an external function must be provided
+/// when interacting with the tree to establish a node's ancestry.
 #[derive(Clone, Debug, Decode, Encode)]
 pub struct ForkTree<H, N, V> {
 	roots: Vec<Node<H, N, V>>,
@@ -69,13 +89,18 @@ impl<H, N, V> ForkTree<H, N, V> where
 	H: PartialEq,
 	N: Ord,
 {
-	pub fn empty() -> ForkTree<H, N, V> {
+	/// Create a new empty tree.
+	pub fn new() -> ForkTree<H, N, V> {
 		ForkTree {
 			roots: Vec::new(),
 			best_finalized_number: None,
 		}
 	}
 
+	/// Import a new node into the tree. The given function `is_descendent_of`
+	/// should return `true` if the second hash (target) is a descendent of the
+	/// first hash (base). This method assumes that nodes in the same branch are
+	/// imported in order.
 	pub fn import<F, E>(
 		&mut self,
 		mut hash: H,
@@ -117,15 +142,19 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(true)
 	}
 
+	/// Iterates over the existing roots in the tree.
 	pub fn roots(&self) -> impl Iterator<Item=(&H, &N, &V)> {
 		self.roots.iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
-	/// Iterates the tree in pre-order.
+	/// Iterates the nodes in the tree in pre-order.
 	pub fn iter(&self) -> impl Iterator<Item=(&H, &N, &V)> {
 		ForkTreeIterator { stack: self.roots.iter().collect() }
 	}
 
+	/// Finalize a root in the tree and return it, return `None` in case no root
+	/// with the given hash exists. All other roots are pruned, and the children
+	/// of the finalized node become the new roots.
 	pub fn finalize_root(&mut self, hash: &H) -> Option<V> {
 		if let Some(position) = self.roots.iter().position(|node| node.hash == *hash) {
 			let node = self.roots.swap_remove(position);
@@ -137,6 +166,11 @@ impl<H, N, V> ForkTree<H, N, V> where
 		None
 	}
 
+	/// Finalize a node in the tree. This method will make sure that the node
+	/// being finalized is either an existing root (an return its data), or a
+	/// node from a competing branch (not in the tree), tree pruning is done
+	/// accordingly. The given function `is_descendent_of` should return `true`
+	/// if the second hash (target) is a descendent of the first hash (base).
 	pub fn finalize<F, E>(
 		&mut self,
 		hash: &H,
@@ -187,7 +221,14 @@ impl<H, N, V> ForkTree<H, N, V> where
 		}
 	}
 
-	pub fn finalizes_if<F, P, E>(
+	/// Checks if a root in the tree is finalized by either finalizing the node
+	/// itself or a child node that's not in the tree, guaranteeing that the
+	/// node being finalized isn't a descendent of any of the root's children.
+	/// The given `predicate` is checked on the prospective finalized root and
+	/// must pass for finalization to occur. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
+	pub fn finalizes_with_descendent_if<F, P, E>(
 		&self,
 		hash: &H,
 		number: N,
@@ -222,7 +263,14 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(false)
 	}
 
-	pub fn finalize_if<F, P, E>(
+	/// Finalize a root in the tree by either finalizing the node itself or a
+	/// child node that's not in the tree, guaranteeing that the node being
+	/// finalized isn't a descendent of any of the root's children. The given
+	/// `predicate` is checked on the prospective finalized root and must pass for
+	/// finalization to occur. The given function `is_descendent_of` should
+	/// return `true` if the second hash (target) is a descendent of the first
+	/// hash (base).
+	pub fn finalize_with_descendent_if<F, P, E>(
 		&mut self,
 		hash: &H,
 		number: N,
@@ -370,7 +418,7 @@ mod test {
 	impl std::error::Error for TestError {}
 
 	fn test_fork_tree<'a>() -> (ForkTree<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, TestError>)  {
-		let mut tree = ForkTree::empty();
+		let mut tree = ForkTree::new();
 
 		//
 		//     - B - C - D - E

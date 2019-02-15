@@ -106,7 +106,7 @@ where H: PartialEq,
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
-			pending_changes: ForkTree::empty(),
+			pending_changes: ForkTree::new(),
 		}
 	}
 
@@ -182,7 +182,7 @@ where
 			new_set_block: None,
 		};
 
-		match self.pending_changes.finalize_if(
+		match self.pending_changes.finalize_with_descendent_if(
 			&finalized_hash,
 			finalized_number.clone(),
 			is_descendent_of,
@@ -222,7 +222,7 @@ where
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{
-		self.pending_changes.finalizes_if(
+		self.pending_changes.finalizes_with_descendent_if(
 			&finalized_hash,
 			finalized_number.clone(),
 			is_descendent_of,
