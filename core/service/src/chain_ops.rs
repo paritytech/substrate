@@ -66,7 +66,10 @@ pub fn export_blocks<F, E, W>(
 	});
 	info!("Exporting blocks from #{} to #{}", block, last);
 	if !json {
-		output.write(&(last - block + As::sa(1)).encode())?;
+		let last_: u64 = last.as_();
+		let block_: u64 = block.as_();
+		let len: u32 = (last_ - block_) as u32 + 1;
+		output.write(&(len).encode())?;
 	}
 
 	loop {
