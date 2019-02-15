@@ -391,6 +391,10 @@ impl<B: BlockT> ChainSync<B> {
 						response.block,
 					);
 
+					trace!(target: "sync", "Invalid block finality data provided: requested: {:?} got: {:?}",
+						hash,
+						response.block,
+					);
 					protocol.report_peer(who, Severity::Bad(msg));
 					return;
 				}
@@ -400,6 +404,11 @@ impl<B: BlockT> ChainSync<B> {
 					response.proof,
 					protocol,
 					&*self.import_queue,
+				);
+			} else {
+				trace!(target: "sync", "Ignoring finality proof response from {}. Peer state: {:?}",
+					who,
+					peer.state,
 				);
 			}
 		}

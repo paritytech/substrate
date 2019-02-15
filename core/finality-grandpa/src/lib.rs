@@ -123,7 +123,7 @@ mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService, BlockImportForLightService};
 
-pub use finality_proof::FinalityProofProvider;
+pub use finality_proof::{FinalityProofProvider, AuthoritySetForFinalityChecker, AuthoritySetForFinalityProver};
 pub use light_import::light_block_import;
 
 use authorities::SharedAuthoritySet;

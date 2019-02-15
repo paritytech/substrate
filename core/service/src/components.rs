@@ -72,7 +72,7 @@ pub type LightExecutor<F> = client::light::call_executor::RemoteOrLocalCallExecu
 			client_db::light::LightStorage<<F as ServiceFactory>::Block>,
 			network::OnDemand<<F as ServiceFactory>::Block>
 		>,
-		network::OnDemand<<F as ServiceFactory>::Block>
+		network::OnDemand<<F as ServiceFactory>::Block>,
 	>,
 	client::LocalCallExecutor<
 		client::light::backend::Backend<

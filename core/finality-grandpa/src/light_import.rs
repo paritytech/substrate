@@ -22,7 +22,6 @@ use client::{
 	backend::Backend,
 	blockchain::HeaderBackend,
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
-	light::fetcher::{FetchChecker, RemoteCallRequest},
 };
 use codec::{Encode, Decode};
 use consensus_common::{
@@ -41,6 +40,7 @@ use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
 use crate::consensus_changes::ConsensusChanges;
 use crate::environment::canonical_at_height;
+use crate::finality_proof::AuthoritySetForFinalityChecker;
 use crate::justification::GrandpaJustification;
 use crate::load_consensus_changes;
 
@@ -52,7 +52,7 @@ const LIGHT_CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 /// Create light block importer.
 pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 	client: Arc<Client<B, E, Block, RA>>,
-	fetch_checker: Arc<FetchChecker<Block>>,
+	authority_set_provider: Arc<AuthoritySetForFinalityChecker<Block>>,
 	api: Arc<PRA>,
 ) -> Result<GrandpaLightBlockImport<B, E, Block, RA>, ClientError>
 	where
@@ -88,7 +88,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 	Ok(GrandpaLightBlockImport {
 		client,
-		fetch_checker,
+		authority_set_provider,
 		data: Arc::new(RwLock::new(LightImportData {
 			authority_set,
 			consensus_changes,
@@ -103,7 +103,7 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 /// - fetching finality proofs for blocks that are enacting consensus changes.
 pub struct GrandpaLightBlockImport<B, E, Block: BlockT<Hash=H256>, RA> {
 	client: Arc<Client<B, E, Block, RA>>,
-	fetch_checker: Arc<FetchChecker<Block>>,
+	authority_set_provider: Arc<AuthoritySetForFinalityChecker<Block>>,
 	data: Arc<RwLock<LightImportData<Block>>>,
 }
 
@@ -180,7 +180,15 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		finality_proof: Vec<u8>,
 		verifier: &Verifier<Block>,
 	) -> Result<(), Self::Error> {
-		do_import_finality_proof(&*self.client, &*self.fetch_checker, &mut *self.data.write(), hash, number, finality_proof, verifier)
+		do_import_finality_proof(
+			&*self.client,
+			&*self.authority_set_provider,
+			&mut *self.data.write(),
+			hash,
+			number,
+			finality_proof,
+			verifier,
+		)
 	}
 }
 
@@ -244,13 +252,26 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 
 	match justification {
 		Some(justification) => {
+			trace!(
+				target: "finality",
+				"Imported block {}{}. Importing justification.",
+				if enacts_consensus_change { " which enacts consensus changes" } else { "" },
+				hash,
+			);
+
 			do_import_justification(client, data, hash, number, justification)?;
 			Ok(import_result)
 		},
 		None if enacts_consensus_change => {
-			// remember that we need justification for this block
+			trace!(
+				target: "finality",
+				"Imported block {} which enacts consensus changes. Requesting finality proof.",
+				hash,
+			);
+
+			// remember that we need finality proof for this block
 			data.consensus_changes.note_change((number, hash));
-			Ok(ImportResult::NeedsJustification)
+			Ok(ImportResult::NeedsFinalityProof)
 		},
 		None => Ok(import_result),
 	}
@@ -259,7 +280,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 /// Try to import finality proof.
 fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: &Client<B, E, Block, RA>,
-	fetch_checker: &FetchChecker<Block>,
+	authority_set_provider: &AuthoritySetForFinalityChecker<Block>,
 	data: &mut LightImportData<Block>,
 	_hash: Block::Hash,
 	_number: NumberFor<Block>,
@@ -281,24 +302,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 		&*client.backend().blockchain(),
 		authority_set_id,
 		authorities,
-		|hash, header, authorities_proof| {
-			let request = RemoteCallRequest {
-				block: hash,
-				header,
-				method: "GrandpaApi_grandpa_authorities".into(),
-				call_data: vec![],
-				retry_count: None,
-			};
-			
-			fetch_checker.check_execution_proof(&request, authorities_proof)
-				.and_then(|authorities| {
-					let authorities: Vec<(Ed25519AuthorityId, u64)> = Decode::decode(&mut &authorities[..])
-						.ok_or_else(|| ClientError::from(ClientErrorKind::CallResultDecode(
-							"failed to decode GRANDPA authorities set proof".into(),
-						)))?;
-					Ok(authorities.into_iter().collect())
-				})
-		},
+		authority_set_provider,
 		finality_proof,
 	).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
 
@@ -359,9 +363,33 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA>(
 	// BadJustification error means that justification has been successfully decoded, but
 	// it isn't valid within current authority set
 	let justification = match justification {
-		Err(ClientError(ClientErrorKind::BadJustification(_), _)) => return Ok(ImportResult::NeedsFinalityProof),
-		Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-		Ok(justification) => justification,
+		Err(ClientError(ClientErrorKind::BadJustification(_), _)) => {
+			trace!(
+				target: "finality",
+				"Justification for {} is not valid within current authorities set. Requesting finality proof.",
+				hash,
+			);
+
+			return Ok(ImportResult::NeedsFinalityProof);
+		},
+		Err(e) => {
+			trace!(
+				target: "finality",
+				"Justification for {} is not valid. Bailing.",
+				hash,
+			);
+
+			return Err(ConsensusErrorKind::ClientImport(e.to_string()).into());
+		},
+		Ok(justification) => {
+			trace!(
+				target: "finality",
+				"Justification for {} is valid. Finalizing the block.",
+				hash,
+			);
+
+			justification
+		},
 	};
 
 	// finalize the block

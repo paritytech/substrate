@@ -35,6 +35,8 @@ type ExtraRequest<B> = (<B as BlockT>::Hash, NumberFor<B>);
 trait ExtraRequestsEssence<B: BlockT> {
 	type Response;
 
+	/// Name of request type to display in logs.
+	fn type_name(&self) -> &'static str;
 	/// Prepare network message corresponding to the request.
 	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B>;
 	/// Accept response.
@@ -145,7 +147,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		let last_finalzied_hash = match protocol.client().info() {
 			Ok(info) => info.chain.finalized_hash,
 			Err(e) => {
-				debug!(target:"sync", "Cannot dispatch extra requests: error {:?} when reading blockchain", e);
+				debug!(target:"sync", "Cannot dispatch {} requests: error {:?} when reading blockchain", self.essence.type_name(), e);
 				return;
 			},
 		};
@@ -157,7 +159,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 			};
 
 			// only ask peers that have synced past the block number that we're
-			// asking the justification for and to whom we haven't already made
+			// asking the extra data for and to whom we haven't already made
 			// the same request recently
 			let peer_eligible = {
 				let request = match self.pending_requests.front() {
@@ -199,7 +201,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 				.expect("peer was is taken from available_peers; available_peers is a subset of peers; qed")
 				.state = self.essence.peer_downloading_state(request.0);
 
-			trace!(target: "sync", "Requesting extra for block #{} from {}", request.0, peer);
+			trace!(target: "sync", "Requesting {} for block #{} from {}", self.essence.type_name(), request.0, peer);
 			let request = self.essence.into_network_request(request, last_finalzied_hash);
 
 			protocol.send_message(peer, request);
@@ -207,8 +209,9 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 
 		self.pending_requests.append(&mut unhandled_requests);
 
-		trace!(target: "sync", "Dispatched {} justification requests ({} pending)",
+		trace!(target: "sync", "Dispatched {} {} requests ({} pending)",
 			initial_pending_requests - self.pending_requests.len(),
+			self.essence.type_name(),
 			self.pending_requests.len(),
 		);
 	}
@@ -244,17 +247,20 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		if let Some(request) = self.peer_requests.remove(&who) {
 			match self.essence.accept_response(request, import_queue, response) {
 				ExtraResponseKind::Accepted => {
+					trace!(target: "sync", "Accepted {} response for {} from {}.", self.essence.type_name(), request.0, who);
 					self.requests.remove(&request);
 					self.previous_requests.remove(&request);
 					return;
 				},
 				ExtraResponseKind::Invalid => {
+					trace!(target: "sync", "Invalid {} provided for {} by {}", self.essence.type_name(), request.0, who);
 					protocol.report_peer(
 						who,
-						Severity::Bad(format!("Invalid extra data provided for #{}", request.0)),
+						Severity::Bad(format!("Invalid {} provided for {} by {}", self.essence.type_name(), request.0, who)),
 					);
 				},
 				ExtraResponseKind::Missing => {
+					trace!(target: "sync", "Empty {} response for {} has provided by {}", self.essence.type_name(), request.0, who);
 					self.previous_requests
 						.entry(request)
 						.or_insert(Vec::new())
@@ -263,6 +269,8 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 			}
 
 			self.pending_requests.push_front(request);
+		} else {
+			trace!(target: "sync", "Ignoring {} response from {}. No pending request.", self.essence.type_name(), who);
 		}
 	}
 
@@ -286,6 +294,10 @@ struct JustificationsRequestsEssence;
 
 impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 	type Response = Option<Justification>;
+
+	fn type_name(&self) -> &'static str {
+		"justification"
+	}
 
 	fn into_network_request(&self, request: ExtraRequest<B>, _last_finalzied_hash: B::Hash) -> Message<B> {
 		GenericMessage::BlockRequest(message::generic::BlockRequest {
@@ -319,6 +331,10 @@ struct FinalityProofRequestsEssence;
 
 impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence {
 	type Response = Option<Vec<u8>>;
+
+	fn type_name(&self) -> &'static str {
+		"finality proof"
+	}
 
 	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B> {
 		GenericMessage::FinalityProofRequest(message::generic::FinalityProofRequest {

@@ -245,13 +245,17 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 
 	fn import_justification(&self, hash: B::Hash, number: NumberFor<B>, justification: Justification) -> bool {
 		self.justification_import.as_ref().map(|justification_import| {
-			justification_import.import_justification(hash, number, justification).is_ok()
+			justification_import.import_justification(hash, number, justification)
+				.map_err(|e| { trace!(target:"sync", "Justification import failed with: {}", e); e })
+				.is_ok()
 		}).unwrap_or(false)
 	}
 
 	fn import_finality_proof(&self, hash: B::Hash, number: NumberFor<B>, finality_proof: Vec<u8>) -> bool {
 		self.finality_proof_import.as_ref().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier).is_ok()
+			finality_proof_import.import_finality_proof(hash, number, finality_proof, &*self.verifier)
+				.map_err(|e| { trace!(target:"sync", "Finality proof import failed with: {}", e); e })
+				.is_ok()
 		}).unwrap_or(false)
 	}
 }

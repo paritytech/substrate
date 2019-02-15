@@ -663,7 +663,7 @@ mod tests {
 	use super::*;
 	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
-	use network::test::{Block as TestBlock, PeersClient};
+	use network::test::{Block as TestBlock, PeersClient, PeersFullClient};
 	use runtime_primitives::traits::Block as BlockT;
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
@@ -704,14 +704,14 @@ mod tests {
 
 	pub struct AuraTestNet {
 		peers: Vec<Arc<Peer<AuraVerifier<
-			PeersClient,
+			PeersFullClient,
 			NothingExtra,
 		>, ()>>>,
 		started: bool,
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
+		type Verifier = AuraVerifier<PeersFullClient, NothingExtra>;
 		type PeerData = ();
 
 		/// Create new test network with peers and given config.
@@ -722,23 +722,28 @@ mod tests {
 			}
 		}
 
-		fn make_verifier(&self, client: Arc<PeersClient>, _cfg: &ProtocolConfig)
+		fn make_verifier(&self, client: PeersClient, _cfg: &ProtocolConfig)
 			-> Arc<Self::Verifier>
 		{
-			let slot_duration = SlotDuration::get_or_compute(&*client)
-				.expect("slot duration available");
-			let inherent_data_providers = InherentDataProviders::new();
-			register_aura_inherent_data_provider(
-				&inherent_data_providers,
-				slot_duration.get()
-			).expect("Registers aura inherent data provider");
+			match client {
+				PeersClient::Full(client) => {
+					let slot_duration = SlotDuration::get_or_compute(&*client)
+						.expect("slot duration available");
+					let inherent_data_providers = InherentDataProviders::new();
+					register_aura_inherent_data_provider(
+						&inherent_data_providers,
+						slot_duration.get()
+					).expect("Registers aura inherent data provider");
 
-			assert_eq!(slot_duration.get(), SLOT_DURATION);
-			Arc::new(AuraVerifier {
-				client,
-				extra: NothingExtra,
-				inherent_data_providers,
-			})
+					assert_eq!(slot_duration.get(), SLOT_DURATION);
+					Arc::new(AuraVerifier {
+						client,
+						extra: NothingExtra,
+						inherent_data_providers,
+					})
+				},
+				PeersClient::Light(_) => unreachable!("No (yet) tests for light client + Aura"),
+			}
 		}
 
 		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
@@ -780,7 +785,7 @@ mod tests {
 
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
-			let client = net.lock().peer(*peer_id).client().clone();
+			let client = net.lock().peer(*peer_id).client().as_full().expect("full clients are created").clone();
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
