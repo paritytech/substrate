@@ -104,8 +104,6 @@ pub fn new_test_ext(
 		} else {
 			vec![(10, balance_factor), (20, balance_factor)]
 		},
-		transaction_base_fee: 0,
-		transaction_byte_fee: 0,
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,

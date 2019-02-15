@@ -1927,6 +1927,7 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
  "srml-contract 0.1.0",
+ "srml-fees 0.1.0",
  "srml-grandpa 0.1.0",
  "srml-indices 0.1.0",
  "srml-session 0.1.0",
@@ -1981,6 +1982,7 @@ dependencies = [
  "srml-council 0.1.0",
  "srml-democracy 0.1.0",
  "srml-executive 0.1.0",
+ "srml-fees 0.1.0",
  "srml-grandpa 0.1.0",
  "srml-indices 0.1.0",
  "srml-session 0.1.0",
@@ -2045,6 +2047,7 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
  "srml-executive 0.1.0",
+ "srml-fees 0.1.0",
  "srml-indices 0.1.0",
  "srml-sudo 0.1.0",
  "srml-support 0.1.0",
@@ -3177,6 +3180,7 @@ dependencies = [
  "sr-std 0.1.0",
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
+ "srml-fees 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
@@ -3249,7 +3253,24 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-balances 0.1.0",
+ "srml-fees 0.1.0",
  "srml-indices 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-fees"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-primitives 0.1.0",
