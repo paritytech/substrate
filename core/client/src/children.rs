@@ -20,7 +20,7 @@ use crate::error;
 use std::hash::Hash;
 
 
-/// Map of father to children blocks.
+/// Used to access children blocks hashes from db.
 pub struct ChildrenMap;
 
 impl ChildrenMap {
@@ -50,24 +50,21 @@ impl ChildrenMap {
 		Ok(children)
 	}
 
-	/// Prepare the database transaction `tx` that adds `child_hash` to the children of `parent_hash`.
+	/// Insert the key-value pair (`parent_hash`, `children_hashes`) in the transaction.
+	/// Any existing value is overwritten upon write.
 	pub fn prepare_transaction<
 		K: Eq + Hash + Clone + Encode + Decode,
 		V: Eq + Hash + Clone + Encode + Decode,
 	>(
-		db: &KeyValueDB,
 		tx: &mut DBTransaction,
 		column: Option<u32>,
 		prefix: &[u8],
 		parent_hash: K,
-		child_hash: V,
-	) -> error::Result<()> {
-		let mut children_db = Self::children_hashes(db, column, prefix, parent_hash.clone())?;
-		children_db.push(child_hash);
-		let mut buf = prefix.to_vec();
-		parent_hash.using_encoded(|s| buf.extend(s));
-		tx.put_vec(column, &buf[..], children_db.encode());
-		Ok(())
+		children_hashes: V,
+	) {
+		let mut key = prefix.to_vec();
+		parent_hash.using_encoded(|s| key.extend(s));
+		tx.put_vec(column, &key[..], children_hashes.encode());
 	}
 }
 
@@ -80,20 +77,22 @@ mod tests {
 		const PREFIX: &[u8] = b"children";
 		let db = ::kvdb_memorydb::create(0);
 
-		let mut children = ChildrenMap::new();
 		let mut tx = DBTransaction::new();
 
-		children.import(0u32, 0u32);
-		children.import(1_1, 1_3);
-		children.import(1_2, 1_4);
-		children.import(1_1, 1_5);
-		children.import(1_2, 1_6);
-		
-		let _ = children.prepare_transaction(&db, &mut tx, None, PREFIX);
+		let mut children1 = Vec::new();
+		children1.push(1_3);
+		children1.push(1_5);
+		ChildrenMap::prepare_transaction(&mut tx, None, PREFIX, 1_1, children1);
+
+		let mut children2 = Vec::new();
+		children2.push(1_4);
+		children2.push(1_6);
+		ChildrenMap::prepare_transaction(&mut tx, None, PREFIX, 1_2, children2);
+
 		db.write(tx).unwrap();
 		
-		let r1: Vec<u32> = children.hashes(&db, None, PREFIX, 1_1).unwrap();
-		let r2: Vec<u32> = children.hashes(&db, None, PREFIX, 1_2).unwrap();
+		let r1: Vec<u32> = ChildrenMap::children_hashes(&db, None, PREFIX, 1_1).unwrap();
+		let r2: Vec<u32> = ChildrenMap::children_hashes(&db, None, PREFIX, 1_2).unwrap();
 		
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2, vec![1_4, 1_6]);

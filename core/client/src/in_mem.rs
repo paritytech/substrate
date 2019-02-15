@@ -34,7 +34,6 @@ use crate::error;
 use crate::backend::{self, NewBlockState};
 use crate::light;
 use crate::leaves::LeafSet;
-use crate::children::ChildrenMap;
 use crate::blockchain::{self, BlockStatus, HeaderBackend};
 
 struct PendingBlock<B: BlockT> {
@@ -99,7 +98,6 @@ struct BlockchainStorage<Block: BlockT> {
 	header_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	changes_trie_cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
-	children: HashMap<Block::Hash, Vec<Block::Hash>>,
 	aux: HashMap<Vec<u8>, Vec<u8>>,
 }
 
@@ -150,7 +148,6 @@ impl<Block: BlockT> Blockchain<Block> {
 				header_cht_roots: HashMap::new(),
 				changes_trie_cht_roots: HashMap::new(),
 				leaves: LeafSet::new(),
-				children: HashMap::new(),
 				aux: HashMap::new(),
 			}));
 		Blockchain {
@@ -366,8 +363,8 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		Ok(self.storage.read().leaves.hashes())
 	}
 
-	fn children(&self, parent_hash: Block::Hash) -> error::Result<Vec<Block::Hash>> {
-		Ok(self.storage.read().children.get(&parent_hash).cloned().unwrap_or_default())
+	fn children(&self, _parent_hash: Block::Hash) -> error::Result<Vec<Block::Hash>> {
+		unimplemented!()
 	}
 }
 

@@ -51,8 +51,8 @@ pub mod meta_keys {
 	pub const GENESIS_HASH: &[u8; 3] = b"gen";
 	/// Leaves prefix list key.
 	pub const LEAF_PREFIX: &[u8; 4] = b"leaf";
-	/// Child prefix list key.
-	pub const CHILD_PREFIX: &[u8; 5] = b"child";
+	/// Children prefix list key.
+	pub const CHILDREN_PREFIX: &[u8; 8] = b"children";
 }
 
 /// Database metadata.

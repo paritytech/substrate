@@ -1740,7 +1740,6 @@ pub(crate) mod tests {
 	fn uncles_with_only_ancestors() {
 		// block tree:
 		// G -> A1 -> A2
-
 		let client = test_client::new();
 
 		// G -> A1
@@ -1831,7 +1830,7 @@ pub(crate) mod tests {
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
 		let uncles1 = client.uncles(a4.hash(), 10).unwrap();
-		assert_eq!(2, uncles1.len());
+		assert_eq!(vec![b2.hash(), d2.hash()], uncles1);
 
 		let uncles2 = client.uncles(a4.hash(), 0).unwrap();
 		assert_eq!(0, uncles2.len());
@@ -1843,10 +1842,10 @@ pub(crate) mod tests {
 		assert_eq!(0, uncles4.len());
 
 		let uncles5 = client.uncles(d2.hash(), 10).unwrap();
-		assert_eq!(2, uncles5.len());
+		assert_eq!(vec![a2.hash(), b2.hash()], uncles5);
 
 		let uncles6 = client.uncles(b3.hash(), 1).unwrap();
-		assert_eq!(1, uncles6.len());
+		assert_eq!(vec![c3.hash()], uncles6);
 	}
 
 	#[test]
