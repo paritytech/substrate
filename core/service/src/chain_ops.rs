@@ -68,7 +68,7 @@ pub fn export_blocks<F, E, W>(
 	if !json {
 		let last_: u64 = last.as_();
 		let block_: u64 = block.as_();
-		let len: u32 = (last_ - block_) as u32 + 1;
+		let len: u64 = last_ - block_ + 1;
 		output.write(&len.encode())?;
 	}
 
@@ -139,7 +139,7 @@ pub fn import_blocks<F, E, R>(
 		let _ = exit_send.send(());
 	});
 
-	let count: u32 = Decode::decode(&mut input).ok_or("Error reading file")?;
+	let count: u64 = Decode::decode(&mut input).ok_or("Error reading file")?;
 	info!("Importing {} blocks", count);
 	let mut block_count = 0;
 	for b in 0 .. count {
