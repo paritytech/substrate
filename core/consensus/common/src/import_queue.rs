@@ -400,6 +400,9 @@ impl<B: BlockT> BlockImporter<B> {
 		let success = self.justification_import.as_ref().map(|justification_import| {
 			justification_import.import_justification(hash, number, justification).is_ok()
 		}).unwrap_or(false);
+		if !success {
+			debug!("Justification import failed for hash: {:?} number: {:?} coming from node: {:?}", hash, number, who);
+		}
 		if let Some(link) = self.link.as_ref() {
 			link.justification_imported(who, &hash, number, success);
 		}

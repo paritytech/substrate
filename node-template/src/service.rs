@@ -13,7 +13,7 @@ use substrate_service::{
 };
 use basic_authorship::ProposerFactory;
 use node_executor;
-use consensus::{import_queue, start_aura, AuraImportQueue, SlotDuration, NothingExtra};
+use consensus::{import_queue, start_aura, BasicQueue, SlotDuration, NothingExtra};
 use substrate_client as client;
 use primitives::ed25519::Pair;
 use inherents::InherentDataProviders;
@@ -82,7 +82,7 @@ construct_service_factory! {
 		},
 		LightService = LightComponents<Self>
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<
+		FullImportQueue = BasicQueue<
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>|
@@ -95,7 +95,7 @@ construct_service_factory! {
 					config.custom.inherent_data_providers.clone(),
 				).map_err(Into::into)
 			},
-		LightImportQueue = AuraImportQueue<
+		LightImportQueue = BasicQueue<
 			Self::Block,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>|
