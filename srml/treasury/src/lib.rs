@@ -303,8 +303,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			existential_deposit: 0,

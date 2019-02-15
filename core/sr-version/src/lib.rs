@@ -158,12 +158,9 @@ impl NativeVersion {
 
 #[cfg(feature = "std")]
 mod apis_serialize {
-	extern crate impl_serde;
-	extern crate serde;
-
 	use super::*;
-	use self::impl_serde::serialize as bytes;
-	use self::serde::{Serializer, ser::SerializeTuple};
+	use impl_serde::serialize as bytes;
+	use serde::{Serializer, ser::SerializeTuple};
 
 	#[derive(Serialize)]
 	struct ApiId<'a>(

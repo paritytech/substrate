@@ -57,6 +57,9 @@ use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
 pub use state_db::PruningMode;
 
+#[cfg(feature = "test-helpers")]
+use client::in_mem::Backend as InMemoryBackend;
+
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u64 = 32768;
 const STATE_CACHE_SIZE_BYTES: usize = 16 * 1024 * 1024;
@@ -463,8 +466,10 @@ impl<Block: BlockT> client::backend::PrunableStateChangesTrieStorage<Blake2Hashe
 
 impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
 	fn root(&self, anchor: &state_machine::ChangesTrieAnchorBlockId<H256>, block: u64) -> Result<Option<H256>, String> {
-		// check API requirement
-		assert!(block <= anchor.number, "API requirement");
+		// check API requirement: we can't get NEXT block(s) based on anchor
+		if block > anchor.number {
+			return Err(format!("Can't get changes trie root at {} using anchor at {}", block, anchor.number));
+		}
 
 		// we need to get hash of the block to resolve changes trie root
 		let block_id = if block <= self.meta.read().finalized_number.as_() {
@@ -531,8 +536,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		Backend::from_kvdb(db as Arc<_>, config.pruning, canonicalization_delay)
 	}
 
-	#[cfg(test)]
-	fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
@@ -568,6 +573,54 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			canonicalization_delay,
 			shared_cache: new_shared_cache(STATE_CACHE_SIZE_BYTES),
 		})
+	}
+
+	/// Returns in-memory blockchain that contains the same set of blocks that the self.
+	#[cfg(feature = "test-helpers")]
+	pub fn as_in_memory(&self) -> InMemoryBackend<Block, Blake2Hasher> {
+		use client::backend::{Backend as ClientBackend, BlockImportOperation};
+		use client::blockchain::Backend as BlockchainBackend;
+
+		let inmem = InMemoryBackend::<Block, Blake2Hasher>::new();
+
+		// get all headers hashes && sort them by number (could be duplicate)
+		let mut headers: Vec<(NumberFor<Block>, Block::Hash, Block::Header)> = Vec::new();
+		for (_, header) in self.blockchain.db.iter(columns::HEADER) {
+			let header = Block::Header::decode(&mut &header[..]).unwrap();
+			let hash = header.hash();
+			let number = *header.number();
+			let pos = headers.binary_search_by(|item| item.0.cmp(&number));
+			match pos {
+				Ok(pos) => headers.insert(pos, (number, hash, header)),
+				Err(pos) => headers.insert(pos, (number, hash, header)),
+			}
+		}
+
+		// insert all other headers + bodies + justifications
+		let info = self.blockchain.info().unwrap();
+		for (number, hash, header) in headers {
+			let id = BlockId::Hash(hash);
+			let justification = self.blockchain.justification(id).unwrap();
+			let body = self.blockchain.body(id).unwrap();
+			let state = self.state_at(id).unwrap().pairs();
+
+			let new_block_state = if number.is_zero() {
+				NewBlockState::Final
+			} else if hash == info.best_hash {
+				NewBlockState::Best
+			} else {
+				NewBlockState::Normal
+			};
+			let mut op = inmem.begin_operation().unwrap();
+			op.set_block_data(header, body, justification, new_block_state).unwrap();
+			op.update_db_storage(state.into_iter().map(|(k, v)| (None, k, Some(v))).collect()).unwrap();
+			inmem.commit_operation(op).unwrap();
+		}
+
+		// and now finalize the best block we have
+		inmem.finalize_block(BlockId::Hash(info.finalized_hash), None).unwrap();
+
+		inmem
 	}
 
 	/// Handle setting head within a transaction. `route_to` should be the last
@@ -712,8 +765,8 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		operation.apply_aux(&mut transaction);
 
 		let mut meta_updates = Vec::new();
+		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 		if !operation.finalized_blocks.is_empty() {
-			let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
 			for (block, justification) in operation.finalized_blocks {
 				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
 				let block_header = self.blockchain.expect_header(BlockId::Hash(block_hash))?;
@@ -787,7 +840,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 			if finalized {
 				// TODO: ensure best chain contains this block.
-				self.ensure_sequential_finalization(header, None)?;
+				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
 				self.note_finalized(&mut transaction, header, hash)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.

@@ -20,9 +20,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-#[macro_use]
-extern crate runtime_primitives;
-
 use rstd::prelude::*;
 use parity_codec_derive::{Encode, Decode};
 #[cfg(feature = "std")]
@@ -37,9 +34,8 @@ use client::{
 	block_builder::api::{self as block_builder_api, InherentData, CheckInherentsResult},
 	runtime_api as client_api, impl_runtime_apis
 };
-use runtime_primitives::ApplyResult;
+use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::generic;
 use runtime_primitives::traits::{
 	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
@@ -64,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 28,
-	impl_version: 28,
+	spec_version: 29,
+	impl_version: 29,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -109,6 +105,12 @@ impl balances::Trait for Runtime {
 	type OnNewAccount = Indices;
 	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
+}
+
+impl fees::Trait for Runtime {
+	type Event = Event;
+	type Amount = Balance;
+	type TransferAsset = Balances;
 }
 
 impl consensus::Trait for Runtime {
@@ -214,6 +216,7 @@ construct_runtime!(
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
+		Fees: fees::{Module, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -232,7 +235,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Fees, AllModules>;
 
 impl_runtime_apis! {
 	impl client_api::Core<Block> for Runtime {
