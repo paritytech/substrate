@@ -409,7 +409,7 @@ impl<'a> Impls<'a> {
 					let key_for = &*#key_for(key);
 					let (mut val, linkage) = Self::read(storage, key_for)
 						.map(|(data, linkage)| (data, Some(linkage)))
-						.#option_simple_1(|| (#fielddefault, None));
+						.unwrap_or_else(|| (#fielddefault, None));
 
 					let ret = f(&mut val);
 					#mutate_impl ;
