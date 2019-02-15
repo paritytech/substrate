@@ -339,8 +339,8 @@ impl<B: BlockT> BlockImporter<B> {
 			let link = match self.link.as_ref() {
 				Some(link) => link,
 				None => {
-					trace!(target:"sync", "Received import result for {} while import-queue has no link", hash);
-					return true
+					trace!(target: "sync", "Received import result for {} while import-queue has no link", hash);
+					return true;
 				},
 			};
 
@@ -466,12 +466,8 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		let mut imported = 0;
 
 		let blocks_range = match (
-			blocks
-				.first()
-				.and_then(|b| b.header.as_ref().map(|h| h.number())),
-			blocks
-				.last()
-				.and_then(|b| b.header.as_ref().map(|h| h.number())),
+			blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
+			blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
 		) {
 			(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
 			(Some(first), Some(_)) => format!(" ({})", first),
@@ -499,7 +495,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			let was_ok = import_result.is_ok();
 			results.push((import_result, block.hash));
 			if was_ok {
-				imported = imported + 1;
+				imported += 1;
 			} else {
 				has_error = true;
 			}
