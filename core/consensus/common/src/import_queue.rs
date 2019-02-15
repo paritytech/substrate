@@ -115,7 +115,7 @@ pub struct ImportQueueStatus<B: BlockT> {
 	/// Number of blocks that are currently in the queue.
 	pub importing_count: usize,
 	/// The number of the best block that was ever in the queue since start/last failure.
-	pub best_importing_number: <<B as BlockT>::Header as HeaderT>::Number,
+	pub best_importing_number: NumberFor<B>,
 }
 
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate thread,
@@ -221,7 +221,7 @@ pub enum BlockImportWorkerMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	Imported(
 		Vec<(
-			Result<BlockImportResult<<<B as BlockT>::Header as HeaderT>::Number>, BlockImportError>,
+			Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
 			B::Hash,
 		)>,
 	),
@@ -237,7 +237,7 @@ struct BlockImporter<B: BlockT> {
 	result_port: Receiver<BlockImportWorkerMsg<B>>,
 	worker_sender: Sender<BlockImportWorkerMsg<B>>,
 	queue_blocks: HashSet<B::Hash>,
-	best_importing_number: <<B as BlockT>::Header as HeaderT>::Number,
+	best_importing_number: NumberFor<B>,
 	link: Option<Box<dyn Link<B>>>,
 	justification_import: Option<SharedJustificationImport<B>>,
 }
@@ -564,7 +564,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: Arc<V>,
-) -> Result<BlockImportResult<<<B as BlockT>::Header as HeaderT>::Number>, BlockImportError> {
+) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
 	let peer = block.origin;
 
 	let (header, justification) = match (block.header, block.justification) {
