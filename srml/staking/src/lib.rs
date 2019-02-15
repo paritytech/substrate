@@ -556,20 +556,22 @@ impl<T: Trait> Module<T> {
 		let candidates = if candidates.len() <= count {
 			candidates
 		} else {
-			let mut winners = (0..count).map(|i| candidates[i]).collect::<Vec<_>>();
-			winners.sort_unstable_by_key(|&i| i.1.total);
-			for (index, entry) in candidates.into_iter().enumerate().skip(count) {
+			candidates.into_iter().fold(vec![], |mut winners, entry| {
 				if let Err(insert_point) = winners.binary_search_by_key(&entry.1.total, |i| i.1.total) {
-					if insert_point > 0 {
-						// Big enough to be considered: insert at beginning and swap up to relevant point.
-						winners[0] = entry;
-						for i in 0..(insert_point - 1) {
-							winners.swap(i, i + 1)
+					if winners.len() < count {
+						winners.insert(insert_point, entry)
+					} else {
+						if insert_point > 0 {
+							// Big enough to be considered: insert at beginning and swap up to relevant point.
+							winners[0] = entry;
+							for i in 0..(insert_point - 1) {
+								winners.swap(i, i + 1)
+							}
 						}
 					}
 				}
-			}
-			winners
+				winners
+			})
 		};
 
 		// Clear Stakers and reduce their slash_count.
