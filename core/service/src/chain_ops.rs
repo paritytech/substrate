@@ -69,7 +69,7 @@ pub fn export_blocks<F, E, W>(
 		let last_: u64 = last.as_();
 		let block_: u64 = block.as_();
 		let len: u32 = (last_ - block_) as u32 + 1;
-		output.write(&(len).encode())?;
+		output.write(&len.encode())?;
 	}
 
 	loop {
