@@ -107,7 +107,7 @@ impl<H, N> AuthoritySet<H, N> {
 impl<H: Eq, N> AuthoritySet<H, N>
 where
 	N: Add<Output=N> + Ord + Clone + Debug,
-	H: Debug
+	H: Debug,
 {
 	/// Note an upcoming pending transition. This makes sure that there isn't
 	/// already any pending change for the same chain. Multiple pending changes
