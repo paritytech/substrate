@@ -28,11 +28,11 @@ use rstd::prelude::*;
 use rstd::{cmp, result};
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module};
+use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
 use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero};
 use srml_support::dispatch::Result;
-use primitives::traits::{Zero, SimpleArithmetic, MakePayment,
-	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug};
+use primitives::traits::{Zero, SimpleArithmetic,
+	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug, TransferAsset};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
@@ -122,7 +122,7 @@ decl_storage! {
 
 						let per_block = balance / length;
 						let offset = begin * per_block + balance;
-						
+
 						(who.clone(), VestingSchedule { offset, per_block })
 					})
 			}).collect::<Vec<_>>()
@@ -154,14 +154,6 @@ decl_storage! {
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
-
-
-		// Payment stuff.
-
-		/// The fee to be paid for making a transaction; the base.
-		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
-		/// The fee to be paid for making a transaction; the per-byte portion.
-		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
@@ -505,15 +497,25 @@ where
 	}
 }
 
-impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
-	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
-		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
-		if b < transaction_fee + Self::existential_deposit() {
-			return Err("not enough funds for transaction fee");
-		}
-		Self::set_free_balance(transactor, b - transaction_fee);
-		Self::decrease_total_stake_by(transaction_fee);
+impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
+	type Amount = T::Balance;
+
+	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
+		Self::make_transfer(from, to, amount)
+	}
+
+	fn remove_from(who: &T::AccountId, value: T::Balance) -> Result {
+		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		let b = Self::free_balance(who);
+		ensure!(b >= value, "account has too few funds");
+		Self::set_free_balance(who, b - value);
+		Self::decrease_total_stake_by(value);
+		Ok(())
+	}
+
+	fn add_to(who: &T::AccountId, value: T::Balance) -> Result {
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
+		Self::increase_total_stake_by(value);
 		Ok(())
 	}
 }

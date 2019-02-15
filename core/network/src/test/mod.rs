@@ -372,7 +372,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 			.send(ProtocolMsg::GossipConsensusMessage(topic, kind, data));
 	}
 
-	pub fn consensus_gossip_collect_garbage_for(&self, _topic: <Block as BlockT>::Hash) {
+	pub fn consensus_gossip_collect_garbage_for_topic(&self, _topic: <Block as BlockT>::Hash) {
 		self.with_gossip(move |gossip, _| gossip.collect_garbage())
 	}
 

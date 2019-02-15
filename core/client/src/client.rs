@@ -1628,7 +1628,7 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
-		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
+		assert!(client.state_at(&BlockId::Number(1)).unwrap().pairs() != client.state_at(&BlockId::Number(0)).unwrap().pairs());
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
@@ -1647,14 +1647,11 @@ pub(crate) mod tests {
 
 	#[test]
 	fn client_uses_authorities_from_blockchain_cache() {
-		let client = test_client::new();
-		test_client::client::in_mem::cache_authorities_at(
-			client.backend().blockchain(),
-			Default::default(),
-			Some(vec![[1u8; 32].into()]));
-		assert_eq!(client.authorities_at(
-			&BlockId::Hash(Default::default())).unwrap(),
-			vec![[1u8; 32].into()]);
+		let client = test_client::new_light();
+		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
+		// authorities cache is first filled in genesis block
+		// => should be read from cache here (remote request will fail in this test)
+		assert!(!client.authorities_at(&BlockId::Hash(genesis_hash)).unwrap().is_empty());
 	}
 
 	#[test]
@@ -1680,7 +1677,7 @@ pub(crate) mod tests {
 		client.import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
-		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
+		assert!(client.state_at(&BlockId::Number(1)).unwrap().pairs() != client.state_at(&BlockId::Number(0)).unwrap().pairs());
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 	}
 
