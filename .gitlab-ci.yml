@@ -3,6 +3,7 @@
 
 
 stages:
+  - merge-test
   - test
   - build
   - publish
@@ -35,10 +36,29 @@ cache:
 
 
 
+#### stage:                        merge-test
+
+check:merge:conflict:
+  stage:                           merge-test
+  image:                           parity/tools:latest
+  cache:                           {}
+  tags:
+    - linux-docker
+  only:
+    - /^[0-9]+$/
+  variables:
+    GITHUB_API:                    "https://api.github.com"
+    GITLAB_API:                    "https://gitlab.parity.io/api/v4"
+    GITHUB_API_PROJECT:            "parity%2Finfrastructure%2Fgithub-api"
+  script:
+    - ./scripts/gitlab/check_merge_conflict.sh
+
+
+
 
 #### stage:                        test
 
-test:runtime:
+check:runtime:
   stage:                           test
   image:                           parity/tools:latest
   cache:                           {}
@@ -64,7 +84,6 @@ test:rust:stable:                  &test
     RUSTFLAGS: -Cdebug-assertions=y
     TARGET: native
   only:
-    - triggers
     - tags
     - master
     - schedules
