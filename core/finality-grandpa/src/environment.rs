@@ -18,7 +18,8 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use codec::Encode;
+use log::{debug, warn, info};
+use parity_codec::Encode;
 use futures::prelude::*;
 use tokio::timer::Delay;
 
@@ -38,10 +39,10 @@ use crate::{
 	AUTHORITY_SET_KEY, CONSENSUS_CHANGES_KEY, LAST_COMPLETED_KEY,
 	Commit, Config, Error, Network, Precommit, Prevote, LastCompleted,
 };
-use authorities::{AuthoritySet, SharedAuthoritySet};
-use consensus_changes::SharedConsensusChanges;
-use justification::GrandpaJustification;
-use until_imported::UntilVoteTargetImported;
+use crate::authorities::{AuthoritySet, SharedAuthoritySet};
+use crate::consensus_changes::SharedConsensusChanges;
+use crate::justification::GrandpaJustification;
+use crate::until_imported::UntilVoteTargetImported;
 
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
@@ -246,7 +247,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let incoming = ::communication::checked_message_stream::<Block, _>(
+		let incoming = crate::communication::checked_message_stream::<Block, _>(
 			round,
 			self.set_id,
 			self.network.messages_for(round, self.set_id),
@@ -256,7 +257,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let local_key = self.config.local_key.as_ref()
 			.filter(|pair| self.voters.contains_key(&pair.public().into()));
 
-		let (out_rx, outgoing) = ::communication::outgoing_messages::<Block, _>(
+		let (out_rx, outgoing) = crate::communication::outgoing_messages::<Block, _>(
 			round,
 			self.set_id,
 			local_key.cloned(),

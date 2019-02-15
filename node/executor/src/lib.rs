@@ -48,7 +48,6 @@ mod tests {
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
 		SystemConfig, GrandpaConfig, IndicesConfig, FeesConfig, Event, Log};
 	use wabt;
-	use hex_literal::{hex, hex_impl};
 	use primitives::map;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
@@ -354,7 +353,7 @@ mod tests {
 			).0.unwrap();
 		}
 
-		let mut correct_header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		let correct_header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			env,
 			"BlockBuilder_finalise_block",
 			&[0u8;0],
