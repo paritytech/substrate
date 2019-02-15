@@ -16,7 +16,7 @@
 
 //! Utilities for dealing with authorities, authority sets, and handoffs.
 
-use dag::Dag;
+use fork_tree::ForkTree;
 use parking_lot::RwLock;
 use substrate_primitives::Ed25519AuthorityId;
 use grandpa::VoterSet;
@@ -94,7 +94,7 @@ pub(crate) struct Status<H, N> {
 pub(crate) struct AuthoritySet<H, N> {
 	current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	set_id: u64,
-	pending_changes: Dag<H, N, PendingChange<H, N>>,
+	pending_changes: ForkTree<H, N, PendingChange<H, N>>,
 }
 
 impl<H, N> AuthoritySet<H, N>
@@ -106,7 +106,7 @@ where H: PartialEq,
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
-			pending_changes: Dag::empty(),
+			pending_changes: ForkTree::empty(),
 		}
 	}
 
@@ -130,7 +130,7 @@ where
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
-	) -> Result<(), dag::Error<E>> where
+	) -> Result<(), fork_tree::Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
 	{
 		let hash = pending.canon_hash.clone();
@@ -173,7 +173,7 @@ where
 		finalized_hash: H,
 		finalized_number: N,
 		is_descendent_of: &F,
-	) -> Result<Status<H, N>, dag::Error<E>>
+	) -> Result<Status<H, N>, fork_tree::Error<E>>
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{
@@ -188,7 +188,7 @@ where
 			is_descendent_of,
 			|change| change.effective_number() <= finalized_number
 		)? {
-			dag::FinalizationResult::Changed(change) => {
+			fork_tree::FinalizationResult::Changed(change) => {
 				status.changed = true;
 
 				if let Some(change) = change {
@@ -204,7 +204,7 @@ where
 					));
 				}
 			},
-			dag::FinalizationResult::Unchanged => {},
+			fork_tree::FinalizationResult::Unchanged => {},
 		}
 
 		Ok(status)
@@ -218,7 +218,7 @@ where
 		finalized_hash: H,
 		finalized_number: N,
 		is_descendent_of: &F,
-	) -> Result<bool, dag::Error<E>>
+	) -> Result<bool, fork_tree::Error<E>>
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{

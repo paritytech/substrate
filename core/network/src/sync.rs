@@ -19,11 +19,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use log::{debug, trace, warn};
 use crate::protocol::Context;
+use fork_tree::ForkTree;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
-use dag::Dag;
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
 use runtime_primitives::Justification;
@@ -68,7 +68,7 @@ type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
 /// Manages pending block justification requests.
 struct PendingJustifications<B: BlockT> {
-	justifications: Dag<B::Hash, NumberFor<B>, ()>,
+	justifications: ForkTree<B::Hash, NumberFor<B>, ()>,
 	pending_requests: VecDeque<PendingJustification<B>>,
 	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
 	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
@@ -77,7 +77,7 @@ struct PendingJustifications<B: BlockT> {
 impl<B: BlockT> PendingJustifications<B> {
 	fn new() -> PendingJustifications<B> {
 		PendingJustifications {
-			justifications: Dag::empty(),
+			justifications: ForkTree::empty(),
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),
@@ -195,7 +195,7 @@ impl<B: BlockT> PendingJustifications<B> {
 				self.pending_requests.push_back((justification.0, justification.1));
 			},
 			Err(err) => {
-				warn!(target: "sync", "Failed to insert requested justification {:?} {:?} into DAG: {:?}",
+				warn!(target: "sync", "Failed to insert requested justification {:?} {:?} into tree: {:?}",
 					justification.0,
 					justification.1,
 					err,
@@ -230,7 +230,7 @@ impl<B: BlockT> PendingJustifications<B> {
 			if let Some(justification) = justification {
 				if import_queue.import_justification(request.0, request.1, justification) {
 					if self.justifications.finalize_root(&request.0).is_none() {
-						warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the DAG: {:?}",
+						warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
 							request.0,
 							request.1,
 							self.justifications.roots().collect::<Vec<_>>(),
@@ -267,7 +267,7 @@ impl<B: BlockT> PendingJustifications<B> {
 		best_finalized_hash: &B::Hash,
 		best_finalized_number: NumberFor<B>,
 		is_descendent_of: F,
-	) -> Result<(), dag::Error<ClientError>>
+	) -> Result<(), fork_tree::Error<ClientError>>
 		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
 	{
 		use std::collections::HashSet;

@@ -20,7 +20,7 @@ use parity_codec_derive::{Decode, Encode};
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error<E> {
 	Duplicate,
-	UnfinalizedRoot,
+	UnfinalizedAncestor,
 	Revert,
 	Client(E),
 }
@@ -35,9 +35,9 @@ impl<E: std::error::Error> fmt::Display for Error<E> {
 impl<E: std::error::Error> std::error::Error for Error<E> {
 	fn description(&self) -> &str {
 		match *self {
-			Error::Duplicate => "Hash already exists in DAG",
-			Error::UnfinalizedRoot => "Finalized descendent of DAG root without finalizing root first",
-			Error::Revert => "Tried to import or finalize hash that is an ancestor of a previously finalized node",
+			Error::Duplicate => "Hash already exists in Tree",
+			Error::UnfinalizedAncestor => "Finalized descendent of Tree node without finalizing its ancestor(s) first",
+			Error::Revert => "Tried to import or finalize node that is an ancestor of a previously finalized node",
 			Error::Client(ref err) => err.description(),
 		}
 	}
@@ -60,17 +60,17 @@ pub enum FinalizationResult<V> {
 }
 
 #[derive(Clone, Debug, Decode, Encode)]
-pub struct Dag<H, N, V> {
+pub struct ForkTree<H, N, V> {
 	roots: Vec<Node<H, N, V>>,
 	best_finalized_number: Option<N>,
 }
 
-impl<H, N, V> Dag<H, N, V> where
+impl<H, N, V> ForkTree<H, N, V> where
 	H: PartialEq,
 	N: Ord,
 {
-	pub fn empty() -> Dag<H, N, V> {
-		Dag {
+	pub fn empty() -> ForkTree<H, N, V> {
+		ForkTree {
 			roots: Vec::new(),
 			best_finalized_number: None,
 		}
@@ -121,9 +121,9 @@ impl<H, N, V> Dag<H, N, V> where
 		self.roots.iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
-	/// Iterates the DAG in pre-order.
+	/// Iterates the tree in pre-order.
 	pub fn iter(&self) -> impl Iterator<Item=(&H, &N, &V)> {
-		DagIterator { stack: self.roots.iter().collect() }
+		ForkTreeIterator { stack: self.roots.iter().collect() }
 	}
 
 	pub fn finalize_root(&mut self, hash: &H) -> Option<V> {
@@ -160,12 +160,12 @@ impl<H, N, V> Dag<H, N, V> where
 		// make sure we're not finalizing a descendent of any root
 		for root in self.roots.iter() {
 			if number > root.number && is_descendent_of(&root.hash, hash)? {
-				return Err(Error::UnfinalizedRoot);
+				return Err(Error::UnfinalizedAncestor);
 			}
 		}
 
 		// we finalized a block earlier than any existing root (or possibly
-		// another fork not part of the dag). make sure to only keep roots that
+		// another fork not part of the tree). make sure to only keep roots that
 		// are part of the finalized branch
 		let mut changed = false;
 		self.roots.retain(|root| {
@@ -211,7 +211,7 @@ impl<H, N, V> Dag<H, N, V> where
 			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
 				if predicate(&root.data) {
 					if root.children.iter().any(|n| n.number <= number) {
-						return Err(Error::UnfinalizedRoot);
+						return Err(Error::UnfinalizedAncestor);
 					}
 
 					return Ok(true);
@@ -247,7 +247,7 @@ impl<H, N, V> Dag<H, N, V> where
 			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
 				if predicate(&root.data) {
 					if root.children.iter().any(|n| n.number <= number) {
-						return Err(Error::UnfinalizedRoot);
+						return Err(Error::UnfinalizedAncestor);
 					}
 
 					position = Some(i);
@@ -264,7 +264,7 @@ impl<H, N, V> Dag<H, N, V> where
 		}
 
 		// we finalized a block earlier than any existing root (or possibly
-		// another fork not part of the dag). make sure to only keep roots that
+		// another fork not part of the tree). make sure to only keep roots that
 		// are part of the finalized branch
 		let mut changed = false;
 		self.roots.retain(|root| {
@@ -339,11 +339,11 @@ impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 	}
 }
 
-struct DagIterator<'a, H, N, V> {
+struct ForkTreeIterator<'a, H, N, V> {
 	stack: Vec<&'a Node<H, N, V>>,
 }
 
-impl<'a, H, N, V> Iterator for DagIterator<'a, H, N, V> {
+impl<'a, H, N, V> Iterator for ForkTreeIterator<'a, H, N, V> {
 	type Item = (&'a H, &'a N, &'a V);
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -356,7 +356,7 @@ impl<'a, H, N, V> Iterator for DagIterator<'a, H, N, V> {
 
 #[cfg(test)]
 mod test {
-	use super::{Dag, Error};
+	use super::{ForkTree, Error};
 
 	#[derive(Debug, PartialEq)]
 	struct TestError;
@@ -369,8 +369,8 @@ mod test {
 
 	impl std::error::Error for TestError {}
 
-	fn test_dag<'a>() -> (Dag<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, TestError>)  {
-		let mut dag = Dag::empty();
+	fn test_fork_tree<'a>() -> (ForkTree<&'a str, u64, ()>, impl Fn(&&str, &&str) -> Result<bool, TestError>)  {
+		let mut tree = ForkTree::empty();
 
 		//
 		//     - B - C - D - E
@@ -400,63 +400,63 @@ mod test {
 			}
 		};
 
-		dag.import("A", 1, (), &is_descendent_of).unwrap();
+		tree.import("A", 1, (), &is_descendent_of).unwrap();
 
-		dag.import("B", 2, (), &is_descendent_of).unwrap();
-		dag.import("C", 3, (), &is_descendent_of).unwrap();
-		dag.import("D", 4, (), &is_descendent_of).unwrap();
-		dag.import("E", 5, (), &is_descendent_of).unwrap();
+		tree.import("B", 2, (), &is_descendent_of).unwrap();
+		tree.import("C", 3, (), &is_descendent_of).unwrap();
+		tree.import("D", 4, (), &is_descendent_of).unwrap();
+		tree.import("E", 5, (), &is_descendent_of).unwrap();
 
-		dag.import("F", 2, (), &is_descendent_of).unwrap();
-		dag.import("G", 3, (), &is_descendent_of).unwrap();
+		tree.import("F", 2, (), &is_descendent_of).unwrap();
+		tree.import("G", 3, (), &is_descendent_of).unwrap();
 
-		dag.import("H", 3, (), &is_descendent_of).unwrap();
-		dag.import("I", 4, (), &is_descendent_of).unwrap();
+		tree.import("H", 3, (), &is_descendent_of).unwrap();
+		tree.import("I", 4, (), &is_descendent_of).unwrap();
 
-		dag.import("J", 2, (), &is_descendent_of).unwrap();
-		dag.import("K", 3, (), &is_descendent_of).unwrap();
+		tree.import("J", 2, (), &is_descendent_of).unwrap();
+		tree.import("K", 3, (), &is_descendent_of).unwrap();
 
-		(dag, is_descendent_of)
+		(tree, is_descendent_of)
 	}
 
 	#[test]
 	fn import_doesnt_revert() {
-		let (mut dag, is_descendent_of) = test_dag();
+		let (mut tree, is_descendent_of) = test_fork_tree();
 
-		dag.finalize_root(&"A");
+		tree.finalize_root(&"A");
 
 		assert_eq!(
-			dag.best_finalized_number,
+			tree.best_finalized_number,
 			Some(1),
 		);
 
 		assert_eq!(
-			dag.import("A", 1, (), &is_descendent_of),
+			tree.import("A", 1, (), &is_descendent_of),
 			Err(Error::Revert),
 		);
 	}
 
 	#[test]
 	fn import_doesnt_add_duplicates() {
-		let (mut dag, is_descendent_of) = test_dag();
+		let (mut tree, is_descendent_of) = test_fork_tree();
 
 		assert_eq!(
-			dag.import("A", 1, (), &is_descendent_of),
+			tree.import("A", 1, (), &is_descendent_of),
 			Err(Error::Duplicate),
 		);
 
 		assert_eq!(
-			dag.import("I", 4, (), &is_descendent_of),
+			tree.import("I", 4, (), &is_descendent_of),
 			Err(Error::Duplicate),
 		);
 
 		assert_eq!(
-			dag.import("G", 3, (), &is_descendent_of),
+			tree.import("G", 3, (), &is_descendent_of),
 			Err(Error::Duplicate),
 		);
 
 		assert_eq!(
-			dag.import("K", 3, (), &is_descendent_of),
+			tree.import("K", 3, (), &is_descendent_of),
 			Err(Error::Duplicate),
 		);
 	}
@@ -464,108 +464,108 @@ mod test {
 	#[test]
 	fn finalize_root_works() {
 		let finalize_a = || {
-			let (mut dag, ..) = test_dag();
+			let (mut tree, ..) = test_fork_tree();
 
 			assert_eq!(
-				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("A", 1)],
 			);
 
 			// finalizing "A" opens up three possible forks
-			dag.finalize_root(&"A");
+			tree.finalize_root(&"A");
 
 			assert_eq!(
-				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("B", 2), ("F", 2), ("J", 2)],
 			);
 
-			dag
+			tree
 		};
 
 		{
-			let mut dag = finalize_a();
+			let mut tree = finalize_a();
 
 			// finalizing "B" will progress on its fork and remove any other competing forks
-			dag.finalize_root(&"B");
+			tree.finalize_root(&"B");
 
 			assert_eq!(
-				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("C", 3)],
 			);
 
 			// all the other forks have been pruned
-			assert!(dag.roots.len() == 1);
+			assert!(tree.roots.len() == 1);
 		}
 
 		{
-			let mut dag = finalize_a();
+			let mut tree = finalize_a();
 
 			// finalizing "J" will progress on its fork and remove any other competing forks
-			dag.finalize_root(&"J");
+			tree.finalize_root(&"J");
 
 			assert_eq!(
-				dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+				tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 				vec![("K", 3)],
 			);
 
 			// all the other forks have been pruned
-			assert!(dag.roots.len() == 1);
+			assert!(tree.roots.len() == 1);
 		}
 	}
 
 	#[test]
 	fn finalize_works() {
-		let (mut dag, is_descendent_of) = test_dag();
+		let (mut tree, is_descendent_of) = test_fork_tree();
 
-		let original_roots = dag.roots.clone();
+		let original_roots = tree.roots.clone();
 
-		// finalizing a block prior to any in the node doesn't change the dag
-		dag.finalize(&"0", 0, &is_descendent_of).unwrap();
-		assert_eq!(dag.roots, original_roots);
+		// finalizing a block prior to any in the node doesn't change the tree
+		tree.finalize(&"0", 0, &is_descendent_of).unwrap();
+		assert_eq!(tree.roots, original_roots);
 
 		// finalizing "A" opens up three possible forks
-		dag.finalize(&"A", 1, &is_descendent_of).unwrap();
+		tree.finalize(&"A", 1, &is_descendent_of).unwrap();
 		assert_eq!(
-			dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![("B", 2), ("F", 2), ("J", 2)],
 		);
 
 		// finalizing anything lower than what we observed will fail
 		assert_eq!(
-			dag.best_finalized_number,
+			tree.best_finalized_number,
 			Some(1),
 		);
 
 		assert_eq!(
-			dag.finalize(&"Z", 1, &is_descendent_of),
+			tree.finalize(&"Z", 1, &is_descendent_of),
 			Err(Error::Revert),
 		);
 
 		// trying to finalize a node without finalizing its ancestors first will fail
 		assert_eq!(
-			dag.finalize(&"H", 3, &is_descendent_of),
-			Err(Error::UnfinalizedRoot),
+			tree.finalize(&"H", 3, &is_descendent_of),
+			Err(Error::UnfinalizedAncestor),
 		);
 
 		// after finalizing "F" we can finalize "H"
-		dag.finalize(&"F", 2, &is_descendent_of).unwrap();
-		dag.finalize(&"H", 3, &is_descendent_of).unwrap();
+		tree.finalize(&"F", 2, &is_descendent_of).unwrap();
+		tree.finalize(&"H", 3, &is_descendent_of).unwrap();
 
 		assert_eq!(
-			dag.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![("I", 4)],
 		);
 
-		// finalizing a node from another fork that isn't part of the dag clears the dag
-		dag.finalize(&"Z", 5, &is_descendent_of).unwrap();
-		assert!(dag.roots.is_empty());
+		// finalizing a node from another fork that isn't part of the tree clears the tree
+		tree.finalize(&"Z", 5, &is_descendent_of).unwrap();
+		assert!(tree.roots.is_empty());
 	}
 
 	#[test]
 	fn iter_iterates_in_preorder() {
-		let (dag, ..) = test_dag();
+		let (tree, ..) = test_fork_tree();
 		assert_eq!(
-			dag.iter().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			tree.iter().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![
 				("A", 1),
 				("J", 2), ("K", 3),

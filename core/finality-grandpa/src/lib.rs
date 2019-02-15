@@ -52,8 +52,8 @@
 //! any signaled changes based on whether the signaling block is included in the
 //! newly-finalized chain.
 
-extern crate dag;
 extern crate finality_grandpa as grandpa;
+extern crate fork_tree;
 extern crate futures;
 extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
