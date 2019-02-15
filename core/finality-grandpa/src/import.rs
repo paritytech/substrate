@@ -76,26 +76,26 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 			_ => return,
 		};
 
-		// FIXME
 		// request justifications for all pending changes for which change blocks have already been imported
-		// for pending_change in self.authority_set.inner().read().pending_changes() {
-		// 	if pending_change.effective_number() > chain_info.finalized_number &&
-		// 		pending_change.effective_number() <= chain_info.best_number
-		// 	{
-		// 		let effective_block_hash = self.inner.best_containing(
-		// 			pending_change.canon_hash,
-		// 			Some(pending_change.effective_number()),
-		// 		);
+		let authorities = self.authority_set.inner().read();
+		for pending_change in authorities.pending_changes() {
+			if pending_change.effective_number() > chain_info.finalized_number &&
+				pending_change.effective_number() <= chain_info.best_number
+			{
+				let effective_block_hash = self.inner.best_containing(
+					pending_change.canon_hash,
+					Some(pending_change.effective_number()),
+				);
 
-		// 		if let Ok(Some(hash)) = effective_block_hash {
-		// 			if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
-		// 				if *header.number() == pending_change.effective_number() {
-		// 					link.request_justification(&header.hash(), *header.number());
-		// 				}
-		// 			}
-		// 		}
-		// 	}
-		// }
+				if let Ok(Some(hash)) = effective_block_hash {
+					if let Ok(Some(header)) = self.inner.header(&BlockId::Hash(hash)) {
+						if *header.number() == pending_change.effective_number() {
+							link.request_justification(&header.hash(), *header.number());
+						}
+					}
+				}
+			}
+		}
 	}
 
 	fn import_justification(
@@ -154,8 +154,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		// the old authority set on error.
 		let is_descendent_of = is_descendent_of(&self.inner, Some((&hash, &parent_hash)));
 		let just_in_case = if let Some(change) = maybe_change {
-			let parent_hash = *block.header.parent_hash();
-
 			let mut authorities = self.authority_set.inner().write();
 			let old_set = authorities.clone();
 

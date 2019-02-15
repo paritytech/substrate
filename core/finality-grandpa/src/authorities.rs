@@ -152,10 +152,9 @@ where
 	}
 
 	/// Inspect pending changes.
-	// FIXME
-	// pub(crate) fn pending_changes(&self) -> &[PendingChange<H, N>] {
-	// 	&self.pending_changes
-	// }
+	pub(crate) fn pending_changes(&self) -> impl Iterator<Item=&PendingChange<H, N>> {
+		self.pending_changes.iter().map(|(_, _, c)| c)
+	}
 
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
