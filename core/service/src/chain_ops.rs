@@ -21,7 +21,7 @@ use futures::Future;
 use log::{info, warn};
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{As, Block, Header};
+use runtime_primitives::traits::{As, Block, Header, NumberFor};
 use consensus_common::import_queue::{ImportQueue, IncomingBlock, Link};
 use network::message;
 
@@ -98,6 +98,18 @@ pub fn export_blocks<F, E, W>(
 	Ok(())
 }
 
+struct WaitLink {
+	wait_send: std::sync::mpsc::Sender<()>,
+}
+
+impl WaitLink {
+	fn new(wait_send: std::sync::mpsc::Sender<()>) -> WaitLink {
+		WaitLink {
+			wait_send,
+		}
+	}
+}
+
 /// Import blocks from a binary stream.
 pub fn import_blocks<F, E, R>(
 	mut config: FactoryFullConfiguration<F>,
@@ -106,13 +118,18 @@ pub fn import_blocks<F, E, R>(
 ) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
-	struct DummyLink;
-	impl<B: Block> Link<B> for DummyLink { }
-
 	let client = new_client::<F>(&config)?;
 	// FIXME #1134 this shouldn't need a mutable config.
 	let queue = components::FullComponents::<F>::build_import_queue(&mut config, client.clone())?;
-	queue.start(DummyLink)?;
+
+	let (wait_send, wait_recv) = std::sync::mpsc::channel();
+	impl<B: Block> Link<B> for WaitLink {
+		fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {
+			self.wait_send.send(()).expect("Unable to notify about imported block");
+		}
+	}
+	let wait_link = WaitLink::new(wait_send);
+	queue.start(wait_link)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -158,6 +175,13 @@ pub fn import_blocks<F, E, R>(
 			info!("#{}", b);
 		}
 	}
+
+	let mut blocks_imported = 0;
+	while blocks_imported < count {
+		wait_recv.recv().expect("Unable to receive info about imported block");
+		blocks_imported += 1;
+	}
+
 	info!("Imported {} blocks. Best: #{}", block_count, client.info()?.chain.best_number);
 
 	Ok(())
