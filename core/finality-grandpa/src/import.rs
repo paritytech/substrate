@@ -16,7 +16,8 @@
 
 use std::sync::Arc;
 
-use codec::Encode;
+use log::{debug, trace, info};
+use parity_codec::Encode;
 use futures::sync::mpsc;
 
 use client::{blockchain, CallExecutor, Client};
@@ -35,10 +36,10 @@ use runtime_primitives::traits::{
 use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
 use crate::{AUTHORITY_SET_KEY, Error};
-use authorities::SharedAuthoritySet;
-use consensus_changes::SharedConsensusChanges;
-use environment::{canonical_at_height, finalize_block, ExitOrError, NewAuthoritySet};
-use justification::GrandpaJustification;
+use crate::authorities::SharedAuthoritySet;
+use crate::consensus_changes::SharedConsensusChanges;
+use crate::environment::{canonical_at_height, finalize_block, ExitOrError, NewAuthoritySet};
+use crate::justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.
 ///
@@ -123,7 +124,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
-		use authorities::PendingChange;
+		use crate::authorities::PendingChange;
 		use client::blockchain::HeaderBackend;
 
 		let hash = block.post_header().hash();

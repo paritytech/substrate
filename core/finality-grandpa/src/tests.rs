@@ -29,7 +29,7 @@ use client::{
 	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
-use codec::Decode;
+use parity_codec::Decode;
 use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportBlock, ImportResult};
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
@@ -372,7 +372,7 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 	for (peer_id, key) in peers.iter().enumerate() {
 		let highest_finalized = highest_finalized.clone();
 		let (client, link) = {
-			let mut net = net.lock();
+			let net = net.lock();
 			// temporary needed for some reason
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
@@ -469,7 +469,7 @@ fn finalize_3_voters_1_observer() {
 
 	for (peer_id, local_key) in all_peers.enumerate() {
 		let (client, link) = {
-			let mut net = net.lock();
+			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
 				net.peers[peer_id].client().clone(),
@@ -546,7 +546,7 @@ fn transition_3_voters_twice_1_observer() {
 		assert_eq!(peer.client().info().unwrap().chain.best_number, 1,
 					"Peer #{} failed to sync", i);
 
-		let set_raw = peer.client().backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
+		let set_raw = peer.client().backend().get_aux(crate::AUTHORITY_SET_KEY).unwrap().unwrap();
 		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
@@ -620,7 +620,7 @@ fn transition_3_voters_twice_1_observer() {
 
 	for (peer_id, local_key) in all_peers {
 		let (client, link) = {
-			let mut net = net.lock();
+			let net = net.lock();
 			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(
 				net.peers[peer_id].client().clone(),
@@ -632,7 +632,7 @@ fn transition_3_voters_twice_1_observer() {
 				.take_while(|n| Ok(n.header.number() < &30))
 				.for_each(move |_| Ok(()))
 				.map(move |()| {
-					let set_raw = client.backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
+					let set_raw = client.backend().get_aux(crate::AUTHORITY_SET_KEY).unwrap().unwrap();
 					let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
