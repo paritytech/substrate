@@ -53,31 +53,16 @@ impl<E: std::error::Error> From<E> for Error<E> {
 	}
 }
 
-#[derive(Clone, Debug, Decode, Encode)]
-pub struct Dag<H, N, V> {
-	roots: Vec<Node<H, N, V>>,
-	best_finalized_number: Option<N>,
-}
-
-struct DagIterator<'a, H, N, V> {
-	stack: Vec<&'a Node<H, N, V>>,
-}
-
-impl<'a, H, N, V> Iterator for DagIterator<'a, H, N, V> {
-	type Item = (&'a H, &'a N, &'a V);
-
-	fn next(&mut self) -> Option<Self::Item> {
-		self.stack.pop().map(|node| {
-			self.stack.extend(node.children.iter());
-			(&node.hash, &node.number, &node.data)
-		})
-	}
-}
-
 #[derive(Debug, PartialEq)]
 pub enum FinalizationResult<V> {
 	Changed(Option<V>),
 	Unchanged,
+}
+
+#[derive(Clone, Debug, Decode, Encode)]
+pub struct Dag<H, N, V> {
+	roots: Vec<Node<H, N, V>>,
+	best_finalized_number: Option<N>,
 }
 
 impl<H, N, V> Dag<H, N, V> where
@@ -351,6 +336,21 @@ impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
 		} else {
 			Ok(Some((hash, number, data)))
 		}
+	}
+}
+
+struct DagIterator<'a, H, N, V> {
+	stack: Vec<&'a Node<H, N, V>>,
+}
+
+impl<'a, H, N, V> Iterator for DagIterator<'a, H, N, V> {
+	type Item = (&'a H, &'a N, &'a V);
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.stack.pop().map(|node| {
+			self.stack.extend(node.children.iter());
+			(&node.hash, &node.number, &node.data)
+		})
 	}
 }
 
