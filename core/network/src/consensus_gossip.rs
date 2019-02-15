@@ -19,6 +19,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::{Instant, Duration};
 use log::{trace, debug};
 use futures::sync::mpsc;
 use rand::{self, seq::SliceRandom};
@@ -30,6 +31,7 @@ use crate::protocol::Context;
 use crate::config::Roles;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
+const MESSAGE_LIFETIME: Duration = Duration::from_secs(120);
 const KNOWN_MESSAGES_CACHE_SIZE: usize = 4096;
 
 struct PeerConsensus<H> {
@@ -41,17 +43,13 @@ struct MessageEntry<B: BlockT> {
 	message_hash: B::Hash,
 	topic: B::Hash,
 	message: ConsensusMessage,
+	timestamp: Instant,
 }
 
 /// Message validation result.
 pub enum ValidationResult<H> {
-	/// Message is valid.
-	Valid {
-		/// Message topic.
-		topic: H,
-		/// Flag that indicates if the message should be broadcasted.
-		broadcast: bool
-	},
+	/// Message is valid with this topic.
+	Valid(H),
 	/// Invalid message.
 	Invalid,
 	/// Obsolete message.
@@ -122,27 +120,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 		&mut self,
 		protocol: &mut Context<B>,
 		message_hash: B::Hash,
-		broadcast: bool,
 		get_message: F,
 	)
 		where F: Fn() -> ConsensusMessage,
 	{
-		if broadcast {
-			for (id, ref mut peer) in self.peers.iter_mut() {
-				if peer.known_messages.insert(message_hash.clone()) {
-					let message = get_message();
-					if peer.is_authority {
-						trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
-					} else {
-						trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-					}
-					protocol.send_message(*id, Message::Consensus(message));
-				}
-			}
-
-			return;
-		}
-
 		let mut non_authorities: Vec<_> = self.peers.iter()
 			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&message_hash) { Some(*id) } else { None })
 			.collect();
@@ -180,6 +161,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				topic,
 				message_hash,
 				message: get_message(),
+				timestamp: Instant::now(),
 			});
 
 		}
@@ -207,12 +189,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 		let known_messages = &mut self.known_messages;
 		let before = self.messages.len();
 		let validators = &self.validators;
+		let now = Instant::now();
 
 		self.messages.retain(|entry| {
-			match validators.get(&entry.message.kind)
+			entry.timestamp + MESSAGE_LIFETIME >= now
+			&& match validators.get(&entry.message.kind)
 				.map(|v| v.validate(entry.message.kind, &entry.message.data))
 			{
-				Some(ValidationResult::Valid { .. }) => true,
+				Some(ValidationResult::Valid(_)) => true,
 				_ => false,
 			}
 		});
@@ -248,6 +232,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		who: NodeIndex,
 		message: ConsensusMessage,
+		is_syncing: bool,
 	) -> Option<(B::Hash, ConsensusMessage)> {
 		let message_hash = HashFor::<B>::hash(&message.data[..]);
 
@@ -260,10 +245,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 			use std::collections::hash_map::Entry;
 
 			//validate the message
-			let (topic, broadcast) = match self.validators.get(&message.kind)
+			let topic = match self.validators.get(&message.kind)
 				.map(|v| v.validate(message.kind, &message.data))
 			{
-				Some(ValidationResult::Valid { topic, broadcast }) => (topic, broadcast),
+				Some(ValidationResult::Valid(topic)) => topic,
 				Some(ValidationResult::Invalid) => {
 					trace!(target:"gossip", "Invalid message from {}", who);
 					protocol.report_peer(
@@ -274,9 +259,19 @@ impl<B: BlockT> ConsensusGossip<B> {
 				},
 				Some(ValidationResult::Expired) => {
 					trace!(target:"gossip", "Ignored expired message from {}", who);
+					if !is_syncing {
+						protocol.report_peer(
+							who,
+							Severity::Useless(format!("Sent expired consensus message")),
+						);
+					}
 					return None;
 				}
 				None => {
+					protocol.report_peer(
+						who,
+						Severity::Useless(format!("Sent unknown consensus message kind")),
+					);
 					trace!(target:"gossip", "Unknown message kind {} from {}", message.kind, who);
 					return None;
 				}
@@ -295,7 +290,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					entry.remove_entry();
 				}
 			}
-			self.multicast_inner(protocol, message_hash, topic, broadcast, || message.clone());
+			self.multicast_inner(protocol, message_hash, topic, || message.clone());
 			Some((topic, message))
 		} else {
 			trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -309,10 +304,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		topic: B::Hash,
 		message: ConsensusMessage,
-		broadcast: bool,
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
-		self.multicast_inner(protocol, message_hash, topic, broadcast, || message.clone());
+		self.multicast_inner(protocol, message_hash, topic, || message.clone());
 	}
 
 	fn multicast_inner<F>(
@@ -320,13 +314,12 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		message_hash: B::Hash,
 		topic: B::Hash,
-		broadcast: bool,
 		get_message: F,
 	)
 		where F: Fn() -> ConsensusMessage
 	{
 		self.register_message(message_hash, topic, &get_message);
-		self.propagate(protocol, message_hash, broadcast, get_message);
+		self.propagate(protocol, message_hash, get_message);
 	}
 
 	/// Note new consensus session.
@@ -338,6 +331,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 #[cfg(test)]
 mod tests {
 	use runtime_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
+	use std::time::Instant;
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
@@ -349,6 +343,7 @@ mod tests {
 					topic: $topic,
 					message_hash: $hash,
 					message: ConsensusMessage { data: $m, kind: 0},
+					timestamp: $now,
 				});
 			}
 		}
@@ -360,7 +355,7 @@ mod tests {
 		struct AllowAll;
 		impl Validator<H256> for AllowAll {
 			fn validate(&self, _kind: u32, _data: &[u8]) -> ValidationResult<H256> {
-				ValidationResult::Valid { topic: H256::default(), broadcast: true }
+				ValidationResult::Valid(H256::default())
 			}
 		}
 
@@ -368,7 +363,7 @@ mod tests {
 		impl Validator<H256> for AllowOne {
 			fn validate(&self, _kind: u32, data: &[u8]) -> ValidationResult<H256> {
 				if data[0] == 1 {
-					ValidationResult::Valid { topic: H256::default(), broadcast: true }
+					ValidationResult::Valid(H256::default())
 				} else {
 					ValidationResult::Expired
 				}
@@ -383,6 +378,7 @@ mod tests {
 		let m1 = vec![1, 2, 3];
 		let m2 = vec![4, 5, 6];
 
+		let now = Instant::now();
 		push_msg!(consensus, prev_hash, m1_hash, now, m1);
 		push_msg!(consensus, best_hash, m2_hash, now, m2.clone());
 		consensus.known_messages.insert(m1_hash, ());
@@ -401,6 +397,15 @@ mod tests {
 		// known messages are only pruned based on size.
 		assert_eq!(consensus.known_messages.len(), 2);
 		assert!(consensus.known_messages.contains_key(&m2_hash));
+
+		// make timestamp expired, but the message is still kept as known
+		consensus.messages.clear();
+		consensus.known_messages.clear();
+		consensus.register_validator(0, Arc::new(AllowAll));
+		push_msg!(consensus, best_hash, m2_hash, now - MESSAGE_LIFETIME, m2.clone());
+		consensus.collect_garbage();
+		assert!(consensus.messages.is_empty());
+		assert_eq!(consensus.known_messages.len(), 1);
 	}
 
 	#[test]

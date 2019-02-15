@@ -194,7 +194,7 @@ impl Network<Block> for MessageRouting {
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), super::GRANDPA_ROUND_MESSAGE, message, false);
+		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), super::GRANDPA_ROUND_MESSAGE, message);
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
@@ -224,7 +224,7 @@ impl Network<Block> for MessageRouting {
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), super::GRANDPA_COMMIT_MESSAGE, message, false);
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), super::GRANDPA_COMMIT_MESSAGE, message);
 	}
 
 	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {

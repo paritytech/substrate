@@ -366,10 +366,10 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
-	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, kind: u32, data: Vec<u8>, broadcast: bool) {
+	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, kind: u32, data: Vec<u8>) {
 		let _ = self
 			.protocol_sender
-			.send(ProtocolMsg::GossipConsensusMessage(topic, kind, data, broadcast));
+			.send(ProtocolMsg::GossipConsensusMessage(topic, kind, data));
 	}
 
 	pub fn consensus_gossip_collect_garbage_for(&self, _topic: <Block as BlockT>::Hash) {

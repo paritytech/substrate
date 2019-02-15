@@ -322,9 +322,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				return true;
 			}
 		} else if set_id == rounds.set_id {
-			if round < rounds.min_live_round.saturating_sub(MESSAGE_ROUND_TOLERANCE)
-				|| round > rounds.max_round.saturating_add(MESSAGE_ROUND_TOLERANCE)
-			{
+			if round < rounds.min_live_round.saturating_sub(MESSAGE_ROUND_TOLERANCE) {
 				trace!(target: "afg", "Expired: Message round is out of bounds {} (ours {}-{})", round, rounds.min_live_round, rounds.max_round);
 				return true;
 			}
@@ -354,7 +352,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				}
 
 				let topic = message_topic::<Block>(full.round, full.set_id);
-				network_gossip::ValidationResult::Valid { topic, broadcast: false }
+				network_gossip::ValidationResult::Valid(topic)
 			},
 			None => {
 				debug!(target: "afg", "Error decoding message");
@@ -391,7 +389,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				}
 
 				let topic = commit_topic::<Block>(full.set_id);
-				network_gossip::ValidationResult::Valid { topic, broadcast: false }
+				network_gossip::ValidationResult::Valid(topic)
 			},
 			None => {
 				debug!(target: "afg", "Error decoding commit message");
@@ -498,7 +496,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ROUND_MESSAGE, message, false);
+		self.service.gossip_consensus_message(topic, GRANDPA_ROUND_MESSAGE, message);
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
@@ -523,7 +521,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_COMMIT_MESSAGE, message, false);
+		self.service.gossip_consensus_message(topic, GRANDPA_COMMIT_MESSAGE, message);
 	}
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {

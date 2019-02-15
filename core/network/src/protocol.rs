@@ -241,7 +241,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, u32, Vec<u8>, bool),
+	GossipConsensusMessage(B::Hash, u32, Vec<u8>),
 	/// Is protocol currently major-syncing?
 	IsMajorSyncing(Sender<bool>),
 	/// Is protocol currently offline?
@@ -377,8 +377,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, kind ,message, broadcast) => {
-				self.gossip_consensus_message(topic, kind, message, broadcast)
+			ProtocolMsg::GossipConsensusMessage(topic, kind, message) => {
+				self.gossip_consensus_message(topic, kind, message)
 			}
 			ProtocolMsg::IsMajorSyncing(sender) => {
 				let is_syncing = self.sync.status().is_major_syncing();
@@ -475,6 +475,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 					who,
 					msg,
+					self.sync.status().is_major_syncing(),
 				);
 			}
 			other => self.specialization.on_message(
@@ -494,12 +495,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(&mut self, topic: B::Hash, kind: u32, message: Vec<u8>, broadcast: bool) {
+	fn gossip_consensus_message(&mut self, topic: B::Hash, kind: u32, message: Vec<u8>) {
 		self.consensus_gossip.multicast(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			topic,
 			ConsensusMessage{ data: message, kind },
-			broadcast,
 		);
 	}
 

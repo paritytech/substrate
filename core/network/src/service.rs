@@ -200,11 +200,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	}
 
 	/// Send a consensus message through the gossip
-	pub fn gossip_consensus_message(&self, topic: B::Hash, kind: u32, message: Vec<u8>, broadcast: bool) {
+	pub fn gossip_consensus_message(&self, topic: B::Hash, kind: u32, message: Vec<u8>) {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::GossipConsensusMessage(
-				topic, kind, message, broadcast,
+				topic, kind, message,
 			));
 	}
 
