@@ -4134,9 +4134,11 @@ dependencies = [
 name = "substrate-test-client"
 version = "0.1.0"
 dependencies = [
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-client-db 0.1.0",
  "substrate-consensus-common 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
