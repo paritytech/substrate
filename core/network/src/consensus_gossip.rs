@@ -61,7 +61,7 @@ pub enum ValidationResult<H> {
 /// Validates consensus messages.
 pub trait Validator<H> {
 	/// Validate consensus message.
-	fn validate(&self, data: &[u8]) -> ValidationResult<H>;
+	fn validate(&self, kind: u32, data: &[u8]) -> ValidationResult<H>;
 }
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
@@ -210,7 +210,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		self.messages.retain(|entry| {
 			match validators.get(&entry.message.kind)
-				.map(|v| v.validate(&entry.message.data))
+				.map(|v| v.validate(entry.message.kind, &entry.message.data))
 			{
 				Some(ValidationResult::Valid { .. }) => true,
 				_ => false,
@@ -261,7 +261,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 			//validate the message
 			let (topic, broadcast) = match self.validators.get(&message.kind)
-				.map(|v| v.validate(&message.data))
+				.map(|v| v.validate(message.kind, &message.data))
 			{
 				Some(ValidationResult::Valid { topic, broadcast }) => (topic, broadcast),
 				Some(ValidationResult::Invalid) => {
@@ -359,14 +359,14 @@ mod tests {
 
 		struct AllowAll;
 		impl Validator<H256> for AllowAll {
-			fn validate(&self, _data: &[u8]) -> ValidationResult<H256> {
+			fn validate(&self, _kind: u32, _data: &[u8]) -> ValidationResult<H256> {
 				ValidationResult::Valid { topic: H256::default(), broadcast: true }
 			}
 		}
 
 		struct AllowOne;
 		impl Validator<H256> for AllowOne {
-			fn validate(&self, data: &[u8]) -> ValidationResult<H256> {
+			fn validate(&self, _kind: u32, data: &[u8]) -> ValidationResult<H256> {
 				if data[0] == 1 {
 					ValidationResult::Valid { topic: H256::default(), broadcast: true }
 				} else {

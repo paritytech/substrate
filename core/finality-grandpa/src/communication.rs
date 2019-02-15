@@ -27,7 +27,7 @@ use codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Ed25519AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
-use {Error, Network, Message, SignedMessage, Commit, CompactCommit};
+use {Error, Network, Message, SignedMessage, Commit, CompactCommit, FullRoundMessage, FullCommitMessage};
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
@@ -258,8 +258,8 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// converts a message stream into a stream of signed messages.
 /// the output stream checks signatures also.
 pub(crate) fn checked_message_stream<Block: BlockT, S>(
-	round: u64,
-	set_id: u64,
+	_round: u64,
+	_set_id: u64,
 	inner: S,
 	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 )
@@ -268,7 +268,7 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 {
 	inner
 		.filter_map(|raw| {
-			let decoded = SignedMessage::<Block>::decode(&mut &raw[..]);
+			let decoded = FullRoundMessage::<Block>::decode(&mut &raw[..]);
 			if decoded.is_none() {
 				debug!(target: "afg", "Skipping malformed message {:?}", raw);
 			}
@@ -276,20 +276,11 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 		})
 		.and_then(move |msg| {
 			// check signature.
-			if !voters.contains_key(&msg.id) {
-				debug!(target: "afg", "Skipping message from unknown voter {}", msg.id);
+			if !voters.contains_key(&msg.message.id) {
+				debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 				return Ok(None);
 			}
-
-			// we ignore messages where the signature doesn't check out.
-			let res = check_message_sig::<Block>(
-				&msg.message,
-				&msg.id,
-				&msg.signature,
-				round,
-				set_id
-			);
-			Ok(res.map(move |()| msg).ok())
+			Ok(Some(msg.message))
 		})
 		.filter_map(|x| x)
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
@@ -321,10 +312,16 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 				id: local_id,
 			};
 
+			let message = FullRoundMessage::<Block> {
+				message: signed.clone(),
+				round: self.round,
+				set_id: self.set_id,
+			};
+
 			// announce our block hash to peers and propagate the
 			// message.
 			self.network.announce(self.round, self.set_id, target_hash);
-			self.network.send_message(self.round, self.set_id, signed.encode());
+			self.network.send_message(self.round, self.set_id, message.encode());
 
 			// forward the message to the inner sender.
 			let _ = self.sender.unbounded_send(signed);
@@ -391,32 +388,18 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 fn check_compact_commit<Block: BlockT>(
 	msg: CompactCommit<Block>,
 	voters: &VoterSet<Ed25519AuthorityId>,
-	round: u64,
-	set_id: u64,
+	_round: u64,
+	_set_id: u64,
 ) -> Option<CompactCommit<Block>> {
-	use grandpa::Message as GrandpaMessage;
 	if msg.precommits.len() != msg.auth_data.len() || msg.precommits.is_empty() {
 		debug!(target: "afg", "Skipping malformed compact commit");
 		return None;
 	}
 
 	// check signatures on all contained precommits.
-	for (precommit, &(ref sig, ref id)) in msg.precommits.iter().zip(&msg.auth_data) {
+	for (_, ref id) in &msg.auth_data {
 		if !voters.contains_key(id) {
 			debug!(target: "afg", "Skipping commit containing unknown voter {}", id);
-			return None;
-		}
-
-		let res = check_message_sig::<Block>(
-			&GrandpaMessage::Precommit(precommit.clone()),
-			id,
-			sig,
-			round,
-			set_id,
-		);
-
-		if let Err(()) = res {
-			debug!(target: "afg", "Skipping commit containing bad message");
 			return None;
 		}
 	}
@@ -437,14 +420,15 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	inner
 		.filter_map(|raw| {
 			// this could be optimized by decoding piecewise.
-			let decoded = <(u64, CompactCommit<Block>)>::decode(&mut &raw[..]);
+			let decoded = FullCommitMessage::<Block>::decode(&mut &raw[..]);
 			if decoded.is_none() {
 				trace!(target: "afg", "Skipping malformed commit message {:?}", raw);
 			}
 			decoded
 		})
-		.filter_map(move |(round, msg)| {
-			check_compact_commit::<Block>(msg, &*voters, round, set_id).map(move |c| (round, c))
+		.filter_map(move |msg| {
+			let round = msg.round;
+			check_compact_commit::<Block>(msg.message, &*voters, round, set_id).map(move |c| (round, c))
 		})
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }
@@ -490,7 +474,13 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			auth_data
 		};
 
-		self.network.send_commit(round, self.set_id, Encode::encode(&(round, compact_commit)));
+		let message = FullCommitMessage::<Block> {
+			round: round,
+			set_id: self.set_id,
+			message: compact_commit,
+		};
+
+		self.network.send_commit(round, self.set_id, Encode::encode(&message));
 
 		Ok(AsyncSink::Ready)
 	}
