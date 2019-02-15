@@ -193,11 +193,10 @@ impl<'a> Impls<'a> {
 		let head_key = format!("head of {}", prefix);
 		let prefix = format!("{}", prefix);
 		let name_lowercase = name.to_string().to_lowercase();
-		let key_for = syn::Ident::new(&format!("key_for_{}", name_lowercase), name.span());
-		let internal_module = syn::Ident::new(&format!("__internal_do_not_use_{}", name_lowercase), name.span());
-		let linkage = syn::Ident::new(&format!("Linkage{}", name), name.span());
-		let borrowing_linkage = syn::Ident::new(&format!("Borrowing{}", linkage), name.span());
-		let enumerator = syn::Ident::new(&format!("Enumerator{}", name), name.span());
+		let key_for = syn::Ident::new(&format!("__decl_storage_key_for_{}", name_lowercase), name.span());
+		let linkage = syn::Ident::new(&format!("__DeclStorageLinkage{}", name), name.span());
+		let enumerator = syn::Ident::new(&format!("__DeclStorageEnumerator{}", name), name.span());
+		let phantom_data = quote! { #scrate::storage::generator::PhantomData };
 		let put_or_insert = quote! {
 			match linkage {
 				Some(linkage) => storage.put(key_for, &(val, linkage)),
@@ -216,140 +215,147 @@ impl<'a> Impls<'a> {
 		};
 
 		// generator for linked map
-		quote! {
+		let helpers = quote! {
+			#[derive(parity_codec_derive::Encode, parity_codec_derive::Decode)]
+			struct #linkage<Key> {
+				/// Previous element key in storage (None for the first element)
+				previous: Option<Key>,
+				/// Next element key in storage (None for the last element)
+				next: Option<Key>,
+			}
 
-			mod #internal_module {
-				use super::*;
-
-				#[derive(Default, parity_codec_derive::Encode, parity_codec_derive::Decode)]
-				pub struct #linkage {
-					/// Previous element key in storage (None for the first element)
-					previous: Option<#kty>,
-					/// Next element key in storage (None for the last element)
-					next: Option<#kty>,
-				}
-
-				/// A helper struct to avoid unnecessary key cloning.
-				///
-				/// NOTE It has to have exact same parity-codec encoding as #linkage!
-				#[derive(parity_codec_derive::Encode)]
-				struct #borrowing_linkage<'a> {
-					previous: Option<&'a #kty>,
-					next: Option<&'a #kty>,
-				}
-
-				impl #linkage {
-					/// Update linkage when this element is removed.
-					///
-					/// Takes care of updating previous and next elements points
-					/// as well as updates head if the element is first or last.
-					pub fn remove<S: #scrate::GenericStorage>(
-						self,
-						storage: &S,
-					) {
-						let next_key = self.next.as_ref().map(|x| #key_for(x));
-						let prev_key = self.previous.as_ref().map(|x| #key_for(x));
-
-						if let Some(prev_key) = prev_key {
-							// Retrieve previous element and update `next`
-							let mut res = Self::read(storage, &*prev_key)
-								.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
-							res.1.next = self.next;
-							storage.put(&*prev_key, &res);
-						} else {
-							// we were first so let's update the head
-							Self::write_head(storage, self.next.as_ref());
-						}
-
-						if let Some(next_key) = next_key {
-							// Update previous of next element
-							let mut res = Self::read(storage, &*next_key)
-								.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
-							res.1.previous = self.previous;
-							storage.put(&*next_key, &res);
-						}
-					}
-
-					/// Read the contained data and it's linkage.
-					pub fn read<S: #scrate::GenericStorage>(storage: &S, key: &[u8]) -> Option<(#value_type, #linkage)> {
-						storage.get(key)
-					}
-
-					/// Generate linkage for newly inserted element.
-					///
-					/// Takes care of updating head and previous head's pointer.
-					pub fn insert_new_head<S: #scrate::GenericStorage>(
-						storage: &S,
-						key: &#kty,
-					) -> Self {
-						if let Some(head) = Self::read_head(storage) {
-							// update previous head predecessor
-							{
-								let head_key = #key_for(&head);
-								let (data, linkage) = Self::read(storage, &*head_key).expect(r#"
-									head is set when first element is inserted and unset when last element is removed;
-									if head is Some then it points to existing key; qed
-								"#);
-								storage.put(&*head_key, &(data, #borrowing_linkage {
-									next: linkage.next.as_ref(),
-									previous: Some(key),
-								}));
-							}
-							// update to current head
-							Self::write_head(storage, Some(key));
-							// return linkage with pointer to previous head
-							let mut linkage = Self::default();
-							linkage.next = Some(head);
-							linkage
-						} else {
-							// we are first - update the head and produce empty linkage
-							Self::write_head(storage, Some(key));
-							Self::default()
-						}
-					}
-
-					/// Read current head pointer.
-					pub fn read_head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
-						storage.get(#head_key.as_bytes())
-					}
-
-					/// Overwrite current head pointer.
-					///
-					/// If `None` is given head is removed from storage.
-					fn write_head<S: #scrate::GenericStorage>(storage: &S, head: Option<&#kty>) {
-						match head {
-							Some(head) => storage.put(#head_key.as_bytes(), head),
-							None => storage.kill(#head_key.as_bytes()),
-						}
-					}
-				}
-
-				pub struct #enumerator<'a, S> {
-					pub storage: &'a S,
-					pub next: Option<#kty>,
-				}
-
-				impl<'a, S: #scrate::GenericStorage> Iterator for #enumerator<'a, S> {
-					type Item = (#kty, #typ);
-
-					fn next(&mut self) -> Option<Self::Item> {
-						let next = self.next.take()?;
-						let key_for = #key_for(&next);
-						let (val, linkage) = #linkage::read(self.storage, &*key_for)
-							.expect("previous/next only contain existing entires; we enumerate using next; entry exists; qed");
-						self.next = linkage.next;
-						Some((next, val))
+			impl<Key> Default for #linkage<Key> {
+				fn default() -> Self {
+					Self {
+						previous: None,
+						next: None,
 					}
 				}
 			}
 
-			fn #key_for(key: &#kty) -> #scrate::rstd::vec::Vec<u8> {
+			struct #enumerator<'a, S, K, V> {
+				storage: &'a S,
+				next: Option<K>,
+				_data: #phantom_data<V>,
+			}
+
+			impl<'a, S: #scrate::GenericStorage, K, V> Iterator for #enumerator<'a, S, K, V> where
+				K: 'a + #scrate::codec::Codec,
+				V: 'a + #scrate::codec::Decode,
+			{
+				type Item = (K, V);
+
+				fn next(&mut self) -> Option<Self::Item> {
+					let next = self.next.take()?;
+					let key_for = #key_for(&next);
+					let (val, linkage): (V, #linkage<K>) = self.storage.get(&*key_for)
+						.expect("previous/next only contain existing entires; we enumerate using next; entry exists; qed");
+					self.next = linkage.next;
+					Some((next, val))
+				}
+			}
+
+			fn #key_for<Key: #scrate::codec::Encode>(key: &Key) -> #scrate::rstd::vec::Vec<u8> {
 				let mut key_for = #prefix.as_bytes().to_vec();
 				#scrate::codec::Encode::encode_to(&key, &mut key_for);
 				key_for
 			}
+		};
 
-			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
+		let structure = quote! {
+			#visibility struct #name<#traitinstance: #traittype>(#phantom_data<#traitinstance>);
+
+			impl<#traitinstance: #traittype> #name<#traitinstance> {
+				/// Update linkage when this element is removed.
+				///
+				/// Takes care of updating previous and next elements points
+				/// as well as updates head if the element is first or last.
+				fn remove_linkage<S: #scrate::GenericStorage>(
+					linkage: #linkage<#kty>,
+					storage: &S,
+				) {
+					let next_key = linkage.next.as_ref().map(|x| #key_for(x));
+					let prev_key = linkage.previous.as_ref().map(|x| #key_for(x));
+
+					if let Some(prev_key) = prev_key {
+						// Retrieve previous element and update `next`
+						let mut res = Self::read(storage, &*prev_key)
+							.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
+						res.1.next = linkage.next;
+						storage.put(&*prev_key, &res);
+					} else {
+						// we were first so let's update the head
+						Self::write_head(storage, linkage.next.as_ref());
+					}
+
+					if let Some(next_key) = next_key {
+						// Update previous of next element
+						let mut res = Self::read(storage, &*next_key)
+							.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
+						res.1.previous = linkage.previous;
+						storage.put(&*next_key, &res);
+					}
+				}
+
+				/// Read the contained data and it's linkage.
+				fn read<S: #scrate::GenericStorage>(storage: &S, key: &[u8]) -> Option<(#value_type, #linkage<#kty>)> {
+					storage.get(key)
+				}
+
+				/// Generate linkage for newly inserted element.
+				///
+				/// Takes care of updating head and previous head's pointer.
+				fn insert_new_head<S: #scrate::GenericStorage>(
+					storage: &S,
+					key: &#kty,
+				) -> #linkage<#kty> {
+					if let Some(head) = Self::read_head(storage) {
+						// update previous head predecessor
+						{
+							let head_key = #key_for(&head);
+							let (data, linkage) = Self::read(storage, &*head_key).expect(r#"
+								head is set when first element is inserted and unset when last element is removed;
+								if head is Some then it points to existing key; qed
+							"#);
+							storage.put(&*head_key, &(data, #linkage {
+								next: linkage.next.as_ref(),
+								previous: Some(key),
+							}));
+						}
+						// update to current head
+						Self::write_head(storage, Some(key));
+						// return linkage with pointer to previous head
+						let mut linkage = #linkage::default();
+						linkage.next = Some(head);
+						linkage
+					} else {
+						// we are first - update the head and produce empty linkage
+						Self::write_head(storage, Some(key));
+						#linkage::default()
+					}
+				}
+
+				/// Read current head pointer.
+				fn read_head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
+					storage.get(#head_key.as_bytes())
+				}
+
+				/// Overwrite current head pointer.
+				///
+				/// If `None` is given head is removed from storage.
+				fn write_head<S: #scrate::GenericStorage>(storage: &S, head: Option<&#kty>) {
+					match head {
+						Some(head) => storage.put(#head_key.as_bytes(), head),
+						None => storage.kill(#head_key.as_bytes()),
+					}
+				}
+			}
+		};
+
+		quote! {
+			#helpers
+
+			#structure
 
 			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
 				type Query = #value_type;
@@ -371,13 +377,13 @@ impl<'a> Impls<'a> {
 
 				/// Take the value, reading and removing it.
 				fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					let res: Option<(#value_type, self::#internal_module::#linkage)> = storage.take(&*#key_for(key));
+					let res: Option<(#value_type, #linkage<#kty>)> = storage.take(&*#key_for(key));
 					match res {
 						Some((data, linkage)) => {
-							linkage.remove(storage);
+							Self::remove_linkage(linkage, storage);
 							data
 						},
-						None => #fielddefault
+						None => #fielddefault,
 					}
 				}
 
@@ -389,19 +395,19 @@ impl<'a> Impls<'a> {
 				/// Store a value to be associated with the given key from the map.
 				fn insert<S: #scrate::GenericStorage>(key: &#kty, val: &#typ, storage: &S) {
 					let key_for = &*#key_for(key);
-					let linkage = match self::#internal_module::#linkage::read(storage, key_for) {
+					let linkage = match Self::read(storage, key_for) {
 						// overwrite but reuse existing linkage
 						Some((_data, linkage)) => linkage,
 						// create new linkage
-						None => self::#internal_module::#linkage::insert_new_head(storage, key),
+						None => Self::insert_new_head(storage, key),
 					};
-					storage.put(key_for, &(*val, linkage))
+					storage.put(key_for, &(val, linkage))
 				}
 
 				/// Mutate the value under a key
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
 					let key_for = &*#key_for(key);
-					let (mut val, linkage) = self::#internal_module::#linkage::read(storage, key_for)
+					let (mut val, linkage) = Self::read(storage, key_for)
 						.map(|(data, linkage)| (data, Some(linkage)))
 						.#option_simple_1(|| (#fielddefault, None));
 
@@ -413,13 +419,17 @@ impl<'a> Impls<'a> {
 
 			impl<#traitinstance: #traittype> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance> {
 				fn head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
-					self::#internal_module::#linkage::read_head(storage)
+					Self::read_head(storage)
 				}
 
-				fn enumerate<'a, S: #scrate::GenericStorage>(storage: &'a S) -> #scrate::storage::generator::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> {
-					#scrate::storage::generator::Box::new(self::#internal_module::#enumerator {
-						next: self::#internal_module::#linkage::read_head(storage),
+				fn enumerate<'a, S: #scrate::GenericStorage>(storage: &'a S) -> #scrate::storage::generator::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
+					#kty: 'a,
+					#typ: 'a,
+				{
+					#scrate::storage::generator::Box::new(#enumerator {
+						next: Self::read_head(storage),
 						storage,
+						_data: #phantom_data::<#typ>::default(),
 					})
 				}
 			}
