@@ -279,7 +279,7 @@ impl<'a> Impls<'a> {
 
 					if let Some(prev_key) = prev_key {
 						// Retrieve previous element and update `next`
-						let mut res = Self::read(storage, &*prev_key)
+						let mut res = Self::read_with_linkage(storage, &*prev_key)
 							.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
 						res.1.next = linkage.next;
 						storage.put(&*prev_key, &res);
@@ -290,7 +290,7 @@ impl<'a> Impls<'a> {
 
 					if let Some(next_key) = next_key {
 						// Update previous of next element
-						let mut res = Self::read(storage, &*next_key)
+						let mut res = Self::read_with_linkage(storage, &*next_key)
 							.expect("Linkage is updated in case entry is removed; it always points to existing keys; qed");
 						res.1.previous = linkage.previous;
 						storage.put(&*next_key, &res);
@@ -298,14 +298,14 @@ impl<'a> Impls<'a> {
 				}
 
 				/// Read the contained data and it's linkage.
-				fn read<S: #scrate::GenericStorage>(storage: &S, key: &[u8]) -> Option<(#value_type, #linkage<#kty>)> {
+				fn read_with_linkage<S: #scrate::GenericStorage>(storage: &S, key: &[u8]) -> Option<(#value_type, #linkage<#kty>)> {
 					storage.get(key)
 				}
 
 				/// Generate linkage for newly inserted element.
 				///
 				/// Takes care of updating head and previous head's pointer.
-				fn insert_new_head<S: #scrate::GenericStorage>(
+				fn new_head_linkage<S: #scrate::GenericStorage>(
 					storage: &S,
 					key: &#kty,
 				) -> #linkage<#kty> {
@@ -313,7 +313,7 @@ impl<'a> Impls<'a> {
 						// update previous head predecessor
 						{
 							let head_key = #key_for(&head);
-							let (data, linkage) = Self::read(storage, &*head_key).expect(r#"
+							let (data, linkage) = Self::read_with_linkage(storage, &*head_key).expect(r#"
 								head is set when first element is inserted and unset when last element is removed;
 								if head is Some then it points to existing key; qed
 							"#);
@@ -395,11 +395,11 @@ impl<'a> Impls<'a> {
 				/// Store a value to be associated with the given key from the map.
 				fn insert<S: #scrate::GenericStorage>(key: &#kty, val: &#typ, storage: &S) {
 					let key_for = &*#key_for(key);
-					let linkage = match Self::read(storage, key_for) {
+					let linkage = match Self::read_with_linkage(storage, key_for) {
 						// overwrite but reuse existing linkage
 						Some((_data, linkage)) => linkage,
 						// create new linkage
-						None => Self::insert_new_head(storage, key),
+						None => Self::new_head_linkage(storage, key),
 					};
 					storage.put(key_for, &(val, linkage))
 				}
@@ -407,7 +407,7 @@ impl<'a> Impls<'a> {
 				/// Mutate the value under a key
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
 					let key_for = &*#key_for(key);
-					let (mut val, linkage) = Self::read(storage, key_for)
+					let (mut val, linkage) = Self::read_with_linkage(storage, key_for)
 						.map(|(data, linkage)| (data, Some(linkage)))
 						.unwrap_or_else(|| (#fielddefault, None));
 
