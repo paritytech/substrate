@@ -413,11 +413,12 @@ impl<B: BlockT> BlockImporter<B> {
 
 	fn handle_import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
 		let success = self.justification_import.as_ref().map(|justification_import| {
-			justification_import.import_justification(hash, number, justification).is_ok()
+			justification_import.import_justification(hash, number, justification)
+				.map_err(|e| {
+					debug!("Justification import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}", e, hash, number, who);
+					e
+				}).is_ok()
 		}).unwrap_or(false);
-		if !success {
-			debug!("Justification import failed for hash: {:?} number: {:?} coming from node: {:?}", hash, number, who);
-		}
 		if let Some(link) = self.link.as_ref() {
 			link.justification_imported(who, &hash, number, success);
 		}
