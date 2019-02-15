@@ -35,8 +35,6 @@ pub use vote_threshold::{Approved, VoteThreshold};
 pub type PropIndex = u32;
 /// A referendum index.
 pub type ReferendumIndex = u32;
-/// A number of lock periods.
-pub type LockPeriods = i8;
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Default)]
@@ -45,7 +43,7 @@ pub struct Vote(i8);
 
 impl Vote {
 	/// Create a new instance.
-	pub fn new(aye: bool, multiplier: LockPeriods) -> Self {
+	pub fn new(aye: bool, multiplier: i8) -> Self {
 		let m = multiplier.max(1) - 1;
 		Vote(if aye {
 			-1 - m
@@ -60,13 +58,12 @@ impl Vote {
 	}
 
 	/// The strength (measured in lock periods).
-	pub fn multiplier(self) -> LockPeriods {
+	pub fn multiplier(self) -> i8 {
 		1 + if self.0 < 0 { -(self.0 + 1) } else { self.0 }
 	}
 }
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
-type VoteCount = Vote;
 
 pub trait Trait: system::Trait + Sized {
 	type Currency: Currency<<Self as system::Trait>::AccountId>;
@@ -156,11 +153,34 @@ decl_module! {
 			}
 		}
 
-		/// Delegation voting methods.
-		pub fn delegate(origin, to: T::AccountId, maximum_periods: LockPeriods) -> Result {
+		/// Delegate vote.
+		pub fn delegate(origin, to: T::AccountId, periods: i8) -> Result {
 			let who = ensure_signed(origin)?;
-			<Delegations<T>>::insert(&who, (to.clone(), maximum_periods));
+			<Delegations<T>>::insert(&who, (to.clone(), periods.clone()));
+
+			if <DelegatesTo<T>>::exists(&to) {
+				<DelegatesTo<T>>::mutate(&to, |delegators| delegators.push(who.clone()))
+			} else {
+				<DelegatesTo<T>>::insert(&to, vec![who.clone()]);
+			}
+
 			Self::deposit_event(RawEvent::Delegated(who, to));
+			Ok(())
+		}
+
+		/// Undelegate vote.
+		fn undelegate(origin) -> Result {
+			let who = ensure_signed(origin)?;
+
+			if <Delegations<T>>::exists(&who) {
+				let (delegate, _) = <Delegations<T>>::get(&who);
+				<DelegatesTo<T>>::mutate(&delegate, |delegators| {
+					let idx = delegators.iter().position(|d| *d == who.clone()).unwrap(); // Fix
+					delegators.remove(idx); // Fix PANIC
+				});
+			}
+			<Delegations<T>>::remove(&who);
+			Self::deposit_event(RawEvent::Undelegate(who));
 			Ok(())
 		}
 	}
@@ -203,7 +223,7 @@ decl_storage! {
 		/// The delay before enactment for all public referenda.
 		pub PublicDelay get(public_delay) config(): T::BlockNumber;
 		/// The maximum number of additional lock periods a voter may offer to strengthen their vote. Multiples of `PublicDelay`.
-		pub MaxLockPeriods get(max_lock_periods) config(): LockPeriods;
+		pub MaxLockPeriods get(max_lock_periods) config(): i8;
 
 		/// How often (in blocks) to check for new votes.
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
@@ -229,9 +249,10 @@ decl_storage! {
 		pub VoteOf get(vote_of): map (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Store for delegation voting.
-		pub Delegations get(delegations): map T::AccountId => (T::AccountId, LockPeriods);
-		pub DelegatorCount get(delegator_count): map T::AccountId => u32;
-		pub SubscriptionVotes get(subscription_votes): map (T::AccountId, ReferendumIndex) => VoteCount;
+		pub Delegations get(delegations): map T::AccountId => (T::AccountId, i8);
+		pub DelegatesTo get(delegates_to): map T::AccountId => Vec<T::AccountId>;
+		// pub DelegatorCount get(delegator_count): map T::AccountId => u32;
+		// pub SubscriptionVotes get(subscription_votes): map (T::AccountId, ReferendumIndex) => VoteCount;
 	}
 }
 
@@ -245,8 +266,8 @@ decl_event!(
 		NotPassed(ReferendumIndex),
 		Cancelled(ReferendumIndex),
 		Executed(ReferendumIndex, bool),
-		/// Delegation voting events.
 		Delegated(AccountId, AccountId),
+		Undelegate(AccountId),
 	}
 );
 
@@ -283,11 +304,22 @@ impl<T: Trait> Module<T> {
 			.collect()
 	}
 
+	fn delegated_balance(who: T::AccountId, multiplier: i8) -> BalanceOf<T> {
+		Self::delegates_to(&who).iter().fold(Zero::zero(), |acc, d| {
+			if multiplier <= Self::delegations(d).1 {
+				acc + T::Currency::total_balance(d) + Self::delegated_balance(d.clone(), multiplier)
+			} else {
+				acc
+			}
+		})
+	}
+
 	/// Get the voters for the current proposal.
 	pub fn tally(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
 		Self::voters_for(ref_index).iter()
 			.map(|voter| (
-				T::Currency::total_balance(voter),
+				T::Currency::total_balance(voter) + Self::delegated_balance(voter.clone(),
+					Self::vote_of((ref_index, voter.clone())).multiplier()),
 				Self::vote_of((ref_index, voter.clone())),
 			))
 			.map(|(bal, vote)|
@@ -450,6 +482,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
+	use balances;
 
 	const AYE: Vote = Vote(-1);
 	const NAY: Vote = Vote(0);
@@ -605,6 +638,30 @@ mod tests {
 			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
+
+	#[test]
+	fn single_proposal_should_work_with_delegation() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			Democracy::delegate(Origin::signed(2), 1, 100);
+
+			assert_ok!(propose_set_balance(1, 2, 1));
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			System::set_block_number(2);
+			let r = 0;
+			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
+
+			assert_eq!(Democracy::referendum_count(), 1);
+			assert_eq!(Democracy::voters_for(r), vec![1]);
+			assert_eq!(Democracy::vote_of((r, 1)), AYE);
+			assert_eq!(Democracy::tally(r), (10, 0, 10));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Balances::free_balance(&42), 2);
+		});
+	}
+
 
 	#[test]
 	fn deposit_for_proposals_should_be_taken() {

@@ -97,7 +97,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			voting_period: 10 * MINUTES,    // 3 days to discuss & vote on an active referendum
 			minimum_deposit: 50 * DOLLARS,    // 12000 as the minimum deposit for a referendum
 			public_delay: 10 * MINUTES,
-			max_lock_periods: 6,
+			max_lock_periods: (6 as i8).into(),
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: vec![],
@@ -223,7 +223,7 @@ pub fn testnet_genesis(
 			voting_period: 18,
 			minimum_deposit: 10,
 			public_delay: 0,
-			max_lock_periods: 6,
+			max_lock_periods: (6 as i8).into(),
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
