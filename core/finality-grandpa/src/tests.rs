@@ -52,7 +52,7 @@ type PeerData =
 			>
 		>
 	>;
-type GrandpaPeer = Peer<PassThroughVerifier, PeerData>;
+type GrandpaPeer = Peer<PeerData>;
 
 struct GrandpaTestNet {
 	peers: Vec<Arc<GrandpaPeer>>,

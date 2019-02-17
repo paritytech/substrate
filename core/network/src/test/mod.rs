@@ -23,13 +23,14 @@ mod sync;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 use log::trace;
 use client;
 use client::block_builder::BlockBuilder;
 use crate::config::ProtocolConfig;
-use consensus::import_queue::{import_many_blocks, ImportQueue, ImportQueueStatus, IncomingBlock};
+use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
 use consensus::{BlockOrigin, ForkChoiceStrategy, ImportBlock, JustificationImport};
@@ -45,7 +46,7 @@ use parking_lot::Mutex;
 use primitives::{H256, Ed25519AuthorityId};
 use crate::protocol::{Context, Protocol, ProtocolMsg, ProtocolStatus};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, Zero, NumberFor};
+use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::Justification;
 use crate::service::{network_channel, NetworkChan, NetworkLink, NetworkMsg, NetworkPort, TransactionPool};
 use crate::specialization::NetworkSpecialization;
@@ -53,34 +54,6 @@ use test_client;
 
 pub use test_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use test_client::TestClient;
-
-#[cfg(any(test, feature = "test-helpers"))]
-use std::cell::RefCell;
-
-#[cfg(any(test, feature = "test-helpers"))]
-struct ImportCB<B: BlockT>(RefCell<Option<Box<dyn Fn(BlockOrigin, Vec<IncomingBlock<B>>) -> bool>>>);
-
-#[cfg(any(test, feature = "test-helpers"))]
-impl<B: BlockT> ImportCB<B> {
-	fn new() -> Self {
-		ImportCB(RefCell::new(None))
-	}
-	fn set<F>(&self, cb: Box<F>)
-	where F: 'static + Fn(BlockOrigin, Vec<IncomingBlock<B>>) -> bool,
-	{
-		*self.0.borrow_mut() = Some(cb);
-	}
-	fn call(&self, origin: BlockOrigin, data: Vec<IncomingBlock<B>>) -> bool {
-		let b = self.0.borrow();
-		b.as_ref().expect("The Callback has been set before. qed.")(origin, data)
-	}
-}
-
-#[cfg(any(test, feature = "test-helpers"))]
-unsafe impl<B: BlockT> Send for ImportCB<B> {}
-#[cfg(any(test, feature = "test-helpers"))]
-unsafe impl<B: BlockT> Sync for ImportCB<B> {}
-
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// A Verifier that accepts all blocks and passes them on with the configured
@@ -114,100 +87,9 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 }
 
 /// A link implementation that does nothing.
-pub struct NoopLink;
+pub struct NoopLink { }
 
 impl<B: BlockT> Link<B> for NoopLink { }
-
-/// Blocks import queue that is importing blocks in the same thread.
-/// The boolean value indicates whether blocks should be imported without instant finality.
-#[cfg(any(test, feature = "test-helpers"))]
-pub struct SyncImportQueue<B: BlockT, V: Verifier<B>> {
-	verifier: Arc<V>,
-	link: ImportCB<B>,
-	block_import: SharedBlockImport<B>,
-	justification_import: Option<SharedJustificationImport<B>>,
-}
-
-#[cfg(any(test, feature = "test-helpers"))]
-impl<B: 'static + BlockT, V: 'static + Verifier<B>> SyncImportQueue<B, V> {
-	/// Create a new SyncImportQueue wrapping the given Verifier and block import
-	/// handle.
-	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>, justification_import: Option<SharedJustificationImport<B>>) -> Self {
-		let queue = SyncImportQueue {
-			verifier,
-			link: ImportCB::new(),
-			block_import,
-			justification_import,
-		};
-
-		let v = queue.verifier.clone();
-		let import_handle = queue.block_import.clone();
-		queue.link.set(Box::new(move |origin, new_blocks| {
-			let verifier = v.clone();
-			import_many_blocks(
-				&*import_handle,
-				&NoopLink,
-				None,
-				(origin, new_blocks),
-				verifier,
-			)
-		}));
-
-		queue
-	}
-}
-
-#[cfg(any(test, feature = "test-helpers"))]
-impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImportQueue<B, V>
-{
-	fn start<L: 'static + Link<B>>(
-		&self,
-		link: L,
-	) -> Result<(), std::io::Error> {
-		let v = self.verifier.clone();
-		let import_handle = self.block_import.clone();
-		self.link.set(Box::new(move |origin, new_blocks| {
-			let verifier = v.clone();
-			import_many_blocks(
-				&*import_handle,
-				&link,
-				None,
-				(origin, new_blocks),
-				verifier
-			)
-		}));
-		Ok(())
-	}
-	fn clear(&self) { }
-
-	fn stop(&self) { }
-
-	fn status(&self) -> ImportQueueStatus<B> {
-		ImportQueueStatus {
-			importing_count: 0,
-			best_importing_number: Zero::zero(),
-		}
-	}
-
-	fn is_importing(&self, _hash: &B::Hash) -> bool {
-		false
-	}
-
-	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
-		self.link.call(origin, blocks);
-	}
-
-	fn import_justification(
-		&self,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		justification: Justification,
-	) -> bool {
-		self.justification_import.as_ref().map(|justification_import| {
-			justification_import.import_justification(hash, number, justification).is_ok()
-		}).unwrap_or(false)
-	}
-}
 
 /// The test specialization.
 pub struct DummySpecialization { }
@@ -234,19 +116,20 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 
 pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
 
-pub struct Peer<V: 'static + Verifier<Block>, D> {
+pub struct Peer<D> {
 	client: Arc<PeersClient>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
+
 	network_port: Mutex<NetworkPort<Block>>,
-	import_queue: Arc<SyncImportQueue<Block, V>>,
+	pub import_queue: Box<ImportQueue<Block>>,
 	network_sender: NetworkChan<Block>,
 	pub data: D,
 }
 
-impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
+impl<D> Peer<D> {
 	fn new(
 		client: Arc<PeersClient>,
-		import_queue: Arc<SyncImportQueue<Block, V>>,
+		import_queue: Box<ImportQueue<Block>>,
 		protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
 		network_sender: NetworkChan<Block>,
 		network_port: NetworkPort<Block>,
@@ -276,7 +159,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 			network_sender: self.network_sender.clone(),
 		};
 
-		self.import_queue.start(network_link).expect("Test ImportQueue always starts");
+		self.import_queue.start(Box::new(network_link)).expect("Test ImportQueue always starts");
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::BlockImported(info.chain.best_hash, header));
@@ -327,7 +210,8 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Whether this peer is done syncing (has no messages to send).
 	fn is_done(&self) -> bool {
-		self.network_port.lock().receiver().is_empty()
+		self.import_queue.status().importing_count == 0 &&
+			self.network_port.lock().receiver().is_empty()
 	}
 
 	/// Execute a "sync step". This is called for each peer after it sends a packet.
@@ -437,8 +321,6 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 			let header = block.header.clone();
 			at = BlockId::Hash(hash);
 
-			// NOTE: if we use a non-synchronous queue in the test-net in the future,
-			// this may not work.
 			self.import_queue.import_blocks(
 				origin,
 				vec![IncomingBlock {
@@ -447,8 +329,12 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 					header: Some(header),
 					body: Some(block.extrinsics),
 					justification: None,
-				}
-			]);
+				}],
+			);
+			// Simulate a synchronous import.
+			while self.import_queue.status().importing_count > 0 {
+				thread::sleep(Duration::from_millis(20));
+			}
 		}
 	}
 
@@ -516,9 +402,9 @@ pub trait TestNetFactory: Sized {
 	fn make_verifier(&self, client: Arc<PeersClient>, config: &ProtocolConfig) -> Arc<Self::Verifier>;
 
 	/// Get reference to peer.
-	fn peer(&self, i: usize) -> &Peer<Self::Verifier, Self::PeerData>;
-	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>;
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>)>(&mut self, closure: F);
+	fn peer(&self, i: usize) -> &Peer<Self::PeerData>;
+	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>>;
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F);
 
 	fn started(&self) -> bool;
 	fn set_started(&mut self, now: bool);
@@ -553,8 +439,8 @@ pub trait TestNetFactory: Sized {
 		let (block_import, justification_import, data) = self.make_block_import(client.clone());
 		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
-		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import, justification_import));
-		let specialization = DummySpecialization { };
+		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
+		let specialization = DummySpecialization {};
 		let protocol_sender = Protocol::new(
 			network_sender.clone(),
 			config.clone(),
@@ -727,8 +613,8 @@ pub trait TestNetFactory: Sized {
 }
 
 pub struct TestNet {
-	peers: Vec<Arc<Peer<PassThroughVerifier, ()>>>,
-	started: bool
+	peers: Vec<Arc<Peer<()>>>,
+	started: bool,
 }
 
 impl TestNetFactory for TestNet {
@@ -749,15 +635,15 @@ impl TestNetFactory for TestNet {
 		Arc::new(PassThroughVerifier(false))
 	}
 
-	fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
+	fn peer(&self, i: usize) -> &Peer<()> {
 		&self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
+	fn peers(&self) -> &Vec<Arc<Peer<()>>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F ) {
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<()>>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 
@@ -802,15 +688,15 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.make_verifier(client, config)
 	}
 
-	fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
+	fn peer(&self, i: usize) -> &Peer<Self::PeerData> {
 		self.0.peer(i)
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
+	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>> {
 		self.0.peers()
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F ) {
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F ) {
 		self.0.mut_peers(closure)
 	}
 
