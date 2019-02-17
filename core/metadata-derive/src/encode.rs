@@ -1,3 +1,5 @@
+use quote::{quote, quote_spanned};
+
 use proc_macro2::{Span, TokenStream};
 use syn::{
 	Data, Field, Fields, Type,

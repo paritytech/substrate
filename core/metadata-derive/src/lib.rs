@@ -1,18 +1,14 @@
+
 extern crate proc_macro;
-extern crate proc_macro2;
 
-#[macro_use]
-extern crate syn;
-
-#[macro_use]
-extern crate quote;
+use syn::parse_quote;
+use quote::{quote};
 
 use proc_macro::TokenStream;
-use proc_macro2::Span;
+use proc_macro2::{Span};
 use syn::{DeriveInput, Generics, Ident, GenericParam};
 
 mod encode;
-
 
 #[proc_macro_derive(EncodeMetadata)]
 pub fn encode_derive(input: TokenStream) -> TokenStream {

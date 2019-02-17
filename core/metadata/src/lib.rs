@@ -1,24 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(not(feature = "std"), macro_use)]
-pub extern crate sr_std as rstd;
-
-extern crate parity_codec;
-#[macro_use]
-extern crate parity_codec_derive;
-
 #[cfg(feature = "std")]
-extern crate serde;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
+use serde_derive::Serialize;
 
-extern crate primitive_types;
+use parity_codec_derive::{Encode, Decode};
 
 mod registry;
 
 use primitive_types::{U256, U512, H160, H256, H512};
 
+pub use rstd;
 use rstd::prelude::*;
 
 pub use registry::MetadataRegistry;

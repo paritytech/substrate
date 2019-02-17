@@ -1,3 +1,8 @@
+#[cfg(feature = "std")]
+use serde_derive::Serialize;
+
+use parity_codec_derive::{Encode, Decode};
+
 use super::{TypeMetadata, TypeMetadataKind, MetadataName};
 
 use rstd::prelude::*;
