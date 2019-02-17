@@ -71,7 +71,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup, ChargeFee};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
 use srml_support::traits::OnFreeBalanceZero;
@@ -100,10 +100,13 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Amount> + As<Self::Balance> + As<u64> + As<u32>;
 
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
+
+	/// Fee charge.
+	type ChargeFee: ChargeFee<Self::AccountId, Amount=Self::Amount>;
 
 	/// A function type that computes the fee for dispatching the given `Call`.
 	///
@@ -182,7 +185,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
 
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter)?;
 
 			result.map(|_| ())
 		}
@@ -223,7 +226,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter)?;
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {
@@ -276,7 +279,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter);
+			gas::refund_unused_gas::<T>(&origin, gas_meter)?;
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {

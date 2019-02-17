@@ -100,11 +100,13 @@ impl Trait for Test {
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
+	type ChargeFee = Fees;
 }
 
 type Balances = balances::Module<Test>;
 type Contract = Module<Test>;
 type System = system::Module<Test>;
+type Fees = fees::Module<Test>;
 
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<H256, u64> for DummyContractAddressFor {

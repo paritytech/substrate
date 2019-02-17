@@ -15,9 +15,8 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{GasSpent, Module, Trait};
-use balances;
 use runtime_primitives::BLOCK_FULL;
-use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
+use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero, ChargeFee};
 use srml_support::StorageValue;
 
 #[cfg(test)]
@@ -213,18 +212,12 @@ pub fn buy_gas<T: Trait>(
 
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
-	let b = <balances::Module<T>>::free_balance(transactor);
-	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
-		.checked_mul(&gas_price)
+	let cost = <T::Gas as As<T::Amount>>::as_(gas_limit.clone())
+		.checked_mul(&T::Amount::sa(<T::Balance as As<u64>>::as_(gas_price)))
 		.ok_or("overflow multiplying gas limit by price")?;
 
-	let new_balance = b.checked_sub(&cost);
-	if new_balance < Some(<balances::Module<T>>::existential_deposit()) {
-		return Err("not enough funds for transaction fee");
-	}
+	T::ChargeFee::charge_fee(transactor, cost)?;
 
-	<balances::Module<T>>::set_free_balance(transactor, b - cost);
-	<balances::Module<T>>::decrease_total_stake_by(cost);
 	Ok(GasMeter {
 		limit: gas_limit,
 		gas_left: gas_limit,
@@ -235,7 +228,7 @@ pub fn buy_gas<T: Trait>(
 }
 
 /// Refund the unused gas.
-pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
+pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) -> Result<(), &'static str> {
 	// Increase total spent gas.
 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
 	// also has T::Gas type.
@@ -243,10 +236,8 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	<GasSpent<T>>::put(gas_spent);
 
 	// Refund gas left by the price it was bought.
-	let b = <balances::Module<T>>::free_balance(transactor);
-	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
-	<balances::Module<T>>::set_free_balance(transactor, b + refund);
-	<balances::Module<T>>::increase_total_stake_by(refund);
+	let refund = <T::Gas as As<T::Amount>>::as_(gas_meter.gas_left) * T::Amount::sa(<T::Balance as As<u64>>::as_(gas_meter.gas_price));
+	T::ChargeFee::refund_fee(transactor, refund)
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units

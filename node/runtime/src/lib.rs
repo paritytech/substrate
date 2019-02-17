@@ -180,6 +180,7 @@ impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
 	type ComputeDispatchFee = contract::DefaultDispatchFeeComputor<Runtime>;
+	type ChargeFee = fees::Module<Self>;
 }
 
 impl sudo::Trait for Runtime {
