@@ -123,7 +123,7 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Arc::new(Components::build_import_queue(&mut config, client.clone())?);
+		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
