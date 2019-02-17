@@ -18,7 +18,7 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 
 [features]
 default = ["std"]
