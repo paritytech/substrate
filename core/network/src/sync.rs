@@ -66,7 +66,11 @@ enum PeerSyncState<B: BlockT> {
 /// Pending justification request for the given block (hash and number).
 type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
-/// Manages pending block justification requests.
+/// Manages pending block justification requests. Multiple justifications may be
+/// requested for competing forks, or for the same branch at different
+/// (increasing) heights. This structure will guarantee that justifications are
+/// fetched in-order, and that obsolete changes are pruned (when finalizing a
+/// competing fork).
 struct PendingJustifications<B: BlockT> {
 	justifications: ForkTree<B::Hash, NumberFor<B>, ()>,
 	pending_requests: VecDeque<PendingJustification<B>>,
