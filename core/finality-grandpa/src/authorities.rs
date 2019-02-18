@@ -139,8 +139,9 @@ where
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
-		debug!(target: "afg", "Inserting potential set change at block {:?}.",
-			   (&number, &hash));
+		debug!(target: "afg", "Inserting potential set change signalled at block {:?} \
+							   (delayed by {:?} blocks).",
+			   (&number, &hash), pending.finalization_depth);
 
 		self.pending_changes.import(
 			hash.clone(),
@@ -200,7 +201,7 @@ where
 			&finalized_hash,
 			finalized_number.clone(),
 			is_descendent_of,
-			|change| change.effective_number() <= finalized_number
+			|change| change.effective_number() == finalized_number
 		)? {
 			fork_tree::FinalizationResult::Changed(change) => {
 				status.changed = true;
@@ -239,11 +240,11 @@ where
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{
-		self.pending_changes.finalizes_with_descendent_if(
+		self.pending_changes.finalizes_any_with_descendent_if(
 			&finalized_hash,
 			finalized_number.clone(),
 			is_descendent_of,
-			|change| change.effective_number() <= finalized_number
+			|change| change.effective_number() == finalized_number
 		)
 	}
 }

@@ -147,9 +147,13 @@ impl<H, N, V> ForkTree<H, N, V> where
 		self.roots.iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
+	fn node_iter(&self) -> impl Iterator<Item=&Node<H, N, V>> {
+		ForkTreeIterator { stack: self.roots.iter().collect() }
+	}
+
 	/// Iterates the nodes in the tree in pre-order.
 	pub fn iter(&self) -> impl Iterator<Item=(&H, &N, &V)> {
-		ForkTreeIterator { stack: self.roots.iter().collect() }
+		self.node_iter().map(|node| (&node.hash, &node.number, &node.data))
 	}
 
 	/// Finalize a root in the tree and return it, return `None` in case no root
@@ -221,14 +225,14 @@ impl<H, N, V> ForkTree<H, N, V> where
 		}
 	}
 
-	/// Checks if a root in the tree is finalized by either finalizing the node
-	/// itself or a child node that's not in the tree, guaranteeing that the
-	/// node being finalized isn't a descendent of any of the root's children.
-	/// The given `predicate` is checked on the prospective finalized root and
-	/// must pass for finalization to occur. The given function
+	/// Checks if any node in the tree is finalized by either finalizing the
+	/// node itself or a child node that's not in the tree, guaranteeing that
+	/// the node being finalized isn't a descendent of any of the node's
+	/// children. The given `predicate` is checked on the prospective finalized
+	/// root and must pass for finalization to occur. The given function
 	/// `is_descendent_of` should return `true` if the second hash (target) is a
 	/// descendent of the first hash (base).
-	pub fn finalizes_with_descendent_if<F, P, E>(
+	pub fn finalizes_any_with_descendent_if<F, P, E>(
 		&self,
 		hash: &H,
 		number: N,
@@ -245,20 +249,18 @@ impl<H, N, V> ForkTree<H, N, V> where
 			}
 		}
 
-		// check if the given hash is equal or a a descendent of any root, if we
-		// find a valid root that passes the predicate then we must ensure that
-		// we're not finalizing past any children node.
-		for root in self.roots.iter() {
-			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
-				if predicate(&root.data) {
-					for node in root.children.iter() {
-						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
-							return Err(Error::UnfinalizedAncestor);
-						}
+		// check if the given hash is equal or a descendent of any node in the
+		// tree, if we find a valid node that passes the predicate then we must
+		// ensure that we're not finalizing past any of its child nodes.
+		for node in self.node_iter() {
+			if predicate(&node.data) {
+				for node in node.children.iter() {
+					if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+						return Err(Error::UnfinalizedAncestor);
 					}
-
-					return Ok(true);
 				}
+
+				return Ok(true);
 			}
 		}
 
@@ -402,12 +404,12 @@ struct ForkTreeIterator<'a, H, N, V> {
 }
 
 impl<'a, H, N, V> Iterator for ForkTreeIterator<'a, H, N, V> {
-	type Item = (&'a H, &'a N, &'a V);
+	type Item = &'a Node<H, N, V>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.stack.pop().map(|node| {
 			self.stack.extend(node.children.iter());
-			(&node.hash, &node.number, &node.data)
+			node
 		})
 	}
 }
@@ -675,7 +677,7 @@ mod test {
 		};
 
 		assert_eq!(
-			tree.finalizes_with_descendent_if(
+			tree.finalizes_any_with_descendent_if(
 				&"B",
 				2,
 				&is_descendent_of,
@@ -703,7 +705,7 @@ mod test {
 
 		// finalizing "C" will finalize the node "A0" and prune it out of the tree
 		assert_eq!(
-			tree.finalizes_with_descendent_if(
+			tree.finalizes_any_with_descendent_if(
 				&"C",
 				5,
 				&is_descendent_of,
@@ -729,7 +731,7 @@ mod test {
 
 		// finalizing "F" will fail since it would finalize past "E" without finalizing "D" first
 		assert_eq!(
-			tree.finalizes_with_descendent_if(
+			tree.finalizes_any_with_descendent_if(
 				&"F",
 				100,
 				&is_descendent_of,
@@ -740,7 +742,7 @@ mod test {
 
 		// it will work with "G" though since it is not in the same branch as "E"
 		assert_eq!(
-			tree.finalizes_with_descendent_if(
+			tree.finalizes_any_with_descendent_if(
 				&"G",
 				100,
 				&is_descendent_of,
