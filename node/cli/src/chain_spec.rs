@@ -20,7 +20,7 @@ use primitives::{Ed25519AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill};
+	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, FeesConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::{hex, hex_impl};
@@ -64,8 +64,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		system: None,
 		balances: Some(BalancesConfig {
 			balances: endowed_accounts.iter().map(|&k| (k, 10_000_000 * DOLLARS)).collect(),
-			transaction_base_fee: 1 * CENTS,
-			transaction_byte_fee: 10 * MILLICENTS,
 			existential_deposit: 1 * DOLLARS,
 			transfer_fee: 1 * CENTS,
 			creation_fee: 1 * CENTS,
@@ -139,7 +137,11 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
-		})
+		}),
+		fees: Some(FeesConfig {
+			transaction_base_fee: 1 * CENTS,
+			transaction_byte_fee: 10 * MILLICENTS,
+		}),
 	}
 }
 
@@ -192,8 +194,6 @@ pub fn testnet_genesis(
 			ids: endowed_accounts.iter().map(|x| x.0.into()).collect(),
 		}),
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 1,
-			transaction_byte_fee: 0,
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
@@ -267,7 +267,11 @@ pub fn testnet_genesis(
 		}),
 		grandpa: Some(GrandpaConfig {
 			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
-		})
+		}),
+		fees: Some(FeesConfig {
+			transaction_base_fee: 1,
+			transaction_byte_fee: 0,
+		}),
 	}
 }
 

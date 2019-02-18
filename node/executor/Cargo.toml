@@ -6,7 +6,6 @@ description = "Substrate node implementation in Rust."
 edition = "2018"
 
 [dependencies]
-hex-literal = "0.1"
 trie-root = "0.11"
 parity-codec = "3.0"
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
@@ -31,6 +30,7 @@ treasury = { package = "srml-treasury", path = "../../srml/treasury" }
 contract = { package = "srml-contract", path = "../../srml/contract" }
 grandpa = { package = "srml-grandpa", path = "../../srml/grandpa" }
 indices = { package = "srml-indices", path = "../../srml/indices" }
+fees = { package = "srml-fees", path = "../../srml/fees" }
 wabt = "~0.7.4"
 
 [features]

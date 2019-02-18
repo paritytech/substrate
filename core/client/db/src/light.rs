@@ -72,8 +72,8 @@ impl<Block> LightStorage<Block>
 		Self::from_kvdb(db as Arc<_>)
 	}
 
-	#[cfg(test)]
-	pub(crate) fn new_test() -> Self {
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_test() -> Self {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
@@ -493,7 +493,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	}
 
 	fn cache(&self) -> Option<&BlockchainCache<Block>> {
-		None
+		Some(&self.cache)
 	}
 }
 

@@ -22,6 +22,7 @@
 
 use super::{BlockStatus, Error, SignedMessage, CompactCommit};
 
+use log::{debug, warn};
 use client::ImportNotifications;
 use futures::prelude::*;
 use futures::stream::Fuse;
@@ -114,8 +115,8 @@ impl<Block: BlockT, Status, I, M> Stream for UntilImported<Block, Status, I, M> 
 				Async::Ready(Some(input)) => {
 					// new input: schedule wait of any parts which require
 					// blocks to be known.
-					let mut ready = &mut self.ready;
-					let mut pending = &mut self.pending;
+					let ready = &mut self.ready;
+					let pending = &mut self.pending;
 					M::schedule_wait(
 						input,
 						&self.status_check,
@@ -300,7 +301,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockCommitMessage<Block> {
 				// check integrity: all precommits for same hash have same number.
 				let canon_number = match checked_hashes.entry(target_hash) {
 					Entry::Occupied(entry) => entry.get().number().clone(),
-					Entry::Vacant(mut entry) => {
+					Entry::Vacant(entry) => {
 						if let Some(number) = status_check.block_number(target_hash)? {
 							entry.insert(KnownOrUnknown::Known(number));
 							number

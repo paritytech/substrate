@@ -16,6 +16,7 @@ version = { package = "sr-version", path = "../../core/sr-version", default_feat
 support = { package = "srml-support", path = "../../srml/support", default_features = false }
 primitives = { package = "substrate-primitives", path = "../../core/primitives", default_features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default_features = false }
+fees = { package = "srml-fees", path = "../../srml/fees", default_features = false }
 consensus = { package = "srml-consensus", path = "../../srml/consensus", default_features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default_features = false }
 executive = { package = "srml-executive", path = "../../srml/executive", default_features = false }
@@ -38,6 +39,7 @@ std = [
 	"runtime-io/std",
 	"support/std",
 	"balances/std",
+	"fees/std",
 	"executive/std",
 	"aura/std",
 	"indices/std",
