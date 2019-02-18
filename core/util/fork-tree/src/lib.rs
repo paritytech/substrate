@@ -251,8 +251,10 @@ impl<H, N, V> ForkTree<H, N, V> where
 		for root in self.roots.iter() {
 			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
 				if predicate(&root.data) {
-					if root.children.iter().any(|n| n.number <= number) {
-						return Err(Error::UnfinalizedAncestor);
+					for node in root.children.iter() {
+						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+							return Err(Error::UnfinalizedAncestor);
+						}
 					}
 
 					return Ok(true);
@@ -294,8 +296,10 @@ impl<H, N, V> ForkTree<H, N, V> where
 		for (i, root) in self.roots.iter().enumerate() {
 			if root.hash == *hash || is_descendent_of(&root.hash, hash)? {
 				if predicate(&root.data) {
-					if root.children.iter().any(|n| n.number <= number) {
-						return Err(Error::UnfinalizedAncestor);
+					for node in root.children.iter() {
+						if node.number <= number && is_descendent_of(&node.hash, &hash)? {
+							return Err(Error::UnfinalizedAncestor);
+						}
 					}
 
 					position = Some(i);
@@ -304,19 +308,25 @@ impl<H, N, V> ForkTree<H, N, V> where
 			}
 		}
 
-		if let Some(position) = position {
-			let node = self.roots.swap_remove(position);
+		let node_data = position.map(|i| {
+			let node = self.roots.swap_remove(i);
 			self.roots = node.children;
 			self.best_finalized_number = Some(node.number);
-			return Ok(FinalizationResult::Changed(Some(node.data)));
-		}
+			node.data
+		});
 
-		// we finalized a block earlier than any existing root (or possibly
-		// another fork not part of the tree). make sure to only keep roots that
-		// are part of the finalized branch
+		// if the block being finalized is earlier than a given root, then it
+		// must be its ancestor, otherwise we can prune the root. if there's a
+		// root at the same height then the hashes must match. otherwise the
+		// node being finalized is higher than the root so it must be its
+		// descendent (in this case the node wasn't finalized earlier presumably
+		// because the predicate didn't pass).
 		let mut changed = false;
 		self.roots.retain(|root| {
-			let retain = root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false);
+			let retain =
+				root.number > number && is_descendent_of(hash, &root.hash).unwrap_or(false) ||
+				root.number == number && root.hash == *hash ||
+				is_descendent_of(&root.hash, hash).unwrap_or(false);
 
 			if !retain {
 				changed = true;
@@ -327,10 +337,10 @@ impl<H, N, V> ForkTree<H, N, V> where
 
 		self.best_finalized_number = Some(number);
 
-		if changed {
-			Ok(FinalizationResult::Changed(None))
-		} else {
-			Ok(FinalizationResult::Unchanged)
+		match (node_data, changed) {
+			(Some(data), _) => Ok(FinalizationResult::Changed(Some(data))),
+			(None, true) => Ok(FinalizationResult::Changed(None)),
+			(None, false) => Ok(FinalizationResult::Unchanged),
 		}
 	}
 }
