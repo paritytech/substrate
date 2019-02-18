@@ -31,8 +31,10 @@ use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
 use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero};
 use srml_support::dispatch::Result;
-use primitives::traits::{Zero, SimpleArithmetic,
-	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug, TransferAsset};
+use primitives::traits::{
+	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub, ChargeFee,
+	MaybeSerializeDebug, TransferAsset,
+};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
@@ -53,6 +55,9 @@ pub trait Trait: system::Trait {
 
 	/// A function that returns true iff a given account can transfer its funds to another account.
 	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId>;
+
+	/// Charge fee.
+	type ChargeFee: ChargeFee<Self::AccountId, Amount=Self::Balance>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -326,8 +331,9 @@ impl<T: Trait> Module<T> {
 		};
 
 		if transactor != dest {
-			Self::set_free_balance(transactor, new_from_balance);
-			Self::decrease_total_stake_by(fee);
+			T::ChargeFee::charge_fee(transactor, fee)?;
+
+			Self::set_free_balance(transactor, new_from_balance - fee);
 			Self::set_free_balance_creating(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}

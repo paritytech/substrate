@@ -100,13 +100,13 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Amount> + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter + Default + Codec + SimpleArithmetic + Bounded + Copy + As<Self::Balance> + As<u64> + As<u32>;
 
 	/// A function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<CodeHash<Self>, Self::AccountId>;
 
 	/// Fee charge.
-	type ChargeFee: ChargeFee<Self::AccountId, Amount=Self::Amount>;
+	type ChargeFee: ChargeFee<Self::AccountId, Amount=Self::Balance>;
 
 	/// A function type that computes the fee for dispatching the given `Call`.
 	///

@@ -320,6 +320,7 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
+		type ChargeFee = fees::Module<Runtime>;
 		type Event = MetaEvent;
 	}
 	impl fees::Trait for Runtime {

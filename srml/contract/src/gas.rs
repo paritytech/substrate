@@ -212,11 +212,11 @@ pub fn buy_gas<T: Trait>(
 
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
-	let cost = <T::Gas as As<T::Amount>>::as_(gas_limit.clone())
-		.checked_mul(&T::Amount::sa(<T::Balance as As<u64>>::as_(gas_price)))
+	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
+		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;
 
-	T::ChargeFee::charge_fee(transactor, cost)?;
+	<T as Trait>::ChargeFee::charge_fee(transactor, cost)?;
 
 	Ok(GasMeter {
 		limit: gas_limit,
@@ -236,8 +236,8 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	<GasSpent<T>>::put(gas_spent);
 
 	// Refund gas left by the price it was bought.
-	let refund = <T::Gas as As<T::Amount>>::as_(gas_meter.gas_left) * T::Amount::sa(<T::Balance as As<u64>>::as_(gas_meter.gas_price));
-	T::ChargeFee::refund_fee(transactor, refund)
+	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
+	<T as Trait>::ChargeFee::refund_fee(transactor, refund)
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units

@@ -277,7 +277,13 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
+		type ChargeFee = fees::Module<Test>;
 		type Event = ();
+	}
+	impl fees::Trait for Test {
+		type Event = ();
+		type Amount = u64;
+		type TransferAsset = balances::Module<Test>;
 	}
 	impl Trait for Test {
 		type Event = ();

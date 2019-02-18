@@ -23,6 +23,7 @@ use primitives::{traits::{IdentityLookup}, testing::{Digest, DigestItem, Header}
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
+use fees;
 use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
@@ -45,11 +46,17 @@ impl system::Trait for Runtime {
 	type Event = ();
 	type Log = DigestItem;
 }
+impl fees::Trait for Runtime {
+	type Event = ();
+	type Amount = u64;
+	type TransferAsset = Balances;
+}
 impl Trait for Runtime {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();
+	type ChargeFee = fees::Module<Runtime>;
 	type Event = ();
 }
 

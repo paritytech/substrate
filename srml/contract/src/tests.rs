@@ -78,6 +78,7 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();
+	type ChargeFee = Fees;
 	type Event = MetaEvent;
 }
 impl timestamp::Trait for Test {

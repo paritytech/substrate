@@ -55,7 +55,13 @@ impl balances::Trait for Test {
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
 	type EnsureAccountLiquid = Staking;
+	type ChargeFee = fees::Module<Test>;
 	type Event = ();
+}
+impl fees::Trait for Test {
+	type Event = ();
+	type Amount = u64;
+	type TransferAsset = balances::Module<Test>;
 }
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = ConvertUintAuthorityId;

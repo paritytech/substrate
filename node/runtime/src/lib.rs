@@ -104,6 +104,7 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
 	type OnNewAccount = Indices;
 	type EnsureAccountLiquid = (Staking, Democracy);
+	type ChargeFee = fees::Module<Runtime>;
 	type Event = Event;
 }
 

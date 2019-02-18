@@ -160,6 +160,8 @@ impl balances::Trait for Runtime {
 	type OnNewAccount = Indices;
 	/// Restrict whether an account can transfer funds. We don't place any further restrictions.
 	type EnsureAccountLiquid = ();
+	/// Charge fee.
+	type ChargeFee = Fees;
 	/// The uniquitous event type.
 	type Event = Event;
 }

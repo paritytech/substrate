@@ -45,7 +45,7 @@ mod tests {
 
 	impl_outer_event! {
 		pub enum Event for Test {
-			balances<T>, democracy<T>, seats<T>, voting<T>, motions<T>,
+			balances<T>, fees<T>, democracy<T>, seats<T>, voting<T>, motions<T>,
 		}
 	}
 
@@ -77,7 +77,13 @@ mod tests {
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
 		type EnsureAccountLiquid = ();
+		type ChargeFee = fees::Module<Test>;
 		type Event = Event;
+	}
+	impl fees::Trait for Test {
+		type Event = Event;
+		type Amount = u64;
+		type TransferAsset = balances::Module<Test>;
 	}
 	impl democracy::Trait for Test {
 		type Currency = balances::Module<Self>;
