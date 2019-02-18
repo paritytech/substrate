@@ -124,6 +124,8 @@ pub struct Peer<D> {
 	pub import_queue: Box<ImportQueue<Block>>,
 	network_sender: NetworkChan<Block>,
 	pub data: D,
+	best_hash: Mutex<Option<H256>>,
+	finalized_hash: Mutex<Option<H256>>,
 }
 
 impl<D> Peer<D> {
@@ -143,6 +145,8 @@ impl<D> Peer<D> {
 			network_sender,
 			network_port,
 			data,
+			best_hash: Mutex::new(None),
+			finalized_hash: Mutex::new(None),
 		}
 	}
 	/// Called after blockchain has been populated to updated current state.
@@ -222,19 +226,39 @@ impl<D> Peer<D> {
 	/// Send block import notifications.
 	fn send_import_notifications(&self) {
 		let info = self.client.info().expect("In-mem client does not fail");
+
+		let mut best_hash = self.best_hash.lock();
+		match *best_hash {
+			None => {},
+			Some(hash) if hash != info.chain.best_hash => {},
+			_ => return,
+		}
+
 		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::BlockImported(info.chain.best_hash, header));
+
+		*best_hash = Some(info.chain.best_hash);
 	}
 
 	/// Send block finalization notifications.
 	pub fn send_finality_notifications(&self) {
 		let info = self.client.info().expect("In-mem client does not fail");
+
+		let mut finalized_hash = self.finalized_hash.lock();
+		match *finalized_hash {
+			None => {},
+			Some(hash) if hash != info.chain.finalized_hash => {},
+			_ => return,
+		}
+
 		let header = self.client.header(&BlockId::Hash(info.chain.finalized_hash)).unwrap().unwrap();
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::BlockFinalized(info.chain.finalized_hash, header.clone()));
+
+		*finalized_hash = Some(info.chain.finalized_hash);
 	}
 
 	/// Restart sync for a peer.
@@ -573,7 +597,7 @@ pub trait TestNetFactory: Sized {
 		let mut done = 0;
 
 		loop {
-			if done > 10 { break; }
+			if done > 3 { break; }
 			if self.done() {
 				done += 1;
 			} else {
