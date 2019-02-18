@@ -19,6 +19,7 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use rstd::prelude::*;
 use srml_support::{dispatch::Result, Parameter, StorageMap, decl_event, decl_storage, decl_module};
 use runtime_primitives::traits::{
 	As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee,

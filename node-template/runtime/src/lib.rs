@@ -179,7 +179,7 @@ impl sudo::Trait for Runtime {
 }
 
 /// Used for the module template in `./template.rs`
-impl template::Trait for Runtime { 
+impl template::Trait for Runtime {
 	type Event = Event;
 }
 
