@@ -219,7 +219,7 @@ impl<'a> Impls<'a> {
 				use super::*;
 
 				/// Linkage data of an element (it's successor and predecessor)
-				#[derive(#scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
+				#[derive(parity_codec_derive::Encode, parity_codec_derive::Decode)]
 				pub(crate) struct Linkage<Key> {
 					/// Previous element key in storage (None for the first element)
 					pub previous: Option<Key>,
