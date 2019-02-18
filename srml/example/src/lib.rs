@@ -63,6 +63,9 @@ decl_storage! {
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
 		Dummy get(dummy) config(): Option<T::Balance>;
 
+		Dummy2 get(dummy2): linked_map T::Balance => T::Balance;
+
+
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(foo) config(): T::Balance;
 	}
