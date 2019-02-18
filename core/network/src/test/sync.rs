@@ -20,7 +20,6 @@ use crate::config::Roles;
 use consensus::BlockOrigin;
 use network_libp2p::NodeIndex;
 use crate::sync::SyncState;
-use std::{thread, time};
 use std::collections::HashSet;
 use super::*;
 
@@ -31,7 +30,8 @@ fn sync_from_two_peers_works() {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
 	let status = net.peer(0).status();
 	assert_eq!(status.sync.state, SyncState::Idle);
 }
@@ -45,7 +45,8 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 	net.peer(2).push_blocks(100, false);
 	net.restart_peer(0);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
 }
 
 #[test]
@@ -53,12 +54,8 @@ fn sync_long_chain_works() {
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
 	net.sync();
-	// Wait for peer 0 to import blocks received over the network.
-	thread::sleep(time::Duration::from_millis(1000));
-	net.sync();
-	// Wait for peers to get up to speed.
-	thread::sleep(time::Duration::from_millis(1000));
-	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
 }
 
 #[test]
@@ -68,7 +65,8 @@ fn sync_no_common_longer_chain_fails() {
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
 	net.sync();
-	assert!(!net.peer(0).client.backend().blockchain().canon_equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(!net.peer(0).client.backend().as_in_memory().blockchain()
+		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
 }
 
 #[test]
@@ -146,11 +144,11 @@ fn sync_after_fork_works() {
 	net.peer(2).push_blocks(1, false);
 
 	// peer 1 has the best chain
-	let peer1_chain = net.peer(1).client.backend().blockchain().clone();
+	let peer1_chain = net.peer(1).client.backend().as_in_memory().blockchain().clone();
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(&peer1_chain));
-	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer1_chain));
-	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer1_chain));
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain().canon_equals_to(&peer1_chain));
+	assert!(net.peer(1).client.backend().as_in_memory().blockchain().canon_equals_to(&peer1_chain));
+	assert!(net.peer(2).client.backend().as_in_memory().blockchain().canon_equals_to(&peer1_chain));
 }
 
 #[test]
@@ -166,8 +164,8 @@ fn syncs_all_forks() {
 
 	net.sync();
 	// Check that all peers have all of the blocks.
-	assert_eq!(9, net.peer(0).client.backend().blockchain().blocks_count());
-	assert_eq!(9, net.peer(1).client.backend().blockchain().blocks_count());
+	assert_eq!(9, net.peer(0).client.backend().as_in_memory().blockchain().blocks_count());
+	assert_eq!(9, net.peer(1).client.backend().as_in_memory().blockchain().blocks_count());
 }
 
 #[test]
@@ -180,11 +178,12 @@ fn own_blocks_are_announced() {
 	let header = net.peer(0).client().header(&BlockId::Number(1)).unwrap().unwrap();
 	net.peer(0).on_block_imported(header.hash(), &header);
 	net.sync();
+
 	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
 	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);
-	let peer0_chain = net.peer(0).client.backend().blockchain().clone();
-	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer0_chain));
-	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer0_chain));
+	let peer0_chain = net.peer(0).client.backend().as_in_memory().blockchain().clone();
+	assert!(net.peer(1).client.backend().as_in_memory().blockchain().canon_equals_to(&peer0_chain));
+	assert!(net.peer(2).client.backend().as_in_memory().blockchain().canon_equals_to(&peer0_chain));
 }
 
 #[test]

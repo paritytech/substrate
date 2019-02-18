@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use log::{debug, trace, warn};
 use crate::protocol::Context;
@@ -31,6 +30,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberF
 use runtime_primitives::generic::BlockId;
 use crate::message::{self, generic::Message as GenericMessage};
 use crate::config::Roles;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -217,14 +217,37 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 	}
 
+	/// Process the import of a justification.
+	/// Queues a retry in case the import failed.
+	fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
+		let request = (hash, number);
+		if success {
+			if self.justifications.finalize_root(&request.0).is_none() {
+				warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
+					  request.0,
+					  request.1,
+					  self.justifications.roots().collect::<Vec<_>>(),
+				);
+				return;
+			};
+
+			self.previous_requests.clear();
+			self.peer_requests.clear();
+			self.pending_requests =
+				self.justifications.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
+
+			return;
+		}
+		self.pending_requests.push_front(request);
+	}
+
 	/// Processes the response for the request previously sent to the given
-	/// peer. Queues a retry in case the import fails or the given justification
+	/// peer. Queues a retry in case the given justification
 	/// was `None`.
 	fn on_response(
 		&mut self,
 		who: NodeIndex,
 		justification: Option<Justification>,
-		protocol: &mut Context<B>,
 		import_queue: &ImportQueue<B>,
 	) {
 		// we assume that the request maps to the given response, this is
@@ -232,34 +255,14 @@ impl<B: BlockT> PendingJustifications<B> {
 		// messages to chain sync.
 		if let Some(request) = self.peer_requests.remove(&who) {
 			if let Some(justification) = justification {
-				if import_queue.import_justification(request.0, request.1, justification) {
-					if self.justifications.finalize_root(&request.0).is_none() {
-						warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
-							request.0,
-							request.1,
-							self.justifications.roots().collect::<Vec<_>>(),
-						);
-						return;
-					};
-
-					self.previous_requests.clear();
-					self.peer_requests.clear();
-					self.pending_requests =
-						self.justifications.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
-					return;
-				} else {
-					protocol.report_peer(
-						who,
-						Severity::Bad(format!("Invalid justification provided for #{}", request.0)),
-					);
-				}
-			} else {
-				self.previous_requests
-					.entry(request)
-					.or_insert(Vec::new())
-					.push((who, Instant::now()));
+				import_queue.import_justification(who.clone(), request.0, request.1, justification);
+				return
 			}
 
+			self.previous_requests
+				.entry(request)
+				.or_insert(Vec::new())
+				.push((who, Instant::now()));
 			self.pending_requests.push_front(request);
 		}
 	}
@@ -296,8 +299,9 @@ pub struct ChainSync<B: BlockT> {
 	best_queued_number: NumberFor<B>,
 	best_queued_hash: B::Hash,
 	required_block_attributes: message::BlockAttributes,
-	import_queue: Arc<ImportQueue<B>>,
 	justifications: PendingJustifications<B>,
+	import_queue: Box<ImportQueue<B>>,
+	is_stopping: AtomicBool,
 }
 
 /// Reported sync state.
@@ -338,7 +342,7 @@ impl<B: BlockT> Status<B> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
-	pub(crate) fn new(role: Roles, info: &ClientInfo<B>, import_queue: Arc<ImportQueue<B>>) -> Self {
+	pub(crate) fn new(role: Roles, info: &ClientInfo<B>, import_queue: Box<ImportQueue<B>>) -> Self {
 		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
 		if role.intersects(Roles::FULL | Roles::AUTHORITY) {
 			required_block_attributes |= message::BlockAttributes::BODY;
@@ -353,6 +357,7 @@ impl<B: BlockT> ChainSync<B> {
 			justifications: PendingJustifications::new(),
 			required_block_attributes,
 			import_queue,
+			is_stopping: Default::default(),
 		}
 	}
 
@@ -361,7 +366,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Returns import queue reference.
-	pub(crate) fn import_queue(&self) -> Arc<ImportQueue<B>> {
+	pub(crate) fn import_queue(&self) -> Box<ImportQueue<B>> {
 		self.import_queue.clone()
 	}
 
@@ -581,7 +586,6 @@ impl<B: BlockT> ChainSync<B> {
 						self.justifications.on_response(
 							who,
 							response.justification,
-							protocol,
 							&*self.import_queue,
 						);
 					},
@@ -603,6 +607,9 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Maintain the sync process (download new blocks, fetch justifications).
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
+		if self.is_stopping.load(Ordering::SeqCst) {
+			return
+		}
 		let peers: Vec<NodeIndex> = self.peers.keys().map(|p| *p).collect();
 		for peer in peers {
 			self.download_new(protocol, peer);
@@ -625,6 +632,15 @@ impl<B: BlockT> ChainSync<B> {
 		);
 
 		self.justifications.dispatch(&mut self.peers, protocol);
+	}
+
+	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
+		self.justifications.justification_import_result(hash, number, success);
+	}
+
+	pub fn stop(&self) {
+		self.is_stopping.store(true, Ordering::SeqCst);
+		self.import_queue.stop();
 	}
 
 	/// Notify about successful import of the given block.

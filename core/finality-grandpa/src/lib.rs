@@ -52,46 +52,15 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 
-extern crate finality_grandpa as grandpa;
-extern crate fork_tree;
-extern crate futures;
-extern crate substrate_client as client;
-extern crate sr_primitives as runtime_primitives;
-extern crate substrate_consensus_common as consensus_common;
-extern crate substrate_network as network;
-extern crate substrate_primitives;
-extern crate tokio;
-extern crate parking_lot;
-extern crate parity_codec as codec;
-extern crate substrate_finality_grandpa_primitives as fg_primitives;
-extern crate rand;
-
-#[macro_use]
-extern crate log;
-
-#[cfg(feature="service-integration")]
-extern crate substrate_service as service;
-
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-
-#[cfg(test)]
-extern crate env_logger;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
 use futures::prelude::*;
+use log::{debug, info, warn};
 use futures::sync::{self, mpsc, oneshot};
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
 	error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 	DigestItemFor, DigestItem,
@@ -322,12 +291,12 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage_for_topic(topic));
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage(|t| t == &topic));
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage_for_topic(topic));
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
@@ -410,7 +379,7 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 
 			authority_set
 		}
-		Some(raw) => ::authorities::AuthoritySet::decode(&mut &raw[..])
+		Some(raw) => crate::authorities::AuthoritySet::decode(&mut &raw[..])
 			.ok_or_else(|| ::client::error::ErrorKind::Backend(
 				format!("GRANDPA authority set kept in invalid format")
 			))?
@@ -469,7 +438,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 {
 	// verification stream
-	let commit_in = ::communication::checked_commit_stream::<Block, _>(
+	let commit_in = crate::communication::checked_commit_stream::<Block, _>(
 		set_id,
 		network.commit_messages(set_id),
 		voters.clone(),
@@ -486,7 +455,7 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 		.map(|pair| voters.contains_key(&pair.public().into()))
 		.unwrap_or(false);
 
-	let commit_out = ::communication::CommitsOut::<Block, _>::new(
+	let commit_out = crate::communication::CommitsOut::<Block, _>::new(
 		network.clone(),
 		set_id,
 		is_voter,

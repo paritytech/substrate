@@ -258,6 +258,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	BlockImportedSync(B::Hash, NumberFor<B>),
 	/// Tell protocol to request justification for a block.
 	RequestJustification(B::Hash, NumberFor<B>),
+	/// Inform protocol whether a justification was successfully imported.
+	JustificationImportResult(B::Hash, NumberFor<B>, bool),
 	/// A block has been imported (sent by the client).
 	BlockImported(B::Hash, B::Header),
 	/// A block has been finalized (sent by the client).
@@ -274,11 +276,11 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
-	pub fn new<I: 'static + ImportQueue<B>>(
+	pub fn new(
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		import_queue: Arc<I>,
+		import_queue: Box<ImportQueue<B>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
@@ -403,6 +405,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				self.sync.request_justification(&hash, number, &mut context);
 			},
+			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
 			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
 			ProtocolMsg::Tick => self.tick(),
 			#[cfg(any(test, feature = "test-helpers"))]
@@ -893,8 +896,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn stop(&mut self) {
 		// stop processing import requests first (without holding a sync lock)
-		let import_queue = self.sync.import_queue();
-		import_queue.stop();
+		self.sync.stop();
 
 		// and then clear all the sync data
 		self.abort();

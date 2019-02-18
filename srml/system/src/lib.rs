@@ -273,6 +273,11 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
+	/// Gets extrinsics count.
+	pub fn extrinsic_count() -> u32 {
+		<ExtrinsicCount<T>>::get().unwrap_or_default()
+	}
+
 	/// Gets a total length of all executed extrinsics.
 	pub fn all_extrinsics_len() -> u32 {
 		<AllExtrinsicsLen<T>>::get().unwrap_or_default()

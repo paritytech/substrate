@@ -66,6 +66,7 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
+	"srml/fees",
 	"srml/grandpa",
 	"srml/indices",
 	"srml/metadata",

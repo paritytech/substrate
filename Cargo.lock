@@ -1926,7 +1926,6 @@ dependencies = [
 name = "node-executor"
 version = "0.1.0"
 dependencies = [
- "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1935,6 +1934,7 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
  "srml-contract 0.1.0",
+ "srml-fees 0.1.0",
  "srml-grandpa 0.1.0",
  "srml-indices 0.1.0",
  "srml-session 0.1.0",
@@ -1989,6 +1989,7 @@ dependencies = [
  "srml-council 0.1.0",
  "srml-democracy 0.1.0",
  "srml-executive 0.1.0",
+ "srml-fees 0.1.0",
  "srml-grandpa 0.1.0",
  "srml-indices 0.1.0",
  "srml-session 0.1.0",
@@ -2053,6 +2054,7 @@ dependencies = [
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
  "srml-executive 0.1.0",
+ "srml-fees 0.1.0",
  "srml-indices 0.1.0",
  "srml-sudo 0.1.0",
  "srml-support 0.1.0",
@@ -3185,6 +3187,7 @@ dependencies = [
  "sr-std 0.1.0",
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
+ "srml-fees 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
@@ -3257,7 +3260,24 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-balances 0.1.0",
+ "srml-fees 0.1.0",
  "srml-indices 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-fees"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-primitives 0.1.0",
@@ -3766,12 +3786,12 @@ dependencies = [
 name = "substrate-consensus-common"
 version = "0.1.0"
 dependencies = [
+ "crossbeam-channel 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "sr-version 0.1.0",
  "substrate-inherents 0.1.0",
@@ -4144,9 +4164,11 @@ dependencies = [
 name = "substrate-test-client"
 version = "0.1.0"
 dependencies = [
+ "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-client-db 0.1.0",
  "substrate-consensus-common 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
