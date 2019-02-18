@@ -776,7 +776,6 @@ fn sync_justifications_on_change_blocks() {
 	}
 
 	// the last peer should get the justification by syncing from other peers
-	assert!(net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none());
 	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
 		net.lock().route_fast();
 	}

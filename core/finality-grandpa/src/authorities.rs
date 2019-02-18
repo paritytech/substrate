@@ -83,6 +83,7 @@ impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
 }
 
 /// Status of the set after changes were applied.
+#[derive(Debug)]
 pub(crate) struct Status<H, N> {
 	/// Whether internal changes were made.
 	pub(crate) changed: bool,
@@ -201,7 +202,7 @@ where
 			&finalized_hash,
 			finalized_number.clone(),
 			is_descendent_of,
-			|change| change.effective_number() == finalized_number
+			|change| change.effective_number() <= finalized_number
 		)? {
 			fork_tree::FinalizationResult::Changed(change) => {
 				status.changed = true;
@@ -436,7 +437,7 @@ mod tests {
 		});
 
 		// trying to finalize past `change_c` without finalizing `change_a` first
-		match authorities.apply_changes("hash_d", 100, &is_descendent_of) {
+		match authorities.apply_changes("hash_d", 40, &is_descendent_of) {
 			Err(fork_tree::Error::UnfinalizedAncestor) => {},
 			_ => unreachable!(),
 		}
@@ -449,9 +450,9 @@ mod tests {
 		assert_eq!(authorities.set_id, 1);
 
 		// after finalizing `change_a` it should be possible to finalize `change_c`
-		let status = authorities.apply_changes("hash_d", 100, &is_descendent_of).unwrap();
+		let status = authorities.apply_changes("hash_d", 40, &is_descendent_of).unwrap();
 		assert!(status.changed);
-		assert_eq!(status.new_set_block, Some(("hash_d", 100)));
+		assert_eq!(status.new_set_block, Some(("hash_d", 40)));
 
 		assert_eq!(authorities.current_authorities, set_c);
 		assert_eq!(authorities.set_id, 2);
