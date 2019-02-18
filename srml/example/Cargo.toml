@@ -8,7 +8,6 @@ edition = "2018"
 hex-literal = "0.1.0"
 serde = { version = "1.0", default-features = false }
 parity-codec = { version = "3.0", default-features = false }
-parity-codec-derive = { version = "3.0", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 balances = { package = "srml-balances", path = "../balances", default-features = false }
@@ -23,7 +22,6 @@ default = ["std"]
 std = [
 	"serde/std",
 	"parity-codec/std",
-	"parity-codec-derive/std",
 	"sr-primitives/std",
 	"srml-support/std",
 	"system/std",

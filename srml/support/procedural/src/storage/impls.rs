@@ -194,6 +194,7 @@ impl<'a> Impls<'a> {
 		let prefix = format!("{}", prefix);
 		let name_lowercase = name.to_string().to_lowercase();
 		let inner_module = syn::Ident::new(&format!("__linked_map_details_for_{}_do_not_use", name_lowercase), name.span());
+		let linkage = syn::Ident::new(&format!("__LinkageFor{}DoNotUse", name), name.span());
 		let phantom_data = quote! { #scrate::storage::generator::PhantomData };
 		let as_map = quote!{ <Self as #scrate::storage::generator::StorageMap<#kty, #typ>> };
 		let put_or_insert = quote! {
@@ -215,17 +216,20 @@ impl<'a> Impls<'a> {
 
 		// generator for linked map
 		let helpers = quote! {
+			/// Linkage data of an element (it's successor and predecessor)
+			#[derive(#scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
+			pub(crate) struct #linkage<Key> {
+				/// Previous element key in storage (None for the first element)
+				pub previous: Option<Key>,
+				/// Next element key in storage (None for the last element)
+				pub next: Option<Key>,
+			}
+
 			mod #inner_module {
 				use super::*;
 
-				/// Linkage data of an element (it's successor and predecessor)
-				#[derive(parity_codec_derive::Encode, parity_codec_derive::Decode)]
-				pub(crate) struct Linkage<Key> {
-					/// Previous element key in storage (None for the first element)
-					pub previous: Option<Key>,
-					/// Next element key in storage (None for the last element)
-					pub next: Option<Key>,
-				}
+				/// Re-exported version of linkage to overcome proc-macro derivation issue.
+				pub(crate) use super::#linkage as Linkage;
 
 				impl<Key> Default for Linkage<Key> {
 					fn default() -> Self {

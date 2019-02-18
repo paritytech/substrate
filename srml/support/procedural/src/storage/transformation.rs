@@ -192,11 +192,11 @@ fn decl_store_extra_genesis(
 				is_trait_needed = true;
 				has_trait_field = true;
 			}
-			for t in ext::get_non_bound_serde_derive_types(type_infos.value_type, &traitinstance).into_iter() {
+			for t in ext::get_non_bound_serde_derive_types(type_infos.value_type, &traitinstance) {
 				serde_complete_bound.insert(t);
 			}
 			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
-				for t in ext::get_non_bound_serde_derive_types(key_type, &traitinstance).into_iter() {
+				for t in ext::get_non_bound_serde_derive_types(key_type, &traitinstance) {
 					serde_complete_bound.insert(t);
 				}
 			}
@@ -210,6 +210,7 @@ fn decl_store_extra_genesis(
 				} else {
 					quote!( #d )
 				}).unwrap_or_else(|| quote!( Default::default() ));
+
 			config_field_default.extend(quote!( #ident: #fielddefault, ));
 		} else {
 			opt_build = build.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
