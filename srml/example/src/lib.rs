@@ -296,6 +296,8 @@ mod tests {
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
+			// we configure the map with (key, value) pairs.
+			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
 		}.build_storage().unwrap().0);
 		t.into()
