@@ -14,7 +14,7 @@ client = { package = "substrate-client", path = "../../core/client", default-fea
 rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 version = { package = "sr-version", path = "../../core/sr-version", default-features = false }
-srml-support = { package = "srml-support", path = "../../srml/support", default-features = false }
+support = { package = "srml-support", path = "../../srml/support", default-features = false }
 aura = { package = "srml-aura", path = "../../srml/aura", default-features = false }
 balances = { package = "srml-balances", path = "../../srml/balances", default-features = false }
 consensus = { package = "srml-consensus", path = "../../srml/consensus", default-features = false }
@@ -48,7 +48,7 @@ std = [
 	"substrate-primitives/std",
 	"rstd/std",
 	"runtime_primitives/std",
-	"srml-support/std",
+	"support/std",
 	"balances/std",
 	"consensus/std",
 	"contract/std",
