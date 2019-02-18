@@ -23,6 +23,7 @@ mod sync;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -92,6 +93,7 @@ pub struct NoopLink { }
 impl<B: BlockT> Link<B> for NoopLink { }
 
 /// The test specialization.
+#[derive(Clone)]
 pub struct DummySpecialization { }
 
 impl NetworkSpecialization<Block> for DummySpecialization {
@@ -116,33 +118,104 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 
 pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
 
-pub struct Peer<D> {
-	client: Arc<PeersClient>,
-	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
+#[derive(Clone)]
+/// A Link that can wait for a block to have been imported.
+pub struct TestLink<S: NetworkSpecialization<Block> + Clone> {
+	import_done: Arc<AtomicBool>,
+	hash: Arc<Mutex<Hash>>,
+	link: NetworkLink<Block, S>,
+}
 
-	network_port: Mutex<NetworkPort<Block>>,
+impl<S: NetworkSpecialization<Block> + Clone> TestLink<S> {
+	fn new(
+		protocol_sender: Sender<ProtocolMsg<Block, S>>,
+		network_sender: NetworkChan<Block>
+	) -> TestLink<S> {
+		TestLink {
+			import_done: Arc::new(AtomicBool::new(false)),
+			hash: Arc::new(Mutex::new(Default::default())),
+			link: NetworkLink {
+				protocol_sender,
+				network_sender,
+			}
+		}
+	}
+
+	/// Set the hash which will be awaited for import.
+	fn with_hash(&self, hash: Hash) {
+		self.import_done.store(false, Ordering::SeqCst);
+		*self.hash.lock() = hash;
+	}
+
+	/// Simulate a synchronous import.
+	fn wait_for_import(&self) {
+		while !self.import_done.load(Ordering::SeqCst) {
+			thread::sleep(Duration::from_millis(20));
+		}
+	}
+}
+
+impl<S: NetworkSpecialization<Block> + Clone> Link<Block> for TestLink<S> {
+	fn block_imported(&self, hash: &Hash, number: NumberFor<Block>) {
+		if hash == &*self.hash.lock() {
+			self.import_done.store(true, Ordering::SeqCst);
+		}
+		self.link.block_imported(hash, number);
+	}
+
+	fn blocks_processed(&self, processed_blocks: Vec<Hash>, has_error: bool) {
+		self.link.blocks_processed(processed_blocks, has_error);
+	}
+
+	fn justification_imported(&self, who: NodeIndex, hash: &Hash, number:NumberFor<Block>, success: bool) {
+		self.link.justification_imported(who, hash, number, success);
+	}
+
+	fn request_justification(&self, hash: &Hash, number: NumberFor<Block>) {
+		self.link.request_justification(hash, number);
+	}
+
+	fn useless_peer(&self, who: NodeIndex, reason: &str) {
+		self.link.useless_peer(who, reason);
+	}
+
+	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str) {
+		self.link.note_useless_and_restart_sync(who, reason);
+	}
+
+	fn restart(&self) {
+		self.link.restart();
+	}
+}
+
+pub struct Peer<D, S: NetworkSpecialization<Block> + Clone> {
+	client: Arc<PeersClient>,
+	pub protocol_sender: Sender<ProtocolMsg<Block, S>>,
+	network_link: TestLink<S>,
+	network_port: Arc<Mutex<NetworkPort<Block>>>,
 	pub import_queue: Box<ImportQueue<Block>>,
-	network_sender: NetworkChan<Block>,
 	pub data: D,
 	best_hash: Mutex<Option<H256>>,
 	finalized_hash: Mutex<Option<H256>>,
 }
 
-impl<D> Peer<D> {
+impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 	fn new(
 		client: Arc<PeersClient>,
 		import_queue: Box<ImportQueue<Block>>,
-		protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
+		protocol_sender: Sender<ProtocolMsg<Block, S>>,
 		network_sender: NetworkChan<Block>,
 		network_port: NetworkPort<Block>,
 		data: D,
 	) -> Self {
-		let network_port = Mutex::new(network_port);
+		let network_port = Arc::new(Mutex::new(network_port));
+		let network_link = TestLink::new(protocol_sender.clone(), network_sender.clone());
+		import_queue.start(Box::new(network_link.clone())).expect("Test ImportQueue always starts");
 		Peer {
 			client,
 			protocol_sender,
 			import_queue,
-			network_sender,
+			network_link,
 			network_port,
 			data,
 			best_hash: Mutex::new(None),
@@ -158,12 +231,6 @@ impl<D> Peer<D> {
 			.header(&BlockId::Hash(info.chain.best_hash))
 			.unwrap()
 			.unwrap();
-		let network_link = NetworkLink {
-			protocol_sender: self.protocol_sender.clone(),
-			network_sender: self.network_sender.clone(),
-		};
-
-		self.import_queue.start(Box::new(network_link)).expect("Test ImportQueue always starts");
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::BlockImported(info.chain.best_hash, header));
@@ -214,8 +281,7 @@ impl<D> Peer<D> {
 
 	/// Whether this peer is done syncing (has no messages to send).
 	fn is_done(&self) -> bool {
-		self.import_queue.status().importing_count == 0 &&
-			self.network_port.lock().receiver().is_empty()
+		self.network_port.lock().receiver().is_empty()
 	}
 
 	/// Execute a "sync step". This is called for each peer after it sends a packet.
@@ -345,7 +411,7 @@ impl<D> Peer<D> {
 			);
 			let header = block.header.clone();
 			at = hash;
-
+			self.network_link.with_hash(hash);
 			self.import_queue.import_blocks(
 				origin,
 				vec![IncomingBlock {
@@ -356,10 +422,8 @@ impl<D> Peer<D> {
 					justification: None,
 				}],
 			);
-			// Simulate a synchronous import.
-			while self.import_queue.status().importing_count > 0 {
-				thread::sleep(Duration::from_millis(20));
-			}
+			// Simulate a sync import.
+			self.network_link.wait_for_import();
 		}
 		at
 	}
@@ -420,6 +484,7 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 }
 
 pub trait TestNetFactory: Sized {
+	type Specialization: NetworkSpecialization<Block> + Clone;
 	type Verifier: 'static + Verifier<Block>;
 	type PeerData: Default;
 
@@ -428,9 +493,9 @@ pub trait TestNetFactory: Sized {
 	fn make_verifier(&self, client: Arc<PeersClient>, config: &ProtocolConfig) -> Arc<Self::Verifier>;
 
 	/// Get reference to peer.
-	fn peer(&self, i: usize) -> &Peer<Self::PeerData>;
-	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>>;
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F);
+	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization>;
+	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>;
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F);
 
 	fn started(&self) -> bool;
 	fn set_started(&mut self, now: bool);
@@ -458,38 +523,7 @@ pub trait TestNetFactory: Sized {
 	}
 
 	/// Add a peer.
-	fn add_peer(&mut self, config: &ProtocolConfig) {
-		let client = Arc::new(test_client::new());
-		let tx_pool = Arc::new(EmptyTransactionPool);
-		let verifier = self.make_verifier(client.clone(), config);
-		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let (network_sender, network_port) = network_channel(ProtocolId::default());
-
-		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
-		let specialization = DummySpecialization {};
-		let protocol_sender = Protocol::new(
-			network_sender.clone(),
-			config.clone(),
-			client.clone(),
-			import_queue.clone(),
-			None,
-			tx_pool,
-			specialization,
-		).unwrap();
-
-		let peer = Arc::new(Peer::new(
-			client,
-			import_queue,
-			protocol_sender,
-			network_sender,
-			network_port,
-			data,
-		));
-
-		self.mut_peers(|peers| {
-			peers.push(peer.clone())
-		});
-	}
+	fn add_peer(&mut self, config: &ProtocolConfig);
 
 	/// Start network.
 	fn start(&mut self) {
@@ -638,12 +672,45 @@ pub trait TestNetFactory: Sized {
 	}
 }
 
+pub fn create_peer<D, V: 'static + Verifier<Block>, S: NetworkSpecialization<Block> + Clone>(
+	client: Arc<PeersClient>,
+	block_import: SharedBlockImport<Block>,
+	justification_import: Option<SharedJustificationImport<Block>>,
+	data:D,
+	verifier: Arc<V>,
+	specialization: S,
+	config: &ProtocolConfig)
+	-> Arc<Peer<D, S>> {
+	let tx_pool = Arc::new(EmptyTransactionPool);
+	let (network_sender, network_port) = network_channel(ProtocolId::default());
+	let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
+	let protocol_sender = Protocol::new(
+		network_sender.clone(),
+		config.clone(),
+		client.clone(),
+		import_queue.clone(),
+		None,
+		tx_pool,
+		specialization,
+	).unwrap();
+
+	Arc::new(Peer::new(
+		client,
+		import_queue,
+		protocol_sender,
+		network_sender,
+		network_port,
+		data,
+	))
+}
+
 pub struct TestNet {
-	peers: Vec<Arc<Peer<()>>>,
+	peers: Vec<Arc<Peer<(), DummySpecialization>>>,
 	started: bool,
 }
 
 impl TestNetFactory for TestNet {
+	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
 
@@ -655,21 +722,32 @@ impl TestNetFactory for TestNet {
 		}
 	}
 
+	fn add_peer(&mut self, config: &ProtocolConfig) {
+		let client = Arc::new(test_client::new());
+		let verifier = self.make_verifier(client.clone(), config);
+		let (block_import, justification_import, data) = self.make_block_import(client.clone());
+		let specialization = DummySpecialization {};
+		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
+		self.mut_peers(|peers| {
+			peers.push(peer.clone())
+		});
+	}
+
 	fn make_verifier(&self, _client: Arc<PeersClient>, _config: &ProtocolConfig)
 		-> Arc<Self::Verifier>
 	{
 		Arc::new(PassThroughVerifier(false))
 	}
 
-	fn peer(&self, i: usize) -> &Peer<()> {
+	fn peer(&self, i: usize) -> &Peer<(), Self::Specialization> {
 		&self.peers[i]
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<()>>> {
+	fn peers(&self) -> &Vec<Arc<Peer<(), Self::Specialization>>> {
 		&self.peers
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<()>>>)>(&mut self, closure: F) {
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<(), Self::Specialization>>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 
@@ -701,6 +779,7 @@ impl JustificationImport<Block> for ForceFinalized {
 pub struct JustificationTestNet(TestNet);
 
 impl TestNetFactory for JustificationTestNet {
+	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = ();
 
@@ -714,15 +793,26 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.make_verifier(client, config)
 	}
 
-	fn peer(&self, i: usize) -> &Peer<Self::PeerData> {
+	fn add_peer(&mut self, config: &ProtocolConfig) {
+		let client = Arc::new(test_client::new());
+		let verifier = self.make_verifier(client.clone(), config);
+		let (block_import, justification_import, data) = self.make_block_import(client.clone());
+		let specialization = DummySpecialization {};
+		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
+		self.mut_peers(|peers| {
+			peers.push(peer.clone())
+		});
+	}
+
+	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization> {
 		self.0.peer(i)
 	}
 
-	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>> {
+	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, Self::Specialization>>> {
 		self.0.peers()
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F ) {
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F ) {
 		self.0.mut_peers(closure)
 	}
 

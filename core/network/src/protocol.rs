@@ -210,8 +210,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	Peers(Sender<Vec<(NodeIndex, PeerInfo<B>)>>),
 	/// Let protocol know a peer is currenlty clogged.
 	PeerClogged(NodeIndex, Option<Message<B>>),
-	/// Tell protocol to maintain sync.
-	MaintainSync,
+	/// A batch of blocks have been processed, with or without errors.
+	BlocksProcessed(Vec<B::Hash>, bool),
 	/// Tell protocol to restart sync.
 	RestartSync,
 	/// Propagate a block to peers.
@@ -340,11 +340,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				let is_offline = self.sync.status().is_offline();
 				let _ = sender.send(is_offline);
 			}
-			ProtocolMsg::MaintainSync => {
+			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
+				self.sync.blocks_processed(hashes, has_error);
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				self.sync.maintain_sync(&mut context);
-			}
+			},
 			ProtocolMsg::RestartSync => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
@@ -584,16 +585,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				response,
 			);
 		} else {
-			// import_queue.import_blocks also acquires sync.write();
-			// Break the cycle by doing these separately from the outside;
-			let new_blocks = {
-				self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response)
-			};
-
-			if let Some((origin, new_blocks)) = new_blocks {
-				let import_queue = self.sync.import_queue();
-				import_queue.import_blocks(origin, new_blocks);
-			}
+			self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response);
 		}
 	}
 

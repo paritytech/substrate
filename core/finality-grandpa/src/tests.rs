@@ -17,7 +17,7 @@
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
-use network::test::{Block, Hash, TestNetFactory, Peer, PeersClient};
+use network::test::{create_peer, Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
@@ -52,12 +52,12 @@ type PeerData =
 			>
 		>
 	>;
-type GrandpaPeer = Peer<PeerData>;
+type GrandpaPeer = Peer<PeerData, DummySpecialization>;
 
 struct GrandpaTestNet {
 	peers: Vec<Arc<GrandpaPeer>>,
 	test_config: TestApi,
-	started: bool
+	started: bool,
 }
 
 impl GrandpaTestNet {
@@ -68,16 +68,15 @@ impl GrandpaTestNet {
 			test_config,
 		};
 		let config = Self::default_config();
-
 		for _ in 0..n_peers {
 			net.add_peer(&config);
 		}
-
 		net
 	}
 }
 
 impl TestNetFactory for GrandpaTestNet {
+	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = PeerData;
 
@@ -86,7 +85,7 @@ impl TestNetFactory for GrandpaTestNet {
 		GrandpaTestNet {
 			peers: Vec::new(),
 			test_config: Default::default(),
-			started: false
+			started: false,
 		}
 	}
 
@@ -112,6 +111,17 @@ impl TestNetFactory for GrandpaTestNet {
 		).expect("Could not create block import for fresh peer.");
 		let shared_import = Arc::new(import);
 		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
+	}
+
+	fn add_peer(&mut self, config: &ProtocolConfig) {
+		let client = Arc::new(test_client::new());
+		let verifier = self.make_verifier(client.clone(), config);
+		let (block_import, justification_import, data) = self.make_block_import(client.clone());
+		let specialization = DummySpecialization {};
+		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
+		self.mut_peers(|peers| {
+			peers.push(peer.clone())
+		});
 	}
 
 	fn peer(&self, i: usize) -> &GrandpaPeer {
