@@ -412,7 +412,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F)
+	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
 	{
 		let best_hash = self.client.info().unwrap().chain.best_hash;
@@ -421,11 +421,12 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Add blocks to the peer -- edit the block before adding. The chain will
 	/// start at the given block iD.
-	pub fn generate_blocks_at<F>(&self, mut at: BlockId<Block>, count: usize, origin: BlockOrigin, mut edit_block: F)
+	pub fn generate_blocks_at<F>(&self, at: BlockId<Block>, count: usize, origin: BlockOrigin, mut edit_block: F) -> H256
 		where F: FnMut(BlockBuilder<Block, PeersClient>) -> Block
 	{
+		let mut at = self.client.header(&at).unwrap().unwrap().hash();
 		for _  in 0..count {
-			let builder = self.client.new_block_at(&at).unwrap();
+			let builder = self.client.new_block_at(&BlockId::Hash(at)).unwrap();
 			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!(
@@ -435,7 +436,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 				block.header.parent_hash
 			);
 			let header = block.header.clone();
-			at = BlockId::Hash(hash);
+			at = hash;
 
 			// NOTE: if we use a non-synchronous queue in the test-net in the future,
 			// this may not work.
@@ -450,17 +451,18 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 				}
 			]);
 		}
+		at
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
-	pub fn push_blocks(&self, count: usize, with_tx: bool) {
+	pub fn push_blocks(&self, count: usize, with_tx: bool) -> H256 {
 		let best_hash = self.client.info().unwrap().chain.best_hash;
-		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx);
+		self.push_blocks_at(BlockId::Hash(best_hash), count, with_tx)
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX) starting from
 	/// given hash.
-	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) {
+	pub fn push_blocks_at(&self, at: BlockId<Block>, count: usize, with_tx: bool) -> H256 {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
@@ -474,17 +476,17 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()
-			});
+			})
 		} else {
-			self.generate_blocks_at(at, count, BlockOrigin::File, |builder| builder.bake().unwrap());
+			self.generate_blocks_at(at, count, BlockOrigin::File, |builder| builder.bake().unwrap())
 		}
 	}
 
-	pub fn push_authorities_change_block(&self, new_authorities: Vec<Ed25519AuthorityId>) {
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<Ed25519AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.bake().unwrap()
-		});
+		})
 	}
 
 	/// Get a reference to the client.
