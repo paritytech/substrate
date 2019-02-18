@@ -20,7 +20,8 @@ use client::{CallExecutor, Client};
 use client::backend::Backend;
 use client::blockchain::HeaderBackend;
 use client::error::{Error as ClientError, ErrorKind as ClientErrorKind};
-use codec::Decode;
+use parity_codec::Decode;
+use parity_codec_derive::{Encode, Decode};
 use grandpa::VoterSet;
 use grandpa::{Error as GrandpaError};
 use runtime_primitives::generic::BlockId;
@@ -28,7 +29,7 @@ use runtime_primitives::traits::{NumberFor, Block as BlockT, Header as HeaderT};
 use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
 use crate::{Commit, Error};
-use communication;
+use crate::communication;
 
 /// A GRANDPA justification for block finality, it includes a commit message and
 /// an ancestry proof including all headers routing all precommit target blocks
