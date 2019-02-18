@@ -404,7 +404,7 @@ impl<'a, H, N, V> Iterator for ForkTreeIterator<'a, H, N, V> {
 
 #[cfg(test)]
 mod test {
-	use super::{ForkTree, Error};
+	use super::{FinalizationResult, ForkTree, Error};
 
 	#[derive(Debug, PartialEq)]
 	struct TestError;
@@ -568,11 +568,19 @@ mod test {
 		let original_roots = tree.roots.clone();
 
 		// finalizing a block prior to any in the node doesn't change the tree
-		tree.finalize(&"0", 0, &is_descendent_of).unwrap();
+		assert_eq!(
+			tree.finalize(&"0", 0, &is_descendent_of),
+			Ok(FinalizationResult::Unchanged),
+		);
+
 		assert_eq!(tree.roots, original_roots);
 
 		// finalizing "A" opens up three possible forks
-		tree.finalize(&"A", 1, &is_descendent_of).unwrap();
+		assert_eq!(
+			tree.finalize(&"A", 1, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(()))),
+		);
+
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
 			vec![("B", 2), ("F", 2), ("J", 2)],
@@ -596,8 +604,15 @@ mod test {
 		);
 
 		// after finalizing "F" we can finalize "H"
-		tree.finalize(&"F", 2, &is_descendent_of).unwrap();
-		tree.finalize(&"H", 3, &is_descendent_of).unwrap();
+		assert_eq!(
+			tree.finalize(&"F", 2, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(()))),
+		);
+
+		assert_eq!(
+			tree.finalize(&"H", 3, &is_descendent_of),
+			Ok(FinalizationResult::Changed(Some(()))),
+		);
 
 		assert_eq!(
 			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
@@ -605,8 +620,137 @@ mod test {
 		);
 
 		// finalizing a node from another fork that isn't part of the tree clears the tree
-		tree.finalize(&"Z", 5, &is_descendent_of).unwrap();
+		assert_eq!(
+			tree.finalize(&"Z", 5, &is_descendent_of),
+			Ok(FinalizationResult::Changed(None)),
+		);
+
 		assert!(tree.roots.is_empty());
+	}
+
+	#[test]
+	fn finalize_with_descendent_works() {
+		#[derive(Debug, PartialEq)]
+		struct Change { effective: u64 };
+
+		let (mut tree, is_descendent_of) = {
+			let mut tree = ForkTree::new();
+
+			let is_descendent_of = |base: &&str, block: &&str| -> Result<bool, TestError> {
+
+				//
+				// A0 #1 - (B #2) - (C #5) - D #10 - E #15 - (F #100)
+				//                            \
+				//                             - (G #100)
+				//
+				// A1 #1
+				//
+				// Nodes B, C, F and G  are not part of the tree.
+				match (*base, *block) {
+					("A0", b) => Ok(b == "B" || b == "C" || b == "D" || b == "G"),
+					("A1", _) => Ok(false),
+					("C", b) => Ok(b == "D"),
+					("D", b) => Ok(b == "E" || b == "F" || b == "G"),
+					("E", b) => Ok(b == "F"),
+					_ => Ok(false),
+				}
+			};
+
+			tree.import("A0", 1, Change { effective: 5 }, &is_descendent_of).unwrap();
+			tree.import("A1", 1, Change { effective: 5 }, &is_descendent_of).unwrap();
+			tree.import("D", 10, Change { effective: 10 }, &is_descendent_of).unwrap();
+			tree.import("E", 15, Change { effective: 50 }, &is_descendent_of).unwrap();
+
+			(tree, is_descendent_of)
+		};
+
+		assert_eq!(
+			tree.finalizes_with_descendent_if(
+				&"B",
+				2,
+				&is_descendent_of,
+				|c| c.effective <= 2,
+			),
+			Ok(false),
+		);
+
+		// finalizing "B" doesn't finalize "A0" since the predicate doesn't pass,
+		// although it will clear out "A1" from the tree
+		assert_eq!(
+			tree.finalize_with_descendent_if(
+				&"B",
+				2,
+				&is_descendent_of,
+				|c| c.effective <= 2,
+			),
+			Ok(FinalizationResult::Changed(None)),
+		);
+
+		assert_eq!(
+			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![("A0", 1)],
+		);
+
+		// finalizing "C" will finalize the node "A0" and prune it out of the tree
+		assert_eq!(
+			tree.finalizes_with_descendent_if(
+				&"C",
+				5,
+				&is_descendent_of,
+				|c| c.effective <= 5,
+			),
+			Ok(true),
+		);
+
+		assert_eq!(
+			tree.finalize_with_descendent_if(
+				&"C",
+				5,
+				&is_descendent_of,
+				|c| c.effective <= 5,
+			),
+			Ok(FinalizationResult::Changed(Some(Change { effective: 5 }))),
+		);
+
+		assert_eq!(
+			tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect::<Vec<_>>(),
+			vec![("D", 10)],
+		);
+
+		// finalizing "F" will fail since it would finalize past "E" without finalizing "D" first
+		assert_eq!(
+			tree.finalizes_with_descendent_if(
+				&"F",
+				100,
+				&is_descendent_of,
+				|c| c.effective <= 100,
+			),
+			Err(Error::UnfinalizedAncestor),
+		);
+
+		// it will work with "G" though since it is not in the same branch as "E"
+		assert_eq!(
+			tree.finalizes_with_descendent_if(
+				&"G",
+				100,
+				&is_descendent_of,
+				|c| c.effective <= 100,
+			),
+			Ok(true),
+		);
+
+		assert_eq!(
+			tree.finalize_with_descendent_if(
+				&"G",
+				100,
+				&is_descendent_of,
+				|c| c.effective <= 100,
+			),
+			Ok(FinalizationResult::Changed(Some(Change { effective: 10 }))),
+		);
+
+		// "E" will be pruned out
+		assert_eq!(tree.roots().count(), 0);
 	}
 
 	#[test]
