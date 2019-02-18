@@ -45,12 +45,12 @@
 //! logic is complex to compute because it requires looking arbitrarily far
 //! back in the chain.
 //!
-//! Instead, we keep track of a list of all signals we've seen so far,
-//! sorted ascending by the block number they would be applied at. We never vote
-//! on chains with number higher than the earliest handoff block number
-//! (this is num(signal) + N). When finalizing a block, we either apply or prune
-//! any signaled changes based on whether the signaling block is included in the
-//! newly-finalized chain.
+//! Instead, we keep track of a list of all signals we've seen so far (across
+//! all forks), sorted ascending by the block number they would be applied at.
+//! We never vote on chains with number higher than the earliest handoff block
+//! number (this is num(signal) + N). When finalizing a block, we either apply
+//! or prune any signaled changes based on whether the signaling block is
+//! included in the newly-finalized chain.
 
 extern crate finality_grandpa as grandpa;
 extern crate fork_tree;

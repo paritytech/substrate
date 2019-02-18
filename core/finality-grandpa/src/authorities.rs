@@ -121,20 +121,24 @@ where
 	N: Add<Output=N> + Ord + Clone + Debug,
 	H: Clone + Debug
 {
-	/// Note an upcoming pending transition. This makes sure that there isn't
-	/// already any pending change for the same chain. Multiple pending changes
-	/// are allowed but they must be signalled in different forks. The closure
-	/// should return an error if the pending change block is equal to or a
-	/// descendent of the given block.
-	pub(crate) fn add_pending_change<F, E: std::error::Error>(
+	/// Note an upcoming pending transition. Multiple pending changes on the
+	/// same branch can be added as long as they don't overlap. This method
+	/// assumes that changes on the same branch will be added in-order. The
+	/// given function `is_descendent_of` should return `true` if the second
+	/// hash (target) is a descendent of the first hash (base).
+	pub(crate) fn add_pending_change<F, E>(
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
 	) -> Result<(), fork_tree::Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
+		E:  std::error::Error,
 	{
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
+
+		debug!(target: "afg", "Inserting potential set change at block {:?}.",
+			   (&number, &hash));
 
 		self.pending_changes.import(
 			hash.clone(),
@@ -143,31 +147,39 @@ where
 			is_descendent_of,
 		)?;
 
-		debug!(target: "afg", "Inserting potential set change at block {:?}.",
-			   (&number, &hash));
-
-		// debug!(target: "afg", "There are now {} pending changes.", self.pending_changes.len());
+		debug!(target: "afg", "There are now {} alternatives for the next pending change (roots), \
+							   and a total of {} pending changes (across all forks).",
+			self.pending_changes.roots().count(),
+			self.pending_changes.iter().count(),
+		);
 
 		Ok(())
 	}
 
-	/// Inspect pending changes.
+	/// Inspect pending changes. Pending changes in the tree are traversed in pre-order.
 	pub(crate) fn pending_changes(&self) -> impl Iterator<Item=&PendingChange<H, N>> {
 		self.pending_changes.iter().map(|(_, _, c)| c)
 	}
 
-	/// Get the earliest limit-block number, if any.
+	/// Get the earliest limit-block number, if any. If there are pending
+	/// changes across different forks, this method will return the earliest
+	/// effective number (across the different branches).
 	pub(crate) fn current_limit(&self) -> Option<N> {
 		self.pending_changes.roots()
 			.min_by_key(|&(_, _, c)| c.effective_number())
 			.map(|(_, _, c)| c.effective_number())
 	}
 
-	/// Apply or prune any pending transitions. Provide a closure that can be used to check for the
-	/// finalized block with given number.
+	/// Apply or prune any pending transitions. This method ensures that if
+	/// there are multiple changes in the same branch, finalizing this block
+	/// won't finalize past multiple transitions (i.e. transitions must be
+	/// finalized in-order). The given function `is_descendent_of` should return
+	/// `true` if the second hash (target) is a descendent of the first hash
+	/// (base).
 	///
-	/// When the set has changed, the return value will be `Ok(Some((H, N)))` which is the canonical
-	/// block where the set last changed.
+	/// When the set has changed, the return value will be `Ok(Some((H, N)))`
+	/// which is the canonical block where the set last changed (i.e. the given
+	/// hash and number).
 	pub(crate) fn apply_changes<F, E>(
 		&mut self,
 		finalized_hash: H,
@@ -211,8 +223,11 @@ where
 	}
 
 	/// Check whether the given finalized block number enacts any authority set
-	/// change (without triggering it). Provide a closure that can be used to
-	/// check for the canonical block with a given number.
+	/// change (without triggering it), ensuring that if there are multiple
+	/// changes in the same branch, finalizing this block won't finalize past
+	/// multiple transitions (i.e. transitions must be finalized in-order). The
+	/// given function `is_descendent_of` should return `true` if the second
+	/// hash (target) is a descendent of the first hash (base).
 	pub fn enacts_change<F, E>(
 		&self,
 		finalized_hash: H,
@@ -259,16 +274,24 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 mod tests {
 	use super::*;
 
-	fn ignore_existing_changes<A>(_a: &A) -> Result<(), ::Error> {
-		Ok(())
+	fn static_is_descendent_of<A>(value: bool)
+		-> impl Fn(&A, &A) -> Result<bool, std::io::Error>
+	{
+		move |_, _| Ok(value)
+	}
+
+	fn is_descendent_of<A, F>(f: F) -> impl Fn(&A, &A) -> Result<bool, std::io::Error>
+		where F: Fn(&A, &A) -> bool
+	{
+		move |base, hash| Ok(f(base, hash))
 	}
 
 	#[test]
-	fn changes_sorted_in_correct_order() {
+	fn changes_iterated_in_pre_order() {
 		let mut authorities = AuthoritySet {
 			current_authorities: Vec::new(),
 			set_id: 0,
-			pending_changes: Vec::new(),
+			pending_changes: ForkTree::new(),
 		};
 
 		let change_a = PendingChange {
@@ -281,7 +304,7 @@ mod tests {
 		let change_b = PendingChange {
 			next_authorities: Vec::new(),
 			finalization_depth: 0,
-			canon_height: 16,
+			canon_height: 5,
 			canon_hash: "hash_b",
 		};
 
@@ -292,11 +315,18 @@ mod tests {
 			canon_hash: "hash_c",
 		};
 
-		authorities.add_pending_change(change_a.clone(), ignore_existing_changes).unwrap();
-		authorities.add_pending_change(change_b.clone(), ignore_existing_changes).unwrap();
-		authorities.add_pending_change(change_c.clone(), ignore_existing_changes).unwrap();
+		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_c.clone(), &is_descendent_of(|base, hash| match (*base, *hash) {
+			("hash_a", "hash_c") => true,
+			("hash_b", "hash_c") => false,
+			_ => unreachable!(),
+		})).unwrap();
 
-		assert_eq!(authorities.pending_changes, vec![change_a, change_c, change_b]);
+		assert_eq!(
+			authorities.pending_changes().collect::<Vec<_>>(),
+			vec![&change_b, &change_a, &change_c],
+		);
 	}
 
 	#[test]
@@ -304,12 +334,13 @@ mod tests {
 		let mut authorities = AuthoritySet {
 			current_authorities: Vec::new(),
 			set_id: 0,
-			pending_changes: Vec::new(),
+			pending_changes: ForkTree::new(),
 		};
 
 		let set_a = vec![([1; 32].into(), 5)];
 		let set_b = vec![([2; 32].into(), 5)];
 
+		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
 			finalization_depth: 10,
@@ -324,101 +355,103 @@ mod tests {
 			canon_hash: "hash_b",
 		};
 
-		authorities.add_pending_change(change_a.clone(), ignore_existing_changes).unwrap();
-		authorities.add_pending_change(change_b.clone(), ignore_existing_changes).unwrap();
+		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(true)).unwrap();
+		authorities.add_pending_change(change_b.clone(), &static_is_descendent_of(true)).unwrap();
 
-		authorities.apply_changes(10, |_| Err(())).unwrap();
-		assert!(authorities.current_authorities.is_empty());
+		assert_eq!(
+			authorities.pending_changes().collect::<Vec<_>>(),
+			vec![&change_b, &change_a],
+		);
 
-		authorities.apply_changes(15, |n| match n {
-			5 => Ok(Some("hash_a")),
-			15 => Ok(Some("hash_15_canon")),
-			_ => Err(()),
-		}).unwrap();
+		// finalizing "hash_c" won't enact the change signalled at "hash_a" but it will prune out "hash_b"
+		let status = authorities.apply_changes("hash_c", 11, &is_descendent_of(|base, hash| match (*base, *hash) {
+			("hash_a", "hash_c") => true,
+			("hash_b", "hash_c") => false,
+			_ => unreachable!(),
+		})).unwrap();
+
+		assert!(status.changed);
+		assert_eq!(status.new_set_block, None);
+		assert_eq!(
+			authorities.pending_changes().collect::<Vec<_>>(),
+			vec![&change_a],
+		);
+
+		// finalizing "hash_d" will enact the change signalled at "hash_a"
+		let status = authorities.apply_changes("hash_d", 15, &is_descendent_of(|base, hash| match (*base, *hash) {
+			("hash_a", "hash_d") => true,
+			_ => unreachable!(),
+		})).unwrap();
+
+		assert!(status.changed);
+		assert_eq!(status.new_set_block, Some(("hash_d", 15)));
 
 		assert_eq!(authorities.current_authorities, set_a);
 		assert_eq!(authorities.set_id, 1);
-		assert!(authorities.pending_changes.is_empty());
+		assert_eq!(authorities.pending_changes().count(), 0);
 	}
 
 	#[test]
-	fn disallow_multiple_changes_on_same_fork() {
+	fn disallow_multiple_changes_being_finalized_at_once() {
 		let mut authorities = AuthoritySet {
 			current_authorities: Vec::new(),
 			set_id: 0,
-			pending_changes: Vec::new(),
+			pending_changes: ForkTree::new(),
 		};
 
 		let set_a = vec![([1; 32].into(), 5)];
-		let set_b = vec![([2; 32].into(), 5)];
-		let set_c = vec![([3; 32].into(), 5)];
+		let set_c = vec![([2; 32].into(), 5)];
 
+		// two competing changes at the same height on different forks
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
 			finalization_depth: 10,
 			canon_height: 5,
 			canon_hash: "hash_a",
-		};
-
-		let change_b = PendingChange {
-			next_authorities: set_b.clone(),
-			finalization_depth: 10,
-			canon_height: 16,
-			canon_hash: "hash_b",
 		};
 
 		let change_c = PendingChange {
 			next_authorities: set_c.clone(),
 			finalization_depth: 10,
-			canon_height: 16,
+			canon_height: 30,
 			canon_hash: "hash_c",
 		};
 
-		let is_equal_or_descendent_of = |base, block| -> Result<(), ()> {
-			match (base, block) {
-				("hash_a", "hash_b") => return Err(()),
-				("hash_a", "hash_c") => return Ok(()),
-				("hash_c", "hash_b") => return Ok(()),
-				_ => unreachable!(),
-			}
-		};
+		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(true)).unwrap();
+		authorities.add_pending_change(change_c.clone(), &static_is_descendent_of(true)).unwrap();
 
-		authorities.add_pending_change(
-			change_a.clone(),
-			|base| is_equal_or_descendent_of(base, change_a.canon_hash),
-		).unwrap();
+		let is_descendent_of = is_descendent_of(|base, hash| match (*base, *hash) {
+			("hash_a", "hash_b") => true,
+			("hash_a", "hash_c") => true,
+			("hash_a", "hash_d") => true,
 
-		// change b is on the same chain has the unfinalized change a so it should error
-		assert!(
-			authorities.add_pending_change(
-				change_b.clone(),
-				|base| is_equal_or_descendent_of(base, change_b.canon_hash),
-			).is_err()
-		);
+			("hash_c", "hash_b") => false,
+			("hash_c", "hash_d") => true,
 
-		// change c is accepted because it's on a different fork
-		authorities.add_pending_change(
-			change_c.clone(),
-			|base| is_equal_or_descendent_of(base, change_c.canon_hash)
-		).unwrap();
+			("hash_b", "hash_c") => true,
+			_ => unreachable!(),
+		});
 
-		authorities.apply_changes(15, |n| match n {
-			5 => Ok(Some("hash_a")),
-			15 => Ok(Some("hash_a15")),
-			_ => Err(()),
-		}).unwrap();
+		// trying to finalize past `change_c` without finalizing `change_a` first
+		match authorities.apply_changes("hash_d", 100, &is_descendent_of) {
+			Err(fork_tree::Error::UnfinalizedAncestor) => {},
+			_ => unreachable!(),
+		}
+
+		let status = authorities.apply_changes("hash_b", 15, &is_descendent_of).unwrap();
+		assert!(status.changed);
+		assert_eq!(status.new_set_block, Some(("hash_b", 15)));
 
 		assert_eq!(authorities.current_authorities, set_a);
+		assert_eq!(authorities.set_id, 1);
 
-		// pending change c has been removed since it was on a different fork
-		// and can no longer be enacted
-		assert!(authorities.pending_changes.is_empty());
+		// after finalizing `change_a` it should be possible to finalize `change_c`
+		let status = authorities.apply_changes("hash_d", 100, &is_descendent_of).unwrap();
+		assert!(status.changed);
+		assert_eq!(status.new_set_block, Some(("hash_d", 100)));
 
-		// pending change b can now be added
-		authorities.add_pending_change(
-			change_b.clone(),
-			|base| is_equal_or_descendent_of(base, change_b.canon_hash),
-		).unwrap();
+		assert_eq!(authorities.current_authorities, set_c);
+		assert_eq!(authorities.set_id, 2);
 	}
 
 	#[test]
@@ -426,7 +459,7 @@ mod tests {
 		let mut authorities = AuthoritySet {
 			current_authorities: Vec::new(),
 			set_id: 0,
-			pending_changes: Vec::new(),
+			pending_changes: ForkTree::new(),
 		};
 
 		let set_a = vec![([1; 32].into(), 5)];
@@ -438,19 +471,21 @@ mod tests {
 			canon_hash: "hash_a",
 		};
 
-		authorities.add_pending_change(change_a.clone(), |_| Err(())).unwrap();
+		authorities.add_pending_change(change_a.clone(), &static_is_descendent_of(false)).unwrap();
 
-		let canonical = |n| match n {
-			5 => Ok(Some("hash_a")),
-			15 => Ok(Some("hash_a15")),
-			_ => Err(()),
-		};
+		let is_descendent_of = is_descendent_of(|base, hash| match (*base, *hash) {
+			("hash_a", "hash_b") => true,
+			("hash_a", "hash_c") => false,
+			_ => unreachable!(),
+		});
 
-		// there's an effective change triggered at block 15
-		assert!(authorities.enacts_change(15, canonical).unwrap());
+		// "hash_c" won't finalize the existing change since it isn't a descendent
+		assert!(!authorities.enacts_change("hash_c", 15, &is_descendent_of).unwrap());
 
-		// block 16 is already past the change, we assume 15 will be finalized
-		// first and enact the change
-		assert!(!authorities.enacts_change(16, canonical).unwrap());
+		// "hash_b" at depth 14 won't work either
+		assert!(!authorities.enacts_change("hash_b", 14, &is_descendent_of).unwrap());
+
+		// but it should work at depth 15 (change height + depth)
+		assert!(authorities.enacts_change("hash_b", 15, &is_descendent_of).unwrap());
 	}
 }

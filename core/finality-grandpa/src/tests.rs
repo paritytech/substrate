@@ -550,7 +550,7 @@ fn transition_3_voters_twice_1_observer() {
 		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
-		assert_eq!(set.pending_changes().len(), 0);
+		assert_eq!(set.pending_changes().count(), 0);
 	}
 
 	{
@@ -636,7 +636,7 @@ fn transition_3_voters_twice_1_observer() {
 					let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
-					assert!(set.pending_changes().is_empty());
+					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
 		let voter = run_grandpa(
