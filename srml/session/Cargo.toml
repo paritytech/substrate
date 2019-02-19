@@ -16,6 +16,7 @@ srml-support = { path = "../support", default-features = false }
 consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
+storage = { package = "substrate-storage", path = "../../core/storage", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../../core/primitives", default-features = false }
@@ -33,5 +34,6 @@ std = [
 	"primitives/std",
 	"consensus/std",
 	"system/std",
-	"timestamp/std"
+	"timestamp/std",
+	"storage/std",
 ]

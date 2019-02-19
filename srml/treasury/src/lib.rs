@@ -21,8 +21,9 @@
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
-use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
+use srml_support::{decl_module, decl_event, ensure};
 use srml_support::traits::{Currency, OnDilution, ArithmeticType};
+use storage::{StorageValue, StorageMap, decl_storage};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec_derive::{Encode, Decode};
 use system::ensure_signed;

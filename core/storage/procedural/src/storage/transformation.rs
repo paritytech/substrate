@@ -18,8 +18,8 @@
 //! `decl_storage` macro transformation
 // end::description[]
 
-use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
+use substrate_storage_procedural_tools::syn_ext as ext;
+use substrate_storage_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -64,10 +64,10 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 	} = def;
 	let hidden_crate_name = hidden_crate.map(|rc| rc.ident.content).map(|i| i.to_string())
 		.unwrap_or_else(|| "decl_storage".to_string());
-	let scrate = generate_crate_access(&hidden_crate_name, "srml-support");
+	let scrate = generate_crate_access(&hidden_crate_name, "substrate-storage");
 	let scrate_decl = generate_hidden_includes(
 		&hidden_crate_name,
-		"srml-support",
+		"substrate-storage",
 	);
 
 	let (
@@ -130,12 +130,12 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		}
 		impl<#traitinstance: 'static + #traittype> #module_ident<#traitinstance> {
 			#impl_store_fns
-			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
-				#scrate::storage::generator::StorageMetadata {
-					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
+			pub fn store_metadata() -> #scrate::generator::StorageMetadata {
+				#scrate::generator::StorageMetadata {
+					functions: #scrate::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
 			}
-			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
+			pub fn store_metadata_functions() -> &'static [#scrate::generator::StorageFunctionMetadata] {
 				#store_functions_to_metadata
 			}
 			pub fn store_metadata_name() -> &'static str {
@@ -239,7 +239,7 @@ fn decl_store_extra_genesis(
 						let v = (#builder)(&self);
 						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
 							.expect(#error_message);
-						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
+						<#name<#traitinstance> as #scrate::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -252,7 +252,7 @@ fn decl_store_extra_genesis(
 						for (k, v) in data.into_iter() {
 							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
 								.expect(#error_message);
-							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
+							<#name<#traitinstance> as #scrate::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
 				},
@@ -347,7 +347,7 @@ fn decl_store_extra_genesis(
 
 					quote!{
 						#[serde(skip)]
-						pub _genesis_phantom_data: #scrate::storage::generator::PhantomData<#traitinstance>,
+						pub _genesis_phantom_data: #scrate::generator::PhantomData<#traitinstance>,
 					},
 					quote!{
 						_genesis_phantom_data: Default::default(),
@@ -497,14 +497,14 @@ fn impl_store_fns(
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{
 						pub fn #get_fn() -> #value_type {
-							<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
+							<#name<#traitinstance> as #scrate::generator::StorageValue<#typ>> :: get(&#scrate::RuntimeStorage)
 						}
 					}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{
-						pub fn #get_fn<K: #scrate::storage::generator::Borrow<#key_type>>(key: K) -> #value_type {
-							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
+						pub fn #get_fn<K: #scrate::generator::Borrow<#key_type>>(key: K) -> #value_type {
+							<#name<#traitinstance> as #scrate::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::RuntimeStorage)
 						}
 					}
 				}
@@ -541,28 +541,28 @@ fn store_functions_to_metadata (
 		let stype = match type_infos.kind {
 			DeclStorageTypeInfosKind::Simple => {
 				quote!{
-					#scrate::storage::generator::StorageFunctionType::Plain(
-						#scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					#scrate::generator::StorageFunctionType::Plain(
+						#scrate::generator::DecodeDifferent::Encode(#styp),
 					)
 				}
 			},
 			DeclStorageTypeInfosKind::Map { key_type, .. } => {
 				let kty = clean_type_string(&quote!(#key_type).to_string());
 				quote!{
-					#scrate::storage::generator::StorageFunctionType::Map {
-						key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
-						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					#scrate::generator::StorageFunctionType::Map {
+						key: #scrate::generator::DecodeDifferent::Encode(#kty),
+						value: #scrate::generator::DecodeDifferent::Encode(#styp),
 					}
 				}
 			},
 		};
 		let modifier = if type_infos.is_option {
 			quote!{
-				#scrate::storage::generator::StorageFunctionModifier::Optional
+				#scrate::generator::StorageFunctionModifier::Optional
 			}
 		} else {
 			quote!{
-				#scrate::storage::generator::StorageFunctionModifier::Default
+				#scrate::generator::StorageFunctionModifier::Default
 			}
 		};
 		let default = default_value.inner.as_ref().map(|d| &d.expr)
@@ -586,16 +586,16 @@ fn store_functions_to_metadata (
 		let struct_name = proc_macro2::Ident::new(&("__GetByteStruct".to_string() + &str_name), name.span());
 		let cache_name = proc_macro2::Ident::new(&("__CACHE_GET_BYTE_STRUCT_".to_string() + &str_name), name.span());
 		let item = quote! {
-			#scrate::storage::generator::StorageFunctionMetadata {
-				name: #scrate::storage::generator::DecodeDifferent::Encode(#str_name),
+			#scrate::generator::StorageFunctionMetadata {
+				name: #scrate::generator::DecodeDifferent::Encode(#str_name),
 				modifier: #modifier,
 				ty: #stype,
-				default: #scrate::storage::generator::DecodeDifferent::Encode(
-					#scrate::storage::generator::DefaultByteGetter(
+				default: #scrate::generator::DecodeDifferent::Encode(
+					#scrate::generator::DefaultByteGetter(
 						&#struct_name::<#traitinstance>(#scrate::rstd::marker::PhantomData)
 					)
 				),
-				documentation: #scrate::storage::generator::DecodeDifferent::Encode(&[ #docs ]),
+				documentation: #scrate::generator::DecodeDifferent::Encode(&[ #docs ]),
 			},
 		};
 		items.extend(item);
@@ -605,7 +605,7 @@ fn store_functions_to_metadata (
 			#[allow(non_upper_case_globals)]
 			static #cache_name: #scrate::once_cell::sync::OnceCell<#scrate::rstd::vec::Vec<u8>> = #scrate::once_cell::sync::OnceCell::INIT;
 			#[cfg(feature = "std")]
-			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::generator::DefaultByte for #struct_name<#traitinstance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					#cache_name.get_or_init(|| {
@@ -615,7 +615,7 @@ fn store_functions_to_metadata (
 				}
 			}
 			#[cfg(not(feature = "std"))]
-			impl<#traitinstance: #traittype> #scrate::storage::generator::DefaultByte for #struct_name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::generator::DefaultByte for #struct_name<#traitinstance> {
 				fn default_byte(&self) -> #scrate::rstd::vec::Vec<u8> {
 					use #scrate::codec::Encode;
 					let def_val: #value_type = #default;

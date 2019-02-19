@@ -241,7 +241,6 @@ mod tests {
 	use crate::codec::{Encode, Decode};
 	use parity_codec_derive::{Decode, Encode};
 
-
 	mod system {
 		pub trait Trait {
 			type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
@@ -320,7 +319,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
-		crate::decl_storage! {
+		storage::decl_storage! {
 			trait Store for Module<T: Trait> as TestStorage {
 				StorageMethod : Option<u32>;
 			}

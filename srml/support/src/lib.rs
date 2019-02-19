@@ -27,19 +27,12 @@ pub use sr_std as rstd;
 pub use parity_codec as codec;
 #[doc(hidden)]
 pub use parity_codec_derive;
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use once_cell;
 #[doc(hidden)]
 pub use paste;
 pub use sr_primitives as runtime_primitives;
 
-pub use self::storage::generator::Storage as GenericStorage;
-
 #[macro_use]
 pub mod dispatch;
-#[macro_use]
-pub mod storage;
 mod hashable;
 #[macro_use]
 pub mod event;
@@ -54,14 +47,10 @@ pub mod inherent;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMap;
 pub use runtime_io::print;
-
-#[doc(inline)]
-pub use srml_support_procedural::decl_storage;
 
 #[macro_export]
 macro_rules! fail {
@@ -158,7 +147,7 @@ mod tests {
 	}
 	use self::module::Module;
 
-	decl_storage! {
+	storage::decl_storage! {
 		trait Store for Module<T: Trait> as Example {
 			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
 			pub GenericData get(generic_data): linked_map T::BlockNumber => T::BlockNumber;
@@ -255,5 +244,4 @@ mod tests {
 			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![]);
 		});
 	}
-
 }

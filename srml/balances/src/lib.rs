@@ -28,9 +28,10 @@ use rstd::prelude::*;
 use rstd::{cmp, result};
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
+use srml_support::{Parameter, decl_event, decl_module, ensure};
 use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, ArithmeticType};
 use srml_support::dispatch::Result;
+use storage::{StorageValue, StorageMap, decl_storage};
 use primitives::traits::{Zero, SimpleArithmetic,
 	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug, TransferAsset};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};

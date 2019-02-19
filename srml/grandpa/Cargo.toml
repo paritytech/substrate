@@ -17,6 +17,7 @@ primitives = { package = "sr-primitives", path = "../../core/sr-primitives", def
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 session = { package = "srml-session", path = "../session", default-features = false }
+storage = { package = "substrate-storage", path = "../../core/storage", default-features = false }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
@@ -34,4 +35,5 @@ std = [
 	"primitives/std",
 	"system/std",
 	"session/std",
+	"storage/std",
 ]

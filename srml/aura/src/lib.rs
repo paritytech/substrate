@@ -21,8 +21,8 @@
 pub use timestamp;
 
 use rstd::{result, prelude::*};
-use srml_support::storage::StorageValue;
-use srml_support::{decl_storage, decl_module};
+use srml_support::decl_module;
+use storage::{StorageValue, decl_storage};
 use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]

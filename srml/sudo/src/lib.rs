@@ -21,7 +21,8 @@
 
 use sr_std::prelude::*;
 use sr_primitives::traits::StaticLookup;
-use srml_support::{StorageValue, Parameter, Dispatchable, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{Parameter, Dispatchable, decl_module, decl_event, ensure};
+use storage::{StorageValue, decl_storage};
 use system::ensure_signed;
 
 pub trait Trait: system::Trait {

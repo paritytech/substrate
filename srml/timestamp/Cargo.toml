@@ -15,6 +15,7 @@ inherents = { package = "substrate-inherents", path = "../../core/inherents", de
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
+storage = { package = "substrate-storage", path = "../../core/storage", default-features = false }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = true }
@@ -32,4 +33,5 @@ std = [
 	"parity-codec-derive/std",
 	"system/std",
 	"inherents/std",
+	"storage/std",
 ]

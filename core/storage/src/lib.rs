@@ -19,10 +19,28 @@
 use crate::rstd::prelude::*;
 use crate::rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
-use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
+use parity_codec::{Codec, Encode, Decode, KeyedVec, Input};
 
 #[macro_use]
 pub mod generator;
+
+#[cfg(feature = "std")]
+pub use serde;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use serde_derive::*;
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use once_cell;
+#[doc(hidden)]
+pub use parity_codec as codec;
+#[doc(hidden)]
+pub use parity_codec_derive;
+pub use sr_std as rstd;
+pub use crate::generator::Storage as GenericStorage;
+#[doc(inline)]
+pub use substrate_storage_procedural::decl_storage;
+pub use sr_primitives as runtime_primitives;
 
 struct IncrementalInput<'a> {
 	key: &'a [u8],
@@ -125,27 +143,27 @@ pub struct RuntimeStorage;
 
 impl crate::GenericStorage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		super::storage::exists(key)
+		crate::exists(key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		super::storage::get(key)
+		crate::get(key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		super::storage::put(key, val)
+		crate::put(key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		super::storage::kill(key)
+		crate::kill(key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		super::storage::take(key)
+		crate::take(key)
 	}
 }
 

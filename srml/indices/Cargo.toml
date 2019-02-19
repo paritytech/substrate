@@ -17,6 +17,7 @@ primitives = { package = "sr-primitives", path = "../../core/sr-primitives", def
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
+storage = { package = "substrate-storage", path = "../../core/storage", default-features = false }
 
 [dev-dependencies]
 ref_thread_local = "0.0"
@@ -35,4 +36,5 @@ std = [
 	"srml-support/std",
 	"primitives/std",
 	"system/std",
+	"storage/std",
 ]

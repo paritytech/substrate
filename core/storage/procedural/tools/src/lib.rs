@@ -19,7 +19,7 @@
 // end::description[]
 
 // reexport proc macros
-pub use srml_support_procedural_tools_derive::*;
+pub use substrate_storage_procedural_tools_derive::*;
 
 use proc_macro_crate::crate_name;
 use syn::parse::Error;

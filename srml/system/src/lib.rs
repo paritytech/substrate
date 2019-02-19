@@ -28,7 +28,8 @@ use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
 	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug, StaticLookup};
 use substrate_primitives::storage::well_known_keys;
-use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use srml_support::{Parameter, decl_module, decl_event};
+use storage::{StorageValue, StorageMap, decl_storage};
 use safe_mix::TripletMix;
 use parity_codec_derive::{Encode, Decode};
 

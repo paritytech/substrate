@@ -23,9 +23,10 @@
 use rstd::{prelude::*, cmp};
 use parity_codec::HasCompact;
 use parity_codec_derive::{Encode, Decode};
-use srml_support::{Parameter, StorageValue, StorageMap, dispatch::Result};
-use srml_support::{decl_module, decl_event, decl_storage, ensure};
+use srml_support::{Parameter, dispatch::Result};
+use srml_support::{decl_module, decl_event, ensure};
 use srml_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, ArithmeticType};
+use storage::{StorageValue, StorageMap, decl_storage};
 use session::OnSessionChange;
 use primitives::Perbill;
 use primitives::traits::{Zero, One, Bounded, As, StaticLookup};

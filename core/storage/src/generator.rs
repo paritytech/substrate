@@ -46,7 +46,7 @@
 //!# fn main() { }
 //! ```
 
-use crate::codec;
+use parity_codec as codec;
 use crate::rstd::vec::Vec;
 #[doc(hidden)]
 pub use crate::rstd::borrow::Borrow;
@@ -356,7 +356,7 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::generator::StorageValue<$ty> for $name {
+		impl $crate::generator::StorageValue<$ty> for $name {
 			type Query = $gettype;
 
 			/// Get the storage key.
@@ -376,7 +376,7 @@ macro_rules! __storage_items_internal {
 
 			/// Mutate this value.
 			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::GenericStorage>(f: F, storage: &S) -> R {
-				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+				let mut val = <Self as $crate::generator::StorageValue<$ty>>::get(storage);
 
 				let ret = f(&mut val);
 
@@ -386,8 +386,8 @@ macro_rules! __storage_items_internal {
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
-						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+						Some(ref val) => <Self as $crate::generator::StorageValue<$ty>>::put(&val, storage),
+						None => <Self as $crate::generator::StorageValue<$ty>>::kill(storage),
 					}
 				});
 
@@ -405,7 +405,7 @@ macro_rules! __storage_items_internal {
 	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
-		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
+		impl $crate::generator::StorageMap<$kty, $ty> for $name {
 			type Query = $gettype;
 
 			/// Get the prefix key in storage.
@@ -422,19 +422,19 @@ macro_rules! __storage_items_internal {
 
 			/// Load the value associated with the given key from the map.
 			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				let key = <$name as $crate::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$getter(&key[..])
 			}
 
 			/// Take the value, reading and removing it.
 			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				let key = <$name as $crate::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
 			}
 
 			/// Mutate the value under a key.
 			fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) -> R {
-				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+				let mut val = <Self as $crate::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				let ret = f(&mut val);
 
@@ -444,8 +444,8 @@ macro_rules! __storage_items_internal {
 				} {
 					// Option<> type case
 					match val {
-						Some(ref val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+						Some(ref val) => <Self as $crate::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::generator::StorageMap<$kty, $ty>>::remove(key, storage),
 					}
 				});
 
@@ -459,18 +459,18 @@ macro_rules! __storage_items_internal {
 
 		impl $name {
 			fn clear_item<S: $crate::GenericStorage>(index: u32, storage: &S) {
-				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
-					storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index));
+				if index < <$name as $crate::generator::StorageList<$ty>>::len(storage) {
+					storage.kill(&<$name as $crate::generator::StorageList<$ty>>::key_for(index));
 				}
 			}
 
 			fn set_len<S: $crate::GenericStorage>(count: u32, storage: &S) {
-				(count..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
-				storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key(), &count);
+				(count..<$name as $crate::generator::StorageList<$ty>>::len(storage)).for_each(|i| $name::clear_item(i, storage));
+				storage.put(&<$name as $crate::generator::StorageList<$ty>>::len_key(), &count);
 			}
 		}
 
-		impl $crate::storage::generator::StorageList<$ty> for $name {
+		impl $crate::generator::StorageList<$ty> for $name {
 			/// Get the prefix key in storage.
 			fn prefix() -> &'static [u8] {
 				$prefix
@@ -492,8 +492,8 @@ macro_rules! __storage_items_internal {
 
 			/// Read out all the items.
 			fn items<S: $crate::GenericStorage>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
-				(0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage))
-					.map(|i| <$name as $crate::storage::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
+				(0..<$name as $crate::generator::StorageList<$ty>>::len(storage))
+					.map(|i| <$name as $crate::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
 					.collect()
 			}
 
@@ -502,32 +502,32 @@ macro_rules! __storage_items_internal {
 				$name::set_len(items.len() as u32, storage);
 				items.iter()
 					.enumerate()
-					.for_each(|(i, item)| <$name as $crate::storage::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
+					.for_each(|(i, item)| <$name as $crate::generator::StorageList<$ty>>::set_item(i as u32, item, storage));
 			}
 
 			fn set_item<S: $crate::GenericStorage>(index: u32, item: &$ty, storage: &S) {
-				if index < <$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
-					storage.put(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..], item);
+				if index < <$name as $crate::generator::StorageList<$ty>>::len(storage) {
+					storage.put(&<$name as $crate::generator::StorageList<$ty>>::key_for(index)[..], item);
 				}
 			}
 
 			/// Load the value at given index. Returns `None` if the index is out-of-bounds.
 			fn get<S: $crate::GenericStorage>(index: u32, storage: &S) -> Option<$ty> {
-				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::key_for(index)[..])
+				storage.get(&<$name as $crate::generator::StorageList<$ty>>::key_for(index)[..])
 			}
 
 			/// Load the length of the list.
 			fn len<S: $crate::GenericStorage>(storage: &S) -> u32 {
-				storage.get(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
+				storage.get(&<$name as $crate::generator::StorageList<$ty>>::len_key()).unwrap_or_default()
 			}
 
 			/// Clear the list.
 			fn clear<S: $crate::GenericStorage>(storage: &S) {
-				for i in 0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage) {
+				for i in 0..<$name as $crate::generator::StorageList<$ty>>::len(storage) {
 					$name::clear_item(i, storage);
 				}
 
-				storage.kill(&<$name as $crate::storage::generator::StorageList<$ty>>::len_key()[..])
+				storage.kill(&<$name as $crate::generator::StorageList<$ty>>::len_key()[..])
 			}
 		}
 	};
@@ -628,7 +628,7 @@ mod tests {
 		type BlockNumber;
 	}
 
-	decl_module! {
+	runtime_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -949,7 +949,7 @@ mod test2 {
 		type BlockNumber;
 	}
 
-	decl_module! {
+	runtime_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
@@ -984,7 +984,7 @@ mod test3 {
 		type Origin;
 		type BlockNumber;
 	}
-	decl_module! {
+	srml_support::decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 	crate::decl_storage! {

@@ -21,7 +21,8 @@ use rstd::result;
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Dispatchable, Parameter};
-use srml_support::{StorageValue, StorageMap, decl_module, decl_event, decl_storage, ensure};
+use srml_support::{decl_module, decl_event, ensure};
+use storage::{StorageValue, StorageMap, decl_storage};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::{self, ensure_signed};
 

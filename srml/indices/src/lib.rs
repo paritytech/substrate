@@ -21,7 +21,8 @@
 
 use rstd::{prelude::*, result, marker::PhantomData};
 use parity_codec::{Encode, Decode, Codec, Input, Output};
-use srml_support::{StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
+use srml_support::{Parameter, decl_module, decl_event};
+use storage::{StorageValue, StorageMap, decl_storage};
 use primitives::traits::{One, SimpleArithmetic, As, StaticLookup, Member};
 use system::{IsDeadAccount, OnNewAccount};
 

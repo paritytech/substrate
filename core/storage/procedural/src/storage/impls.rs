@@ -57,13 +57,13 @@ impl<'a> Impls<'a> {
 
 		let mutate_impl = if !is_option {
 			quote!{
-				<Self as #scrate::storage::generator::StorageValue<#typ>>::put(&val, storage)
+				<Self as #scrate::generator::StorageValue<#typ>>::put(&val, storage)
 			}
 		} else {
 			quote!{
 				match val {
-					Some(ref val) => <Self as #scrate::storage::generator::StorageValue<#typ>>::put(&val, storage),
-					None => <Self as #scrate::storage::generator::StorageValue<#typ>>::kill(storage),
+					Some(ref val) => <Self as #scrate::generator::StorageValue<#typ>>::put(&val, storage),
+					None => <Self as #scrate::generator::StorageValue<#typ>>::kill(storage),
 				}
 			}
 		};
@@ -71,9 +71,9 @@ impl<'a> Impls<'a> {
 		// generator for value
 		quote!{
 
-			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
+			#visibility struct #name<#traitinstance: #traittype>(#scrate::generator::PhantomData<#traitinstance>);
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageValue<#typ> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::generator::StorageValue<#typ> for #name<#traitinstance> {
 				type Query = #value_type;
 
 				/// Get the storage key.
@@ -83,19 +83,19 @@ impl<'a> Impls<'a> {
 
 				/// Load the value from the provided storage instance.
 				fn get<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
-					storage.get(<Self as #scrate::storage::generator::StorageValue<#typ>>::key())
+					storage.get(<Self as #scrate::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take a value from storage, removing it afterwards.
 				fn take<S: #scrate::GenericStorage>(storage: &S) -> Self::Query {
-					storage.take(<Self as #scrate::storage::generator::StorageValue<#typ>>::key())
+					storage.take(<Self as #scrate::generator::StorageValue<#typ>>::key())
 						.#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key.
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(f: F, storage: &S) -> R {
-					let mut val = <Self as #scrate::storage::generator::StorageValue<#typ>>::get(storage);
+					let mut val = <Self as #scrate::generator::StorageValue<#typ>>::get(storage);
 
 					let ret = f(&mut val);
 					#mutate_impl ;
@@ -122,21 +122,21 @@ impl<'a> Impls<'a> {
 
 		let mutate_impl = if !is_option {
 			quote!{
-				<Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage)
+				<Self as #scrate::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage)
 			}
 		} else {
 			quote!{
 				match val {
-					Some(ref val) => <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage),
-					None => <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::remove(key, storage),
+					Some(ref val) => <Self as #scrate::generator::StorageMap<#kty, #typ>>::insert(key, &val, storage),
+					None => <Self as #scrate::generator::StorageMap<#kty, #typ>>::remove(key, storage),
 				}
 			}
 		};
 		// generator for map
 		quote!{
-			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
+			#visibility struct #name<#traitinstance: #traittype>(#scrate::generator::PhantomData<#traitinstance>);
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
 				type Query = #value_type;
 
 				/// Get the prefix key in storage.
@@ -153,19 +153,19 @@ impl<'a> Impls<'a> {
 
 				/// Load the value associated with the given key from the map.
 				fn get<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					let key = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key);
+					let key = <Self as #scrate::generator::StorageMap<#kty, #typ>>::key_for(key);
 					storage.get(&key[..]).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Take the value, reading and removing it.
 				fn take<S: #scrate::GenericStorage>(key: &#kty, storage: &S) -> Self::Query {
-					let key = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::key_for(key);
+					let key = <Self as #scrate::generator::StorageMap<#kty, #typ>>::key_for(key);
 					storage.take(&key[..]).#option_simple_1(|| #fielddefault)
 				}
 
 				/// Mutate the value under a key
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericStorage>(key: &#kty, f: F, storage: &S) -> R {
-					let mut val = <Self as #scrate::storage::generator::StorageMap<#kty, #typ>>::get(key, storage);
+					let mut val = <Self as #scrate::generator::StorageMap<#kty, #typ>>::get(key, storage);
 
 					let ret = f(&mut val);
 					#mutate_impl ;
@@ -195,8 +195,8 @@ impl<'a> Impls<'a> {
 		let name_lowercase = name.to_string().to_lowercase();
 		let inner_module = syn::Ident::new(&format!("__linked_map_details_for_{}_do_not_use", name_lowercase), name.span());
 		let linkage = syn::Ident::new(&format!("__LinkageFor{}DoNotUse", name), name.span());
-		let phantom_data = quote! { #scrate::storage::generator::PhantomData };
-		let as_map = quote!{ <Self as #scrate::storage::generator::StorageMap<#kty, #typ>> };
+		let phantom_data = quote! { #scrate::generator::PhantomData };
+		let as_map = quote!{ <Self as #scrate::generator::StorageMap<#kty, #typ>> };
 		let put_or_insert = quote! {
 			match linkage {
 				Some(linkage) => storage.put(key_for, &(val, linkage)),
@@ -389,7 +389,7 @@ impl<'a> Impls<'a> {
 
 			#structure
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
 				type Query = #value_type;
 
 				/// Get the prefix key in storage.
@@ -455,20 +455,20 @@ impl<'a> Impls<'a> {
 				}
 			}
 
-			impl<#traitinstance: #traittype> #scrate::storage::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance> {
+			impl<#traitinstance: #traittype> #scrate::generator::EnumerableStorageMap<#kty, #typ> for #name<#traitinstance> {
 				fn head<S: #scrate::GenericStorage>(storage: &S) -> Option<#kty> {
 					use self::#inner_module::Utils;
 
 					Self::read_head(storage)
 				}
 
-				fn enumerate<'a, S: #scrate::GenericStorage>(storage: &'a S) -> #scrate::storage::generator::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
+				fn enumerate<'a, S: #scrate::GenericStorage>(storage: &'a S) -> #scrate::generator::Box<dyn Iterator<Item = (#kty, #typ)> + 'a> where
 					#kty: 'a,
 					#typ: 'a,
 				{
 					use self::#inner_module::{Utils, Enumerator};
 
-					#scrate::storage::generator::Box::new(Enumerator {
+					#scrate::generator::Box::new(Enumerator {
 						next: Self::read_head(storage),
 						storage,
 						_data: #phantom_data::<#typ>::default(),

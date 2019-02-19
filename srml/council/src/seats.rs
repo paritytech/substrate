@@ -19,7 +19,8 @@
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, StaticLookup};
 use runtime_io::print;
-use srml_support::{StorageValue, StorageMap, dispatch::Result, traits::Currency, decl_storage, decl_event, ensure};
+use srml_support::{dispatch::Result, traits::Currency, decl_event, ensure};
+use storage::{StorageValue, StorageMap, decl_storage};
 use democracy;
 use system::{self, ensure_signed};
 

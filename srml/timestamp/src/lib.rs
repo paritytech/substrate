@@ -35,8 +35,8 @@
 #[cfg(feature = "std")]
 use parity_codec_derive::Decode;
 use parity_codec_derive::Encode;
-use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
-use srml_support::for_each_tuple;
+use srml_support::{Parameter, decl_module, for_each_tuple};
+use storage::{StorageValue, decl_storage};
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, cmp};

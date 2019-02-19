@@ -28,7 +28,7 @@ use proc_macro2::TokenStream as T2;
 use quote::{ToTokens, quote};
 use std::iter::once;
 use syn::Ident;
-use srml_support_procedural_tools_derive::{ToTokens, Parse};
+use substrate_storage_procedural_tools_derive::{ToTokens, Parse};
 
 /// stop parsing here getting remaining token as content
 /// Warn duplicate stream (part of)

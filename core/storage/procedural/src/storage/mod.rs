@@ -18,8 +18,8 @@
 //! `decl_storage` macro
 // end::description[]
 
-use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyword_impl};
+use substrate_storage_procedural_tools::syn_ext as ext;
+use substrate_storage_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyword_impl};
 
 use syn::{Ident, Token};
 use syn::token::CustomKeyword;

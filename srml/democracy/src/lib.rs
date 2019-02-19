@@ -22,10 +22,10 @@ use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, As};
 use parity_codec_derive::{Encode, Decode};
-use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
-use srml_support::{decl_module, decl_storage, decl_event, ensure};
+use srml_support::{Parameter, Dispatchable, IsSubType, decl_module, decl_event, ensure};
 use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid, ArithmeticType};
 use srml_support::dispatch::Result;
+use storage::{StorageValue, StorageMap, decl_storage};
 use system::ensure_signed;
 
 mod vote_threshold;

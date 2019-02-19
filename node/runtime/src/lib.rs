@@ -53,7 +53,7 @@ pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
-pub use support::StorageValue;
+pub use storage::StorageValue;
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {

@@ -21,8 +21,8 @@
 
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, Convert};
-use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::dispatch::Result;
+use srml_support::{for_each_tuple, decl_module, decl_event, dispatch::Result};
+use storage::{StorageValue, StorageMap, decl_storage};
 use system::ensure_signed;
 use rstd::ops::Mul;
 

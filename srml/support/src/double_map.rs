@@ -18,7 +18,7 @@
 
 use crate::rstd::prelude::*;
 use crate::codec::{Codec, Encode};
-use crate::storage::unhashed;
+use storage::unhashed;
 
 /// An implementation of a map with a two keys.
 ///

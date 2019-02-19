@@ -19,7 +19,8 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use srml_support::{dispatch::Result, traits::ArithmeticType, StorageMap, decl_event, decl_storage, decl_module};
+use srml_support::{dispatch::Result, traits::ArithmeticType, decl_event, decl_module};
+use storage::{StorageMap, decl_storage};
 use runtime_primitives::traits::{
 	As, ChargeBytesFee, ChargeFee,
 	TransferAsset, CheckedAdd, CheckedSub, CheckedMul, Zero
