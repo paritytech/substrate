@@ -574,6 +574,16 @@ macro_rules! decl_module {
 		#[cfg(not(feature = "std"))]
 		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
 
+		impl<$trait_instance: $trait_name> $crate::substrate_metadata::EncodeMetadata for $mod_type<$trait_instance> {
+			fn type_name() -> $crate::substrate_metadata::MetadataName {
+				$crate::substrate_metadata::MetadataName::Custom(module_path!().into(), stringify!($mod_type).into())
+			}
+
+			fn type_metadata_kind(registry: &mut $crate::substrate_metadata::MetadataRegistry) -> $crate::substrate_metadata::TypeMetadataKind {
+				$crate::substrate_metadata::TypeMetadataKind::Struct(vec![])
+			}
+		}
+
 		decl_module! {
 			@impl_on_initialise
 			$mod_type<$trait_instance: $trait_name>;
@@ -882,7 +892,7 @@ macro_rules! impl_outer_dispatch {
 		}
 	) => {
 		$(#[$attr])*
-		#[derive(Clone, PartialEq, Eq, $crate::substrate_metadata_derive::EncodeMetadata)]
+		#[derive(Clone, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum $call_type {
 			$(
@@ -899,6 +909,30 @@ macro_rules! impl_outer_dispatch {
 						$call_type::$camelcase(call) => call.dispatch(origin),
 					)*
 				}
+			}
+		}
+		impl $crate::substrate_metadata::EncodeMetadata for $call_type {
+			fn type_name() -> $crate::substrate_metadata::MetadataName {
+				$crate::substrate_metadata::MetadataName::Custom(module_path!().into(), stringify!($call_type).into())
+			}
+
+			fn type_metadata_kind(registry: &mut $crate::substrate_metadata::MetadataRegistry) -> $crate::substrate_metadata::TypeMetadataKind {
+				let mut idx: u16 = 0;
+				$crate::substrate_metadata::TypeMetadataKind::Enum(vec![
+					$({
+						let type_name = <$camelcase as $crate::substrate_metadata::EncodeMetadata>::type_name();
+						registry.register(type_name.clone(), <$camelcase as $crate::substrate_metadata::EncodeMetadata>::type_metadata_kind);
+						idx += 1;
+						$crate::substrate_metadata::EnumVariantMetadata {
+							name: stringify!($camelcase).into(),
+							index: idx - 1,
+							fields: vec![$crate::substrate_metadata::FieldMetadata {
+								name: $crate::substrate_metadata::FieldName::Unnamed(0),
+								ty: type_name,
+							}]
+						}
+					},)*
+				])
 			}
 		}
 		$(
