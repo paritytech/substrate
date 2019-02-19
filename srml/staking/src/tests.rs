@@ -21,13 +21,14 @@
 use super::*;
 use runtime_io::with_externalities;
 use srml_support::{assert_ok, assert_noop, EnumerableStorageMap};
-use mock::{Balances, Session, Staking, System, Timestamp, Test, new_test_ext, Origin};
+use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
 use srml_support::traits::Currency;
 
 
 #[test]
 fn basic_setup_works() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+	with_externalities(&mut ExtBuilder::default().build(),
+	|| {
 		assert_eq!(Staking::bonded(&11), Some(10));
 		assert_eq!(Staking::bonded(&21), Some(20));
 		assert_eq!(Staking::bonded(&1), None);
@@ -46,10 +47,11 @@ fn basic_setup_works() {
 	});
 }
 
-/*
+
 #[test]
 fn note_null_offline_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+	with_externalities(&mut ExtBuilder::default().build(),
+	|| {
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 1);
@@ -62,7 +64,8 @@ fn note_null_offline_should_work() {
 
 #[test]
 fn invulnerability_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+	with_externalities(&mut ExtBuilder::default().build(),
+	|| {
 		assert_ok!(Staking::set_invulnerables(vec![10]));
 		Balances::set_free_balance(&10, 70);
 		assert_eq!(Staking::offline_slash_grace(), 0);
@@ -75,7 +78,7 @@ fn invulnerability_should_work() {
 		assert!(Staking::forcing_new_era().is_none());
 	});
 }
-
+/*
 #[test]
 fn note_offline_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
