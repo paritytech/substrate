@@ -26,6 +26,7 @@ mod storage;
 
 use proc_macro::TokenStream;
 
+// TODO TODO documentation
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
 ///
 /// ## Example

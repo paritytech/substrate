@@ -28,16 +28,17 @@ use system::ensure_signed;
 /// should be added to our implied traits list.
 ///
 /// `system::Trait` should always be included in our implied traits.
-pub trait Trait: balances::Trait {
+pub trait Trait<Instance>: balances::Trait {
+	type Amount;
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
 }
 
 decl_storage! {
 	// A macro for the Storage trait, and its implementation, for this module.
 	// This allows for type-safe usage of the Substrate storage database, so you can
 	// keep things around between blocks.
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Trait<Instance>, Instance: Instantiable> as Example {
 		// Any storage declarations of the form:
 		//   `pub? Name get(getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
@@ -76,7 +77,8 @@ decl_storage! {
 /// circumstances that have happened that users, Dapps and/or chain explorers would find
 /// interesting and otherwise difficult to detect.
 decl_event!(
-	pub enum Event<T> where B = <T as balances::Trait>::Balance {
+	pub enum Event<T, Instance> where B = <T as balances::Trait>::Balance, A = <T as Trait<Instance>>::Amount {
+		Amount(A),
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),
@@ -115,12 +117,12 @@ decl_event!(
 // `ensure_root` and `ensure_inherent`.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait<Instance>, Instance: Instantiable> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
 		/// For non-generic events, the generic parameter just needs to be dropped, so that it
 		/// looks like: `fn deposit_event() = default;`.
-		fn deposit_event<T>() = default;
+		fn deposit_event<T, Instance>() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
@@ -176,7 +178,7 @@ decl_module! {
 			// <Dummy<T>>::put(&new_dummy);
 
 			// Here's the new one of read and then modify the value.
-			<Dummy<T>>::mutate(|dummy| {
+			<Dummy<T, Instance>>::mutate(|dummy| {
 				let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
 				*dummy = Some(new_dummy);
 			});
@@ -199,7 +201,7 @@ decl_module! {
 		// for you and `Ok(())` will be returned.
 		fn set_dummy(#[compact] new_value: T::Balance) {
 			// Put the new value into storage.
-			<Dummy<T>>::put(new_value);
+			<Dummy<T, Instance>>::put(new_value);
 		}
 
 		// The signature could also look like: `fn on_initialise()`
@@ -212,7 +214,7 @@ decl_module! {
 		fn on_finalise(_n: T::BlockNumber) {
 			// Anything that needs to be done at the end of the block.
 			// We just kill our dummy storage item.
-			<Dummy<T>>::kill();
+			<Dummy<T, Instance>>::kill();
 		}
 	}
 }
@@ -222,15 +224,15 @@ decl_module! {
 // - Public interface. These are functions that are `pub` and generally fall into inspector
 // functions that do not write to storage and operation functions that do.
 // - Private functions. These are your usual private utilities unavailable to other modules.
-impl<T: Trait> Module<T> {
+impl<T: Trait<Instance>, Instance: Instantiable> Module<T, Instance> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
 	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
 		let _sender = ensure_signed(origin)?;
 
-		let prev = <Foo<T>>::get();
+		let prev = <Foo<T, Instance>>::get();
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
-		let result = <Foo<T>>::mutate(|foo| {
+		let result = <Foo<T, Instance>>::mutate(|foo| {
 			*foo = *foo + increase_by;
 			*foo
 		});

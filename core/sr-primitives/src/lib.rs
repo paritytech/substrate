@@ -370,6 +370,13 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(sig: &V, item: &T, signe
 #[macro_export]
 macro_rules! __impl_outer_config_types {
 	(
+		$concrete:ident $config:ident $snake:ident < $ignore:ident, $instance:path > $( $rest:tt )*
+	) => {
+		#[cfg(any(feature = "std", test))]
+		pub type $config = $snake::GenesisConfig<$concrete, $instance>;
+		$crate::__impl_outer_config_types! {$concrete $($rest)*}
+	};
+	(
 		$concrete:ident $config:ident $snake:ident < $ignore:ident > $( $rest:tt )*
 	) => {
 		#[cfg(any(feature = "std", test))]
@@ -396,10 +403,10 @@ macro_rules! __impl_outer_config_types {
 macro_rules! impl_outer_config {
 	(
 		pub struct $main:ident for $concrete:ident {
-			$( $config:ident => $snake:ident $( < $generic:ident > )*, )*
+			$( $config:ident => $snake:ident $( < $generic:ident $(, $instance:path)? > )*, )*
 		}
 	) => {
-		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic > )* )* }
+		$crate::__impl_outer_config_types! { $concrete $( $config $snake $( < $generic $(, $instance)? > )* )* }
 		#[cfg(any(feature = "std", test))]
 		#[derive(Serialize, Deserialize)]
 		#[serde(rename_all = "camelCase")]

@@ -18,6 +18,7 @@ inherents = { package = "substrate-inherents", path = "../../core/inherents", de
 srml-support-procedural = { path = "./procedural" }
 paste = "0.1"
 once_cell = { version = "0.1.6", default-features = false, optional = true }
+spin = "0.5"
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"

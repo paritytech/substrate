@@ -99,6 +99,14 @@ impl indices::Trait for Runtime {
 	type Event = Event;
 }
 
+impl balances::Trait<balances::Instance1> for Runtime {
+	type Balance = Balance;
+	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type OnNewAccount = Indices;
+	type EnsureAccountLiquid = (Staking, Democracy);
+	type Event = Event;
+}
+
 impl balances::Trait for Runtime {
 	type Balance = Balance;
 	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
@@ -186,12 +194,19 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
+impl example::Trait<example::Instance1> for Runtime {
+	type Amount = ();
+	type Event = Event;
+}
+
 impl grandpa::Trait for Runtime {
 	type SessionKey = SessionKey;
 	type Log = Log;
 	type Event = Event;
 }
 
+// TODO TODO: make log, Inherent, and Origin
+// TODO TODO: error when no event ?
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
@@ -216,6 +231,8 @@ construct_runtime!(
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
 		Fees: fees::{Module, Storage, Config<T>, Event<T>},
+		BalancesInstance1: balances::<Instance1>::{Event<T, I>},
+		Example: example::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
 	}
 );
 
