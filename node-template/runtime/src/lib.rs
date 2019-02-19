@@ -166,7 +166,6 @@ impl balances::Trait for Runtime {
 }
 
 impl fees::Trait for Runtime {
-	type Amount = u128;
 	type TransferAsset = Balances;
 	type Event = Event;
 }

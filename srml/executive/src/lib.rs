@@ -325,7 +325,6 @@ mod tests {
 	}
 	impl fees::Trait for Runtime {
 		type Event = MetaEvent;
-		type Amount = u64;
 		type TransferAsset = balances::Module<Runtime>;
 	}
 
