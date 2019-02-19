@@ -205,41 +205,67 @@ fn note_offline_auto_unstake_session_change_should_work() {
 		assert_eq!(Balances::free_balance(&20), 6700);
 		assert_eq!(Staking::intentions(), vec![0u64; 0]);
 	});
-}
+}*/
 
 
 #[test]
 fn rewards_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+	// should check that: 
+	// 1)rewards get recorded per session 2)rewards get paid per Era
+	with_externalities(&mut ExtBuilder::default().build(), 
+	|| {
+		// Initial config should be correct
 		assert_eq!(Staking::era_length(), 9);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Balances::total_balance(&10), 1);
 
+		// check the balance of a validator accounts.
+		assert_eq!(Balances::total_balance(&10), 1); 
+
+		// Block 3 => Session 1 => Era 0
 		System::set_block_number(3);
 		Timestamp::set_timestamp(15);	// on time.
-		Session::check_rotate_session(System::block_number());
+		Session::check_rotate_session(System::block_number()); // QUESTIONS: why this matters ?
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
-		assert_eq!(Balances::total_balance(&10), 11);
+
+		// session triggered: the reward value stashed should be 10 -- defined in ExtBuilder genesis.
+		assert_eq!(Staking::current_session_reward(), 10);
+		assert_eq!(Staking::current_era_reward(), 10);
+		
+		// Block 6 => Session 2 => Era 0 
 		System::set_block_number(6);
-		Timestamp::set_timestamp(31);	// a little late
+		Timestamp::set_timestamp(32);	// a little late.
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Balances::total_balance(&10), 20);	// less reward
+
+		// session reward is the same,
+		assert_eq!(Staking::current_session_reward(), 10);
+		// though 2 will be deducted while stashed in the era reward due to delay
+		assert_eq!(Staking::current_era_reward(), 18);
+
+		// Block 6 => Session 3 => Era 1
 		System::set_block_number(9);
-		Timestamp::set_timestamp(50);	// very late
+		Timestamp::set_timestamp(45);  // back to being punktlisch. no delayss
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
-		assert_eq!(Balances::total_balance(&10), 27);	// much less reward
+
+		// 1 + sum of of the session rewards accumulated
+		assert_eq!(Balances::total_balance(&10), 1 + 10 + 10 + 8);
+
+		// FIXME: possibly either extend this (or make a new test) to at least another cover two eras 
+		// (can fast-forward to the end) and test/verify the logic of the new <CurrentSessionReward> value mutated at 
+		// the end of the era. e.g:
+		// assert_eq!(Staking::current_session_reward(), 20);
+		// assert_eq!(Staking::current_era_reward(), 0);
 	});
 }
 
-#[test]
+/*#[test]
 fn slashing_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		assert_eq!(Staking::era_length(), 9);
@@ -458,11 +484,16 @@ fn double_staking_should_fail() {
 		assert_noop!(Staking::stake(Origin::signed(2)), "Cannot stake if already nominating.");
 		assert_noop!(Staking::nominate(Origin::signed(2), 1), "Cannot nominate if already nominating.");
 	});
-}
+}*/
 
 #[test]
 fn staking_eras_work() {
-	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1)
+		.sessions_per_era(2)
+		.reward(10)
+		.build(), 
+	|| {
 		assert_eq!(Staking::era_length(), 2);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -528,7 +559,7 @@ fn staking_eras_work() {
 	});
 }
 
-#[test]
+/*#[test]
 fn staking_balance_transfer_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		Balances::set_free_balance(&1, 111);
