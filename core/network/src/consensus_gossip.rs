@@ -101,6 +101,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			// Send out all known messages to authorities.
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
+				if entry.timestamp + MESSAGE_LIFETIME < now { continue };
 				known_messages.insert(entry.message_hash);
 				protocol.send_message(who, Message::Consensus(entry.message.clone()));
 			}
@@ -126,7 +127,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 		where F: Fn() -> ConsensusMessage,
 	{
 		let mut non_authorities: Vec<_> = self.peers.iter()
-			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&message_hash) { Some(*id) } else { None })
+			.filter_map(|(id, ref peer)|
+				if !peer.is_authority && !peer.known_messages.contains(&message_hash) {
+					Some(*id)
+				} else {
+					None
+				}
+			)
 			.collect();
 
 		non_authorities.shuffle(&mut rand::thread_rng());
