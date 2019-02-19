@@ -499,12 +499,14 @@ where
 	fn inject_dial_failure(&mut self, peer_id: Option<&PeerId>, addr: &Multiaddr, error: &dyn error::Error) {
 		if let Some(peer_id) = peer_id.as_ref() {
 			debug!(target: "sub-libp2p", "Failed to reach peer {:?} through {} => {:?}", peer_id, addr, error);
-			if self.connected_peers.contains(peer_id) {
-				self.topology.set_unreachable(addr);
-			}
+			self.topology.set_unreachable(addr);
 
 			// Trigger a `connect_to_nodes` round.
 			self.next_connect_to_nodes = Delay::new(Instant::now());
+
+		} else {
+			debug!(target: "sub-libp2p", "Failed to reach {} => {:?}", addr, error);
+			self.topology.set_unreachable(addr);
 		}
 	}
 
