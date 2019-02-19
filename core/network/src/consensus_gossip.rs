@@ -207,7 +207,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 	}
 
-	/// Get all incoming messages for a topic.
+	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
 	pub fn messages_for(&mut self, topic: B::Hash) -> mpsc::UnboundedReceiver<Vec<u8>> {
 		let (tx, rx) = mpsc::unbounded();
 		for entry in self.messages.iter().filter(|e| e.topic == topic) {
