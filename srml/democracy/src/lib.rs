@@ -157,18 +157,18 @@ decl_module! {
 		}
 
 		/// Delegate vote.
-		pub fn delegate(origin, ref_index: ReferendumIndex, to: T::AccountId, lock_periods: LockPeriods) -> Result {
+		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) -> Result {
 			let who = ensure_signed(origin)?;
-			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone(), ref_index));
-			Self::deposit_event(RawEvent::Delegated(who, to, ref_index));
+			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
+			Self::deposit_event(RawEvent::Delegated(who, to));
 			Ok(())
 		}
 
 		/// Undelegate vote.
-		fn undelegate(origin, ref_index: ReferendumIndex) -> Result {
+		fn undelegate(origin) -> Result {
 			let who = ensure_signed(origin)?;
 			<Delegations<T>>::remove(who.clone());
-			Self::deposit_event(RawEvent::Undelegated(who, ref_index));
+			Self::deposit_event(RawEvent::Undelegated(who));
 			Ok(())
 		}
 	}
@@ -237,7 +237,7 @@ decl_storage! {
 		pub VoteOf get(vote_of): map (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
-		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, LockPeriods, ReferendumIndex);
+		pub Delegations get(delegations): linked_map T::AccountId => (T::AccountId, LockPeriods);
 	}
 }
 
@@ -251,8 +251,8 @@ decl_event!(
 		NotPassed(ReferendumIndex),
 		Cancelled(ReferendumIndex),
 		Executed(ReferendumIndex, bool),
-		Delegated(AccountId, AccountId, ReferendumIndex),
-		Undelegated(AccountId, ReferendumIndex),
+		Delegated(AccountId, AccountId),
+		Undelegated(AccountId),
 	}
 );
 
@@ -314,7 +314,7 @@ impl<T: Trait> Module<T> {
 		let mut capital = Zero::zero();
 		for voter in Self::voters_for(ref_index).iter() {
 			let vote = Self::vote_of((ref_index, voter.clone()));
-			let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier());
+			let (votes, balance) = Self::delegated_votes(voter.clone(), vote.multiplier());
 			if vote.is_aye() {
 				approve += votes;
 			} else {
@@ -325,15 +325,15 @@ impl<T: Trait> Module<T> {
 		(approve, against, capital)
 	}
 
-	fn delegated_votes(ref_index: ReferendumIndex, to: T::AccountId, min_lock_periods: LockPeriods) -> (BalanceOf<T>, BalanceOf<T>) {
+	fn delegated_votes(to: T::AccountId, min_lock_periods: LockPeriods) -> (BalanceOf<T>, BalanceOf<T>) {
 		let mut balance = Zero::zero();
 		let mut votes = Zero::zero();
-		for (delegator, (delegate, periods, r)) in <Delegations<T>>::enumerate() {
-			if ref_index == r && delegate == to {
+		for (delegator, (delegate, periods)) in <Delegations<T>>::enumerate() {
+			if delegate == to {
 				let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
 				balance += T::Currency::total_balance(&delegator);
 				votes += T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
-				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods);
+				let (del_votes, del_balance) = Self::delegated_votes(delegator, lock_periods);
 				votes += del_votes;
 				balance += del_balance;
 			}
@@ -662,7 +662,7 @@ mod tests {
 			let r = 0;
 
 			/// Delegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), r, 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
@@ -687,8 +687,8 @@ mod tests {
 			assert_ok!(propose_set_balance(1, 2, 1));
 
 			/// Delegate and undelegate vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 1, 100));
-			assert_ok!(Democracy::undelegate(Origin::signed(2), 1));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_ok!(Democracy::undelegate(Origin::signed(2)));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			System::set_block_number(2);
@@ -717,7 +717,7 @@ mod tests {
 			assert_ok!(propose_set_balance(1, 2, 1));
 
 			/// Delegate the vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 1, 100));
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			System::set_block_number(2);
@@ -931,7 +931,7 @@ mod tests {
 		});
 	}
 
-#[test]
+	#[test]
 	fn lock_voting_should_work_with_delegation() {
 		with_externalities(&mut new_test_ext_with_public_delay(1), || {
 			System::set_block_number(1);
@@ -940,7 +940,7 @@ mod tests {
 			assert_ok!(Democracy::vote(Origin::signed(2), r, Vote::new(true, 5)));
 			assert_ok!(Democracy::vote(Origin::signed(3), r, Vote::new(true, 4)));
 			assert_ok!(Democracy::vote(Origin::signed(4), r, Vote::new(true, 3)));
-			assert_ok!(Democracy::delegate(Origin::signed(5), r, 2, 2));
+			assert_ok!(Democracy::delegate(Origin::signed(5), 2, 2));
 			assert_ok!(Democracy::vote(Origin::signed(6), r, Vote::new(false, 1)));
 
 			assert_eq!(Democracy::tally(r), (440, 120, 210));
