@@ -98,6 +98,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
 		if roles.intersects(Roles::AUTHORITY) {
 			trace!(target:"gossip", "Registering {:?} {}", roles, who);
+			let now = Instant::now();
 			// Send out all known messages to authorities.
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
