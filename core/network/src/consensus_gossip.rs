@@ -29,6 +29,7 @@ use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
 pub use crate::message::generic::{Message, ConsensusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
+use crate::ConsensusEngineId;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(120);
@@ -59,7 +60,7 @@ pub enum ValidationResult<H> {
 /// Validates consensus messages.
 pub trait Validator<H> {
 	/// Validate consensus message.
-	fn validate(&self, kind: u32, data: &[u8]) -> ValidationResult<H>;
+	fn validate(&self, data: &[u8]) -> ValidationResult<H>;
 }
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
@@ -68,7 +69,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	live_message_sinks: HashMap<B::Hash, Vec<mpsc::UnboundedSender<Vec<u8>>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
-	validators: HashMap<u32, Arc<Validator<B::Hash>>>,
+	validators: HashMap<ConsensusEngineId, Arc<Validator<B::Hash>>>,
 }
 
 impl<B: BlockT> ConsensusGossip<B> {
@@ -89,8 +90,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Register message validator for a message type.
-	pub fn register_validator(&mut self, kind: u32, validator: Arc<Validator<B::Hash>>) {
-		self.validators.insert(kind, validator);
+	pub fn register_validator(&mut self, engine_id: ConsensusEngineId, validator: Arc<Validator<B::Hash>>) {
+		self.validators.insert(engine_id, validator);
 	}
 
 	/// Handle new connected peer.
@@ -187,8 +188,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 		self.messages.retain(|entry| {
 			entry.timestamp + MESSAGE_LIFETIME >= now
-			&& match validators.get(&entry.message.kind)
-				.map(|v| v.validate(entry.message.kind, &entry.message.data))
+			&& match validators.get(&entry.message.engine_id)
+				.map(|v| v.validate(&entry.message.data))
 			{
 				Some(ValidationResult::Valid(_)) => true,
 				_ => false,
@@ -239,8 +240,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 			use std::collections::hash_map::Entry;
 
 			//validate the message
-			let topic = match self.validators.get(&message.kind)
-				.map(|v| v.validate(message.kind, &message.data))
+			let topic = match self.validators.get(&message.engine_id)
+				.map(|v| v.validate(&message.data))
 			{
 				Some(ValidationResult::Valid(topic)) => topic,
 				Some(ValidationResult::Invalid) => {
@@ -264,9 +265,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 				None => {
 					protocol.report_peer(
 						who,
-						Severity::Useless(format!("Sent unknown consensus message kind")),
+						Severity::Useless(format!("Sent unknown consensus engine id")),
 					);
-					trace!(target:"gossip", "Unknown message kind {} from {}", message.kind, who);
+					trace!(target:"gossip", "Unknown message engine id {:?} from {}", message.engine_id, who);
 					return None;
 				}
 			};
@@ -336,7 +337,7 @@ mod tests {
 				$consensus.messages.push(MessageEntry {
 					topic: $topic,
 					message_hash: $hash,
-					message: ConsensusMessage { data: $m, kind: 0},
+					message: ConsensusMessage { data: $m, engine_id: [0, 0, 0, 0]},
 					timestamp: $now,
 				});
 			}
@@ -348,14 +349,14 @@ mod tests {
 
 		struct AllowAll;
 		impl Validator<H256> for AllowAll {
-			fn validate(&self, _kind: u32, _data: &[u8]) -> ValidationResult<H256> {
+			fn validate(&self, _data: &[u8]) -> ValidationResult<H256> {
 				ValidationResult::Valid(H256::default())
 			}
 		}
 
 		struct AllowOne;
 		impl Validator<H256> for AllowOne {
-			fn validate(&self, _kind: u32, data: &[u8]) -> ValidationResult<H256> {
+			fn validate(&self, data: &[u8]) -> ValidationResult<H256> {
 				if data[0] == 1 {
 					ValidationResult::Valid(H256::default())
 				} else {
@@ -378,12 +379,13 @@ mod tests {
 		consensus.known_messages.insert(m1_hash, ());
 		consensus.known_messages.insert(m2_hash, ());
 
-		consensus.register_validator(0, Arc::new(AllowAll));
+		let test_engine_id = Default::default();
+		consensus.register_validator(test_engine_id, Arc::new(AllowAll));
 		consensus.collect_garbage();
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.known_messages.len(), 2);
 
-		consensus.register_validator(0, Arc::new(AllowOne));
+		consensus.register_validator(test_engine_id, Arc::new(AllowOne));
 
 		// m2 is expired
 		consensus.collect_garbage();
@@ -395,7 +397,7 @@ mod tests {
 		// make timestamp expired, but the message is still kept as known
 		consensus.messages.clear();
 		consensus.known_messages.clear();
-		consensus.register_validator(0, Arc::new(AllowAll));
+		consensus.register_validator(test_engine_id, Arc::new(AllowAll));
 		push_msg!(consensus, best_hash, m2_hash, now - MESSAGE_LIFETIME, m2.clone());
 		consensus.collect_garbage();
 		assert!(consensus.messages.is_empty());
@@ -408,7 +410,7 @@ mod tests {
 
 		let mut consensus = ConsensusGossip::<Block>::new();
 
-		let message = ConsensusMessage { data: vec![4, 5, 6], kind: 0 };
+		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
 		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
@@ -424,8 +426,8 @@ mod tests {
 		let mut consensus = ConsensusGossip::<Block>::new();
 
 		let topic = [1; 32].into();
-		let msg_a = ConsensusMessage { data: vec![1, 2, 3], kind: 0 };
-		let msg_b = ConsensusMessage { data: vec![4, 5, 6], kind: 0 };
+		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
+		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
 		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic, || msg_a.clone());
 		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic, || msg_b.clone());
@@ -439,7 +441,7 @@ mod tests {
 
 		let mut consensus = ConsensusGossip::<Block>::new();
 
-		let message = ConsensusMessage { data: vec![4, 5, 6], kind: 0 };
+		let message = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
 		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);

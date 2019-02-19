@@ -108,8 +108,7 @@ const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
-const GRANDPA_ROUND_MESSAGE: u32 = 0x1001;
-const GRANDPA_COMMIT_MESSAGE: u32 = 0x1002;
+const GRANDPA_ENGINE_ID: network::ConsensusEngineId = [b'a', b'f', b'g', b'1'];
 
 const MESSAGE_ROUND_TOLERANCE: u64 = 2;
 
@@ -126,9 +125,19 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	Ed25519AuthorityId,
 >;
 
+/// Grandpa gossip message type.
+/// This is the root type that gets encoded and sent on the network.
+#[derive(Debug, Encode, Decode)]
+pub enum GossipMessage<Block: BlockT> {
+	/// Grandpa message with round and set info.
+	VoteOrPrecommit(VoteOrPrecommitMessage<Block>),
+	/// Grandpa commit message with round and set info.
+	Commit(FullCommitMessage<Block>),
+}
+
 /// Network level message with topic information.
 #[derive(Debug, Encode, Decode)]
-pub struct FullRoundMessage<Block: BlockT> {
+pub struct VoteOrPrecommitMessage<Block: BlockT> {
 	pub round: u64,
 	pub set_id: u64,
 	pub message: SignedMessage<Block>,
@@ -153,7 +162,7 @@ pub type CompactCommit<Block> = grandpa::CompactCommit<
 	Ed25519AuthorityId
 >;
 
-/// Network level message with topic information.
+/// Network level commit message with topic information.
 #[derive(Debug, Encode, Decode)]
 pub struct FullCommitMessage<Block: BlockT> {
 	pub round: u64,
@@ -304,83 +313,65 @@ impl<Block: BlockT> GossipValidator<Block> {
 		false
 	}
 
-	fn validate_round_message(&self, mut raw: &[u8]) -> network_gossip::ValidationResult<Block::Hash> {
-		match FullRoundMessage::<Block>::decode(&mut raw) {
-			Some(full) => {
-				if self.is_expired(full.round, full.set_id) {
-					return network_gossip::ValidationResult::Expired;
-				}
+	fn validate_round_message(&self, full: VoteOrPrecommitMessage<Block>) -> network_gossip::ValidationResult<Block::Hash> {
+		if self.is_expired(full.round, full.set_id) {
+			return network_gossip::ValidationResult::Expired;
+		}
 
-				if let Err(()) = communication::check_message_sig::<Block>(
-					&full.message.message,
-					&full.message.id,
-					&full.message.signature,
-					full.round,
-					full.set_id
-				) {
-					debug!(target: "afg", "Bad message signature {}", full.message.id);
-					return network_gossip::ValidationResult::Invalid;
-				}
+		if let Err(()) = communication::check_message_sig::<Block>(
+			&full.message.message,
+			&full.message.id,
+			&full.message.signature,
+			full.round,
+			full.set_id
+		) {
+			debug!(target: "afg", "Bad message signature {}", full.message.id);
+			return network_gossip::ValidationResult::Invalid;
+		}
 
-				let topic = message_topic::<Block>(full.round, full.set_id);
-				network_gossip::ValidationResult::Valid(topic)
-			},
+		let topic = message_topic::<Block>(full.round, full.set_id);
+		network_gossip::ValidationResult::Valid(topic)
+	}
+
+	fn validate_commit_message(&self, full: FullCommitMessage<Block>) -> network_gossip::ValidationResult<Block::Hash> {
+		use grandpa::Message as GrandpaMessage;
+		if self.is_expired(full.round, full.set_id) {
+			return network_gossip::ValidationResult::Expired;
+		}
+
+		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
+			debug!(target: "afg", "Malformed compact commit");
+			return network_gossip::ValidationResult::Invalid;
+		}
+
+		// check signatures on all contained precommits.
+		for (precommit, &(ref sig, ref id)) in full.message.precommits.iter().zip(&full.message.auth_data) {
+			if let Err(()) = communication::check_message_sig::<Block>(
+				&GrandpaMessage::Precommit(precommit.clone()),
+				id,
+				sig,
+				full.round,
+				full.set_id,
+			) {
+				debug!(target: "afg", "Bad commit message signature {}", id);
+				return network_gossip::ValidationResult::Invalid;
+			}
+		}
+
+		let topic = commit_topic::<Block>(full.set_id);
+		network_gossip::ValidationResult::Valid(topic)
+	}
+}
+
+impl<Block: BlockT> network_gossip::Validator<Block::Hash> for GossipValidator<Block> {
+	fn validate(&self, mut data: &[u8]) -> network_gossip::ValidationResult<Block::Hash> {
+		match GossipMessage::<Block>::decode(&mut data) {
+			Some(GossipMessage::VoteOrPrecommit(message)) => self.validate_round_message(message),
+			Some(GossipMessage::Commit(message)) => self.validate_commit_message(message),
 			None => {
 				debug!(target: "afg", "Error decoding message");
 				network_gossip::ValidationResult::Invalid
 			}
-		}
-	}
-
-	fn validate_commit_message(&self, mut raw: &[u8]) -> network_gossip::ValidationResult<Block::Hash> {
-		match FullCommitMessage::<Block>::decode(&mut raw) {
-			Some(full) => {
-				use grandpa::Message as GrandpaMessage;
-				if self.is_expired(full.round, full.set_id) {
-					return network_gossip::ValidationResult::Expired;
-				}
-
-				if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
-					debug!(target: "afg", "Malformed compact commit");
-					return network_gossip::ValidationResult::Invalid;
-				}
-
-				// check signatures on all contained precommits.
-				for (precommit, &(ref sig, ref id)) in full.message.precommits.iter().zip(&full.message.auth_data) {
-					if let Err(()) = communication::check_message_sig::<Block>(
-						&GrandpaMessage::Precommit(precommit.clone()),
-						id,
-						sig,
-						full.round,
-						full.set_id,
-					) {
-						debug!(target: "afg", "Bad commit message signature {}", id);
-						return network_gossip::ValidationResult::Invalid;
-					}
-				}
-
-				let topic = commit_topic::<Block>(full.set_id);
-				network_gossip::ValidationResult::Valid(topic)
-			},
-			None => {
-				debug!(target: "afg", "Error decoding commit message");
-				network_gossip::ValidationResult::Invalid
-			}
-		}
-	}
-
-}
-
-impl<Block: BlockT> network_gossip::Validator<Block::Hash> for GossipValidator<Block> {
-	fn validate(&self, kind: u32, data: &[u8]) -> network_gossip::ValidationResult<Block::Hash> {
-		match kind {
-			GRANDPA_ROUND_MESSAGE => {
-				self.validate_round_message(data)
-			},
-			GRANDPA_COMMIT_MESSAGE => {
-				self.validate_commit_message(data)
-			},
-			_ => network_gossip::ValidationResult::Invalid,
 		}
 	}
 }
@@ -429,8 +420,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>> NetworkBri
 		let validator = Arc::new(GossipValidator::new());
 		let v = validator.clone();
 		service.with_gossip(move |gossip, _| {
-			gossip.register_validator(GRANDPA_ROUND_MESSAGE, validator.clone());
-			gossip.register_validator(GRANDPA_COMMIT_MESSAGE, validator.clone());
+			gossip.register_validator(GRANDPA_ENGINE_ID, validator.clone());
 		});
 		NetworkBridge { service, validator: v }
 	}
@@ -467,7 +457,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ROUND_MESSAGE, message);
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
@@ -492,7 +482,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_COMMIT_MESSAGE, message);
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
 	}
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {

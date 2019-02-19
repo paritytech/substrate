@@ -28,7 +28,8 @@ use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Ed25519AuthorityId};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
-use crate::{Error, Network, Message, SignedMessage, Commit, CompactCommit, FullRoundMessage, FullCommitMessage};
+use crate::{Error, Network, Message, SignedMessage, Commit,
+	CompactCommit, GossipMessage, FullCommitMessage, VoteOrPrecommitMessage};
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()
@@ -269,19 +270,27 @@ pub(crate) fn checked_message_stream<Block: BlockT, S>(
 {
 	inner
 		.filter_map(|raw| {
-			let decoded = FullRoundMessage::<Block>::decode(&mut &raw[..]);
+			let decoded = GossipMessage::<Block>::decode(&mut &raw[..]);
 			if decoded.is_none() {
 				debug!(target: "afg", "Skipping malformed message {:?}", raw);
 			}
 			decoded
 		})
 		.and_then(move |msg| {
-			// check signature.
-			if !voters.contains_key(&msg.message.id) {
-				debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
-				return Ok(None);
+			match msg {
+				GossipMessage::VoteOrPrecommit(msg) => {
+					// check signature.
+					if !voters.contains_key(&msg.message.id) {
+						debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
+						return Ok(None);
+					}
+					Ok(Some(msg.message))
+				}
+				_ => {
+					debug!(target: "afg", "Skipping unknown message type");
+					return Ok(None);
+				}
 			}
-			Ok(Some(msg.message))
 		})
 		.filter_map(|x| x)
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
@@ -313,11 +322,11 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 				id: local_id,
 			};
 
-			let message = FullRoundMessage::<Block> {
+			let message = GossipMessage::VoteOrPrecommit(VoteOrPrecommitMessage::<Block> {
 				message: signed.clone(),
 				round: self.round,
 				set_id: self.set_id,
-			};
+			});
 
 			// announce our block hash to peers and propagate the
 			// message.
@@ -421,15 +430,23 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 	inner
 		.filter_map(|raw| {
 			// this could be optimized by decoding piecewise.
-			let decoded = FullCommitMessage::<Block>::decode(&mut &raw[..]);
+			let decoded = GossipMessage::<Block>::decode(&mut &raw[..]);
 			if decoded.is_none() {
 				trace!(target: "afg", "Skipping malformed commit message {:?}", raw);
 			}
 			decoded
 		})
 		.filter_map(move |msg| {
-			let round = msg.round;
-			check_compact_commit::<Block>(msg.message, &*voters, round, set_id).map(move |c| (round, c))
+			match msg {
+				GossipMessage::Commit(msg) => {
+					let round = msg.round;
+					check_compact_commit::<Block>(msg.message, &*voters, round, set_id).map(move |c| (round, c))
+				},
+				_ => {
+					debug!(target: "afg", "Skipping unknown message type");
+					return None;
+				}
+			}
 		})
 		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
 }

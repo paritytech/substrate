@@ -30,6 +30,9 @@ pub use self::generic::{
 /// A unique ID of a request.
 pub type RequestId = u64;
 
+/// Consensus engine unique ID.
+pub type ConsensusEngineId = [u8; 4];
+
 /// Type alias for using the message type using block type parameters.
 pub type Message<B> = generic::Message<
 	<B as BlockT>::Header,
@@ -132,13 +135,13 @@ pub mod generic {
 	use crate::config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
-		RequestId, Transactions, Direction
+		RequestId, Transactions, Direction, ConsensusEngineId,
 	};
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {
-		/// Identifies message structure.
-		pub kind: u32,
+		/// Identifies consensus engine.
+		pub engine_id: ConsensusEngineId,
 		/// Message payload.
 		pub data: Vec<u8>,
 	}

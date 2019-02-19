@@ -20,7 +20,7 @@ use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus::import_queue::ImportQueue;
-use crate::message::{self, Message};
+use crate::message::{self, Message, ConsensusEngineId};
 use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::on_demand::OnDemandService;
@@ -241,7 +241,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, u32, Vec<u8>),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>),
 	/// Is protocol currently major-syncing?
 	IsMajorSyncing(Sender<bool>),
 	/// Is protocol currently offline?
@@ -377,8 +377,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, kind, message) => {
-				self.gossip_consensus_message(topic, kind, message)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
+				self.gossip_consensus_message(topic, engine_id, message)
 			}
 			ProtocolMsg::IsMajorSyncing(sender) => {
 				let is_syncing = self.sync.status().is_major_syncing();
@@ -495,11 +495,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(&mut self, topic: B::Hash, kind: u32, message: Vec<u8>) {
+	fn gossip_consensus_message(&mut self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		self.consensus_gossip.multicast(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			topic,
-			ConsensusMessage{ data: message, kind },
+			ConsensusMessage{ data: message, engine_id },
 		);
 	}
 
