@@ -38,6 +38,7 @@ use runtime_primitives::{
 		GetNodeBlockType, GetRuntimeBlockType,
 	},
 };
+pub use runtime_primitives::AccountId;
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
 use primitives::{Ed25519AuthorityId, OpaqueMetadata};
@@ -127,8 +128,6 @@ impl Extrinsic {
 	}
 }
 
-/// An identifier for an account on this system.
-pub type AccountId = H256;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
 /// The block number type used in this runtime.

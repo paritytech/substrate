@@ -579,7 +579,7 @@ macro_rules! decl_module {
 				$crate::substrate_metadata::MetadataName::Custom(module_path!().into(), stringify!($mod_type).into())
 			}
 
-			fn type_metadata_kind(registry: &mut $crate::substrate_metadata::MetadataRegistry) -> $crate::substrate_metadata::TypeMetadataKind {
+			fn type_metadata_kind(_registry: &mut $crate::substrate_metadata::MetadataRegistry) -> $crate::substrate_metadata::TypeMetadataKind {
 				$crate::substrate_metadata::TypeMetadataKind::Struct($crate::rstd::vec::Vec::new())
 			}
 		}
@@ -916,6 +916,7 @@ macro_rules! impl_outer_dispatch {
 				$crate::substrate_metadata::MetadataName::Custom(module_path!().into(), stringify!($call_type).into())
 			}
 
+			#[allow(unused_variables)]
 			fn type_metadata_kind(registry: &mut $crate::substrate_metadata::MetadataRegistry) -> $crate::substrate_metadata::TypeMetadataKind {
 				let mut idx: u16 = 0;
 				$crate::substrate_metadata::TypeMetadataKind::Enum($crate::_vec![

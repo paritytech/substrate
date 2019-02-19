@@ -14,7 +14,7 @@ use primitives::bytes;
 use primitives::{Ed25519AuthorityId, OpaqueMetadata};
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, Ed25519Signature, generic,
-	traits::{self, BlakeTwo256, Block as BlockT, StaticLookup}, create_runtime_str
+	traits::{self, Verify, BlakeTwo256, Block as BlockT, StaticLookup}, create_runtime_str
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -36,7 +36,7 @@ pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
 
 /// Alias to Ed25519 pubkey that identifies an account on the chain.
-pub type AccountId = primitives::H256;
+pub type AccountId = <Ed25519Signature as Verify>::Signer;
 
 /// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
