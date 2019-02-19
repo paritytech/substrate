@@ -192,13 +192,10 @@ fn decl_store_extra_genesis(
 				is_trait_needed = true;
 				has_trait_field = true;
 			}
-			for t in ext::get_non_bound_serde_derive_types(type_infos.value_type, &traitinstance) {
-				serde_complete_bound.insert(t);
-			}
+
+			serde_complete_bound.insert(type_infos.value_type);
 			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
-				for t in ext::get_non_bound_serde_derive_types(key_type, &traitinstance) {
-					serde_complete_bound.insert(t);
-				}
+				serde_complete_bound.insert(key_type);
 			}
 			let storage_type = type_infos.typ.clone();
 			config_field.extend(match type_infos.kind {
@@ -285,9 +282,7 @@ fn decl_store_extra_genesis(
 						has_trait_field = true;
 					}
 
-					for t in ext::get_non_bound_serde_derive_types(extra_type, &traitinstance).into_iter() {
-						serde_complete_bound.insert(t);
-					}
+					serde_complete_bound.insert(extra_type);
 
 					let extrafield = &extra_field.content;
 					genesis_extrafields.extend(quote!{
@@ -315,6 +310,7 @@ fn decl_store_extra_genesis(
 	let serde_bug_bound = if !serde_complete_bound.is_empty() {
 		let mut b_ser = String::new();
 		let mut b_dser = String::new();
+		// panic!("{:#?}", serde_complete_bound);
 		serde_complete_bound.into_iter().for_each(|bound| {
 			let stype = quote!(#bound);
 			b_ser.push_str(&format!("{} : {}::serde::Serialize, ", stype, scrate));
