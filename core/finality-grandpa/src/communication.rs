@@ -260,8 +260,6 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 /// converts a message stream into a stream of signed messages.
 /// the output stream checks signatures also.
 pub(crate) fn checked_message_stream<Block: BlockT, S>(
-	_round: u64,
-	_set_id: u64,
 	inner: S,
 	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 )
@@ -398,8 +396,6 @@ pub(crate) fn outgoing_messages<Block: BlockT, N: Network<Block>>(
 fn check_compact_commit<Block: BlockT>(
 	msg: CompactCommit<Block>,
 	voters: &VoterSet<Ed25519AuthorityId>,
-	_round: u64,
-	_set_id: u64,
 ) -> Option<CompactCommit<Block>> {
 	if msg.precommits.len() != msg.auth_data.len() || msg.precommits.is_empty() {
 		debug!(target: "afg", "Skipping malformed compact commit");
@@ -420,7 +416,6 @@ fn check_compact_commit<Block: BlockT>(
 /// A stream for incoming commit messages. This checks all the signatures on the
 /// messages.
 pub(crate) fn checked_commit_stream<Block: BlockT, S>(
-	set_id: u64,
 	inner: S,
 	voters: Arc<VoterSet<Ed25519AuthorityId>>,
 )
@@ -440,7 +435,7 @@ pub(crate) fn checked_commit_stream<Block: BlockT, S>(
 			match msg {
 				GossipMessage::Commit(msg) => {
 					let round = msg.round;
-					check_compact_commit::<Block>(msg.message, &*voters, round, set_id).map(move |c| (round, c))
+					check_compact_commit::<Block>(msg.message, &*voters).map(move |c| (round, c))
 				},
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");

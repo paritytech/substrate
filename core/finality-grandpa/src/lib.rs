@@ -313,7 +313,9 @@ impl<Block: BlockT> GossipValidator<Block> {
 		false
 	}
 
-	fn validate_round_message(&self, full: VoteOrPrecommitMessage<Block>) -> network_gossip::ValidationResult<Block::Hash> {
+	fn validate_round_message(&self, full: VoteOrPrecommitMessage<Block>)
+		-> network_gossip::ValidationResult<Block::Hash>
+	{
 		if self.is_expired(full.round, full.set_id) {
 			return network_gossip::ValidationResult::Expired;
 		}
@@ -333,7 +335,9 @@ impl<Block: BlockT> GossipValidator<Block> {
 		network_gossip::ValidationResult::Valid(topic)
 	}
 
-	fn validate_commit_message(&self, full: FullCommitMessage<Block>) -> network_gossip::ValidationResult<Block::Hash> {
+	fn validate_commit_message(&self, full: FullCommitMessage<Block>)
+		-> network_gossip::ValidationResult<Block::Hash>
+	{
 		use grandpa::Message as GrandpaMessage;
 		if self.is_expired(full.round, full.set_id) {
 			return network_gossip::ValidationResult::Expired;
@@ -420,9 +424,9 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>> NetworkBri
 		let validator = Arc::new(GossipValidator::new());
 		let v = validator.clone();
 		service.with_gossip(move |gossip, _| {
-			gossip.register_validator(GRANDPA_ENGINE_ID, validator.clone());
+			gossip.register_validator(GRANDPA_ENGINE_ID, v);
 		});
-		NetworkBridge { service, validator: v }
+		NetworkBridge { service, validator: validator }
 	}
 }
 
@@ -611,7 +615,6 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 {
 	// verification stream
 	let commit_in = crate::communication::checked_commit_stream::<Block, _>(
-		set_id,
 		network.commit_messages(set_id),
 		voters.clone(),
 	);

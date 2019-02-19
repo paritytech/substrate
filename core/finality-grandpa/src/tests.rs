@@ -150,13 +150,13 @@ impl MessageRouting {
 			let inner = inner.lock();
 			let peer = inner.peer(peer_id);
 			peer.with_gossip(move |gossip, _| {
-				gossip.register_validator(GRANDPA_ENGINE_ID, validator.clone());
+				gossip.register_validator(GRANDPA_ENGINE_ID, v);
 			});
 		}
 		MessageRouting {
 			inner,
 			peer_id,
-			validator: v,
+			validator,
 		}
 	}
 
