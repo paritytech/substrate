@@ -101,6 +101,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			// Send out all known messages to authorities.
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
+				if entry.timestamp + MESSAGE_LIFETIME < now { continue };
 				known_messages.insert(entry.message_hash);
 				protocol.send_message(who, Message::Consensus(entry.message.clone()));
 			}
