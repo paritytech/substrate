@@ -127,7 +127,13 @@ impl<B: BlockT> ConsensusGossip<B> {
 		where F: Fn() -> ConsensusMessage,
 	{
 		let mut non_authorities: Vec<_> = self.peers.iter()
-			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&message_hash) { Some(*id) } else { None })
+			.filter_map(|(id, ref peer)|
+				if !peer.is_authority && !peer.known_messages.contains(&message_hash) {
+					Some(*id)
+				} else {
+					None
+				}
+			)
 			.collect();
 
 		non_authorities.shuffle(&mut rand::thread_rng());
