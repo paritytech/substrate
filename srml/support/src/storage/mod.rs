@@ -345,7 +345,7 @@ pub trait EnumerableStorageMap<K: Codec, V: Codec>: StorageMap<K, V> {
 	fn head() -> Option<K>;
 
 	/// Enumerate all elements in the map.
-	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>>;
+	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static;
 }
 
 impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator::EnumerableStorageMap<K, V> {
@@ -353,7 +353,7 @@ impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator:
 		<U as generator::EnumerableStorageMap<K, V>>::head(&RuntimeStorage)
 	}
 
-	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> {
+	fn enumerate() -> Box<dyn Iterator<Item = (K, V)>> where K: 'static, V: 'static {
 		<U as generator::EnumerableStorageMap<K, V>>::enumerate(&RuntimeStorage)
 	}
 }
