@@ -580,7 +580,7 @@ macro_rules! decl_module {
 			}
 
 			fn type_metadata_kind(registry: &mut $crate::substrate_metadata::MetadataRegistry) -> $crate::substrate_metadata::TypeMetadataKind {
-				$crate::substrate_metadata::TypeMetadataKind::Struct(vec![])
+				$crate::substrate_metadata::TypeMetadataKind::Struct($crate::rstd::vec::Vec::new())
 			}
 		}
 
@@ -918,7 +918,7 @@ macro_rules! impl_outer_dispatch {
 
 			fn type_metadata_kind(registry: &mut $crate::substrate_metadata::MetadataRegistry) -> $crate::substrate_metadata::TypeMetadataKind {
 				let mut idx: u16 = 0;
-				$crate::substrate_metadata::TypeMetadataKind::Enum(vec![
+				$crate::substrate_metadata::TypeMetadataKind::Enum($crate::_vec![
 					$({
 						let type_name = <$camelcase as $crate::substrate_metadata::EncodeMetadata>::type_name();
 						registry.register(type_name.clone(), <$camelcase as $crate::substrate_metadata::EncodeMetadata>::type_metadata_kind);
@@ -926,12 +926,12 @@ macro_rules! impl_outer_dispatch {
 						$crate::substrate_metadata::EnumVariantMetadata {
 							name: stringify!($camelcase).into(),
 							index: idx - 1,
-							fields: vec![$crate::substrate_metadata::FieldMetadata {
+							fields: $crate::_vec![$crate::substrate_metadata::FieldMetadata {
 								name: $crate::substrate_metadata::FieldName::Unnamed(0),
 								ty: type_name,
 							}]
 						}
-					},)*
+					}),*
 				])
 			}
 		}
@@ -1043,7 +1043,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		vec![ $( $function_metadata ),* ]
+		$crate::_vec![ $( $function_metadata ),* ]
 	}
 }
 
@@ -1060,7 +1060,7 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::dispatch::FunctionMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
-			arguments: vec![
+			arguments: $crate::_vec![
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),

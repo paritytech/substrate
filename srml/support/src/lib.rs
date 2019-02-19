@@ -137,6 +137,20 @@ macro_rules! for_each_tuple {
 	}
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! _vec {
+    ( $( $x:expr ),* ) => {
+        {
+			#[allow(unused_mut)]
+            let mut temp_vec = $crate::rstd::vec::Vec::new();
+            $(
+                temp_vec.push($x);
+            )*
+            temp_vec
+        }
+    };
+}
 #[cfg(test)]
 mod tests {
 	use super::*;

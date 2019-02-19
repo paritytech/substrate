@@ -266,7 +266,7 @@ macro_rules! __events_to_metadata {
 			$( $metadata, )*
 			$crate::event::EventMetadata {
 				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),
-				arguments: vec![
+				arguments: $crate::_vec![
 					$( $( <$param as $crate::substrate_metadata::EncodeMetadata>::type_name() ),* )*
 				],
 				documentation: $crate::event::DecodeDifferent::Encode(&[
@@ -279,7 +279,7 @@ macro_rules! __events_to_metadata {
 	(
 		$( $metadata:expr ),*;
 	) => {
-		vec![ $( $metadata ),* ]
+		$crate::_vec![ $( $metadata ),* ]
 	}
 }
 

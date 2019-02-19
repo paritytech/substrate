@@ -1410,6 +1410,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -1428,6 +1430,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -1443,6 +1447,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-support-procedural 0.1.0",
  "srml-system 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]
@@ -1530,6 +1536,8 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-inherents 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-metadata-derive 0.1.0",
 ]
 
 [[package]]

@@ -131,6 +131,7 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		impl<#traitinstance: 'static + #traittype> #module_ident<#traitinstance> {
 			#impl_store_fns
 			pub fn store_metadata_functions() -> #scrate::rstd::vec::Vec<#scrate::storage::generator::StorageFunctionMetadata> {
+				use #scrate::rstd::prelude::*;
 				#store_functions_to_metadata
 			}
 			pub fn store_metadata_name() -> &'static str {
