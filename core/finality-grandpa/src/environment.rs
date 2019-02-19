@@ -368,6 +368,7 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 /// Finalize the given block and apply any authority set changes. If an
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
+/// This method assumes that the block being finalized has already been imported.
 pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
@@ -391,9 +392,11 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	let mut old_last_completed = None;
 
 	let mut consensus_changes = consensus_changes.lock();
-	let status = authority_set.apply_changes(number, |canon_number| {
-		canonical_at_height(client, (hash, number), canon_number)
-	})?;
+	let status = authority_set.apply_changes(
+		hash,
+		number,
+		&is_descendent_of(client, None),
+	).map_err(|e| Error::Safety(e.to_string()))?;
 
 	if status.changed {
 		// write new authority set state to disk.
@@ -598,4 +601,42 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	}
 
 	Ok(Some(current.hash()))
+}
+
+/// Returns a function for checking block ancestry, the returned function will
+/// return `true` if the given hash (second parameter) is a descendent of the
+/// base (first parameter). If the `current` parameter is defined, it should
+/// represent the current block `hash` and its `parent hash`, if given the
+/// function that's returned will assume that `hash` isn't part of the local DB
+/// yet, and all searches in the DB will instead reference the parent.
+pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash=H256>, RA>(
+	client: &'a Client<B, E, Block, RA>,
+	current: Option<(&'a H256, &'a H256)>,
+) -> impl Fn(&H256, &H256) -> Result<bool, client::error::Error> + 'a
+where B: Backend<Block, Blake2Hasher>,
+	  E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+{
+	move |base, hash| {
+		if base == hash { return Ok(false); }
+
+		let mut hash = hash;
+		if let Some((current_hash, current_parent_hash)) = current {
+			if base == current_hash { return Ok(false); }
+			if hash == current_hash {
+				if base == current_parent_hash {
+					return Ok(true);
+				} else {
+					hash = current_parent_hash;
+				}
+			}
+		}
+
+		let tree_route = client::blockchain::tree_route(
+			client.backend().blockchain(),
+			BlockId::Hash(*hash),
+			BlockId::Hash(*base),
+		)?;
+
+		Ok(tree_route.common_block().hash == *base)
+	}
 }

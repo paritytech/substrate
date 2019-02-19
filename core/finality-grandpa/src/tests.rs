@@ -416,7 +416,12 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 		.map_err(|_| ());
 
 	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		.for_each(move |_| { net.lock().route_fast(); Ok(()) })
+		.for_each(move |_| {
+			net.lock().send_import_notifications();
+			net.lock().send_finality_notifications();
+			net.lock().route_fast();
+			Ok(())
+		})
 		.map(|_| ())
 		.map_err(|_| ());
 
@@ -550,7 +555,7 @@ fn transition_3_voters_twice_1_observer() {
 		let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 		assert_eq!(set.current(), (0, make_ids(peers_a).as_slice()));
-		assert_eq!(set.pending_changes().len(), 0);
+		assert_eq!(set.pending_changes().count(), 0);
 	}
 
 	{
@@ -636,7 +641,7 @@ fn transition_3_voters_twice_1_observer() {
 					let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
 					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
-					assert!(set.pending_changes().is_empty());
+					assert_eq!(set.pending_changes().count(), 0);
 				})
 		);
 		let voter = run_grandpa(
@@ -771,10 +776,69 @@ fn sync_justifications_on_change_blocks() {
 	}
 
 	// the last peer should get the justification by syncing from other peers
-	assert!(net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none());
 	while net.lock().peer(3).client().justification(&BlockId::Number(21)).unwrap().is_none() {
 		net.lock().route_fast();
 	}
+}
+
+#[test]
+fn finalizes_multiple_pending_changes_in_order() {
+	env_logger::init();
+
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers_b = &[Keyring::Dave, Keyring::Eve, Keyring::Ferdie];
+	let peers_c = &[Keyring::Dave, Keyring::Alice, Keyring::Bob];
+
+	let all_peers = &[
+		Keyring::Alice, Keyring::Bob, Keyring::Charlie,
+		Keyring::Dave, Keyring::Eve, Keyring::Ferdie,
+	];
+	let genesis_voters = make_ids(peers_a);
+
+	// 6 peers, 3 of them are authorities and participate in grandpa from genesis
+	let api = TestApi::new(genesis_voters);
+	let transitions = api.scheduled_changes.clone();
+	let mut net = GrandpaTestNet::new(api, 6);
+
+	// add 20 blocks
+	net.peer(0).push_blocks(20, false);
+
+	// at block 21 we do add a transition which is instant
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+		let block = builder.bake().unwrap();
+		transitions.lock().insert(*block.header.parent_hash(), ScheduledChange {
+			next_authorities: make_ids(peers_b),
+			delay: 0,
+		});
+		block
+	});
+
+	// add more blocks on top of it (until we have 25)
+	net.peer(0).push_blocks(4, false);
+
+	// at block 26 we add another which is enacted at block 30
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+		let block = builder.bake().unwrap();
+		transitions.lock().insert(*block.header.parent_hash(), ScheduledChange {
+			next_authorities: make_ids(peers_c),
+			delay: 4,
+		});
+		block
+	});
+
+	// add more blocks on top of it (until we have 30)
+	net.peer(0).push_blocks(4, false);
+
+	net.sync();
+
+	// all peers imported both change blocks
+	for i in 0..6 {
+		assert_eq!(net.peer(i).client().info().unwrap().chain.best_number, 30,
+			"Peer #{} failed to sync", i);
+	}
+
+	let net = Arc::new(Mutex::new(net));
+	run_to_completion(30, net.clone(), all_peers);
 }
 
 #[test]
