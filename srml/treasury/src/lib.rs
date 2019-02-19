@@ -22,12 +22,12 @@
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnDilution};
+use srml_support::traits::{Currency, OnDilution, ArithmeticType};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
 use parity_codec_derive::{Encode, Decode};
 use system::ensure_signed;
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -36,7 +36,7 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::Ac
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: system::Trait {
 	/// The staking balance.
-	type Currency: Currency<Self::AccountId>;
+	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=BalanceOf<Self>>;
 
 	/// Origin from which approvals must come.
 	type ApproveOrigin: EnsureOrigin<Self::Origin>;
@@ -172,7 +172,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T>
 	where
-		Balance = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance,
+		Balance = BalanceOf<T>,
 		<T as system::Trait>::AccountId
 	{
 		/// New proposal.

@@ -19,9 +19,9 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use srml_support::{dispatch::Result, Parameter, StorageMap, decl_event, decl_storage, decl_module};
+use srml_support::{dispatch::Result, traits::ArithmeticType, StorageMap, decl_event, decl_storage, decl_module};
 use runtime_primitives::traits::{
-	As, Member, SimpleArithmetic, ChargeBytesFee, ChargeFee,
+	As, ChargeBytesFee, ChargeFee,
 	TransferAsset, CheckedAdd, CheckedSub, CheckedMul, Zero
 };
 use system;
@@ -29,15 +29,14 @@ use system;
 mod mock;
 mod tests;
 
+type AssetOf<T> = <<T as Trait>::TransferAsset as ArithmeticType>::Type;
+
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
-	/// The unit for fee amount
-	type Amount: Member + Parameter + SimpleArithmetic + Default + Copy + As<u64>;
-
 	/// A function does the asset transfer between accounts
-	type TransferAsset: TransferAsset<Self::AccountId, Amount = Self::Amount>;
+	type TransferAsset: ArithmeticType + TransferAsset<Self::AccountId, Amount=AssetOf<Self>>;
 }
 
 decl_module! {
@@ -58,7 +57,7 @@ decl_module! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as Trait>::Amount {
+	pub enum Event<T> where Amount = AssetOf<T> {
 		/// Fee charged (extrinsic_index, fee_amount)
 		Charged(u32, Amount),
 	}
@@ -67,22 +66,22 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as Fees {
 		/// The fee to be paid for making a transaction; the base.
-		pub TransactionBaseFee get(transaction_base_fee) config(): T::Amount;
+		pub TransactionBaseFee get(transaction_base_fee) config(): AssetOf<T>;
 		/// The fee to be paid for making a transaction; the per-byte portion.
-		pub TransactionByteFee get(transaction_byte_fee) config(): T::Amount;
+		pub TransactionByteFee get(transaction_byte_fee) config(): AssetOf<T>;
 
 		/// The `extrinsic_index => accumulated_fees` map, containing records to
 		/// track the overall charged fees for each transaction.
 		///
 		/// All records should be removed at finalise stage.
-		CurrentTransactionFee get(current_transaction_fee): map u32 => T::Amount;
+		CurrentTransactionFee get(current_transaction_fee): map u32 => AssetOf<T>;
 	}
 }
 
 impl<T: Trait> ChargeBytesFee<T::AccountId> for Module<T> {
 	fn charge_base_bytes_fee(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let bytes_fee = Self::transaction_byte_fee().checked_mul(
-			&<T::Amount as As<u64>>::sa(encoded_len as u64)
+			&<AssetOf<T> as As<u64>>::sa(encoded_len as u64)
 		).ok_or_else(|| "bytes fee overflow")?;
 		let overall = Self::transaction_base_fee().checked_add(&bytes_fee).ok_or_else(|| "bytes fee overflow")?;
 		Self::charge_fee(transactor, overall)
@@ -90,9 +89,9 @@ impl<T: Trait> ChargeBytesFee<T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
-	type Amount = T::Amount;
+	type Amount = AssetOf<T>;
 
-	fn charge_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
+	fn charge_fee(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
 		let extrinsic_index = <system::Module<T>>::extrinsic_index().ok_or_else(|| "no extrinsic index found")?;
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
 		let new_fee = current_fee.checked_add(&amount).ok_or_else(|| "fee got overflow after charge")?;
@@ -103,7 +102,7 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 		Ok(())
 	}
 
-	fn refund_fee(transactor: &T::AccountId, amount: T::Amount) -> Result {
+	fn refund_fee(transactor: &T::AccountId, amount: AssetOf<T>) -> Result {
 		let extrinsic_index = <system::Module<T>>::extrinsic_index().ok_or_else(|| "no extrinsic index found")?;
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
 		let new_fee = current_fee.checked_sub(&amount).ok_or_else(|| "fee got underflow after refund")?;
