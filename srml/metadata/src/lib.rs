@@ -326,8 +326,12 @@ impl Decode for RuntimeMetadataDeprecated {
 #[derive(Eq, Encode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadataV2 {
+	/// Contains details of each runtime module
 	pub modules: Vec<ModuleMetadata>,
+	/// Contains all the type descriptions in all the runtime modules
 	pub type_registry: substrate_metadata::MetadataRegistry,
+	/// The block type been used, which should include the type description of header and extrinsic
+	pub block: MetadataName,
 }
 
 /// All metadata about an runtime module.

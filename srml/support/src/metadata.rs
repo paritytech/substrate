@@ -37,10 +37,21 @@ macro_rules! impl_runtime_metadata {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
 				let mut registry = $crate::substrate_metadata::MetadataRegistry::new();
+				let block_type_name = <
+					<
+						Self as $crate::runtime_primitives::traits::GetRuntimeBlockType
+					>::RuntimeBlock as $crate::substrate_metadata::EncodeMetadata
+				>::type_name();
+				registry.register(block_type_name.clone(), <
+					<
+						Self as $crate::runtime_primitives::traits::GetRuntimeBlockType
+					>::RuntimeBlock as $crate::substrate_metadata::EncodeMetadata
+				>::type_metadata_kind);
 				$crate::metadata::RuntimeMetadata::V2 (
 					$crate::metadata::RuntimeMetadataV2 {
 						modules: $crate::__runtime_modules_to_metadata!(registry; $runtime;; $( $rest )*),
-						type_registry: registry
+						type_registry: registry,
+						block: block_type_name,
 					}
 				).into()
 			}
@@ -401,6 +412,7 @@ mod tests {
 	fn runtime_metadata() {
 		let expected = RuntimeMetadata::V2(
 			RuntimeMetadataV2 {
+				type_registry: MetadataRegistry::new(),
 				modules: vec![
 					ModuleMetadata {
 						name: DecodeDifferent::Encode("system"),
@@ -469,7 +481,7 @@ mod tests {
 						)),
 					},
 				],
-				type_registry: MetadataRegistry::new()
+				block: MetadataName::Unknown,
 			}
 		);
 
