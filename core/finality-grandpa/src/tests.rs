@@ -506,7 +506,7 @@ fn finalize_3_voters_1_observer() {
 
 #[test]
 fn transition_3_voters_twice_1_observer() {
-	env_logger::init();
+	let _ = env_logger::try_init();
 	let peers_a = &[
 		Keyring::Alice,
 		Keyring::Bob,
