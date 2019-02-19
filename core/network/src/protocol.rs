@@ -874,7 +874,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
-		self.sync.block_finalized(&hash, *header.number());
+		self.sync.on_block_finalized(
+			&hash,
+			*header.number(),
+			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
+		);
 	}
 
 	fn on_remote_call_request(
