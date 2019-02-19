@@ -40,6 +40,8 @@ use substrate_metadata_derive::EncodeMetadata;
 
 #[cfg(feature = "std")]
 use substrate_primitives::hexdisplay::ascii_format;
+#[cfg(feature = "std")]
+use substrate_primitives::Ed25519AuthorityId;
 
 #[cfg(feature = "std")]
 pub mod testing;
@@ -295,10 +297,17 @@ impl AsRef<[u8]> for AccountId {
 }
 
 #[cfg(feature = "std")]
+impl From<Ed25519AuthorityId> for AccountId {
+	fn from(id: Ed25519AuthorityId) -> AccountId {
+		AccountId(id.0.into())
+	}
+}
+
+#[cfg(feature = "std")]
 impl std::fmt::Display for AccountId {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-      self.0.fmt(f)
-    }
+		self.0.fmt(f)
+	}
 }
 
 /// Ed25519 signature verify.
