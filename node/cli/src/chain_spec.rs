@@ -16,7 +16,7 @@
 
 //! Substrate chain configurations.
 
-use primitives::{Ed25519AuthorityId, ed25519};
+use primitives::{Ed25519AuthorityId as AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
@@ -39,7 +39,7 @@ pub fn dried_danta_config() -> Result<ChainSpec, String> {
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
 	// stash, controller, session-key
-	let initial_authorities = vec![(
+	let initial_authorities: Vec<(AccountId, AccountId, AuthorityId)> = vec![(
 		hex!["fbecf7767fc63a6f9fa8094bbc5751d7269cd8e619cfdd9edfbe1fbc716b173e"].into(),	// 5Hm2GcbuUct7sWX8d56zRktxr9D9Lw5hTFjSUhUoVHwFNmYW TODO: change once we switch to sr25519
 		hex!["6ed35e632190b9c795f019030e6c5cff1508655db28c83577e0a4366c9bd5773"].into(),	// 5Ea1uyGz6H5WHZhWvPDxxLXWyiUkzWDwx54Hcn8LJ5dbFawH TODO: change once we switch to sr25519
 		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
@@ -56,7 +56,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		hex!["36dfc933bb0848d8addf16a961369b2e122633a5819a19e43c8142381a1280e3"].into(),	// 5DJevPKpz4EEvmSpK7W6KemS3i5JYPq5FEuEewgRY2cZCxNg TODO: change once we switch to sr25519
 		hex!["8101764f45778d4980dadaceee6e8af2517d3ab91ac9bec9cd1714fa5994081c"].into(),
 	)];
-	let endowed_accounts = vec![
+	let endowed_accounts: Vec<AccountId> = vec![
 		hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),	// 5HYmsxGRAmZMjyZYmf7uGPL2YDQGHEt6NjGrfUuxNEgeGBRN TODO: change once we switch to sr25519
 	];
 	const MILLICENTS: u128 = 1_000_000_000;
@@ -74,7 +74,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),    // FIXME change once we have #1252
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect::<Vec<_>>(),
+			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
@@ -88,7 +88,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			vesting: vec![],
 		}),
 		indices: Some(IndicesConfig {
-			ids: endowed_accounts.iter(|x| x.0.clone())
+			ids: endowed_accounts.iter().cloned()
 				.chain(initial_authorities.iter().map(|x| x.0.clone()))
 				.collect::<Vec<_>>(),
 		}),
@@ -182,7 +182,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 }
 
 /// Helper function to generate AuthorityID from seed
-pub fn get_authority_id_from_seed(seed: &str) -> Ed25519AuthorityId {
+pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
 	let padded_seed = pad_seed(seed);
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
@@ -190,7 +190,7 @@ pub fn get_authority_id_from_seed(seed: &str) -> Ed25519AuthorityId {
 }
 
 /// Helper function to generate stash, controller and session key from seed
-pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, Ed25519AuthorityId) {
+pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuthorityId) {
 	let padded_seed = pad_seed(seed);
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
@@ -203,9 +203,9 @@ pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, Ed2551
 
 /// Helper function to create GenesisConfig for testing
 pub fn testnet_genesis(
-	initial_authorities: Vec<(AccountId, AccountId, Ed25519AuthorityId)>,
+	initial_authorities: Vec<(AccountId, AccountId, AuthorityId)>,
 	root_key: AccountId,
-	endowed_accounts: Option<Vec<Ed25519AuthorityId>>,
+	endowed_accounts: Option<Vec<AuthorityId>>,
 ) -> GenesisConfig {
 	let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
 		vec![
