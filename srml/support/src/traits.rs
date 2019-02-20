@@ -88,7 +88,7 @@ impl<
 	Balance: Copy,
 	X: EnsureAccountLiquid<AccountId, Balance>,
 	Y: EnsureAccountLiquid<AccountId, Balance>,
-> EnsureAccountLiquid<AccountId> for (X, Y) {
+> EnsureAccountLiquid<AccountId, Balance> for (X, Y) {
 	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str> {
 		X::ensure_account_liquid(who)?;
 		Y::ensure_account_liquid(who)
@@ -103,8 +103,8 @@ impl<
 		Y::ensure_account_can_withdraw(who, amount, reason)
 	}
 }
-impl<AccountId> EnsureAccountLiquid<AccountId> for () {
-	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
+impl<AccountId, Balance> EnsureAccountLiquid<AccountId, Balance> for () {
+	fn ensure_account_liquid(_who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
 }
 
 /// Outcome of a balance update.
@@ -242,7 +242,7 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 }
 
 /// Reason for moving funds out of an account.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum WithdrawReason {
 	/// In order to pay for (system) transaction costs.

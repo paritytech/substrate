@@ -29,10 +29,13 @@ use rstd::{cmp, result};
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
-use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason};
+use srml_support::traits::{
+	UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, TransferAsset, WithdrawReason
+};
 use srml_support::dispatch::Result;
-use primitives::traits::{Zero, SimpleArithmetic,
-	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug, TransferAsset, WithdrawReason};
+use primitives::traits::{
+	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug
+};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
@@ -52,7 +55,7 @@ pub trait Trait: system::Trait {
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// A function that returns true iff a given account can transfer its funds to another account.
-	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId>;
+	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId, Self::Balance>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
