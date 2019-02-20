@@ -505,6 +505,11 @@ where
 			self.next_connect_to_nodes = Delay::new(Instant::now());
 
 		} else {
+			// This code path is only reached if `peer_id` is None, which means that we dialed an
+			// address without knowing the `PeerId` to expect. We don't currently do that, except
+			// in one situation: for convenience, we accept bootstrap node addresses in the format
+			// `IP:PORT`.
+			// There is no reason this trigger a `connect_to_nodes` round in that situation.
 			debug!(target: "sub-libp2p", "Failed to reach {} => {:?}", addr, error);
 			self.topology.set_unreachable(addr);
 		}
