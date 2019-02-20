@@ -38,6 +38,8 @@ pub type ReferendumIndex = u32;
 /// A number of lock periods.
 pub type LockPeriods = i8;
 
+const MAX_ITERATION_LIMIT: u32 = 16;
+
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Default)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -159,6 +161,8 @@ decl_module! {
 		/// Delegate vote.
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) -> Result {
 			let who = ensure_signed(origin)?;
+			ensure!(Self::is_acyclic_delegation(who.clone(), to.clone(), MAX_ITERATION_LIMIT),
+				"delegation creates a cycle or max delegation depth reached");
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
 			Self::deposit_event(RawEvent::Delegated(who, to));
 			Ok(())
@@ -167,7 +171,7 @@ decl_module! {
 		/// Undelegate vote.
 		fn undelegate(origin) -> Result {
 			let who = ensure_signed(origin)?;
-			<Delegations<T>>::remove(who.clone());
+			<Delegations<T>>::take(who.clone());
 			Self::deposit_event(RawEvent::Undelegated(who));
 			Ok(())
 		}
@@ -344,6 +348,16 @@ impl<T: Trait> Module<T> {
 	/// Indicates if the account is delegating vote.
 	fn is_delegating(who: T::AccountId) -> bool {
 		<Delegations<T>>::exists(who)
+	}
+
+	fn is_acyclic_delegation(from: T::AccountId, to: T::AccountId, iteration_limit: u32) -> bool {
+		if from == to || iteration_limit == 0 {
+			return false;
+		}
+		if !<Delegations<T>>::exists(to.clone()) {
+			return true;
+		}
+		Self::is_acyclic_delegation(from, Self::delegations(to).0, iteration_limit - 1)
 	}
 
 	// Exposed mutables.
