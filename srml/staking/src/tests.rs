@@ -299,7 +299,7 @@ fn slashing_should_work() {
 
 #[test]
 fn staking_should_work() {
-	// should tests: 
+	// should test: 
 	// * new validators can be added to the default set
 	// * new ones will be chosen per era (+ based on phragmen)
 	// * either one can unlock the stash and back-down from being a validator.
@@ -329,6 +329,7 @@ fn staking_should_work() {
 		// --- Block 2: 
 		System::set_block_number(2);
 		// Explicitly state the desire to validate for all of them.
+		// note that the controller account will state interest as representative of the stash-controller pair.
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }));
 		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }));
 
