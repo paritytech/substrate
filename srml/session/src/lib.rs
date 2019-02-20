@@ -25,6 +25,7 @@ use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_e
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 use rstd::ops::Mul;
+use rstd::collections::btree_map::BTreeMap;
 
 /// A session has changed.
 pub trait OnSessionChange<T> {
@@ -139,9 +140,21 @@ impl<T: Trait> Module<T> {
 	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
+		let current_authoritys = <consensus::Module<T>>::authorities();
+		let mut inconsistent_keys: BTreeMap<T::AccountId, T::SessionKey> = BTreeMap::new();
+		Self::validators().iter().enumerate().for_each(|(i, v)| {
+			if T::ConvertAccountIdToSessionKey::convert(v.clone()) != current_authoritys[i] {
+				inconsistent_keys.insert(v.clone(), current_authoritys[i].clone());
+			}
+		});
 		<Validators<T>>::put(&new.to_vec());
 		<consensus::Module<T>>::set_authorities(
-			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
+			&new.iter().cloned().map(|account_id| {
+               if let Some(authority_key) = inconsistent_keys.get(&account_id) {
+                   authority_key.clone()
+               } else {
+                   T::ConvertAccountIdToSessionKey::convert(account_id)
+               }}).collect::<Vec<_>>()
 		);
 	}
 
