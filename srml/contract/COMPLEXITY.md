@@ -135,10 +135,10 @@ This function performs the following steps:
 
 1. Querying source and destination balances from an overlay (see `get_balance`),
 2. Querying `existential_deposit`.
-3. Executing `ensure_account_can_transfer` hook.
+3. Executing `ensure_account_liquid` hook.
 4. Updating source and destination balance in the overlay (see `set_balance`).
 
-**Note** that the complexity of executing `ensure_account_can_transfer` hook should be considered separately.
+**Note** that the complexity of executing `ensure_account_liquid` hook should be considered separately.
 
 In the course of the execution this function can perform up to 2 DB reads to `get_balance` of source and destination accounts. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
 
