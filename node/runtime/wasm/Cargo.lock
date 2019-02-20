@@ -1377,6 +1377,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
+ "srml-balances 0.1.0",
  "srml-democracy 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
@@ -1396,6 +1397,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
+ "srml-balances 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
 ]
@@ -1504,6 +1506,7 @@ dependencies = [
  "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
+ "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
  "srml-session 0.1.0",
  "srml-support 0.1.0",

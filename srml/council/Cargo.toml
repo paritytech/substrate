@@ -16,10 +16,10 @@ primitives = { package = "sr-primitives", path = "../../core/sr-primitives", def
 srml-support = { path = "../support", default-features = false }
 democracy = { package = "srml-democracy", path = "../democracy", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
+balances = { package = "srml-balances", path = "../balances", default-features = false }
 
 [dev-dependencies]
 hex-literal = "0.1.0"
-balances = { package = "srml-balances", path = "../balances", default-features = false }
 
 [features]
 default = ["std"]
@@ -34,4 +34,5 @@ std = [
 	"primitives/std",
 	"democracy/std",
 	"system/std",
+	"balances/std",
 ]
