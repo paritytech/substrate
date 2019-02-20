@@ -110,9 +110,14 @@ decl_storage! {
 		/// Block at which the session length last changed.
 		LastLengthChange: Option<T::BlockNumber>;
 		/// The next key for a given validator.
-		NextKeyFor: map T::AccountId => Option<T::SessionKey>;
+		NextKeyFor build(|config: &GenesisConfig<T>| {
+			config.keys.clone()
+		}): map T::AccountId => Option<T::SessionKey>;
 		/// The next session length.
 		NextSessionLength: Option<T::BlockNumber>;
+	}
+	add_extra_genesis {
+		config(keys): Vec<(T::AccountId, T::SessionKey)>;
 	}
 }
 
@@ -270,6 +275,7 @@ mod tests {
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
+			keys: vec![],
 		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}

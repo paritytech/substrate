@@ -93,6 +93,7 @@ pub fn new_test_ext(
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
+		keys: vec![],
 	}.build_storage().unwrap().0);
 	t.extend(balances::GenesisConfig::<Test>{
 		balances: if monied {

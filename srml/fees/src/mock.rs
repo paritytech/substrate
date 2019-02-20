@@ -48,8 +48,8 @@ impl<AccountId> TransferAsset<AccountId> for TransferAssetMock {
 	type Amount = u64;
 
 	fn transfer(_: &AccountId, _: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn remove_from(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn add_to(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn withdraw(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn deposit(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.

@@ -18,7 +18,9 @@
 
 use crate::rstd::result;
 use crate::codec::Codec;
-use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, As};
+use crate::runtime_primitives::traits::{
+	MaybeSerializeDebug, SimpleArithmetic, As
+};
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -51,32 +53,58 @@ impl<Balance> OnDilution<Balance> for () {
 	fn on_dilution(_minted: Balance, _portion: Balance) {}
 }
 
-/// Determinator for whether a given account is able to use its balance.
-pub trait EnsureAccountLiquid<AccountId> {
-	/// Returns `Ok` iff the account is able to transfer funds normally. `Err(...)`
-	/// with the reason why not otherwise.
-	fn ensure_account_can_transfer(who: &AccountId) -> result::Result<(), &'static str>;
+/// Determinator for whether a given account is able to use its **free** balance.
+/// 
+/// By convention, `ensure_account_liquid` overrules `ensure_account_can_withdraw`. If a
+/// caller gets `Ok` from the former, then they do not need to call the latter.
+/// 
+/// This implies that if you define the latter away from its default of replicating the
+/// former, then ensure you also redefine the former to return an `Err` in corresponding
+/// situations, otherwise you'll end up giving inconsistent information.
+pub trait EnsureAccountLiquid<AccountId, Balance> {
+	/// Ensures that the account is completely unencumbered. If this is `Ok` then there's no need to
+	/// check any other items. If it's an `Err`, then you must use one pair of the other items.
+	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str>;
 
-	/// Returns `Ok` iff the account is able to make transaction payments. `Err(...)`
-	/// with the reason why not otherwise.
-	fn ensure_account_can_pay(_who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
+	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
+	/// for the given reason.
+	/// 
+	/// `Err(...)` with the reason why not otherwise.
+	/// 
+	/// By default this just reflects the results of `ensure_account_liquid`.
+	/// 
+	/// @warning If you redefine this away from the default, ensure that you define
+	/// `ensure_account_liquid` in accordance.
+	fn ensure_account_can_withdraw(
+		who: &AccountId,
+		_amount: Balance,
+		_reason: WithdrawReason
+	) -> result::Result<(), &'static str> {
+		Self::ensure_account_liquid(who)
+	}
 }
 impl<
 	AccountId,
-	X: EnsureAccountLiquid<AccountId>,
-	Y: EnsureAccountLiquid<AccountId>,
+	Balance: Copy,
+	X: EnsureAccountLiquid<AccountId, Balance>,
+	Y: EnsureAccountLiquid<AccountId, Balance>,
 > EnsureAccountLiquid<AccountId> for (X, Y) {
-	fn ensure_account_can_transfer(who: &AccountId) -> result::Result<(), &'static str> {
-		X::ensure_account_can_transfer(who)?;
-		Y::ensure_account_can_transfer(who)
+	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str> {
+		X::ensure_account_liquid(who)?;
+		Y::ensure_account_liquid(who)
 	}
-	fn ensure_account_can_pay(who: &AccountId) -> result::Result<(), &'static str> {
-		X::ensure_account_can_pay(who)?;
-		Y::ensure_account_can_pay(who)
+
+	fn ensure_account_can_withdraw(
+		who: &AccountId,
+		amount: Balance,
+		reason: WithdrawReason
+	) -> result::Result<(), &'static str> {
+		X::ensure_account_can_withdraw(who, amount, reason)?;
+		Y::ensure_account_can_withdraw(who, amount, reason)
 	}
 }
 impl<AccountId> EnsureAccountLiquid<AccountId> for () {
-	fn ensure_account_can_transfer(_who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
+	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
 }
 
 /// Outcome of a balance update.
@@ -162,15 +190,6 @@ pub trait Currency<AccountId> {
 	/// NOTE: This assumes that the total stake remains unchanged after this operation.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
 
-	/// Substrates `value` from the free balance of `who`. If the whole amount cannot be
-	/// deducted, an error is returned.
-	/// 
-	/// This does *not* check for spendability, e.g. using `EnsureAccountLiquid` trait.
-	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
-	/// you mean to actually burn value out of existence, then use `slash` instead.
-	fn decrease_free_balance(who: &AccountId, value: Self::Balance) -> result::Result<UpdateBalanceOutcome, &'static str>;
-
 	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
@@ -201,4 +220,69 @@ pub trait Currency<AccountId> {
 		beneficiary: &AccountId,
 		value: Self::Balance
 	) -> result::Result<Option<Self::Balance>, &'static str>;
+}
+
+/// Charge bytes fee trait
+pub trait ChargeBytesFee<AccountId> {
+	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
+	/// `encoded_len` bytes. Return Ok iff the payment was successful.
+	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
+}
+
+/// Charge fee trait
+pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
+	/// The type of fee amount.
+	type Amount;
+
+	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
+	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+
+	/// Refund `amount` of previous charged fees from `transactor`. Return Ok iff the refund was successful.
+	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+}
+
+/// Reason for moving funds out of an account.
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum WithdrawReason {
+	/// In order to pay for (system) transaction costs.
+	TransactionPayment,
+	/// In order to transfer ownership.
+	Transfer,
+	/// In order to reserve some funds for a later return or repatriation
+	Reserve,
+}
+
+/// Transfer fungible asset trait
+pub trait TransferAsset<AccountId> {
+	/// The type of asset amount.
+	type Amount;
+
+	/// Transfer asset from `from` account to `to` account with `amount` of asset.
+	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+
+	/// Remove asset from `who` account by deducting `amount` in the account balances.
+	fn withdraw(who: &AccountId, amount: Self::Amount, reason: WithdrawReason) -> Result<(), &'static str>;
+
+	/// Add asset to `who` account by increasing `amount` in the account balances.
+	fn deposit(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+}
+
+impl<T> ChargeBytesFee<T> for () {
+	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+}
+
+impl<T> ChargeFee<T> for () {
+	type Amount = ();
+
+	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+}
+
+impl<T> TransferAsset<T> for () {
+	type Amount = ();
+
+	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn withdraw(_: &T, _: Self::Amount, _: WithdrawReason) -> Result<(), &'static str> { Ok(()) }
+	fn deposit(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }
