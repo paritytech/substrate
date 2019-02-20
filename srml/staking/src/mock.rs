@@ -133,6 +133,7 @@ impl ExtBuilder {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: self.session_length,
 			validators: vec![10, 20],
+			keys: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: if self.monied {

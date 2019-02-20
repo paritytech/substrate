@@ -34,9 +34,9 @@ fn basic_setup_works() {
 		assert_eq!(Staking::bonded(&1), None);		// Account 1 is not a stashed
 
 		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, active: 100, inactive: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 100, active: 100, unlocking: vec![] }));
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
-		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, active: 200, inactive: vec![] }));
+		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 200, active: 200, unlocking: vec![] }));
 		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
 
@@ -304,7 +304,7 @@ fn slashing_should_work() {
 
 #[test]
 fn staking_should_work() {
-	// should tests: 
+	// should test: 
 	// * new validators can be added to the default set
 	// * new ones will be chosen per era (+ based on phragmen)
 	// * either one can unlock the stash and back-down from being a validator.
@@ -334,6 +334,7 @@ fn staking_should_work() {
 		// --- Block 2: 
 		System::set_block_number(2);
 		// Explicitly state the desire to validate for all of them.
+		// note that the controller account will state interest as representative of the stash-controller pair.
 		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }));
 		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }));
 
