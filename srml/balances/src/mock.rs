@@ -48,7 +48,6 @@ impl system::Trait for Runtime {
 }
 impl fees::Trait for Runtime {
 	type Event = ();
-	type Amount = u64;
 	type TransferAsset = Balances;
 }
 impl Trait for Runtime {

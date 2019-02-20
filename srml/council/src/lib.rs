@@ -82,7 +82,6 @@ mod tests {
 	}
 	impl fees::Trait for Test {
 		type Event = Event;
-		type Amount = u64;
 		type TransferAsset = balances::Module<Test>;
 	}
 	impl democracy::Trait for Test {

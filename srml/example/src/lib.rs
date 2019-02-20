@@ -286,7 +286,6 @@ mod tests {
 	}
 	impl fees::Trait for Test {
 		type Event = ();
-		type Amount = u64;
 		type TransferAsset = balances::Module<Test>;
 	}
 	impl Trait for Test {

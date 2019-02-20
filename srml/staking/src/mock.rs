@@ -60,7 +60,6 @@ impl balances::Trait for Test {
 }
 impl fees::Trait for Test {
 	type Event = ();
-	type Amount = u64;
 	type TransferAsset = balances::Module<Test>;
 }
 impl session::Trait for Test {
