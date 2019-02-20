@@ -487,11 +487,11 @@ impl<Block: BlockT, N: Network<Block>> Sink for CommitsOut<Block, N> {
 			auth_data
 		};
 
-		let message = FullCommitMessage::<Block> {
+		let message = GossipMessage::Commit(FullCommitMessage::<Block> {
 			round: round,
 			set_id: self.set_id,
 			message: compact_commit,
-		};
+		});
 
 		self.network.send_commit(round, self.set_id, Encode::encode(&message));
 
