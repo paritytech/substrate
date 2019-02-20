@@ -139,13 +139,24 @@ impl TestNetFactory for GrandpaTestNet {
 struct MessageRouting {
 	inner: Arc<Mutex<GrandpaTestNet>>,
 	peer_id: usize,
+	validator: Arc<GossipValidator<Block>>,
 }
 
 impl MessageRouting {
 	fn new(inner: Arc<Mutex<GrandpaTestNet>>, peer_id: usize,) -> Self {
+		let validator = Arc::new(GossipValidator::new());
+		let v = validator.clone();
+		{
+			let inner = inner.lock();
+			let peer = inner.peer(peer_id);
+			peer.with_gossip(move |gossip, _| {
+				gossip.register_validator(GRANDPA_ENGINE_ID, v);
+			});
+		}
 		MessageRouting {
 			inner,
 			peer_id,
+			validator,
 		}
 	}
 
@@ -157,37 +168,18 @@ impl MessageRouting {
 }
 
 fn make_topic(round: u64, set_id: u64) -> Hash {
-	let mut hash = Hash::default();
-	round.using_encoded(|s| {
-		let raw = hash.as_mut();
-		raw[..8].copy_from_slice(s);
-	});
-	set_id.using_encoded(|s| {
-		let raw = hash.as_mut();
-		raw[8..16].copy_from_slice(s);
-	});
-	hash
+	message_topic::<Block>(round, set_id)
 }
 
 fn make_commit_topic(set_id: u64) -> Hash {
-	let mut hash = Hash::default();
-
-	{
-		let raw = hash.as_mut();
-		raw[16..22].copy_from_slice(b"commit");
-	}
-	set_id.using_encoded(|s| {
-		let raw = hash.as_mut();
-		raw[24..].copy_from_slice(s);
-	});
-
-	hash
+	commit_topic::<Block>(set_id)
 }
 
 impl Network<Block> for MessageRouting {
 	type In = Box<Stream<Item=Vec<u8>,Error=()> + Send>;
 
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
+		self.validator.note_round(round, set_id);
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
 		let messages = peer.consensus_gossip_messages_for(make_topic(round, set_id));
@@ -201,20 +193,23 @@ impl Network<Block> for MessageRouting {
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message, false);
+		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), GRANDPA_ENGINE_ID, message);
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
+		self.validator.drop_round(round, set_id);
 		let topic = make_topic(round, set_id);
 		self.drop_messages(topic);
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
+		self.validator.drop_set(set_id);
 		let topic = make_commit_topic(set_id);
 		self.drop_messages(topic);
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
+		self.validator.note_set(set_id);
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
         let messages = peer.consensus_gossip_messages_for(make_commit_topic(set_id));
@@ -228,7 +223,7 @@ impl Network<Block> for MessageRouting {
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), message, false);
+		inner.peer(self.peer_id).gossip_message(make_commit_topic(set_id), GRANDPA_ENGINE_ID, message);
 	}
 
 	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
@@ -516,6 +511,7 @@ fn finalize_3_voters_1_observer() {
 
 #[test]
 fn transition_3_voters_twice_1_observer() {
+	let _ = env_logger::try_init();
 	let peers_a = &[
 		Keyring::Alice,
 		Keyring::Bob,

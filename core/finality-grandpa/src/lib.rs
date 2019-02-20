@@ -53,7 +53,7 @@
 //! included in the newly-finalized chain.
 
 use futures::prelude::*;
-use log::{debug, info, warn};
+use log::{debug, info, warn, trace};
 use futures::sync::{self, mpsc, oneshot};
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
@@ -61,6 +61,7 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use parity_codec::{Encode, Decode};
+use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 	DigestItemFor, DigestItem,
@@ -73,6 +74,7 @@ use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
 
 use network::Service as NetworkService;
+use network::consensus_gossip as network_gossip;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -106,6 +108,10 @@ const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
 
+const GRANDPA_ENGINE_ID: network::ConsensusEngineId = [b'a', b'f', b'g', b'1'];
+
+const MESSAGE_ROUND_TOLERANCE: u64 = 2;
+
 /// round-number, round-state
 type LastCompleted<H, N> = (u64, RoundState<H, N>);
 
@@ -118,6 +124,25 @@ pub type SignedMessage<Block> = grandpa::SignedMessage<
 	ed25519::Signature,
 	Ed25519AuthorityId,
 >;
+
+/// Grandpa gossip message type.
+/// This is the root type that gets encoded and sent on the network.
+#[derive(Debug, Encode, Decode)]
+pub enum GossipMessage<Block: BlockT> {
+	/// Grandpa message with round and set info.
+	VoteOrPrecommit(VoteOrPrecommitMessage<Block>),
+	/// Grandpa commit message with round and set info.
+	Commit(FullCommitMessage<Block>),
+}
+
+/// Network level message with topic information.
+#[derive(Debug, Encode, Decode)]
+pub struct VoteOrPrecommitMessage<Block: BlockT> {
+	pub round: u64,
+	pub set_id: u64,
+	pub message: SignedMessage<Block>,
+}
+
 /// A prevote message for this chain's block type.
 pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A precommit message for this chain's block type.
@@ -136,6 +161,14 @@ pub type CompactCommit<Block> = grandpa::CompactCommit<
 	ed25519::Signature,
 	Ed25519AuthorityId
 >;
+
+/// Network level commit message with topic information.
+#[derive(Debug, Encode, Decode)]
+pub struct FullCommitMessage<Block: BlockT> {
+	pub round: u64,
+	pub set_id: u64,
+	pub message: CompactCommit<Block>,
+}
 
 /// Configuration for the GRANDPA service.
 #[derive(Clone)]
@@ -213,6 +246,142 @@ impl Stream for NetworkStream {
 	}
 }
 
+struct TopicTracker {
+	min_live_round: u64,
+	max_round: u64,
+	set_id: u64,
+}
+
+struct GossipValidator<Block: BlockT> {
+	rounds: parking_lot::RwLock<TopicTracker>,
+	_marker: ::std::marker::PhantomData<Block>,
+}
+
+impl<Block: BlockT> GossipValidator<Block> {
+	fn new() -> GossipValidator<Block> {
+		GossipValidator {
+			rounds: parking_lot::RwLock::new(TopicTracker {
+				min_live_round: 0,
+				max_round: 0,
+				set_id: 0,
+			}),
+			_marker: Default::default(),
+		}
+	}
+
+	fn note_round(&self, round: u64, set_id: u64) {
+		let mut rounds = self.rounds.write();
+		if set_id > rounds.set_id {
+			rounds.set_id = set_id;
+			rounds.max_round = 0;
+			rounds.min_live_round = 0;
+		}
+		rounds.max_round = rounds.max_round.max(round);
+	}
+
+	fn note_set(&self, _set_id: u64) {
+	}
+
+	fn drop_round(&self, round: u64, set_id: u64) {
+		let mut rounds = self.rounds.write();
+		if set_id == rounds.set_id && round >= rounds.min_live_round {
+			rounds.min_live_round = round + 1;
+		}
+	}
+
+	fn drop_set(&self, _set_id: u64) {
+	}
+
+	fn is_expired(&self, round: u64, set_id: u64) -> bool {
+		let rounds = self.rounds.read();
+		if set_id < rounds.set_id {
+			trace!(target: "afg", "Expired: Message with expired set_id {} (ours {})", set_id, rounds.set_id);
+			return true;
+		} else if set_id == rounds.set_id + 1 {
+			// allow a few first rounds of future set.
+			if round > MESSAGE_ROUND_TOLERANCE {
+				trace!(target: "afg", "Expired: Message too far in the future set, round {} (ours set_id {})", round, rounds.set_id);
+				return true;
+			}
+		} else if set_id == rounds.set_id {
+			if round < rounds.min_live_round.saturating_sub(MESSAGE_ROUND_TOLERANCE) {
+				trace!(target: "afg", "Expired: Message round is out of bounds {} (ours {}-{})", round, rounds.min_live_round, rounds.max_round);
+				return true;
+			}
+		} else {
+			trace!(target: "afg", "Expired: Message in invalid future set {} (ours {})", set_id, rounds.set_id);
+			return true;
+		}
+		false
+	}
+
+	fn validate_round_message(&self, full: VoteOrPrecommitMessage<Block>)
+		-> network_gossip::ValidationResult<Block::Hash>
+	{
+		if self.is_expired(full.round, full.set_id) {
+			return network_gossip::ValidationResult::Expired;
+		}
+
+		if let Err(()) = communication::check_message_sig::<Block>(
+			&full.message.message,
+			&full.message.id,
+			&full.message.signature,
+			full.round,
+			full.set_id
+		) {
+			debug!(target: "afg", "Bad message signature {}", full.message.id);
+			return network_gossip::ValidationResult::Invalid;
+		}
+
+		let topic = message_topic::<Block>(full.round, full.set_id);
+		network_gossip::ValidationResult::Valid(topic)
+	}
+
+	fn validate_commit_message(&self, full: FullCommitMessage<Block>)
+		-> network_gossip::ValidationResult<Block::Hash>
+	{
+		use grandpa::Message as GrandpaMessage;
+		if self.is_expired(full.round, full.set_id) {
+			return network_gossip::ValidationResult::Expired;
+		}
+
+		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
+			debug!(target: "afg", "Malformed compact commit");
+			return network_gossip::ValidationResult::Invalid;
+		}
+
+		// check signatures on all contained precommits.
+		for (precommit, &(ref sig, ref id)) in full.message.precommits.iter().zip(&full.message.auth_data) {
+			if let Err(()) = communication::check_message_sig::<Block>(
+				&GrandpaMessage::Precommit(precommit.clone()),
+				id,
+				sig,
+				full.round,
+				full.set_id,
+			) {
+				debug!(target: "afg", "Bad commit message signature {}", id);
+				return network_gossip::ValidationResult::Invalid;
+			}
+		}
+
+		let topic = commit_topic::<Block>(full.set_id);
+		network_gossip::ValidationResult::Valid(topic)
+	}
+}
+
+impl<Block: BlockT> network_gossip::Validator<Block::Hash> for GossipValidator<Block> {
+	fn validate(&self, mut data: &[u8]) -> network_gossip::ValidationResult<Block::Hash> {
+		match GossipMessage::<Block>::decode(&mut data) {
+			Some(GossipMessage::VoteOrPrecommit(message)) => self.validate_round_message(message),
+			Some(GossipMessage::Commit(message)) => self.validate_commit_message(message),
+			None => {
+				debug!(target: "afg", "Error decoding message");
+				network_gossip::ValidationResult::Invalid
+			}
+		}
+	}
+}
+
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
 ///
@@ -247,20 +416,27 @@ pub trait Network<Block: BlockT>: Clone {
 
 ///  Bridge between NetworkService, gossiping consensus messages and Grandpa
 pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>> {
-	service: Arc<NetworkService<B, S>>
+	service: Arc<NetworkService<B, S>>,
+	validator: Arc<GossipValidator<B>>,
 }
 
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>> NetworkBridge<B, S> {
 	/// Create a new NetworkBridge to the given NetworkService
 	pub fn new(service: Arc<NetworkService<B, S>>) -> Self {
-		NetworkBridge { service }
+		let validator = Arc::new(GossipValidator::new());
+		let v = validator.clone();
+		service.with_gossip(move |gossip, _| {
+			gossip.register_validator(GRANDPA_ENGINE_ID, v);
+		});
+		NetworkBridge { service, validator: validator }
 	}
 }
 
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Clone for NetworkBridge<B, S> {
 	fn clone(&self) -> Self {
 		NetworkBridge {
-			service: Arc::clone(&self.service)
+			service: Arc::clone(&self.service),
+			validator: Arc::clone(&self.validator),
 		}
 	}
 }
@@ -276,6 +452,7 @@ fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
 impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B> for NetworkBridge<B, S> {
 	type In = NetworkStream;
 	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
+		self.validator.note_round(round, set_id);
 		let (tx, rx) = sync::oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(message_topic::<B>(round, set_id));
@@ -286,20 +463,21 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, message, false);
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
-		let topic = message_topic::<B>(round, set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage_for_topic(topic));
+		self.validator.drop_round(round, set_id);
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
-		let topic = commit_topic::<B>(set_id);
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage_for_topic(topic));
+		self.validator.drop_set(set_id);
+		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
 	}
 
 	fn commit_messages(&self, set_id: u64) -> Self::In {
+		self.validator.note_set(set_id);
 		let (tx, rx) = sync::oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
 			let inner_rx = gossip.messages_for(commit_topic::<B>(set_id));
@@ -310,7 +488,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
 		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, message, false);
+		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
 	}
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
@@ -439,7 +617,6 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 {
 	// verification stream
 	let commit_in = crate::communication::checked_commit_stream::<Block, _>(
-		set_id,
 		network.commit_messages(set_id),
 		voters.clone(),
 	);
