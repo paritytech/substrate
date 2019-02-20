@@ -24,7 +24,7 @@ use srml_support::{
 	traits::{ArithmeticType, ChargeBytesFee, ChargeFee, TransferAsset, WithdrawReason}
 };
 use runtime_primitives::traits::{
-	As, SimpleArithmetic, CheckedAdd, CheckedSub, CheckedMul, Zero
+	As, CheckedAdd, CheckedSub, CheckedMul, Zero
 };
 use system;
 

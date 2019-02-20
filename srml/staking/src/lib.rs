@@ -30,7 +30,7 @@ use srml_support::traits::{
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Zero, One, As, StaticLookup};
+use primitives::traits::{Zero, One, As, StaticLookup, Saturating, CheckedSub};
 use system::ensure_signed;
 
 mod mock;
@@ -41,7 +41,6 @@ const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
-const MAX_CONSOLIDATE_CHUNKS: usize = 10;
 
 #[derive(PartialEq, Clone)]
 #[cfg_attr(test, derive(Debug))]
@@ -119,6 +118,23 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	/// Any balance that is becoming (or has become) free, which may be transferred out
 	/// of the stash.
 	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
+}
+
+impl<AccountId, Balance: HasCompact + Copy + Saturating, BlockNumber: HasCompact + PartialOrd> StakingLedger<AccountId, Balance, BlockNumber> {
+	/// Remove entries from `unlocking` that are sufficiently old and reduce the
+	/// total by the sum of their balances.
+	fn consolidate_unlocked(self, current_era: BlockNumber) -> Self {
+		let mut total = self.total;
+		let unlocking = self.unlocking.into_iter()
+			.filter(|chunk| if chunk.era > current_era {
+				true
+			} else {
+				total = total.saturating_sub(chunk.value);
+				false
+			})
+			.collect();
+		Self { total, active: self.active, stash: self.stash, unlocking }
+	}
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
@@ -359,19 +375,8 @@ decl_module! {
 		/// See also `unbond`.
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
-
-			let current_era = Self::current_era();
-			let mut total = Zero::zero();
-			ledger.unlocking = ledger.unlocking.into_iter()
-				.filter(|chunk| if chunk.era > current_era {
-					true
-				} else {
-					ledger.total = ledger.total.saturating_sub(chunk.value);
-					false
-				})
-				.collect();
-			<Ledger<T>>::insert(&controller, ledger);
+			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			<Ledger<T>>::insert(&controller, ledger.consolidate_unlocked(Self::current_era()));
 		}
 
 		/// Declare the desire to validate for the origin controller.
@@ -751,7 +756,7 @@ impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
 		if let Some(controller) = <Bonded<T>>::get(who) {
 			let ledger = Self::ledger(&controller).ok_or("stash without controller")?;
 			let free_balance = T::Currency::free_balance(&who);
-			ensure!(free_balance.checked_sub(ledger.total).unwrap_or_default() > amount,
+			ensure!(free_balance.checked_sub(&ledger.total).unwrap_or_default() > amount,
 				"stash with too much under management");
 		}		
 		Ok(())

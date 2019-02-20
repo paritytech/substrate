@@ -27,9 +27,9 @@ use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{
-	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+pub use num_traits::{
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	CheckedShl, CheckedShr, Saturating
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -183,6 +183,7 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord +
 	HasCompact
 {}
@@ -200,6 +201,7 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord +
 	HasCompact
 > SimpleArithmetic for T {}
