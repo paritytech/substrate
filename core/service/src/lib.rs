@@ -17,7 +17,7 @@
 //! Substrate service. Starts a thread that spins up the network, client, and extrinsic pool.
 //! Manages communication between them.
 
-#![warn(unused_extern_crates)]
+#![warn(missing_docs)]
 
 mod components;
 mod error;
@@ -35,7 +35,7 @@ use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, As, ProvideRuntimeApi};
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -76,6 +76,7 @@ pub struct Service<Components: components::Components> {
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
+	_offchain_workers: Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>,
 }
 
 /// Creates bare client without any networking.
@@ -95,8 +96,8 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 		task_executor: TaskExecutor,
-	)
-		-> Result<Self, error::Error>
+	) -> Result<Self, error::Error> where
+		ComponentClient<Components>: ProvideRuntimeApi,
 	{
 		let (signal, exit) = ::exit_future::signal();
 
@@ -168,17 +169,25 @@ impl<Components: components::Components> Service<Components> {
 		)?;
 		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
+		let offchain_workers = Arc::new(offchain::OffchainWorkers::new(client.clone()));
+
 		{
 			// block notifications
 			let network = Arc::downgrade(&network);
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
+			let offchain = Arc::downgrade(&offchain_workers);
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
+					if let Some(offchain) = offchain.upgrade() {
+						tokio::spawn(offchain.on_block_imported(notification.header.number()));
+					}
+
 					if let Some(network) = network.upgrade() {
 						network.on_block_imported(notification.hash, notification.header);
 					}
+
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
 						Components::TransactionPool::on_block_imported(
 							&BlockId::hash(notification.hash),
@@ -186,6 +195,7 @@ impl<Components: components::Components> Service<Components> {
 							&*txpool,
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
 					}
+
 					Ok(())
 				})
 				.select(exit.clone())
@@ -304,6 +314,7 @@ impl<Components: components::Components> Service<Components> {
 			exit,
 			_rpc: Box::new(rpc),
 			_telemetry: telemetry,
+			_offchain_workers: offchain_workers,
 		})
 	}
 

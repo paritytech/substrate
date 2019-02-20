@@ -84,6 +84,8 @@ pub struct ExecutionStrategies {
 	pub importing: ExecutionStrategy,
 	/// Execution strategy used when constructing blocks.
 	pub block_construction: ExecutionStrategy,
+	/// Execution strategy used for offchain workers.
+	pub offchain_worker: ExecutionStrategy,
 	/// Execution strategy used in other cases.
 	pub other: ExecutionStrategy,
 }
@@ -94,6 +96,7 @@ impl Default for ExecutionStrategies {
 			syncing: ExecutionStrategy::NativeElseWasm,
 			importing: ExecutionStrategy::NativeElseWasm,
 			block_construction: ExecutionStrategy::AlwaysWasm,
+			offchain_worker: ExecutionStrategy::NativeWhenPossible,
 			other: ExecutionStrategy::NativeElseWasm,
 		}
 	}
@@ -1310,6 +1313,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			ExecutionContext::BlockConstruction => self.execution_strategies.block_construction.get_manager(),
 			ExecutionContext::Syncing => self.execution_strategies.syncing.get_manager(),
 			ExecutionContext::Importing => self.execution_strategies.importing.get_manager(),
+			ExecutionContext::OffchainWorker => self.execution_strategies.offchain_worker.get_manager(),
 			ExecutionContext::Other => self.execution_strategies.other.get_manager(),
 		};
 		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(

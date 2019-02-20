@@ -295,6 +295,8 @@ pub enum ExecutionContext {
 	Syncing,
 	/// Context used for block construction.
 	BlockConstruction,
+	/// Offchain worker context.
+	OffchainWorker,
 	/// Context used for other calls.
 	Other,
 }

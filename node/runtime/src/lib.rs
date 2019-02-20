@@ -289,6 +289,12 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl client_api::OffchainWorker<Block> for Runtime {
+		fn generate_extrinsics(number: NumberFor<Block>) {
+			unimplemented!()
+		}
+	}
+
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_pending_change(digest: &DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>

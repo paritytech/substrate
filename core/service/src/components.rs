@@ -248,7 +248,12 @@ pub trait ServiceTrait<C: Components>:
 	+ MaintainTransactionPool<C>
 {}
 impl<C: Components, T> ServiceTrait<C> for T where
-	T: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + MaintainTransactionPool<C>
+	T: Deref<Target = Service<C>>
+	+ Send
+	+ Sync
+	+ 'static
+	+ StartRPC<C>
+	+ MaintainTransactionPool<C>
 {}
 
 /// A collection of types and methods to build a service on top of the substrate service.
@@ -382,10 +387,13 @@ pub struct FullComponents<Factory: ServiceFactory> {
 }
 
 impl<Factory: ServiceFactory> FullComponents<Factory> {
+	/// Create new `FullComponents`
 	pub fn new(
 		config: FactoryFullConfiguration<Factory>,
 		task_executor: TaskExecutor
-	) -> Result<Self, error::Error> {
+	) -> Result<Self, error::Error> where
+		ComponentClient<Self>: ProvideRuntimeApi,
+	{
 		Ok(
 			Self {
 				_factory: Default::default(),
@@ -462,10 +470,13 @@ pub struct LightComponents<Factory: ServiceFactory> {
 }
 
 impl<Factory: ServiceFactory> LightComponents<Factory> {
+	/// Create new `LightComponents`
 	pub fn new(
 		config: FactoryFullConfiguration<Factory>,
 		task_executor: TaskExecutor
-	) -> Result<Self, error::Error> {
+	) -> Result<Self, error::Error> where
+		ComponentClient<Self>: ProvideRuntimeApi,
+	{
 		Ok(
 			Self {
 				_factory: Default::default(),

@@ -24,7 +24,7 @@ pub use state_machine::OverlayedChanges;
 pub use primitives::NativeOrEncoded;
 #[doc(hidden)]
 pub use runtime_primitives::{
-	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, ApiRef, RuntimeApiInfo},
+	traits::{AuthorityIdFor, Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Header as HeaderT, ApiRef, RuntimeApiInfo},
 	generic::BlockId, transaction_validity::TransactionValidity, ExecutionContext,
 };
 #[doc(hidden)]
@@ -131,4 +131,11 @@ decl_runtime_apis! {
 		/// Validate the given transaction.
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
+
+	/// The offchain worker api.
+	pub trait OffchainWorker {
+		/// Starts the off-chain task for given block number.
+		fn generate_extrinsics(number: <<Block as BlockT>::Header as HeaderT>::Number);
+	}
 }
+

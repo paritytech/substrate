@@ -1,0 +1,27 @@
+[package]
+description = "Substrate offchain workers"
+name = "substrate-offchain"
+version = "0.1.0"
+license = "GPL-3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[lib]
+
+[dependencies]
+client = { package = "substrate-client", path = "../../core/client" }
+consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
+futures = "0.1"
+parity-codec = "3.0"
+parity-codec-derive = "3.0"
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+sr-api-macros = { path = "../sr-api-macros" }
+
+[dev-dependencies]
+env_logger = { version = "0.6" }
+keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+test_client = { package = "substrate-test-client", path = "../../core/test-client" }
+
+[features]
+default = []
