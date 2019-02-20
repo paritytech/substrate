@@ -37,4 +37,5 @@ std = [
 	"primitives/std",
 	"session/std",
 	"system/std",
+	"balances/std"
 ]
