@@ -318,7 +318,7 @@ impl<T: Trait> Module<T> {
 		let mut capital = Zero::zero();
 		for voter in Self::voters_for(ref_index).iter() {
 			let vote = Self::vote_of((ref_index, voter.clone()));
-			let (votes, balance) = Self::delegated_votes(voter.clone(), vote.multiplier());
+			let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier());
 			if vote.is_aye() {
 				approve += votes;
 			} else {
@@ -329,20 +329,16 @@ impl<T: Trait> Module<T> {
 		(approve, against, capital)
 	}
 
-	fn delegated_votes(to: T::AccountId, min_lock_periods: LockPeriods) -> (BalanceOf<T>, BalanceOf<T>) {
-		let mut balance = Zero::zero();
-		let mut votes = Zero::zero();
-		for (delegator, (delegate, periods)) in <Delegations<T>>::enumerate() {
-			if delegate == to {
+	fn delegated_votes(ref_index: ReferendumIndex, to: T::AccountId, min_lock_periods: LockPeriods) -> (BalanceOf<T>, BalanceOf<T>) {
+		<Delegations<T>>::enumerate()
+			.filter(|(delegator, (delegate, _))| *delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())))
+			.fold((Zero::zero(), Zero::zero()), |(votes_acc, balance_acc), (delegator, (_delegate, periods))| {
 				let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
-				balance += T::Currency::total_balance(&delegator);
-				votes += T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
-				let (del_votes, del_balance) = Self::delegated_votes(delegator, lock_periods);
-				votes += del_votes;
-				balance += del_balance;
-			}
-		}
-		(votes, balance)
+				let balance = T::Currency::total_balance(&delegator);
+				let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
+				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods);
+				(votes_acc + votes + del_votes, balance_acc + balance + del_balance)
+			})
 	}
 
 	/// Indicates if the account is delegating vote.
@@ -675,7 +671,7 @@ mod tests {
 			System::set_block_number(2);
 			let r = 0;
 
-			/// Delegate vote.
+			// Delegate vote.
 			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
 
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
@@ -684,7 +680,39 @@ mod tests {
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
-			/// Delegated vote is counted.
+			// Delegated vote is counted.
+			assert_eq!(Democracy::tally(r), (30, 0, 30));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Balances::free_balance(&42), 2);
+		});
+	}
+
+	#[test]
+	fn single_proposal_should_work_with_vote_and_delegation() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+
+			assert_ok!(propose_set_balance(1, 2, 1));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			System::set_block_number(2);
+			let r = 0;
+
+			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
+
+			// Vote.
+			assert_ok!(Democracy::vote(Origin::signed(2), r, AYE));
+
+			// Delegate vote.
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+
+			assert_eq!(Democracy::referendum_count(), 1);
+			assert_eq!(Democracy::voters_for(r), vec![1, 2]);
+			assert_eq!(Democracy::vote_of((r, 1)), AYE);
+
+			// Delegated vote is not counted.
 			assert_eq!(Democracy::tally(r), (30, 0, 30));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
@@ -700,7 +728,7 @@ mod tests {
 
 			assert_ok!(propose_set_balance(1, 2, 1));
 
-			/// Delegate and undelegate vote.
+			// Delegate and undelegate vote.
 			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
 			assert_ok!(Democracy::undelegate(Origin::signed(2)));
 
@@ -713,7 +741,7 @@ mod tests {
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), AYE);
 
-			/// Delegated vote is not counted.
+			// Delegated vote is not counted.
 			assert_eq!(Democracy::tally(r), (10, 0, 10));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
@@ -730,14 +758,14 @@ mod tests {
 
 			assert_ok!(propose_set_balance(1, 2, 1));
 
-			/// Delegate the vote.
+			// Delegate the vote.
 			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			System::set_block_number(2);
 			let r = 0;
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
-			/// Vote.
+			// Vote.
 			assert_err!(Democracy::vote(Origin::signed(2), r, NAY), "transactor is delegating vote.");
 		});
 	}
