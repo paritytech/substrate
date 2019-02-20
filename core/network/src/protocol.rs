@@ -20,8 +20,8 @@ use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus::import_queue::ImportQueue;
-use crate::message::{self, Message};
-use crate::message::generic::Message as GenericMessage;
+use crate::message::{self, Message, ConsensusEngineId};
+use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::on_demand::OnDemandService;
 use crate::specialization::NetworkSpecialization;
@@ -44,7 +44,9 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 1;
+pub(crate) const CURRENT_VERSION: u32 = 2;
+/// Lowest version we support
+const MIN_VERSION: u32 = 2;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -199,7 +201,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, Vec<u8>, bool),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>),
 	/// Is protocol currently major-syncing?
 	IsMajorSyncing(Sender<bool>),
 	/// Is protocol currently offline?
@@ -327,8 +329,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, message, broadcast) => {
-				self.gossip_consensus_message(topic, message, broadcast)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
+				self.gossip_consensus_message(topic, engine_id, message)
 			}
 			ProtocolMsg::IsMajorSyncing(sender) => {
 				let is_syncing = self.sync.status().is_major_syncing();
@@ -420,13 +422,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
-			GenericMessage::Consensus(topic, msg, broadcast) => {
+			GenericMessage::Consensus(msg) => {
 				self.consensus_gossip.on_incoming(
 					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 					who,
-					topic,
 					msg,
-					broadcast,
+					self.sync.status().is_major_syncing(),
 				);
 			}
 			other => self.specialization.on_message(
@@ -446,12 +447,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(&mut self, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
+	fn gossip_consensus_message(&mut self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		self.consensus_gossip.multicast(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			topic,
-			message,
-			broadcast,
+			ConsensusMessage{ data: message, engine_id },
 		);
 	}
 
@@ -599,7 +599,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Perform time based maintenance.
 	fn tick(&mut self) {
-		self.consensus_gossip.collect_garbage(|_| true);
+		self.consensus_gossip.collect_garbage();
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.on_demand
@@ -653,7 +653,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				));
 				return;
 			}
-			if status.version != CURRENT_VERSION {
+			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
 				let reason = format!("Peer using unsupported protocol version {}", status.version);
 				self.network_chan.send(NetworkMsg::ReportPeer(
 					who,
@@ -803,6 +803,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if let Ok(info) = self.context_data.chain.info() {
 			let status = message::generic::Status {
 				version: CURRENT_VERSION,
+				min_supported_version: MIN_VERSION,
 				genesis_hash: info.chain.genesis_hash,
 				roles: self.config.roles.into(),
 				best_number: info.chain.best_number,
