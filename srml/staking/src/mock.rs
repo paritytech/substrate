@@ -18,7 +18,7 @@
 
 #![cfg(test)]
 
-use primitives::{traits::IdentityLookup, BuildStorage, Perbill};
+use primitives::{traits::{IdentityLookup, Convert}, BuildStorage, Perbill};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
@@ -88,7 +88,7 @@ pub fn new_test_ext(
 	};
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
-		authorities: vec![],
+		authorities: vec![<Test as session::Trait>::ConvertAccountIdToSessionKey::convert(10), <Test as session::Trait>::ConvertAccountIdToSessionKey::convert(20)],
 	}.build_storage().unwrap().0);
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
