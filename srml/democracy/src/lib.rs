@@ -123,7 +123,6 @@ decl_module! {
 			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 			ensure!(!T::Currency::total_balance(&who).is_zero(),
 					"transactor must have balance to signal approval.");
-			ensure!(!Self::is_delegating(who.clone()), "transactor is delegating vote.");
 			if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
 				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
 			}
@@ -161,7 +160,7 @@ decl_module! {
 		/// Delegate vote.
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_acyclic_delegation(who.clone(), to.clone(), MAX_ITERATION_LIMIT),
+			ensure!(Self::is_acyclic_delegation(&who, to.clone(), MAX_ITERATION_LIMIT),
 				"delegation creates a cycle or max delegation depth reached");
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
 			Self::deposit_event(RawEvent::Delegated(who, to));
@@ -313,20 +312,16 @@ impl<T: Trait> Module<T> {
 	/// Get the delegated voters for the current proposal.
 	/// I think this goes into a worker once https://github.com/paritytech/substrate/issues/1458 is done. 
 	fn tally_delegation(ref_index: ReferendumIndex) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
-		let mut approve = Zero::zero();
-		let mut against = Zero::zero();
-		let mut capital = Zero::zero();
-		for voter in Self::voters_for(ref_index).iter() {
-			let vote = Self::vote_of((ref_index, voter.clone()));
-			let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier());
-			if vote.is_aye() {
-				approve += votes;
-			} else {
-				against += votes;
-			}
-			capital += balance;
-		}
-		(approve, against, capital)
+		Self::voters_for(ref_index).iter()
+			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
+				let vote = Self::vote_of((ref_index, voter.clone()));
+				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier());
+				if vote.is_aye() {
+					(approve_acc + votes, against_acc, capital_acc + balance)
+				} else {
+					(approve_acc, against_acc + votes, capital_acc + balance)
+				}
+			})
 	}
 
 	fn delegated_votes(ref_index: ReferendumIndex, to: T::AccountId, min_lock_periods: LockPeriods) -> (BalanceOf<T>, BalanceOf<T>) {
@@ -346,8 +341,8 @@ impl<T: Trait> Module<T> {
 		<Delegations<T>>::exists(who)
 	}
 
-	fn is_acyclic_delegation(from: T::AccountId, to: T::AccountId, iteration_limit: u32) -> bool {
-		if from == to || iteration_limit == 0 {
+	fn is_acyclic_delegation(from: &T::AccountId, to: T::AccountId, iteration_limit: u32) -> bool {
+		if from == &to || iteration_limit == 0 {
 			return false;
 		}
 		if !<Delegations<T>>::exists(to.clone()) {
@@ -690,6 +685,42 @@ mod tests {
 	}
 
 	#[test]
+	fn single_proposal_should_work_with_acyclic_delegation() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+
+			assert_ok!(propose_set_balance(1, 2, 1));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+			System::set_block_number(2);
+			let r = 0;
+
+			// Check behaviour with cycles.
+			assert_err!(Democracy::delegate(Origin::signed(1), 1, 100),
+				"delegation creates a cycle or max delegation depth reached");
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+			assert_err!(Democracy::delegate(Origin::signed(1), 2, 100),
+				"delegation creates a cycle or max delegation depth reached");
+			assert_ok!(Democracy::delegate(Origin::signed(3), 2, 100));
+			assert_err!(Democracy::delegate(Origin::signed(1), 3, 100),
+				"delegation creates a cycle or max delegation depth reached");
+			
+			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
+
+			assert_eq!(Democracy::referendum_count(), 1);
+			assert_eq!(Democracy::voters_for(r), vec![1]);
+
+			// Delegated vote is counted.
+			assert_eq!(Democracy::tally(r), (60, 0, 60));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Balances::free_balance(&42), 2);
+		});
+	}
+
+	#[test]
+	/// If transactor already voted, delegated vote is overwriten.
 	fn single_proposal_should_work_with_vote_and_delegation() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
@@ -751,22 +782,35 @@ mod tests {
 	}
 
 	#[test]
-	/// Transactor cannot vote when delegating.
-	fn single_proposal_with_delegation_and_vote() {
+	/// If transactor voted, delegated vote is overwriten.
+	fn single_proposal_should_work_with_delegation_and_vote() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
 
 			assert_ok!(propose_set_balance(1, 2, 1));
 
-			// Delegate the vote.
-			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
-
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 			System::set_block_number(2);
 			let r = 0;
+
 			assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
+
+			// Delegate vote.
+			assert_ok!(Democracy::delegate(Origin::signed(2), 1, 100));
+
 			// Vote.
-			assert_err!(Democracy::vote(Origin::signed(2), r, NAY), "transactor is delegating vote.");
+			assert_ok!(Democracy::vote(Origin::signed(2), r, AYE));
+
+			assert_eq!(Democracy::referendum_count(), 1);
+			assert_eq!(Democracy::voters_for(r), vec![1, 2]);
+			assert_eq!(Democracy::vote_of((r, 1)), AYE);
+
+			// Delegated vote is not counted.
+			assert_eq!(Democracy::tally(r), (30, 0, 30));
+
+			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
+
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
