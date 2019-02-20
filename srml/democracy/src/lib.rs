@@ -38,7 +38,7 @@ pub type ReferendumIndex = u32;
 /// A number of lock periods.
 pub type LockPeriods = i8;
 
-const MAX_ITERATION_LIMIT: u32 = 16;
+const MAX_RECURSION_LIMIT: u32 = 16;
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Default)]
@@ -160,7 +160,7 @@ decl_module! {
 		/// Delegate vote.
 		pub fn delegate(origin, to: T::AccountId, lock_periods: LockPeriods) -> Result {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_acyclic_delegation(&who, to.clone(), MAX_ITERATION_LIMIT),
+			ensure!(Self::is_acyclic_delegation(&who, to.clone(), MAX_RECURSION_LIMIT),
 				"delegation creates a cycle or max delegation depth reached");
 			<Delegations<T>>::insert(who.clone(), (to.clone(), lock_periods.clone()));
 			Self::deposit_event(RawEvent::Delegated(who, to));
@@ -170,7 +170,7 @@ decl_module! {
 		/// Undelegate vote.
 		fn undelegate(origin) -> Result {
 			let who = ensure_signed(origin)?;
-			<Delegations<T>>::take(who.clone());
+			<Delegations<T>>::remove(who.clone());
 			Self::deposit_event(RawEvent::Undelegated(who));
 			Ok(())
 		}
@@ -315,7 +315,7 @@ impl<T: Trait> Module<T> {
 		Self::voters_for(ref_index).iter()
 			.fold((Zero::zero(), Zero::zero(), Zero::zero()), |(approve_acc, against_acc, capital_acc), voter| {
 				let vote = Self::vote_of((ref_index, voter.clone()));
-				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier());
+				let (votes, balance) = Self::delegated_votes(ref_index, voter.clone(), vote.multiplier(), MAX_RECURSION_LIMIT);
 				if vote.is_aye() {
 					(approve_acc + votes, against_acc, capital_acc + balance)
 				} else {
@@ -324,14 +324,20 @@ impl<T: Trait> Module<T> {
 			})
 	}
 
-	fn delegated_votes(ref_index: ReferendumIndex, to: T::AccountId, min_lock_periods: LockPeriods) -> (BalanceOf<T>, BalanceOf<T>) {
+	fn delegated_votes(
+		ref_index: ReferendumIndex,
+		to: T::AccountId,
+		min_lock_periods: LockPeriods,
+		recursion_limit: u32,
+	) -> (BalanceOf<T>, BalanceOf<T>) {
+		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
 		<Delegations<T>>::enumerate()
 			.filter(|(delegator, (delegate, _))| *delegate == to && !<VoteOf<T>>::exists(&(ref_index, delegator.clone())))
 			.fold((Zero::zero(), Zero::zero()), |(votes_acc, balance_acc), (delegator, (_delegate, periods))| {
 				let lock_periods = if min_lock_periods <= periods { min_lock_periods } else { periods };
 				let balance = T::Currency::total_balance(&delegator);
 				let votes = T::Currency::total_balance(&delegator) * BalanceOf::<T>::sa(lock_periods as u64);
-				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods);
+				let (del_votes, del_balance) = Self::delegated_votes(ref_index, delegator, lock_periods, recursion_limit - 1);
 				(votes_acc + votes + del_votes, balance_acc + balance + del_balance)
 			})
 	}
@@ -341,14 +347,14 @@ impl<T: Trait> Module<T> {
 		<Delegations<T>>::exists(who)
 	}
 
-	fn is_acyclic_delegation(from: &T::AccountId, to: T::AccountId, iteration_limit: u32) -> bool {
-		if from == &to || iteration_limit == 0 {
+	fn is_acyclic_delegation(from: &T::AccountId, to: T::AccountId, recursion_limit: u32) -> bool {
+		if from == &to || recursion_limit == 0 {
 			return false;
 		}
 		if !<Delegations<T>>::exists(to.clone()) {
 			return true;
 		}
-		Self::is_acyclic_delegation(from, Self::delegations(to).0, iteration_limit - 1)
+		Self::is_acyclic_delegation(from, Self::delegations(to).0, recursion_limit - 1)
 	}
 
 	// Exposed mutables.
