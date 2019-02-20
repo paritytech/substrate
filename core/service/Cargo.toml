@@ -2,6 +2,7 @@
 name = "substrate-service"
 version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 futures = "0.1.17"
@@ -16,19 +17,19 @@ serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
 target_info = "0.1"
-substrate-keystore = { path = "../../core/keystore" }
+keystore = { package = "substrate-keystore", path = "../../core/keystore" }
 sr-io = { path = "../../core/sr-io" }
-sr-primitives = { path = "../../core/sr-primitives" }
-substrate-primitives = { path = "../../core/primitives" }
-substrate-consensus-common = { path = "../../core/consensus/common" }
-substrate-network = { path = "../../core/network" }
-substrate-client = { path = "../../core/client" }
-substrate-client-db = { path = "../../core/client/db" }
+runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
+primitives = { package = "substrate-primitives", path = "../../core/primitives" }
+consensus_common = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
+network = { package = "substrate-network", path = "../../core/network" }
+client = { package = "substrate-client", path = "../../core/client" }
+client_db = { package = "substrate-client-db", path = "../../core/client/db" }
 parity-codec = "3.0"
 substrate-executor = { path = "../../core/executor" }
-substrate-transaction-pool = { path = "../../core/transaction-pool" }
-substrate-rpc-servers = { path = "../../core/rpc-servers" }
-substrate-telemetry = { path = "../../core/telemetry" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
+rpc = { package = "substrate-rpc-servers", path = "../../core/rpc-servers" }
+tel = { package = "substrate-telemetry", path = "../../core/telemetry" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }

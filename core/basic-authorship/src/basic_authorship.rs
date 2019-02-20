@@ -20,11 +20,11 @@
 //
 use std::{self, time, sync::Arc};
 
-use log::{info, debug, trace};
+use log::{info, debug};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
-	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::{Core, ApiExt}
+	block_builder::api::BlockBuilder as BlockBuilderApi, runtime_api::Core,
 };
 use codec::Decode;
 use consensus_common::{self, evaluation};
@@ -32,6 +32,7 @@ use primitives::{H256, Blake2Hasher};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
 };
+use runtime_primitives::ExecutionContext;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
@@ -96,10 +97,10 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		let mut block_builder = self.new_block_at(at)?;
 
 		let runtime_api = self.runtime_api();
-		if runtime_api.has_api::<BlockBuilderApi<Block>>(at)? {
-			runtime_api.inherent_extrinsics(at, inherent_data)?
-				.into_iter().try_for_each(|i| block_builder.push(i))?;
-		}
+		// We don't check the API versions any further here since the dispatch compatibility
+		// check should be enough.
+		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
+			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
 		build_ctx(&mut block_builder);
 
@@ -173,7 +174,7 @@ impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Pro
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		// leave some time for evaluation and block finalisation (33%)
-	 	let deadline = (self.now)() + max_duration - max_duration / 3;
+		let deadline = (self.now)() + max_duration - max_duration / 3;
 		self.propose_with(inherent_data, deadline)
 	}
 }
@@ -190,10 +191,17 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	{
 		use runtime_primitives::traits::BlakeTwo256;
 
+		/// If the block is full we will attempt to push at most
+		/// this number of transactions before quitting for real.
+		/// It allows us to increase block utilisation.
+		const MAX_SKIPPED_TRANSACTIONS: usize = 8;
+
 		let block = self.client.build_block(
 			&self.parent_id,
 			inherent_data,
 			|block_builder| {
+				let mut is_first = true;
+				let mut skipped = 0;
 				let mut unqueue_invalid = Vec::new();
 				let pending_iterator = self.transaction_pool.ready();
 
@@ -208,14 +216,27 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 							debug!("[{:?}] Pushed to the block.", pending.hash);
 						}
 						Err(error::Error(error::ErrorKind::ApplyExtrinsicFailed(ApplyError::FullBlock), _)) => {
-							debug!("Block is full, proceed with proposing.");
-							break;
+							if is_first {
+								debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending.hash);
+								unqueue_invalid.push(pending.hash.clone());
+							} else if skipped < MAX_SKIPPED_TRANSACTIONS {
+								skipped += 1;
+								debug!(
+									"Block seems full, but will try {} more transactions before quitting.",
+									MAX_SKIPPED_TRANSACTIONS - skipped
+								);
+							} else {
+								debug!("Block is full, proceed with proposing.");
+								break;
+							}
 						}
 						Err(e) => {
-							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+							debug!("[{:?}] Invalid transaction: {}", pending.hash, e);
 							unqueue_invalid.push(pending.hash.clone());
 						}
 					}
+
+					is_first = false;
 				}
 
 				self.transaction_pool.remove_invalid(&unqueue_invalid);

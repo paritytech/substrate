@@ -20,14 +20,15 @@
 #![allow(unused)]
 
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
+use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorityId};
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
-use runtime_support::{StorageMap, StorageDoubleMap};
+use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
-use {wabt, balances};
+use fees;
+use {wabt, balances, consensus};
 use hex_literal::*;
 use assert_matches::assert_matches;
 use crate::{
@@ -40,10 +41,11 @@ mod contract {
 	// needs to give a name for the current crate.
 	// This hack is required for `impl_outer_event!`.
 	pub use super::super::*;
+	use srml_support::impl_outer_event;
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {
-		balances<T>, contract<T>,
+		balances<T>, contract<T>, fees<T>,
 	}
 }
 impl_outer_origin! {
@@ -77,6 +79,19 @@ impl balances::Trait for Test {
 	type OnNewAccount = ();
 	type EnsureAccountLiquid = ();
 	type Event = MetaEvent;
+}
+impl timestamp::Trait for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+}
+impl consensus::Trait for Test {
+	type Log = DigestItem;
+	type SessionKey = UintAuthorityId;
+	type InherentOfflineReport = ();
+}
+impl fees::Trait for Test {
+	type Event = MetaEvent;
+	type TransferAsset = Balances;
 }
 impl Trait for Test {
 	type Call = Call;
@@ -155,11 +170,10 @@ impl ExtBuilder {
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				balances: vec![],
-				transaction_base_fee: 0,
-				transaction_byte_fee: 0,
 				existential_deposit: self.existential_deposit,
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
+				vesting: vec![],
 			}
 			.build_storage()
 			.unwrap()
@@ -338,7 +352,7 @@ const HASH_DISPATCH_CALL: [u8; 32] = hex!("49dfdcaf9c1553be10634467e95b8e71a3bc1
 fn dispatch_call() {
 	// This test can fail due to the encoding changes. In case it becomes too annoying
 	// let's rewrite so as we use this module controlled call or we serialize it in runtime.
-	let encoded = codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
+	let encoded = parity_codec::Encode::encode(&Call::Balances(balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
 	let wasm = wabt::wat2wasm(CODE_DISPATCH_CALL).unwrap();

@@ -31,11 +31,12 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::Keyring;
-	use runtime_support::{Hashable, StorageValue, StorageMap};
+	use keyring::ed25519::Keyring;
+	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{
-		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue
+		twox_128, Blake2Hasher, ChangesTrieConfiguration, ed25519::{Public, Pair}, NeverNativeValue,
+		NativeOrEncoded
 	};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
@@ -45,9 +46,8 @@ mod tests {
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, GrandpaConfig, IndicesConfig, Event, Log};
+		SystemConfig, GrandpaConfig, IndicesConfig, FeesConfig, Event, Log};
 	use wabt;
-	use hex_literal::{hex, hex_impl};
 	use primitives::map;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
@@ -72,10 +72,12 @@ mod tests {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
-				let signature = payload.using_encoded(|b| if b.len() > 256 {
-					pair.sign(&runtime_io::blake2_256(b))
-				} else {
-					pair.sign(b)
+				let signature = payload.using_encoded(|b| {
+					if b.len() > 256 {
+						pair.sign(&runtime_io::blake2_256(b))
+					} else {
+						pair.sign(b)
+					}
 				}).into();
 				UncheckedExtrinsic {
 					signature: Some((indices::address::Address::Id(signed), signature, payload.0, era)),
@@ -101,7 +103,7 @@ mod tests {
 	}
 
 	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
-		::substrate_executor::NativeExecutor::new()
+		::substrate_executor::NativeExecutor::new(None)
 	}
 
 	#[test]
@@ -109,13 +111,13 @@ mod tests {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
+			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -142,13 +144,13 @@ mod tests {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
+			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -175,13 +177,13 @@ mod tests {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
+			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -212,13 +214,13 @@ mod tests {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(BLOATY_CODE, map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
+			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = executor().call::<_, NeverNativeValue, fn() -> _>(
@@ -245,7 +247,6 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
 		TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
@@ -264,20 +265,19 @@ mod tests {
 					(alice(), 111),
 					(charlie(), 100_000_000),
 				],
-				transaction_base_fee: 1,
-				transaction_byte_fee: 0,
 				existential_deposit: 0,
 				transfer_fee: 0,
 				creation_fee: 0,
+				vesting: vec![],
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
+				validators: vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three],
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				intentions: vec![alice(), bob(), Charlie.to_raw_public().into()],
+				intentions: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
@@ -286,7 +286,7 @@ mod tests {
 				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
-				invulnerables: vec![alice(), bob(), Charlie.to_raw_public().into()],
+				invulnerables: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -297,66 +297,83 @@ mod tests {
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(Alice.to_raw_public().into(), 1),
-					(Bob.to_raw_public().into(), 1),
-					(Charlie.to_raw_public().into(), 1),
+					(Keyring::Alice.to_raw_public().into(), 1),
+					(Keyring::Bob.to_raw_public().into(), 1),
+					(Keyring::Charlie.to_raw_public().into(), 1),
 				],
+			}),
+			fees: Some(FeesConfig {
+				transaction_base_fee: 1,
+				transaction_byte_fee: 0,
 			}),
 		}.build_storage().unwrap().0)
 	}
 
-	fn changes_trie_log(changes_root: Hash) -> Log {
-		Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root))
-	}
-
 	fn construct_block(
+		env: &mut TestExternalities<Blake2Hasher>,
 		number: BlockNumber,
 		parent_hash: Hash,
-		state_root: Hash,
-		logs: Vec<Log>,
-		extrinsics: Vec<CheckedExtrinsic>
+		extrinsics: Vec<CheckedExtrinsic>,
 	) -> (Vec<u8>, Hash) {
 		use trie::ordered_trie_root;
 
+		// sign extrinsics.
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter()
-			.map(Encode::encode))
-			.to_fixed_bytes()
-			.into();
 
-		let mut digest = generic::Digest::<Log>::default();
-		for item in logs {
-			digest.push(item);
-		}
+		// calculate the header fields that we can.
+		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(
+				extrinsics.iter().map(Encode::encode)
+			).to_fixed_bytes()
+			.into();
 
 		let header = Header {
 			parent_hash,
 			number,
-			state_root,
 			extrinsics_root,
-			digest,
+			state_root: Default::default(),
+			digest: Default::default(),
 		};
-		let hash = header.blake2_256();
 
-		(Block { header, extrinsics }.encode(), hash.into())
+		// execute the block to get the real header.
+		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			env,
+			"Core_initialise_block",
+			&header.encode(),
+			true,
+			None,
+		).0.unwrap();
+
+		for i in extrinsics.iter() {
+			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+				env,
+				"BlockBuilder_apply_extrinsic",
+				&i.encode(),
+				true,
+				None,
+			).0.unwrap();
+		}
+
+		let correct_header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+			env,
+			"BlockBuilder_finalise_block",
+			&[0u8;0],
+			true,
+			None,
+		).0.unwrap() {
+			NativeOrEncoded::Native(_) => unreachable!(),
+			NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
+		};
+
+
+		let hash = correct_header.blake2_256();
+		(Block { header: correct_header, extrinsics }.encode(), hash.into())
 	}
 
-	fn block1(support_changes_trie: bool) -> (Vec<u8>, Hash) {
+	fn changes_trie_block() -> (Vec<u8>, Hash) {
 		construct_block(
+			&mut new_test_ext(COMPACT_CODE, true),
 			1,
 			GENESIS_HASH.into(),
-			if support_changes_trie {
-				hex!("cc63808897a07869d3b9103df5ad92f9be2f865ece506df5de0a87b2a95131d5").into()
-			} else {
-				hex!("fe5275f4d9f8130c8e80d0132f0a718ae0eeea2872c841843192720ad5c3f05a").into()
-			},
-			if support_changes_trie {
-				vec![changes_trie_log(
-					hex!("f254b62df0bfef049e010a7a0d6f176d73cc5d9710fa945b4e48f519c8d3a291").into(),
-				)]
-			} else {
-				vec![]
-			},
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -370,18 +387,30 @@ mod tests {
 		)
 	}
 
-	fn block2() -> (Vec<u8>, Hash) {
-		construct_block(
+	// block 1 and 2 must be created together to ensure transactions are only signed once (since they
+	// are not guaranteed to be deterministic) and to ensure that the correct state is propagated
+	// from block1's execution to block2 to derive the correct storage_root.
+	fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
+		let mut t = new_test_ext(COMPACT_CODE, false);
+		let block1 = construct_block(
+			&mut t,
+			1,
+			GENESIS_HASH.into(),
+			vec![
+				CheckedExtrinsic {
+					signed: None,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((alice(), 0)),
+					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+				},
+			]
+		);
+		let block2 = construct_block(
+			&mut t,
 			2,
-			block1(false).1,
-			hex!("45b6655508fb524467b5c24184a7509b9ae07db4f95e16052ed425af182f39a8").into(),
-			vec![ // session changes here, so we add a grandpa change signal log.
-				Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-					(Keyring::One.to_raw_public().into(), 1),
-					(Keyring::Two.to_raw_public().into(), 1),
-					([3u8; 32].into(), 1),
-				]))
-			],
+			block1.1.clone(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -396,15 +425,24 @@ mod tests {
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
 				}
 			]
-		)
+		);
+
+		let mut digest = generic::Digest::<Log>::default();
+		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
+			(Keyring::One.to_raw_public().into(), 1),
+			(Keyring::Two.to_raw_public().into(), 1),
+			([3u8; 32].into(), 1),
+		])));
+		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
+
+		(block1, block2)
 	}
 
-	fn block1big() -> (Vec<u8>, Hash) {
+	fn big_block() -> (Vec<u8>, Hash) {
 		construct_block(
+			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
-			hex!("ec00658cc2826d3499dde2954e399f0a0b2596eec1b0da9b76bc72394161dc99").into(),
-			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -422,10 +460,12 @@ mod tests {
 	fn full_native_block_import_works() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
+		let (block1, block2) = blocks();
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block1(false).0,
+			&block1.0,
 			true,
 			None,
 		).0.unwrap();
@@ -445,15 +485,15 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::NewAccount(
-						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						bob().into(),
 						69
 					))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::Transfer(
-						hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
-						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						alice().into(),
+						bob().into(),
 						69,
 						0
 					))
@@ -473,14 +513,18 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::fees(fees::RawEvent::Charged(1, 1))
 				}
 			]);
 		});
-
+		
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block2().0,
+			&block2.0,
 			true,
 			None,
 		).0.unwrap();
@@ -497,8 +541,8 @@ mod tests {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
-							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
-							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							bob().into(),
+							alice().into(),
 							5,
 							0
 						)
@@ -512,8 +556,8 @@ mod tests {
 					phase: Phase::ApplyExtrinsic(2),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
-							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
-							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							alice().into(),
+							bob().into(),
 							15,
 							0
 						)
@@ -550,6 +594,14 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::fees(fees::RawEvent::Charged(1, 1))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::fees(fees::RawEvent::Charged(2, 1))
 				}
 			]);
 		});
@@ -559,14 +611,16 @@ mod tests {
 	fn full_wasm_block_import_works() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1(false).0).unwrap();
+		let (block1, block2) = blocks();
+
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 41);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2().0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 30);
@@ -660,7 +714,6 @@ mod tests {
 
 	#[test]
 	fn deploying_wasm_contract_should_work() {
-		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		let transfer_code = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 		let transfer_ch = <Runtime as system::Trait>::Hashing::hash(&transfer_code);
@@ -672,10 +725,9 @@ mod tests {
 		);
 
 		let b = construct_block(
+			&mut new_test_ext(COMPACT_CODE, false),
 			1,
 			GENESIS_HASH.into(),
-			hex!("6a4da4ed61c4d9eba0477aa67024d573693df781176dfe7fe903d1088b38b266").into(),
-			vec![],
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -702,6 +754,8 @@ mod tests {
 			]
 		);
 
+		let mut t = new_test_ext(COMPACT_CODE, false);
+
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE,"Core_execute_block", &b.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
@@ -720,7 +774,7 @@ mod tests {
 				8,
 				COMPACT_CODE,
 				"Core_execute_block",
-				&block1big().0
+				&big_block().0
 			).is_err()
 		);
 	}
@@ -729,10 +783,10 @@ mod tests {
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
-		Executor::new().call::<_, NeverNativeValue, fn() -> _>(
+		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block1big().0,
+			&big_block().0,
 			true,
 			None,
 		).0.unwrap();
@@ -743,10 +797,10 @@ mod tests {
 		let mut t = new_test_ext(COMPACT_CODE, false);
 
 		assert!(
-			Executor::new().call::<_, NeverNativeValue, fn() -> _>(
+			Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 				&mut t,
 				"Core_execute_block",
-				&block1big().0,
+				&big_block().0,
 				false,
 				None,
 			).0.is_err()
@@ -759,13 +813,13 @@ mod tests {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
+			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialise_block", &vec![].and(&from_block_number(1u64)));
@@ -781,13 +835,13 @@ mod tests {
 		let mut t = TestExternalities::<Blake2Hasher>::new_with_code(foreign_code, map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(<indices::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
-			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32],
+			twox_128(<fees::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<fees::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16]
 		]);
 
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_initialise_block", &vec![].and(&from_block_number(1u64)));
@@ -804,11 +858,15 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works_with_changes_trie() {
+		let block1 = changes_trie_block();
+		let block_data = block1.0;
+		let block = Block::decode(&mut &block_data[..]).unwrap();
+
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		Executor::new().call::<_, NeverNativeValue, fn() -> _>(
+		Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
-			&block1(true).0,
+			&block.encode(),
 			true,
 			None,
 		).0.unwrap();
@@ -818,8 +876,10 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works_with_changes_trie() {
+		let block1 = changes_trie_block();
+		
 		let mut t = new_test_ext(COMPACT_CODE, true);
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1(true).0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		assert!(t.storage_changes_root(Default::default(), 0).is_some());
 	}
@@ -831,10 +891,12 @@ mod tests {
 
 		#[bench]
 		fn wasm_execute_block(b: &mut Bencher) {
+			let (block1, block2) = blocks();
+
 			b.iter(|| {
 				let mut t = new_test_ext(COMPACT_CODE, false);
-				WasmExecutor::new().call(&mut t, "Core_execute_block", &block1(false).0).unwrap();
-				WasmExecutor::new().call(&mut t, "Core_execute_block", &block2().0).unwrap();
+				WasmExecutor::new().call(&mut t, "Core_execute_block", &block1.0).unwrap();
+				WasmExecutor::new().call(&mut t, "Core_execute_block", &block2.0).unwrap();
 			});
 		}
 	}

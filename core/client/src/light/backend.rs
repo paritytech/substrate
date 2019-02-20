@@ -22,7 +22,7 @@ use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
-use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
+use runtime_primitives::{generic::BlockId, Justification, StorageOverlay, ChildrenStorageOverlay};
 use state_machine::{Backend as StateBackend, TrieBackend, backend::InMemory as InMemoryState};
 use runtime_primitives::traits::{Block as BlockT, NumberFor, AuthorityIdFor, Zero, Header};
 use crate::in_mem::{self, check_genesis_storage};
@@ -50,6 +50,7 @@ pub struct ImportOperation<Block: BlockT, S, F, H> {
 	leaf_state: NewBlockState,
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
+	set_head: Option<BlockId<Block>>,
 	storage_update: Option<InMemoryState<H>>,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
@@ -120,6 +121,7 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 			leaf_state: NewBlockState::Normal,
 			aux_ops: Vec::new(),
 			finalized_blocks: Vec::new(),
+			set_head: None,
 			storage_update: None,
 			_phantom: Default::default(),
 		})
@@ -163,6 +165,10 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F, H> where
 					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
 				}
 			}
+		}
+
+		if let Some(set_head) = operation.set_head {
+			self.blockchain.storage().set_head(set_head)?;
 		}
 
 		Ok(())
@@ -262,11 +268,11 @@ where
 		Ok(())
 	}
 
-	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> ClientResult<H::Out> {
+	fn reset_storage(&mut self, top: StorageOverlay, children: ChildrenStorageOverlay) -> ClientResult<H::Out> {
 		check_genesis_storage(&top, &children)?;
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<Vec<u8>>, StorageMap> = HashMap::new();
+		let mut storage: HashMap<Option<Vec<u8>>, StorageOverlay> = HashMap::new();
 		storage.insert(None, top);
 		for (child_key, child_storage) in children {
 			storage.insert(Some(child_key), child_storage);
@@ -292,6 +298,11 @@ where
 
 	fn mark_finalized(&mut self, block: BlockId<Block>, _justification: Option<Justification>) -> ClientResult<()> {
 		self.finalized_blocks.push(block);
+		Ok(())
+	}
+
+	fn mark_head(&mut self, block: BlockId<Block>) -> ClientResult<()> {
+		self.set_head = Some(block);
 		Ok(())
 	}
 }
@@ -501,6 +512,7 @@ mod tests {
 		}
 	}
 
+	#[test]
 	fn light_aux_store_is_updated_via_non_importing_op() {
 		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
 		let mut op = ClientBackend::<Block, Blake2Hasher>::begin_operation(&backend).unwrap();

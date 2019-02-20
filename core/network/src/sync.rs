@@ -14,21 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use protocol::Context;
+use log::{debug, trace, warn};
+use crate::protocol::Context;
+use fork_tree::ForkTree;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
 use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
-use blocks::BlockCollection;
+use crate::blocks::BlockCollection;
 use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
 use runtime_primitives::generic::BlockId;
-use message::{self, generic::Message as GenericMessage};
-use config::Roles;
+use crate::message::{self, generic::Message as GenericMessage};
+use crate::config::Roles;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -64,9 +66,13 @@ enum PeerSyncState<B: BlockT> {
 /// Pending justification request for the given block (hash and number).
 type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
-/// Manages pending block justification requests.
+/// Manages pending block justification requests. Multiple justifications may be
+/// requested for competing forks, or for the same branch at different
+/// (increasing) heights. This structure will guarantee that justifications are
+/// fetched in-order, and that obsolete changes are pruned (when finalizing a
+/// competing fork).
 struct PendingJustifications<B: BlockT> {
-	justifications: HashSet<PendingJustification<B>>,
+	justifications: ForkTree<B::Hash, NumberFor<B>, ()>,
 	pending_requests: VecDeque<PendingJustification<B>>,
 	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
 	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
@@ -75,7 +81,7 @@ struct PendingJustifications<B: BlockT> {
 impl<B: BlockT> PendingJustifications<B> {
 	fn new() -> PendingJustifications<B> {
 		PendingJustifications {
-			justifications: HashSet::new(),
+			justifications: ForkTree::new(),
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),
@@ -91,6 +97,8 @@ impl<B: BlockT> PendingJustifications<B> {
 		if self.pending_requests.is_empty() {
 			return;
 		}
+
+		let initial_pending_requests = self.pending_requests.len();
 
 		// clean up previous failed requests so we can retry again
 		for (_, requests) in self.previous_requests.iter_mut() {
@@ -172,14 +180,34 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 
 		self.pending_requests.append(&mut unhandled_requests);
+
+		trace!(target: "sync", "Dispatched {} justification requests ({} pending)",
+			initial_pending_requests - self.pending_requests.len(),
+			self.pending_requests.len(),
+		);
 	}
 
 	/// Queue a justification request (without dispatching it).
-	fn queue_request(&mut self, justification: &PendingJustification<B>) {
-		if !self.justifications.insert(*justification) {
-			return;
-		}
-		self.pending_requests.push_back(*justification);
+	fn queue_request<F>(
+		&mut self,
+		justification: &PendingJustification<B>,
+		is_descendent_of: F,
+	) where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError> {
+		match self.justifications.import(justification.0.clone(), justification.1.clone(), (), &is_descendent_of) {
+			Ok(true) => {
+				// this is a new root so we add it to the current `pending_requests`
+				self.pending_requests.push_back((justification.0, justification.1));
+			},
+			Err(err) => {
+				warn!(target: "sync", "Failed to insert requested justification {:?} {:?} into tree: {:?}",
+					justification.0,
+					justification.1,
+					err,
+				);
+				return;
+			},
+			_ => {},
+		};
 	}
 
 	/// Retry any pending request if a peer disconnected.
@@ -189,14 +217,37 @@ impl<B: BlockT> PendingJustifications<B> {
 		}
 	}
 
+	/// Process the import of a justification.
+	/// Queues a retry in case the import failed.
+	fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
+		let request = (hash, number);
+		if success {
+			if self.justifications.finalize_root(&request.0).is_none() {
+				warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
+					  request.0,
+					  request.1,
+					  self.justifications.roots().collect::<Vec<_>>(),
+				);
+				return;
+			};
+
+			self.previous_requests.clear();
+			self.peer_requests.clear();
+			self.pending_requests =
+				self.justifications.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
+
+			return;
+		}
+		self.pending_requests.push_front(request);
+	}
+
 	/// Processes the response for the request previously sent to the given
-	/// peer. Queues a retry in case the import fails or the given justification
+	/// peer. Queues a retry in case the given justification
 	/// was `None`.
 	fn on_response(
 		&mut self,
 		who: NodeIndex,
 		justification: Option<Justification>,
-		protocol: &mut Context<B>,
 		import_queue: &ImportQueue<B>,
 	) {
 		// we assume that the request maps to the given response, this is
@@ -204,34 +255,39 @@ impl<B: BlockT> PendingJustifications<B> {
 		// messages to chain sync.
 		if let Some(request) = self.peer_requests.remove(&who) {
 			if let Some(justification) = justification {
-				if import_queue.import_justification(request.0, request.1, justification) {
-					self.justifications.remove(&request);
-					self.previous_requests.remove(&request);
-					return;
-				} else {
-					protocol.report_peer(
-						who,
-						Severity::Bad(&format!("Invalid justification provided for #{}", request.0)),
-					);
-				}
-			} else {
-				self.previous_requests
-					.entry(request)
-					.or_insert(Vec::new())
-					.push((who, Instant::now()));
+				import_queue.import_justification(who.clone(), request.0, request.1, justification);
+				return
 			}
 
+			self.previous_requests
+				.entry(request)
+				.or_insert(Vec::new())
+				.push((who, Instant::now()));
 			self.pending_requests.push_front(request);
 		}
 	}
 
 	/// Removes any pending justification requests for blocks lower than the
 	/// given best finalized.
-	fn collect_garbage(&mut self, best_finalized: NumberFor<B>) {
-		self.justifications.retain(|(_, n)| *n > best_finalized);
-		self.pending_requests.retain(|(_, n)| *n > best_finalized);
-		self.peer_requests.retain(|_, (_, n)| *n > best_finalized);
-		self.previous_requests.retain(|(_, n), _| *n > best_finalized);
+	fn on_block_finalized<F>(
+		&mut self,
+		best_finalized_hash: &B::Hash,
+		best_finalized_number: NumberFor<B>,
+		is_descendent_of: F,
+	) -> Result<(), fork_tree::Error<ClientError>>
+		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
+	{
+		use std::collections::HashSet;
+
+		self.justifications.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+
+		let roots = self.justifications.roots().collect::<HashSet<_>>();
+
+		self.pending_requests.retain(|(h, n)| roots.contains(&(h, n, &())));
+		self.peer_requests.retain(|_, (h, n)| roots.contains(&(h, n, &())));
+		self.previous_requests.retain(|(h, n), _| roots.contains(&(h, n, &())));
+
+		Ok(())
 	}
 }
 
@@ -243,8 +299,9 @@ pub struct ChainSync<B: BlockT> {
 	best_queued_number: NumberFor<B>,
 	best_queued_hash: B::Hash,
 	required_block_attributes: message::BlockAttributes,
-	import_queue: Arc<ImportQueue<B>>,
 	justifications: PendingJustifications<B>,
+	import_queue: Box<ImportQueue<B>>,
+	is_stopping: AtomicBool,
 }
 
 /// Reported sync state.
@@ -285,7 +342,7 @@ impl<B: BlockT> Status<B> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
-	pub(crate) fn new(role: Roles, info: &ClientInfo<B>, import_queue: Arc<ImportQueue<B>>) -> Self {
+	pub(crate) fn new(role: Roles, info: &ClientInfo<B>, import_queue: Box<ImportQueue<B>>) -> Self {
 		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
 		if role.intersects(Roles::FULL | Roles::AUTHORITY) {
 			required_block_attributes |= message::BlockAttributes::BODY;
@@ -300,6 +357,7 @@ impl<B: BlockT> ChainSync<B> {
 			justifications: PendingJustifications::new(),
 			required_block_attributes,
 			import_queue,
+			is_stopping: Default::default(),
 		}
 	}
 
@@ -308,7 +366,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Returns import queue reference.
-	pub(crate) fn import_queue(&self) -> Arc<ImportQueue<B>> {
+	pub(crate) fn import_queue(&self) -> Box<ImportQueue<B>> {
 		self.import_queue.clone()
 	}
 
@@ -332,13 +390,16 @@ impl<B: BlockT> ChainSync<B> {
 			match (block_status(&*protocol.client(), &*self.import_queue, info.best_hash), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
-					protocol.report_peer(who, Severity::Useless(&format!("Error legimimately reading blockchain status: {:?}", e)));
+					let reason = format!("Error legimimately reading blockchain status: {:?}", e);
+					protocol.report_peer(who, Severity::Useless(reason));
 				},
 				(Ok(BlockStatus::KnownBad), _) => {
-					protocol.report_peer(who, Severity::Bad(&format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number)));
+					let reason = format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who, Severity::Bad(reason));
 				},
-				(Ok(BlockStatus::Unknown), b) if b.is_zero() => {
-					protocol.report_peer(who, Severity::Bad(&format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number)));
+				(Ok(BlockStatus::Unknown), b) if b == As::sa(0) => {
+					let reason = format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
+					protocol.report_peer(who, Severity::Bad(reason));
 				},
 				(Ok(BlockStatus::Unknown), _) if self.import_queue.status().importing_count > MAJOR_SYNC_BLOCKS => {
 					// when actively syncing the common point moves too fast.
@@ -457,18 +518,19 @@ impl<B: BlockT> ChainSync<B> {
 								},
 								Ok(_) => { // genesis mismatch
 									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
-									protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer"));
+									protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
 									return None;
 								},
 								Err(e) => {
-									protocol.report_peer(who, Severity::Useless(&format!("Error answering legitimate blockchain query: {:?}", e)));
+									let reason = format!("Error answering legitimate blockchain query: {:?}", e);
+									protocol.report_peer(who, Severity::Useless(reason));
 									return None;
 								}
 							}
 						},
 						None => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
-							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor"));
+							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
 							return None;
 						}
 					}
@@ -517,24 +579,23 @@ impl<B: BlockT> ChainSync<B> {
 								response.hash,
 							);
 
-							protocol.report_peer(who, Severity::Bad(&msg));
+							protocol.report_peer(who, Severity::Bad(msg));
 							return;
 						}
 
 						self.justifications.on_response(
 							who,
 							response.justification,
-							protocol,
 							&*self.import_queue,
 						);
 					},
 					None => {
-						let msg = format!(
-							"Provided empty response for justification request {:?}",
+						// we might have asked the peer for a justification on a block that we thought it had
+						// (regardless of whether it had a justification for it or not).
+						trace!(target: "sync", "Peer {:?} provided empty response for justification request {:?}",
+							who,
 							hash,
 						);
-
-						protocol.report_peer(who, Severity::Useless(&msg));
 						return;
 					},
 				}
@@ -546,6 +607,9 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Maintain the sync process (download new blocks, fetch justifications).
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
+		if self.is_stopping.load(Ordering::SeqCst) {
+			return
+		}
 		let peers: Vec<NodeIndex> = self.peers.keys().map(|p| *p).collect();
 		for peer in peers {
 			self.download_new(protocol, peer);
@@ -562,8 +626,21 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// Queues a new justification request and tries to dispatch all pending requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
-		self.justifications.queue_request(&(*hash, number));
+		self.justifications.queue_request(
+			&(*hash, number),
+			|base, block| protocol.client().is_descendent_of(base, block),
+		);
+
 		self.justifications.dispatch(&mut self.peers, protocol);
+	}
+
+	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
+		self.justifications.justification_import_result(hash, number, success);
+	}
+
+	pub fn stop(&self) {
+		self.is_stopping.store(true, Ordering::SeqCst);
+		self.import_queue.stop();
 	}
 
 	/// Notify about successful import of the given block.
@@ -572,8 +649,14 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Notify about finalization of the given block.
-	pub fn block_finalized(&mut self, _hash: &B::Hash, number: NumberFor<B>) {
-		self.justifications.collect_garbage(number);
+	pub fn on_block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
+		if let Err(err) = self.justifications.on_block_finalized(
+			hash,
+			number,
+			|base, block| protocol.client().is_descendent_of(base, block),
+		) {
+			warn!(target: "sync", "Error cleaning up pending justification requests: {:?}", err);
+		};
 	}
 
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
@@ -786,7 +869,7 @@ impl<B: BlockT> ChainSync<B> {
 
 /// Get block status, taking into account import queue.
 fn block_status<B: BlockT>(
-	chain: &::chain::Client<B>,
+	chain: &crate::chain::Client<B>,
 	queue: &ImportQueue<B>,
 	hash: B::Hash) -> Result<BlockStatus, ClientError>
 {

@@ -21,11 +21,10 @@ mod custom_proto;
 mod error;
 mod secret;
 mod service_task;
-mod topology;
 mod traits;
 mod transport;
 
-pub use crate::custom_proto::RegisteredProtocol;
+pub use crate::custom_proto::{CustomMessage, RegisteredProtocol};
 pub use crate::error::{Error, ErrorKind, DisconnectReason};
 pub use crate::secret::obtain_private_key;
 pub use crate::service_task::{start_service, Service, ServiceEvent};

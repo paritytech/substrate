@@ -18,7 +18,8 @@ use crate::ProtocolId;
 use bytes::Bytes;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade::ProtocolName};
 use libp2p::tokio_codec::Framed;
-use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
+use log::warn;
+use std::{collections::VecDeque, io, marker::PhantomData, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
@@ -27,8 +28,7 @@ use unsigned_varint::codec::UviBytes;
 ///
 /// Note that "a single protocol" here refers to `par` for example. However
 /// each protocol can have multiple different versions for networking purposes.
-#[derive(Clone)]
-pub struct RegisteredProtocol {
+pub struct RegisteredProtocol<TMessage> {
 	/// Id of the protocol for API purposes.
 	id: ProtocolId,
 	/// Base name of the protocol as advertised on the network.
@@ -37,9 +37,11 @@ pub struct RegisteredProtocol {
 	/// List of protocol versions that we support.
 	/// Ordered in descending order so that the best comes first.
 	supported_versions: Vec<u8>,
+	/// Marker to pin the generic.
+	marker: PhantomData<TMessage>,
 }
 
-impl RegisteredProtocol {
+impl<TMessage> RegisteredProtocol<TMessage> {
 	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
 	/// passed inside the `RegisteredProtocolOutput`.
 	pub fn new(protocol: ProtocolId, versions: &[u8])
@@ -56,6 +58,7 @@ impl RegisteredProtocol {
 				tmp.sort_unstable_by(|a, b| b.cmp(&a));
 				tmp
 			},
+			marker: PhantomData,
 		}
 	}
 
@@ -66,16 +69,27 @@ impl RegisteredProtocol {
 	}
 }
 
+impl<TMessage> Clone for RegisteredProtocol<TMessage> {
+	fn clone(&self) -> Self {
+		RegisteredProtocol {
+			id: self.id,
+			base_name: self.base_name.clone(),
+			supported_versions: self.supported_versions.clone(),
+			marker: PhantomData,
+		}
+	}
+}
+
 /// Output of a `RegisteredProtocol` upgrade.
-pub struct RegisteredProtocolSubstream<TSubstream> {
+pub struct RegisteredProtocolSubstream<TMessage, TSubstream> {
 	/// If true, we are in the process of closing the sink.
 	is_closing: bool,
 	/// Buffer of packets to send.
-	send_queue: VecDeque<Bytes>,
+	send_queue: VecDeque<Vec<u8>>,
 	/// If true, we should call `poll_complete` on the inner sink.
 	requires_poll_complete: bool,
 	/// The underlying substream.
-	inner: stream::Fuse<Framed<TSubstream, UviBytes<Bytes>>>,
+	inner: stream::Fuse<Framed<TSubstream, UviBytes<Vec<u8>>>>,
 	/// Id of the protocol.
 	protocol_id: ProtocolId,
 	/// Version of the protocol that was negotiated.
@@ -83,9 +97,11 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// If true, we have sent a "remote is clogged" event recently and shouldn't send another one
 	/// unless the buffer empties then fills itself again.
 	clogged_fuse: bool,
+	/// Marker to pin the generic.
+	marker: PhantomData<TMessage>,
 }
 
-impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
+impl<TMessage, TSubstream> RegisteredProtocolSubstream<TMessage, TSubstream> {
 	/// Returns the protocol id.
 	#[inline]
 	pub fn protocol_id(&self) -> ProtocolId {
@@ -110,33 +126,53 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	}
 
 	/// Sends a message to the substream.
-	pub fn send_message(&mut self, data: Bytes) {
+	pub fn send_message(&mut self, data: TMessage)
+	where TMessage: CustomMessage {
 		if self.is_closing {
 			return
 		}
 
-		self.send_queue.push_back(data);
+		self.send_queue.push_back(data.into_bytes());
+	}
+}
+
+/// Implemented on messages that can be sent or received on the network.
+pub trait CustomMessage {
+	/// Turns a message into raw bytes.
+	fn into_bytes(self) -> Vec<u8>;
+	/// Tries to part `bytes` into a message.
+	fn from_bytes(bytes: &[u8]) -> Result<Self, ()>
+		where Self: Sized;
+}
+
+/// This trait implementation exists mostly for testing convenience.
+impl CustomMessage for Vec<u8> {
+	fn into_bytes(self) -> Vec<u8> {
+		self
+	}
+
+	fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
+		Ok(bytes.to_vec())
 	}
 }
 
 /// Event produced by the `RegisteredProtocolSubstream`.
 #[derive(Debug, Clone)]
-pub enum RegisteredProtocolEvent {
+pub enum RegisteredProtocolEvent<TMessage> {
 	/// Received a message from the remote.
-	Message(Bytes),
+	Message(TMessage),
 
 	/// Diagnostic event indicating that the connection is clogged and we should avoid sending too
 	/// many messages to it.
 	Clogged {
 		/// Copy of the messages that are within the buffer, for further diagnostic.
-		messages: Vec<Bytes>,
+		messages: Vec<TMessage>,
 	},
 }
 
-impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
-where TSubstream: AsyncRead + AsyncWrite,
-{
-	type Item = RegisteredProtocolEvent;
+impl<TMessage, TSubstream> Stream for RegisteredProtocolSubstream<TMessage, TSubstream>
+where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
+	type Item = RegisteredProtocolEvent<TMessage>;
 	type Error = io::Error;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -164,7 +200,10 @@ where TSubstream: AsyncRead + AsyncWrite,
 				//	thus never read any message from the network.
 				self.clogged_fuse = true;
 				return Ok(Async::Ready(Some(RegisteredProtocolEvent::Clogged {
-					messages: self.send_queue.iter().cloned().collect(),
+					messages: self.send_queue.iter()
+						.map(|m| CustomMessage::from_bytes(&m))
+						.filter_map(Result::ok)
+						.collect(),
 				})))
 			}
 		} else {
@@ -181,8 +220,14 @@ where TSubstream: AsyncRead + AsyncWrite,
 		// Receiving incoming packets.
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		match self.inner.poll()? {
-			Async::Ready(Some(data)) =>
-				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(data.freeze())))),
+			Async::Ready(Some(data)) => {
+				let message = <TMessage as CustomMessage>::from_bytes(&data)
+					.map_err(|()| {
+						warn!(target: "sub-libp2p", "Couldn't decode packet sent by the remote: {:?}", data);
+						io::ErrorKind::InvalidData
+					})?;
+				Ok(Async::Ready(Some(RegisteredProtocolEvent::Message(message))))
+			},
 			Async::Ready(None) =>
 				if !self.requires_poll_complete && self.send_queue.is_empty() {
 					Ok(Async::Ready(None))
@@ -194,7 +239,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 	}
 }
 
-impl UpgradeInfo for RegisteredProtocol {
+impl<TMessage> UpgradeInfo for RegisteredProtocol<TMessage> {
 	type Info = RegisteredProtocolName;
 	type InfoIter = VecIntoIter<Self::Info>;
 
@@ -228,10 +273,10 @@ impl ProtocolName for RegisteredProtocolName {
 	}
 }
 
-impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
+impl<TMessage, TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol<TMessage>
 where TSubstream: AsyncRead + AsyncWrite,
 {
-	type Output = RegisteredProtocolSubstream<TSubstream>;
+	type Output = RegisteredProtocolSubstream<TMessage, TSubstream>;
 	type Future = future::FutureResult<Self::Output, io::Error>;
 	type Error = io::Error;
 
@@ -250,11 +295,12 @@ where TSubstream: AsyncRead + AsyncWrite,
 			protocol_id: self.id,
 			protocol_version: info.version,
 			clogged_fuse: false,
+			marker: PhantomData,
 		})
 	}
 }
 
-impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocol
+impl<TMessage, TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocol<TMessage>
 where TSubstream: AsyncRead + AsyncWrite,
 {
 	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
@@ -272,10 +318,9 @@ where TSubstream: AsyncRead + AsyncWrite,
 }
 
 // Connection upgrade for all the protocols contained in it.
-#[derive(Clone)]
-pub struct RegisteredProtocols(pub Vec<RegisteredProtocol>);
+pub struct RegisteredProtocols<TMessage>(pub Vec<RegisteredProtocol<TMessage>>);
 
-impl RegisteredProtocols {
+impl<TMessage> RegisteredProtocols<TMessage> {
 	/// Returns the number of protocols.
 	#[inline]
 	pub fn len(&self) -> usize {
@@ -288,13 +333,13 @@ impl RegisteredProtocols {
 	}
 }
 
-impl Default for RegisteredProtocols {
+impl<TMessage> Default for RegisteredProtocols<TMessage> {
 	fn default() -> Self {
 		RegisteredProtocols(Vec::new())
 	}
 }
 
-impl UpgradeInfo for RegisteredProtocols {
+impl<TMessage> UpgradeInfo for RegisteredProtocols<TMessage> {
 	type Info = RegisteredProtocolsName;
 	type InfoIter = VecIntoIter<Self::Info>;
 
@@ -314,6 +359,12 @@ impl UpgradeInfo for RegisteredProtocols {
 	}
 }
 
+impl<TMessage> Clone for RegisteredProtocols<TMessage> {
+	fn clone(&self) -> Self {
+		RegisteredProtocols(self.0.clone())
+	}
+}
+
 /// Implementation of `ProtocolName` for several custom protocols.
 #[derive(Debug, Clone)]
 pub struct RegisteredProtocolsName {
@@ -329,11 +380,11 @@ impl ProtocolName for RegisteredProtocolsName {
 	}
 }
 
-impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocols
+impl<TMessage, TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocols<TMessage>
 where TSubstream: AsyncRead + AsyncWrite,
 {
-	type Output = <RegisteredProtocol as InboundUpgrade<TSubstream>>::Output;
-	type Future = <RegisteredProtocol as InboundUpgrade<TSubstream>>::Future;
+	type Output = <RegisteredProtocol<TMessage> as InboundUpgrade<TSubstream>>::Output;
+	type Future = <RegisteredProtocol<TMessage> as InboundUpgrade<TSubstream>>::Future;
 	type Error = io::Error;
 
 	#[inline]
@@ -349,7 +400,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 	}
 }
 
-impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocols
+impl<TMessage, TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocols<TMessage>
 where TSubstream: AsyncRead + AsyncWrite,
 {
 	type Output = <Self as InboundUpgrade<TSubstream>>::Output;

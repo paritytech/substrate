@@ -23,7 +23,7 @@ use sandbox;
 use system;
 use rstd::prelude::*;
 use rstd::mem;
-use codec::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 use runtime_primitives::traits::{As, CheckedMul, Bounded};
 
 /// Enumerates all possible *special* trap conditions.
@@ -479,6 +479,19 @@ define_env!(Env, <E: Ext>,
 	// The data is encoded as T::Balance. The current contents of the scratch buffer are overwritten.
 	ext_value_transferred(ctx) => {
 		ctx.scratch_buf = ctx.ext.value_transferred().encode();
+		Ok(())
+	},
+
+	// Load the latest block RNG seed into the scratch buffer
+	ext_random_seed(ctx) => {
+		ctx.scratch_buf = ctx.ext.random_seed().encode();
+		Ok(())
+	},
+
+	// Load the latest block timestamp into the scratch buffer
+	ext_now(ctx) => {
+		let now: u64 = As::as_(ctx.ext.now().clone());
+		ctx.scratch_buf = now.encode();
 		Ok(())
 	},
 

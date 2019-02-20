@@ -16,10 +16,12 @@
 
 //! Generic implementation of a block header.
 
-use codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
-use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
+#[cfg(feature = "std")]
+use serde_derive::Serialize;
+use crate::codec::{Decode, Encode, Codec, Input, Output, HasCompact, EncodeAsRef};
+use crate::traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebug, MaybeSerializeDebugButNotDeserialize};
-use generic::Digest;
+use crate::generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]

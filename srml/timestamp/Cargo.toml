@@ -2,36 +2,34 @@
 name = "srml-timestamp"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default-features = false }
 parity-codec = { version = "3.0", default-features = false }
 parity-codec-derive = { version = "3.0", default-features = false }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
-sr-std = { path = "../../core/sr-std", default-features = false }
-sr-io = { path = "../../core/sr-io", default-features = false }
-sr-primitives = { path = "../../core/sr-primitives", default-features = false }
-substrate-inherents = { path = "../../core/inherents", default-features = false }
+rstd = { package = "sr-std", path = "../../core/sr-std", default-features = false }
+runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
+inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 srml-support = { path = "../support", default-features = false }
-srml-system = { path = "../system", default-features = false }
-srml-consensus = { path = "../consensus", default-features = false }
+system = { package = "srml-system", path = "../system", default-features = false }
+consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 
 [dev-dependencies]
-sr-io = { path = "../../core/sr-io", default-features = true }
+runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = true }
+substrate-primitives = { path = "../../core/primitives", default-features = false }
 
 [features]
 default = ["std"]
 std = [
-	"sr-std/std",
-	"sr-io/std",
+	"rstd/std",
 	"srml-support/std",
-	"sr-primitives/std",
-	"srml-consensus/std",
+	"runtime_primitives/std",
+	"consensus/std",
 	"serde/std",
 	"parity-codec/std",
 	"parity-codec-derive/std",
-	"substrate-primitives/std",
-	"srml-system/std",
-	"substrate-inherents/std",
+	"system/std",
+	"inherents/std",
 ]

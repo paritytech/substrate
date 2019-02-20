@@ -16,8 +16,10 @@
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
+use bitflags::bitflags;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use codec::{Encode, Decode, Input, Output};
+use parity_codec::{Encode, Decode, Input, Output};
+use parity_codec_derive::{Encode, Decode};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -27,6 +29,9 @@ pub use self::generic::{
 
 /// A unique ID of a request.
 pub type RequestId = u64;
+
+/// Consensus engine unique ID.
+pub type ConsensusEngineId = [u8; 4];
 
 /// Type alias for using the message type using block type parameters.
 pub type Message<B> = generic::Message<
@@ -123,14 +128,23 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
+	use parity_codec::{Encode, Decode};
+	use network_libp2p::CustomMessage;
 	use runtime_primitives::Justification;
-	use config::Roles;
+	use parity_codec_derive::{Encode, Decode};
+	use crate::config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
-		RequestId, Transactions, Direction
+		RequestId, Transactions, Direction, ConsensusEngineId,
 	};
-	/// Consensus is opaque to us
-	pub type ConsensusMessage = Vec<u8>;
+	/// Consensus is mostly opaque to us
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	pub struct ConsensusMessage {
+		/// Identifies consensus engine.
+		pub engine_id: ConsensusEngineId,
+		/// Message payload.
+		pub data: Vec<u8>,
+	}
 
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -172,7 +186,7 @@ pub mod generic {
 		/// Transactions.
 		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
-		Consensus(Hash, ConsensusMessage, bool), // topic, opaque Vec<u8>, broadcast
+		Consensus(ConsensusMessage),
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.
@@ -194,11 +208,25 @@ pub mod generic {
 		ChainSpecific(Vec<u8>),
 	}
 
+	impl<Header, Hash, Number, Extrinsic> CustomMessage for Message<Header, Hash, Number, Extrinsic>
+		where Self: Decode + Encode
+	{
+		fn into_bytes(self) -> Vec<u8> {
+			self.encode()
+		}
+
+		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
+			Decode::decode(&mut &bytes[..]).ok_or(())
+		}
+	}
+
 	/// Status sent on connection.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct Status<Hash, Number> {
 		/// Protocol version.
 		pub version: u32,
+		/// Minimum supported version.
+		pub min_supported_version: u32,
 		/// Supported roles.
 		pub roles: Roles,
 		/// Best block number.

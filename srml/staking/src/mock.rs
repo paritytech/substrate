@@ -22,7 +22,8 @@ use primitives::{traits::IdentityLookup, BuildStorage, Perbill};
 use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUintAuthorityId};
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
+use srml_support::impl_outer_origin;
+use crate::{GenesisConfig, Module, Trait};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -66,6 +67,7 @@ impl timestamp::Trait for Test {
 	type OnTimestampSet = ();
 }
 impl Trait for Test {
+	type Currency = balances::Module<Self>;
 	type OnRewardMinted = ();
 	type Event = ();
 }
@@ -102,11 +104,10 @@ pub fn new_test_ext(
 		} else {
 			vec![(10, balance_factor), (20, balance_factor)]
 		},
-		transaction_base_fee: 0,
-		transaction_byte_fee: 0,
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,
+		vesting: vec![],
 	}.build_storage().unwrap().0);
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,

@@ -148,13 +148,21 @@ pub trait SandboxCapabilities {
 
 	/// Allocate space of the specified length in the supervisor memory.
 	///
+	/// # Errors
+	///
+	/// Returns `Err` if allocation not possible or errors during heap management.
+	///
 	/// Returns pointer to the allocated block.
-	fn allocate(&mut self, len: u32) -> u32;
+	fn allocate(&mut self, len: u32) -> Result<u32, UserError>;
 
 	/// Deallocate space specified by the pointer that was previously returned by [`allocate`].
 	///
+	/// # Errors
+	///
+	/// Returns `Err` if deallocation not possible or because of errors in heap management.
+	///
 	/// [`allocate`]: #tymethod.allocate
-	fn deallocate(&mut self, ptr: u32);
+	fn deallocate(&mut self, ptr: u32) -> Result<(), UserError>;
 
 	/// Write `data` into the supervisor memory at offset specified by `ptr`.
 	///
@@ -232,7 +240,7 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		// Move serialized arguments inside the memory and invoke dispatch thunk and
 		// then free allocated memory.
 		let invoke_args_ptr = self.supervisor_externals
-			.allocate(invoke_args_data.len() as u32);
+			.allocate(invoke_args_data.len() as u32)?;
 		self.supervisor_externals
 			.write_memory(invoke_args_ptr, &invoke_args_data)?;
 		let result = ::wasmi::FuncInstance::invoke(
@@ -245,7 +253,7 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 			],
 			self.supervisor_externals,
 		);
-		self.supervisor_externals.deallocate(invoke_args_ptr);
+		self.supervisor_externals.deallocate(invoke_args_ptr)?;
 
 		// dispatch_thunk returns pointer to serialized arguments.
 		let (serialized_result_val_ptr, serialized_result_val_len) = match result {
@@ -264,7 +272,7 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 		let serialized_result_val = self.supervisor_externals
 			.read_memory(serialized_result_val_ptr, serialized_result_val_len)?;
 		self.supervisor_externals
-			.deallocate(serialized_result_val_ptr);
+			.deallocate(serialized_result_val_ptr)?;
 
 		// We do not have to check the signature here, because it's automatically
 		// checked by wasmi.
@@ -558,6 +566,8 @@ impl Store {
 #[cfg(test)]
 mod tests {
 	use primitives::{Blake2Hasher};
+	use crate::allocator;
+	use crate::sandbox::trap;
 	use crate::wasm_executor::WasmExecutor;
 	use state_machine::TestExternalities;
 	use wabt;
@@ -613,6 +623,32 @@ mod tests {
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![0],
 		);
+	}
+
+	#[test]
+	fn sandbox_should_trap_when_heap_exhausted() {
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "assert" (func $assert (param i32)))
+			(func (export "call")
+				i32.const 0
+				call $assert
+			)
+		)
+		"#).unwrap();
+
+		let res = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_exhaust_heap", &code);
+		assert_eq!(res.is_err(), true);
+		if let Err(err) = res {
+			let inner_err = err.iter().next().unwrap();
+			assert_eq!(
+				format!("{}", inner_err),
+				format!("{}", wasmi::Error::Trap(trap(allocator::OUT_OF_SPACE)))
+			);
+		}
 	}
 
 	#[test]

@@ -16,9 +16,11 @@
 
 use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
-use config::Roles;
+use crate::config::Roles;
 use consensus::BlockOrigin;
-use sync::SyncState;
+use network_libp2p::NodeIndex;
+use crate::sync::SyncState;
+use std::collections::HashSet;
 use super::*;
 
 #[test]
@@ -28,8 +30,9 @@ fn sync_from_two_peers_works() {
 	net.peer(1).push_blocks(100, false);
 	net.peer(2).push_blocks(100, false);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
-	let status = net.peer(0).sync.status();
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
+	let status = net.peer(0).status();
 	assert_eq!(status.sync.state, SyncState::Idle);
 }
 
@@ -42,17 +45,17 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 	net.peer(2).push_blocks(100, false);
 	net.restart_peer(0);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
 }
 
 #[test]
 fn sync_long_chain_works() {
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);
-	net.sync_steps(3);
-	assert_eq!(net.peer(0).sync.status().sync.state, SyncState::Downloading);
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
 }
 
 #[test]
@@ -62,7 +65,8 @@ fn sync_no_common_longer_chain_fails() {
 	net.peer(0).push_blocks(20, true);
 	net.peer(1).push_blocks(20, false);
 	net.sync();
-	assert!(!net.peer(0).client.backend().blockchain().canon_equals_to(net.peer(1).client.backend().blockchain()));
+	assert!(!net.peer(0).client.backend().as_in_memory().blockchain()
+		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
 }
 
 #[test]
@@ -76,11 +80,46 @@ fn sync_justifications() {
 	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
 	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
 
-	// we finalize block #10 for peer 0 with a justification
+	// we finalize block #10, #15 and #20 for peer 0 with a justification
 	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(15), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(20), Some(Vec::new()), true).unwrap();
 
-	let header = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
-	net.peer(1).request_justification(&header.hash().into(), 10);
+	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
+	let h2 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap();
+	let h3 = net.peer(1).client().header(&BlockId::Number(20)).unwrap().unwrap();
+
+	// peer 1 should get the justifications from the network
+	net.peer(1).request_justification(&h1.hash().into(), 10);
+	net.peer(1).request_justification(&h2.hash().into(), 15);
+	net.peer(1).request_justification(&h3.hash().into(), 20);
+
+	net.sync();
+
+	for height in (10..21).step_by(5) {
+		assert_eq!(net.peer(0).client().justification(&BlockId::Number(height)).unwrap(), Some(Vec::new()));
+		assert_eq!(net.peer(1).client().justification(&BlockId::Number(height)).unwrap(), Some(Vec::new()));
+	}
+}
+
+#[test]
+fn sync_justifications_across_forks() {
+	let _ = ::env_logger::try_init();
+	let mut net = JustificationTestNet::new(3);
+	// we push 5 blocks
+	net.peer(0).push_blocks(5, false);
+	// and then two forks 5 and 6 blocks long
+	let f1_best = net.peer(0).push_blocks_at(BlockId::Number(5), 5, false);
+	let f2_best = net.peer(0).push_blocks_at(BlockId::Number(5), 6, false);
+
+	// peer 1 will only see the longer fork. but we'll request justifications
+	// for both and finalize the small fork instead.
+	net.sync();
+
+	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), true).unwrap();
+
+	net.peer(1).request_justification(&f1_best, 10);
+	net.peer(1).request_justification(&f2_best, 11);
 
 	net.sync();
 
@@ -105,11 +144,11 @@ fn sync_after_fork_works() {
 	net.peer(2).push_blocks(1, false);
 
 	// peer 1 has the best chain
-	let peer1_chain = net.peer(1).client.backend().blockchain().clone();
+	let peer1_chain = net.peer(1).client.backend().as_in_memory().blockchain().clone();
 	net.sync();
-	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(&peer1_chain));
-	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer1_chain));
-	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer1_chain));
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain().canon_equals_to(&peer1_chain));
+	assert!(net.peer(1).client.backend().as_in_memory().blockchain().canon_equals_to(&peer1_chain));
+	assert!(net.peer(2).client.backend().as_in_memory().blockchain().canon_equals_to(&peer1_chain));
 }
 
 #[test]
@@ -125,8 +164,8 @@ fn syncs_all_forks() {
 
 	net.sync();
 	// Check that all peers have all of the blocks.
-	assert_eq!(9, net.peer(0).client.backend().blockchain().blocks_count());
-	assert_eq!(9, net.peer(1).client.backend().blockchain().blocks_count());
+	assert_eq!(9, net.peer(0).client.backend().as_in_memory().blockchain().blocks_count());
+	assert_eq!(9, net.peer(1).client.backend().as_in_memory().blockchain().blocks_count());
 }
 
 #[test]
@@ -137,13 +176,14 @@ fn own_blocks_are_announced() {
 	net.peer(0).generate_blocks(1, BlockOrigin::Own, |builder| builder.bake().unwrap());
 
 	let header = net.peer(0).client().header(&BlockId::Number(1)).unwrap().unwrap();
-	net.peer(0).with_io(|io| net.peer(0).sync.on_block_imported(io, header.hash(), &header));
+	net.peer(0).on_block_imported(header.hash(), &header);
 	net.sync();
+
 	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
 	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);
-	let peer0_chain = net.peer(0).client.backend().blockchain().clone();
-	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer0_chain));
-	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer0_chain));
+	let peer0_chain = net.peer(0).client.backend().as_in_memory().blockchain().clone();
+	assert!(net.peer(1).client.backend().as_in_memory().blockchain().canon_equals_to(&peer0_chain));
+	assert!(net.peer(2).client.backend().as_in_memory().blockchain().canon_equals_to(&peer0_chain));
 }
 
 #[test]
@@ -166,10 +206,11 @@ fn blocks_are_not_announced_by_light_nodes() {
 	net.peer(0).on_connect(1);
 	net.peer(1).on_connect(2);
 
-	// generate block at peer0 && run sync
-	while !net.done() {
-		net.sync_step();
-	}
+	// Only sync between 0 -> 1, and 1 -> 2
+	let mut disconnected = HashSet::new();
+	disconnected.insert(0 as NodeIndex);
+	disconnected.insert(2 as NodeIndex);
+	net.sync_with_disconnected(disconnected);
 
 	// peer 0 has the best chain
 	// peer 1 has the best chain

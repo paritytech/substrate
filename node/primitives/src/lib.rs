@@ -21,15 +21,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-use runtime_primitives::generic;
-use runtime_primitives::{OpaqueExtrinsic, traits::BlakeTwo256};
+use runtime_primitives::{
+    generic, traits::{Verify, BlakeTwo256}, Ed25519Signature, OpaqueExtrinsic
+};
 
 /// An index to a block.
 pub type BlockNumber = u64;
 
-/// Alias to Ed25519 pubkey that identifies an account on the chain. This will almost
-/// certainly continue to be the same as the substrate's `AuthorityId`.
-pub type AccountId = ::primitives::H256;
+/// Alias to 512-bit hash when used in the context of a signature on the chain.
+pub type Signature = Ed25519Signature;
+
+/// Some way of identifying an account on the chain. We intentionally make it equivalent
+/// to the public key of our transaction signing scheme.
+pub type AccountId = <Signature as Verify>::Signer;
 
 /// The type for looking up accounts. We don't expect more than 4 billion of them, but you
 /// never know...
@@ -47,9 +51,6 @@ pub type Index = u64;
 
 /// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
-
-/// Alias to 512-bit hash when used in the context of a signature on the chain.
-pub type Signature = runtime_primitives::Ed25519Signature;
 
 /// A timestamp: seconds since the unix epoch.
 pub type Timestamp = u64;

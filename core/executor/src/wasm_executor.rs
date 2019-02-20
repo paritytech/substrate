@@ -28,7 +28,7 @@ use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
-use primitives::{blake2_256, twox_128, twox_256, ed25519};
+use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
@@ -75,10 +75,10 @@ impl<'e, E: Externalities<Blake2Hasher>> sandbox::SandboxCapabilities for Functi
 	fn store_mut(&mut self) -> &mut sandbox::Store {
 		&mut self.sandbox_store
 	}
-	fn allocate(&mut self, len: u32) -> u32 {
+	fn allocate(&mut self, len: u32) -> ::std::result::Result<u32, UserError> {
 		self.heap.allocate(len)
 	}
-	fn deallocate(&mut self, ptr: u32) {
+	fn deallocate(&mut self, ptr: u32) -> ::std::result::Result<(), UserError> {
 		self.heap.deallocate(ptr)
 	}
 	fn write_memory(&mut self, ptr: u32, data: &[u8]) -> ::std::result::Result<(), UserError> {
@@ -133,12 +133,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
-		let r = this.heap.allocate(size);
+		let r = this.heap.allocate(size)?;
 		debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
 		Ok(r)
 	},
 	ext_free(addr: *mut u8) => {
-		this.heap.deallocate(addr);
+		this.heap.deallocate(addr)?;
 		debug_trace!(target: "sr-io", "free {}", addr);
 		Ok(())
 	},
@@ -252,7 +252,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		);
 
 		if let Some(value) = maybe_value {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_storage"))?;
@@ -291,7 +291,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		);
 
 		if let Some(value) = maybe_value {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_child_storage"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_child_storage"))?;
@@ -373,7 +373,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_child_storage_root"))?;
 		let r = this.ext.child_storage_root(&storage_key);
 		if let Some(value) = r {
-			let offset = this.heap.allocate(value.len() as u32) as u32;
+			let offset = this.heap.allocate(value.len() as u32)? as u32;
 			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
 				.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
@@ -475,6 +475,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_ed25519_verify"))?;
 
 		Ok(if ed25519::verify(&sig, &msg, &pubkey) {
+			0
+		} else {
+			5
+		})
+	},
+	ext_sr25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
+		let mut sig = [0u8; 64];
+		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_sr25519_verify"))?;
+		let mut pubkey = [0u8; 32];
+		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_sr25519_verify"))?;
+		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_sr25519_verify"))?;
+
+		Ok(if sr25519::verify(&sig, &msg, &pubkey) {
 			0
 		} else {
 			5
@@ -677,7 +690,7 @@ impl WasmExecutor {
 		let used_mem = memory.used_size();
 		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
 		let size = data.len() as u32;
-		let offset = fec.heap.allocate(size);
+		let offset = fec.heap.allocate(size).map_err(|_| ErrorKind::Runtime)?;
 		memory.set(offset, &data)?;
 
 		let result = module_instance.invoke_export(
@@ -885,6 +898,32 @@ mod tests {
 	}
 
 	#[test]
+	fn sr25519_verify_should_work() {
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
+		let sig = key.sign(b"all ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			vec![1]
+		);
+
+		let other_sig = key.sign(b"all is not ok!");
+		let mut calldata = vec![];
+		calldata.extend_from_slice(key.public().as_ref());
+		calldata.extend_from_slice(other_sig.as_ref());
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sr25519_verify", &calldata).unwrap(),
+			vec![0]
+		);
+	}
+
+	#[test]
 	fn enumerated_trie_root_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
@@ -893,6 +932,4 @@ mod tests {
 			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).as_fixed_bytes().encode()
 		);
 	}
-
-
 }

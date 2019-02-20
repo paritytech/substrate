@@ -34,7 +34,8 @@ use consensus_common::{
 };
 use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport};
 use client::ChainHead;
-use client::block_builder::api::BlockBuilder as BlockBuilderApi;
+use client::block_builder::api::{BlockBuilder as BlockBuilderApi, self as block_builder_api};
+use client::runtime_api::ApiExt;
 use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
@@ -465,6 +466,50 @@ impl<C, E> AuraVerifier<C, E>
 			Ok(())
 		}
 	}
+
+	#[allow(deprecated)]
+	fn old_check_inherents<B: Block>(
+		&self,
+		block: B,
+		block_id: BlockId<B>,
+		inherent_data: InherentData,
+		timestamp_now: u64,
+	) -> Result<(), String>
+		where C: ProvideRuntimeApi, C::Api: BlockBuilderApi<B>
+	{
+		use block_builder_api::{OldInherentData, OldCheckInherentError};
+		const MAX_TIMESTAMP_DRIFT_SECS: u64 = 60;
+
+		let (timestamp, slot) = AuraSlotCompatible::extract_timestamp_and_slot(&inherent_data).map_err(|e| format!("{:?}", e))?;
+		let inherent_data = OldInherentData::new(timestamp, slot);
+
+		let inherent_res = self.client.runtime_api().check_inherents_before_version_2(
+			&block_id,
+			block,
+			inherent_data,
+		).map_err(|e| format!("{:?}", e))?;
+
+		match inherent_res {
+			Ok(()) => Ok(()),
+			Err(OldCheckInherentError::ValidAtTimestamp(timestamp)) => {
+				// halt import until timestamp is valid.
+				// reject when too far ahead.
+				if timestamp > timestamp_now + MAX_TIMESTAMP_DRIFT_SECS {
+					return Err("Rejecting block too far in future".into());
+				}
+
+				let diff = timestamp.saturating_sub(timestamp_now);
+				info!(
+					target: "aura",
+					"halting for block {} seconds in the future",
+					diff
+				);
+				thread::sleep(Duration::from_secs(diff));
+				Ok(())
+			},
+			Err(OldCheckInherentError::Other(e)) => Err(e.into())
+		}
+	}
 }
 
 /// No-op extra verification.
@@ -519,12 +564,25 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 					inherent_data.aura_replace_inherent_data(slot_num);
 					let block = B::new(pre_header.clone(), inner_body);
 
-					self.check_inherents(
-						block.clone(),
-						BlockId::Hash(parent_hash),
-						inherent_data,
-						timestamp_now,
-					)?;
+					if self.client
+						.runtime_api()
+						.has_api_with::<BlockBuilderApi<B>, _>(&BlockId::Hash(parent_hash), |v| v < 2)
+						.map_err(|e| format!("{:?}", e))?
+					{
+						self.old_check_inherents(
+							block.clone(),
+							BlockId::Hash(parent_hash),
+							inherent_data,
+							timestamp_now,
+						)?;
+					} else {
+						self.check_inherents(
+							block.clone(),
+							BlockId::Hash(parent_hash),
+							inherent_data,
+							timestamp_now,
+						)?;
+					}
 
 					let (_, inner_body) = block.deconstruct();
 					body = Some(inner_body);
@@ -557,7 +615,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B, C, E> = BasicQueue<B, AuraVerifier<C, E>>;
+pub type AuraImportQueue<B> = BasicQueue<B>;
 
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
@@ -581,12 +639,12 @@ pub fn import_queue<B, C, E>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<AuraImportQueue<B, C, E>, consensus_common::Error> where
+) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
-	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
+	C: 'static + Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
-	E: ExtraVerification<B>,
+	E: 'static + ExtraVerification<B>,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
@@ -641,10 +699,7 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<AuraVerifier<
-			PeersClient,
-			NothingExtra,
-		>, ()>>>,
+		peers: Vec<Arc<Peer<()>>>,
 		started: bool,
 	}
 
@@ -679,15 +734,15 @@ mod tests {
 			})
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
+		fn peer(&self, i: usize) -> &Peer<Self::PeerData> {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
+		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 
@@ -722,9 +777,7 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
-					.take_while(|n| {
-						Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5))
-					})
+					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
 					.for_each(move |_| Ok(()))
 			);
 
@@ -758,7 +811,7 @@ mod tests {
 		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
-				net.lock().sync();
+				net.lock().route_fast();
 				Ok(())
 			})
 			.map(|_| ())

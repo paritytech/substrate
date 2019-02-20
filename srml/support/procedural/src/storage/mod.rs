@@ -19,9 +19,12 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
+use srml_support_procedural_tools::{ToTokens, Parse, custom_keyword, custom_keyword_impl};
 
-use syn::Ident;
+use syn::{Ident, Token};
 use syn::token::CustomKeyword;
+
+mod impls;
 
 pub mod transformation;
 
@@ -74,8 +77,7 @@ struct AddExtraGenesisLine {
 	pub extra_field: ext::Parens<Ident>,
 	pub coldot_token: Token![:],
 	pub extra_type: syn::Type,
-	// FIXME #1570: use a custom ext::Option instead (syn option on '=' fails)
-	pub default_value: ext::Seq<DeclStorageDefault>,
+	pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -91,8 +93,7 @@ struct DeclStorageLine {
 	pub build: Option<DeclStorageBuild>,
 	pub coldot_token: Token![:],
 	pub storage_type: DeclStorageType,
-	// FIXME #1570: use a custom ext::Option instead (syn option on '=' fails)
-	pub default_value: ext::Seq<DeclStorageDefault>,
+	pub default_value: ext::Opt<DeclStorageDefault>,
 }
 
 
@@ -117,12 +118,21 @@ struct DeclStorageBuild {
 #[derive(Parse, ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
+	LinkedMap(DeclStorageLinkedMap),
 	Simple(syn::Type),
 }
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: ext::CustomToken<MapKeyword>,
+	pub key: syn::Type,
+	pub ass_keyword: Token![=>],
+	pub value: syn::Type,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+struct DeclStorageLinkedMap {
+	pub map_keyword: ext::CustomToken<LinkedMapKeyword>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
@@ -142,3 +152,4 @@ custom_keyword_impl!(DeclStorageBuild, "build", "storage build config");
 custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesis");
 custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
+custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");

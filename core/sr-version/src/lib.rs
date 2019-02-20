@@ -19,18 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
-#[allow(unused_imports)]
-#[macro_use]
-extern crate sr_std as rstd;
-
-#[macro_use]
-extern crate parity_codec_derive;
-
-extern crate sr_primitives as runtime_primitives;
-
+use serde_derive::Serialize;
 #[cfg(feature = "std")]
 use std::fmt;
 #[cfg(feature = "std")]
@@ -70,8 +59,8 @@ macro_rules! create_apis_vec {
 /// This triplet have different semantics and mis-interpretation could cause problems.
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
 /// absolutely not `impl_version` since they change the semantics of the runtime.
-#[derive(Clone, PartialEq, Eq, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Decode))]
+#[derive(Clone, PartialEq, Eq, parity_codec_derive::Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, parity_codec_derive::Decode))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
@@ -136,6 +125,16 @@ impl RuntimeVersion {
 			s == &A::ID && *v == A::VERSION
 		})
 	}
+
+	/// Check if the given api is implemented and the version passes a predicate.
+	pub fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+		&self,
+		pred: P,
+	) -> bool {
+		self.apis.iter().any(|(s, v)| {
+			s == &A::ID && pred(*v)
+		})
+	}
 }
 
 #[cfg(feature = "std")]
@@ -159,12 +158,9 @@ impl NativeVersion {
 
 #[cfg(feature = "std")]
 mod apis_serialize {
-	extern crate impl_serde;
-	extern crate serde;
-
 	use super::*;
-	use self::impl_serde::serialize as bytes;
-	use self::serde::{Serializer, ser::SerializeTuple};
+	use impl_serde::serialize as bytes;
+	use serde::{Serializer, ser::SerializeTuple};
 
 	#[derive(Serialize)]
 	struct ApiId<'a>(

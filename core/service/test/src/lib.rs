@@ -16,23 +16,11 @@
 
 //! Service integration test utils.
 
-#[macro_use]
-extern crate log;
-extern crate tempdir;
-extern crate tokio;
-extern crate futures;
-extern crate env_logger;
-extern crate fdlimit;
-extern crate substrate_service as service;
-extern crate substrate_network as network;
-extern crate substrate_primitives as primitives;
-extern crate substrate_client as client;
-extern crate substrate_consensus_common as consensus;
-extern crate sr_primitives;
 use std::iter;
 use std::sync::Arc;
 use std::net::Ipv4Addr;
 use std::time::Duration;
+use log::info;
 use futures::{Future, Stream};
 use tempdir::TempDir;
 use tokio::runtime::Runtime;
@@ -40,7 +28,6 @@ use tokio::timer::Interval;
 use primitives::blake2_256;
 use service::{
 	ServiceFactory,
-	ExecutionStrategy,
 	Configuration,
 	FactoryFullConfiguration,
 	FactoryChainSpec,
@@ -130,11 +117,11 @@ fn node_config<F: ServiceFactory> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
-		block_execution_strategy: ExecutionStrategy::NativeWhenPossible,
-		api_execution_strategy: ExecutionStrategy::NativeWhenPossible,
+		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
 		telemetry_url: None,
+		default_heap_pages: None,
 	}
 }
 

@@ -7,10 +7,11 @@ name = "substrate"
 version = "0.10.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
+edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
-node-cli = { path = "node/cli" }
+cli = { package = "node-cli", path = "node/cli" }
 futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 
@@ -51,6 +52,7 @@ members = [
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
 	"core/inherents",
+	"core/util/fork-tree",
 	"srml/support",
 	"srml/support/procedural",
 	"srml/support/procedural/tools",
@@ -64,6 +66,7 @@ members = [
 	"srml/democracy",
 	"srml/example",
 	"srml/executive",
+	"srml/fees",
 	"srml/grandpa",
 	"srml/indices",
 	"srml/metadata",
@@ -78,6 +81,7 @@ members = [
 	"node/executor",
 	"node/primitives",
 	"node/runtime",
+	"node-template",
 	"subkey",
 ]
 exclude = [
