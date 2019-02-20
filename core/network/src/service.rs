@@ -565,7 +565,7 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 		Ok(())
 	});
 
-	// Merge all futures into one.network_id
+	// Merge all futures into one.
 	let futures: Vec<Box<Future<Item = (), Error = io::Error> + Send>> = vec![
 		Box::new(protocol) as Box<_>,
 		Box::new(network) as Box<_>
