@@ -34,9 +34,9 @@ fn basic_setup_works() {
 		assert_eq!(Staking::bonded(&1), None);		// Account 1 is not a stashed
 
 		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, active: 100, inactive: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 100, active: 100, unlocking: vec![] }));
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
-		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, active: 200, inactive: vec![] }));
+		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 200, active: 200, unlocking: vec![] }));
 		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
 
