@@ -99,7 +99,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			stakers: initial_authorities.iter().map(|x| (x.0.into(), x.1.into(), STASH)).collect(),
 			offline_slash: Perbill::from_billionths(1_000_000),
 			session_reward: Perbill::from_billionths(2_065),
 			current_offline_slash: 0,
@@ -109,6 +108,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			bonding_duration: 60 * MINUTES,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
+			stakers: initial_authorities.iter().map(|x| (x.0.into(), x.1.into(), STASH)).collect(),
 			invulnerables: initial_authorities.iter().map(|x| x.1.into()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
@@ -157,7 +157,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			key: endowed_accounts[0].clone(),
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect::<Vec<_>>(),
+			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
 		fees: Some(FeesConfig {
 			transaction_base_fee: 1 * CENTS,
@@ -182,7 +182,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 }
 
 /// Helper function to generate AuthorityID from seed
-pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
+pub fn get_account_id_from_seed(seed: &str) -> AccountId {
 	let padded_seed = pad_seed(seed);
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
@@ -195,8 +195,8 @@ pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, Author
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
 	(
-		ed25519::Pair::from_seed(&padded_seed).public().0.into(),	// TODO: simple morph
-		ed25519::Pair::from_seed(&padded_seed).public().0.into(),	// TODO: simple morph
+		get_account_id_from_seed(&format!("{}-stash", seed)),
+		get_account_id_from_seed(seed),
 		ed25519::Pair::from_seed(&padded_seed).public().0.into()
 	)
 }
@@ -205,16 +205,16 @@ pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, Author
 pub fn testnet_genesis(
 	initial_authorities: Vec<(AccountId, AccountId, AuthorityId)>,
 	root_key: AccountId,
-	endowed_accounts: Option<Vec<AuthorityId>>,
+	endowed_accounts: Option<Vec<AccountId>>,
 ) -> GenesisConfig {
-	let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
+	let endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
 		vec![
-			get_authority_id_from_seed("Alice"),
-			get_authority_id_from_seed("Bob"),
-			get_authority_id_from_seed("Charlie"),
-			get_authority_id_from_seed("Dave"),
-			get_authority_id_from_seed("Eve"),
-			get_authority_id_from_seed("Ferdie"),
+			get_account_id_from_seed("Alice"),
+			get_account_id_from_seed("Bob"),
+			get_account_id_from_seed("Charlie"),
+			get_account_id_from_seed("Dave"),
+			get_account_id_from_seed("Eve"),
+			get_account_id_from_seed("Ferdie"),
 		]
 	});
 
@@ -224,11 +224,11 @@ pub fn testnet_genesis(
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
-			authorities: initial_authorities.clone(),
+			authorities: initial_authorities.iter().map(|x| x.2.clone()).collect(),
 		}),
 		system: None,
 		indices: Some(IndicesConfig {
-			ids: endowed_accounts.iter().map(|x| x.0.into()).collect(),
+			ids: endowed_accounts.clone(),
 		}),
 		balances: Some(BalancesConfig {
 			existential_deposit: 500,
@@ -238,12 +238,12 @@ pub fn testnet_genesis(
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
+			validators: initial_authorities.iter().map(|x| x.1.into()).collect(),
 			session_length: 10,
+			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			minimum_validator_count: 1,
 			validator_count: 2,
 			sessions_per_era: 5,
@@ -253,7 +253,8 @@ pub fn testnet_genesis(
 			current_offline_slash: 0,
 			current_session_reward: 0,
 			offline_slash_grace: 0,
-			invulnerables: initial_authorities.iter().cloned().map(Into::into).collect(),
+			stakers: initial_authorities.iter().map(|x| (x.0.into(), x.1.into(), STASH)).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.1.into()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,
@@ -264,7 +265,7 @@ pub fn testnet_genesis(
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
-			.filter(|a| initial_authorities.iter().find(|&b| a.0 == b.0).is_none())
+				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, _)| controller == endowed).is_none())
 				.map(|a| (a.clone().into(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
@@ -303,7 +304,7 @@ pub fn testnet_genesis(
 			key: root_key,
 		}),
 		grandpa: Some(GrandpaConfig {
-			authorities: initial_authorities.clone().into_iter().map(|k| (k, 1)).collect(),
+			authorities: initial_authorities.iter().map(|x| (x.2.clone(), 1)).collect(),
 		}),
 		fees: Some(FeesConfig {
 			transaction_base_fee: 1,
@@ -317,7 +318,7 @@ fn development_config_genesis() -> GenesisConfig {
 		vec![
 			get_authority_keys_from_seed("Alice"),
 		],
-		get_authority_id_from_seed("Alice").into(),
+		get_account_id_from_seed("Alice").into(),
 		None,
 	)
 }
@@ -333,7 +334,7 @@ fn local_testnet_genesis() -> GenesisConfig {
 			get_authority_keys_from_seed("Alice"),
 			get_authority_keys_from_seed("Bob"),
 		],
-		get_authority_id_from_seed("Alice").into(),
+		get_account_id_from_seed("Alice").into(),
 		None,
 	)
 }
