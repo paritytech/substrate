@@ -239,7 +239,6 @@ impl<'a> Impls<'a> {
 						}
 					}
 				}
-			}
 
 				/// A key-value pair iterator for enumerable map.
 				pub(crate) struct Enumerator<'a, S, K, V> {
@@ -247,7 +246,6 @@ impl<'a> Impls<'a> {
 					pub next: Option<K>,
 					pub _data: #phantom_data<V>,
 				}
-			}
 
 				impl<'a, S: #scrate::GenericStorage, K, V> Iterator for Enumerator<'a, S, K, V> where
 					K: 'a + #scrate::codec::Codec,
