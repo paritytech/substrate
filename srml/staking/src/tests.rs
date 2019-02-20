@@ -29,21 +29,26 @@ use srml_support::traits::Currency;
 fn basic_setup_works() {
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
-		assert_eq!(Staking::bonded(&11), Some(10));
-		assert_eq!(Staking::bonded(&21), Some(20));
-		assert_eq!(Staking::bonded(&1), None);
+		assert_eq!(Staking::bonded(&11), Some(10)); // Account 11 is stashed and locked, and account 10 is the controller
+		assert_eq!(Staking::bonded(&21), Some(20)); // Account 21 is stashed and locked, and account 20 is the controller
+		assert_eq!(Staking::bonded(&1), None);		// Account 1 is not a stashed
 
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, active: 10, inactive: vec![] }));
-		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, active: 20, inactive: vec![] }));
+		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, active: 100, inactive: vec![] }));
+		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
+		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, active: 200, inactive: vec![] }));
+		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
 
+		// ValidatorPrefs are default, thus unstake_threshold is 3, other values are default for their type
 		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
 			(20, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }),
 			(10, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash })
 		]);
 
-		assert_eq!(Staking::stakers(10), Exposure { total: 10, own: 10, others: vec![] });
-		assert_eq!(Staking::stakers(20), Exposure { total: 20, own: 20, others: vec![] });
+		// Account 10 is exposed by 100 * balance_factor from their own stash in account 11
+		assert_eq!(Staking::stakers(10), Exposure { total: 100, own: 100, others: vec![] });
+		assert_eq!(Staking::stakers(20), Exposure { total: 200, own: 200, others: vec![] });
 	});
 }
 
