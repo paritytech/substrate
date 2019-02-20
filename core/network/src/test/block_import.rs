@@ -16,55 +16,15 @@
 
 //! Testing block import logic.
 
-use consensus::import_queue::{import_single_block, process_import_result};
-use consensus::import_queue::{AsyncImportQueueData, BasicQueue, BlockImportError, BlockImportResult};
+use consensus::import_queue::{import_single_block, BasicQueue, BlockImportError, BlockImportResult};
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::NumberFor;
-use std::cell::Cell;
 use super::*;
 
-struct TestLink {
-	imported: Cell<usize>,
-	maintains: Cell<usize>,
-	disconnects: Cell<usize>,
-	restarts: Cell<usize>,
-}
+struct TestLink {}
 
-impl TestLink {
-	fn new() -> TestLink {
-		TestLink {
-			imported: Cell::new(0),
-			maintains: Cell::new(0),
-			disconnects: Cell::new(0),
-			restarts: Cell::new(0),
-		}
-	}
-
-	fn total(&self) -> usize {
-		self.imported.get() + self.maintains.get() + self.disconnects.get() + self.restarts.get()
-	}
-}
-
-impl Link<Block> for TestLink {
-	fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
-		self.imported.set(self.imported.get() + 1);
-	}
-	fn maintain_sync(&self) {
-		self.maintains.set(self.maintains.get() + 1);
-	}
-	fn useless_peer(&self, _: NodeIndex, _: &str) {
-		self.disconnects.set(self.disconnects.get() + 1);
-	}
-	fn note_useless_and_restart_sync(&self, id: NodeIndex, r: &str) {
-		self.useless_peer(id, r);
-		self.restart();
-	}
-	fn restart(&self) {
-		self.restarts.set(self.restarts.get() + 1);
-	}
-}
+impl Link<Block> for TestLink {}
 
 fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>, Hash, u64, IncomingBlock<Block>) {
 	let client = test_client::new();
@@ -85,19 +45,19 @@ fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Ex
 
 #[test]
 fn import_single_good_block_works() {
-	let (_, hash, number, block) = prepare_good_block();
+	let (_, _hash, number, block) = prepare_good_block();
 	assert_eq!(
 		import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-		Ok(BlockImportResult::ImportedUnknown(hash, number))
+		Ok(BlockImportResult::ImportedUnknown(number))
 	);
 }
 
 #[test]
 fn import_single_good_known_block_is_ignored() {
-	let (client, hash, number, block) = prepare_good_block();
+	let (client, _hash, number, block) = prepare_good_block();
 	assert_eq!(
 		import_single_block(&client, BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-		Ok(BlockImportResult::ImportedKnown(hash, number))
+		Ok(BlockImportResult::ImportedKnown(number))
 	);
 }
 
@@ -112,67 +72,12 @@ fn import_single_good_block_without_header_fails() {
 }
 
 #[test]
-fn process_import_result_works() {
-	let link = TestLink::new();
-	assert_eq!(process_import_result::<Block>(&link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
-	assert_eq!(link.total(), 1);
-
-	let link = TestLink::new();
-	assert_eq!(process_import_result::<Block>(&link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
-	assert_eq!(link.total(), 1);
-	assert_eq!(link.imported.get(), 1);
-
-	let link = TestLink::new();
-	assert_eq!(process_import_result::<Block>(&link, Ok(BlockImportResult::ImportedUnknown(Default::default(), 0))), 1);
-	assert_eq!(link.total(), 1);
-	assert_eq!(link.imported.get(), 1);
-
-	let link = TestLink::new();
-	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::IncompleteHeader(Some(0)))), 0);
-	assert_eq!(link.total(), 2);
-	assert_eq!(link.disconnects.get(), 1);
-	assert_eq!(link.restarts.get(), 1);
-
-	let link = TestLink::new();
-	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::UnknownParent)), 0);
-	assert_eq!(link.total(), 1);
-	assert_eq!(link.restarts.get(), 1);
-
-	let link = TestLink::new();
-	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::Error)), 0);
-	assert_eq!(link.total(), 1);
-	assert_eq!(link.restarts.get(), 1);
-
-	let link = TestLink::new();
-	assert_eq!(process_import_result::<Block>(&link, Err(BlockImportError::VerificationFailed(Some(0), String::new()))), 0);
-	assert_eq!(link.total(), 2);
-	assert_eq!(link.restarts.get(), 1);
-	assert_eq!(link.disconnects.get(), 1);
-}
-
-#[test]
-fn import_many_blocks_stops_when_stopping() {
-	let (_, _, _, block) = prepare_good_block();
-	let qdata = AsyncImportQueueData::new();
-	let verifier = Arc::new(PassThroughVerifier(true));
-	qdata.stop();
-	let client = test_client::new();
-	assert!(!import_many_blocks(
-		&client,
-		&mut TestLink::new(),
-		Some(&qdata),
-		(BlockOrigin::File, vec![block.clone(), block]),
-		verifier
-	));
-}
-
-#[test]
 fn async_import_queue_drops() {
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
 		let verifier = Arc::new(PassThroughVerifier(true));
 		let queue = BasicQueue::new(verifier, Arc::new(test_client::new()), None);
-		queue.start(TestLink::new()).unwrap();
+		queue.start(Box::new(TestLink{})).unwrap();
 		drop(queue);
 	}
 }

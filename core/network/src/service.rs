@@ -25,7 +25,7 @@ use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, S
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
-use crate::message::Message;
+use crate::message::{Message, ConsensusEngineId};
 use crate::protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
@@ -80,6 +80,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::BlockImportedSync(hash.clone(), number));
 	}
 
+	fn justification_imported(&self, who: NodeIndex, hash: &B::Hash, number: NumberFor<B>, success: bool) {
+		let _ = self.protocol_sender.send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
+		if !success {
+			let reason = Severity::Bad(format!("Invalid justification provided for #{}", hash).to_string());
+			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who, reason));
+		}
+	}
+
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
@@ -119,10 +127,10 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	/// Creates and register protocol with the network service
-	pub fn new<I: 'static + ImportQueue<B>, H: ExHashT>(
+	pub fn new<H: ExHashT>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
-		import_queue: Arc<I>,
+		import_queue: Box<ImportQueue<B>>,
 	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
 		let protocol_sender = Protocol::new(
@@ -155,7 +163,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			network_sender: network_chan.clone(),
 		};
 
-		import_queue.start(link)?;
+		import_queue.start(Box::new(link))?;
 
 		Ok((service, network_chan))
 	}
@@ -200,11 +208,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	}
 
 	/// Send a consensus message through the gossip
-	pub fn gossip_consensus_message(&self, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
+	pub fn gossip_consensus_message(&self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::GossipConsensusMessage(
-				topic, message, broadcast,
+				topic, engine_id, message,
 			));
 	}
 

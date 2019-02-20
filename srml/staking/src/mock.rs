@@ -78,32 +78,6 @@ pub struct ExtBuilder {
 	sessions_per_era: u64,
 	current_era: u64,
 	monied: bool,
-<<<<<<< HEAD
-	reward: u64
-) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	let balance_factor = if ext_deposit > 0 {
-		256
-	} else {
-		1
-	};
-	t.extend(consensus::GenesisConfig::<Test>{
-		code: vec![],
-		authorities: vec![],
-	}.build_storage().unwrap().0);
-	t.extend(session::GenesisConfig::<Test>{
-		session_length,
-		validators: vec![10, 20],
-		keys: vec![],
-	}.build_storage().unwrap().0);
-	t.extend(balances::GenesisConfig::<Test>{
-		balances: if monied {
-			if reward > 0 {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (11, balance_factor * 10), (20, balance_factor), (21, balance_factor * 20)]
-			} else {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
-			}
-=======
 	reward: u64,
 }
 
@@ -149,7 +123,6 @@ impl ExtBuilder {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		let balance_factor = if self.existential_deposit > 0 {
 			256
->>>>>>> 7042842877876b54716c34d834f6670fa60135e4
 		} else {
 			1
 		};

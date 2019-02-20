@@ -26,7 +26,7 @@ use parity_codec_derive::{Encode, Decode};
 use srml_support::{Parameter, StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
-	Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason
+	Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason, ArithmeticType
 };
 use session::OnSessionChange;
 use primitives::Perbill;
@@ -146,11 +146,11 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
-	type Currency: Currency<Self::AccountId>;
+	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=BalanceOf<Self>>;
 
 	/// Some tokens minted.
 	type OnRewardMinted: OnDilution<BalanceOf<Self>>;

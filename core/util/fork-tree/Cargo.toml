@@ -1,0 +1,9 @@
+[package]
+name = "fork-tree"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+
+[dependencies]
+parity-codec = "3.0"
+parity-codec-derive = "3.0"

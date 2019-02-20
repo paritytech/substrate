@@ -615,7 +615,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 }
 
 /// The Aura import queue type.
-pub type AuraImportQueue<B, C, E> = BasicQueue<B, AuraVerifier<C, E>>;
+pub type AuraImportQueue<B> = BasicQueue<B>;
 
 /// Register the aura inherent data provider, if not registered already.
 fn register_aura_inherent_data_provider(
@@ -639,12 +639,12 @@ pub fn import_queue<B, C, E>(
 	client: Arc<C>,
 	extra: E,
 	inherent_data_providers: InherentDataProviders,
-) -> Result<AuraImportQueue<B, C, E>, consensus_common::Error> where
+) -> Result<AuraImportQueue<B>, consensus_common::Error> where
 	B: Block,
-	C: Authorities<B> + ProvideRuntimeApi + Send + Sync,
+	C: 'static + Authorities<B> + ProvideRuntimeApi + Send + Sync,
 	C::Api: BlockBuilderApi<B>,
 	DigestItemFor<B>: CompatibleDigestItem + DigestItem<AuthorityId=Ed25519AuthorityId>,
-	E: ExtraVerification<B>,
+	E: 'static + ExtraVerification<B>,
 {
 	register_aura_inherent_data_provider(&inherent_data_providers, slot_duration.get())?;
 
@@ -699,10 +699,7 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<AuraVerifier<
-			PeersClient,
-			NothingExtra,
-		>, ()>>>,
+		peers: Vec<Arc<Peer<()>>>,
 		started: bool,
 	}
 
@@ -737,15 +734,15 @@ mod tests {
 			})
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
+		fn peer(&self, i: usize) -> &Peer<Self::PeerData> {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
+		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 
