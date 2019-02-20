@@ -291,6 +291,29 @@ mod tests {
 	}
 
 	#[test]
+	fn prune_two_pending() {
+		let mut db = make_db(&[1, 2, 3]);
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut commit = make_commit(&[4], &[1]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		let mut commit = make_commit(&[5], &[2]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
+		let mut commit = CommitSet::default();
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
+		let mut commit = CommitSet::default();
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
+		pruning.apply_pending();
+		assert!(db.data_eq(&make_db(&[3, 4, 5])));
+		assert_eq!(pruning.pending_number, 2);
+	}
+
+	#[test]
 	fn reinserted_survives() {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
