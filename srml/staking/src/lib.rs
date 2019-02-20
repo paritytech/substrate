@@ -309,7 +309,7 @@ decl_module! {
 
 				// Avoid there being a dust balance left in the staking system.
 				let ed = T::Currency::minimum_balance();
-				if ledger.active - value < ed {
+				if ledger.active < ed {
 					value += ledger.active;
 					ledger.active = Zero::zero();
 				}
