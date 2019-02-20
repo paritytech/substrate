@@ -48,7 +48,6 @@ mod tests {
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
 		SystemConfig, GrandpaConfig, IndicesConfig, FeesConfig, Event, Log};
 	use wabt;
-	use hex_literal::{hex, hex_impl};
 	use primitives::map;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
@@ -65,6 +64,18 @@ mod tests {
 
 	fn charlie() -> AccountId {
 		AccountId::from(Keyring::Charlie.to_raw_public())
+	}
+
+	fn dave() -> AccountId {
+		AccountId::from(Keyring::Dave.to_raw_public())
+	}
+
+	fn eve() -> AccountId {
+		AccountId::from(Keyring::Eve.to_raw_public())
+	}
+
+	fn ferdie() -> AccountId {
+		AccountId::from(Keyring::Ferdie.to_raw_public())
 	}
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
@@ -259,12 +270,16 @@ mod tests {
 				..Default::default()
 			}),
 			indices: Some(IndicesConfig {
-				ids: vec![alice(), charlie()],
+				ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
 			}),
 			balances: Some(BalancesConfig {
 				balances: vec![
 					(alice(), 111),
+					(bob(), 100),
 					(charlie(), 100_000_000),
+					(dave(), 100),
+					(eve(), 100),
+					(ferdie(), 100),
 				],
 				existential_deposit: 0,
 				transfer_fee: 0,
@@ -274,11 +289,16 @@ mod tests {
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three],
+				keys: vec![
+					(alice(), keyring::ed25519::Keyring::Alice.to_raw_public().into()),
+					(bob(), keyring::ed25519::Keyring::Bob.to_raw_public().into()),
+					(charlie(), keyring::ed25519::Keyring::Charlie.to_raw_public().into())
+				]
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				intentions: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
+				stakers: vec![(dave(), alice(), 111), (eve(), bob(), 100), (ferdie(), charlie(), 100)],
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
@@ -287,7 +307,7 @@ mod tests {
 				current_offline_slash: 0,
 				current_session_reward: 0,
 				offline_slash_grace: 0,
-				invulnerables: vec![alice(), bob(), Keyring::Charlie.to_raw_public().into()],
+				invulnerables: vec![alice(), bob(), charlie()],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -298,9 +318,9 @@ mod tests {
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(Keyring::Alice.to_raw_public().into(), 1),
-					(Keyring::Bob.to_raw_public().into(), 1),
-					(Keyring::Charlie.to_raw_public().into(), 1),
+					(keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
+					(keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
+					(keyring::ed25519::Keyring::Charlie.to_raw_public().into(), 1),
 				],
 			}),
 			fees: Some(FeesConfig {
@@ -354,7 +374,7 @@ mod tests {
 			).0.unwrap();
 		}
 
-		let mut correct_header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
+		let header = match Executor::new(None).call::<_, NeverNativeValue, fn() -> _>(
 			env,
 			"BlockBuilder_finalise_block",
 			&[0u8;0],
@@ -365,9 +385,8 @@ mod tests {
 			NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
 		};
 
-
-		let hash = correct_header.blake2_256();
-		(Block { header: correct_header, extrinsics }.encode(), hash.into())
+		let hash = header.blake2_256();
+		(Block { header, extrinsics }.encode(), hash.into())
 	}
 
 	fn changes_trie_block() -> (Vec<u8>, Hash) {

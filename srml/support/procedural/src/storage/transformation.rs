@@ -192,24 +192,30 @@ fn decl_store_extra_genesis(
 				is_trait_needed = true;
 				has_trait_field = true;
 			}
-			for t in ext::get_non_bound_serde_derive_types(type_infos.value_type, &traitinstance).into_iter() {
-				serde_complete_bound.insert(t);
-			}
+
+			serde_complete_bound.insert(type_infos.value_type);
 			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
-				for t in ext::get_non_bound_serde_derive_types(key_type, &traitinstance).into_iter() {
-					serde_complete_bound.insert(t);
-				}
+				serde_complete_bound.insert(key_type);
 			}
 			let storage_type = type_infos.typ.clone();
-			config_field.extend(quote!( pub #ident: #storage_type, ));
+			config_field.extend(match type_infos.kind {
+				DeclStorageTypeInfosKind::Simple => {
+					quote!( pub #ident: #storage_type, )
+				},
+				DeclStorageTypeInfosKind::Map {key_type, .. } => {
+					quote!( pub #ident: Vec<(#key_type, #storage_type)>, )
+				},
+			});
 			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
 				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance>| config.#ident.clone()) )));
+
 			let fielddefault = default_value.inner.as_ref().map(|d| &d.expr).map(|d|
 				if type_infos.is_option {
 					quote!( #d.unwrap_or_default() )
 				} else {
 					quote!( #d )
 				}).unwrap_or_else(|| quote!( Default::default() ));
+
 			config_field_default.extend(quote!( #ident: #fielddefault, ));
 		} else {
 			opt_build = build.as_ref().map(|b| &b.expr.content).map(|b| quote!( #b ));
@@ -276,9 +282,7 @@ fn decl_store_extra_genesis(
 						has_trait_field = true;
 					}
 
-					for t in ext::get_non_bound_serde_derive_types(extra_type, &traitinstance).into_iter() {
-						serde_complete_bound.insert(t);
-					}
+					serde_complete_bound.insert(extra_type);
 
 					let extrafield = &extra_field.content;
 					genesis_extrafields.extend(quote!{
@@ -306,6 +310,7 @@ fn decl_store_extra_genesis(
 	let serde_bug_bound = if !serde_complete_bound.is_empty() {
 		let mut b_ser = String::new();
 		let mut b_dser = String::new();
+		// panic!("{:#?}", serde_complete_bound);
 		serde_complete_bound.into_iter().for_each(|bound| {
 			let stype = quote!(#bound);
 			b_ser.push_str(&format!("{} : {}::serde::Serialize, ", stype, scrate));

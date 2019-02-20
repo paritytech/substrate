@@ -131,7 +131,7 @@ pub fn import_blocks<F, E, R>(
 
 	let (wait_send, wait_recv) = std::sync::mpsc::channel();
 	let wait_link = WaitLink::new(wait_send);
-	queue.start(wait_link)?;
+	queue.start(Box::new(wait_link))?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {

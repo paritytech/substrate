@@ -25,7 +25,9 @@ use parity_codec::HasCompact;
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{Parameter, StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
-use srml_support::traits::{Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero};
+use srml_support::traits::{
+	Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason, ArithmeticType
+};
 use session::OnSessionChange;
 use primitives::Perbill;
 use primitives::traits::{Zero, One, As, StaticLookup};
@@ -39,6 +41,7 @@ const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
+const MAX_CONSOLIDATE_CHUNKS: usize = 10;
 
 #[derive(PartialEq, Clone)]
 #[cfg_attr(test, derive(Debug))]
@@ -105,13 +108,17 @@ pub struct UnlockChunk<Balance: HasCompact, BlockNumber: HasCompact> {
 pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
+	/// The total amount of the stash's balance that we are currently accounting for.
+	/// It's just `active` plus all the `unlocking` balances.
+	#[codec(compact)]
+	pub total: Balance,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
 	#[codec(compact)]
 	pub active: Balance,
 	/// Any balance that is becoming (or has become) free, which may be transferred out
 	/// of the stash.
-	pub inactive: Vec<UnlockChunk<Balance, BlockNumber>>,
+	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
@@ -139,11 +146,11 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 	pub others: Vec<IndividualExposure<AccountId, Balance>>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
-	type Currency: Currency<Self::AccountId>;
+	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=BalanceOf<Self>>;
 
 	/// Some tokens minted.
 	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
@@ -187,8 +194,9 @@ decl_storage! {
 				controller.clone(),
 				StakingLedger {
 					stash: stash.clone(),
+					total: *value,
 					active: *value,
-					inactive: Vec::<UnlockChunk<BalanceOf<T>, T::BlockNumber>>::new(),
+					unlocking: Vec::<UnlockChunk<BalanceOf<T>, T::BlockNumber>>::new(),
 				},
 			)).collect::<Vec<_>>()
 		}): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
@@ -271,7 +279,7 @@ decl_module! {
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will be the
 		/// account that controls it.
-		fn bond_stash(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>) {
+		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>) {
 			let stash = ensure_signed(origin)?;
 
 			if <Bonded<T>>::exists(&stash) {
@@ -286,19 +294,40 @@ decl_module! {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
-			let remaining_free = stash_balance - value;
-			let inactive = match remaining_free.is_zero() {
-				false => vec![UnlockChunk { value: remaining_free, era: Self::current_era()}],
-				true => vec![],
-			};
 
-			<Ledger<T>>::insert(&controller, StakingLedger { stash, active: value, inactive });
+			<Ledger<T>>::insert(&controller, StakingLedger { stash, total: value, active: value, unlocking: vec![] });
+		}
+
+		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up for
+		/// staking.
+		/// 
+		/// Use this if there are additional funds in your stash account that you wish to bond.
+		/// 
+		/// NOTE: This call must be made by the controller, not the stash.
+		fn bond_extra(origin, max_additional: BalanceOf<T>) {
+			let controller = ensure_signed(origin)?;
+			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let stash_balance = T::Currency::free_balance(&ledger.stash);
+
+			if stash_balance > ledger.total {
+				let extra = (stash_balance - ledger.total).min(max_additional);
+				ledger.total += extra;
+				ledger.active += extra;
+				<Ledger<T>>::insert(&controller, ledger);
+			}
 		}
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
 		/// period ends. If this leaves an amount actively bonded less than 
 		/// T::Currency::existential_deposit(), then it is increased to the full amount.
-		fn unlock(origin, #[compact] value: BalanceOf<T>) {
+		/// 
+		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
+		/// the funds out of management ready for transfer. 
+		/// 
+		/// NOTE: This call must be made by the controller, not the stash.
+		/// 
+		/// See also `withdraw_unbonded`.
+		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 
@@ -315,51 +344,41 @@ decl_module! {
 				}
 
 				let era = Self::current_era() + Self::bonding_duration();
-				ledger.inactive.push(UnlockChunk { value, era });
+				ledger.unlocking.push(UnlockChunk { value, era });
 				<Ledger<T>>::insert(&controller, ledger);
 			}
 		}
 
-		/// Transfer some `value` of unlocked funds from the stash to `destination` account.
-		fn transfer_unlocked(origin, destination: <T::Lookup as StaticLookup>::Source) {
+		/// Remove any unlocked chunks from the `unlocking` queue from our management.
+		/// 
+		/// This essentially frees up that balance to be used by the stash account to do
+		/// whatever it wants.
+		/// 
+		/// NOTE: This call must be made by the controller, not the stash.
+		/// 
+		/// See also `unbond`.
+		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
 
 			let current_era = Self::current_era();
 			let mut total = Zero::zero();
-			ledger.inactive = ledger.inactive.into_iter()
-				.filter(|UnlockChunk { value, era }| if current_era < *era {
+			ledger.unlocking = ledger.unlocking.into_iter()
+				.filter(|chunk| if chunk.era > current_era {
 					true
 				} else {
-					total += *value;
+					ledger.total = ledger.total.saturating_sub(chunk.value);
 					false
 				})
 				.collect();
-
-			T::Currency::decrease_free_balance(&ledger.stash, total)?;
-			T::Currency::increase_free_balance_creating(&T::Lookup::lookup(destination)?, total);
 			<Ledger<T>>::insert(&controller, ledger);
-		}
-
-		/// Add any extra amounts that have appeared in the stash free_balance into the balance up for
-		/// staking.
-		fn note_additional(origin) {
-			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
-
-			let stash_balance = T::Currency::free_balance(&ledger.stash);
-			let inactive_balance = ledger.inactive.iter().fold(Zero::zero(), |acc, uc| acc + uc.value);
-
-			if stash_balance > inactive_balance + ledger.active {
-				let extra = stash_balance - inactive_balance - ledger.active;
-				ledger.inactive.push(UnlockChunk { value: extra, era: Self::current_era() });
-				<Ledger<T>>::insert(&controller, ledger);
-			}
 		}
 
 		/// Declare the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
+		/// 
+		/// NOTE: This call must be made by the controller, not the stash.
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -370,6 +389,8 @@ decl_module! {
 		/// Declare the desire to nominate `targets` for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
+		/// 
+		/// NOTE: This call must be made by the controller, not the stash.
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -386,6 +407,8 @@ decl_module! {
 		/// Declare no desire to either validate or nominate.
 		///
 		/// Effects will be felt at the beginning of the next era.
+		/// 
+		/// NOTE: This call must be made by the controller, not the stash.
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -711,17 +734,27 @@ impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 	}
 }
 
-impl<T: Trait> EnsureAccountLiquid<T::AccountId> for Module<T> {
-	fn ensure_account_can_transfer(who: &T::AccountId) -> Result {
+impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
+	fn ensure_account_liquid(who: &T::AccountId) -> Result {
 		if <Bonded<T>>::exists(who) {
-			Err("stash accounts are frozen")
+			Err("stash accounts are not liquid")
 		} else {
 			Ok(())
 		}
 	}
-
-	fn ensure_account_can_pay(who: &T::AccountId) -> Result {
-		Self::ensure_account_can_transfer(who)
+	fn ensure_account_can_withdraw(
+		who: &T::AccountId,
+		amount: BalanceOf<T>,
+		_reason: WithdrawReason,
+	) -> Result {
+		// For this, we only bother with the first UnlockChunk, since it's only fees.
+		if let Some(controller) = <Bonded<T>>::get(who) {
+			let ledger = Self::ledger(&controller).ok_or("stash without controller")?;
+			let free_balance = T::Currency::free_balance(&who);
+			ensure!(free_balance.checked_sub(ledger.total).unwrap_or_default() > amount,
+				"stash with too much under management");
+		}		
+		Ok(())
 	}
 }
 
