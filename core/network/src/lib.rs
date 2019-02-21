@@ -27,6 +27,7 @@ mod protocol;
 mod chain;
 mod blocks;
 mod on_demand;
+mod util;
 pub mod config;
 pub mod consensus_gossip;
 pub mod error;
