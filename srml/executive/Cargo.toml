@@ -19,7 +19,7 @@ substrate-primitives = { path = "../../core/primitives" }
 srml-indices = { path = "../indices" }
 balances = { package = "srml-balances", path = "../balances" }
 fees = { package = "srml-fees", path = "../fees" }
-parity-codec-derive = { version = "3.0", default-features = false }
+parity-codec-derive = { version = "3.0" }
 
 [features]
 default = ["std"]

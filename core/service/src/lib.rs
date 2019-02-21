@@ -271,6 +271,7 @@ impl<Components: components::Components> Service<Components> {
 		// Telemetry
 		let telemetry = config.telemetry_url.clone().map(|url| {
 			let is_authority = config.roles == Roles::AUTHORITY;
+			let network_id = network.local_peer_id().to_base58();
 			let pubkey = format!("{}", public_key);
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
@@ -286,7 +287,8 @@ impl<Components: components::Components> Service<Components> {
 						"config" => "",
 						"chain" => chain_name.clone(),
 						"pubkey" => &pubkey,
-						"authority" => is_authority
+						"authority" => is_authority,
+						"network_id" => network_id.clone()
 					);
 				}),
 			}))
