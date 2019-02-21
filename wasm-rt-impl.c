@@ -34,6 +34,7 @@ typedef struct FuncType {
 
 uint32_t wasm_rt_call_stack_depth;
 uint32_t g_saved_call_stack_depth;
+uint8_t* data_offset;
 
 jmp_buf g_jmp_buf;
 FuncType* g_func_types;
@@ -98,6 +99,7 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
   memory->max_pages = max_pages;
   memory->size = initial_pages * PAGE_SIZE;
   memory->data = calloc(memory->size, 1);
+  data_offset = memory->data;
 }
 
 uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
@@ -109,6 +111,7 @@ uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
   memory->pages = new_pages;
   memory->size = new_pages * PAGE_SIZE;
   memory->data = realloc(memory->data, memory->size);
+  data_offset = memory->data;
   memset(memory->data + old_pages * PAGE_SIZE, 0, delta * PAGE_SIZE);
   return old_pages;
 }
