@@ -18,6 +18,7 @@
 
 #![cfg(test)]
 #![allow(dead_code)]
+#![feature(custom_attribute)]
 
 extern crate substrate_metadata;
 extern crate substrate_metadata_derive;
@@ -65,6 +66,14 @@ enum EnumWithDiscriminant {
 	B = 15,
 	C = 255,
 }
+
+#[derive(Debug, PartialEq, EncodeMetadata)]
+struct StructWithCompact {
+	#[codec(compact)]
+	pub a: u32,
+	pub b: u64,
+}
+
 
 fn get_metadata<T: EncodeMetadata>() -> MetadataRegistry {
 	let mut reg = MetadataRegistry::new();
@@ -210,6 +219,23 @@ fn should_work() {
 					FieldMetadata {
 						name: FieldName::Named("c".into()),
 						ty: MetadataName::Vector(Box::new(MetadataName::U8)),
+					},
+				])
+			}
+		]
+	});
+	assert_eq!(get_metadata::<StructWithCompact>(), MetadataRegistry {
+		list: vec![
+			TypeMetadata {
+				name: MetadataName::Custom("mod".into(), "StructWithCompact".into()),
+				kind: TypeMetadataKind::Struct(vec![
+					FieldMetadata {
+						name: FieldName::Named("a".into()),
+						ty: MetadataName::Compact(Box::new(MetadataName::U32))
+					},
+					FieldMetadata {
+						name: FieldName::Named("b".into()),
+						ty: MetadataName::U64
 					},
 				])
 			}

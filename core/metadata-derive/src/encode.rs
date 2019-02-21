@@ -17,6 +17,7 @@ fn encode_fields(
 ) -> TokenStream
 {
 	let recurse = fields.iter().enumerate().map(|(i, f)| {
+		let compact = get_enable_compact(f);
 		let name = f.ident.as_ref().map(|iden| quote! {
 			_substrate_metadata::FieldName::Named(stringify!(#iden).into())
 		})
@@ -30,7 +31,7 @@ fn encode_fields(
 				#registry.register(type_name.clone(), <#ty as _substrate_metadata::EncodeMetadata>::type_metadata_kind);
 				_substrate_metadata::FieldMetadata {
 					name: #name,
-					ty: type_name
+					ty: if #compact { _substrate_metadata::MetadataName::Compact(Box::new(type_name)) } else { type_name }
 				}
 			}
 		}
@@ -189,4 +190,17 @@ fn index(v: &Variant, i: usize) -> TokenStream {
 			.map(|&(_, ref expr)| quote! { #expr })
 			.unwrap_or_else(|| quote! { #i })
 		)
+}
+
+fn get_enable_compact(field_entry: &Field) -> bool {
+	// look for `encode(compact)` in the attributes
+	find_meta_item(field_entry.attrs.iter(), |meta| {
+		if let NestedMeta::Meta(Meta::Word(ref word)) = meta {
+			if word == "compact" {
+				return Some(());
+			}
+		}
+
+		None
+	}).is_some()
 }
