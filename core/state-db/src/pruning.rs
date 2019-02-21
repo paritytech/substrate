@@ -166,6 +166,8 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			inserted,
 			deleted,
 		};
+		// Calculate pending block number taking pending canonicalizations into account, but not pending prunings
+		// as these are always applied last.
 		let block = self.pending_number + (self.death_rows.len() + self.pending_records.len()) as u64;
 		let journal_key = to_journal_key(block);
 		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
