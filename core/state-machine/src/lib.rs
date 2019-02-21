@@ -725,7 +725,7 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		assert_eq!(execute(
+		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -737,6 +737,7 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute(
 			ExecutionStrategy::NativeWhenPossible
 		).unwrap().0, vec![66]);
 	}
@@ -744,7 +745,7 @@ mod tests {
 
 	#[test]
 	fn execute_works_with_native_else_wasm() {
-		assert_eq!(execute(
+		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -756,6 +757,7 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute(
 			ExecutionStrategy::NativeElseWasm
 		).unwrap().0, vec![66]);
 	}
@@ -763,7 +765,7 @@ mod tests {
 	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
 		let mut consensus_failed = false;
-		assert!(execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> _>(
+		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -775,6 +777,7 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
 				println!("HELLO!");
@@ -881,7 +884,7 @@ mod tests {
 
 	#[test]
 	fn cannot_change_changes_trie_config() {
-		assert!(execute(
+		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -893,13 +896,14 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute(
 			ExecutionStrategy::NativeWhenPossible
 		).is_err());
 	}
 
 	#[test]
 	fn cannot_change_changes_trie_config_with_native_else_wasm() {
-		assert!(execute(
+		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
@@ -911,6 +915,7 @@ mod tests {
 			},
 			"test",
 			&[],
+		).execute(
 			ExecutionStrategy::NativeElseWasm
 		).is_err());
 	}
