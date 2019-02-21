@@ -166,7 +166,9 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			inserted,
 			deleted,
 		};
-		let block = self.pending_number + self.window_size() as u64;
+		// Calculate pending block number taking pending canonicalizations into account, but not pending prunings
+		// as these are always applied last.
+		let block = self.pending_number + (self.death_rows.len() + self.pending_records.len()) as u64;
 		let journal_key = to_journal_key(block);
 		commit.meta.inserted.push((journal_key.clone(), journal_record.encode()));
 		self.pending_records.push((block, journal_record));
@@ -281,6 +283,29 @@ mod tests {
 		pruning.prune_one(&mut commit);
 		db.commit(&commit);
 		pruning.apply_pending();
+		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
+		let mut commit = CommitSet::default();
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
+		pruning.apply_pending();
+		assert!(db.data_eq(&make_db(&[3, 4, 5])));
+		assert_eq!(pruning.pending_number, 2);
+	}
+
+	#[test]
+	fn prune_two_pending() {
+		let mut db = make_db(&[1, 2, 3]);
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut commit = make_commit(&[4], &[1]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		let mut commit = make_commit(&[5], &[2]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
+		let mut commit = CommitSet::default();
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit);
