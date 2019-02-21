@@ -33,7 +33,7 @@ use service::{
 };
 use network::{
 	Protocol, config::{NetworkConfiguration, NonReservedPeerMode, Secret},
-	multiaddr,
+	build_multiaddr,
 };
 use primitives::H256;
 
@@ -455,7 +455,7 @@ where
 				.map_err(|err| format!("Error obtaining network key: {}", err))?;
 
 		let peer_id = network_keys.to_peer_id();
-		let addr = multiaddr![
+		let addr = build_multiaddr![
 			Ip4([127, 0, 0, 1]),
 			Tcp(30333u16),
 			P2p(peer_id)
