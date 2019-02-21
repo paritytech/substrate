@@ -228,7 +228,7 @@ pub fn buy_gas<T: Trait>(
 }
 
 /// Refund the unused gas.
-pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) -> Result<(), &'static str> {
+pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
 	// Increase total spent gas.
 	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
 	// also has T::Gas type.
@@ -237,7 +237,8 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 
 	// Refund gas left by the price it was bought.
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
-	<T as Trait>::ChargeFee::refund_fee(transactor, refund)
+	// This cannot fail, since `refund` is never greater than bought amount.
+	let _ = <T as Trait>::ChargeFee::refund_fee(transactor, refund);
 }
 
 /// A little handy utility for converting a value in balance units into approximitate value in gas units

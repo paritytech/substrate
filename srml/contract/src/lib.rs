@@ -185,7 +185,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
 
-			gas::refund_unused_gas::<T>(&origin, gas_meter)?;
+			gas::refund_unused_gas::<T>(&origin, gas_meter);
 
 			result.map(|_| ())
 		}
@@ -226,7 +226,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter)?;
+			gas::refund_unused_gas::<T>(&origin, gas_meter);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {
@@ -279,7 +279,7 @@ decl_module! {
 			//
 			// NOTE: this should go after the commit to the storage, since the storage changes
 			// can alter the balance of the caller.
-			gas::refund_unused_gas::<T>(&origin, gas_meter)?;
+			gas::refund_unused_gas::<T>(&origin, gas_meter);
 
 			// Dispatch every recorded call with an appropriate origin.
 			ctx.calls.into_iter().for_each(|(who, call)| {
