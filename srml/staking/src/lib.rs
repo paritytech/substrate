@@ -115,8 +115,8 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	/// rounds.
 	#[codec(compact)]
 	pub active: Balance,
-	/// Any balance that is becoming (or has become) free, which may be transferred out
-	/// of the stash.
+	/// Any balance that is becoming free, which may eventually be transferred out
+	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
 }
 
@@ -270,7 +270,9 @@ decl_storage! {
 		/// The session index at which the era length last changed.
 		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
 
-		/// The highest and lowest staked validator slashable balances.
+		/// The amount of balance actively at stake for each validator slot, currently.
+		///
+		/// This is used to derive rewards and punishments.
 		pub SlotStake get(slot_stake) build(|config: &GenesisConfig<T>| {
 			config.stakers.iter().map(|&(_, _, value)| value).min()
 		}): BalanceOf<T>;
