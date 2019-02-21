@@ -182,7 +182,7 @@ decl_module! {
 		) {
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
-			Self::make_transfer(&transactor, &dest, value)?;
+			Self::make_transfer(&transactor, &dest, value, true)?;
 		}
 
 		/// Set the balances of a given account.
@@ -305,8 +305,14 @@ impl<T: Trait> Module<T> {
 		Ok(Self::set_free_balance(who, b - value))
 	}
 
-	/// Transfer some liquid free balance to another staker.
-	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
+	/// Transfer some liquid free balance to another account. If `can_kill`, will enforce
+	/// ExistentialDeposit law anulling the `transactor`'s account as needed.
+	pub fn make_transfer(
+		transactor: &T::AccountId,
+		dest: &T::AccountId,
+		value: T::Balance,
+		can_kill: bool,
+	) -> Result {
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
@@ -333,6 +339,10 @@ impl<T: Trait> Module<T> {
 			Some(b) => b,
 			None => return Err("destination balance too high to receive value"),
 		};
+
+		if !can_kill {
+			ensure!(new_from_balance >= Self::existential_deposit(), "balance too low to send value")
+		}
 
 		if transactor != dest {
 			T::ChargeFee::charge_fee(transactor, fee)?;
@@ -511,13 +521,14 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	type Amount = T::Balance;
 
 	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::make_transfer(from, to, amount)
+		Self::make_transfer(from, to, amount, false)
 	}
 
 	fn remove_from(who: &T::AccountId, value: T::Balance) -> Result {
 		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
 		let b = Self::free_balance(who);
-		ensure!(b >= value, "account has too few funds");
+		// ensure `who`'s account won't be killed.
+		ensure!(b >= value + Self::existential_deposit(), "account has too few funds");
 		Self::set_free_balance(who, b - value);
 		Self::decrease_total_stake_by(value);
 		Ok(())

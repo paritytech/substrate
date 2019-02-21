@@ -139,6 +139,8 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 	type Amount;
 
 	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
+	///
+	/// NOTE: Should not kill `transactor`'s account.
 	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
 	/// Refund `amount` of previous charged fees from `transactor`. Return Ok iff the refund was successful.
@@ -151,9 +153,13 @@ pub trait TransferAsset<AccountId> {
 	type Amount;
 
 	/// Transfer asset from `from` account to `to` account with `amount` of asset.
+	///
+	/// NOTE: Should not kill `from`'s account.
 	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
 	/// Remove asset from `who` account by deducing `amount` in the account balances.
+	///
+	/// NOTE: Should not kill `who`'s account.
 	fn remove_from(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
 	/// Add asset to `who` account by increasing `amount` in the account balances.
