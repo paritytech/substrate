@@ -190,8 +190,6 @@ type DefaultHandler<R, E> = fn(
 	CallResult<R, E>,
 ) -> CallResult<R, E>;
 
-type NativeCall =
-
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
 #[derive(Clone)]
 pub enum ExecutionManager<F> {
