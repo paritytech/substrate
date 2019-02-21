@@ -508,9 +508,11 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 					.send_custom_message(who, protocol_id, outgoing_message);
 			},
 			NetworkMsg::ReportPeer(who, severity) => {
-				info!(target: "sync", "Banning {:?} because {:?}", who, severity);
 				match severity {
-					Severity::Bad(_) => network_service_2.lock().ban_node(who),
+					Severity::Bad(message) => {
+						info!(target: "sync", "Banning {:?} because {:?}", who, message);
+						network_service_2.lock().ban_node(who)
+					},
 					Severity::Useless(_) => network_service_2.lock().drop_node(who),
 					Severity::Timeout => network_service_2.lock().drop_node(who),
 				}
