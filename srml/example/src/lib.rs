@@ -63,6 +63,10 @@ decl_storage! {
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
 		Dummy get(dummy) config(): Option<T::Balance>;
 
+		// A map that has enumerable entries.
+		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
+
+
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(foo) config(): T::Balance;
 	}
@@ -292,6 +296,8 @@ mod tests {
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
+			// we configure the map with (key, value) pairs.
+			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
 		}.build_storage().unwrap().0);
 		t.into()

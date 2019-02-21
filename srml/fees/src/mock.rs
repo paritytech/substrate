@@ -25,7 +25,7 @@ use runtime_primitives::{
 };
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event};
+use srml_support::{impl_outer_origin, impl_outer_event, traits::ArithmeticType};
 use crate::{GenesisConfig, Module, Trait, system};
 
 impl_outer_origin!{
@@ -52,6 +52,10 @@ impl<AccountId> TransferAsset<AccountId> for TransferAssetMock {
 	fn add_to(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }
 
+impl ArithmeticType for TransferAssetMock {
+	type Type = u64;
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -69,8 +73,7 @@ impl system::Trait for Test {
 	type Log = DigestItem;
 }
 impl Trait for Test {
-	type Amount = u64;
-	type Event =TestEvent;
+	type Event = TestEvent;
 	type TransferAsset = TransferAssetMock;
 }
 

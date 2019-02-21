@@ -29,7 +29,7 @@ use rstd::{cmp, result};
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
-use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero};
+use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, ArithmeticType};
 use srml_support::dispatch::Result;
 use primitives::traits::{Zero, SimpleArithmetic,
 	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug, TransferAsset};
@@ -40,7 +40,7 @@ mod tests;
 
 pub trait Trait: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64>;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<usize> + As<u64> + MaybeSerializeDebug;
 
 	/// A function which is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
@@ -56,6 +56,10 @@ pub trait Trait: system::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+}
+
+impl<T: Trait> ArithmeticType for Module<T> {
+	type Type = <T as Trait>::Balance;
 }
 
 decl_event!(

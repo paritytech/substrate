@@ -20,8 +20,8 @@ use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 use consensus::import_queue::ImportQueue;
-use crate::message::{self, Message};
-use crate::message::generic::Message as GenericMessage;
+use crate::message::{self, Message, ConsensusEngineId};
+use crate::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::on_demand::OnDemandService;
 use crate::specialization::NetworkSpecialization;
@@ -29,22 +29,22 @@ use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
 use crate::service::{NetworkChan, NetworkMsg, TransactionPool, ExHashT};
 use crate::config::{ProtocolConfig, Roles};
 use rustc_hex::ToHex;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::thread;
-use std::time;
-use std::cmp;
+use std::{cmp, num::NonZeroUsize, thread, time};
 use log::{trace, debug, warn};
 use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
-use crate::error;
+use crate::{error, util::LruHashSet};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 1;
+pub(crate) const CURRENT_VERSION: u32 = 2;
+/// Lowest version we support
+const MIN_VERSION: u32 = 2;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -82,22 +82,15 @@ pub struct ProtocolStatus<B: BlockT> {
 /// Peer information
 #[derive(Debug)]
 struct Peer<B: BlockT, H: ExHashT> {
-	/// Protocol version
-	protocol_version: u32,
-	/// Roles
-	roles: Roles,
-	/// Peer best block hash
-	best_hash: B::Hash,
-	/// Peer best block number
-	best_number: <B::Header as HeaderT>::Number,
+	info: PeerInfo<B>,
 	/// Current block request, if any.
 	block_request: Option<(time::Instant, message::BlockRequest<B>)>,
 	/// Requests we are no longer insterested in.
 	obsolete_requests: HashMap<message::RequestId, time::Instant>,
 	/// Holds a set of transactions known to this peer.
-	known_extrinsics: HashSet<H>,
+	known_extrinsics: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
-	known_blocks: HashSet<B::Hash>,
+	known_blocks: LruHashSet<B::Hash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
 }
@@ -131,61 +124,28 @@ pub trait Context<B: BlockT> {
 }
 
 /// Protocol context.
-pub(crate) struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
+struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 	network_chan: &'a NetworkChan<B>,
 	context_data: &'a mut ContextData<B, H>,
 }
 
 impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
-	pub(crate) fn new(
-		context_data: &'a mut ContextData<B, H>,
-		network_chan: &'a NetworkChan<B>,
-	) -> Self {
-		ProtocolContext {
-			network_chan,
-			context_data,
-		}
-	}
-
-	/// Send a message to a peer.
-	pub fn send_message(&mut self, who: NodeIndex, message: Message<B>) {
-		send_message(
-			&mut self.context_data.peers,
-			&self.network_chan,
-			who,
-			message,
-		)
-	}
-
-	/// Point out that a peer has been malign or irresponsible or appeared lazy.
-	pub fn report_peer(&mut self, who: NodeIndex, reason: Severity) {
-		let _ = self
-			.network_chan
-			.send(NetworkMsg::ReportPeer(who, reason));
-	}
-
-	/// Get peer info.
-	pub fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>> {
-		self.context_data.peers.get(&peer).map(|p| PeerInfo {
-			roles: p.roles,
-			protocol_version: p.protocol_version,
-			best_hash: p.best_hash,
-			best_number: p.best_number,
-		})
+	fn new(context_data: &'a mut ContextData<B, H>, network_chan: &'a NetworkChan<B>) -> Self {
+		ProtocolContext { network_chan, context_data }
 	}
 }
 
 impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
 	fn send_message(&mut self, who: NodeIndex, message: Message<B>) {
-		ProtocolContext::send_message(self, who, message);
+		send_message(&mut self.context_data.peers, &self.network_chan, who, message)
 	}
 
 	fn report_peer(&mut self, who: NodeIndex, reason: Severity) {
-		ProtocolContext::report_peer(self, who, reason);
+		self.network_chan.send(NetworkMsg::ReportPeer(who, reason))
 	}
 
 	fn peer_info(&self, who: NodeIndex) -> Option<PeerInfo<B>> {
-		ProtocolContext::peer_info(self, who)
+		self.context_data.peers.get(&who).map(|p| p.info.clone())
 	}
 
 	fn client(&self) -> &Client<B> {
@@ -194,7 +154,7 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 }
 
 /// Data necessary to create a context.
-pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
+struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: HashMap<NodeIndex, Peer<B, H>>,
 	pub chain: Arc<Client<B>>,
@@ -239,7 +199,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	/// Execute a closure with the consensus gossip.
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
-	GossipConsensusMessage(B::Hash, Vec<u8>, bool),
+	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>),
 	/// Is protocol currently major-syncing?
 	IsMajorSyncing(Sender<bool>),
 	/// Is protocol currently offline?
@@ -258,6 +218,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	BlockImportedSync(B::Hash, NumberFor<B>),
 	/// Tell protocol to request justification for a block.
 	RequestJustification(B::Hash, NumberFor<B>),
+	/// Inform protocol whether a justification was successfully imported.
+	JustificationImportResult(B::Hash, NumberFor<B>, bool),
 	/// A block has been imported (sent by the client).
 	BlockImported(B::Hash, B::Header),
 	/// A block has been finalized (sent by the client).
@@ -274,11 +236,11 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
-	pub fn new<I: 'static + ImportQueue<B>>(
+	pub fn new(
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		import_queue: Arc<I>,
+		import_queue: Box<ImportQueue<B>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
@@ -343,17 +305,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn handle_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
 		match msg {
 			ProtocolMsg::Peers(sender) => {
-				let peers = self.context_data.peers.iter().map(|(idx, p)| {
-					(
-						*idx,
-						PeerInfo {
-							roles: p.roles,
-							protocol_version: p.protocol_version,
-							best_hash: p.best_hash,
-							best_number: p.best_number,
-						}
-					)
-				}).collect();
+				let peers = self.context_data.peers.iter().map(|(idx, p)| (*idx, p.info.clone())).collect();
 				let _ = sender.send(peers);
 			},
 			ProtocolMsg::PeerDisconnected(who, debug_info) => self.on_peer_disconnected(who, debug_info),
@@ -375,8 +327,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				task.call_box(&mut self.consensus_gossip, &mut context);
 			}
-			ProtocolMsg::GossipConsensusMessage(topic, message, broadcast) => {
-				self.gossip_consensus_message(topic, message, broadcast)
+			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
+				self.gossip_consensus_message(topic, engine_id, message)
 			}
 			ProtocolMsg::IsMajorSyncing(sender) => {
 				let is_syncing = self.sync.status().is_major_syncing();
@@ -403,6 +355,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				self.sync.request_justification(&hash, number, &mut context);
 			},
+			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
 			ProtocolMsg::PropagateExtrinsics => self.propagate_extrinsics(),
 			ProtocolMsg::Tick => self.tick(),
 			#[cfg(any(test, feature = "test-helpers"))]
@@ -427,9 +380,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				return request.map(|(_, r)| r)
 			}
 			trace!(target: "sync", "Unexpected response packet from {} ({})", who, response.id,);
-			let _ = self
-				.network_chan
-				.send(NetworkMsg::ReportPeer(who, Severity::Bad("Unexpected response packet received from peer".to_string())));
+			let severity = Severity::Bad("Unexpected response packet received from peer".to_string());
+			self.network_chan.send(NetworkMsg::ReportPeer(who, severity))
 		}
 		None
 	}
@@ -468,13 +420,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(who, response),
-			GenericMessage::Consensus(topic, msg, broadcast) => {
+			GenericMessage::Consensus(msg) => {
 				self.consensus_gossip.on_incoming(
 					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 					who,
-					topic,
 					msg,
-					broadcast,
+					self.sync.status().is_major_syncing(),
 				);
 			}
 			other => self.specialization.on_message(
@@ -494,12 +445,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		);
 	}
 
-	fn gossip_consensus_message(&mut self, topic: B::Hash, message: Vec<u8>, broadcast: bool) {
+	fn gossip_consensus_message(&mut self, topic: B::Hash, engine_id: ConsensusEngineId, message: Vec<u8>) {
 		self.consensus_gossip.multicast(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			topic,
-			message,
-			broadcast,
+			ConsensusMessage{ data: message, engine_id },
 		);
 	}
 
@@ -529,17 +479,13 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Called as a back-pressure mechanism if the networking detects that the peer cannot process
 	/// our messaging rate fast enough.
-	pub fn on_clogged_peer(
-		&self,
-		who: NodeIndex,
-		_message: Option<Message<B>>,
-	) {
+	pub fn on_clogged_peer(&self, who: NodeIndex, _msg: Option<Message<B>>) {
 		// We don't do anything but print some diagnostics for now.
 		if let Some(peer) = self.context_data.peers.get(&who) {
 			debug!(target: "sync", "Clogged peer {} (protocol_version: {:?}; roles: {:?}; \
 				known_extrinsics: {:?}; known_blocks: {:?}; best_hash: {:?}; best_number: {:?})",
-				who, peer.protocol_version, peer.roles, peer.known_extrinsics, peer.known_blocks,
-				peer.best_hash, peer.best_number);
+				who, peer.info.protocol_version, peer.info.roles, peer.known_extrinsics, peer.known_blocks,
+				peer.info.best_hash, peer.info.best_number);
 		} else {
 			debug!(target: "sync", "Peer clogged before being properly connected");
 		}
@@ -570,7 +516,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let number = header.number().clone();
 			let hash = header.hash();
 			let parent_hash = header.parent_hash().clone();
-			let justification = if get_justification { self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None) } else { None };
+			let justification = if get_justification {
+				self.context_data.chain.justification(&BlockId::Hash(hash)).unwrap_or(None)
+			} else {
+				None
+			};
 			let block_data = message::generic::BlockData {
 				hash: hash,
 				header: if get_header { Some(header) } else { None },
@@ -647,7 +597,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Perform time based maintenance.
 	fn tick(&mut self) {
-		self.consensus_gossip.collect_garbage(|_| true);
+		self.consensus_gossip.collect_garbage();
 		self.maintain_peers();
 		self.sync.tick(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		self.on_demand
@@ -674,26 +624,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 		}
 
-		self.specialization
-			.maintain_peers(&mut ProtocolContext::new(
-				&mut self.context_data,
-				&self.network_chan,
-			));
+		self.specialization.maintain_peers(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan));
 		for p in aborting {
 			let _ = self
 				.network_chan
 				.send(NetworkMsg::ReportPeer(p, Severity::Timeout));
 		}
-	}
-
-	#[allow(dead_code)]
-	fn peer_info(&mut self, peer: NodeIndex) -> Option<PeerInfo<B>> {
-		self.context_data.peers.get(&peer).map(|p| PeerInfo {
-			roles: p.roles,
-			protocol_version: p.protocol_version,
-			best_hash: p.best_hash,
-			best_number: p.best_number,
-		})
 	}
 
 	/// Called by peer to report status
@@ -715,7 +651,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				));
 				return;
 			}
-			if status.version != CURRENT_VERSION {
+			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
 				let reason = format!("Peer using unsupported protocol version {}", status.version);
 				self.network_chan.send(NetworkMsg::ReportPeer(
 					who,
@@ -747,14 +683,18 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 
+			let cache_limit = NonZeroUsize::new(1_000_000).expect("1_000_000 > 0; qed");
+
 			let peer = Peer {
-				protocol_version: status.version,
-				roles: status.roles,
-				best_hash: status.best_hash,
-				best_number: status.best_number,
+				info: PeerInfo {
+					protocol_version: status.version,
+					roles: status.roles,
+					best_hash: status.best_hash,
+					best_number: status.best_number
+				},
 				block_request: None,
-				known_extrinsics: HashSet::new(),
-				known_blocks: HashSet::new(),
+				known_extrinsics: LruHashSet::new(cache_limit),
+				known_blocks: LruHashSet::new(cache_limit),
 				next_request_id: 0,
 				obsolete_requests: HashMap::new(),
 			};
@@ -802,8 +742,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		let extrinsics = self.transaction_pool.transactions();
-		// FIXME: find a way to remove this vec. https://github.com/paritytech/substrate/issues/1698
-		let mut will_send = vec![];
 		let mut propagated_to = HashMap::new();
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
@@ -827,11 +765,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					}
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
-				will_send.push((who.clone(), to_send));
+				self.network_chan.send(NetworkMsg::Outgoing(*who, GenericMessage::Transactions(to_send)))
 			}
-		}
-		for (who, to_send) in will_send {
-			self.send_message(who, GenericMessage::Transactions(to_send));
 		}
 		self.transaction_pool.on_broadcasted(propagated_to);
 	}
@@ -854,17 +789,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		};
 		let hash = header.hash();
 
-		// FIXME: find a way to remove this vec. https://github.com/paritytech/substrate/issues/1698
-		let mut to_send = vec![];
+		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
+
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			trace!(target: "sync", "Reannouncing block {:?} to {}", hash, who);
 			peer.known_blocks.insert(hash);
-			to_send.push(who.clone());
-		}
-		for who in to_send {
-			self.send_message(who, GenericMessage::BlockAnnounce(message::BlockAnnounce {
-				header: header.clone()
-			}));
+			self.network_chan.send(NetworkMsg::Outgoing(*who, message.clone()))
 		}
 	}
 
@@ -873,6 +803,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		if let Ok(info) = self.context_data.chain.info() {
 			let status = message::generic::Status {
 				version: CURRENT_VERSION,
+				min_supported_version: MIN_VERSION,
 				genesis_hash: info.chain.genesis_hash,
 				roles: self.config.roles.into(),
 				best_number: info.chain.best_number,
@@ -893,8 +824,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn stop(&mut self) {
 		// stop processing import requests first (without holding a sync lock)
-		let import_queue = self.sync.import_queue();
-		import_queue.stop();
+		self.sync.stop();
 
 		// and then clear all the sync data
 		self.abort();
@@ -920,7 +850,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	fn on_block_imported(&mut self, hash: B::Hash, header: &B::Header) {
-		self.sync.update_chain_info(&header);
+		self.sync.update_chain_info(header);
 		self.specialization.on_block_imported(
 			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 			hash.clone(),
@@ -934,26 +864,22 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 		// send out block announcements
 
-		// FIXME: find a way to remove this vec. https://github.com/paritytech/substrate/issues/1698
-		let mut to_send = vec![];
+		let message = GenericMessage::BlockAnnounce(message::BlockAnnounce { header: header.clone() });
+
 		for (who, ref mut peer) in self.context_data.peers.iter_mut() {
 			if peer.known_blocks.insert(hash.clone()) {
 				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
-				to_send.push(who.clone());
+				self.network_chan.send(NetworkMsg::Outgoing(*who, message.clone()))
 			}
-		}
-		for who in to_send {
-			self.send_message(
-				who,
-				GenericMessage::BlockAnnounce(message::BlockAnnounce {
-					header: header.clone(),
-				}),
-			);
 		}
 	}
 
 	fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
-		self.sync.block_finalized(&hash, *header.number());
+		self.sync.on_block_finalized(
+			&hash,
+			*header.number(),
+			&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
+		);
 	}
 
 	fn on_remote_call_request(
@@ -1109,19 +1035,16 @@ fn send_message<B: BlockT, H: ExHashT>(
 	who: NodeIndex,
 	mut message: Message<B>,
 ) {
-	match message {
-		GenericMessage::BlockRequest(ref mut r) => {
-			if let Some(ref mut peer) = peers.get_mut(&who) {
-				r.id = peer.next_request_id;
-				peer.next_request_id = peer.next_request_id + 1;
-				if let Some((timestamp, request)) = peer.block_request.take() {
-					trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
-					peer.obsolete_requests.insert(request.id, timestamp);
-				}
-				peer.block_request = Some((time::Instant::now(), r.clone()));
+	if let GenericMessage::BlockRequest(ref mut r) = message {
+		if let Some(ref mut peer) = peers.get_mut(&who) {
+			r.id = peer.next_request_id;
+			peer.next_request_id = peer.next_request_id + 1;
+			if let Some((timestamp, request)) = peer.block_request.take() {
+				trace!(target: "sync", "Request {} for {} is now obsolete.", request.id, who);
+				peer.obsolete_requests.insert(request.id, timestamp);
 			}
+			peer.block_request = Some((time::Instant::now(), r.clone()));
 		}
-		_ => (),
 	}
 	network_chan.send(NetworkMsg::Outgoing(who, message));
 }

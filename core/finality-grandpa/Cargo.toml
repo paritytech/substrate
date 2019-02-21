@@ -2,33 +2,32 @@
 name = "substrate-finality-grandpa"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
+fork-tree = { path = "../../core/util/fork-tree" }
 futures = "0.1"
-parity-codec = "3.0"
-parity-codec-derive = "3.0"
-sr-primitives = { path = "../sr-primitives" }
-substrate-consensus-common = { path = "../consensus/common" }
-substrate-primitives = { path = "../primitives" }
-substrate-client = { path = "../client" }
-substrate-network = { path = "../network" }
-substrate-service = { path = "../service", optional = true }
 log = "0.4"
 parking_lot = "0.7.1"
 tokio = "0.1.7"
-substrate-finality-grandpa-primitives = { path = "primitives" }
 rand = "0.6"
-
-[dependencies.finality-grandpa]
-version = "0.6.0"
-features = ["derive-codec"]
+parity-codec = "3.0"
+parity-codec-derive = "3.0"
+runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
+consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
+substrate-primitives = { path = "../primitives" }
+client = { package = "substrate-client", path = "../client" }
+network = { package = "substrate-network", path = "../network" }
+service = { package = "substrate-service", path = "../service", optional = true }
+fg_primitives = { package = "substrate-finality-grandpa-primitives", path = "primitives" }
+grandpa = { package = "finality-grandpa", version = "0.6.0", features = ["derive-codec"] }
 
 [dev-dependencies]
-substrate-network = { path = "../network", features = ["test-helpers"] }
-substrate-keyring = { path = "../keyring" }
-substrate-test-client = { path = "../test-client"}
+network = { package = "substrate-network", path = "../network", features = ["test-helpers"] }
+keyring = { package = "substrate-keyring", path = "../keyring" }
+test_client = { package = "substrate-test-client", path = "../test-client"}
 env_logger = "0.6"
 
 [features]
 default = ["service-integration"]
-service-integration = ["substrate-service"]
+service-integration = ["service"]

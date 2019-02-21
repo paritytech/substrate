@@ -79,10 +79,14 @@ pub enum UpdateBalanceOutcome {
 	AccountKilled,
 }
 
+pub trait ArithmeticType {
+	type Type: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+}
+
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+	type Balance;
 
 	// PUBLIC IMMUTABLES
 

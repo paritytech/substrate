@@ -19,10 +19,10 @@ system = { package = "srml-system", path = "../system", default-features = false
 session = { package = "srml-session", path = "../session", default-features = false }
 
 [dev-dependencies]
-substrate-primitives = { path = "../../core/primitives", default-features = false }
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
-timestamp = { package = "srml-timestamp", path = "../timestamp", default-features = false }
-balances = { package = "srml-balances", path = "../balances", default-features = false }
+substrate-primitives = { path = "../../core/primitives" }
+runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+timestamp = { package = "srml-timestamp", path = "../timestamp" }
+balances = { package = "srml-balances", path = "../balances" }
 
 [features]
 default = ["std"]

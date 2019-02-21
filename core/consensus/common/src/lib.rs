@@ -26,6 +26,9 @@
 // our error-chain could potentially blow up otherwise
 #![recursion_limit="128"]
 
+#[macro_use] extern crate crossbeam_channel;
+#[macro_use] extern crate log;
+
 use std::sync::Arc;
 use std::time::Duration;
 

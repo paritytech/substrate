@@ -2,22 +2,23 @@
 name = "substrate-finality-grandpa-primitives"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
 
 [dependencies]
-substrate-client = { path = "../../client", default-features = false }
+client = { package = "substrate-client", path = "../../client", default-features = false }
 substrate-primitives = { path = "../../primitives", default-features = false }
 parity-codec = { version = "3.0", default-features = false }
 parity-codec-derive = { version = "3.0", default-features = false }
 sr-primitives = { path = "../../sr-primitives", default-features = false }
-sr-std = { path = "../../sr-std", default-features = false }
+rstd = { package = "sr-std", path = "../../sr-std", default-features = false }
 
 [features]
 default = ["std"]
 std = [
 	"substrate-primitives/std",
-	"substrate-client/std",
+	"client/std",
 	"parity-codec/std",
 	"parity-codec-derive/std",
 	"sr-primitives/std",
-	"sr-std/std",
+	"rstd/std",
 ]

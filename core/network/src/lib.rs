@@ -27,6 +27,7 @@ mod protocol;
 mod chain;
 mod blocks;
 mod on_demand;
+mod util;
 pub mod config;
 pub mod consensus_gossip;
 pub mod error;
@@ -42,9 +43,9 @@ pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
     NodeIndex, ProtocolId, Severity, Protocol, Multiaddr,
-    obtain_private_key, multiaddr, PeerId, PublicKey
+    obtain_private_key, build_multiaddr, PeerId, PublicKey
 };
-pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
+pub use message::{generic as generic_message, RequestId, Status as StatusMessage, ConsensusEngineId};
 pub use error::Error;
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
 #[doc(hidden)]

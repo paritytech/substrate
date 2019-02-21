@@ -16,9 +16,11 @@ error-chain = "0.12"
 bitflags = "1.0"
 futures = "0.1.17"
 linked-hash-map = "0.5"
+linked_hash_set = "0.1.3"
 lru-cache = "0.1.1"
 rustc-hex = "2.0"
 rand = "0.6"
+fork-tree = { path = "../../core/util/fork-tree" }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 client = { package = "substrate-client", path = "../../core/client" }
