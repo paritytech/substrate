@@ -91,10 +91,10 @@ pub struct ExecutionStrategies {
 impl Default for ExecutionStrategies {
 	fn default() -> ExecutionStrategies {
 		ExecutionStrategies {
-			syncing: ExecutionStrategy::NativeElseWasm,
-			importing: ExecutionStrategy::NativeElseWasm,
+			syncing: ExecutionStrategy::AlwaysWasm,
+			importing: ExecutionStrategy::AlwaysWasm,
 			block_construction: ExecutionStrategy::AlwaysWasm,
-			other: ExecutionStrategy::NativeElseWasm,
+			other: ExecutionStrategy::AlwaysWasm,
 		}
 	}
 }

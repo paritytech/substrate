@@ -239,26 +239,32 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 				(true, true, Some(call)) => {
 					trace!(
 						target: "executor",
-						"Request for native execution with native call succeeded (native: {}, chain: {}).",
+						"Request for native execution with native call succeeded, using WASM anyway :-) (native: {}, chain: {}).",
 						self.native_version.runtime_version,
 						onchain_version
 							.as_ref()
 							.map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
 					(
-						with_native_environment(ext, move || (call)())
-							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Into::into)),
-						true
+						self.fallback
+							.call_in_wasm_module(ext, module, method, data)
+							.map(NativeOrEncoded::Encoded),
+						false
 					)
 				}
 				_ => {
 					trace!(
 						target: "executor",
-						"Request for native execution succeeded (native: {}, chain: {})",
+						"Request for native execution succeeded, but using WASM :-) (native: {}, chain: {})",
 						self.native_version.runtime_version,
 						onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v))
 					);
-					(D::dispatch(ext, method, data).map(NativeOrEncoded::Encoded), true)
+					(
+						self.fallback
+							.call_in_wasm_module(ext, module, method, data)
+							.map(NativeOrEncoded::Encoded),
+						false
+					)
 				}
 			}
 		})

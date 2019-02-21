@@ -199,10 +199,10 @@ pub enum ExecutionManager<F> {
 impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
 	fn from(s: &'a ExecutionManager<F>) -> Self {
 		match *s {
-			ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
+			ExecutionManager::NativeWhenPossible => ExecutionStrategy::AlwaysWasm,
 			ExecutionManager::AlwaysWasm => ExecutionStrategy::AlwaysWasm,
-			ExecutionManager::NativeElseWasm => ExecutionStrategy::NativeElseWasm,
-			ExecutionManager::Both(_) => ExecutionStrategy::Both,
+			ExecutionManager::NativeElseWasm => ExecutionStrategy::AlwaysWasm,
+			ExecutionManager::Both(_) => ExecutionStrategy::AlwaysWasm,
 		}
 	}
 }
@@ -217,16 +217,9 @@ impl ExecutionStrategy {
 		{
 		match self {
 			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-			ExecutionStrategy::NativeElseWasm => ExecutionManager::NativeElseWasm,
-			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!(
-					"Consensus error between wasm {:?} and native {:?}. Using wasm.",
-					wasm_result,
-					native_result
-				);
-				wasm_result
-			}),
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::NativeElseWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::Both => ExecutionManager::AlwaysWasm,
 		}
 	}
 }
@@ -252,7 +245,7 @@ pub fn native_else_wasm<E, R: Decode>() ->
 		) -> Result<NativeOrEncoded<R>, E>
 	>
 {
-	ExecutionManager::NativeElseWasm
+	ExecutionManager::AlwaysWasm
 }
 
 /// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
