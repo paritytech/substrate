@@ -1173,7 +1173,7 @@ mod tests {
 
 	pub trait Trait {
 		type Origin;
-		type BlockNumber: Into<u32>;
+		type BlockNumber: Into<u32> + EncodeMetadata;
 	}
 
 	pub mod system {

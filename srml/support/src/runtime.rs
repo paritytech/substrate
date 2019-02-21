@@ -337,6 +337,7 @@ macro_rules! construct_runtime {
 		);
 		$crate::__decl_runtime_metadata!(
 			$runtime;
+			$block;
 			;
 			$(
 				$name: $module::{ $( $modules $( <$modules_generic> )* )* }
@@ -745,6 +746,7 @@ macro_rules! __decl_runtime_metadata {
 	// contain a module
 	(
 		$runtime:ident;
+		$block:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
 			Module $( $modules:ident $( <$modules_generic:ident> )* )*
@@ -756,6 +758,7 @@ macro_rules! __decl_runtime_metadata {
 
 		$crate::__decl_runtime_metadata!(@Module
 			$runtime;
+			$block;
 			$( $parsed_modules { $( $withs )* } )*;
 			$name: $module::{ $( $modules $( <$modules_generic> )* )* }
 			$(
@@ -768,6 +771,7 @@ macro_rules! __decl_runtime_metadata {
 	// do not contain Module : skip
 	(
 		$runtime:ident;
+		$block:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
 			$( $modules:ident $( <$modules_generic:ident> )* )*
@@ -778,6 +782,7 @@ macro_rules! __decl_runtime_metadata {
 	) => {
 		$crate::__decl_runtime_metadata!(
 			$runtime;
+			$block;
 			$( $parsed_modules { $( $withs )* } )*;
 			$(
 				$rest_name: $rest_module::{
@@ -789,6 +794,7 @@ macro_rules! __decl_runtime_metadata {
 	// process module
 	(@Module
 		$runtime:ident;
+		$block:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 		$name:ident: $module:ident::{
 			$( $modules:ident $( <$modules_generic:ident> )* )*
@@ -799,6 +805,7 @@ macro_rules! __decl_runtime_metadata {
 	) => {
 		$crate::__decl_runtime_metadata!(
 			$runtime;
+			$block;
 			$( $parsed_modules { $( $withs )* } )*
 			$module {
 				$($modules)*
@@ -813,10 +820,11 @@ macro_rules! __decl_runtime_metadata {
 	// end of decl
 	(
 		$runtime:ident;
+		$block:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
 	) => {
 		$crate::impl_runtime_metadata!(
-			for $runtime with modules
+			for $runtime, $block with modules
 				$( $parsed_modules::Module with $( $withs )* , )*
 		);
 	}

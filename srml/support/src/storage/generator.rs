@@ -626,7 +626,7 @@ mod tests {
 
 	pub trait Trait {
 		type Origin: codec::Encode + codec::Decode + ::std::default::Default + EncodeMetadata;
-		type BlockNumber;
+		type BlockNumber: EncodeMetadata;
 	}
 
 	decl_module! {
@@ -950,7 +950,7 @@ mod tests {
 mod test2 {
 	pub trait Trait {
 		type Origin;
-		type BlockNumber;
+		type BlockNumber: substrate_metadata::EncodeMetadata;
 	}
 
 	decl_module! {
@@ -986,7 +986,7 @@ mod test2 {
 mod test3 {
 	pub trait Trait {
 		type Origin;
-		type BlockNumber;
+		type BlockNumber: substrate_metadata::EncodeMetadata;
 	}
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}

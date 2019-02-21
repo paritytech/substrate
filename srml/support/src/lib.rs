@@ -159,7 +159,7 @@ mod tests {
 	use runtime_primitives::BuildStorage;
 
 	pub trait Trait {
-		type BlockNumber: Codec + Default;
+		type BlockNumber: Codec + Default + substrate_metadata::EncodeMetadata;
 		type Origin;
 	}
 

@@ -24,28 +24,24 @@ pub use srml_metadata::{
 ///
 /// Example:
 /// ```compile_fail
-/// impl_runtime_metadata!(for RUNTIME_NAME with modules MODULE0, MODULE2, MODULE3 with Storage);
+/// impl_runtime_metadata!(for RUNTIME_NAME, BLOCK_NAME with modules MODULE0, MODULE2, MODULE3 with Storage);
 /// ```
 ///
 /// In this example, just `MODULE3` implements the `Storage` trait.
 #[macro_export]
 macro_rules! impl_runtime_metadata {
 	(
-		for $runtime:ident with modules
+		for $runtime:ident, $block:ident with modules
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
 			pub fn metadata() -> $crate::metadata::RuntimeMetadataPrefixed {
 				let mut registry = $crate::substrate_metadata::MetadataRegistry::new();
 				let block_type_name = <
-					<
-						Self as $crate::runtime_primitives::traits::GetRuntimeBlockType
-					>::RuntimeBlock as $crate::substrate_metadata::EncodeMetadata
+					$block as $crate::substrate_metadata::EncodeMetadata
 				>::type_name();
 				registry.register(block_type_name.clone(), <
-					<
-						Self as $crate::runtime_primitives::traits::GetRuntimeBlockType
-					>::RuntimeBlock as $crate::substrate_metadata::EncodeMetadata
+					$block as $crate::substrate_metadata::EncodeMetadata
 				>::type_metadata_kind);
 				$crate::metadata::RuntimeMetadata::V2 (
 					$crate::metadata::RuntimeMetadataV2 {
@@ -335,7 +331,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
-			type BlockNumber;
+			type BlockNumber: substrate_metadata::EncodeMetadata;
 		}
 
 		decl_event!(
@@ -364,6 +360,9 @@ mod tests {
 
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, EncodeMetadata)]
 	pub struct TestRuntime;
+
+	#[derive(EncodeMetadata)]
+	pub struct Block;
 
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
@@ -402,7 +401,7 @@ mod tests {
 	}
 
 	impl_runtime_metadata!(
-		for TestRuntime with modules
+		for TestRuntime, Block with modules
 			system::Module with Event,
 			event_module::Module with Event Call,
 			event_module2::Module with Event Storage Call,
