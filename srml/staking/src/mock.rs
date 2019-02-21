@@ -138,9 +138,9 @@ impl ExtBuilder {
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: if self.monied {
 				if self.reward > 0 {
-					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (11, balance_factor * 10), (20, balance_factor), (21, balance_factor * 20)]
+					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor), (10, balance_factor), (11, balance_factor * 10), (20, balance_factor), (21, balance_factor * 20)]
 				} else {
-					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
+					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor)]
 				}
 			} else {
 				vec![(10, balance_factor), (11, balance_factor * 10), (20, balance_factor), (21, balance_factor * 20)]
@@ -153,7 +153,7 @@ impl ExtBuilder {
 		t.extend(GenesisConfig::<Test>{
 			sessions_per_era: self.sessions_per_era,
 			current_era: self.current_era,
-			stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
+			stakers: vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)],
 			validator_count: 2,
 			minimum_validator_count: 0,
 			bonding_duration: self.sessions_per_era * self.session_length * 3,

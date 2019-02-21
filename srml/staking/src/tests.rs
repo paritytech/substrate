@@ -24,9 +24,9 @@ use srml_support::{assert_ok, assert_noop, EnumerableStorageMap};
 use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
 use srml_support::traits::Currency;
 
-
 #[test]
 fn basic_setup_works() {
+	// Verifies initial conditions of mock
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		assert_eq!(Staking::bonded(&11), Some(10)); // Account 11 is stashed and locked, and account 10 is the controller
@@ -34,9 +34,9 @@ fn basic_setup_works() {
 		assert_eq!(Staking::bonded(&1), None);		// Account 1 is not a stashed
 
 		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 100, active: 100, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
-		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 200, active: 200, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 2000, active: 2000, unlocking: vec![] }));
 		// Account 1 does not control any stash
 		assert_eq!(Staking::ledger(&1), None);
 
@@ -47,74 +47,108 @@ fn basic_setup_works() {
 		]);
 
 		// Account 10 is exposed by 100 * balance_factor from their own stash in account 11
-		assert_eq!(Staking::stakers(10), Exposure { total: 100, own: 100, others: vec![] });
-		assert_eq!(Staking::stakers(20), Exposure { total: 200, own: 200, others: vec![] });
+		assert_eq!(Staking::stakers(10), Exposure { total: 1000, own: 1000, others: vec![] });
+		assert_eq!(Staking::stakers(20), Exposure { total: 2000, own: 2000, others: vec![] });
 	});
 }
 
 
 #[test]
 fn note_null_offline_should_work() {
+	// Test the staking module works when no validators are offline
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
+		// Slashing begins for validators immediately if found offline
 		assert_eq!(Staking::offline_slash_grace(), 0);
+		// Account 10 has not been reported offline
+		assert_eq!(Staking::slash_count(&10), 0);
+		// Account 10 has `balance_factor` free balance
+		assert_eq!(Balances::free_balance(&10), 1);
+		// Nothing happens to Account 10, as expected
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 1);
-		System::set_extrinsic_index(1);
-		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Balances::free_balance(&10), 1);
+		// New era is not being forced
 		assert!(Staking::forcing_new_era().is_none());
 	});
 }
 
 #[test]
 fn invulnerability_should_work() {
+	// Test that users can be invulnerable from slashing or being kicked
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
+		// Make account 10 invulnerable
 		assert_ok!(Staking::set_invulnerables(vec![10]));
+		// Give account 10 some funds
 		Balances::set_free_balance(&10, 70);
+		// There is no slash grade period
 		assert_eq!(Staking::offline_slash_grace(), 0);
+		// Account 10 has not been slashed
 		assert_eq!(Staking::slash_count(&10), 0);
+		// Account 10 has the 70 funds we gave it above
 		assert_eq!(Balances::free_balance(&10), 70);
-		System::set_extrinsic_index(1);
+		// Set account 10 as an offline validator, should exit early if invulnerable
 		Staking::on_offline_validator(10, 1);
+		// Show that account 10 has not been touched
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 70);
-		assert!(Staking::forcing_new_era().is_none());
-	});
-}
-/*
-#[test]
-fn note_offline_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		Balances::set_free_balance(&10, 70);
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Balances::free_balance(&10), 70);
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		assert_eq!(Staking::slash_count(&10), 1);
-		assert_eq!(Balances::free_balance(&10), 50);
+		// New era not being forced
 		assert!(Staking::forcing_new_era().is_none());
 	});
 }
 
 #[test]
+fn note_offline_should_work() {
+	// Test that an offline validator gets slashed
+	// TODO: Confirm how much exponential factor should effect
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Give account 10 some balance
+		Balances::set_free_balance(&10, 1000);
+		println!("Stash Balance: {:?}", Balances::free_balance(&11));
+		// Validators get slashed immediately
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		// Unstake threshold is 3
+		assert_eq!(Staking::validators(&10).unstake_threshold, 3);
+		// Account 10 has not been slashed before
+		assert_eq!(Staking::slash_count(&10), 0);
+		// Account 10 has the funds we just gave it
+		assert_eq!(Balances::free_balance(&10), 1000);
+		// Report account 10 as offline, one greater than unstake threshold
+		Staking::on_offline_validator(10, 4);
+		// Confirm user has been reported
+		assert_eq!(Staking::slash_count(&10), 4);
+		// Confirm balance has been reduced by 2^unstake_threshold * current_offline_slash()
+		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * 20);
+		// A new era is forced due to slashing
+		assert!(Staking::forcing_new_era().is_some());
+		println!("Stash Balance After: {:?}", Balances::free_balance(&11));
+
+	});
+}
+/*
+#[test]
 fn note_offline_exponent_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		Balances::set_free_balance(&10, 150);
+	// Test that slashing penalty for offline increases exponentially
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Give account 10 some balance
+		Balances::set_free_balance(&10, 1000);
+		// Confirm initial conditions
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Balances::free_balance(&10), 150);
-		System::set_extrinsic_index(1);
+		assert_eq!(Balances::free_balance(&10), 1000);
+		// Have validator be offline = unstake_threshold
+		Staking::on_offline_validator(10, 3);
+		assert_eq!(Staking::slash_count(&10), 3);
+		let new_free_balance_1 = 1000 - 2_u64.pow(3) * 20;
+		assert_eq!(Balances::free_balance(&10), new_free_balance_1);
+		// Have validator be offline again
 		Staking::on_offline_validator(10, 1);
-		assert_eq!(Staking::slash_count(&10), 1);
-		assert_eq!(Balances::free_balance(&10), 130);
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		assert_eq!(Staking::slash_count(&10), 2);
-		assert_eq!(Balances::free_balance(&10), 90);
-		assert!(Staking::forcing_new_era().is_none());
+		// Slash count increases by one
+		assert_eq!(Staking::slash_count(&10), 3 + 1);
+		// Balance decreases exponentially
+		assert_eq!(Balances::free_balance(&10), new_free_balance_1 - 2_u64.pow(4) * 20);
+		// New era is forced due to slashing
+		assert!(Staking::forcing_new_era().is_some());
 	});
 }
 
@@ -301,7 +335,7 @@ fn slashing_should_work() {
 }*/
 
 
-
+/*
 #[test]
 fn staking_should_work() {
 	// should test: 
@@ -322,8 +356,10 @@ fn staking_should_work() {
 		System::set_block_number(1);
 		// 2 entities will state interest in validating
 		// account 1 controlled by 2, account 3 controlled by 4.
-		assert_ok!(Staking::bond_stash(Origin::signed(1), 2, 5));  // balance of 1 = 10, stashed = 5 
-		assert_ok!(Staking::bond_stash(Origin::signed(3), 4, 15)); // balance of 3 = 30, stashed = 15 
+		// 4 is stashing a lot more than 2 and even 10, it will become a validator.
+		// initial stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 5));  // balance of 1 = 10, stashed = 5 
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 150)); // balance of 3 = 300, stashed = 150 
 		
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
@@ -359,7 +395,7 @@ fn staking_should_work() {
 		System::set_block_number(4);
 
 		// unlock the entire stashed value.
-		Staking::unlock(Origin::signed(4), Staking::ledger(&4).unwrap().active);
+		Staking::unbond(Origin::signed(4), Staking::ledger(&4).unwrap().active).unwrap();
 		
 		Session::check_rotate_session(System::block_number());
 		// nothing should be changed so far.
@@ -378,10 +414,11 @@ fn staking_should_work() {
 		System::set_block_number(6);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators().contains(&4), false); 
+		println!("New validators (which should not have 4) are {:?}", Session::validators());
 	});
 }
 
-/*
+
 #[test]
 fn nominating_and_rewards_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
@@ -495,19 +532,31 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Balances::total_balance(&4), 30);		//slashed
 	});
 }
-
+*/
 #[test]
 fn double_staking_should_fail() {
-	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
+	// should test (in the same order):
+	// * an account already bonded as controller CAN be reused as the controller of another account.
+	// * an account already bonded as stash cannot be the controller of another account.
+	// * an account already bonded as stash cannot nominate.
+	// * an account already bonded as controller can nominate.
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1).sessions_per_era(2).build(), 
+	|| {
+		let arbitrary_value = 5;
 		System::set_block_number(1);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_noop!(Staking::stake(Origin::signed(1)), "Cannot stake if already staked.");
-		assert_noop!(Staking::nominate(Origin::signed(1), 1), "Cannot nominate if already staked.");
-		assert_ok!(Staking::nominate(Origin::signed(2), 1));
-		assert_noop!(Staking::stake(Origin::signed(2)), "Cannot stake if already nominating.");
-		assert_noop!(Staking::nominate(Origin::signed(2), 1), "Cannot nominate if already nominating.");
+		// 2 = controller, 1 stashed => ok
+		assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value));
+		// 2 = controller, 3 stashed (Note that 2 is reused.) => ok
+		assert_ok!(Staking::bond(Origin::signed(3), 2, arbitrary_value));
+		// 4 = not used so far, 1 stashed => not allowed.
+		assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value), "stash already bonded");
+		// 1 = stashed => attempting to nominate should fail.
+		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
+		// 2 = controller  => nominating should work.
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
 	});
-}*/
+}
 
 #[test]
 fn staking_eras_work() {
@@ -582,25 +631,38 @@ fn staking_eras_work() {
 	});
 }
 
-/*#[test]
-fn staking_balance_transfer_when_bonded_should_not_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		Balances::set_free_balance(&1, 111);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_noop!(Balances::transfer(Origin::signed(1), 2, 69), "cannot transfer illiquid funds");
-	});
-}
 
 #[test]
-fn deducting_balance_when_bonded_should_not_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		Balances::set_free_balance(&1, 111);
-		<Bondage<Test>>::insert(1, 2);
-		System::set_block_number(1);
-		assert_noop!(Balances::reserve(&1, 69), "cannot transfer illiquid funds");
+fn balance_transfer_when_bonded_should_not_work() {
+	// Tests that a stash account cannot transfer funds
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Confirm account 11 is stashed
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Confirm account 11 has some free balance
+		assert_eq!(Balances::free_balance(&11), 10);
+		Balances::set_free_balance(&11, 100);
+		// Confirm that account 11 cannot transfer any balance
+		// TODO: Figure out why we dont use the illiquid error 
+		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "stash with too much under management");
 	});
 }
 
+
+#[test]
+fn reserving_balance_when_bonded_should_not_work() {
+	// Checks that a bonded account cannot reserve balance from free balance
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Check that account 11 is stashed
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Confirm account 11 has some free balance
+		assert_eq!(Balances::free_balance(&11), 10);
+		// Confirm account 11 cannot reserve balance
+		// TODO: Figure out why we dont use the illiquid error
+		assert_noop!(Balances::reserve(&11, 1), "stash with too much under management");
+	});
+}
+
+/*
 #[test]
 fn slash_value_calculation_does_not_overflow() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {

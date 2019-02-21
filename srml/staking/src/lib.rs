@@ -720,6 +720,7 @@ impl<T: Trait> Module<T> {
 		let event = if new_slash_count > max_slashes {
 			// They're bailing.
 			let slash = Self::current_offline_slash()
+				// Multiply current_offline_slash by 2^unstake_threshold
 				.checked_shl(prefs.unstake_threshold)
 				.unwrap_or_else(Self::slot_stake);
 			let _ = Self::slash_validator(&v, slash);
