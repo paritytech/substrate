@@ -153,7 +153,7 @@ impl ExtBuilder {
 		t.extend(GenesisConfig::<Test>{
 			sessions_per_era: self.sessions_per_era,
 			current_era: self.current_era,
-			stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
+			stakers: vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)],
 			validator_count: 2,
 			minimum_validator_count: 0,
 			bonding_duration: self.sessions_per_era * self.session_length * 3,
