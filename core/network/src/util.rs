@@ -27,7 +27,7 @@ pub(crate) struct LruHashSet<T: Hash + Eq> {
 }
 
 impl<T: Hash + Eq> LruHashSet<T> {
-	/// Create a new `LruHashSet` with the given limit.
+	/// Create a new `LruHashSet` with the given (exclusive) limit.
 	pub(crate) fn new(limit: NonZeroUsize) -> Self {
 		Self { set: LinkedHashSet::new(), limit }
 	}
@@ -36,14 +36,15 @@ impl<T: Hash + Eq> LruHashSet<T> {
 	///
 	/// Returns `true` if this is a new element to the set, `false` otherwise.
 	/// Maintains the limit of the set by removing the oldest entry if necessary.
+	/// Inserting the same element will update its LRU position.
 	pub(crate) fn insert(&mut self, e: T) -> bool {
-		if self.set.len() == usize::from(self.limit) {
-			if self.set.contains(&e) {
-				return false
+		if self.set.insert(e) {
+			if self.set.len() == usize::from(self.limit) {
+				self.set.pop_front(); // remove oldest entry
 			}
-			self.set.pop_front(); // remove oldest entry
+			return true
 		}
-		self.set.insert(e)
+		false
 	}
 }
 
@@ -53,41 +54,23 @@ mod tests {
 
 	#[test]
 	fn maintains_limit() {
-		let two = NonZeroUsize::new(2).unwrap();
-		let mut set = LruHashSet::new(two);
+		let three = NonZeroUsize::new(3).unwrap();
+		let mut set = LruHashSet::<u8>::new(three);
 
 		// First element.
-		assert!(set.insert(1u8));
-		assert_eq!(1, set.set.len());
-		assert!(set.set.contains(&1));
-
-		// Inserting the same element multiple times has no effect.
-		assert!(!set.insert(1u8));
-		assert_eq!(1, set.set.len());
-		assert!(set.set.contains(&1));
+		assert!(set.insert(1));
+		assert_eq!(vec![&1], set.set.iter().collect::<Vec<_>>());
 
 		// Second element.
-		assert!(set.insert(2u8));
-		assert_eq!(2, set.set.len());
-		assert!(set.set.contains(&1));
-		assert!(set.set.contains(&2));
+		assert!(set.insert(2));
+		assert_eq!(vec![&1, &2], set.set.iter().collect::<Vec<_>>());
 
-		// Inserting the same element multiple times has no effect.
-		assert!(!set.insert(2u8));
-		assert_eq!(2, set.set.len());
-		assert!(set.set.contains(&1));
-		assert!(set.set.contains(&2));
+		// Inserting the same element updates its LRU position.
+		assert!(!set.insert(1));
+		assert_eq!(vec![&2, &1], set.set.iter().collect::<Vec<_>>());
 
 		// We reached the limit. The next element forces the oldest one out.
-		assert!(set.insert(3u8));
-		assert_eq!(2, set.set.len());
-		assert!(set.set.contains(&2));
-		assert!(set.set.contains(&3));
-
-		// Inserting the same element multiple times has no effect.
-		assert!(!set.insert(3u8));
-		assert_eq!(2, set.set.len());
-		assert!(set.set.contains(&2));
-		assert!(set.set.contains(&3));
+		assert!(set.insert(3));
+		assert_eq!(vec![&1, &3], set.set.iter().collect::<Vec<_>>());
 	}
 }
