@@ -322,8 +322,10 @@ fn staking_should_work() {
 		System::set_block_number(1);
 		// 2 entities will state interest in validating
 		// account 1 controlled by 2, account 3 controlled by 4.
-		assert_ok!(Staking::bond_stash(Origin::signed(1), 2, 5));  // balance of 1 = 10, stashed = 5 
-		assert_ok!(Staking::bond_stash(Origin::signed(3), 4, 15)); // balance of 3 = 30, stashed = 15 
+		// 4 is stashing a lot more than 2 and even 10, it will become a validator.
+		// initial stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 5));  // balance of 1 = 10, stashed = 5 
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 150)); // balance of 3 = 300, stashed = 150 
 		
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
@@ -359,7 +361,7 @@ fn staking_should_work() {
 		System::set_block_number(4);
 
 		// unlock the entire stashed value.
-		Staking::unlock(Origin::signed(4), Staking::ledger(&4).unwrap().active);
+		Staking::unbond(Origin::signed(4), Staking::ledger(&4).unwrap().active).unwrap();
 		
 		Session::check_rotate_session(System::block_number());
 		// nothing should be changed so far.
@@ -378,6 +380,7 @@ fn staking_should_work() {
 		System::set_block_number(6);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators().contains(&4), false); 
+		println!("New validators (which should not have 4) are {:?}", Session::validators());
 	});
 }
 
