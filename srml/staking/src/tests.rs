@@ -532,19 +532,31 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Balances::total_balance(&4), 30);		//slashed
 	});
 }
-
+*/
 #[test]
 fn double_staking_should_fail() {
-	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
+	// should test (in the same order):
+	// * an account already bonded as controller CAN be reused as the controller of another account.
+	// * an account already bonded as stash cannot be the controller of another account.
+	// * an account already bonded as stash cannot nominate.
+	// * an account already bonded as controller can nominate.
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1).sessions_per_era(2).build(), 
+	|| {
+		let arbitrary_value = 5;
 		System::set_block_number(1);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_noop!(Staking::stake(Origin::signed(1)), "Cannot stake if already staked.");
-		assert_noop!(Staking::nominate(Origin::signed(1), 1), "Cannot nominate if already staked.");
-		assert_ok!(Staking::nominate(Origin::signed(2), 1));
-		assert_noop!(Staking::stake(Origin::signed(2)), "Cannot stake if already nominating.");
-		assert_noop!(Staking::nominate(Origin::signed(2), 1), "Cannot nominate if already nominating.");
+		// 2 = controller, 1 stashed => ok
+		assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value));
+		// 2 = controller, 3 stashed (Note that 2 is reused.) => ok
+		assert_ok!(Staking::bond(Origin::signed(3), 2, arbitrary_value));
+		// 4 = not used so far, 1 stashed => not allowed.
+		assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value), "stash already bonded");
+		// 1 = stashed => attempting to nominate should fail.
+		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
+		// 2 = controller  => nominating should work.
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
 	});
-}*/
+}
 
 #[test]
 fn staking_eras_work() {
