@@ -60,8 +60,13 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
+// <<<<<<< HEAD
 	spec_version: 30,
 	impl_version: 30,
+// =======
+// 	spec_version: 29,
+// 	impl_version: 32,
+// >>>>>>> master
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -109,7 +114,6 @@ impl balances::Trait for Runtime {
 
 impl fees::Trait for Runtime {
 	type Event = Event;
-	type Amount = Balance;
 	type TransferAsset = Balances;
 }
 

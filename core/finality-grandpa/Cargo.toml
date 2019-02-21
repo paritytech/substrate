@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
+fork-tree = { path = "../../core/util/fork-tree" }
 futures = "0.1"
 log = "0.4"
 parking_lot = "0.7.1"

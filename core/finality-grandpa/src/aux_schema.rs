@@ -20,6 +20,7 @@ use parity_codec::{Encode, Decode};
 use parity_codec_derive::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, ErrorKind as ClientErrorKind};
+use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
 use substrate_primitives::Ed25519AuthorityId;
 use log::info;
@@ -73,18 +74,22 @@ struct V0AuthoritySet<H, N> {
 	pending_changes: Vec<V0PendingChange<H, N>>,
 }
 
-impl<H, N> Into<AuthoritySet<H, N>> for V0AuthoritySet<H, N> {
+impl<H, N> Into<AuthoritySet<H, N>> for V0AuthoritySet<H, N>
+where H: PartialEq,
+	  N: Ord,
+{
 	fn into(self) -> AuthoritySet<H, N> {
 		AuthoritySet {
 			current_authorities: self.current_authorities,
 			set_id: self.set_id,
-			pending_changes: self.pending_changes.into_iter().map(|old_change| PendingChange {
-				next_authorities: old_change.next_authorities,
-				delay: old_change.delay,
-				canon_height: old_change.canon_height,
-				canon_hash: old_change.canon_hash,
-				delay_kind: DelayKind::Finalized,
-			}).collect()
+			pending_changes: ForkTree::new(),
+			// pending_changes: self.pending_changes.into_iter().map(|old_change| PendingChange {
+			// 	next_authorities: old_change.next_authorities,
+			// 	delay: old_change.delay,
+			// 	canon_height: old_change.canon_height,
+			// 	canon_hash: old_change.canon_hash,
+			// 	delay_kind: DelayKind::Finalized,
+			// }).collect()
 		}
 	}
 }
@@ -117,8 +122,8 @@ pub(crate) fn load_persistent<B, H, N, G>(
 	-> ClientResult<PersistentData<H, N>>
 	where
 		B: AuxStore,
-		H: Decode + Encode + Clone,
-		N: Decode + Encode + Clone,
+		H: Decode + Encode + Clone + PartialEq,
+		N: Decode + Encode + Clone + Ord,
 		G: FnOnce() -> ClientResult<Vec<(Ed25519AuthorityId, u64)>>
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;

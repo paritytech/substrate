@@ -229,8 +229,6 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
 		let incoming = crate::communication::checked_message_stream::<Block, _>(
-			round,
-			self.set_id,
 			self.network.messages_for(round, self.set_id),
 			self.voters.clone(),
 		);
@@ -348,6 +346,7 @@ impl<Block: BlockT> From<GrandpaJustification<Block>> for JustificationOrCommit<
 /// Finalize the given block and apply any authority set changes. If an
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
+/// This method assumes that the block being finalized has already been imported.
 pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	client: &Client<B, E, Block, RA>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
@@ -361,145 +360,180 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
 {
-	// lock must be held through writing to DB to avoid race
-	let mut authority_set = authority_set.inner().write();
+	unimplemented!()
+// 	// lock must be held through writing to DB to avoid race
+// 	let mut authority_set = authority_set.inner().write();
 
-	// FIXME #1483: clone only when changed
-	let old_authority_set = authority_set.clone();
-	// holds the old consensus changes in case it is changed below, needed for
-	// reverting in case of failure
-	let mut old_consensus_changes = None;
+// 	// FIXME #1483: clone only when changed
+// 	let old_authority_set = authority_set.clone();
+// 	// holds the old consensus changes in case it is changed below, needed for
+// 	// reverting in case of failure
+// 	let mut old_consensus_changes = None;
 
-	let mut consensus_changes = consensus_changes.lock();
-	let canon_at_height = |canon_number| {
-		// "true" because the block is finalized
-		canonical_at_height(client, (hash, number), true, canon_number)
-	};
+// 	let mut consensus_changes = consensus_changes.lock();
+// // <<<<<<< HEAD
+// // 	let canon_at_height = |canon_number| {
+// // 		// "true" because the block is finalized
+// // 		canonical_at_height(client, (hash, number), true, canon_number)
+// // 	};
+// // =======
+// // 	let status = authority_set.apply_changes(
+// // 		hash,
+// // 		number,
+// // 		&is_descendent_of(client, None),
+// // 	).map_err(|e| Error::Safety(e.to_string()))?;
 
-	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
-		let status = authority_set.apply_standard_changes(number, &canon_at_height)?;
+// // 	if status.changed {
+// // 		// write new authority set state to disk.
+// // 		let encoded_set = authority_set.encode();
 
-		// check if this is this is the first finalization of some consensus changes
-		let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
-			.finalize((number, hash), &canon_at_height)?;
+// // 		let write_result = if let Some((ref canon_hash, ref canon_number)) = status.new_set_block {
+// // 			// we also overwrite the "last completed round" entry with a blank slate
+// // 			// because from the perspective of the finality gadget, the chain has
+// // 			// reset.
+// // 			let round_state = RoundState::genesis((*canon_hash, *canon_number));
+// // 			let last_completed: LastCompleted<_, _> = (0, round_state);
+// // 			let encoded = last_completed.encode();
 
-		if alters_consensus_changes {
-			old_consensus_changes = Some(consensus_changes.clone());
+// // 			old_last_completed = Backend::get_aux(&**client.backend(), LAST_COMPLETED_KEY)?;
 
-			let write_result = crate::aux_schema::update_consensus_changes(
-				&*consensus_changes,
-				|insert| client.apply_aux(import_op, insert, &[]),
-			);
+// // 			Backend::insert_aux(
+// // 				&**client.backend(),
+// // 				&[
+// // 					(AUTHORITY_SET_KEY, &encoded_set[..]),
+// // 					(LAST_COMPLETED_KEY, &encoded[..]),
+// // 				],
+// // 				&[]
+// // 			)
+// // 		} else {
+// // 			Backend::insert_aux(&**client.backend(), &[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
+// // 		};
+// // >>>>>>> master
 
-			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+// 	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
+// 		let status = authority_set.apply_standard_changes(number, &canon_at_height)?;
 
-				return Err(e.into());
-			}
-		}
+// 		// check if this is this is the first finalization of some consensus changes
+// 		let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
+// 			.finalize((number, hash), &canon_at_height)?;
 
-		// NOTE: this code assumes that honest voters will never vote past a
-		// transition block, thus we don't have to worry about the case where
-		// we have a transition with `effective_block = N`, but we finalize
-		// `N+1`. this assumption is required to make sure we store
-		// justifications for transition blocks which will be requested by
-		// syncing clients.
-		let justification = match justification_or_commit {
-			JustificationOrCommit::Justification(justification) => Some(justification.encode()),
-			JustificationOrCommit::Commit((round_number, commit)) => {
-				let mut justification_required =
-					// justification is always required when block that enacts new authorities
-					// set is finalized
-					status.new_set_block.is_some() ||
-					// justification is required when consensus changes are finalized
-					finalizes_consensus_changes;
+// 		if alters_consensus_changes {
+// 			old_consensus_changes = Some(consensus_changes.clone());
 
-				// justification is required every N blocks to be able to prove blocks
-				// finalization to remote nodes
-				if !justification_required {
-					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info()?.chain.finalized_number;
-						justification_required =
-							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
-							(last_finalized_number / justification_period != number / justification_period);
-					}
-				}
+// 			let write_result = crate::aux_schema::update_consensus_changes(
+// 				&*consensus_changes,
+// 				|insert| client.apply_aux(import_op, insert, &[]),
+// 			);
 
-				if justification_required {
-					let justification = GrandpaJustification::from_commit(
-						client,
-						round_number,
-						commit,
-					)?;
+// 			if let Err(e) = write_result {
+// 				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
+// 				warn!(target: "finality", "Node is in a potentially inconsistent state.");
 
-					Some(justification.encode())
-				} else {
-					None
-				}
-			},
-		};
+// 				return Err(e.into());
+// 			}
+// 		}
 
-		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
+// 		// NOTE: this code assumes that honest voters will never vote past a
+// 		// transition block, thus we don't have to worry about the case where
+// 		// we have a transition with `effective_block = N`, but we finalize
+// 		// `N+1`. this assumption is required to make sure we store
+// 		// justifications for transition blocks which will be requested by
+// 		// syncing clients.
+// 		let justification = match justification_or_commit {
+// 			JustificationOrCommit::Justification(justification) => Some(justification.encode()),
+// 			JustificationOrCommit::Commit((round_number, commit)) => {
+// 				let mut justification_required =
+// 					// justification is always required when block that enacts new authorities
+// 					// set is finalized
+// 					status.new_set_block.is_some() ||
+// 					// justification is required when consensus changes are finalized
+// 					finalizes_consensus_changes;
 
-		// ideally some handle to a synchronization oracle would be used
-		// to avoid unconditionally notifying.
-		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
-			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
-			e
-		})?;
+// 				// justification is required every N blocks to be able to prove blocks
+// 				// finalization to remote nodes
+// 				if !justification_required {
+// 					if let Some(justification_period) = justification_period {
+// 						let last_finalized_number = client.info()?.chain.finalized_number;
+// 						justification_required =
+// 							(!last_finalized_number.is_zero() || number - last_finalized_number == justification_period) &&
+// 							(last_finalized_number / justification_period != number / justification_period);
+// 					}
+// 				}
 
-		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
-			// the authority set has changed.
-			let (new_id, set_ref) = authority_set.current();
+// 				if justification_required {
+// 					let justification = GrandpaJustification::from_commit(
+// 						client,
+// 						round_number,
+// 						commit,
+// 					)?;
 
-			if set_ref.len() > 16 {
-				info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
-			} else {
-				info!("Applying GRANDPA set change to new set {:?}", set_ref);
-			}
+// 					Some(justification.encode())
+// 				} else {
+// 					None
+// 				}
+// 			},
+// 		};
 
-			Some(NewAuthoritySet {
-				canon_hash,
-				canon_number,
-				set_id: new_id,
-				authorities: set_ref.to_vec(),
-			})
-		} else {
-			None
-		};
+// 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
 
-		if status.changed {
-			let write_result = crate::aux_schema::update_authority_set(
-				&authority_set,
-				new_authorities.as_ref(),
-				|insert| client.apply_aux(import_op, insert, &[]),
-			);
+// 		// ideally some handle to a synchronization oracle would be used
+// 		// to avoid unconditionally notifying.
+// 		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
+// 			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+// 			e
+// 		})?;
 
-			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
-				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+// 		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
+// 			// the authority set has changed.
+// 			let (new_id, set_ref) = authority_set.current();
 
-				return Err(e.into());
-			}
-		}
+// 			if set_ref.len() > 16 {
+// 				info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
+// 			} else {
+// 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
+// 			}
 
-		Ok(new_authorities.map(VoterCommand::ChangeAuthorities))
-	});
+// 			Some(NewAuthoritySet {
+// 				canon_hash,
+// 				canon_number,
+// 				set_id: new_id,
+// 				authorities: set_ref.to_vec(),
+// 			})
+// 		} else {
+// 			None
+// 		};
 
-	match update_res {
-		Ok(Some(command)) => Err(CommandOrError::VoterCommand(command)),
-		Ok(None) => Ok(()),
-		Err(e) => {
-			*authority_set = old_authority_set;
+// 		if status.changed {
+// 			let write_result = crate::aux_schema::update_authority_set(
+// 				&authority_set,
+// 				new_authorities.as_ref(),
+// 				|insert| client.apply_aux(import_op, insert, &[]),
+// 			);
 
-			if let Some(old_consensus_changes) = old_consensus_changes {
-				*consensus_changes = old_consensus_changes;
-			}
+// 			if let Err(e) = write_result {
+// 				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
+// 				warn!(target: "finality", "Node is in a potentially inconsistent state.");
 
-			Err(CommandOrError::Error(e))
-		}
-	}
+// 				return Err(e.into());
+// 			}
+// 		}
+
+// 		Ok(new_authorities.map(VoterCommand::ChangeAuthorities))
+// 	});
+
+// 	match update_res {
+// 		Ok(Some(command)) => Err(CommandOrError::VoterCommand(command)),
+// 		Ok(None) => Ok(()),
+// 		Err(e) => {
+// 			*authority_set = old_authority_set;
+
+// 			if let Some(old_consensus_changes) = old_consensus_changes {
+// 				*consensus_changes = old_consensus_changes;
+// 			}
+
+// 			Err(CommandOrError::Error(e))
+// 		}
+// 	}
 }
 
 /// Using the given base get the block at the given height on this chain. The
@@ -551,4 +585,42 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	}
 
 	Ok(Some(current.hash()))
+}
+
+/// Returns a function for checking block ancestry, the returned function will
+/// return `true` if the given hash (second parameter) is a descendent of the
+/// base (first parameter). If the `current` parameter is defined, it should
+/// represent the current block `hash` and its `parent hash`, if given the
+/// function that's returned will assume that `hash` isn't part of the local DB
+/// yet, and all searches in the DB will instead reference the parent.
+pub fn is_descendent_of<'a, B, E, Block: BlockT<Hash=H256>, RA>(
+	client: &'a Client<B, E, Block, RA>,
+	current: Option<(&'a H256, &'a H256)>,
+) -> impl Fn(&H256, &H256) -> Result<bool, client::error::Error> + 'a
+where B: Backend<Block, Blake2Hasher>,
+	  E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
+{
+	move |base, hash| {
+		if base == hash { return Ok(false); }
+
+		let mut hash = hash;
+		if let Some((current_hash, current_parent_hash)) = current {
+			if base == current_hash { return Ok(false); }
+			if hash == current_hash {
+				if base == current_parent_hash {
+					return Ok(true);
+				} else {
+					hash = current_parent_hash;
+				}
+			}
+		}
+
+		let tree_route = client::blockchain::tree_route(
+			client.backend().blockchain(),
+			BlockId::Hash(*hash),
+			BlockId::Hash(*base),
+		)?;
+
+		Ok(tree_route.common_block().hash == *base)
+	}
 }

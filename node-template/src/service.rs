@@ -84,8 +84,6 @@ construct_service_factory! {
 			{ |config, executor| <LightComponents<Factory>>::new(config, executor) },
 		FullImportQueue = AuraImportQueue<
 			Self::Block,
-			FullClient<Self>,
-			NothingExtra,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self> , client: Arc<FullClient<Self>>|
 				import_queue(
@@ -99,8 +97,6 @@ construct_service_factory! {
 			},
 		LightImportQueue = AuraImportQueue<
 			Self::Block,
-			LightClient<Self>,
-			NothingExtra,
 		>
 			{ |config: &mut FactoryFullConfiguration<Self>, client: Arc<LightClient<Self>>|
 				import_queue(
