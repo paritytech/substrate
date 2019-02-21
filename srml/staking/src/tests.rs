@@ -619,25 +619,38 @@ fn staking_eras_work() {
 	});
 }
 
-/*#[test]
-fn staking_balance_transfer_when_bonded_should_not_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		Balances::set_free_balance(&1, 111);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_noop!(Balances::transfer(Origin::signed(1), 2, 69), "cannot transfer illiquid funds");
-	});
-}
 
 #[test]
-fn deducting_balance_when_bonded_should_not_work() {
-	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		Balances::set_free_balance(&1, 111);
-		<Bondage<Test>>::insert(1, 2);
-		System::set_block_number(1);
-		assert_noop!(Balances::reserve(&1, 69), "cannot transfer illiquid funds");
+fn balance_transfer_when_bonded_should_not_work() {
+	// Tests that a stash account cannot transfer funds
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Confirm account 11 is stashed
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Confirm account 11 has some free balance
+		assert_eq!(Balances::free_balance(&11), 10);
+		Balances::set_free_balance(&11, 100);
+		// Confirm that account 11 cannot transfer any balance
+		// TODO: Figure out why we dont use the illiquid error 
+		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "stash with too much under management");
 	});
 }
 
+
+#[test]
+fn reserving_balance_when_bonded_should_not_work() {
+	// Checks that a bonded account cannot reserve balance from free balance
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Check that account 11 is stashed
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Confirm account 11 has some free balance
+		assert_eq!(Balances::free_balance(&11), 10);
+		// Confirm account 11 cannot reserve balance
+		// TODO: Figure out why we dont use the illiquid error
+		assert_noop!(Balances::reserve(&11, 1), "stash with too much under management");
+	});
+}
+
+/*
 #[test]
 fn slash_value_calculation_does_not_overflow() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
