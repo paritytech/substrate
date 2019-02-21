@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use log::{trace, debug};
+use log::{debug, trace, warn};
 use crate::protocol::Context;
+use fork_tree::ForkTree;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
 use consensus::BlockOrigin;
@@ -65,9 +66,13 @@ enum PeerSyncState<B: BlockT> {
 /// Pending justification request for the given block (hash and number).
 type PendingJustification<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
-/// Manages pending block justification requests.
+/// Manages pending block justification requests. Multiple justifications may be
+/// requested for competing forks, or for the same branch at different
+/// (increasing) heights. This structure will guarantee that justifications are
+/// fetched in-order, and that obsolete changes are pruned (when finalizing a
+/// competing fork).
 struct PendingJustifications<B: BlockT> {
-	justifications: HashSet<PendingJustification<B>>,
+	justifications: ForkTree<B::Hash, NumberFor<B>, ()>,
 	pending_requests: VecDeque<PendingJustification<B>>,
 	peer_requests: HashMap<NodeIndex, PendingJustification<B>>,
 	previous_requests: HashMap<PendingJustification<B>, Vec<(NodeIndex, Instant)>>,
@@ -76,7 +81,7 @@ struct PendingJustifications<B: BlockT> {
 impl<B: BlockT> PendingJustifications<B> {
 	fn new() -> PendingJustifications<B> {
 		PendingJustifications {
-			justifications: HashSet::new(),
+			justifications: ForkTree::new(),
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),
@@ -183,11 +188,26 @@ impl<B: BlockT> PendingJustifications<B> {
 	}
 
 	/// Queue a justification request (without dispatching it).
-	fn queue_request(&mut self, justification: &PendingJustification<B>) {
-		if !self.justifications.insert(*justification) {
-			return;
-		}
-		self.pending_requests.push_back(*justification);
+	fn queue_request<F>(
+		&mut self,
+		justification: &PendingJustification<B>,
+		is_descendent_of: F,
+	) where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError> {
+		match self.justifications.import(justification.0.clone(), justification.1.clone(), (), &is_descendent_of) {
+			Ok(true) => {
+				// this is a new root so we add it to the current `pending_requests`
+				self.pending_requests.push_back((justification.0, justification.1));
+			},
+			Err(err) => {
+				warn!(target: "sync", "Failed to insert requested justification {:?} {:?} into tree: {:?}",
+					justification.0,
+					justification.1,
+					err,
+				);
+				return;
+			},
+			_ => {},
+		};
 	}
 
 	/// Retry any pending request if a peer disconnected.
@@ -202,8 +222,20 @@ impl<B: BlockT> PendingJustifications<B> {
 	fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		let request = (hash, number);
 		if success {
-			self.justifications.remove(&request);
-			self.previous_requests.remove(&request);
+			if self.justifications.finalize_root(&request.0).is_none() {
+				warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
+					  request.0,
+					  request.1,
+					  self.justifications.roots().collect::<Vec<_>>(),
+				);
+				return;
+			};
+
+			self.previous_requests.clear();
+			self.peer_requests.clear();
+			self.pending_requests =
+				self.justifications.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
+
 			return;
 		}
 		self.pending_requests.push_front(request);
@@ -226,6 +258,7 @@ impl<B: BlockT> PendingJustifications<B> {
 				import_queue.import_justification(who.clone(), request.0, request.1, justification);
 				return
 			}
+
 			self.previous_requests
 				.entry(request)
 				.or_insert(Vec::new())
@@ -236,11 +269,25 @@ impl<B: BlockT> PendingJustifications<B> {
 
 	/// Removes any pending justification requests for blocks lower than the
 	/// given best finalized.
-	fn collect_garbage(&mut self, best_finalized: NumberFor<B>) {
-		self.justifications.retain(|(_, n)| *n > best_finalized);
-		self.pending_requests.retain(|(_, n)| *n > best_finalized);
-		self.peer_requests.retain(|_, (_, n)| *n > best_finalized);
-		self.previous_requests.retain(|(_, n), _| *n > best_finalized);
+	fn on_block_finalized<F>(
+		&mut self,
+		best_finalized_hash: &B::Hash,
+		best_finalized_number: NumberFor<B>,
+		is_descendent_of: F,
+	) -> Result<(), fork_tree::Error<ClientError>>
+		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
+	{
+		use std::collections::HashSet;
+
+		self.justifications.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+
+		let roots = self.justifications.roots().collect::<HashSet<_>>();
+
+		self.pending_requests.retain(|(h, n)| roots.contains(&(h, n, &())));
+		self.peer_requests.retain(|_, (h, n)| roots.contains(&(h, n, &())));
+		self.previous_requests.retain(|(h, n), _| roots.contains(&(h, n, &())));
+
+		Ok(())
 	}
 }
 
@@ -579,7 +626,11 @@ impl<B: BlockT> ChainSync<B> {
 	///
 	/// Queues a new justification request and tries to dispatch all pending requests.
 	pub fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
-		self.justifications.queue_request(&(*hash, number));
+		self.justifications.queue_request(
+			&(*hash, number),
+			|base, block| protocol.client().is_descendent_of(base, block),
+		);
+
 		self.justifications.dispatch(&mut self.peers, protocol);
 	}
 
@@ -598,8 +649,14 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	/// Notify about finalization of the given block.
-	pub fn block_finalized(&mut self, _hash: &B::Hash, number: NumberFor<B>) {
-		self.justifications.collect_garbage(number);
+	pub fn on_block_finalized(&mut self, hash: &B::Hash, number: NumberFor<B>, protocol: &mut Context<B>) {
+		if let Err(err) = self.justifications.on_block_finalized(
+			hash,
+			number,
+			|base, block| protocol.client().is_descendent_of(base, block),
+		) {
+			warn!(target: "sync", "Error cleaning up pending justification requests: {:?}", err);
+		};
 	}
 
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {

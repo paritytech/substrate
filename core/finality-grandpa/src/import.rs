@@ -38,7 +38,7 @@ use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 use crate::{AUTHORITY_SET_KEY, Error};
 use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::environment::{canonical_at_height, finalize_block, ExitOrError, NewAuthoritySet};
+use crate::environment::{finalize_block, is_descendent_of, ExitOrError, NewAuthoritySet};
 use crate::justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.
@@ -78,7 +78,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 		};
 
 		// request justifications for all pending changes for which change blocks have already been imported
-		for pending_change in self.authority_set.inner().read().pending_changes() {
+		let authorities = self.authority_set.inner().read();
+		for pending_change in authorities.pending_changes() {
 			if pending_change.effective_number() > chain_info.finalized_number &&
 				pending_change.effective_number() <= chain_info.best_number
 			{
@@ -128,7 +129,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		use client::blockchain::HeaderBackend;
 
 		let hash = block.post_header().hash();
-		let number = block.header.number().clone();
+		let parent_hash = *block.header.parent_hash();
+		let number = *block.header.number();
 
 		// early exit if block already in chain, otherwise the check for
 		// authority changes will error when trying to re-import a change block
@@ -139,7 +141,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		}
 
 		let maybe_change = self.api.runtime_api().grandpa_pending_change(
-			&BlockId::hash(*block.header.parent_hash()),
+			&BlockId::hash(parent_hash),
 			&block.header.digest().clone(),
 		);
 
@@ -151,38 +153,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
 		// the old authority set on error.
+		let is_descendent_of = is_descendent_of(&self.inner, Some((&hash, &parent_hash)));
 		let just_in_case = if let Some(change) = maybe_change {
-			let parent_hash = *block.header.parent_hash();
-
 			let mut authorities = self.authority_set.inner().write();
 			let old_set = authorities.clone();
-
-			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
-				let error = || {
-					debug!(target: "afg", "rejecting change: {} is in the same chain as {}", hash, base);
-					Err(ConsensusErrorKind::ClientImport("Incorrect base hash".to_string()).into())
-				};
-
-				if *base == hash { return error(); }
-				if *base == parent_hash { return error(); }
-
-				let tree_route = blockchain::tree_route(
-					self.inner.backend().blockchain(),
-					BlockId::Hash(parent_hash),
-					BlockId::Hash(*base),
-				);
-
-				let tree_route = match tree_route {
-					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-					Ok(route) => route,
-				};
-
-				if tree_route.common_block().hash == *base {
-					return error();
-				}
-
-				Ok(())
-			};
 
 			authorities.add_pending_change(
 				PendingChange {
@@ -191,8 +165,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					canon_height: number,
 					canon_hash: hash,
 				},
-				is_equal_or_descendent_of,
-			)?;
+				&is_descendent_of,
+			).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
 
 			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
 			Some((old_set, authorities))
@@ -226,9 +200,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			}
 		};
 
-		let enacts_change = self.authority_set.inner().read().enacts_change(number, |canon_number| {
-			canonical_at_height(&self.inner, (hash, number), canon_number)
-		}).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
+		let enacts_change = self.authority_set.inner().read().enacts_change(
+			hash,
+			number,
+			&is_descendent_of,
+		).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
 
 		if !enacts_change && !enacts_consensus_change {
 			return Ok(import_result);
@@ -340,6 +316,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA>
 					Error::Network(error) => ConsensusErrorKind::ClientImport(error),
 					Error::Blockchain(error) => ConsensusErrorKind::ClientImport(error),
 					Error::Client(error) => ConsensusErrorKind::ClientImport(error.to_string()),
+					Error::Safety(error) => ConsensusErrorKind::ClientImport(error),
 					Error::Timer(error) => ConsensusErrorKind::ClientImport(error.to_string()),
 				}.into());
 			},

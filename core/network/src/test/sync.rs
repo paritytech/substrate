@@ -80,11 +80,46 @@ fn sync_justifications() {
 	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
 	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
 
-	// we finalize block #10 for peer 0 with a justification
+	// we finalize block #10, #15 and #20 for peer 0 with a justification
 	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(15), Some(Vec::new()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(20), Some(Vec::new()), true).unwrap();
 
-	let header = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
-	net.peer(1).request_justification(&header.hash().into(), 10);
+	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
+	let h2 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap();
+	let h3 = net.peer(1).client().header(&BlockId::Number(20)).unwrap().unwrap();
+
+	// peer 1 should get the justifications from the network
+	net.peer(1).request_justification(&h1.hash().into(), 10);
+	net.peer(1).request_justification(&h2.hash().into(), 15);
+	net.peer(1).request_justification(&h3.hash().into(), 20);
+
+	net.sync();
+
+	for height in (10..21).step_by(5) {
+		assert_eq!(net.peer(0).client().justification(&BlockId::Number(height)).unwrap(), Some(Vec::new()));
+		assert_eq!(net.peer(1).client().justification(&BlockId::Number(height)).unwrap(), Some(Vec::new()));
+	}
+}
+
+#[test]
+fn sync_justifications_across_forks() {
+	let _ = ::env_logger::try_init();
+	let mut net = JustificationTestNet::new(3);
+	// we push 5 blocks
+	net.peer(0).push_blocks(5, false);
+	// and then two forks 5 and 6 blocks long
+	let f1_best = net.peer(0).push_blocks_at(BlockId::Number(5), 5, false);
+	let f2_best = net.peer(0).push_blocks_at(BlockId::Number(5), 6, false);
+
+	// peer 1 will only see the longer fork. but we'll request justifications
+	// for both and finalize the small fork instead.
+	net.sync();
+
+	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), true).unwrap();
+
+	net.peer(1).request_justification(&f1_best, 10);
+	net.peer(1).request_justification(&f2_best, 11);
 
 	net.sync();
 

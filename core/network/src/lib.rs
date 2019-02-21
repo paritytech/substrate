@@ -44,7 +44,7 @@ pub use network_libp2p::{
     NodeIndex, ProtocolId, Severity, Protocol, Multiaddr,
     obtain_private_key, multiaddr, PeerId, PublicKey
 };
-pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
+pub use message::{generic as generic_message, RequestId, Status as StatusMessage, ConsensusEngineId};
 pub use error::Error;
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
 #[doc(hidden)]
