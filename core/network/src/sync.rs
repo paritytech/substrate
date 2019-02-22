@@ -797,6 +797,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.blocks.clear_peer_download(who);
 		self.peers.remove(&who);
 		if self.peers.len() == 0 {
+			// We're not connected to any peer anymore.
 			self.is_offline.store(true, Ordering::Relaxed);
 		}
 		let current_best_seen = self.best_seen_block();
