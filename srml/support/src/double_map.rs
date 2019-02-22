@@ -19,6 +19,7 @@
 use crate::rstd::prelude::*;
 use crate::codec::{Codec, Encode};
 use crate::storage::unhashed;
+use sr_std::borrow::Borrow;
 
 /// An implementation of a map with a two keys.
 ///
@@ -38,34 +39,66 @@ pub trait StorageDoubleMap {
 	const PREFIX: &'static [u8];
 
 	/// Insert an entry into this map.
-	fn insert(k1: Self::Key1, k2: Self::Key2, val: Self::Value) {
+	fn insert<Q, R>(k1: &Q, k2: &R, val: Self::Value)
+	where
+		Self::Key1: Borrow<Q>,
+		Self::Key2: Borrow<R>,
+		Q: Codec,
+		R: Codec
+	{
 		unhashed::put(&Self::full_key(k1, k2)[..], &val);
 	}
 
 	/// Remove an entry from this map.
-	fn remove(k1: Self::Key1, k2: Self::Key2) {
+	fn remove<Q, R>(k1: &Q, k2: &R)
+	where
+		Self::Key1: Borrow<Q>,
+		Self::Key2: Borrow<R>,
+		Q: Codec,
+		R: Codec
+	{
 		unhashed::kill(&Self::full_key(k1, k2)[..]);
 	}
 
 	/// Get an entry from this map.
 	///
 	/// If there is entry stored under the given keys, returns `None`.
-	fn get(k1: Self::Key1, k2: Self::Key2) -> Option<Self::Value> {
+	fn get<Q, R>(k1: &Q, k2: &R) -> Option<Self::Value>
+	where
+		Self::Key1: Borrow<Q>,
+		Self::Key2: Borrow<R>,
+		Q: Codec,
+		R: Codec
+	{
 		unhashed::get(&Self::full_key(k1, k2)[..])
 	}
 
 	/// Returns `true` if value under the specified keys exists.
-	fn exists(k1: Self::Key1, k2: Self::Key2) -> bool {
+	fn exists<Q, R>(k1: &Q, k2: &R) -> bool
+	where
+		Self::Key1: Borrow<Q>,
+		Self::Key2: Borrow<R>,
+		Q: Codec,
+		R: Codec
+	{
 		unhashed::exists(&Self::full_key(k1, k2)[..])
 	}
 
 	/// Removes all entries that shares the `k1` as the first key.
-	fn remove_prefix(k1: Self::Key1) {
+	fn remove_prefix<Q>(k1: &Q)
+	where
+		Self::Key1: Borrow<Q>,
+		Q: Codec
+	{
 		unhashed::kill_prefix(&Self::derive_key1(Self::encode_key1(k1)))
 	}
 
 	/// Encode key1 into Vec<u8> and prepend a prefix
-	fn encode_key1(key: Self::Key1) -> Vec<u8> {
+	fn encode_key1<Q>(key: &Q) -> Vec<u8>
+	where
+		Self::Key1: Borrow<Q>,
+		Q: Codec
+	{
 		let mut raw_prefix = Vec::new();
 		raw_prefix.extend(Self::PREFIX);
 		raw_prefix.extend(Encode::encode(&key));
@@ -73,7 +106,11 @@ pub trait StorageDoubleMap {
 	}
 
 	/// Encode key2 into Vec<u8>
-	fn encode_key2(key: Self::Key2) -> Vec<u8> {
+	fn encode_key2<R>(key: &R) -> Vec<u8>
+	where
+		Self::Key2: Borrow<R>,
+		R: Codec
+	{
 		Encode::encode(&key)
 	}
 
@@ -85,7 +122,13 @@ pub trait StorageDoubleMap {
 
 	/// Returns a compound key that consist of the two parts: (prefix, `k1`) and `k2`.
 	/// The first part is hased and then concatenated with a hash of `k2`.
-	fn full_key(k1: Self::Key1, k2: Self::Key2) -> Vec<u8> {
+	fn full_key<Q, R>(k1: &Q, k2: &R) -> Vec<u8>
+	where
+		Self::Key1: Borrow<Q>,
+		Self::Key2: Borrow<R>,
+		Q: Codec,
+		R: Codec
+	{
 		let key1_data = Self::encode_key1(k1);
 		let key2_data = Self::encode_key2(k2);
 		let mut key = Self::derive_key1(key1_data);
