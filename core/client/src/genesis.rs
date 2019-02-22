@@ -43,7 +43,7 @@ mod tests {
 	use parity_codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
 	use executor::{NativeExecutionDispatch, native_executor_instance};
-	use state_machine::{execute, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
+	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
@@ -86,35 +86,38 @@ mod tests {
 		let hash = header.hash();
 		let mut overlay = OverlayedChanges::default();
 
-		execute(
+		state_machine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"Core_initialise_block",
 			&header.encode(),
+		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 
 		for tx in transactions.iter() {
-			execute(
+			state_machine::new(
 				backend,
 				Some(&InMemoryChangesTrieStorage::new()),
 				&mut overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
+			).execute(
 				ExecutionStrategy::NativeElseWasm,
 			).unwrap();
 		}
 
-		let (ret_data, _, _) = execute(
+		let (ret_data, _, _) = state_machine::new(
 			backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"BlockBuilder_finalise_block",
 			&[],
+		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
@@ -152,13 +155,14 @@ mod tests {
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
-		let _ = execute(
+		let _ = state_machine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 	}
@@ -177,13 +181,14 @@ mod tests {
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
-		let _ = execute(
+		let _ = state_machine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,
+		).execute(
 			ExecutionStrategy::AlwaysWasm,
 		).unwrap();
 	}
@@ -203,13 +208,14 @@ mod tests {
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
-		let _ = execute(
+		let _ = state_machine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&Executor::new(None),
 			"Core_execute_block",
 			&b1data,
+		).execute(
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 	}
