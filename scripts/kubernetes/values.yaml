@@ -37,9 +37,9 @@ validator:
   # validator.keys) which has the following format:
   #
   # substrate-0-key <key-seed>
-  # substrate-0-node-key <key-seed>
+  # substrate-0-node-key <node-secret-key>
   # substrate-1-key <key-seed>
-  # substrate-1-node-key <key-seed>
+  # substrate-1-node-key <node-secret-key>
   #
   # pod names are canonical. changing these or providing different amount of 
   # keys than the replicas count will lead to behaviour noone ever has 

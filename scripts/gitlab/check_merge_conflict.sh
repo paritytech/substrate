@@ -45,7 +45,7 @@ EOT
 
 test "${mergeable}" = "true" && echo "|  yes, it is." && exit 0
 
-if [ "${baseref}" = "null" -a "${baserepo}" = "null" ]
+if [ "${baseref}" = "null" -o "${baserepo}" = "null" ]
 then
 	echo "| either connectivity issues with github or pull request not existant"
 	exit 3
