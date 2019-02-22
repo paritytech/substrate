@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{io, thread};
-use log::{warn, debug, error, trace};
+use log::{warn, debug, error, trace, info};
 use futures::{Async, Future, Stream, stream, sync::oneshot};
 use parking_lot::Mutex;
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
@@ -509,7 +509,10 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 			},
 			NetworkMsg::ReportPeer(who, severity) => {
 				match severity {
-					Severity::Bad(_) => network_service_2.lock().ban_node(who),
+					Severity::Bad(message) => {
+						info!(target: "sync", "Banning {:?} because {:?}", who, message);
+						network_service_2.lock().ban_node(who)
+					},
 					Severity::Useless(_) => network_service_2.lock().drop_node(who),
 					Severity::Timeout => network_service_2.lock().drop_node(who),
 				}
