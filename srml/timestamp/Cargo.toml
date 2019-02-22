@@ -17,8 +17,8 @@ system = { package = "srml-system", path = "../system", default-features = false
 consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = true }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+substrate-primitives = { path = "../../core/primitives" }
 
 [features]
 default = ["std"]

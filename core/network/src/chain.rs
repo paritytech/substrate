@@ -68,6 +68,9 @@ pub trait Client<Block: BlockT>: Send + Sync {
 		max: Block::Hash,
 		key: &StorageKey
 	) -> Result<ChangesProof<Block::Header>, Error>;
+
+	/// Returns `true` if the given `block` is a descendent of `base`.
+	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error>;
 }
 
 impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
@@ -128,5 +131,19 @@ impl<B, E, Block, RA> Client<Block> for SubstrateClient<B, E, Block, RA> where
 		key: &StorageKey
 	) -> Result<ChangesProof<Block::Header>, Error> {
 		(self as &SubstrateClient<B, E, Block, RA>).key_changes_proof(first, last, min, max, key)
+	}
+
+	fn is_descendent_of(&self, base: &Block::Hash, block: &Block::Hash) -> Result<bool, Error> {
+		if base == block {
+			return Ok(false);
+		}
+
+		let tree_route = ::client::blockchain::tree_route(
+			self.backend().blockchain(),
+			BlockId::Hash(*block),
+			BlockId::Hash(*base),
+		)?;
+
+		Ok(tree_route.common_block().hash == *base)
 	}
 }

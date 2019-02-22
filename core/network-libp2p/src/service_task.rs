@@ -22,7 +22,7 @@ use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, multiaddr};
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, build_multiaddr};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
 use log::{debug, info, warn};
@@ -88,8 +88,8 @@ where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
 				// If the format of the bootstrap node is not a multiaddr, try to parse it as
 				// a `SocketAddr`. This corresponds to the format `IP:PORT`.
 				let addr = match bootnode.parse::<SocketAddr>() {
-					Ok(SocketAddr::V4(socket)) => multiaddr![Ip4(*socket.ip()), Tcp(socket.port())],
-					Ok(SocketAddr::V6(socket)) => multiaddr![Ip6(*socket.ip()), Tcp(socket.port())],
+					Ok(SocketAddr::V4(socket)) => build_multiaddr![Ip4(*socket.ip()), Tcp(socket.port())],
+					Ok(SocketAddr::V6(socket)) => build_multiaddr![Ip6(*socket.ip()), Tcp(socket.port())],
 					_ => {
 						warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode);
 						continue

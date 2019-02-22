@@ -17,8 +17,8 @@ system = { package = "srml-system", path = "../system", default-features = false
 balances = { package = "srml-balances", path = "../balances", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io" }
+substrate-primitives = { path = "../../core/primitives" }
 
 [features]
 default = ["std"]
