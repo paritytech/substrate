@@ -1,0 +1,10 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: substrate
+spec:
+  selector:
+    matchLabels:
+      app: substrate
+  maxUnavailable: 1
+
