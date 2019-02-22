@@ -402,7 +402,8 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Handle new connected peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
-		// Initialize some variables to determine if is_offline or is_major_syncing changed,
+		// Initialize some variables to determine if
+		// is_offline or is_major_syncing should be updated
 		// after processing this new peer.
 		let previous_len = self.peers.len();
 		let previous_best_seen = self.best_seen_block();
