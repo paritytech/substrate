@@ -15,13 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use libp2p::{InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport, mplex, secio, yamux, tcp, dns, websocket};
+use libp2p::{
+	InboundUpgradeExt, OutboundUpgradeExt, PeerId, Transport,
+	mplex, secio, yamux, tcp, dns, websocket, bandwidth
+};
 use libp2p::core::{self, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use std::{io, sync::Arc, time::Duration, usize};
 
 pub use self::bandwidth::BandwidthSinks;
-
-mod bandwidth;
 
 /// Builds the transport that serves as a common ground for all connections.
 ///
@@ -37,7 +38,7 @@ pub fn build_transport(
 	let transport = tcp::TcpConfig::new();
 	let transport = websocket::WsConfig::new(transport.clone()).or_transport(transport);
 	let transport = dns::DnsConfig::new(transport);
-	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, 5);
+	let (transport, sinks) = bandwidth::BandwidthLogging::new(transport, Duration::from_secs(5));
 
 	// TODO: rework the transport creation (https://github.com/libp2p/rust-libp2p/issues/783)
 	let transport = transport

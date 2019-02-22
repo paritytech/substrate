@@ -16,7 +16,7 @@
 
 use futures::{future, stream, prelude::*, try_ready};
 use std::{io, iter};
-use substrate_network_libp2p::{CustomMessage, ServiceEvent, multiaddr};
+use substrate_network_libp2p::{CustomMessage, Protocol, ServiceEvent, build_multiaddr};
 
 /// Builds two services. The second one and further have the first one as its bootstrap node.
 /// This is to be used only for testing, and a panic will happen if something goes wrong.
@@ -29,12 +29,12 @@ fn build_nodes<TMsg>(num: usize) -> Vec<substrate_network_libp2p::Service<TMsg>>
 		let mut boot_nodes = Vec::new();
 		if !result.is_empty() {
 			let mut bootnode = result[0].listeners().next().unwrap().clone();
-			bootnode.append(libp2p::multiaddr::Protocol::P2p(result[0].peer_id().clone().into()));
+			bootnode.append(Protocol::P2p(result[0].peer_id().clone().into()));
 			boot_nodes.push(bootnode.to_string());
 		}
 
 		let config = substrate_network_libp2p::NetworkConfiguration {
-			listen_addresses: vec![multiaddr![Ip4([127, 0, 0, 1]), Tcp(0u16)]],
+			listen_addresses: vec![build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0u16)]],
 			boot_nodes,
 			..substrate_network_libp2p::NetworkConfiguration::default()
 		};

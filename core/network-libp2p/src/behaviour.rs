@@ -246,7 +246,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 					info.listen_addrs.truncate(30);
 				}
 				for addr in &info.listen_addrs {
-					self.discovery.kademlia.add_address(&peer_id, addr.clone());
+					self.discovery.kademlia.add_connected_address(&peer_id, addr.clone());
 				}
 				self.custom_protocols.add_discovered_addrs(
 					&peer_id,
@@ -255,6 +255,10 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<IdentifyEvent> for Behav
 				self.events.push(BehaviourOut::Identified { peer_id, info });
 			}
 			IdentifyEvent::Error { .. } => {}
+			IdentifyEvent::SendBack { result: Err(ref err), ref peer_id } =>
+				debug!(target: "sub-libp2p", "Error when sending back identify info \
+					to {:?} => {}", peer_id, err),
+			IdentifyEvent::SendBack { .. } => {}
 		}
 	}
 }
