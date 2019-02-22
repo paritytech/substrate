@@ -90,7 +90,9 @@ test:rust:stable:                  &test
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
     TARGET: native
-  <<:                              *kubernetes_build
+  # <<:                              *kubernetes_build
+  tags:
+    - linux-docker
   only:
     - tags
     - master
