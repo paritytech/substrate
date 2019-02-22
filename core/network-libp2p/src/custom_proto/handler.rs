@@ -781,6 +781,13 @@ where
 						outgoing_substream.send_message(message);
 						state.pending_response.push((request_id, outgoing_substream));
 					} else {
+						if state.pending_messages.len() >= 2048 {
+							let event = CustomProtosHandlerOut::Clogged {
+								messages: Vec::new(),
+								protocol_id: protocol.id()
+							};
+							self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+						}
 						state.pending_messages.push(message);
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							upgrade: protocol.clone(),
@@ -800,6 +807,13 @@ where
 					outgoing_substream.send_message(message);
 					state.shutdown.push(outgoing_substream);
 				} else {
+					if state.pending_messages.len() >= 2048 {
+						let event = CustomProtosHandlerOut::Clogged {
+							messages: Vec::new(),
+							protocol_id: protocol.id()
+						};
+						self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
+					}
 					state.pending_messages.push(message);
 					self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 						upgrade: protocol.clone(),
