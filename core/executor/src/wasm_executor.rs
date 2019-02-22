@@ -1114,8 +1114,6 @@ impl WasmExecutor {
 		method: &str,
 		data: &[u8],
 	) -> Result<Vec<u8>> {
-		let start = Instant::now();
-
 		// extract a reference to a linear memory, optional reference to a table
 		// and then initialize FunctionExecutor.
 		let memory = Self::get_mem_instance(module_instance)?;
@@ -1139,6 +1137,7 @@ impl WasmExecutor {
 
 		memory_set(offset, &data)?;
 
+		let start = Instant::now();
 		let result: u64 = match method {
 			"Core_execute_block" => unsafe { Core_execute_block(offset as u32, size as u32) },
 			"Core_version" => unsafe { Core_version(offset as u32, size as u32) },
@@ -1157,6 +1156,8 @@ impl WasmExecutor {
 
 			&_ => { panic!("method {:?} missing", method) },
 		};
+		let duration = start.elapsed();
+		eprintln!("duration for {:?}: {:?}µs", method, duration.as_micros());
 
 		let r = result;
 		let offset = r as u32;
@@ -1175,8 +1176,6 @@ impl WasmExecutor {
 		memory.with_direct_access_mut(|buf| buf.resize(used_mem.0, 0));
 		*/
 
-		let duration = start.elapsed();
-		eprintln!("duration for {:?}: {:?}µs", method, duration.as_micros());
 		result
 	}
 
