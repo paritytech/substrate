@@ -40,21 +40,7 @@ impl<H, N> Clone for SharedAuthoritySet<H, N> {
 	}
 }
 
-// <<<<<<< HEAD
-// impl<H, N> SharedAuthoritySet<H, N> {
-// =======
-impl<H, N> SharedAuthoritySet<H, N>
-where H: PartialEq,
-	  N: Ord,
-{
-	/// The genesis authority set.
-	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
-		SharedAuthoritySet {
-			inner: Arc::new(RwLock::new(AuthoritySet::genesis(initial)))
-		}
-	}
-
-// >>>>>>> master
+impl<H, N> SharedAuthoritySet<H, N> {
 	/// Acquire a reference to the inner read-write lock.
 	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
 		&*self.inner
@@ -100,15 +86,16 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode)]
 pub(crate) struct AuthoritySet<H, N> {
-// <<<<<<< HEAD
-	// pub(crate) current_authorities: Vec<(Ed25519AuthorityId, u64)>,
-	// pub(crate) set_id: u64,
-	// pub(crate) pending_changes: Vec<PendingChange<H, N>>,
-// =======
 	pub(crate) current_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	pub(crate) set_id: u64,
-	pub(crate) pending_changes: ForkTree<H, N, PendingChange<H, N>>,
-// >>>>>>> master
+	// Tree of pending standard changes across forks. Standard changes are
+	// enacted on finality and must be enacted (i.e. finalized) in-order across
+	// a given branch
+	pub(crate) pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
+	// Pending forced changes across different forks (at most one per fork).
+	// Forced changes are enacted on block depth (not finality), for this reason
+	// only one forced change should exist per fork.
+	pub(crate) pending_forced_changes: Vec<PendingChange<H, N>>,
 }
 
 impl<H, N> AuthoritySet<H, N>
@@ -120,7 +107,8 @@ where H: PartialEq,
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
-			pending_changes: ForkTree::new(),
+			pending_standard_changes: ForkTree::new(),
+			pending_forced_changes: Vec::new(),
 		}
 	}
 
@@ -133,18 +121,9 @@ where H: PartialEq,
 impl<H: Eq, N> AuthoritySet<H, N>
 where
 	N: Add<Output=N> + Ord + Clone + Debug,
-// <<<<<<< HEAD
-// 	H: Debug,
-// =======
 	H: Clone + Debug
-// >>>>>>> master
 {
-	/// Note an upcoming pending transition. Multiple pending changes on the
-	/// same branch can be added as long as they don't overlap. This method
-	/// assumes that changes on the same branch will be added in-order. The
-	/// given function `is_descendent_of` should return `true` if the second
-	/// hash (target) is a descendent of the first hash (base).
-	pub(crate) fn add_pending_change<F, E>(
+	fn add_standard_change<F, E>(
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
@@ -155,42 +134,103 @@ where
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
 
-		// debug!(target: "afg", "Inserting potential set change signalled at block {:?} \
-		// 					   (delayed by {:?} blocks).",
-		// 	   (&number, &hash), pending.finalization_depth);
+		debug!(target: "afg", "Inserting potential standard set change signalled at block {:?} \
+							   (delayed by {:?} blocks).",
+			   (&number, &hash), pending.delay);
 
-		self.pending_changes.import(
+		self.pending_standard_changes.import(
 			hash.clone(),
 			number.clone(),
 			pending,
 			is_descendent_of,
 		)?;
 
-		debug!(target: "afg", "There are now {} alternatives for the next pending change (roots), \
-							   and a total of {} pending changes (across all forks).",
-			self.pending_changes.roots().count(),
-			self.pending_changes.iter().count(),
+		debug!(target: "afg", "There are now {} alternatives for the next pending standard change (roots), \
+							   and a total of {} pending standard changes (across all forks).",
+			self.pending_standard_changes.roots().count(),
+			self.pending_standard_changes.iter().count(),
 		);
 
 		Ok(())
 	}
 
-	/// Inspect pending changes. Pending changes in the tree are traversed in pre-order.
+	fn add_forced_change<F, E>(
+		&mut self,
+		pending: PendingChange<H, N>,
+		is_descendent_of: &F,
+	) -> Result<(), fork_tree::Error<E>> where
+		F: Fn(&H, &H) -> Result<bool, E>,
+		E:  std::error::Error,
+	{
+		for change in self.pending_forced_changes.iter() {
+			if change.canon_hash == pending.canon_hash ||
+				is_descendent_of(&change.canon_hash, &pending.canon_hash)?
+			{
+				return Err(fork_tree::Error::UnfinalizedAncestor);
+			}
+		}
+
+		// ordered first by effective number and then by signal-block number.
+		let key = (pending.effective_number(), pending.canon_height.clone());
+		let idx = self.pending_forced_changes
+			.binary_search_by_key(&key, |change| (
+				change.effective_number(),
+				change.canon_height.clone(),
+			))
+			.unwrap_or_else(|i| i);
+
+		debug!(target: "afg", "Inserting potential forced set change at block {:?} \
+							   (delayed by {:?} blocks).",
+			   (&pending.canon_height, &pending.canon_hash), pending.delay);
+
+		self.pending_forced_changes.insert(idx, pending);
+
+		debug!(target: "afg", "There are now {} pending forced changes.", self.pending_forced_changes.len());
+
+		Ok(())
+	}
+
+	/// Note an upcoming pending transition. Multiple pending standard changes
+	/// on the same branch can be added as long as they don't overlap. Forced
+	/// changes are restricted to one per fork. This method assumes that changes
+	/// on the same branch will be added in-order. The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
+	pub(crate) fn add_pending_change<F, E>(
+		&mut self,
+		pending: PendingChange<H, N>,
+		is_descendent_of: &F,
+	) -> Result<(), fork_tree::Error<E>> where
+		F: Fn(&H, &H) -> Result<bool, E>,
+		E:  std::error::Error,
+	{
+		match pending.delay_kind {
+			DelayKind::Best => {
+				self.add_forced_change(pending, is_descendent_of)
+			},
+			DelayKind::Finalized => {
+				self.add_standard_change(pending, is_descendent_of)
+			},
+		}
+	}
+
+	/// Inspect pending changes. Standard pending changes are iterated first,
+	/// and the changes in the tree are traversed in pre-order, afterwards all
+	/// forced changes are iterated.
 	pub(crate) fn pending_changes(&self) -> impl Iterator<Item=&PendingChange<H, N>> {
-		// self.pending_changes.iter().map(|(_, _, c)| c)
-		std::iter::empty()
+		self.pending_standard_changes.iter().map(|(_, _, c)| c)
+			.chain(self.pending_forced_changes.iter())
 	}
 
 	/// Get the earliest limit-block number, if any. If there are pending
 	/// changes across different forks, this method will return the earliest
 	/// effective number (across the different branches).
 	pub(crate) fn current_limit(&self) -> Option<N> {
-		self.pending_changes.roots()
+		self.pending_standard_changes.roots()
 			.min_by_key(|&(_, _, c)| c.effective_number())
 			.map(|(_, _, c)| c.effective_number())
 	}
 
-// <<<<<<< HEAD
 	/// Apply or prune any pending transitions based on a best-block trigger.
 	///
 	/// Returns `Ok(new_set)` when a forced change has occurred.
@@ -198,141 +238,108 @@ where
 	///
 	/// These transitions are always forced and do not lead to justifications
 	/// which light clients can follow.
-	pub(crate) fn apply_forced_changes<F, E>(&self, new_best: N, mut canonical: F)
-		-> Result<Option<Self>, E>
-		where F: FnMut(N) -> Result<Option<H>, E>
+	pub(crate) fn apply_forced_changes<F, E>(
+		&self,
+		best_hash: H,
+		best_number: N,
+		is_descendent_of: &F,
+	) -> Result<Option<Self>, E>
+		where F: Fn(&H, &H) -> Result<bool, E>,
 	{
-		unimplemented!()
-		// let mut new_set = None;
+		let mut new_set = None;
 
-		// for change in self.pending_changes.iter()
-		// 	.take_while(|c| c.effective_number() <= new_best) // to prevent iterating too far
-		// 	.filter(|c| c.delay_kind == DelayKind::Best)
-		// 	.filter(|c| c.effective_number() == new_best)
-		// {
-		// 	// check if the block that signalled the change is canonical in
-		// 	// our chain.
-		// 	let canonical_hash = canonical(change.canon_height.clone())?;
+		for change in self.pending_forced_changes.iter()
+			.take_while(|c| c.effective_number() <= best_number) // to prevent iterating too far
+			.filter(|c| c.effective_number() == best_number)
+		{
+			// check if the given best block is in the same branch as the block that signalled the change.
+			if is_descendent_of(&change.canon_hash, &best_hash)? {
+				// apply this change: make the set canonical
+				info!(target: "finality", "Applying authority set change forced at block #{:?}",
+					  change.canon_height);
 
-		// 	if let Some(canonical_hash) = canonical_hash {
-		// 		if canonical_hash == change.canon_hash {
-		// 			// apply this change: make the set canonical
-		// 			info!(target: "finality", "Applying authority set change forced at block #{:?}",
-		// 				  change.canon_height);
+				// TODO: clear any requests for pending justifications
 
-		// 			new_set = Some(AuthoritySet {
-		// 				current_authorities: change.next_authorities.clone(),
-		// 				set_id: self.set_id + 1,
-		// 				pending_changes: Vec::new(), // new set, new changes.
-		// 			});
+				new_set = Some(AuthoritySet {
+					current_authorities: change.next_authorities.clone(),
+					set_id: self.set_id + 1,
+					pending_standard_changes: ForkTree::new(), // new set, new changes.
+					pending_forced_changes: Vec::new(),
+				});
 
-		// 			break;
-		// 		}
-		// 		// we don't wipe forced changes until another change is
-		// 		// applied
-		// 	}
-		// }
+				break;
+			}
 
-		// Ok(new_set)
+			// we don't wipe forced changes until another change is
+			// applied
+		}
+
+		Ok(new_set)
 	}
 
-	/// Apply or prune any pending transitions based on a finality trigger.
-	/// Provide a closure that can be used to check for the block in the best chain
-	/// with given number.
+	/// Apply or prune any pending transitions based on a finality trigger. This
+	/// method ensures that if there are multiple changes in the same branch,
+	/// finalizing this block won't finalize past multiple transitions (i.e.
+	/// transitions must be finalized in-order). The given function
+	/// `is_descendent_of` should return `true` if the second hash (target) is a
+	/// descendent of the first hash (base).
 	///
-	/// When the set has changed, the return value will be `Ok(Some((H, N)))` which is the canonical
-	/// block where the set last changed.
-	pub(crate) fn apply_standard_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
-		-> Result<Status<H, N>, E>
-		where F: FnMut(N) -> Result<Option<H>, E>
-// =======
-// 	/// Apply or prune any pending transitions. This method ensures that if
-// 	/// there are multiple changes in the same branch, finalizing this block
-// 	/// won't finalize past multiple transitions (i.e. transitions must be
-// 	/// finalized in-order). The given function `is_descendent_of` should return
-// 	/// `true` if the second hash (target) is a descendent of the first hash
-// 	/// (base).
-// 	///
-// 	/// When the set has changed, the return value will be `Ok(Some((H, N)))`
-// 	/// which is the canonical block where the set last changed (i.e. the given
-// 	/// hash and number).
-// 	// pub(crate) fn apply_changes<F, E>(
-// 	// 	&mut self,
-// 	// 	finalized_hash: H,
-// 	// 	finalized_number: N,
-// 	// 	is_descendent_of: &F,
-// 	// ) -> Result<Status<H, N>, fork_tree::Error<E>>
-// 	// where F: Fn(&H, &H) -> Result<bool, E>,
-// 	// 	  E: std::error::Error,
-// >>>>>>> master
+	/// When the set has changed, the return value will be `Ok(Some((H, N)))`
+	/// which is the canonical block where the set last changed (i.e. the given
+	/// hash and number).
+	pub(crate) fn apply_standard_changes<F, E>(
+		&mut self,
+		finalized_hash: H,
+		finalized_number: N,
+		is_descendent_of: &F,
+	) -> Result<Status<H, N>, fork_tree::Error<E>>
+		where F: Fn(&H, &H) -> Result<bool, E>,
+			  E: std::error::Error,
 	{
-		unimplemented!()
-		// let mut status = Status {
-		// 	changed: false,
-		// 	new_set_block: None,
-		// };
+		let mut status = Status {
+			changed: false,
+			new_set_block: None,
+		};
 
-		// match self.pending_changes.finalize_with_descendent_if(
-		// 	&finalized_hash,
-		// 	finalized_number.clone(),
-		// 	is_descendent_of,
-		// 	|change| change.effective_number() <= finalized_number
-		// )? {
-		// 	fork_tree::FinalizationResult::Changed(change) => {
-		// 		status.changed = true;
+		match self.pending_standard_changes.finalize_with_descendent_if(
+			&finalized_hash,
+			finalized_number.clone(),
+			is_descendent_of,
+			|change| change.effective_number() <= finalized_number
+		)? {
+			fork_tree::FinalizationResult::Changed(change) => {
+				status.changed = true;
 
-		// 		if let Some(change) = change {
-		// 			info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
-		// 				  change.canon_height);
+				// if we are able to finalize any standard change then we can
+				// discard all pending forced changes (on different forks)
+				self.pending_forced_changes.clear();
 
-		// 			self.current_authorities = change.next_authorities;
-		// 			self.set_id += 1;
+				if let Some(change) = change {
+					info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
+						  change.canon_height);
 
-		// 			status.new_set_block = Some((
-		// 				finalized_hash,
-		// 				finalized_number,
-		// 			));
-		// 		}
-		// 	},
-		// 	fork_tree::FinalizationResult::Unchanged => {},
-		// }
+					self.current_authorities = change.next_authorities;
+					self.set_id += 1;
 
-		// Ok(status)
+					status.new_set_block = Some((
+						finalized_hash,
+						finalized_number,
+					));
+				}
+			},
+			fork_tree::FinalizationResult::Unchanged => {},
+		}
+
+		Ok(status)
 	}
 
-	/// Check whether the given finalized block number enacts any authority set
-// <<<<<<< HEAD
-	/// change (without triggering it). Provide a closure that can be used to
-	/// check for the canonical block with a given number.
-	pub fn enacts_standard_change<F, E>(&self, just_finalized: N, mut canonical: F)
-		-> Result<bool, E>
-		where F: FnMut(N) -> Result<Option<H>, E>
-	{
-		// for change in self.pending_changes.iter()
-		// 	.filter(|c| c.delay_kind == DelayKind::Finalized)
-		// {
-		// 	if change.effective_number() > just_finalized { break };
-
-		// 	if change.effective_number() == just_finalized {
-		// 		// check if the block that signalled the change is canonical in
-		// 		// our chain.
-		// 		match canonical(change.canon_height.clone())? {
-		// 			Some(ref canonical_hash) if *canonical_hash == change.canon_hash =>
-		// 				return Ok(true),
-		// 			_ => (),
-		// 		}
-		// 	}
-		// }
-
-		Ok(false)
-	}
-// =======
-	/// change (without triggering it), ensuring that if there are multiple
-	/// changes in the same branch, finalizing this block won't finalize past
-	/// multiple transitions (i.e. transitions must be finalized in-order). The
-	/// given function `is_descendent_of` should return `true` if the second
-	/// hash (target) is a descendent of the first hash (base).
-	pub fn enacts_change<F, E>(
+	/// Check whether the given finalized block number enacts any standard
+	/// authority set change (without triggering it), ensuring that if there are
+	/// multiple changes in the same branch, finalizing this block won't
+	/// finalize past multiple transitions (i.e. transitions must be finalized
+	/// in-order). The given function `is_descendent_of` should return `true` if
+	/// the second hash (target) is a descendent of the first hash (base).
+	pub fn enacts_standard_change<F, E>(
 		&self,
 		finalized_hash: H,
 		finalized_number: N,
@@ -341,13 +348,12 @@ where
 	where F: Fn(&H, &H) -> Result<bool, E>,
 		  E: std::error::Error,
 	{
-		self.pending_changes.finalizes_any_with_descendent_if(
+		self.pending_standard_changes.finalizes_any_with_descendent_if(
 			&finalized_hash,
 			finalized_number.clone(),
 			is_descendent_of,
 			|change| change.effective_number() == finalized_number
 		)
-// >>>>>>> master
 	}
 }
 

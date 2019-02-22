@@ -21,7 +21,7 @@ use parity_codec::Encode;
 use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
-use client::{blockchain, CallExecutor, Client, error::Error as ClientError};
+use client::{blockchain, CallExecutor, Client};
 use client::backend::Backend;
 use client::runtime_api::Core as CoreApi;
 use consensus_common::{
@@ -40,12 +40,7 @@ use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
-// <<<<<<< HEAD
-// use crate::environment::{canonical_at_height, finalize_block};
-// =======
-// use crate::environment::{finalize_block, is_descendent_of, ExitOrError, NewAuthoritySet};
 use crate::environment::{finalize_block, is_descendent_of};
-// >>>>>>> master
 use crate::justification::GrandpaJustification;
 
 /// A block-import handler for GRANDPA.
@@ -87,7 +82,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> JustificationImport<Block>
 		// request justifications for all pending changes for which change blocks have already been imported
 		let authorities = self.authority_set.inner().read();
 		for pending_change in authorities.pending_changes() {
-			if pending_change.effective_number() > chain_info.finalized_number &&
+			if pending_change.delay_kind == DelayKind::Finalized &&
+				pending_change.effective_number() > chain_info.finalized_number &&
 				pending_change.effective_number() <= chain_info.best_number
 			{
 				let effective_block_hash = self.inner.best_containing(
@@ -173,278 +169,188 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 	fn check_new_change(&self, header: &Block::Header, hash: Block::Hash)
 		-> Result<Option<PendingChange<Block::Hash, NumberFor<Block>>>, ConsensusError>
 	{
-		// let at = BlockId::hash(*header.parent_hash());
-		// let digest = header.digest();
+		let at = BlockId::hash(*header.parent_hash());
+		let digest = header.digest();
 
-// <<<<<<< HEAD
-// 		let api = self.api.runtime_api();
-// =======
-// 		let hash = block.post_header().hash();
-// 		let parent_hash = *block.header.parent_hash();
-// 		let number = *block.header.number();
-// >>>>>>> master
+		let api = self.api.runtime_api();
 
 		// check for forced change.
-		// {
-		// 	let maybe_change = api.grandpa_forced_change(
-		// 		&at,
-		// 		digest,
-		// 	);
+		{
+			let maybe_change = api.grandpa_forced_change(
+				&at,
+				digest,
+			);
 
-		// 	match maybe_change {
-		// 		Err(e) => match api.version(&at) {
-		// 			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-		// 			Ok(version) => if version.has_api_with::<GrandpaApi<Block>, _>(|v| v >= 2) {
-		// 				// API version is high enough to support forced changes
-		// 				// but got error, so it is legitimate.
-		// 				return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
-		// 			}
-		// 		}
-		// 		Ok(None) => {},
-		// 		Ok(Some(change)) => return Ok(Some(PendingChange {
-		// 			next_authorities: change.next_authorities,
-		// 			delay: change.delay,
-		// 			canon_height: *header.number(),
-		// 			canon_hash: hash,
-		// 			delay_kind: DelayKind::Best,
-		// 		})),
-		// 	}
-		// }
+			match maybe_change {
+				Err(e) => match api.version(&at) {
+					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+					Ok(version) => if version.has_api_with::<GrandpaApi<Block>, _>(|v| v >= 2) {
+						// API version is high enough to support forced changes
+						// but got error, so it is legitimate.
+						return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
+					}
+				}
+				Ok(None) => {},
+				Ok(Some(change)) => return Ok(Some(PendingChange {
+					next_authorities: change.next_authorities,
+					delay: change.delay,
+					canon_height: *header.number(),
+					canon_hash: hash,
+					delay_kind: DelayKind::Best,
+				})),
+			}
+		}
 
-// <<<<<<< HEAD
-// 		// check normal scheduled change.
-// 		{
-// 			let maybe_change = api.grandpa_pending_change(
-// 				&at,
-// 				digest,
-// 			);
-// =======
-// 		let maybe_change = self.api.runtime_api().grandpa_pending_change(
-// 			&BlockId::hash(parent_hash),
-// 			&block.header.digest().clone(),
-// 		);
-// >>>>>>> master
+		// check normal scheduled change.
+		{
+			let maybe_change = api.grandpa_pending_change(
+				&at,
+				digest,
+			);
 
-		// 	match maybe_change {
-		// 		Err(e) => Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-		// 		Ok(Some(change)) => Ok(Some(PendingChange {
-		// 			next_authorities: change.next_authorities,
-		// 			delay: change.delay,
-		// 			canon_height: *header.number(),
-		// 			canon_hash: hash,
-		// 			delay_kind: DelayKind::Finalized,
-		// 		})),
-		// 		Ok(None) => Ok(None),
-		// 	}
-		// }
-
-		unimplemented!()
+			match maybe_change {
+				Err(e) => Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
+				Ok(Some(change)) => Ok(Some(PendingChange {
+					next_authorities: change.next_authorities,
+					delay: change.delay,
+					canon_height: *header.number(),
+					canon_hash: hash,
+					delay_kind: DelayKind::Finalized,
+				})),
+				Ok(None) => Ok(None),
+			}
+		}
 	}
 
 	fn make_authorities_changes<'a>(&'a self, block: &mut ImportBlock<Block>, hash: Block::Hash)
 		-> Result<PendingSetChanges<'a, Block>, ConsensusError>
 	{
-		use consensus_common::ForkChoiceStrategy;
-
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
-// <<<<<<< HEAD
-// 		// the old authority set on error or panic.
-// 		struct InnerGuard<'a, T: 'a> {
-// 			old: Option<T>,
-// 			guard: Option<RwLockWriteGuard<'a, T>>,
-// 		}
+		// the old authority set on error or panic.
+		struct InnerGuard<'a, T: 'a> {
+			old: Option<T>,
+			guard: Option<RwLockWriteGuard<'a, T>>,
+		}
 
-// 		impl<'a, T: 'a> InnerGuard<'a, T> {
-// 			fn as_mut(&mut self) -> &mut T {
-// 				&mut **self.guard.as_mut().expect("only taken on deconstruction; qed")
-// 			}
+		impl<'a, T: 'a> InnerGuard<'a, T> {
+			fn as_mut(&mut self) -> &mut T {
+				&mut **self.guard.as_mut().expect("only taken on deconstruction; qed")
+			}
 
-// 			fn set_old(&mut self, old: T) {
-// 				if self.old.is_none() {
-// 					// ignore "newer" old changes.
-// 					self.old = Some(old);
-// 				}
-// 			}
+			fn set_old(&mut self, old: T) {
+				if self.old.is_none() {
+					// ignore "newer" old changes.
+					self.old = Some(old);
+				}
+			}
 
-// 			fn consume(mut self) -> Option<(T, RwLockWriteGuard<'a, T>)> {
-// 				if let Some(old) = self.old.take() {
-// 					Some((old, self.guard.take().expect("only taken on deconstruction; qed")))
-// 				} else {
-// 					None
-// 				}
-// 			}
-// 		}
+			fn consume(mut self) -> Option<(T, RwLockWriteGuard<'a, T>)> {
+				if let Some(old) = self.old.take() {
+					Some((old, self.guard.take().expect("only taken on deconstruction; qed")))
+				} else {
+					None
+				}
+			}
+		}
 
-// 		impl<'a, T: 'a> Drop for InnerGuard<'a, T> {
-// 			fn drop(&mut self) {
-// 				if let (Some(mut guard), Some(old)) = (self.guard.take(), self.old.take()) {
-// 					*guard = old;
-// 				}
-// 			}
-// 		}
+		impl<'a, T: 'a> Drop for InnerGuard<'a, T> {
+			fn drop(&mut self) {
+				if let (Some(mut guard), Some(old)) = (self.guard.take(), self.old.take()) {
+					*guard = old;
+				}
+			}
+		}
 
-// 		let number = block.header.number().clone();
-// 		let maybe_change = self.check_new_change(
-// 			&block.header,
-// 			hash,
-// 		)?;
+		let number = block.header.number().clone();
+		let maybe_change = self.check_new_change(
+			&block.header,
+			hash,
+		)?;
 
-// 		// NOTE: this is valid because our underyling `BlockImport`
-// 		// is always a client -- if there were a lower level `BlockImport`
-// 		// it might change the fork choice strategy.
-// 		let new_is_best = match block.fork_choice {
-// 			ForkChoiceStrategy::Custom(v) => v,
-// 			ForkChoiceStrategy::LongestChain => {
-// 				let info = self.inner.info()
-// 					.map_err(|e: ClientError| ConsensusErrorKind::ClientImport(e.to_string()))
-// 					.map_err(ConsensusError::from)?;
+		// returns a function for checking whether a block is a descendent of another
+		// consistent with querying client directly after importing the block.
+		let parent_hash = *block.header.parent_hash();
+		let is_descendent_of = is_descendent_of(&self.inner, Some((&hash, &parent_hash)));
 
-// 				block.header.number() > &info.chain.best_number
-// 			}
-// 		};
+		let mut guard = InnerGuard {
+			guard: Some(self.authority_set.inner().write()),
+			old: None,
+		};
 
-// 		// tells us the hash that is canonical at a given height
-// 		// consistent with querying client directly after importing the block.
-// 		let canon_at_height = |canon_number| -> Result<_, ClientError> {
-// 			canonical_at_height(
-// 				&self.inner,
-// 				(hash, number),
-// 				new_is_best,
-// 				canon_number,
-// 			)
-// 		};
+		// whether to pause the old authority set -- happens after import
+		// of a forced change block.
+		let mut do_pause = false;
 
-// 		let mut guard = InnerGuard {
-// 			guard: Some(self.authority_set.inner().write()),
-// 			old: None,
-// 		};
+		// add any pending changes.
+		if let Some(change) = maybe_change {
+			let old = guard.as_mut().clone();
+			guard.set_old(old);
 
-// 		// whether to pause the old authority set -- happens after import
-// 		// of a forced change block.
-// 		let mut do_pause = false;
+			if let DelayKind::Best = change.delay_kind {
+				do_pause = true;
+			}
 
-// 		// add any pending changes.
-// 		if let Some(change) = maybe_change {
-// 			let parent_hash = *block.header.parent_hash();
+			guard.as_mut().add_pending_change(
+				change,
+				&is_descendent_of,
+			).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
+		}
 
-// 			let old = guard.as_mut().clone();
-// 			guard.set_old(old);
+		let applied_changes = {
+			let forced_change_set = guard.as_mut().apply_forced_changes(hash, number, &is_descendent_of)
+				.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
+				.map_err(ConsensusError::from)?;
 
-// 			let is_equal_or_descendent_of = |base: &Block::Hash| -> Result<(), ConsensusError> {
-// 				let error = || {
-// 					debug!(target: "afg", "rejecting change: {} is in the same chain as {}",
-// 						hash, base);
-// 					Err(ConsensusErrorKind::ClientImport(
-// 						format!("Incorrect base hash")
-// 					).into())
-// 				};
+			if let Some(new_set) = forced_change_set {
+				let new_authorities = {
+					let (set_id, new_authorities) = new_set.current();
 
-// 				if *base == hash { return error(); }
-// 				if *base == parent_hash { return error(); }
+					// TODO: use a different canon hash! probably the signal
+					// block.
+					NewAuthoritySet {
+						canon_number: number,
+						canon_hash: hash,
+						set_id,
+						authorities: new_authorities.to_vec(),
+					}
+				};
+				let old = ::std::mem::replace(guard.as_mut(), new_set);
+				guard.set_old(old);
 
-// 				let tree_route = blockchain::tree_route(
-// 					self.inner.backend().blockchain(),
-// 					BlockId::Hash(parent_hash),
-// 					BlockId::Hash(*base),
-// 				);
+				AppliedChanges::Forced(new_authorities)
+			} else {
+				let did_standard = guard.as_mut().enacts_standard_change(hash, number, &is_descendent_of)
+					.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
+					.map_err(ConsensusError::from)?;
 
-// 				let tree_route = match tree_route {
-// 					Err(e) => return Err(
-// 						ConsensusErrorKind::ClientImport(e.to_string()).into()
-// 					),
-// 					Ok(route) => route,
-// 				};
+				if did_standard {
+					AppliedChanges::Standard
+				} else {
+					AppliedChanges::None
+				}
+			}
+		};
 
-// 				if tree_route.common_block().hash == *base {
-// 					return error();
-// 				}
+		// consume the guard safely and write necessary changes.
+		let just_in_case = guard.consume();
+		if let Some((_, ref authorities)) = just_in_case {
+			let authorities_change = match applied_changes {
+				AppliedChanges::Forced(ref new) => Some(new),
+				AppliedChanges::Standard => None, // the change isn't actually applied yet.
+				AppliedChanges::None => None,
+			};
 
-// 				Ok(())
-// 			};
+			crate::aux_schema::update_authority_set(
+				authorities,
+				authorities_change,
+				|insert| block.auxiliary.extend(
+					insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+				)
+			);
+		}
 
-// 			if let DelayKind::Best = change.delay_kind {
-// 				do_pause = true;
-// 			}
-
-// 			guard.as_mut().add_pending_change(
-// 				change,
-// 				is_equal_or_descendent_of,
-// 			)?;
-// 		}
-// =======
-// 		// the old authority set on error.
-// 		let is_descendent_of = is_descendent_of(&self.inner, Some((&hash, &parent_hash)));
-// 		let just_in_case = if let Some(change) = maybe_change {
-// 			let mut authorities = self.authority_set.inner().write();
-// 			let old_set = authorities.clone();
-
-// 			authorities.add_pending_change(
-// 				PendingChange {
-// 					next_authorities: change.next_authorities,
-// 					finalization_depth: change.delay,
-// 					canon_height: number,
-// 					canon_hash: hash,
-// 				},
-// 				&is_descendent_of,
-// 			).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
-// >>>>>>> master
-
-		// let applied_changes = {
-		// 	let forced_change_set = guard.as_mut().apply_forced_changes(number, &canon_at_height)
-		// 		.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
-		// 		.map_err(ConsensusError::from)?;
-
-		// 	if let Some(new_set) = forced_change_set {
-		// 		let new_authorities = {
-		// 			let (set_id, new_authorities) = new_set.current();
-
-		// 			// TODO: use a different canon hash! probably the signal
-		// 			// block.
-		// 			NewAuthoritySet {
-		// 				canon_number: number,
-		// 				canon_hash: hash,
-		// 				set_id,
-		// 				authorities: new_authorities.to_vec(),
-		// 			}
-		// 		};
-		// 		let old = ::std::mem::replace(guard.as_mut(), new_set);
-		// 		guard.set_old(old);
-
-		// 		AppliedChanges::Forced(new_authorities)
-		// 	} else {
-		// 		let did_standard = guard.as_mut().enacts_standard_change(number, &canon_at_height)
-		// 			.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
-		// 			.map_err(ConsensusError::from)?;
-
-		// 		if did_standard {
-		// 			AppliedChanges::Standard
-		// 		} else {
-		// 			AppliedChanges::None
-		// 		}
-		// 	}
-		// };
-
-		// // consume the guard safely and write necessary changes.
-		// let just_in_case = guard.consume();
-		// if let Some((_, ref authorities)) = just_in_case {
-		// 	let authorities_change = match applied_changes {
-		// 		AppliedChanges::Forced(ref new) => Some(new),
-		// 		AppliedChanges::Standard => None, // the change isn't actually applied yet.
-		// 		AppliedChanges::None => None,
-		// 	};
-
-		// 	crate::aux_schema::update_authority_set(
-		// 		authorities,
-		// 		authorities_change,
-		// 		|insert| block.auxiliary.extend(
-		// 			insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-		// 		)
-		// 	);
-		// }
-		// Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
-
-		unimplemented!()
+		Ok(PendingSetChanges { just_in_case, applied_changes, do_pause })
 	}
 }
 
@@ -500,63 +406,53 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			}
 		};
 
-// <<<<<<< HEAD
-// 		let (applied_changes, do_pause) = pending_changes.defuse();
+		let (applied_changes, do_pause) = pending_changes.defuse();
 
-// 		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
-// 		if do_pause {
-// 			let _ = self.send_voter_commands.unbounded_send(
-// 				VoterCommand::Pause(format!("Forced change scheduled after inactivity"))
-// 			);
-// 		}
+		// Send the pause signal after import but BEFORE sending a `ChangeAuthorities` message.
+		if do_pause {
+			let _ = self.send_voter_commands.unbounded_send(
+				VoterCommand::Pause(format!("Forced change scheduled after inactivity"))
+			);
+		}
 
-// 		let needs_justification = applied_changes.needs_justification();
-// 		if let AppliedChanges::Forced(new) = applied_changes {
-// 			// NOTE: when we do a force change we are "discrediting" the old set
-// 			// so we ignore any justifications from them.
-// 			// TODO: figure out if this is right...the new set will finalize this block as
-// 			// well so we should probably only reject justifications from the old set.
-// 			justification = None;
-// 			let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
-// 		}
-// =======
-// 		let enacts_change = self.authority_set.inner().read().enacts_change(
-// 			hash,
-// 			number,
-// 			&is_descendent_of,
-// 		).map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
-// >>>>>>> master
+		let needs_justification = applied_changes.needs_justification();
+		if let AppliedChanges::Forced(new) = applied_changes {
+			// NOTE: when we do a force change we are "discrediting" the old set
+			// so we ignore any justifications from them.
+			// TODO: figure out if this is right...the new set will finalize this block as
+			// well so we should probably only reject justifications from the old set.
+			justification = None;
+			let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
+		}
 
-		// if !needs_justification && !enacts_consensus_change {
-		// 	return Ok(import_result);
-		// }
+		if !needs_justification && !enacts_consensus_change {
+			return Ok(import_result);
+		}
 
-		// match justification {
-		// 	Some(justification) => {
-		// 		self.import_justification(hash, number, justification, needs_justification)?;
-		// 	},
-		// 	None => {
-		// 		if needs_justification {
-		// 			trace!(
-		// 				target: "finality",
-		// 				"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
-		// 				number,
-		// 			);
-		// 		}
+		match justification {
+			Some(justification) => {
+				self.import_justification(hash, number, justification, needs_justification)?;
+			},
+			None => {
+				if needs_justification {
+					trace!(
+						target: "finality",
+						"Imported unjustified block #{} that enacts authority set change, waiting for finality for enactment.",
+						number,
+					);
+				}
 
-		// 		// we have imported block with consensus data changes, but without justification
-		// 		// => remember to create justification when next block will be finalized
-		// 		if enacts_consensus_change {
-		// 			self.consensus_changes.lock().note_change((number, hash));
-		// 		}
+				// we have imported block with consensus data changes, but without justification
+				// => remember to create justification when next block will be finalized
+				if enacts_consensus_change {
+					self.consensus_changes.lock().note_change((number, hash));
+				}
 
-		// 		return Ok(ImportResult::NeedsJustification);
-		// 	}
-		// }
+				return Ok(ImportResult::NeedsJustification);
+			}
+		}
 
-		// Ok(import_result)
-
-		unimplemented!()
+		Ok(import_result)
 	}
 
 	fn check_block(

@@ -940,7 +940,7 @@ fn force_change_to_new_set() {
 			).unwrap();
 
 			assert_eq!(set.current(), (1, voters.as_slice()));
-			assert_eq!(set.pending_changes().len(), 0);
+			assert_eq!(set.pending_changes().count(), 0);
 		}
 	};
 

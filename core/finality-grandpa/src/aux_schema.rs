@@ -19,16 +19,17 @@
 use parity_codec::{Encode, Decode};
 use parity_codec_derive::{Encode, Decode};
 use client::backend::AuxStore;
-use client::error::{Result as ClientResult, ErrorKind as ClientErrorKind};
+use client::error::{Result as ClientResult, Error as ClientError, ErrorKind as ClientErrorKind};
 use fork_tree::ForkTree;
 use grandpa::round::State as RoundState;
 use substrate_primitives::Ed25519AuthorityId;
-use log::info;
+use log::{info, warn};
 
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, PendingChange, DelayKind};
 use crate::consensus_changes::{SharedConsensusChanges, ConsensusChanges};
 use crate::NewAuthoritySet;
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 const VERSION_KEY: &[u8] = b"grandpa_schema_version";
@@ -75,21 +76,38 @@ struct V0AuthoritySet<H, N> {
 }
 
 impl<H, N> Into<AuthoritySet<H, N>> for V0AuthoritySet<H, N>
-where H: PartialEq,
-	  N: Ord,
+where H: Clone + Debug + PartialEq,
+	  N: Clone + Debug + Ord,
 {
 	fn into(self) -> AuthoritySet<H, N> {
+		let mut pending_standard_changes = ForkTree::new();
+
+		for old_change in self.pending_changes {
+			let new_change = PendingChange {
+				next_authorities: old_change.next_authorities,
+				delay: old_change.delay,
+				canon_height: old_change.canon_height,
+				canon_hash: old_change.canon_hash,
+				delay_kind: DelayKind::Finalized,
+			};
+
+			if let Err(err) = pending_standard_changes.import::<_, ClientError>(
+				new_change.canon_hash.clone(),
+				new_change.canon_height.clone(),
+				new_change,
+				// previously we only supported at most one pending change per fork
+				&|_, _| Ok(false),
+			) {
+				warn!(target: "afg", "Error migrating pending authority set change: {:?}.", err);
+				warn!(target: "afg", "Node is in a potentially inconsistent state.");
+			}
+		}
+
 		AuthoritySet {
 			current_authorities: self.current_authorities,
 			set_id: self.set_id,
-			pending_changes: ForkTree::new(),
-			// pending_changes: self.pending_changes.into_iter().map(|old_change| PendingChange {
-			// 	next_authorities: old_change.next_authorities,
-			// 	delay: old_change.delay,
-			// 	canon_height: old_change.canon_height,
-			// 	canon_hash: old_change.canon_hash,
-			// 	delay_kind: DelayKind::Finalized,
-			// }).collect()
+			pending_forced_changes: Vec::new(),
+			pending_standard_changes
 		}
 	}
 }
@@ -122,8 +140,8 @@ pub(crate) fn load_persistent<B, H, N, G>(
 	-> ClientResult<PersistentData<H, N>>
 	where
 		B: AuxStore,
-		H: Decode + Encode + Clone + PartialEq,
-		N: Decode + Encode + Clone + Ord,
+		H: Debug + Decode + Encode + Clone + PartialEq,
+		N: Debug + Decode + Encode + Clone + Ord,
 		G: FnOnce() -> ClientResult<Vec<(Ed25519AuthorityId, u64)>>
 {
 	let version: Option<u32> = load_decode(backend, VERSION_KEY)?;

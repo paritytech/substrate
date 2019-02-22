@@ -60,12 +60,8 @@ use client::{
 	error::Error as ClientError,
 };
 use client::blockchain::HeaderBackend;
-// <<<<<<< HEAD
-// use parity_codec::Encode;
-// =======
 use parity_codec::{Encode, Decode};
 use parity_codec_derive::{Encode, Decode};
-// >>>>>>> master
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 	DigestItemFor, DigestItem,
@@ -78,11 +74,9 @@ use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
 
 use network::Service as NetworkService;
-// <<<<<<< HEAD
-use std::fmt;
-// =======
 use network::consensus_gossip as network_gossip;
-// >>>>>>> master
+
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -112,20 +106,9 @@ use until_imported::UntilCommitBlocksImported;
 #[cfg(test)]
 mod tests;
 
-// <<<<<<< HEAD
-// =======
-const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
-const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
-const CONSENSUS_CHANGES_KEY: &[u8] = b"grandpa_consensus_changes";
-
 const GRANDPA_ENGINE_ID: network::ConsensusEngineId = [b'a', b'f', b'g', b'1'];
-
 const MESSAGE_ROUND_TOLERANCE: u64 = 2;
 
-/// round-number, round-state
-type LastCompleted<H, N> = (u64, RoundState<H, N>);
-
-// >>>>>>> master
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A signed message.
