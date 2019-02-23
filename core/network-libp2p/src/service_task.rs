@@ -134,6 +134,8 @@ where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
 pub enum ServiceEvent<TMessage> {
 	/// A custom protocol substream has been opened with a node.
 	OpenedCustomProtocol {
+		/// The Id of the node.
+		peer_id: PeerId,
 		/// Index of the node.
 		node_index: NodeIndex,
 		/// Protocol that has been opened.
@@ -381,8 +383,9 @@ where TMessage: CustomMessage + Send + 'static {
 			match self.swarm.poll() {
 				Ok(Async::Ready(Some(BehaviourOut::CustomProtocolOpen { protocol_id, peer_id, version, endpoint }))) => {
 					debug!(target: "sub-libp2p", "Opened custom protocol with {:?}", peer_id);
-					let node_index = self.index_of_peer_or_assign(peer_id, endpoint);
+					let node_index = self.index_of_peer_or_assign(peer_id.clone(), endpoint);
 					break Ok(Async::Ready(Some(ServiceEvent::OpenedCustomProtocol {
+						peer_id,
 						node_index,
 						protocol: protocol_id,
 						version,
