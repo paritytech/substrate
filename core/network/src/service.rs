@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::{io, thread};
 use log::{warn, debug, error, trace, info};
-use futures::{Async, Future, Stream, stream, sync::oneshot};
+use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::Mutex;
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
@@ -41,12 +41,15 @@ pub use network_libp2p::PeerId;
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 
+
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
-	/// Get sync status
-	fn status(&self) -> ProtocolStatus<B>;
+	/// Get a stream of syns statuses.
+	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>>;
 	/// Get currently connected peers
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
+	/// Are we in the process of downloading the chain?
+	fn is_major_syncing(&self) -> bool;
 }
 
 /// Minimum Requirements for a Hash within Networking
@@ -117,6 +120,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Protocol sender
@@ -135,7 +139,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		import_queue: Box<ImportQueue<B>>,
 	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
+		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let protocol_sender = Protocol::new(
+			status_sinks.clone(),
 			network_chan.clone(),
 			params.config,
 			params.chain,
@@ -154,6 +160,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		)?;
 
 		let service = Arc::new(Service {
+			status_sinks,
 			network,
 			protocol_sender: protocol_sender.clone(),
 			bg_thread: Some(thread),
@@ -240,9 +247,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			.protocol_sender
 			.send(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
 	}
-}
 
-impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
+	/// Are we in the process of downloading the chain?
+	/// Used by both SyncProvider and SyncOracle.
 	fn is_major_syncing(&self) -> bool {
 		let (sender, port) = channel::unbounded();
 		let _ = self
@@ -251,6 +258,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle f
 		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
 			or the ProtocolMsg::Stop message is received,
 			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
+	}
+}
+
+impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing()
 	}
 	fn is_offline(&self) -> bool {
 		let (sender, port) = channel::unbounded();
@@ -275,13 +288,14 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Drop for Service<B, S> {
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Service<B, S> {
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing()
+	}
 	/// Get sync status
-	fn status(&self) -> ProtocolStatus<B> {
-		let (sender, port) = channel::unbounded();
-		let _ = self.protocol_sender.send(ProtocolMsg::Status(sender));
-		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
-			or the ProtocolMsg::Stop message is received,
-			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
+	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>> {
+		let (sink, stream) = mpsc::unbounded();
+		self.status_sinks.lock().push(sink);
+		stream
 	}
 
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {

@@ -19,7 +19,6 @@ use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::config::Roles;
 use consensus::BlockOrigin;
 use network_libp2p::NodeIndex;
-use crate::sync::SyncState;
 use std::collections::HashSet;
 use super::*;
 
@@ -32,8 +31,6 @@ fn sync_from_two_peers_works() {
 	net.sync();
 	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
 		.equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
-	let status = net.peer(0).status();
-	assert_eq!(status.sync.state, SyncState::Idle);
 }
 
 #[test]

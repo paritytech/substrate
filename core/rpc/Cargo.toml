@@ -27,6 +27,7 @@ tokio = "0.1.7"
 
 [dev-dependencies]
 assert_matches = "1.1"
+futures = "0.1.17"
 test_client = { package = "substrate-test-client", path = "../test-client" }
 consensus = { package = "substrate-consensus-common", path = "../consensus/common" }
 rustc-hex = "2.0"

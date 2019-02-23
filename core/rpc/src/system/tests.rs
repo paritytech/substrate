@@ -16,12 +16,13 @@
 
 use super::*;
 
-use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
+use network::{self, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
+use futures::sync::mpsc;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Status {
 	pub peers: usize,
 	pub is_syncing: bool,
@@ -29,25 +30,28 @@ struct Status {
 }
 
 impl network::SyncProvider<Block> for Status {
-	fn status(&self) -> ProtocolStatus<Block> {
-		ProtocolStatus {
-			sync: SyncStatus {
-				state: if self.is_syncing { SyncState::Downloading } else { SyncState::Idle },
-				best_seen_block: None,
-				num_peers: self.peers as u32,
-			},
-			num_peers: self.peers,
-			num_active_peers: 0,
-		}
+	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<Block>> {
+		let (_sink, stream) = mpsc::unbounded();
+		stream
 	}
 
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, NetworkPeerInfo<Block>)> {
-		vec![(1, Some(PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into()), NetworkPeerInfo {
-			roles: Roles::FULL,
-			protocol_version: 1,
-			best_hash: Default::default(),
-			best_number: 1
-		})]
+		let mut peers = vec![];
+		for _peer in 0..self.peers {
+			peers.push(
+				(1, Some(PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into()), NetworkPeerInfo {
+					roles: Roles::FULL,
+					protocol_version: 1,
+					best_hash: Default::default(),
+					best_number: 1
+				})
+			);
+		}
+		peers
+	}
+
+	fn is_major_syncing(&self) -> bool {
+		self.is_syncing
 	}
 }
 
@@ -149,7 +153,11 @@ fn system_health() {
 #[test]
 fn system_peers() {
 	assert_eq!(
-		api(None).system_peers().unwrap(),
+		api(Status {
+			peers: 1,
+			is_syncing: false,
+			is_dev: true,
+		}).system_peers().unwrap(),
 		vec![PeerInfo {
 			index: 1,
 			peer_id: "QmS5oyTmdjwBowwAH1D9YQnoe2HyWpVemH8qHiU5RqWPh4".into(),

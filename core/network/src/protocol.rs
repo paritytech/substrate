@@ -15,6 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crossbeam_channel::{self as channel, Receiver, Sender, select};
+use futures::sync::mpsc;
+use parking_lot::Mutex;
 use network_libp2p::{NodeIndex, Severity};
 use primitives::storage::StorageKey;
 use runtime_primitives::generic::BlockId;
@@ -39,7 +41,11 @@ use crate::{error, util::LruHashSet};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
-const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(5000);
+const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(5100);
+
+/// Interval at which we send status updates on the SyncProvider status stream.
+pub const STATUS_INTERVAL_MS: u64 = 5000;
+const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(STATUS_INTERVAL_MS);
 
 /// Current protocol version.
 pub(crate) const CURRENT_VERSION: u32 = 2;
@@ -55,6 +61,7 @@ const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 	network_chan: NetworkChan<B>,
 	port: Receiver<ProtocolMsg<B, S>>,
 	config: ProtocolConfig,
@@ -190,8 +197,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	PeerDisconnected(NodeIndex, String),
 	/// A custom message from another peer.
 	CustomMessage(NodeIndex, Message<B>),
-	/// Ask the protocol for its status.
-	Status(Sender<ProtocolStatus<B>>),
+	/// Propagate status updates.
+	Status,
 	/// Tell protocol to propagate extrinsics.
 	PropagateExtrinsics,
 	/// Execute a closure with the chain-specific network specialization.
@@ -237,6 +244,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
+		status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
@@ -252,6 +260,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			.name("Protocol".into())
 			.spawn(move || {
 				let mut protocol = Protocol {
+					status_sinks,
 					network_chan,
 					port,
 					config: config,
@@ -269,7 +278,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				};
 				let tick_timeout = channel::tick(TICK_TIMEOUT);
 				let propagate_timeout = channel::tick(PROPAGATE_TIMEOUT);
-				while protocol.run(&tick_timeout, &propagate_timeout) {
+				let status_interval = channel::tick(STATUS_INTERVAL);
+				while protocol.run(&tick_timeout, &propagate_timeout, &status_interval) {
 					// Running until all senders have been dropped...
 				}
 			})
@@ -281,6 +291,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		&mut self,
 		tick_timeout: &Receiver<time::Instant>,
 		propagate_timeout: &Receiver<time::Instant>,
+		status_interval: &Receiver<time::Instant>,
 	) -> bool {
 		let msg = select! {
 			recv(self.port) -> event => {
@@ -298,6 +309,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			recv(propagate_timeout) -> _ => {
 				ProtocolMsg::PropagateExtrinsics
 			},
+			recv(status_interval) -> _ => {
+				ProtocolMsg::Status
+			},
 		};
 		self.handle_msg(msg)
 	}
@@ -314,7 +328,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			ProtocolMsg::CustomMessage(who, message) => {
 				self.on_custom_message(who, message)
 			},
-			ProtocolMsg::Status(sender) => self.status(sender),
+			ProtocolMsg::Status => self.status(),
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
 			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
 			ProtocolMsg::ExecuteWithSpec(task) => {
@@ -387,7 +401,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Returns protocol status
-	fn status(&mut self, sender: Sender<ProtocolStatus<B>>) {
+	fn status(&mut self) {
 		let status = ProtocolStatus {
 			sync: self.sync.status(),
 			num_peers: self.context_data.peers.values().count(),
@@ -398,7 +412,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.filter(|p| p.block_request.is_some())
 				.count(),
 		};
-		let _ = sender.send(status);
+		for sink in &*self.status_sinks.lock() {
+			let _ = sink.unbounded_send(status.clone());
+		}
 	}
 
 	fn on_custom_message(&mut self, who: NodeIndex, message: Message<B>) {

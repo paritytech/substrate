@@ -44,7 +44,7 @@ use network_libp2p::{NodeIndex, ProtocolId};
 use parity_codec::Encode;
 use parking_lot::Mutex;
 use primitives::{H256, Ed25519AuthorityId};
-use crate::protocol::{Context, Protocol, ProtocolMsg, ProtocolStatus};
+use crate::protocol::{Context, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::Justification;
@@ -266,12 +266,6 @@ impl<D> Peer<D> {
 		let _ = self.protocol_sender.send(ProtocolMsg::Abort);
 	}
 
-	pub fn status(&self) -> ProtocolStatus<Block> {
-		let (sender, port) = channel::unbounded();
-		let _ = self.protocol_sender.send(ProtocolMsg::Status(sender));
-		port.recv().unwrap()
-	}
-
 	/// Push a message into the gossip network and relay to peers.
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: <Block as BlockT>::Hash, engine_id: ConsensusEngineId, data: Vec<u8>) {
@@ -467,7 +461,9 @@ pub trait TestNetFactory: Sized {
 
 		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
 		let specialization = DummySpecialization {};
+		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let protocol_sender = Protocol::new(
+			status_sinks,
 			network_sender.clone(),
 			config.clone(),
 			client.clone(),
