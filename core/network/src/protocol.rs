@@ -31,6 +31,7 @@ use crate::config::{ProtocolConfig, Roles};
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::{cmp, num::NonZeroUsize, thread, time};
 use log::{trace, debug, warn};
 use crate::chain::Client;
@@ -200,10 +201,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	ExecuteWithGossip(Box<GossipTask<B> + Send + 'static>),
 	/// Incoming gossip consensus message.
 	GossipConsensusMessage(B::Hash, ConsensusEngineId, Vec<u8>),
-	/// Is protocol currently major-syncing?
-	IsMajorSyncing(Sender<bool>),
-	/// Is protocol currently offline?
-	IsOffline(Sender<bool>),
 	/// Return a list of peers currently known to protocol.
 	Peers(Sender<Vec<(NodeIndex, PeerInfo<B>)>>),
 	/// Let protocol know a peer is currenlty clogged.
@@ -237,6 +234,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
+		is_offline: Arc<AtomicBool>,
+		is_major_syncing: Arc<AtomicBool>,
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
@@ -247,7 +246,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	) -> error::Result<Sender<ProtocolMsg<B, S>>> {
 		let (sender, port) = channel::unbounded();
 		let info = chain.info()?;
-		let sync = ChainSync::new(config.roles, &info, import_queue);
+		let sync = ChainSync::new(is_offline, is_major_syncing, config.roles, &info, import_queue);
 		let _ = thread::Builder::new()
 			.name("Protocol".into())
 			.spawn(move || {
@@ -329,14 +328,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
 				self.gossip_consensus_message(topic, engine_id, message)
-			}
-			ProtocolMsg::IsMajorSyncing(sender) => {
-				let is_syncing = self.sync.status().is_major_syncing();
-				let _ = sender.send(is_syncing);
-			}
-			ProtocolMsg::IsOffline(sender) => {
-				let is_offline = self.sync.status().is_offline();
-				let _ = sender.send(is_offline);
 			}
 			ProtocolMsg::MaintainSync => {
 				let mut context =
