@@ -16,7 +16,7 @@
 
 use super::*;
 
-use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerInfo as NetworkPeerInfo, PublicKey};
+use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
@@ -43,7 +43,7 @@ impl network::SyncProvider<Block> for Status {
 
 	fn peers(&self) -> Vec<(NodeIndex, NetworkPeerInfo<Block>)> {
 		vec![(1, NetworkPeerInfo {
-			peer_id: Some(PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into()),
+			peer_id: PeerId::random(),
 			roles: Roles::FULL,
 			protocol_version: 1,
 			best_hash: Default::default(),

@@ -201,8 +201,7 @@ impl<D> Peer<D> {
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: NodeIndex) {
-		let peer_id = PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into();
-		let _ = self.protocol_sender.send(ProtocolMsg::PeerConnected(peer_id, other, String::new()));
+		let _ = self.protocol_sender.send(ProtocolMsg::PeerConnected(PeerId::random(), other, String::new()));
 	}
 
 	/// Called on disconnect from other indicated peer.
