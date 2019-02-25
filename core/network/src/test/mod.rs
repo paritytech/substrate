@@ -679,8 +679,8 @@ pub fn create_peer<D, V: 'static + Verifier<Block>, S: NetworkSpecialization<Blo
 	data:D,
 	verifier: Arc<V>,
 	specialization: S,
-	config: &ProtocolConfig)
-	-> Arc<Peer<D, S>> {
+	config: &ProtocolConfig
+) -> Arc<Peer<D, S>> {
 	let tx_pool = Arc::new(EmptyTransactionPool);
 	let (network_sender, network_port) = network_channel(ProtocolId::default());
 	let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
@@ -692,7 +692,7 @@ pub fn create_peer<D, V: 'static + Verifier<Block>, S: NetworkSpecialization<Blo
 		None,
 		tx_pool,
 		specialization,
-	).unwrap();
+	).expect("Protocol creationg should work; qed");
 
 	Arc::new(Peer::new(
 		client,
