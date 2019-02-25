@@ -144,7 +144,7 @@ pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where
 		vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()]);
 }
 
-/// helper to test the `leaves` implementation for various backends
+/// helper to test the `children` implementation for various backends
 pub fn test_children_for_backend<B: 'static>(backend: Arc<B>) where
 	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
