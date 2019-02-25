@@ -159,12 +159,6 @@ fn offline_should_slash_and_kick() {
 // 	});
 // }
 
-#[test]
-fn multi_era_reward_should_work() {
-	// TODO: possibly either extend this (or make a new test) to at least another cover two eras 
-	// (can fast-forward to the end) and test/verify the logic of the new <CurrentSessionReward> value mutated at 
-	// the end of the era. e.g:
-}
 
 #[test]
 fn rewards_should_work() {
@@ -174,6 +168,11 @@ fn rewards_should_work() {
 	// TODO: Check that nominators are also rewarded, check with @gav that this is the code
 	with_externalities(&mut ExtBuilder::default().build(), 
 	|| {
+		let delay = 2;
+		// this test is only in the scope of one era. Since this variable changes 
+		// at the last block/new era, we'll save it.
+		let session_reward = 10;
+
 		// Initial config should be correct
 		assert_eq!(Staking::era_length(), 9);
 		assert_eq!(Staking::sessions_per_era(), 3);
@@ -181,48 +180,128 @@ fn rewards_should_work() {
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
 
+		assert_eq!(Staking::current_session_reward(), 10);
+
 		// check the balance of a validator accounts.
 		assert_eq!(Balances::total_balance(&10), 1); 
+		// and the nominator (to-be)
+		assert_eq!(Balances::total_balance(&2), 20); 
 
+		// add a dummy nominator.
+		println!("This is 10: {:?}", <Stakers<Test>>::get(&10));
+		<Stakers<Test>>::insert(&10, Exposure {
+			own: 500, // equal division indicates that the reward will be equally divided among validator and nominator.
+			total: 1000,
+			others: vec![IndividualExposure {who: 2, value: 500 }] 
+		}); 
+		<Payee<Test>>::insert(&2, RewardDestination::Controller);
+
+
+		let mut block = 3;
 		// Block 3 => Session 1 => Era 0
-		System::set_block_number(3);
-		Timestamp::set_timestamp(15);	// on time.
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5);	// on time.
 		Session::check_rotate_session(System::block_number()); // QUESTIONS: why this matters ?
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 
 		// session triggered: the reward value stashed should be 10 -- defined in ExtBuilder genesis.
-		assert_eq!(Staking::current_session_reward(), 10);
-		assert_eq!(Staking::current_era_reward(), 10);
+		assert_eq!(Staking::current_session_reward(), session_reward);
+		assert_eq!(Staking::current_era_reward(), session_reward);
 		
-		// Block 6 => Session 2 => Era 0 
-		System::set_block_number(6);
-		Timestamp::set_timestamp(32);	// a little late.
+		block = 6; // Block 6 => Session 2 => Era 0 
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5 + delay);	// a little late.
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 
 		// session reward is the same,
-		assert_eq!(Staking::current_session_reward(), 10);
+		assert_eq!(Staking::current_session_reward(), session_reward);
 		// though 2 will be deducted while stashed in the era reward due to delay
-		assert_eq!(Staking::current_era_reward(), 18);
+		assert_eq!(Staking::current_era_reward(), 2*session_reward - delay);
 
-		// Block 6 => Session 3 => Era 1
-		System::set_block_number(9);
-		Timestamp::set_timestamp(45);  // back to being punktlisch. no delayss
+		block = 9; // Block 9 => Session 3 => Era 1
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5);  // back to being punktlisch. no delayss
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Session::current_index(), 3);
+
+		assert_eq!(Balances::total_balance(&10), 1 + (3*session_reward - delay)/2);
+		assert_eq!(Balances::total_balance(&2), 20 + (3*session_reward - delay)/2);
+	});
+}
+
+#[test]
+fn multi_era_reward_should_work() {
+	// should check that:
+	// The value of current_session_reward is set at the end of each era, based on 
+	// slot_stake and session_reward. Check and verify this. 
+	with_externalities(&mut ExtBuilder::default().build(), 
+	|| {
+		let delay = 0;
+		let session_reward = 10;
+
+		// This is set by the test config builder.
+		assert_eq!(Staking::current_session_reward(), 10);
+
+		// check the balance of a validator accounts.
+		assert_eq!(Balances::total_balance(&10), 1); 
+
+		let mut block = 3;
+		// Block 3 => Session 1 => Era 0
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5);	// on time.
+		Session::check_rotate_session(System::block_number()); // QUESTIONS: why this matters ?
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 1);
+
+		// session triggered: the reward value stashed should be 10 -- defined in ExtBuilder genesis.
+		assert_eq!(Staking::current_session_reward(), session_reward);
+		assert_eq!(Staking::current_era_reward(), session_reward);
+		
+		block = 6; // Block 6 => Session 2 => Era 0 
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5 + delay);	// a little late.
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 2);
+
+		assert_eq!(Staking::current_session_reward(), session_reward);
+		assert_eq!(Staking::current_era_reward(), 2*session_reward - delay);
+
+		block = 9; // Block 9 => Session 3 => Era 1
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5);  // back to being punktlisch. no delayss
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
 
 		// 1 + sum of of the session rewards accumulated
-		assert_eq!(Balances::total_balance(&10), 1 + 10 + 10 + 8);
+		let recorded_balance = 1 + 3*session_reward - delay;
+		assert_eq!(Balances::total_balance(&10), recorded_balance);
+		
+		// the reward for next era will be: session_reward * slot_stake
+		let new_session_reward = Staking::session_reward() * Staking::slot_stake();
+		assert_eq!(Staking::current_session_reward(), new_session_reward);
+
+		// fast forward to next era:
+		block=12;System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		block=15;System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		
+		// intermediate test.
+		assert_eq!(Staking::current_era_reward(), 2*new_session_reward);
+		
+		block=18;System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
+		
+		// pay time
+		assert_eq!(Balances::total_balance(&10), 3*new_session_reward + recorded_balance);
 	});
 }
 
-/*
 #[test]
 fn staking_should_work() {
-	// TODO: Fix this test
 	// should test: 
 	// * new validators can be added to the default set
 	// * new ones will be chosen per era (+ based on phragmen)
@@ -232,19 +311,17 @@ fn staking_should_work() {
 		assert_eq!(Staking::validator_count(), 2);
 		// remember + compare this along with the test.
 		assert_eq!(Session::validators(), vec![10, 20]);
-
 		assert_ok!(Staking::set_bonding_duration(2));
 		assert_eq!(Staking::bonding_duration(), 2);
 
 
 		// --- Block 1: 
 		System::set_block_number(1);
-		// 2 entities will state interest in validating
-		// account 1 controlled by 2, account 3 controlled by 4.
-		// 4 is stashing a lot more than 2 and even 10, it will become a validator.
+		// give the man some coins 
+		Balances::set_free_balance(&3, 3000);
 		// initial stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::default()));  // balance of 1 = 10, stashed = 5 
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 150, RewardDestination::default())); // balance of 3 = 300, stashed = 150 
+		// account 3 controlled by 4.
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::default())); // balance of 3 = 3000, stashed = 1500
 		
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
@@ -256,7 +333,6 @@ fn staking_should_work() {
 		System::set_block_number(2);
 		// Explicitly state the desire to validate for all of them.
 		// note that the controller account will state interest as representative of the stash-controller pair.
-		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }));
 		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }));
 
 		Session::check_rotate_session(System::block_number());
@@ -269,10 +345,10 @@ fn staking_should_work() {
 		System::set_block_number(3);
 		Session::check_rotate_session(System::block_number());
 
-		// FIXME: the assertion in the section should be changed to something in sync with how phragmen works.
+		// TODO: the assertion in the section should be changed to something in sync with how phragmen works.
 		// for now just check that some arbitrary "two validators" have been chosen.
 		assert_eq!(Session::validators().len(), 2);
-		assert_eq!(Session::validators(), vec![10, 20]); // temporary. sorted by total staked value.
+		assert_eq!(Session::validators(), vec![4, 20]);
 		assert_eq!(Staking::current_era(), 1);
 
 
@@ -299,10 +375,9 @@ fn staking_should_work() {
 		System::set_block_number(6);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators().contains(&4), false); 
-		println!("New validators (which should not have 4) are {:?}", Session::validators());
 	});
 }
-*/
+
 
 // #[test]
 // fn nominating_and_rewards_should_work() {
