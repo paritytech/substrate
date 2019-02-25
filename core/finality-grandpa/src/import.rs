@@ -26,7 +26,7 @@ use client::backend::Backend;
 use client::runtime_api::ApiExt;
 use consensus_common::{
 	BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind,
-	ImportBlock, ImportResult, JustificationImport, PostImportActions,
+	ImportBlock, ImportResult, JustificationImport,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::Justification;
@@ -397,9 +397,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let enacts_consensus_change = new_authorities.is_some();
 		let import_result = self.inner.import_block(block, new_authorities);
 
-		let mut import_actions = {
+		let mut imported_aux = {
 			match import_result {
-				Ok(ImportResult::Imported(actions)) => actions,
+				Ok(ImportResult::Imported(aux)) => aux,
 				Ok(r) => {
 					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
 					pending_changes.revert();
@@ -432,11 +432,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 			// we must clear all pending justifications requests, presumably they won't be
 			// finalized hence why this forced changes was triggered
-			import_actions |= PostImportActions::ClearJustificationRequests;
+			imported_aux.clear_justification_requests = true;
 		}
 
 		if !needs_justification && !enacts_consensus_change {
-			return Ok(ImportResult::Imported(import_actions));
+			return Ok(ImportResult::Imported(imported_aux));
 		}
 
 		match justification {
@@ -458,11 +458,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					self.consensus_changes.lock().note_change((number, hash));
 				}
 
-				import_actions |= PostImportActions::RequestJustification;
+				imported_aux.needs_justification = true;
 			}
 		}
 
-		Ok(ImportResult::Imported(import_actions))
+		Ok(ImportResult::Imported(imported_aux))
 	}
 
 	fn check_block(

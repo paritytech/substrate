@@ -25,7 +25,7 @@
 //! instantiated simply.
 
 use crate::block_import::{
-	BlockImport, BlockOrigin, ImportBlock, ImportResult, JustificationImport, PostImportActions,
+	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
 };
 use crossbeam_channel::{self as channel, Receiver, Sender};
 
@@ -363,15 +363,15 @@ impl<B: BlockT> BlockImporter<B> {
 
 			match result {
 				Ok(BlockImportResult::ImportedKnown(number)) => link.block_imported(&hash, number),
-				Ok(BlockImportResult::ImportedUnknown(number, actions)) => {
+				Ok(BlockImportResult::ImportedUnknown(number, aux)) => {
 					link.block_imported(&hash, number);
 
-					if actions.contains(PostImportActions::ClearJustificationRequests) {
+					if aux.clear_justification_requests {
 						trace!(target: "sync", "Block imported clears all pending justification requests {}: {:?}", number, hash);
 						link.clear_justification_requests();
 					}
 
-					if actions.contains(PostImportActions::RequestJustification) {
+					if aux.needs_justification {
 						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
 						link.request_justification(&hash, number);
 					}
@@ -560,7 +560,7 @@ pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
 	/// Imported known block.
 	ImportedKnown(N),
 	/// Imported unknown block.
-	ImportedUnknown(N, PostImportActions),
+	ImportedUnknown(N, ImportedAux),
 }
 
 /// Block import error.
@@ -609,9 +609,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 				Ok(BlockImportResult::ImportedKnown(number))
 			},
-			Ok(ImportResult::Imported(actions)) => {
-				Ok(BlockImportResult::ImportedUnknown(number, actions))
-			},
+			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux)),
 			Ok(ImportResult::UnknownParent) => {
 				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 				Err(BlockImportError::UnknownParent)
@@ -628,7 +626,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	};
 
 	match import_error(import_handle.check_block(hash, parent))? {
-		BlockImportResult::ImportedUnknown(..) => (),
+		BlockImportResult::ImportedUnknown { .. } => (),
 		r @ _ => return Ok(r), // Any other successfull result means that the block is already imported.
 	}
 

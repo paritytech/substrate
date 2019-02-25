@@ -27,7 +27,7 @@ use runtime_primitives::{
 };
 use consensus::{
 	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
-	BlockOrigin, ForkChoiceStrategy, PostImportActions,
+	BlockOrigin, ForkChoiceStrategy,
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
@@ -828,7 +828,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
 		}
 
-		Ok(ImportResult::Imported(PostImportActions::default()))
+		Ok(ImportResult::imported())
 	}
 
 	fn block_execution(
@@ -1400,7 +1400,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			blockchain::BlockStatus::Unknown => {},
 		}
 
-		Ok(ImportResult::Imported(PostImportActions::default()))
+		Ok(ImportResult::imported())
 	}
 }
 

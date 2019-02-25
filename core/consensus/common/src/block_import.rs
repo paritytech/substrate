@@ -16,7 +16,6 @@
 
 //! Block import helpers.
 
-use bitflags::bitflags;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
 use runtime_primitives::Justification;
 use std::borrow::Cow;
@@ -25,7 +24,7 @@ use std::borrow::Cow;
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
 	/// Block imported.
-	Imported(PostImportActions),
+	Imported(ImportedAux),
 	/// Already in the blockchain.
 	AlreadyInChain,
 	/// Block or parent is known to be bad.
@@ -34,14 +33,29 @@ pub enum ImportResult {
 	UnknownParent,
 }
 
-bitflags! {
-	/// Bitmask of actions to be performed after a given block is imported.
-	#[derive(Default)]
-	pub struct PostImportActions: u8 {
-		/// Clear all pending justification requests.
-		const ClearJustificationRequests = 0b00000001;
-		/// Request a justification for the given block.
-		const RequestJustification = 0b00000010;
+/// Auxiliary data associated with an imported block result.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ImportedAux {
+	/// Clear all pending justification requests.
+	pub clear_justification_requests: bool,
+	/// Request a justification for the given block.
+	pub needs_justification: bool,
+}
+
+impl Default for ImportedAux {
+	fn default() -> ImportedAux {
+		ImportedAux {
+			clear_justification_requests: false,
+			needs_justification: false,
+		}
+	}
+}
+
+impl ImportResult {
+	/// Returns default value for `ImportResult::Imported` with both
+	/// `clear_justification_requests` and `needs_justification` set to false.
+	pub fn imported() -> ImportResult {
+		ImportResult::Imported(ImportedAux::default())
 	}
 }
 

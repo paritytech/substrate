@@ -29,7 +29,7 @@ use client::{
 	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
-use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportBlock, ImportResult, PostImportActions};
+use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock, ImportResult};
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -984,7 +984,7 @@ fn allows_reimporting_change_blocks() {
 
 	assert_eq!(
 		block_import.import_block(block(), None).unwrap(),
-		ImportResult::Imported(PostImportActions::RequestJustification)
+		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false }),
 	);
 
 	assert_eq!(

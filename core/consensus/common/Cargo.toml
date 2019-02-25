@@ -6,7 +6,6 @@ description = "Common utilities for substrate consensus"
 edition = "2018"
 
 [dependencies]
-bitflags = "1.0"
 crossbeam-channel = "0.3.4"
 log = "0.4"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
