@@ -755,7 +755,7 @@ macro_rules! __decl_runtime_metadata {
 		$crate::__decl_runtime_metadata!(
 			$runtime;
 			$( $parsed_modules { $( $withs )* } )*;
-			{leading_module: $($( $leading_module )*)? $other_module }
+			{ leading_module: $( $( $leading_module )* )? $other_module }
 			$name: $module::{
 				$( $modules )*
 			}
