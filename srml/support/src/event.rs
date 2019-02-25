@@ -17,7 +17,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode, TypeName};
 
 /// Implement the `Event` for a module.
 ///
@@ -267,7 +267,10 @@ macro_rules! __events_to_metadata {
 			$crate::event::EventMetadata {
 				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),
 				arguments: $crate::_vec![
-					$( $( <$param as $crate::substrate_metadata::EncodeMetadata>::type_name() ),* )*
+					$( $( $crate::event::TypeName {
+						type_name: <$param as $crate::substrate_metadata::EncodeMetadata>::type_name(),
+						display_name: $crate::event::DecodeDifferent::Encode(stringify!($param)),
+					} ),* )*
 				],
 				documentation: $crate::event::DecodeDifferent::Encode(&[
 					$( $doc_attr ),*

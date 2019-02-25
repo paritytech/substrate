@@ -24,7 +24,7 @@ pub use crate::rstd::result;
 pub use crate::codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef, Compact};
 pub use srml_metadata::{
 	FunctionMetadata, DecodeDifferent, DecodeDifferentArray,
-	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
+	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall, TypeName
 };
 
 /// Result of a module function call; either nothing (functions are only called for "side efeects")
@@ -1065,9 +1065,16 @@ macro_rules! __function_to_metadata {
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
-						ty: $crate::__function_to_metadata!(@get_type_name
-							$(#[$codec_attr])* $param_name: $param
-						),
+						ty: $crate::dispatch::TypeName {
+							type_name: $crate::__function_to_metadata!(@get_type_name
+								$(#[$codec_attr])* $param_name: $param
+							),
+							display_name: $crate::dispatch::DecodeDifferent::Encode(
+								$crate::__function_to_metadata!(@stringify_expand_attr
+									$(#[$codec_attr])* $param_name: $param
+								)
+							),
+						},
 					}
 				),*
 			],
@@ -1084,6 +1091,19 @@ macro_rules! __function_to_metadata {
 	 };
 
 	(@get_type_name $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
+		compile_error!(concat!(
+			"Invalid attribute for parameter `", stringify!($param_name),
+			"`, the following attributes are supported: `#[compact]`"
+		))
+	};
+
+	(@stringify_expand_attr #[compact] $param_name:ident : $param:ty) => {
+		concat!("Compact<", stringify!($param), ">")
+	};
+
+	(@stringify_expand_attr $param_name:ident : $param:ty) => { stringify!($param) };
+
+		(@stringify_expand_attr $(#[codec_attr:ident])* $param_name:ident : $param:ty) => {
 		compile_error!(concat!(
 			"Invalid attribute for parameter `", stringify!($param_name),
 			"`, the following attributes are supported: `#[compact]`"

@@ -19,7 +19,7 @@
 // end::description[]
 
 use srml_support_procedural_tools::syn_ext as ext;
-use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes};
+use srml_support_procedural_tools::{generate_crate_access, generate_hidden_includes, clean_type_string};
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -536,11 +536,15 @@ fn store_functions_to_metadata (
 		let value_type = type_infos.value_type;
 
 		let typ = type_infos.typ;
+		let styp = clean_type_string(&typ.to_string());
 		let (stype, reg_type) = match type_infos.kind {
 			DeclStorageTypeInfosKind::Simple => (
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Plain(
-						<#typ as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
+						#scrate::storage::generator::TypeName {
+							type_name: <#typ as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
+							display_name: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+						}
 					)
 				},
 				quote!{
@@ -548,10 +552,19 @@ fn store_functions_to_metadata (
 				}
 			),
 			DeclStorageTypeInfosKind::Map { key_type, .. } => (
-				quote!{
-					#scrate::storage::generator::StorageFunctionType::Map {
-						key: <#key_type as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
-						value: <#typ as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
+				{
+					let kty = clean_type_string(&quote!(#key_type).to_string());
+					quote!{
+						#scrate::storage::generator::StorageFunctionType::Map {
+							key: #scrate::storage::generator::TypeName {
+								type_name: <#key_type as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
+								display_name: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
+							},
+							value: #scrate::storage::generator::TypeName {
+								type_name: <#typ as #scrate::substrate_metadata::EncodeMetadata>::type_name(),
+								display_name: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+							},
+						}
 					}
 				},
 				quote!{
