@@ -713,7 +713,7 @@ mod tests {
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send an unknown
-		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default())), Default::default())];
+		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(), Default::default())), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
