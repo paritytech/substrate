@@ -122,7 +122,7 @@ pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	is_offline: Arc<AtomicBool>,
 	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
-	// Peers whom we are connected with.
+	/// Peers whom we are connected with.
 	peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<B>>>>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
