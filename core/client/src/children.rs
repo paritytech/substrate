@@ -65,7 +65,7 @@ pub fn write_children<
 	tx.put_vec(column, &key[..], children_hashes.encode());
 }
 
-/// Remove the key-value pair (`parent_hash`, `children_hashes`) in the transaction.
+/// Prepare transaction to remove the children of `parent_hash`.
 pub fn remove_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 >(
