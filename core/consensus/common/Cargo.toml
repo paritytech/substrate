@@ -6,8 +6,8 @@ description = "Common utilities for substrate consensus"
 edition = "2018"
 
 [dependencies]
+crossbeam-channel = "0.3.4"
 log = "0.4"
-parking_lot = "0.7.1"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 error-chain = "0.12"

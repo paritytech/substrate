@@ -369,7 +369,7 @@ impl<T: Trait> StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeHashOf<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who.clone());
+		<StorageOf<T>>::remove_prefix(who);
 	}
 }
 
