@@ -16,7 +16,7 @@
 
 use super::*;
 
-use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
+use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;

@@ -41,7 +41,7 @@ use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use keyring::Keyring;
 use crate::message::{Message, ConsensusEngineId};
-use network_libp2p::{NodeIndex, ProtocolId, PublicKey};
+use network_libp2p::{NodeIndex, ProtocolId, PeerId};
 use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Ed25519AuthorityId};
