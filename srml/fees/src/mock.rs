@@ -20,12 +20,15 @@
 
 use runtime_primitives::BuildStorage;
 use runtime_primitives::{
-	traits::{IdentityLookup, BlakeTwo256, TransferAsset},
+	traits::{IdentityLookup, BlakeTwo256},
 	testing::{Digest, DigestItem, Header},
 };
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
-use srml_support::{impl_outer_origin, impl_outer_event, traits::ArithmeticType};
+use srml_support::{
+	impl_outer_origin, impl_outer_event,
+	traits::{ArithmeticType, TransferAsset, WithdrawReason}
+};
 use crate::{GenesisConfig, Module, Trait, system};
 
 impl_outer_origin!{
@@ -48,7 +51,7 @@ impl<AccountId> TransferAsset<AccountId> for TransferAssetMock {
 	type Amount = u64;
 
 	fn transfer(_: &AccountId, _: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn withdraw(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn withdraw(_: &AccountId, _: Self::Amount, _: WithdrawReason) -> Result<(), &'static str> { Ok(()) }
 	fn deposit(_: &AccountId, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }
 
