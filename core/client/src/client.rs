@@ -56,7 +56,7 @@ use executor::{RuntimeVersion, RuntimeInfo};
 use crate::notifications::{StorageNotifications, StorageEventStream};
 use crate::light::{call_executor::prove_execution, fetcher::ChangesProof};
 use crate::cht;
-use crate::error;
+use crate::error::{self, ErrorKind};
 use crate::in_mem;
 use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
@@ -1230,6 +1230,37 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(None)
 	}
 
+	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
+	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> error::Result<Vec<Block::Hash>> {
+		let load_header = |id: Block::Hash| -> error::Result<Block::Header> {
+			match self.backend.blockchain().header(BlockId::Hash(id))? {
+				Some(hdr) => Ok(hdr),
+				None => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", id)).into()),
+			}
+		};
+
+		let genesis_hash = self.backend.blockchain().info()?.genesis_hash;
+		if genesis_hash == target_hash { return Ok(Vec::new()); }
+
+		let mut current_hash = target_hash;
+		let mut current = load_header(current_hash)?;
+		let mut ancestor_hash = *current.parent_hash();
+		let mut ancestor = load_header(ancestor_hash)?;
+		let mut uncles = Vec::new();
+
+		for _generation in 0..max_generation.as_() {
+			let children = self.backend.blockchain().children(ancestor_hash)?;
+			uncles.extend(children.into_iter().filter(|h| h != &current_hash));
+			current_hash = ancestor_hash;
+			if genesis_hash == current_hash { break; }
+			current = ancestor;
+			ancestor_hash = *current.parent_hash();
+			ancestor = load_header(ancestor_hash)?;
+		}
+
+		Ok(uncles)
+	}
+
 	fn changes_trie_config(&self) -> Result<Option<ChangesTrieConfiguration>, Error> {
 		Ok(self.backend.state_at(BlockId::Number(self.backend.blockchain().info()?.best_number))?
 			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
@@ -1703,6 +1734,117 @@ pub(crate) mod tests {
 		let uninserted_block = client.new_block().unwrap().bake().unwrap();
 
 		assert_eq!(None, client.best_containing(uninserted_block.hash().clone(), None).unwrap());
+	}
+
+	#[test]
+	fn uncles_with_only_ancestors() {
+		// block tree:
+		// G -> A1 -> A2
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block().unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+		let v: Vec<H256> = Vec::new();
+		assert_eq!(v, client.uncles(a2.hash(), 3).unwrap());
+	}
+
+	#[test]
+	fn uncles_with_multiple_forks() {
+		// block tree:
+		// G -> A1 -> A2 -> A3 -> A4 -> A5
+		//      A1 -> B2 -> B3 -> B4
+		//	          B2 -> C3
+		//	    A1 -> D2
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		// A2 -> A3
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a3.clone()).unwrap();
+
+		// A3 -> A4
+		let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a4.clone()).unwrap();
+
+		// A4 -> A5
+		let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, a5.clone()).unwrap();
+
+		// A1 -> B2
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 41,
+			nonce: 0,
+		}).unwrap();
+		let b2 = builder.bake().unwrap();
+		client.import(BlockOrigin::Own, b2.clone()).unwrap();
+
+		// B2 -> B3
+		let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, b3.clone()).unwrap();
+
+		// B3 -> B4
+		let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+		client.import(BlockOrigin::Own, b4.clone()).unwrap();
+
+		// // B2 -> C3
+		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 1,
+			nonce: 1,
+		}).unwrap();
+		let c3 = builder.bake().unwrap();
+		client.import(BlockOrigin::Own, c3.clone()).unwrap();
+
+		// A1 -> D2
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let d2 = builder.bake().unwrap();
+		client.import(BlockOrigin::Own, d2.clone()).unwrap();
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+
+		let uncles1 = client.uncles(a4.hash(), 10).unwrap();
+		assert_eq!(vec![b2.hash(), d2.hash()], uncles1);
+
+		let uncles2 = client.uncles(a4.hash(), 0).unwrap();
+		assert_eq!(0, uncles2.len());
+
+		let uncles3 = client.uncles(a1.hash(), 10).unwrap();
+		assert_eq!(0, uncles3.len());
+
+		let uncles4 = client.uncles(genesis_hash, 10).unwrap();
+		assert_eq!(0, uncles4.len());
+
+		let uncles5 = client.uncles(d2.hash(), 10).unwrap();
+		assert_eq!(vec![a2.hash(), b2.hash()], uncles5);
+
+		let uncles6 = client.uncles(b3.hash(), 1).unwrap();
+		assert_eq!(vec![c3.hash()], uncles6);
 	}
 
 	#[test]

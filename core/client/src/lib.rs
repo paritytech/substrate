@@ -38,6 +38,8 @@ pub mod block_builder;
 #[cfg(feature = "std")]
 pub mod light;
 #[cfg(feature = "std")]
+pub mod children;
+#[cfg(feature = "std")]
 mod leaves;
 #[cfg(feature = "std")]
 mod call_executor;
@@ -45,6 +47,7 @@ mod call_executor;
 mod client;
 #[cfg(feature = "std")]
 mod notifications;
+
 
 #[cfg(feature = "std")]
 pub use crate::blockchain::Info as ChainInfo;
