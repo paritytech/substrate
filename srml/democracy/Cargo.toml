@@ -20,8 +20,8 @@ substrate-metadata = { path = "../../core/metadata", default-features = false }
 substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [dev-dependencies]
-substrate-primitives = { path = "../../core/primitives", default-features = false }
-balances = { package = "srml-balances", path = "../balances", default-features = false }
+substrate-primitives = { path = "../../core/primitives" }
+balances = { package = "srml-balances", path = "../balances" }
 
 [features]
 default = ["std"]

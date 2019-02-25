@@ -21,7 +21,7 @@ substrate-metadata-derive = { path = "../../core/metadata-derive", default-featu
 
 [dev-dependencies]
 hex-literal = "0.1.0"
-balances = { package = "srml-balances", path = "../balances", default-features = false }
+balances = { package = "srml-balances", path = "../balances" }
 
 [features]
 default = ["std"]

@@ -19,7 +19,7 @@ substrate-metadata-derive = { path = "../../core/metadata-derive", default-featu
 
 [dev-dependencies]
 sr-io = { path = "../../core/sr-io", default-features = false }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
+substrate-primitives = { path = "../../core/primitives" }
 
 [features]
 default = ["std"]

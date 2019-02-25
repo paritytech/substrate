@@ -21,7 +21,7 @@ substrate-metadata = { path = "../../core/metadata", default-features = false }
 substrate-metadata-derive = { path = "../../core/metadata-derive", default-features = false }
 
 [dev-dependencies]
-runtime_io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 
 [features]
 default = ["std"]

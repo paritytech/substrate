@@ -388,25 +388,22 @@ macro_rules! __create_decl_macro {
 		macro_rules! $macro_name {
 			(
 				$runtime:ident;
-				System: $module:ident::{
-					$ingore:ident $d( <$ignor:ident> )* $d(, $modules:ident $d( <$modules_generic:ident> )* )*
-				}
-				$d(, $rest_name:ident : $rest_module:ident::{
-					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
-				})*
+				$d( $name:ident : $module:ident::{
+					$d( $modules:ident $d( <$modules_generic:ident> )* ),*
+				}),*
 			) => {
-				$d crate::$macro_name!(
+				$d crate::$macro_name!(@inner
 					$runtime;
-					$module;
+					;
 					;
 					$d(
-						$rest_name: $rest_module::{
-							$d( $rest_modules $d( <$rest_modules_generic> )* ),*
+						$name: $module::{
+							$d( $modules $d( <$modules_generic> )* ),*
 						}
 					),*;
 				);
 			};
-			(
+			(@inner
 				$runtime:ident;
 				; // there can not be multiple `System`s
 				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
@@ -417,7 +414,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
 				})*;
 			) => {
-				$d crate::$macro_name!(
+				$d crate::$macro_name!(@inner
 					$runtime;
 					$module;
 					$d( $parsed_modules $d( <$parsed_generic> )* ),*;
@@ -425,31 +422,10 @@ macro_rules! __create_decl_macro {
 						$rest_name: $rest_module::{
 							$d( $rest_modules $d( <$rest_modules_generic> )* ),*
 						}
-					)*;
+					),*;
 				);
 			};
-			(
-				$runtime:ident;
-				$name:ident: $module:ident::{
-					$ingore:ident $d( <$ignor:ident> )* $d(, $modules:ident $d( <$modules_generic:ident> )* )*
-				}
-				$d(, $rest_name:ident : $rest_module:ident::{
-					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
-				})*
-			) => {
-				$d crate::$macro_name!(
-					$runtime;
-					;
-					;
-					$name: $module::{ $d( $modules $d( <$modules_generic> )* ),* }
-					$d(
-						, $rest_name: $rest_module::{
-							$d( $rest_modules $d( <$rest_modules_generic> )* ),*
-						}
-					)*;
-				);
-			};
-			(
+			(@inner
 				$runtime:ident;
 				$d( $system:ident )*;
 				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
@@ -460,7 +436,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
 				})*;
 			) => {
-				$d crate::$macro_name!(
+				$d crate::$macro_name!(@inner
 					$runtime;
 					$d( $system )*;
 					$d(
@@ -473,7 +449,7 @@ macro_rules! __create_decl_macro {
 					),*;
 				);
 			};
-			(
+			(@inner
 				$runtime:ident;
 				$d( $system:ident )*;
 				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
@@ -484,7 +460,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
 				})*;
 			) => {
-				$d crate::$macro_name!(
+				$d crate::$macro_name!(@inner
 					$runtime;
 					$d( $system )*;
 					$d( $parsed_modules $d( <$parsed_generic> )* ),*;
@@ -496,7 +472,7 @@ macro_rules! __create_decl_macro {
 					)*;
 				);
 			};
-			(
+			(@inner
 				$runtime:ident;
 				$d( $system:ident )*;
 				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;
@@ -505,7 +481,7 @@ macro_rules! __create_decl_macro {
 					$d( $rest_modules:ident $d( <$rest_modules_generic:ident> )* ),*
 				})*;
 			) => {
-				$d crate::$macro_name!(
+				$d crate::$macro_name!(@inner
 					$runtime;
 					$d( $system )*;
 					$d( $parsed_modules $d( <$parsed_generic> )* ),*;
@@ -516,7 +492,7 @@ macro_rules! __create_decl_macro {
 					),*;
 				);
 			};
-			(
+			(@inner
 				$runtime:ident;
 				$d( $system:ident )+;
 				$d( $parsed_modules:ident $d( <$parsed_generic:ident> )* ),*;

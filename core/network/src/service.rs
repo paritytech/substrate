@@ -17,10 +17,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{io, thread};
-use log::{warn, debug, error, trace};
+use log::{warn, debug, error, trace, info};
 use futures::{Async, Future, Stream, stream, sync::oneshot};
 use parking_lot::Mutex;
-use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
+use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
@@ -35,6 +35,8 @@ use crate::specialization::NetworkSpecialization;
 
 use tokio::prelude::task::AtomicTask;
 use tokio::runtime::Runtime;
+
+pub use network_libp2p::PeerId;
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
@@ -178,6 +180,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	#[inline]
 	pub fn average_upload_per_sec(&self) -> u64 {
 		self.network.lock().average_upload_per_sec()
+	}
+
+	/// Returns the network identity of the node.
+	pub fn local_peer_id(&self) -> PeerId {
+		self.network.lock().peer_id().clone()
 	}
 
 	/// Called when a new block is imported by the client.
@@ -502,7 +509,10 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 			},
 			NetworkMsg::ReportPeer(who, severity) => {
 				match severity {
-					Severity::Bad(_) => network_service_2.lock().ban_node(who),
+					Severity::Bad(message) => {
+						info!(target: "sync", "Banning {:?} because {:?}", who, message);
+						network_service_2.lock().ban_node(who)
+					},
 					Severity::Useless(_) => network_service_2.lock().drop_node(who),
 					Severity::Timeout => network_service_2.lock().drop_node(who),
 				}

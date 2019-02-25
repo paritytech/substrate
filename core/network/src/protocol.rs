@@ -29,15 +29,13 @@ use crate::sync::{ChainSync, Status as SyncStatus, SyncState};
 use crate::service::{NetworkChan, NetworkMsg, TransactionPool, ExHashT};
 use crate::config::{ProtocolConfig, Roles};
 use rustc_hex::ToHex;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::thread;
-use std::time;
-use std::cmp;
+use std::{cmp, num::NonZeroUsize, thread, time};
 use log::{trace, debug, warn};
 use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
-use crate::error;
+use crate::{error, util::LruHashSet};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
@@ -90,9 +88,9 @@ struct Peer<B: BlockT, H: ExHashT> {
 	/// Requests we are no longer insterested in.
 	obsolete_requests: HashMap<message::RequestId, time::Instant>,
 	/// Holds a set of transactions known to this peer.
-	known_extrinsics: HashSet<H>,
+	known_extrinsics: LruHashSet<H>,
 	/// Holds a set of blocks known to this peer.
-	known_blocks: HashSet<B::Hash>,
+	known_blocks: LruHashSet<B::Hash>,
 	/// Request counter,
 	next_request_id: message::RequestId,
 }
@@ -685,6 +683,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				}
 			}
 
+			let cache_limit = NonZeroUsize::new(1_000_000).expect("1_000_000 > 0; qed");
+
 			let peer = Peer {
 				info: PeerInfo {
 					protocol_version: status.version,
@@ -693,8 +693,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					best_number: status.best_number
 				},
 				block_request: None,
-				known_extrinsics: HashSet::new(),
-				known_blocks: HashSet::new(),
+				known_extrinsics: LruHashSet::new(cache_limit),
+				known_blocks: LruHashSet::new(cache_limit),
 				next_request_id: 0,
 				obsolete_requests: HashMap::new(),
 			};
