@@ -712,9 +712,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				None => {
 					// Note: can this actually happen?
 					debug!(target: "sync", "Received status from previously unconnected node {}", who);
-					let peer_id = None;
 					let peer_info = PeerInfo {
-						peer_id: peer_id.clone(),
+						peer_id: None,
 						protocol_version: status.version,
 						roles: status.roles,
 						best_hash: status.best_hash,

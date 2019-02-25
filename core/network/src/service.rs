@@ -291,7 +291,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 
 	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)> {
 		let peers = (*self.peers.read()).clone();
-		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect::<Vec<_>>()
+		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
 	}
 }
 
