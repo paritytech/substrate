@@ -210,7 +210,7 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>,> {
 	Peers(Sender<Vec<(NodeIndex, PeerInfo<B>)>>),
 	/// Let protocol know a peer is currenlty clogged.
 	PeerClogged(NodeIndex, Option<Message<B>>),
-	/// A batch of blocks have been processed, with or without errors.
+	/// A batch of blocks has been processed, with or without errors.
 	BlocksProcessed(Vec<B::Hash>, bool),
 	/// Tell protocol to restart sync.
 	RestartSync,

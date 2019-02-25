@@ -113,17 +113,6 @@ impl TestNetFactory for GrandpaTestNet {
 		(shared_import.clone(), Some(shared_import), Mutex::new(Some(link)))
 	}
 
-	fn add_peer(&mut self, config: &ProtocolConfig) {
-		let client = Arc::new(test_client::new());
-		let verifier = self.make_verifier(client.clone(), config);
-		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let specialization = DummySpecialization;
-		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
-		self.mut_peers(|peers| {
-			peers.push(peer)
-		});
-	}
-
 	fn peer(&self, i: usize) -> &GrandpaPeer {
 		&self.peers[i]
 	}
