@@ -23,7 +23,7 @@ use parking_lot::RwLockWriteGuard;
 
 use client::{blockchain, CallExecutor, Client};
 use client::backend::Backend;
-use client::runtime_api::Core as CoreApi;
+use client::runtime_api::ApiExt;
 use consensus_common::{
 	BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind,
 	ImportBlock, ImportResult, JustificationImport, PostImportActions,
@@ -182,14 +182,17 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 			);
 
 			match maybe_change {
-				Err(e) => match api.version(&at) {
+				Err(e) => match api.has_api_with::<GrandpaApi<Block>, _>(&at, |v| v >= 2) {
 					Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-					Ok(version) => if version.has_api_with::<GrandpaApi<Block>, _>(|v| v >= 2) {
+					Ok(true) => {
 						// API version is high enough to support forced changes
 						// but got error, so it is legitimate.
 						return Err(ConsensusErrorKind::ClientImport(e.to_string()).into())
-					}
-				}
+					},
+					Ok(false) => {
+						// API version isn't high enough to support forced changes
+					},
+				},
 				Ok(None) => {},
 				Ok(Some(change)) => return Ok(Some(PendingChange {
 					next_authorities: change.next_authorities,
