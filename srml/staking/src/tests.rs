@@ -125,7 +125,7 @@ fn note_offline_should_work() {
 
 	});
 }
-/*
+
 #[test]
 fn note_offline_exponent_should_work() {
 	// Test that slashing penalty for offline increases exponentially
@@ -152,100 +152,109 @@ fn note_offline_exponent_should_work() {
 	});
 }
 
+// #[test]
+// fn note_offline_grace_should_work() {
+// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+// 		Balances::set_free_balance(&10, 70);
+// 		Balances::set_free_balance(&20, 70);
+// 		assert_ok!(Staking::set_offline_slash_grace(1));
+// 		assert_eq!(Staking::offline_slash_grace(), 1);
+
+// 		assert_eq!(Staking::slash_count(&10), 0);
+// 		assert_eq!(Balances::free_balance(&10), 70);
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(10, 1);
+// 		assert_eq!(Staking::slash_count(&10), 1);
+// 		assert_eq!(Balances::free_balance(&10), 70);
+// 		assert_eq!(Staking::slash_count(&20), 0);
+// 		assert_eq!(Balances::free_balance(&20), 70);
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(10, 1);
+// 		Staking::on_offline_validator(20, 1);
+// 		assert_eq!(Staking::slash_count(&10), 2);
+// 		assert_eq!(Balances::free_balance(&10), 50);
+// 		assert_eq!(Staking::slash_count(&20), 1);
+// 		assert_eq!(Balances::free_balance(&20), 70);
+// 		assert!(Staking::forcing_new_era().is_none());
+// 	});
+// }
+
+// #[test]
+// fn note_offline_force_unstake_session_change_should_work() {
+// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+// 		Balances::set_free_balance(&10, 70);
+// 		Balances::set_free_balance(&20, 70);
+// 		assert_ok!(Staking::stake(Origin::signed(1)));
+
+// 		assert_eq!(Staking::slash_count(&10), 0);
+// 		assert_eq!(Balances::free_balance(&10), 70);
+// 		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
+// 		assert_eq!(Session::validators(), vec![10, 20]);
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(10, 1);
+// 		assert_eq!(Balances::free_balance(&10), 50);
+// 		assert_eq!(Staking::slash_count(&10), 1);
+// 		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(10, 1);
+// 		assert_eq!(Staking::intentions(), vec![1, 20]);
+// 		assert_eq!(Balances::free_balance(&10), 10);
+// 		assert!(Staking::forcing_new_era().is_some());
+// 	});
+// }
+
+// #[test]
+// fn note_offline_auto_unstake_session_change_should_work() {
+// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+// 		Balances::set_free_balance(&10, 7000);
+// 		Balances::set_free_balance(&20, 7000);
+// 		assert_ok!(Staking::register_preferences(Origin::signed(10), 0, ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
+
+// 		assert_eq!(Staking::intentions(), vec![10, 20]);
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(10, 1);
+// 		Staking::on_offline_validator(20, 1);
+// 		assert_eq!(Balances::free_balance(&10), 6980);
+// 		assert_eq!(Balances::free_balance(&20), 6980);
+// 		assert_eq!(Staking::intentions(), vec![10, 20]);
+// 		assert!(Staking::forcing_new_era().is_none());
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(10, 1);
+// 		Staking::on_offline_validator(20, 1);
+// 		assert_eq!(Balances::free_balance(&10), 6940);
+// 		assert_eq!(Balances::free_balance(&20), 6940);
+// 		assert_eq!(Staking::intentions(), vec![20]);
+// 		assert!(Staking::forcing_new_era().is_some());
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(20, 1);
+// 		assert_eq!(Balances::free_balance(&10), 6940);
+// 		assert_eq!(Balances::free_balance(&20), 6860);
+// 		assert_eq!(Staking::intentions(), vec![20]);
+
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(20, 1);
+// 		assert_eq!(Balances::free_balance(&10), 6940);
+// 		assert_eq!(Balances::free_balance(&20), 6700);
+// 		assert_eq!(Staking::intentions(), vec![0u64; 0]);
+// 	});
+// }
+
+
+
 #[test]
-fn note_offline_grace_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		Balances::set_free_balance(&10, 70);
-		Balances::set_free_balance(&20, 70);
-		assert_ok!(Staking::set_offline_slash_grace(1));
-		assert_eq!(Staking::offline_slash_grace(), 1);
-
-		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Balances::free_balance(&10), 70);
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		assert_eq!(Staking::slash_count(&10), 1);
-		assert_eq!(Balances::free_balance(&10), 70);
-		assert_eq!(Staking::slash_count(&20), 0);
-		assert_eq!(Balances::free_balance(&20), 70);
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		Staking::on_offline_validator(20, 1);
-		assert_eq!(Staking::slash_count(&10), 2);
-		assert_eq!(Balances::free_balance(&10), 50);
-		assert_eq!(Staking::slash_count(&20), 1);
-		assert_eq!(Balances::free_balance(&20), 70);
-		assert!(Staking::forcing_new_era().is_none());
-	});
+fn multi_era_reward_should_work() {
+	// FIXME: possibly either extend this (or make a new test) to at least another cover two eras 
+	// (can fast-forward to the end) and test/verify the logic of the new <CurrentSessionReward> value mutated at 
+	// the end of the era. e.g:
+	unimplemented!();
 }
-
-#[test]
-fn note_offline_force_unstake_session_change_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		Balances::set_free_balance(&10, 70);
-		Balances::set_free_balance(&20, 70);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-
-		assert_eq!(Staking::slash_count(&10), 0);
-		assert_eq!(Balances::free_balance(&10), 70);
-		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
-		assert_eq!(Session::validators(), vec![10, 20]);
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		assert_eq!(Balances::free_balance(&10), 50);
-		assert_eq!(Staking::slash_count(&10), 1);
-		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		assert_eq!(Staking::intentions(), vec![1, 20]);
-		assert_eq!(Balances::free_balance(&10), 10);
-		assert!(Staking::forcing_new_era().is_some());
-	});
-}
-
-#[test]
-fn note_offline_auto_unstake_session_change_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		Balances::set_free_balance(&10, 7000);
-		Balances::set_free_balance(&20, 7000);
-		assert_ok!(Staking::register_preferences(Origin::signed(10), 0, ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
-
-		assert_eq!(Staking::intentions(), vec![10, 20]);
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		Staking::on_offline_validator(20, 1);
-		assert_eq!(Balances::free_balance(&10), 6980);
-		assert_eq!(Balances::free_balance(&20), 6980);
-		assert_eq!(Staking::intentions(), vec![10, 20]);
-		assert!(Staking::forcing_new_era().is_none());
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		Staking::on_offline_validator(20, 1);
-		assert_eq!(Balances::free_balance(&10), 6940);
-		assert_eq!(Balances::free_balance(&20), 6940);
-		assert_eq!(Staking::intentions(), vec![20]);
-		assert!(Staking::forcing_new_era().is_some());
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(20, 1);
-		assert_eq!(Balances::free_balance(&10), 6940);
-		assert_eq!(Balances::free_balance(&20), 6860);
-		assert_eq!(Staking::intentions(), vec![20]);
-
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(20, 1);
-		assert_eq!(Balances::free_balance(&10), 6940);
-		assert_eq!(Balances::free_balance(&20), 6700);
-		assert_eq!(Staking::intentions(), vec![0u64; 0]);
-	});
-}*/
-
 
 #[test]
 fn rewards_should_work() {
@@ -295,47 +304,9 @@ fn rewards_should_work() {
 
 		// 1 + sum of of the session rewards accumulated
 		assert_eq!(Balances::total_balance(&10), 1 + 10 + 10 + 8);
-
-		// FIXME: possibly either extend this (or make a new test) to at least another cover two eras 
-		// (can fast-forward to the end) and test/verify the logic of the new <CurrentSessionReward> value mutated at 
-		// the end of the era. e.g:
-		// assert_eq!(Staking::current_session_reward(), 20);
-		// assert_eq!(Staking::current_era_reward(), 0);
 	});
 }
 
-/*#[test]
-fn slashing_should_work() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		assert_eq!(Staking::era_length(), 9);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 0);
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Balances::total_balance(&10), 1);
-
-		System::set_block_number(3);
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 1);
-		assert_eq!(Balances::total_balance(&10), 11);
-
-		System::set_block_number(6);
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Balances::total_balance(&10), 21);
-
-		System::set_block_number(7);
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(10, 1);
-		Staking::on_offline_validator(20, 1);
-		assert_eq!(Balances::total_balance(&10), 1);
-	});
-}*/
-
-
-/*
 #[test]
 fn staking_should_work() {
 	// should test: 
@@ -387,7 +358,7 @@ fn staking_should_work() {
 		// FIXME: the assertion in the section should be changed to something in sync with how phragmen works.
 		// for now just check that some arbitrary "two validators" have been chosen.
 		assert_eq!(Session::validators().len(), 2);
-		assert_eq!(Session::validators(), vec![4, 20]); // temporary. sorted by total staked value.
+		assert_eq!(Session::validators(), vec![10, 20]); // temporary. sorted by total staked value.
 		assert_eq!(Staking::current_era(), 1);
 
 
@@ -419,120 +390,120 @@ fn staking_should_work() {
 }
 
 
-#[test]
-fn nominating_and_rewards_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
-		assert_eq!(Staking::era_length(), 1);
-		assert_eq!(Staking::validator_count(), 2);
-		assert_eq!(Staking::bonding_duration(), 3);
-		assert_eq!(Session::validators(), vec![10, 20]);
+// #[test]
+// fn nominating_and_rewards_should_work() {
+// 	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
+// 		assert_eq!(Staking::era_length(), 1);
+// 		assert_eq!(Staking::validator_count(), 2);
+// 		assert_eq!(Staking::bonding_duration(), 3);
+// 		assert_eq!(Session::validators(), vec![10, 20]);
 
-		System::set_block_number(1);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_ok!(Staking::stake(Origin::signed(2)));
-		assert_ok!(Staking::stake(Origin::signed(3)));
-		assert_ok!(Staking::nominate(Origin::signed(4), 1));
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
-		assert_eq!(Balances::total_balance(&1), 10);
-		assert_eq!(Balances::total_balance(&2), 20);
-		assert_eq!(Balances::total_balance(&3), 30);
-		assert_eq!(Balances::total_balance(&4), 40);
+// 		System::set_block_number(1);
+// 		assert_ok!(Staking::stake(Origin::signed(1)));
+// 		assert_ok!(Staking::stake(Origin::signed(2)));
+// 		assert_ok!(Staking::stake(Origin::signed(3)));
+// 		assert_ok!(Staking::nominate(Origin::signed(4), 1));
+// 		Session::check_rotate_session(System::block_number());
+// 		assert_eq!(Staking::current_era(), 1);
+// 		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
+// 		assert_eq!(Balances::total_balance(&1), 10);
+// 		assert_eq!(Balances::total_balance(&2), 20);
+// 		assert_eq!(Balances::total_balance(&3), 30);
+// 		assert_eq!(Balances::total_balance(&4), 40);
 
-		System::set_block_number(2);
-		assert_ok!(Staking::unnominate(Origin::signed(4), 0));
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 2);
-		assert_eq!(Session::validators(), vec![3, 2]);
-		assert_eq!(Balances::total_balance(&1), 16);
-		assert_eq!(Balances::total_balance(&2), 20);
-		assert_eq!(Balances::total_balance(&3), 60);
-		assert_eq!(Balances::total_balance(&4), 64);
+// 		System::set_block_number(2);
+// 		assert_ok!(Staking::unnominate(Origin::signed(4), 0));
+// 		Session::check_rotate_session(System::block_number());
+// 		assert_eq!(Staking::current_era(), 2);
+// 		assert_eq!(Session::validators(), vec![3, 2]);
+// 		assert_eq!(Balances::total_balance(&1), 16);
+// 		assert_eq!(Balances::total_balance(&2), 20);
+// 		assert_eq!(Balances::total_balance(&3), 60);
+// 		assert_eq!(Balances::total_balance(&4), 64);
 
-		System::set_block_number(3);
-		assert_ok!(Staking::stake(Origin::signed(4)));
-		assert_ok!(Staking::unstake(Origin::signed(3), (Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32).into()));
-		assert_ok!(Staking::nominate(Origin::signed(3), 1));
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![1, 4]);
-		assert_eq!(Balances::total_balance(&1), 16);
-		assert_eq!(Balances::total_balance(&2), 40);
-		assert_eq!(Balances::total_balance(&3), 80);
-		assert_eq!(Balances::total_balance(&4), 64);
+// 		System::set_block_number(3);
+// 		assert_ok!(Staking::stake(Origin::signed(4)));
+// 		assert_ok!(Staking::unstake(Origin::signed(3), (Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32).into()));
+// 		assert_ok!(Staking::nominate(Origin::signed(3), 1));
+// 		Session::check_rotate_session(System::block_number());
+// 		assert_eq!(Session::validators(), vec![1, 4]);
+// 		assert_eq!(Balances::total_balance(&1), 16);
+// 		assert_eq!(Balances::total_balance(&2), 40);
+// 		assert_eq!(Balances::total_balance(&3), 80);
+// 		assert_eq!(Balances::total_balance(&4), 64);
 
-		System::set_block_number(4);
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Balances::total_balance(&1), 26);
-		assert_eq!(Balances::total_balance(&2), 40);
-		assert_eq!(Balances::total_balance(&3), 133);
-		assert_eq!(Balances::total_balance(&4), 128);
-	});
-}
+// 		System::set_block_number(4);
+// 		Session::check_rotate_session(System::block_number());
+// 		assert_eq!(Balances::total_balance(&1), 26);
+// 		assert_eq!(Balances::total_balance(&2), 40);
+// 		assert_eq!(Balances::total_balance(&3), 133);
+// 		assert_eq!(Balances::total_balance(&4), 128);
+// 	});
+// }
 
-#[test]
-fn rewards_with_off_the_table_should_work() {
-	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
-		System::set_block_number(1);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_ok!(Staking::nominate(Origin::signed(2), 1));
-		assert_ok!(Staking::stake(Origin::signed(3)));
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
-		assert_eq!(Balances::total_balance(&1), 10);
-		assert_eq!(Balances::total_balance(&2), 20);
-		assert_eq!(Balances::total_balance(&3), 30);
+// #[test]
+// fn rewards_with_off_the_table_should_work() {
+// 	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
+// 		System::set_block_number(1);
+// 		assert_ok!(Staking::stake(Origin::signed(1)));
+// 		assert_ok!(Staking::nominate(Origin::signed(2), 1));
+// 		assert_ok!(Staking::stake(Origin::signed(3)));
+// 		Session::check_rotate_session(System::block_number());
+// 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
+// 		assert_eq!(Balances::total_balance(&1), 10);
+// 		assert_eq!(Balances::total_balance(&2), 20);
+// 		assert_eq!(Balances::total_balance(&3), 30);
 
-		System::set_block_number(2);
-		assert_ok!(Staking::register_preferences(
-			Origin::signed(1),
-			(Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32).into(),
-			ValidatorPrefs { unstake_threshold: 3, validator_payment: 4 }
-		));
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Balances::total_balance(&1), 22);
-		assert_eq!(Balances::total_balance(&2), 37);
-		assert_eq!(Balances::total_balance(&3), 60);
-	});
-}
+// 		System::set_block_number(2);
+// 		assert_ok!(Staking::register_preferences(
+// 			Origin::signed(1),
+// 			(Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32).into(),
+// 			ValidatorPrefs { unstake_threshold: 3, validator_payment: 4 }
+// 		));
+// 		Session::check_rotate_session(System::block_number());
+// 		assert_eq!(Balances::total_balance(&1), 22);
+// 		assert_eq!(Balances::total_balance(&2), 37);
+// 		assert_eq!(Balances::total_balance(&3), 60);
+// 	});
+// }
 
-#[test]
-fn nominating_slashes_should_work() {
-	with_externalities(&mut new_test_ext(0, 2, 2, 0, true, 10), || {
-		assert_eq!(Staking::era_length(), 4);
-		assert_eq!(Staking::validator_count(), 2);
-		assert_eq!(Staking::bonding_duration(), 12);
-		assert_eq!(Session::validators(), vec![10, 20]);
+// #[test]
+// fn nominating_slashes_should_work() {
+// 	with_externalities(&mut new_test_ext(0, 2, 2, 0, true, 10), || {
+// 		assert_eq!(Staking::era_length(), 4);
+// 		assert_eq!(Staking::validator_count(), 2);
+// 		assert_eq!(Staking::bonding_duration(), 12);
+// 		assert_eq!(Session::validators(), vec![10, 20]);
 
-		System::set_block_number(2);
-		Session::check_rotate_session(System::block_number());
+// 		System::set_block_number(2);
+// 		Session::check_rotate_session(System::block_number());
 
-		Timestamp::set_timestamp(15);
-		System::set_block_number(4);
-		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_ok!(Staking::stake(Origin::signed(3)));
-		assert_ok!(Staking::nominate(Origin::signed(2), 3));
-		assert_ok!(Staking::nominate(Origin::signed(4), 1));
-		Session::check_rotate_session(System::block_number());
+// 		Timestamp::set_timestamp(15);
+// 		System::set_block_number(4);
+// 		assert_ok!(Staking::stake(Origin::signed(1)));
+// 		assert_ok!(Staking::stake(Origin::signed(3)));
+// 		assert_ok!(Staking::nominate(Origin::signed(2), 3));
+// 		assert_ok!(Staking::nominate(Origin::signed(4), 1));
+// 		Session::check_rotate_session(System::block_number());
 
-		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
-		assert_eq!(Balances::total_balance(&1), 10);
-		assert_eq!(Balances::total_balance(&2), 20);
-		assert_eq!(Balances::total_balance(&3), 30);
-		assert_eq!(Balances::total_balance(&4), 40);
+// 		assert_eq!(Staking::current_era(), 1);
+// 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
+// 		assert_eq!(Balances::total_balance(&1), 10);
+// 		assert_eq!(Balances::total_balance(&2), 20);
+// 		assert_eq!(Balances::total_balance(&3), 30);
+// 		assert_eq!(Balances::total_balance(&4), 40);
 
-		System::set_block_number(5);
-		System::set_extrinsic_index(1);
-		Staking::on_offline_validator(1, 1);
-		Staking::on_offline_validator(3, 1);
-		assert_eq!(Balances::total_balance(&1), 0);			//slashed
-		assert_eq!(Balances::total_balance(&2), 20);		//not slashed
-		assert_eq!(Balances::total_balance(&3), 10);		//slashed
-		assert_eq!(Balances::total_balance(&4), 30);		//slashed
-	});
-}
-*/
+// 		System::set_block_number(5);
+// 		System::set_extrinsic_index(1);
+// 		Staking::on_offline_validator(1, 1);
+// 		Staking::on_offline_validator(3, 1);
+// 		assert_eq!(Balances::total_balance(&1), 0);			//slashed
+// 		assert_eq!(Balances::total_balance(&2), 20);		//not slashed
+// 		assert_eq!(Balances::total_balance(&3), 10);		//slashed
+// 		assert_eq!(Balances::total_balance(&4), 30);		//slashed
+// 	});
+// }
+
 #[test]
 fn double_staking_should_fail() {
 	// should test (in the same order):
@@ -662,80 +633,79 @@ fn reserving_balance_when_bonded_should_not_work() {
 	});
 }
 
-/*
-#[test]
-fn slash_value_calculation_does_not_overflow() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		assert_eq!(Staking::era_length(), 9);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 0);
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Balances::total_balance(&10), 1);
-		assert_eq!(Staking::intentions(), vec![10, 20]);
-		assert_eq!(Staking::offline_slash_grace(), 0);
 
-		// set validator preferences so the validator doesn't back down after
-		// slashing.
-		<ValidatorPreferences<Test>>::insert(10, ValidatorPrefs {
-			unstake_threshold: u32::max_value(),
-			validator_payment: 0,
-		});
+// #[test]
+// fn slash_value_calculation_does_not_overflow() {
+// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+// 		assert_eq!(Staking::era_length(), 9);
+// 		assert_eq!(Staking::sessions_per_era(), 3);
+// 		assert_eq!(Staking::last_era_length_change(), 0);
+// 		assert_eq!(Staking::current_era(), 0);
+// 		assert_eq!(Session::current_index(), 0);
+// 		assert_eq!(Balances::total_balance(&10), 1);
+// 		assert_eq!(Staking::intentions(), vec![10, 20]);
+// 		assert_eq!(Staking::offline_slash_grace(), 0);
 
-		System::set_block_number(3);
-		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 1);
-		assert_eq!(Balances::total_balance(&10), 11);
+// 		// set validator preferences so the validator doesn't back down after
+// 		// slashing.
+// 		<ValidatorPreferences<Test>>::insert(10, ValidatorPrefs {
+// 			unstake_threshold: u32::max_value(),
+// 			validator_payment: 0,
+// 		});
 
-		// the balance type is u64, so after slashing 64 times,
-		// the slash value should have overflowed. add a couple extra for
-		// good measure with the slash grace.
-		trait TypeEq {}
-		impl<A> TypeEq for (A, A) {}
-		fn assert_type_eq<A: TypeEq>() {}
-		assert_type_eq::<(u64, <Test as balances::Trait>::Balance)>();
+// 		System::set_block_number(3);
+// 		Session::check_rotate_session(System::block_number());
+// 		assert_eq!(Staking::current_era(), 0);
+// 		assert_eq!(Session::current_index(), 1);
+// 		assert_eq!(Balances::total_balance(&10), 11);
 
-		Staking::on_offline_validator(10, 100);
-	});
-}
+// 		// the balance type is u64, so after slashing 64 times,
+// 		// the slash value should have overflowed. add a couple extra for
+// 		// good measure with the slash grace.
+// 		trait TypeEq {}
+// 		impl<A> TypeEq for (A, A) {}
+// 		fn assert_type_eq<A: TypeEq>() {}
+// 		assert_type_eq::<(u64, <Test as balances::Trait>::Balance)>();
 
-#[test]
-fn next_slash_value_calculation_does_not_overflow() {
-	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-		assert_eq!(Staking::era_length(), 9);
-		assert_eq!(Staking::sessions_per_era(), 3);
-		assert_eq!(Staking::last_era_length_change(), 0);
-		assert_eq!(Staking::current_era(), 0);
-		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Balances::total_balance(&10), 1);
-		assert_eq!(Staking::intentions(), vec![10, 20]);
-		assert_eq!(Staking::offline_slash_grace(), 0);
+// 		Staking::on_offline_validator(10, 100);
+// 	});
+// }
 
-		// set validator preferences so the validator doesn't back down after
-		// slashing.
-		<ValidatorPreferences<Test>>::insert(10, ValidatorPrefs {
-			unstake_threshold: u32::max_value(),
-			validator_payment: 0,
-		});
+// #[test]
+// fn next_slash_value_calculation_does_not_overflow() {
+// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+// 		assert_eq!(Staking::era_length(), 9);
+// 		assert_eq!(Staking::sessions_per_era(), 3);
+// 		assert_eq!(Staking::last_era_length_change(), 0);
+// 		assert_eq!(Staking::current_era(), 0);
+// 		assert_eq!(Session::current_index(), 0);
+// 		assert_eq!(Balances::total_balance(&10), 1);
+// 		assert_eq!(Staking::intentions(), vec![10, 20]);
+// 		assert_eq!(Staking::offline_slash_grace(), 0);
 
-		// we have enough balance to cover the last slash before overflow
-		Balances::set_free_balance(&10, u64::max_value());
-		assert_eq!(Balances::total_balance(&10), u64::max_value());
+// 		// set validator preferences so the validator doesn't back down after
+// 		// slashing.
+// 		<ValidatorPreferences<Test>>::insert(10, ValidatorPrefs {
+// 			unstake_threshold: u32::max_value(),
+// 			validator_payment: 0,
+// 		});
 
-		// the balance type is u64, so after slashing 64 times,
-		// the slash value should have overflowed. add a couple extra for
-		// good measure with the slash grace.
-		trait TypeEq {}
-		impl<A> TypeEq for (A, A) {}
-		fn assert_type_eq<A: TypeEq>() {}
-		assert_type_eq::<(u64, <Test as balances::Trait>::Balance)>();
+// 		// we have enough balance to cover the last slash before overflow
+// 		Balances::set_free_balance(&10, u64::max_value());
+// 		assert_eq!(Balances::total_balance(&10), u64::max_value());
 
-		// the total slash value should overflow the balance type
-		// therefore the total validator balance should be slashed
-		Staking::on_offline_validator(10, 100);
+// 		// the balance type is u64, so after slashing 64 times,
+// 		// the slash value should have overflowed. add a couple extra for
+// 		// good measure with the slash grace.
+// 		trait TypeEq {}
+// 		impl<A> TypeEq for (A, A) {}
+// 		fn assert_type_eq<A: TypeEq>() {}
+// 		assert_type_eq::<(u64, <Test as balances::Trait>::Balance)>();
 
-		assert_eq!(Balances::total_balance(&10), 0);
-	});
-}
-*/
+// 		// the total slash value should overflow the balance type
+// 		// therefore the total validator balance should be slashed
+// 		Staking::on_offline_validator(10, 100);
+
+// 		assert_eq!(Balances::total_balance(&10), 0);
+// 	});
+// }
