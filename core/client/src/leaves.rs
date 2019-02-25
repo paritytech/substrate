@@ -14,43 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::BTreeSet;
-use std::cmp::{Ord, Ordering};
+use std::collections::BTreeMap;
+use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
 use runtime_primitives::traits::SimpleArithmetic;
 use parity_codec::{Encode, Decode};
 use crate::error;
 
-/// helper wrapper type to keep a list of block hashes ordered
-/// by `number` descending in a `BTreeSet` which allows faster and simpler
-/// insertion and removal than keeping them in a list.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {
 	hash: H,
-	number: N,
+	number: Reverse<N>,
 }
-
-impl<H, N> Ord for LeafSetItem<H, N> where N: Ord {
-	fn cmp(&self, other: &Self) -> Ordering {
-		// reverse (descending) order
-		other.number.cmp(&self.number)
-	}
-}
-
-impl<H, N> PartialOrd for LeafSetItem<H, N> where N: PartialOrd {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		// reverse (descending) order
-		other.number.partial_cmp(&self.number)
-	}
-}
-
-impl<H, N> PartialEq for LeafSetItem<H, N> where N: PartialEq {
-	fn eq(&self, other: &LeafSetItem<H, N>) -> bool {
-		self.number == other.number
-	}
-}
-
-impl<H, N> Eq for LeafSetItem<H, N> where N: PartialEq {}
 
 /// A displaced leaf after import.
 pub struct DisplacedLeaf<H, N> {
@@ -63,19 +38,19 @@ pub struct DisplacedLeaf<H, N> {
 /// this allows very fast checking and modification of active leaves.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LeafSet<H, N> {
-	storage: BTreeSet<LeafSetItem<H, N>>,
+	storage: BTreeMap<Reverse<N>, Vec<H>>,
 	pending_added: Vec<LeafSetItem<H, N>>,
 	pending_removed: Vec<H>,
 }
 
 impl<H, N> LeafSet<H, N> where
-	H: Clone + Decode + Encode,
-	N: Clone + SimpleArithmetic + Decode + Encode,
+	H: Clone + PartialEq + Decode + Encode,
+	N: std::fmt::Debug + Clone + SimpleArithmetic + Decode + Encode,
 {
 	/// Construct a new, blank leaf set.
 	pub fn new() -> Self {
 		Self {
-			storage: BTreeSet::new(),
+			storage: BTreeMap::new(),
 			pending_added: Vec::new(),
 			pending_removed: Vec::new(),
 		}
@@ -83,7 +58,7 @@ impl<H, N> LeafSet<H, N> where
 
 	/// Read the leaf list from the DB, using given prefix for keys.
 	pub fn read_from_db(db: &KeyValueDB, column: Option<u32>, prefix: &[u8]) -> error::Result<Self> {
-		let mut storage = BTreeSet::new();
+		let mut storage = BTreeMap::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
 			if !key.starts_with(prefix) { break }
@@ -96,7 +71,7 @@ impl<H, N> LeafSet<H, N> where
 				Some(number) => number,
 				None => return Err(error::ErrorKind::Backend("Error decoding number".into()).into()),
 			};
-			storage.insert(LeafSetItem { hash, number });
+			storage.entry(Reverse(number)).or_insert_with(Vec::new).push(hash);
 		}
 		Ok(Self {
 			storage,
@@ -109,17 +84,17 @@ impl<H, N> LeafSet<H, N> where
 	pub fn import(&mut self, hash: H, number: N, parent_hash: H) -> Option<DisplacedLeaf<H, N>> {
 		// avoid underflow for genesis.
 		let displaced = if number != N::zero() {
-			let displaced = LeafSetItem {
-				hash: parent_hash.clone(),
-				number: number.clone() - N::one(),
-			};
-			let was_displaced = self.storage.remove(&displaced);
+			let new_number = Reverse(number.clone() - N::one());
+			let was_displaced = self.remove_leaf(&new_number, &parent_hash);
 
 			if was_displaced {
-				self.pending_removed.push(parent_hash);
+				self.pending_removed.push(parent_hash.clone());
 				Some(DisplacedLeaf {
 					new_hash: hash.clone(),
-					displaced,
+					displaced: LeafSetItem {
+						hash: parent_hash,
+						number: new_number,
+					},
 				})
 			} else {
 				None
@@ -128,17 +103,16 @@ impl<H, N> LeafSet<H, N> where
 			None
 		};
 
-		let item = LeafSetItem { hash, number };
-		self.storage.insert(item.clone());
-		self.pending_added.push(item);
+		self.insert_leaf(Reverse(number.clone()), hash.clone());
+		self.pending_added.push(LeafSetItem { hash, number: Reverse(number) });
 		displaced
 	}
 
 	/// Undo an import operation, with a displaced leaf.
 	pub fn undo(&mut self, displaced: DisplacedLeaf<H, N>) {
-		let new_number = displaced.displaced.number.clone() + N::one();
-		self.storage.remove(&LeafSetItem { hash: displaced.new_hash, number: new_number });
-		self.storage.insert(displaced.displaced);
+		let new_number = Reverse(displaced.displaced.number.0.clone() + N::one());
+		self.remove_leaf(&new_number, &displaced.new_hash);
+		self.insert_leaf(new_number, displaced.displaced.hash);
 		self.pending_added.clear();
 		self.pending_removed.clear();
 	}
@@ -147,17 +121,14 @@ impl<H, N> LeafSet<H, N> where
 	/// we assume that parent has no further children
 	/// and we add it as leaf again
 	pub fn revert(&mut self, hash: H, number: N, parent_hash: H) {
-		self.storage.insert(LeafSetItem {
-			hash: parent_hash,
-			number: number.clone() - N::one(),
-		});
-		self.storage.remove(&LeafSetItem { hash, number });
+		self.insert_leaf(Reverse(number.clone() - N::one()), parent_hash);
+		self.remove_leaf(&Reverse(number), &hash);
 	}
 
 	/// returns an iterator over all hashes in the leaf set
 	/// ordered by their block number descending.
 	pub fn hashes(&self) -> Vec<H> {
-		self.storage.iter().map(|item| item.hash.clone()).collect()
+		self.storage.iter().flat_map(|(_, hashes)| hashes.iter()).cloned().collect()
 	}
 
 	/// Write the leaf list to the database transaction.
@@ -165,7 +136,7 @@ impl<H, N> LeafSet<H, N> where
 		let mut buf = prefix.to_vec();
 		for LeafSetItem { hash, number } in self.pending_added.drain(..) {
 			hash.using_encoded(|s| buf.extend(s));
-			tx.put_vec(column, &buf[..], number.encode());
+			tx.put_vec(column, &buf[..], number.0.encode());
 			buf.truncate(prefix.len()); // reuse allocation.
 		}
 		for hash in self.pending_removed.drain(..) {
@@ -173,6 +144,39 @@ impl<H, N> LeafSet<H, N> where
 			tx.delete(column, &buf[..]);
 			buf.truncate(prefix.len()); // reuse allocation.
 		}
+	}
+
+	#[cfg(test)]
+	fn contains(&self, number: N, hash: H) -> bool {
+		self.storage.get(&Reverse(number)).map_or(false, |hashes| hashes.contains(&hash))
+	}
+
+	fn insert_leaf(&mut self, number: Reverse<N>, hash: H) {
+		self.storage.entry(number).or_insert_with(Vec::new).push(hash);
+	}
+
+	// returns true if this leaf was contained, false otherwise.
+	fn remove_leaf(&mut self, number: &Reverse<N>, hash: &H) -> bool {
+		let mut empty = false;
+		let removed = self.storage.get_mut(number).map_or(false, |leaves| {
+			let mut found = false;
+			leaves.retain(|h| if h == hash {
+				found = true;
+				false
+			} else {
+				true
+			});
+
+			if leaves.is_empty() { empty = true }
+
+			found
+		});
+
+		if removed && empty {
+			self.storage.remove(number);
+		}
+
+		removed
 	}
 }
 
@@ -189,15 +193,15 @@ mod tests {
 		set.import(2_1, 2, 1_1);
 		set.import(3_1, 3, 2_1);
 
-		assert!(set.storage.contains(&LeafSetItem { hash: 3_1, number: 3 }));
-		assert!(!set.storage.contains(&LeafSetItem { hash: 2_1, number: 2 }));
-		assert!(!set.storage.contains(&LeafSetItem { hash: 1_1, number: 1 }));
-		assert!(!set.storage.contains(&LeafSetItem { hash: 0, number: 0 }));
+		assert!(set.contains(3, 3_1));
+		assert!(!set.contains(2, 2_1));
+		assert!(!set.contains(1, 1_1));
+		assert!(!set.contains(0, 0));
 
 		set.import(2_2, 2, 1_1);
 
-		assert!(set.storage.contains(&LeafSetItem { hash: 3_1, number: 3 }));
-		assert!(set.storage.contains(&LeafSetItem { hash: 2_2, number: 2 }));
+		assert!(set.contains(3, 3_1));
+		assert!(set.contains(2, 2_2));
 	}
 
 	#[test]
@@ -219,5 +223,18 @@ mod tests {
 
 		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
 		assert_eq!(set, set2);
+	}
+
+	#[test]
+	fn two_leaves_same_height_can_be_included() {
+		let mut set = LeafSet::new();
+
+		set.import(1_1u32, 10u32,0u32);
+		set.import(1_2, 10, 0);
+
+		assert!(set.storage.contains_key(&Reverse(10)));
+		assert!(set.contains(10, 1_1));
+		assert!(set.contains(10, 1_2));
+		assert!(!set.contains(10, 1_3));
 	}
 }
