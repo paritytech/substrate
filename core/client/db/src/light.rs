@@ -968,4 +968,28 @@ pub(crate) mod tests {
 		assert_eq!(db.get_aux(&[2]).unwrap(), Some(vec![102]));
 		assert_eq!(db.get_aux(&[3]).unwrap(), Some(vec![103]));
 	}
+
+	#[test]
+	fn test_leaves_pruned_on_finality() {
+		let db = LightStorage::<Block>::new_test();
+		let block0 = insert_final_block(&db, None, || default_header(&Default::default(), 0));
+
+		let block1_a = insert_block(&db, None, || default_header(&block0, 1));
+		let block1_b = insert_block(&db, None, || header_with_extrinsics_root(&block0, 1, [1; 32].into()));
+		let block1_c = insert_block(&db, None, || header_with_extrinsics_root(&block0, 1, [2; 32].into()));
+
+		assert_eq!(db.leaves.read().hashes(), vec![block1_a, block1_b, block1_c]);
+
+		let block2_a = insert_block(&db, None, || default_header(&block1_a, 2));
+		let block2_b = insert_block(&db, None, || header_with_extrinsics_root(&block1_b, 2, [1; 32].into()));
+		let block2_c = insert_block(&db, None, || header_with_extrinsics_root(&block1_b, 2, [2; 32].into()));
+
+		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c, block1_c]);
+
+		db.finalize_header(BlockId::hash(block1_a)).unwrap();
+		db.finalize_header(BlockId::hash(block2_a)).unwrap();
+
+		// leaves at same height stay. Leaves at lower heights pruned.
+		assert_eq!(db.leaves.read().hashes(), vec![block2_a, block2_b, block2_c]);
+	}
 }

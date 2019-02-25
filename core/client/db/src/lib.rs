@@ -1177,6 +1177,7 @@ mod tests {
 	use super::*;
 	use crate::columns;
 	use client::backend::Backend as BTrait;
+	use client::blockchain::Backend as BLBTrait;
 	use client::backend::BlockImportOperation as Op;
 	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use runtime_primitives::traits::{Hash, BlakeTwo256};
@@ -1814,8 +1815,6 @@ mod tests {
 				BlockId::Hash(block1),
 			).unwrap();
 
-			println!("{:?}", tree_route);
-
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert!(tree_route.retracted().is_empty());
 			assert_eq!(tree_route.enacted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![block1]);
@@ -1832,6 +1831,30 @@ mod tests {
 	fn test_blockchain_query_by_number_gets_canonical() {
 		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
 		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+	}
+
+	#[test]
+	fn test_leaves_pruned_on_finality() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), Default::default(), Default::default());
+
+		let block1_a = insert_header(&backend, 1, block0, Default::default(), Default::default());
+		let block1_b = insert_header(&backend, 1, block0, Default::default(), [1; 32].into());
+		let block1_c = insert_header(&backend, 1, block0, Default::default(), [2; 32].into());
+
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block1_a, block1_b, block1_c]);
+
+		let block2_a = insert_header(&backend, 2, block1_a, Default::default(), Default::default());
+		let block2_b = insert_header(&backend, 2, block1_b, Default::default(), Default::default());
+		let block2_c = insert_header(&backend, 2, block1_b, Default::default(), [1; 32].into());
+
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c, block1_c]);
+
+		backend.finalize_block(BlockId::hash(block1_a), None).unwrap();
+		backend.finalize_block(BlockId::hash(block2_a), None).unwrap();
+
+		// leaves at same height stay. Leaves at lower heights pruned.
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a, block2_b, block2_c]);
 	}
 
 	#[test]
