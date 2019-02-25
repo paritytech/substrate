@@ -23,14 +23,14 @@
 use rstd::{prelude::*, result};
 use parity_codec::HasCompact;
 use parity_codec_derive::{Encode, Decode};
-use srml_support::{Parameter, StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
+use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
 	Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason, ArithmeticType
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Zero, One, As, StaticLookup, Saturating, CheckedSub};
+use primitives::traits::{Zero, One, As, StaticLookup, Saturating};
 use system::ensure_signed;
 
 mod mock;
@@ -43,21 +43,20 @@ const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
 /// A destination account for payment.
-// TODO: make work
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum Payee {
+pub enum RewardDestination {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
-	Stake,
+	Staked,
 	/// Pay into the stash account, not increasing the amount at stake.
 	Stash,
 	/// Pay into the controller account.
 	Controller,
 }
 
-impl Default for Payee {
+impl Default for RewardDestination {
 	fn default() -> Self {
-		Payee::Stake
+		RewardDestination::Staked
 	}
 }
 
@@ -78,7 +77,6 @@ impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 		ValidatorPrefs {
 			unstake_threshold: 3,
 			validator_payment: Default::default(),
-			payee: Default::default(),
 		}
 	}
 }
@@ -112,8 +110,6 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
-	/// Should reward be paid into the stash or the controller account?
-	pub payee: Payee,
 }
 
 impl<AccountId, Balance: HasCompact + Copy + Saturating, BlockNumber: HasCompact + PartialOrd> StakingLedger<AccountId, Balance, BlockNumber> {
@@ -214,7 +210,7 @@ decl_storage! {
 		}): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// Where the reward payment should be made.
-		pub Payee get(payee): map T::AccountId => Payee;
+		pub Payee get(payee): map T::AccountId => RewardDestination;
 
 		/// The set of keys are all controllers that want to validate.
 		/// 
@@ -296,7 +292,7 @@ decl_module! {
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will be the
 		/// account that controls it.
-		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: Payee) {
+		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: RewardDestination) {
 			let stash = ensure_signed(origin)?;
 
 			if <Bonded<T>>::exists(&stash) {
@@ -428,7 +424,7 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		/// 
 		/// NOTE: This call must be made by the controller, not the stash.
-		fn set_payee(origin, payee: Payee) {
+		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			<Payee<T>>::insert(&controller, payee);
@@ -548,12 +544,21 @@ impl<T: Trait> Module<T> {
 			for i in exposure.others.iter() {
 				let amount = safe_mul_rational(i.value);
 				let payee = Self::payee(&i.who);
-				let destination = match payee {
-					Payee::Controller => i.who.clone(),
-					Payee::Stash => Self::ledger(&i.who).stash,
-				 	Payee::Staked => <Ledger<T>>::mutate(&i.who, |l| { l.active += amount; l.total += amount; l.stash }),
-				};
-				let _ = T::Currency::reward(&i.who, destination);
+				match payee {
+					RewardDestination::Controller => {
+						let _ = T::Currency::reward(&i.who, amount);
+					}
+					RewardDestination::Stash => {
+						let _ = Self::ledger(&i.who).map(|l| T::Currency::reward(&l.stash, amount));
+					}
+				 	RewardDestination::Staked => <Ledger<T>>::mutate(&i.who, |ml| {
+						if let Some(l) = ml.as_mut() {
+							l.active += amount;
+							l.total += amount;
+							let _ = T::Currency::reward(&l.stash, amount);
+						}
+					}),
+				}
 			}
 			safe_mul_rational(exposure.own)
 		};
@@ -774,7 +779,7 @@ impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
 		if let Some(controller) = Self::bonded(who) {
 			let ledger = Self::ledger(&controller).ok_or("stash without controller")?;
 			let free_balance = T::Currency::free_balance(&who);
-			ensure!(free_balance.saturating_sub(&ledger.total) > amount,
+			ensure!(free_balance.saturating_sub(ledger.total) > amount,
 				"stash with too much under management");
 		}		
 		Ok(())
