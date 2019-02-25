@@ -19,21 +19,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
-use crate::error;
-use crate::backend::{self, NewBlockState};
-use crate::light;
 use primitives::{ChangesTrieConfiguration, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem, AuthorityIdFor};
 use runtime_primitives::{Justification, StorageOverlay, ChildrenStorageOverlay};
-use crate::blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
 use state_machine::{self, InMemoryChangesTrieStorage, ChangesTrieAnchorBlockId};
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use crate::leaves::LeafSet;
 use trie::MemoryDB;
+
+use crate::error;
+use crate::backend::{self, NewBlockState};
+use crate::light;
+use crate::leaves::LeafSet;
+use crate::blockchain::{self, BlockStatus, HeaderBackend};
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -168,7 +169,6 @@ impl<Block: BlockT> Blockchain<Block> {
 		new_state: NewBlockState,
 	) -> crate::error::Result<()> {
 		let number = header.number().clone();
-
 		if new_state.is_best() {
 			self.apply_head(&header)?;
 		}
@@ -361,6 +361,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 
 	fn leaves(&self) -> error::Result<Vec<Block::Hash>> {
 		Ok(self.storage.read().leaves.hashes())
+	}
+
+	fn children(&self, _parent_hash: Block::Hash) -> error::Result<Vec<Block::Hash>> {
+		unimplemented!()
 	}
 }
 
