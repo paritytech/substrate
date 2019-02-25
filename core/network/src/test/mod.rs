@@ -94,7 +94,7 @@ impl<B: BlockT> Link<B> for NoopLink { }
 
 /// The test specialization.
 #[derive(Clone)]
-pub struct DummySpecialization { }
+pub struct DummySpecialization;
 
 impl NetworkSpecialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> {
@@ -726,7 +726,7 @@ impl TestNetFactory for TestNet {
 		let client = Arc::new(test_client::new());
 		let verifier = self.make_verifier(client.clone(), config);
 		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let specialization = DummySpecialization {};
+		let specialization = DummySpecialization;
 		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
 		self.mut_peers(|peers| {
 			peers.push(peer.clone())
@@ -797,7 +797,7 @@ impl TestNetFactory for JustificationTestNet {
 		let client = Arc::new(test_client::new());
 		let verifier = self.make_verifier(client.clone(), config);
 		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let specialization = DummySpecialization {};
+		let specialization = DummySpecialization;
 		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
 		self.mut_peers(|peers| {
 			peers.push(peer.clone())

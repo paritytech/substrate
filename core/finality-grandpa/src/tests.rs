@@ -117,7 +117,7 @@ impl TestNetFactory for GrandpaTestNet {
 		let client = Arc::new(test_client::new());
 		let verifier = self.make_verifier(client.clone(), config);
 		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let specialization = DummySpecialization {};
+		let specialization = DummySpecialization;
 		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
 		self.mut_peers(|peers| {
 			peers.push(peer.clone())
