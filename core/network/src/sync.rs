@@ -134,9 +134,9 @@ impl<B: BlockT> PendingJustifications<B> {
 
 				peer_best_number >= request.1 &&
 					!self.previous_requests
-						 .get(&request)
-						 .map(|requests| requests.iter().any(|i| i.0 == peer))
-						 .unwrap_or(false)
+						.get(&request)
+						.map(|requests| requests.iter().any(|i| i.0 == peer))
+						.unwrap_or(false)
 			};
 
 			if !peer_eligible {
@@ -224,9 +224,9 @@ impl<B: BlockT> PendingJustifications<B> {
 		if success {
 			if self.justifications.finalize_root(&request.0).is_none() {
 				warn!(target: "sync", "Imported justification for {:?} {:?} which isn't a root in the tree: {:?}",
-					  request.0,
-					  request.1,
-					  self.justifications.roots().collect::<Vec<_>>(),
+					request.0,
+					request.1,
+					self.justifications.roots().collect::<Vec<_>>(),
 				);
 				return;
 			};
