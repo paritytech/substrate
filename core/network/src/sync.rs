@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 use log::{debug, trace, warn};
@@ -560,9 +561,7 @@ impl<B: BlockT> ChainSync<B> {
 			.unwrap_or_else(|| Zero::zero());
 		self.queue_blocks
 			.extend(new_blocks.iter().map(|b| b.hash.clone()));
-		if new_best_importing_number > self.best_importing_number {
-			self.best_importing_number = new_best_importing_number;
-		}
+		self.best_importing_number = max(new_best_importing_number, self.best_importing_number);
 		self.import_queue.import_blocks(origin, new_blocks);
 	}
 
