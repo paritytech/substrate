@@ -367,6 +367,7 @@ impl<B: BlockT> BlockImporter<B> {
 					link.block_imported(&hash, number);
 
 					if actions.contains(PostImportActions::ClearJustificationRequests) {
+						trace!(target: "sync", "Block imported clears all pending justification requests {}: {:?}", number, hash);
 						link.clear_justification_requests();
 					}
 
