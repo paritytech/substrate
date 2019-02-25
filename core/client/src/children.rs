@@ -23,7 +23,7 @@ use std::hash::Hash;
 
 
 /// Returns the hashes of the children blocks of the block with `parent_hash`.
-pub fn children_hashes<
+pub fn read_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
 >(db: &KeyValueDB, column: Option<u32>, prefix: &[u8], parent_hash: K) -> error::Result<Vec<V>> {
@@ -50,7 +50,7 @@ pub fn children_hashes<
 
 /// Insert the key-value pair (`parent_hash`, `children_hashes`) in the transaction.
 /// Any existing value is overwritten upon write.
-pub fn prepare_transaction<
+pub fn write_children<
 	K: Eq + Hash + Clone + Encode + Decode,
 	V: Eq + Hash + Clone + Encode + Decode,
 >(
@@ -65,12 +65,27 @@ pub fn prepare_transaction<
 	tx.put_vec(column, &key[..], children_hashes.encode());
 }
 
+/// Remove the key-value pair (`parent_hash`, `children_hashes`) in the transaction.
+pub fn remove_children<
+	K: Eq + Hash + Clone + Encode + Decode,
+>(
+	tx: &mut DBTransaction,
+	column: Option<u32>,
+	prefix: &[u8],
+	parent_hash: K,
+) {
+	let mut key = prefix.to_vec();
+	parent_hash.using_encoded(|s| key.extend(s));
+	tx.delete(column, &key[..]);
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	#[test]
-	fn children_write_read() {
+	fn children_write_read_remove() {
 		const PREFIX: &[u8] = b"children";
 		let db = ::kvdb_memorydb::create(0);
 
@@ -79,19 +94,28 @@ mod tests {
 		let mut children1 = Vec::new();
 		children1.push(1_3);
 		children1.push(1_5);
-		prepare_transaction(&mut tx, None, PREFIX, 1_1, children1);
+		write_children(&mut tx, None, PREFIX, 1_1, children1);
 
 		let mut children2 = Vec::new();
 		children2.push(1_4);
 		children2.push(1_6);
-		prepare_transaction(&mut tx, None, PREFIX, 1_2, children2);
+		write_children(&mut tx, None, PREFIX, 1_2, children2);
 
-		db.write(tx).unwrap();
-		
-		let r1: Vec<u32> = children_hashes(&db, None, PREFIX, 1_1).unwrap();
-		let r2: Vec<u32> = children_hashes(&db, None, PREFIX, 1_2).unwrap();
-		
+		db.write(tx.clone()).unwrap();
+
+		let r1: Vec<u32> = read_children(&db, None, PREFIX, 1_1).unwrap();
+		let r2: Vec<u32> = read_children(&db, None, PREFIX, 1_2).unwrap();
+
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2, vec![1_4, 1_6]);
+
+		remove_children(&mut tx, None, PREFIX, 1_2);
+		db.write(tx).unwrap();
+
+		let r1: Vec<u32> = read_children(&db, None, PREFIX, 1_1).unwrap();
+		let r2: Vec<u32> = read_children(&db, None, PREFIX, 1_2).unwrap();
+
+		assert_eq!(r1, vec![1_3, 1_5]);
+		assert_eq!(r2.len(), 0);		
 	}
 }
