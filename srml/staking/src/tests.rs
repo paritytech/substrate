@@ -42,8 +42,8 @@ fn basic_setup_works() {
 
 		// ValidatorPrefs are default, thus unstake_threshold is 3, other values are default for their type
 		assert_eq!(<Validators<Test>>::enumerate().collect::<Vec<_>>(), vec![
-			(20, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }),
-			(10, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash })
+			(20, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }),
+			(10, ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 })
 		]);
 
 		// Account 10 is exposed by 100 * balance_factor from their own stash in account 11
@@ -136,18 +136,18 @@ fn note_offline_exponent_should_work() {
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 1000);
-		// Have validator be offline = unstake_threshold
-		Staking::on_offline_validator(10, 3);
-		assert_eq!(Staking::slash_count(&10), 3);
+		// Have validator be offline < unstake_threshold
+		Staking::on_offline_validator(10, 2);
+		// No change other than slash_count
+		assert_eq!(Staking::slash_count(&10), 2);
+		assert_eq!(Balances::free_balance(&10), 1000);
+		// Have validator be offline == unstake_threshold
+		Staking::on_offline_validator(10, 1);
+		// Slashed
 		let new_free_balance_1 = 1000 - 2_u64.pow(3) * 20;
 		assert_eq!(Balances::free_balance(&10), new_free_balance_1);
-		// Have validator be offline again
-		Staking::on_offline_validator(10, 1);
-		// Slash count increases by one
-		assert_eq!(Staking::slash_count(&10), 3 + 1);
-		// Balance decreases exponentially
-		assert_eq!(Balances::free_balance(&10), new_free_balance_1 - 2_u64.pow(4) * 20);
-		// New era is forced due to slashing
+		// New era is forced without the validator due to slashing
+		assert!(!<Validators<Test>>::exists(&10));
 		assert!(Staking::forcing_new_era().is_some());
 	});
 }
@@ -329,12 +329,12 @@ fn staking_should_work() {
 		// account 1 controlled by 2, account 3 controlled by 4.
 		// 4 is stashing a lot more than 2 and even 10, it will become a validator.
 		// initial stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 5));  // balance of 1 = 10, stashed = 5 
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 150)); // balance of 3 = 300, stashed = 150 
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Stash));  // balance of 1 = 10, stashed = 5 
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 150, RewardDestination::Stash)); // balance of 3 = 300, stashed = 150 
 		
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
-		// No effects will be seen so far.s
+		// No effects will be seen so far.
 		assert_eq!(Session::validators(), vec![10, 20]);
 		
 
@@ -342,8 +342,8 @@ fn staking_should_work() {
 		System::set_block_number(2);
 		// Explicitly state the desire to validate for all of them.
 		// note that the controller account will state interest as representative of the stash-controller pair.
-		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }));
-		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0, payee: Payee::Stash }));
+		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }));
+		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }));
 
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
@@ -370,14 +370,14 @@ fn staking_should_work() {
 		
 		Session::check_rotate_session(System::block_number());
 		// nothing should be changed so far.
-		assert_eq!(Session::validators(), vec![4, 20]);
+		assert_eq!(Session::validators(), vec![10, 20]);
 		assert_eq!(Staking::current_era(), 1);
 		
 		
 		// --- Block 5: nothing. 4 is still there. 
 		System::set_block_number(5);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Session::validators(), vec![4, 20]); 
+		assert_eq!(Session::validators(), vec![10, 20]); 
 		assert_eq!(Staking::current_era(), 1);
 
 
@@ -517,11 +517,11 @@ fn double_staking_should_fail() {
 		let arbitrary_value = 5;
 		System::set_block_number(1);
 		// 2 = controller, 1 stashed => ok
-		assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value));
+		assert_ok!(Staking::bond(Origin::signed(1), 2, arbitrary_value, RewardDestination::Stash));
 		// 2 = controller, 3 stashed (Note that 2 is reused.) => ok
-		assert_ok!(Staking::bond(Origin::signed(3), 2, arbitrary_value));
+		assert_ok!(Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::Stash));
 		// 4 = not used so far, 1 stashed => not allowed.
-		assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value), "stash already bonded");
+		assert_noop!(Staking::bond(Origin::signed(1), 4, arbitrary_value, RewardDestination::Stash), "stash already bonded");
 		// 1 = stashed => attempting to nominate should fail.
 		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), "not a controller");
 		// 2 = controller  => nominating should work.

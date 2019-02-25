@@ -738,7 +738,7 @@ impl<T: Trait> Module<T> {
 		let unstake_threshold = prefs.unstake_threshold.min(MAX_UNSTAKE_THRESHOLD);
 		let max_slashes = grace + unstake_threshold;
 
-		let event = if new_slash_count > max_slashes {
+		let event = if new_slash_count >= max_slashes {
 			// They're bailing.
 			let slash = Self::current_offline_slash()
 				// Multiply current_offline_slash by 2^unstake_threshold
