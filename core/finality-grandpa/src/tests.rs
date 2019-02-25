@@ -29,7 +29,7 @@ use client::{
 	runtime_api::{Core, RuntimeVersion, ApiExt},
 };
 use test_client::{self, runtime::BlockNumber};
-use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportBlock, ImportResult};
+use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportBlock, ImportResult, PostImportActions};
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
@@ -462,7 +462,7 @@ fn run_to_completion(blocks: u64, net: Arc<Mutex<GrandpaTestNet>>, peers: &[Keyr
 
 #[test]
 fn finalize_3_voters_no_observers() {
-	::env_logger::init();
+	let _ = env_logger::try_init();
 	let peers = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let voters = make_ids(peers);
 
@@ -815,7 +815,7 @@ fn sync_justifications_on_change_blocks() {
 
 #[test]
 fn finalizes_multiple_pending_changes_in_order() {
-	env_logger::init();
+	let _ = env_logger::try_init();
 
 	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
 	let peers_b = &[Keyring::Dave, Keyring::Eve, Keyring::Ferdie];
@@ -984,7 +984,7 @@ fn allows_reimporting_change_blocks() {
 
 	assert_eq!(
 		block_import.import_block(block(), None).unwrap(),
-		ImportResult::NeedsJustification
+		ImportResult::Imported(PostImportActions::RequestJustification)
 	);
 
 	assert_eq!(

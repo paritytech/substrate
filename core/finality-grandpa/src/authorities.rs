@@ -469,9 +469,29 @@ mod tests {
 			_ => unreachable!(),
 		})).unwrap();
 
+		// forced changes are iterated last
+		let change_d = PendingChange {
+			next_authorities: Vec::new(),
+			delay: 2,
+			canon_height: 1,
+			canon_hash: "hash_d",
+			delay_kind: DelayKind::Best,
+		};
+
+		let change_e = PendingChange {
+			next_authorities: Vec::new(),
+			delay: 2,
+			canon_height: 0,
+			canon_hash: "hash_e",
+			delay_kind: DelayKind::Best,
+		};
+
+		authorities.add_pending_change(change_d.clone(), &static_is_descendent_of(false)).unwrap();
+		authorities.add_pending_change(change_e.clone(), &static_is_descendent_of(false)).unwrap();
+
 		assert_eq!(
 			authorities.pending_changes().collect::<Vec<_>>(),
-			vec![&change_b, &change_a, &change_c],
+			vec![&change_b, &change_a, &change_c, &change_e, &change_d],
 		);
 	}
 
@@ -677,29 +697,23 @@ mod tests {
 		// so this should do nothing.
 		assert!(!authorities.enacts_standard_change("hash_c", 15, &static_is_descendent_of(true)).unwrap());
 
-		// FIXME
-		// // throw a standard change into the mix to prove that it's discarded
-		// // for being on the same fork.
-		// //
-		// // NOTE: when we allow multiple changes per fork
-		// // after https://github.com/paritytech/substrate/issues/1497
-		// // this should still be rejected based on the "span" rule -- it overlaps
-		// // with another change on the same fork.
-		// let change_c = PendingChange {
-		// 	next_authorities: set_b.clone(),
-		// 	delay: 3,
-		// 	canon_height: 8,
-		// 	canon_hash: "hash_a8",
-		// 	delay_kind: DelayKind::Best,
-		// };
+		// throw a standard change into the mix to prove that it's discarded
+		// for being on the same fork.
+		//
+		// NOTE: after https://github.com/paritytech/substrate/issues/1861
+		// this should still be rejected based on the "span" rule -- it overlaps
+		// with another change on the same fork.
+		let change_c = PendingChange {
+			next_authorities: set_b.clone(),
+			delay: 3,
+			canon_height: 8,
+			canon_hash: "hash_a8",
+			delay_kind: DelayKind::Best,
+		};
 
-		// assert!(authorities.add_pending_change(change_c, |other_hash| {
-		// 	if other_hash.starts_with("hash_a") {
-		// 		Err(())
-		// 	} else {
-		// 		Ok(())
-		// 	}
-		// }).is_err());
+		assert!(authorities.add_pending_change(change_c, &is_descendent_of(|base: &&str, _| {
+			base.starts_with("hash_a")
+		})).is_err());
 
 		// too early.
 		assert!(authorities.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true)).unwrap().is_none());
