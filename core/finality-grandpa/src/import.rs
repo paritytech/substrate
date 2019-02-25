@@ -306,8 +306,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 				let new_authorities = {
 					let (set_id, new_authorities) = new_set.current();
 
-					// TODO: use a different canon hash! probably the signal
-					// block.
+					// we start the new authority assuming the block that enacted the
+					// change is the canonical one. we could use the block that signalled
+					// the change instead, but this would make verification of
+					// justifications more complicated, since we'd need to check if
+					// there's any pending forced change (since forced changes would
+					// finalize "backwards")
 					NewAuthoritySet {
 						canon_number: number,
 						canon_hash: hash,
@@ -417,11 +421,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		let needs_justification = applied_changes.needs_justification();
 		if let AppliedChanges::Forced(new) = applied_changes {
-			// NOTE: when we do a force change we are "discrediting" the old set
-			// so we ignore any justifications from them.
-			// TODO: figure out if this is right...the new set will finalize this block as
-			// well so we should probably only reject justifications from the old set.
-			justification = None;
+			// NOTE: when we do a force change we are "discrediting" the old set so we
+			// ignore any justifications from them. this block may contain a justification
+			// which should be checked and imported below against the new authority
+			// triggered by this forced change.
 			let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
 
 			// we must clear all pending justifications requests, presumably they won't be
