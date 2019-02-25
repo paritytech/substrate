@@ -41,6 +41,7 @@ pub mod light;
 pub mod leaves;
 #[cfg(feature = "std")]
 pub mod children;
+#[cfg(feature = "std")]
 mod call_executor;
 #[cfg(feature = "std")]
 mod client;
