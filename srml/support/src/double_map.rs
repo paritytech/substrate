@@ -101,8 +101,10 @@ pub trait StorageDoubleMap {
 	{
 		let mut raw_prefix = Vec::new();
 		raw_prefix.extend(Self::PREFIX);
-		raw_prefix.extend(Encode::encode(&key));
-		raw_prefix
+		key.using_encoded(|encoded_key| {
+			raw_prefix.extend(encoded_key);
+			raw_prefix
+		})
 	}
 
 	/// Encode key2 into Vec<u8>
