@@ -19,9 +19,77 @@ use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 use crate::config::Roles;
 use consensus::BlockOrigin;
 use network_libp2p::NodeIndex;
-use crate::sync::SyncState;
 use std::collections::HashSet;
+use std::thread;
+use std::time::Duration;
 use super::*;
+
+#[test]
+fn sync_cycle_from_offline_to_syncing_to_offline() {
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(3);
+	for peer in 0..3 {
+		// Offline, and not major syncing.
+		assert!(net.peer(peer).is_offline());
+		assert!(!net.peer(peer).is_major_syncing());
+	}
+
+	// Generate blocks.
+	net.peer(2).push_blocks(100, false);
+	net.start();
+	net.route_fast();
+	thread::sleep(Duration::from_millis(100));
+	net.route_fast();
+	for peer in 0..3 {
+		// Online
+		assert!(!net.peer(peer).is_offline());
+		if peer < 2 {
+			// Major syncing.
+			assert!(net.peer(peer).is_major_syncing());
+		}
+	}
+	net.sync();
+	for peer in 0..3 {
+		// All done syncing.
+		assert!(!net.peer(peer).is_major_syncing());
+	}
+
+	// Now disconnect them all.
+	for peer in 0..3 {
+		for other in 0..3 {
+			if other != peer {
+				net.peer(peer).on_disconnect(other);
+			}
+		}
+		thread::sleep(Duration::from_millis(100));
+		assert!(net.peer(peer).is_offline());
+		assert!(!net.peer(peer).is_major_syncing());
+	}
+}
+
+#[test]
+fn syncing_node_not_major_syncing_when_disconnected() {
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(3);
+
+	// Generate blocks.
+	net.peer(2).push_blocks(100, false);
+	net.start();
+	net.route_fast();
+	thread::sleep(Duration::from_millis(100));
+	net.route_fast();
+
+	// Peer 1 is major-syncing.
+	assert!(net.peer(1).is_major_syncing());
+
+	// Disconnect peer 1 form everyone else.
+	net.peer(1).on_disconnect(0);
+	net.peer(1).on_disconnect(2);
+	thread::sleep(Duration::from_millis(100));
+
+	// Peer 1 is not major-syncing.
+	assert!(!net.peer(1).is_major_syncing());
+}
 
 #[test]
 fn sync_from_two_peers_works() {
@@ -32,8 +100,7 @@ fn sync_from_two_peers_works() {
 	net.sync();
 	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
 		.equals_to(net.peer(1).client.backend().as_in_memory().blockchain()));
-	let status = net.peer(0).status();
-	assert_eq!(status.sync.state, SyncState::Idle);
+	assert!(!net.peer(0).is_major_syncing());
 }
 
 #[test]

@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use futures::{future, stream, prelude::*, try_ready};
+use rand::seq::SliceRandom;
 use std::{io, iter};
 use substrate_network_libp2p::{CustomMessage, Protocol, ServiceEvent, build_multiaddr};
 
@@ -85,7 +86,10 @@ fn basic_two_nodes_connectivity() {
 fn two_nodes_transfer_lots_of_packets() {
 	// We spawn two nodes, then make the first one send lots of packets to the second one. The test
 	// ends when the second one has received all of them.
-	const NUM_PACKETS: u32 = 20000;
+
+	// Note that if we go too high, we will reach the limit to the number of simultaneous
+	// substreams allowed by the multiplexer.
+	const NUM_PACKETS: u32 = 5000;
 
 	let (mut service1, mut service2) = {
 		let mut l = build_nodes::<Vec<u8>>(2).into_iter();
@@ -114,7 +118,6 @@ fn two_nodes_transfer_lots_of_packets() {
 				Some(ServiceEvent::OpenedCustomProtocol { .. }) => {},
 				Some(ServiceEvent::CustomMessage { message, .. }) => {
 					assert_eq!(message.len(), 1);
-					assert_eq!(u32::from(message[0]), packet_counter % 256);
 					packet_counter += 1;
 					if packet_counter == NUM_PACKETS {
 						return Ok(Async::Ready(()))
@@ -188,4 +191,70 @@ fn many_nodes_connectivity() {
 	});
 
 	tokio::runtime::Runtime::new().unwrap().block_on(combined).unwrap();
+}
+
+#[test]
+fn basic_two_nodes_requests_in_parallel() {
+	let (mut service1, mut service2) = {
+		let mut l = build_nodes::<(Option<u64>, Vec<u8>)>(2).into_iter();
+		let a = l.next().unwrap();
+		let b = l.next().unwrap();
+		(a, b)
+	};
+
+	// Generate random messages with or without a request id.
+	let mut to_send = {
+		let mut to_send = Vec::new();
+		let mut next_id = 0;
+		for _ in 0..200 { // Note: don't make that number too high or the CPU usage will explode.
+			let id = if rand::random::<usize>() % 4 != 0 {
+				let i = next_id;
+				next_id += 1;
+				Some(i)
+			} else {
+				None
+			};
+
+			let msg = (id, (0..10).map(|_| rand::random::<u8>()).collect::<Vec<_>>());
+			to_send.push(msg);
+		}
+		to_send
+	};
+
+	// Clone `to_send` in `to_receive`. Below we will remove from `to_receive` the messages we
+	// receive, until the list is empty.
+	let mut to_receive = to_send.clone();
+	to_send.shuffle(&mut rand::thread_rng());
+
+	let fut1 = future::poll_fn(move || -> io::Result<_> {
+		loop {
+			match try_ready!(service1.poll()) {
+				Some(ServiceEvent::OpenedCustomProtocol { node_index, protocol, .. }) => {
+					for msg in to_send.drain(..) {
+						service1.send_custom_message(node_index, protocol, msg);
+					}
+				},
+				_ => panic!(),
+			}
+		}
+	});
+
+	let fut2 = future::poll_fn(move || -> io::Result<_> {
+		loop {
+			match try_ready!(service2.poll()) {
+				Some(ServiceEvent::OpenedCustomProtocol { .. }) => {},
+				Some(ServiceEvent::CustomMessage { message, .. }) => {
+					let pos = to_receive.iter().position(|m| *m == message).unwrap();
+					to_receive.remove(pos);
+					if to_receive.is_empty() {
+						return Ok(Async::Ready(()))
+					}
+				}
+				_ => panic!(),
+			}
+		}
+	});
+
+	let combined = fut1.select(fut2).map_err(|(err, _)| err);
+	tokio::runtime::Runtime::new().unwrap().block_on_all(combined).unwrap();
 }
