@@ -24,7 +24,7 @@ mod service_task;
 mod traits;
 mod transport;
 
-pub use crate::custom_proto::{CustomMessage, RegisteredProtocol};
+pub use crate::custom_proto::{CustomMessage, CustomMessageId, RegisteredProtocol};
 pub use crate::error::{Error, ErrorKind, DisconnectReason};
 pub use crate::secret::obtain_private_key;
 pub use crate::service_task::{start_service, Service, ServiceEvent};

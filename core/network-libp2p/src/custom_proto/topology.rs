@@ -415,7 +415,12 @@ impl NetTopology {
 					continue
 				}
 
-				debug_assert!(!a.is_connected());
+				// It is possible that we are connected to this address, and that the dial failure
+				// concerns another peer.
+				if a.is_connected() {
+					continue
+				}
+
 				a.adjust_score(SCORE_DIFF_ON_FAILED_TO_CONNECT);
 				trace!(target: "sub-libp2p", "Back off for {} = {:?}", addr, a.next_back_off);
 				a.back_off_until = Instant::now() + a.next_back_off;
