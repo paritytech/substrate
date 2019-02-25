@@ -38,6 +38,8 @@ pub mod block_builder;
 #[cfg(feature = "std")]
 pub mod light;
 #[cfg(feature = "std")]
+pub mod children;
+#[cfg(feature = "std")]
 mod leaves;
 #[cfg(feature = "std")]
 mod call_executor;
@@ -45,8 +47,6 @@ mod call_executor;
 mod client;
 #[cfg(feature = "std")]
 mod notifications;
-#[cfg(feature = "std")]
-mod children;
 
 
 #[cfg(feature = "std")]
@@ -66,8 +66,6 @@ pub use crate::notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
 #[cfg(feature = "std")]
 pub use crate::leaves::LeafSet;
-#[cfg(feature = "std")]
-pub use crate::children::ChildrenMap;
 
 #[doc(inline)]
 pub use sr_api_macros::{decl_runtime_apis, impl_runtime_apis};

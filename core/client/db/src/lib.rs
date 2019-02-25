@@ -52,7 +52,7 @@ use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue};
 use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
 use client::LeafSet;
-use client::ChildrenMap;
+use client::children;
 use state_db::StateDb;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
@@ -252,7 +252,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	}
 
 	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>, client::error::Error> {
-		ChildrenMap::children_hashes(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
+		children::children_hashes(&*self.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)
 	}
 }
 
@@ -862,9 +862,9 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				displaced_leaf
 			};
 
-			let mut children = ChildrenMap::children_hashes(&*self.storage.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)?;
+			let mut children = children::children_hashes(&*self.storage.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)?;
 			children.push(hash);
-			ChildrenMap::prepare_transaction(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash, children);
+			children::prepare_transaction(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash, children);
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
