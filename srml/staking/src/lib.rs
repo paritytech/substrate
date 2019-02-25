@@ -42,18 +42,14 @@ const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
-#[derive(PartialEq, Clone)]
-#[cfg_attr(test, derive(Debug))]
-pub enum LockStatus<BlockNumber: Parameter> {
-	Liquid,
-	LockedUntil(BlockNumber),
-	Bonded,
-}
-
+/// A destination account for payment.
+// TODO: make work
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Payee {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
+	Stake,
+	/// Pay into the stash account, not increasing the amount at stake.
 	Stash,
 	/// Pay into the controller account.
 	Controller,
@@ -61,7 +57,7 @@ pub enum Payee {
 
 impl Default for Payee {
 	fn default() -> Self {
-		Payee::Stash
+		Payee::Stake
 	}
 }
 
@@ -75,8 +71,6 @@ pub struct ValidatorPrefs<Balance: HasCompact> {
 	/// Reward that validator takes up-front; only the rest is split between themselves and nominators.
 	#[codec(compact)]
 	pub validator_payment: Balance,
-	/// Should reward be paid into the stash or the controller account?
-	pub payee: Payee,
 }
 
 impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
@@ -118,6 +112,8 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
+	/// Should reward be paid into the stash or the controller account?
+	pub payee: Payee,
 }
 
 impl<AccountId, Balance: HasCompact + Copy + Saturating, BlockNumber: HasCompact + PartialOrd> StakingLedger<AccountId, Balance, BlockNumber> {
@@ -217,6 +213,9 @@ decl_storage! {
 			)).collect::<Vec<_>>()
 		}): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
+		/// Where the reward payment should be made.
+		pub Payee get(payee): map T::AccountId => Payee;
+
 		/// The set of keys are all controllers that want to validate.
 		/// 
 		/// The values are the preferences that a validator has.
@@ -297,7 +296,7 @@ decl_module! {
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will be the
 		/// account that controls it.
-		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>) {
+		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: Payee) {
 			let stash = ensure_signed(origin)?;
 
 			if <Bonded<T>>::exists(&stash) {
@@ -314,6 +313,7 @@ decl_module! {
 			let value = value.min(stash_balance);
 
 			<Ledger<T>>::insert(&controller, StakingLedger { stash, total: value, active: value, unlocking: vec![] });
+			<Payee<T>>::insert(&controller, payee);
 		}
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up for
@@ -388,7 +388,7 @@ decl_module! {
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
-			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			<Nominators<T>>::remove(&controller);
 			<Validators<T>>::insert(controller, prefs);
 		}
@@ -400,7 +400,7 @@ decl_module! {
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
-			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			ensure!(!targets.is_empty(), "targets cannot be empty");
 			let targets = targets.into_iter()
 				.take(MAX_NOMINATIONS)
@@ -418,9 +418,20 @@ decl_module! {
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
-			let mut _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			<Validators<T>>::remove(&controller);
 			<Nominators<T>>::remove(&controller);
+		}
+
+		/// (Re-)set the payment target for a controller.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		/// 
+		/// NOTE: This call must be made by the controller, not the stash.
+		fn set_payee(origin, payee: Payee) {
+			let controller = ensure_signed(origin)?;
+			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
+			<Payee<T>>::insert(&controller, payee);
 		}
 
 		/// Set the number of sessions in an era.
@@ -498,8 +509,6 @@ impl<T: Trait> Module<T> {
 
 	// PUBLIC MUTABLES (DANGEROUS)
 	
-	// TODO: switch out `backing_balance` for `Stakers`.
-
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
 	/// and reduces the nominators' balance if needed.
 	fn slash_validator(v: &T::AccountId, slash: BalanceOf<T>) {
@@ -537,7 +546,14 @@ impl<T: Trait> Module<T> {
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
 			for i in exposure.others.iter() {
-				let _ = T::Currency::reward(&i.who, safe_mul_rational(i.value));
+				let amount = safe_mul_rational(i.value);
+				let payee = Self::payee(&i.who);
+				let destination = match payee {
+					Payee::Controller => i.who.clone(),
+					Payee::Stash => Self::ledger(&i.who).stash,
+				 	Payee::Staked => <Ledger<T>>::mutate(&i.who, |l| { l.active += amount; l.total += amount; l.stash }),
+				};
+				let _ = T::Currency::reward(&i.who, destination);
 			}
 			safe_mul_rational(exposure.own)
 		};
@@ -755,11 +771,10 @@ impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
 		amount: BalanceOf<T>,
 		_reason: WithdrawReason,
 	) -> Result {
-		// For this, we only bother with the first UnlockChunk, since it's only fees.
-		if let Some(controller) = <Bonded<T>>::get(who) {
+		if let Some(controller) = Self::bonded(who) {
 			let ledger = Self::ledger(&controller).ok_or("stash without controller")?;
 			let free_balance = T::Currency::free_balance(&who);
-			ensure!(free_balance.checked_sub(&ledger.total).unwrap_or_default() > amount,
+			ensure!(free_balance.saturating_sub(&ledger.total) > amount,
 				"stash with too much under management");
 		}		
 		Ok(())
@@ -770,6 +785,7 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		if let Some(controller) = <Bonded<T>>::take(who) {
 			<Ledger<T>>::remove(&controller);
+			<Payee<T>>::remove(&controller);
 			<SlashCount<T>>::remove(&controller);
 			<Validators<T>>::remove(&controller);
 			<Nominators<T>>::remove(&controller);
