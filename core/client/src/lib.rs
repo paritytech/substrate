@@ -38,7 +38,7 @@ pub mod block_builder;
 #[cfg(feature = "std")]
 pub mod light;
 #[cfg(feature = "std")]
-mod leaves;
+pub mod leaves;
 #[cfg(feature = "std")]
 mod call_executor;
 #[cfg(feature = "std")]

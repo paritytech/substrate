@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Helper for managing the set of available leaves in the chain for DB implementations.
+
 use std::collections::BTreeMap;
 use std::cmp::Reverse;
 use kvdb::{KeyValueDB, DBTransaction};
@@ -28,9 +30,27 @@ struct LeafSetItem<H, N> {
 }
 
 /// A displaced leaf after import.
-pub struct DisplacedLeaf<H, N> {
+#[must_use = "Displaced items from the leaf set must be handled."]
+pub struct ImportDisplaced<H, N> {
 	new_hash: H,
 	displaced: LeafSetItem<H, N>,
+}
+
+/// Displaced leaves after finalization.
+#[must_use = "Displaced items from the leaf set must be handled."]
+pub struct FinalizationDisplaced<H, N> {
+	leaves: BTreeMap<Reverse<N>, Vec<H>>,
+}
+
+impl<H, N: Ord> FinalizationDisplaced<H, N> {
+	/// Merge with another. This should only be used for displaced items that
+	/// are produced within one transaction of each other.
+	pub fn merge(&mut self, mut other: Self) {
+		// this will ignore keys that are in duplicate, however
+		// if these are actually produced correctly via the leaf-set within
+		// one transaction, then there will be no overlap in the keys.
+		self.leaves.append(&mut other.leaves);
+	}
 }
 
 /// list of leaf hashes ordered by number (descending).
@@ -81,7 +101,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// update the leaf list on import. returns a displaced leaf if there was one.
-	pub fn import(&mut self, hash: H, number: N, parent_hash: H) -> Option<DisplacedLeaf<H, N>> {
+	pub fn import(&mut self, hash: H, number: N, parent_hash: H) -> Option<ImportDisplaced<H, N>> {
 		// avoid underflow for genesis.
 		let displaced = if number != N::zero() {
 			let new_number = Reverse(number.clone() - N::one());
@@ -89,7 +109,7 @@ impl<H, N> LeafSet<H, N> where
 
 			if was_displaced {
 				self.pending_removed.push(parent_hash.clone());
-				Some(DisplacedLeaf {
+				Some(ImportDisplaced {
 					new_hash: hash.clone(),
 					displaced: LeafSetItem {
 						hash: parent_hash,
@@ -108,13 +128,34 @@ impl<H, N> LeafSet<H, N> where
 		displaced
 	}
 
-	/// Undo an import operation, with a displaced leaf.
-	pub fn undo(&mut self, displaced: DisplacedLeaf<H, N>) {
-		let new_number = Reverse(displaced.displaced.number.0.clone() + N::one());
-		self.remove_leaf(&new_number, &displaced.new_hash);
-		self.insert_leaf(new_number, displaced.displaced.hash);
-		self.pending_added.clear();
-		self.pending_removed.clear();
+	/// Note a block height finalized, displacing all leaves with number less than the finalized block's.
+	///
+	/// Although it would be more technically correct to also prune out leaves at the
+	/// same number as the finalized block, but with different hashes, the current behavior
+	/// is simpler and our assumptions about how finalization works means that those leaves
+	/// will be pruned soon afterwards anyway.
+	pub fn finalize_height(&mut self, number: N) -> FinalizationDisplaced<H, N> {
+		let boundary = if number == N::zero() {
+			return FinalizationDisplaced { leaves: BTreeMap::new() };
+		} else {
+			number - N::one()
+		};
+
+		let below_boundary = self.storage.split_off(&Reverse(boundary));
+		self.pending_removed.extend(below_boundary.values().flat_map(|h| h.iter()).cloned());
+		FinalizationDisplaced {
+			leaves: below_boundary,
+		}
+	}
+
+	/// Undo all pending operations.
+	///
+	/// This returns an `Undo` struct, where any
+	/// `Displaced` objects that have returned by previous method calls
+	/// should be passed to via the appropriate methods. Otherwise,
+	/// the on-disk state may get out of sync with in-memory state.
+	pub fn undo(&mut self) -> Undo<H, N> {
+		Undo { inner: self }
 	}
 
 	/// currently since revert only affects the canonical chain
@@ -180,6 +221,35 @@ impl<H, N> LeafSet<H, N> where
 	}
 }
 
+/// Helper for undoing operations.
+pub struct Undo<'a, H: 'a, N: 'a> {
+	inner: &'a mut LeafSet<H, N>,
+}
+
+impl<'a, H: 'a, N: 'a> Undo<'a, H, N> where
+	H: Clone + PartialEq + Decode + Encode,
+	N: std::fmt::Debug + Clone + SimpleArithmetic + Decode + Encode,
+{
+	/// Undo an imported block by providing the displaced leaf.
+	pub fn undo_import(&mut self, displaced: ImportDisplaced<H, N>) {
+		let new_number = Reverse(displaced.displaced.number.0.clone() + N::one());
+		self.inner.remove_leaf(&new_number, &displaced.new_hash);
+		self.inner.insert_leaf(new_number, displaced.displaced.hash);
+	}
+
+	/// Undo a finalization operation by providing the displaced leaves.
+	pub fn undo_finalization(&mut self, mut displaced: FinalizationDisplaced<H, N>) {
+		self.inner.storage.append(&mut displaced.leaves);
+	}
+}
+
+impl<'a, H: 'a, N: 'a> Drop for Undo<'a, H, N> {
+	fn drop(&mut self) {
+		self.inner.pending_added.clear();
+		self.inner.pending_removed.clear();
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -236,5 +306,51 @@ mod tests {
 		assert!(set.contains(10, 1_1));
 		assert!(set.contains(10, 1_2));
 		assert!(!set.contains(10, 1_3));
+	}
+
+	#[test]
+	fn finalization_consistent_with_disk() {
+		const PREFIX: &[u8] = b"prefix";
+		let db = ::kvdb_memorydb::create(0);
+
+		let mut set = LeafSet::new();
+		set.import(10_1u32, 10u32, 0u32);
+		set.import(11_1, 11, 10_2);
+		set.import(11_2, 11, 10_2);
+		set.import(12_1, 12, 11_123);
+
+		assert!(set.contains(10, 10_1));
+
+		let mut tx = DBTransaction::new();
+		set.prepare_transaction(&mut tx, None, PREFIX);
+		db.write(tx).unwrap();
+
+		let _ = set.finalize_height(11);
+		let mut tx = DBTransaction::new();
+		set.prepare_transaction(&mut tx, None, PREFIX);
+		db.write(tx).unwrap();
+
+		assert!(set.contains(11, 11_1));
+		assert!(set.contains(11, 11_2));
+		assert!(set.contains(12, 12_1));
+		assert!(!set.contains(10, 10_1));
+
+		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		assert_eq!(set, set2);
+	}
+
+	#[test]
+	fn undo_finalization() {
+		let mut set = LeafSet::new();
+		set.import(10_1u32, 10u32, 0u32);
+		set.import(11_1, 11, 10_2);
+		set.import(11_2, 11, 10_2);
+		set.import(12_1, 12, 11_123);
+
+		let displaced = set.finalize_height(11);
+		assert!(!set.contains(10, 10_1));
+
+		set.undo().undo_finalization(displaced);
+		assert!(set.contains(10, 10_1));
 	}
 }

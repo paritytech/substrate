@@ -51,7 +51,7 @@ use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue};
 use crate::utils::{Meta, db_err, meta_keys, open_database, read_db, block_id_to_lookup_key, read_meta};
-use client::LeafSet;
+use client::leaves::{LeafSet, FinalizationDisplaced};
 use state_db::StateDb;
 use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 use log::{trace, debug, warn};
@@ -709,11 +709,18 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
+		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
 	) -> Result<(Block::Hash, <Block::Header as HeaderT>::Number, bool, bool), client::error::Error> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
 		self.ensure_sequential_finalization(header, last_finalized)?;
-		self.note_finalized(transaction, header, *hash)?;
+		self.note_finalized(
+			transaction,
+			header,
+			*hash,
+			finalization_displaced,
+		)?;
+
 		if let Some(justification) = justification {
 			transaction.put(
 				columns::JUSTIFICATION,
@@ -762,10 +769,13 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		-> Result<(), client::error::Error>
 	{
 		let mut transaction = DBTransaction::new();
+		let mut finalization_displaced_leaves = None;
+
 		operation.apply_aux(&mut transaction);
 
 		let mut meta_updates = Vec::new();
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
+
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
 				let block_hash = self.blockchain.expect_block_hash_from_id(&block)?;
@@ -777,6 +787,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 					&block_header,
 					Some(last_finalized_hash),
 					justification,
+					&mut finalization_displaced_leaves,
 				)?);
 				last_finalized_hash = block_hash;
 			}
@@ -841,7 +852,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.ensure_sequential_finalization(header, Some(last_finalized_hash))?;
-				self.note_finalized(&mut transaction, header, hash)?;
+				self.note_finalized(
+					&mut transaction,
+					header,
+					hash,
+					&mut finalization_displaced_leaves,
+				)?;
 			} else {
 				// canonicalize blocks which are old enough, regardless of finality.
 				self.force_delayed_canonicalize(&mut transaction, hash, *header.number())?
@@ -883,9 +899,16 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 
 		if let Some((number, hash, enacted, retracted, displaced_leaf, is_best)) = imported {
 			if let Err(e) = write_result {
+				let mut leaves = self.blockchain.leaves.write();
+				let mut undo = leaves.undo();
 				if let Some(displaced_leaf) = displaced_leaf {
-					self.blockchain.leaves.write().undo(displaced_leaf);
+					undo.undo_import(displaced_leaf);
 				}
+
+				if let Some(finalization_displaced) = finalization_displaced_leaves {
+					undo.undo_finalization(finalization_displaced);
+				}
+
 				return Err(e)
 			}
 
@@ -915,6 +938,7 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 		transaction: &mut DBTransaction,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
+		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>
 	) -> Result<(), client::error::Error> where
 		Block: BlockT<Hash=H256>,
 	{
@@ -936,6 +960,12 @@ impl<Block: BlockT<Hash=H256>> Backend<Block> {
 				.storage(well_known_keys::CHANGES_TRIE_CONFIG)?
 				.and_then(|v| Decode::decode(&mut &*v));
 			self.changes_tries_storage.prune(changes_trie_config, transaction, f_hash, f_num);
+		}
+
+		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
+		match displaced {
+			x @ &mut None => *x = Some(new_displaced),
+			&mut Some(ref mut displaced) => displaced.merge(new_displaced),
 		}
 
 		Ok(())
@@ -1027,22 +1057,27 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		let mut transaction = DBTransaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
 		let header = self.blockchain.expect_header(block)?;
-		let commit = || {
+		let mut displaced = None;
+		let commit = |displaced| {
 			let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
 				&mut transaction,
 				&hash,
 				&header,
 				None,
 				justification,
+				displaced,
 			)?;
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, is_best, is_finalized);
 			Ok(())
 		};
-		match commit() {
+		match commit(&mut displaced) {
 			Ok(()) => self.storage.state_db.apply_pending(),
 			e @ Err(_) => {
 				self.storage.state_db.revert_pending();
+				if let Some(displaced) = displaced {
+					self.blockchain.leaves.write().undo().undo_finalization(displaced);
+				}
 				return e;
 			}
 		}
