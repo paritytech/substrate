@@ -262,7 +262,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// If the `forced` flag is set to true, this indicates that the current
 	/// set has been synchronously determined to be offline and that after
-	/// `in_blocks`
+	/// `in_blocks` the given change should be applied.
 	///
 	/// No change should be signalled while any change is pending. Returns
 	/// an error if a change is already pending.
@@ -298,10 +298,6 @@ impl<T: Trait> Module<T> {
 			Err("Attempt to signal GRANDPA change with one already pending.")
 		}
 	}
-
-	/// Force a change in the authorities.
-	///
-	/// The change will be applied immediately
 
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: Log<T>) {

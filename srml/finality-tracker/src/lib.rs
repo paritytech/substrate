@@ -236,19 +236,14 @@ macro_rules! impl_on_stalled {
 
 for_each_tuple!(impl_on_stalled);
 
-fn extract_inherent_data<N: Decode>(data: &InherentData) -> Result<N, RuntimeString> {
-	data.get_data::<N>(&INHERENT_IDENTIFIER)
-		.map_err(|_| RuntimeString::from("Invalid final number inherent data encoding."))?
-		.ok_or_else(|| "Final number inherent data is not provided.".into())
-}
-
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = MakeFatalError<()>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-		let final_num: T::BlockNumber = extract_inherent_data(data).expect("Gets and decodes final number inherent data");
+		let final_num =
+			data.finalized_number().expect("Gets and decodes final number inherent data");
 
 		// make hint only when not same as last to avoid bloat.
 		Self::recent_hints().last().and_then(|last| if last == &final_num {
