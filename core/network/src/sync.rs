@@ -30,6 +30,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberF
 use runtime_primitives::generic::BlockId;
 use crate::message::{self, generic::Message as GenericMessage};
 use crate::config::Roles;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 // Maximum blocks to request in a single packet.
@@ -46,6 +47,7 @@ const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
 
+#[derive(Debug)]
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
 	pub best_hash: B::Hash,
@@ -302,6 +304,8 @@ pub struct ChainSync<B: BlockT> {
 	justifications: PendingJustifications<B>,
 	import_queue: Box<ImportQueue<B>>,
 	is_stopping: AtomicBool,
+	is_offline: Arc<AtomicBool>,
+	is_major_syncing: Arc<AtomicBool>,
 }
 
 /// Reported sync state.
@@ -342,7 +346,13 @@ impl<B: BlockT> Status<B> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
-	pub(crate) fn new(role: Roles, info: &ClientInfo<B>, import_queue: Box<ImportQueue<B>>) -> Self {
+	pub(crate) fn new(
+		is_offline: Arc<AtomicBool>,
+		is_major_syncing: Arc<AtomicBool>,
+		role: Roles,
+		info: &ClientInfo<B>,
+		import_queue: Box<ImportQueue<B>>
+	) -> Self {
 		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
 		if role.intersects(Roles::FULL | Roles::AUTHORITY) {
 			required_block_attributes |= message::BlockAttributes::BODY;
@@ -358,6 +368,8 @@ impl<B: BlockT> ChainSync<B> {
 			required_block_attributes,
 			import_queue,
 			is_stopping: Default::default(),
+			is_offline,
+			is_major_syncing,
 		}
 	}
 
@@ -370,13 +382,17 @@ impl<B: BlockT> ChainSync<B> {
 		self.import_queue.clone()
 	}
 
+	fn state(&self, best_seen: &Option<NumberFor<B>>) -> SyncState {
+		match best_seen {
+			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > As::sa(5) => SyncState::Downloading,
+			_ => SyncState::Idle,
+		}
+	}
+
 	/// Returns sync status.
 	pub(crate) fn status(&self) -> Status<B> {
 		let best_seen = self.best_seen_block();
-		let state = match &best_seen {
-			&Some(n) if n > self.best_queued_number && n - self.best_queued_number > As::sa(5) => SyncState::Downloading,
-			_ => SyncState::Idle,
-		};
+		let state = self.state(&best_seen);
 		Status {
 			state: state,
 			best_seen_block: best_seen,
@@ -386,6 +402,13 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Handle new connected peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
+		// Initialize some variables to determine if
+		// is_offline or is_major_syncing should be updated
+		// after processing this new peer.
+		let previous_len = self.peers.len();
+		let previous_best_seen = self.best_seen_block();
+		let previous_state = self.state(&previous_best_seen);
+
 		if let Some(info) = protocol.peer_info(who) {
 			match (block_status(&*protocol.client(), &*self.import_queue, info.best_hash), info.best_number) {
 				(Err(e), _) => {
@@ -448,6 +471,22 @@ impl<B: BlockT> ChainSync<B> {
 						recently_announced: Default::default(),
 					});
 				}
+			}
+		}
+
+		let current_best_seen = self.best_seen_block();
+		let current_state = self.state(&current_best_seen);
+		let current_len = self.peers.len();
+		if previous_len == 0 && current_len > 0 {
+			// We were offline, and now we're connected to at least one peer.
+			self.is_offline.store(false, Ordering::Relaxed);
+		}
+		if previous_len < current_len {
+			// We added a peer, let's see if major_syncing should be updated.
+			match (previous_state, current_state) {
+				(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.store(true, Ordering::Relaxed),
+				(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
+				_ => {},
 			}
 		}
 	}
@@ -660,9 +699,18 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	fn block_queued(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+		let best_seen = self.best_seen_block();
+		let previous_state = self.state(&best_seen);
 		if number > self.best_queued_number {
 			self.best_queued_number = number;
 			self.best_queued_hash = *hash;
+		}
+		let current_state = self.state(&best_seen);
+		// If the latest queued block changed our state, update is_major_syncing.
+		match (previous_state, current_state) {
+			(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.store(true, Ordering::Relaxed),
+			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
+			_ => {},
 		}
 		// Update common blocks
 		for (n, peer) in self.peers.iter_mut() {
@@ -744,8 +792,21 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Handle disconnected peer.
 	pub(crate) fn peer_disconnected(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
+		let previous_best_seen = self.best_seen_block();
+		let previous_state = self.state(&previous_best_seen);
 		self.blocks.clear_peer_download(who);
 		self.peers.remove(&who);
+		if self.peers.len() == 0 {
+			// We're not connected to any peer anymore.
+			self.is_offline.store(true, Ordering::Relaxed);
+		}
+		let current_best_seen = self.best_seen_block();
+		let current_state = self.state(&current_best_seen);
+		// We removed a peer, let's see if this put us in idle state and is_major_syncing should be updated.
+		match (previous_state, current_state) {
+			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
+			_ => {},
+		}
 		self.justifications.peer_disconnected(who);
 		self.maintain_sync(protocol);
 	}

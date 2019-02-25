@@ -16,6 +16,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
 use log::{warn, debug, error, trace, info};
 use futures::{Async, Future, Stream, stream, sync::oneshot};
@@ -34,7 +35,7 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use crate::specialization::NetworkSpecialization;
 
 use tokio::prelude::task::AtomicTask;
-use tokio::runtime::Runtime;
+use tokio::runtime::Builder as RuntimeBuilder;
 
 pub use network_libp2p::PeerId;
 
@@ -117,6 +118,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
+	// Are we connected to any peer?
+	is_offline: Arc<AtomicBool>,
+	// Are we actively catching up with the chain?
+	is_major_syncing: Arc<AtomicBool>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Protocol sender
@@ -135,7 +140,12 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		import_queue: Box<ImportQueue<B>>,
 	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
+		// Start in off-line mode, since we're not connected to any nodes yet.
+		let is_offline = Arc::new(AtomicBool::new(true));
+		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let protocol_sender = Protocol::new(
+			is_offline.clone(),
+			is_major_syncing.clone(),
 			network_chan.clone(),
 			params.config,
 			params.chain,
@@ -154,6 +164,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		)?;
 
 		let service = Arc::new(Service {
+			is_offline,
+			is_major_syncing,
 			network,
 			protocol_sender: protocol_sender.clone(),
 			bg_thread: Some(thread),
@@ -244,22 +256,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
 	fn is_major_syncing(&self) -> bool {
-		let (sender, port) = channel::unbounded();
-		let _ = self
-			.protocol_sender
-			.send(ProtocolMsg::IsMajorSyncing(sender));
-		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
-			or the ProtocolMsg::Stop message is received,
-			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
+		self.is_major_syncing.load(Ordering::Relaxed)
 	}
 	fn is_offline(&self) -> bool {
-		let (sender, port) = channel::unbounded();
-		let _ = self
-			.protocol_sender
-			.send(ProtocolMsg::IsOffline(sender));
-		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
-			or the ProtocolMsg::Stop message is received,
-			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
+		self.is_offline.load(Ordering::Relaxed)
 	}
 }
 
@@ -458,7 +458,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 
 	let (close_tx, close_rx) = oneshot::channel();
 	let service_clone = service.clone();
-	let mut runtime = Runtime::new()?;
+	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
 		let fut = run_thread(protocol_sender, service_clone, network_port, protocol_id)
 			.select(close_rx.then(|_| Ok(())))

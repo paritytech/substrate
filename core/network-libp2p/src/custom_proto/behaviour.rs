@@ -22,7 +22,7 @@ use crate::parse_str_addr;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::prelude::*;
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::core::{protocols_handler::ProtocolsHandler, Multiaddr, PeerId};
+use libp2p::core::{protocols_handler::ProtocolsHandler, Endpoint, Multiaddr, PeerId};
 use log::{debug, trace, warn};
 use smallvec::SmallVec;
 use std::{cmp, error, io, marker::PhantomData, path::Path, time::Duration, time::Instant};
@@ -458,13 +458,13 @@ where
 			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (active)", peer_id);
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::EnableActive,
+				event: CustomProtosHandlerIn::Enable(Endpoint::Dialer),
 			});
 		} else {
 			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (passive)", peer_id);
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::EnablePassive,
+				event: CustomProtosHandlerIn::Enable(Endpoint::Listener),
 			});
 		}
 
@@ -581,10 +581,15 @@ where
 					messages,
 				}));
 			}
-			CustomProtosHandlerOut::ProtocolError { protocol_id, error } => {
-				warn!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
-					{:?}: {:?}", source, protocol_id, error);
-				self.ban_peer(source);
+			CustomProtosHandlerOut::ProtocolError { protocol_id, error, is_severe } => {
+				if is_severe {
+					warn!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
+						{:?}: {:?}", source, protocol_id, error);
+					self.ban_peer(source);
+				} else {
+					debug!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
+						{:?}: {:?}", source, protocol_id, error);
+				}
 			}
 		}
 	}

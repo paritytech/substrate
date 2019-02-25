@@ -163,6 +163,10 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 	fn leaves(&self) -> ClientResult<Vec<Block::Hash>> {
 		unimplemented!()
 	}
+
+	fn children(&self, _parent_hash: Block::Hash) -> ClientResult<Vec<Block::Hash>> {
+		unimplemented!()
+	}
 }
 
 #[cfg(test)]
