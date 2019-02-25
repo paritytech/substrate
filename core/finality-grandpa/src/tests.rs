@@ -17,7 +17,7 @@
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
-use network::test::{create_peer, Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
+use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
