@@ -21,7 +21,6 @@ use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
 
-
 struct Status {
 	pub peers: usize,
 	pub is_syncing: bool,
