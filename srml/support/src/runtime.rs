@@ -722,7 +722,7 @@ macro_rules! __decl_runtime_metadata {
 	(
 		$runtime:ident;
 		$( $parsed_modules:ident { $( $withs:ident )* } )*;
-		$( {leading_module: $( $leading_module:ident )* } )?
+		$( { leading_module: $( $leading_module:ident )* } )?
 		$name:ident: $module:ident::{
 			Module $( $modules:ident )*
 		}
