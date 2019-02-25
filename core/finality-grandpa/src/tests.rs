@@ -120,7 +120,7 @@ impl TestNetFactory for GrandpaTestNet {
 		let specialization = DummySpecialization;
 		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
 		self.mut_peers(|peers| {
-			peers.push(peer.clone())
+			peers.push(peer)
 		});
 	}
 
@@ -132,7 +132,7 @@ impl TestNetFactory for GrandpaTestNet {
 		&self.peers
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<GrandpaPeer>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<GrandpaPeer>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 

@@ -495,7 +495,7 @@ pub trait TestNetFactory: Sized {
 	/// Get reference to peer.
 	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization>;
 	fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>;
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F);
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F);
 
 	fn started(&self) -> bool;
 	fn set_started(&mut self, now: bool);
@@ -729,7 +729,7 @@ impl TestNetFactory for TestNet {
 		let specialization = DummySpecialization;
 		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
 		self.mut_peers(|peers| {
-			peers.push(peer.clone())
+			peers.push(peer)
 		});
 	}
 
@@ -747,7 +747,7 @@ impl TestNetFactory for TestNet {
 		&self.peers
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<(), Self::Specialization>>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<(), Self::Specialization>>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 
@@ -800,7 +800,7 @@ impl TestNetFactory for JustificationTestNet {
 		let specialization = DummySpecialization;
 		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
 		self.mut_peers(|peers| {
-			peers.push(peer.clone())
+			peers.push(peer)
 		});
 	}
 
@@ -812,7 +812,7 @@ impl TestNetFactory for JustificationTestNet {
 		self.0.peers()
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F ) {
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, Self::Specialization>>>)>(&mut self, closure: F ) {
 		self.0.mut_peers(closure)
 	}
 

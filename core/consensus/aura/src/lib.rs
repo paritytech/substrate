@@ -742,7 +742,7 @@ mod tests {
 			let specialization = DummySpecialization;
 			let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
 			self.mut_peers(|peers| {
-				peers.push(peer.clone())
+				peers.push(peer)
 			});
 		}
 
@@ -754,7 +754,7 @@ mod tests {
 			&self.peers
 		}
 
-		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 
