@@ -35,7 +35,7 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use crate::specialization::NetworkSpecialization;
 
 use tokio::prelude::task::AtomicTask;
-use tokio::runtime::Runtime;
+use tokio::runtime::Builder as RuntimeBuilder;
 
 pub use network_libp2p::PeerId;
 
@@ -458,7 +458,7 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 
 	let (close_tx, close_rx) = oneshot::channel();
 	let service_clone = service.clone();
-	let mut runtime = Runtime::new()?;
+	let mut runtime = RuntimeBuilder::new().name_prefix("libp2p-").build()?;
 	let thread = thread::Builder::new().name("network".to_string()).spawn(move || {
 		let fut = run_thread(protocol_sender, service_clone, network_port, protocol_id)
 			.select(close_rx.then(|_| Ok(())))

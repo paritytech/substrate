@@ -24,7 +24,7 @@ pub mod chain_spec;
 mod service;
 
 use tokio::prelude::Future;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 pub use cli::{VersionInfo, IntoExit, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
@@ -87,7 +87,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);
-			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
+			let runtime = RuntimeBuilder::new().name_prefix("main-tokio-").build()
+				.map_err(|e| format!("{:?}", e))?;
 			let executor = runtime.executor();
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(
