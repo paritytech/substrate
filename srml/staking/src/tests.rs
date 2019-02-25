@@ -599,52 +599,141 @@ fn reserving_balance_when_bonded_should_not_work() {
 	});
 }
 
+#[test]
+fn max_unstake_threshold_works() {
+	// Tests that max_unstake_threshold gets used when prefs.unstake_threshold is large
+	// TODO: Why does this test fail?
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
+		// Two users with maximum possible balance
+		Balances::set_free_balance(&10, u64::max_value());
+		Balances::set_free_balance(&20, u64::max_value());
 
-// #[test]
-// fn slash_value_calculation_does_not_overflow() {
-// 	// TODO: Test that slash value will not overflow with high unstake threshold
-// 	// TODO: Test that this will remove max possible value from user
-// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-// 		assert_eq!(Staking::era_length(), 9);
-// 		assert_eq!(Staking::sessions_per_era(), 3);
-// 		assert_eq!(Staking::last_era_length_change(), 0);
-// 		assert_eq!(Staking::current_era(), 0);
-// 		assert_eq!(Session::current_index(), 0);
-// 		assert_eq!(Balances::total_balance(&10), 1);
-// 		assert_eq!(Staking::intentions(), vec![10, 20]);
-// 		assert_eq!(Staking::offline_slash_grace(), 0);
+		// Give them full exposer as a staker
+		<Stakers<Test>>::insert(&10, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
+		<Stakers<Test>>::insert(&20, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
 
-// 		// set validator preferences so the validator doesn't back down after
-// 		// slashing.
-// 		<ValidatorPreferences<Test>>::insert(10, ValidatorPrefs {
-// 			unstake_threshold: u32::max_value(),
-// 			validator_payment: 0,
-// 		});
+		// Check things are initialized correctly
+		assert_eq!(Balances::free_balance(&10), u64::max_value());
+		assert_eq!(Balances::free_balance(&20), u64::max_value());
+		assert_eq!(Balances::free_balance(&10), Balances::free_balance(&20));
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::current_offline_slash(), 20);
+		// Account 10 will have unstake_threshold 10
+		<Validators<Test>>::insert(10, ValidatorPrefs {
+			unstake_threshold: 10,
+			validator_payment: 0,
+		});
+		// Account 20 will have unstake_threshold 100, which should be limited to 10
+		<Validators<Test>>::insert(20, ValidatorPrefs {
+			unstake_threshold: 100,
+			validator_payment: 0,
+		});
 
-// 		System::set_block_number(3);
-// 		Session::check_rotate_session(System::block_number());
-// 		assert_eq!(Staking::current_era(), 0);
-// 		assert_eq!(Session::current_index(), 1);
-// 		assert_eq!(Balances::total_balance(&10), 11);
+		// Report each user 1 more than the max_unstake_threshold
+		Staking::on_offline_validator(10, 11);
+		Staking::on_offline_validator(20, 11);
 
-// 		// the balance type is u64, so after slashing 64 times,
-// 		// the slash value should have overflowed. add a couple extra for
-// 		// good measure with the slash grace.
-// 		trait TypeEq {}
-// 		impl<A> TypeEq for (A, A) {}
-// 		fn assert_type_eq<A: TypeEq>() {}
-// 		assert_type_eq::<(u64, <Test as balances::Trait>::Balance)>();
+		// Show that each balance only gets reduced by 2^max_unstake_threshold
+		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(10) * 20);
+		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(10) * 20);
+	});
+}
 
-// 		Staking::on_offline_validator(10, 100);
-// 	});
-// }
+#[test]
+fn slashing_does_not_cause_underflow() {
+	// Tests that slashing more than a user has does not underflow
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// One user with less than `max_value` will test underflow does not occur
+		Balances::set_free_balance(&10, 1);
 
+		// Verify initial conditions
+		assert_eq!(Balances::free_balance(&10), 1);
+		assert_eq!(Staking::offline_slash_grace(), 0);
+
+		// Set validator preference so that 2^unstake_threshold would cause overflow (greater than 64)
+		<Validators<Test>>::insert(10, ValidatorPrefs {
+			unstake_threshold: 10,
+			validator_payment: 0,
+		});
+
+		// Should not panic
+		Staking::on_offline_validator(10, 100);
+		// Confirm that underflow has not occurred, and account balance is set to zero
+		assert_eq!(Balances::free_balance(&10), 0);
+	});
+}
+/*
 #[test]
 fn reward_destination_works() {
 	// TODO: Test that rewards go to the right place when set
 	// Stake, stash, controller
-}
+	with_externalities(&mut ExtBuilder::default()
+		.sessions_per_era(1)
+		.session_length(1)
+		.build(),
+	|| {
+		// Check that account 10 is a validator
+		assert!(<Validators<Test>>::exists(10));
+		// Check the balance of the validator account
+		assert_eq!(Balances::free_balance(&10), 1); 
+		// Check the balance of the stash account
+		assert_eq!(Balances::free_balance(&11), 10); 
+		// Check these two accounts are bonded
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Check how much is at stake
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 
+
+		// Move forward the system for payment
+		System::set_block_number(1);
+		Timestamp::set_timestamp(5);
+		Session::check_rotate_session(System::block_number());
+
+		// Check that RewardDestination is Staked (default)
+		assert_eq!(Staking::payee(&10), RewardDestination::Staked);
+		// Check that reward went to the stash account
+		println!("{:?} {:?}", Balances::free_balance(&10), Balances::free_balance(&11));
+		assert_eq!(Balances::free_balance(&11), 10 + 10);
+		// Check that amount at stake increased accordingly
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 10, active: 1000 + 10, unlocking: vec![] }));
+
+		//Change RewardDestination to Stash
+		<Payee<Test>>::insert(&10, RewardDestination::Stash);
+
+		// Move forward the system for payment
+		System::set_block_number(2);
+		Timestamp::set_timestamp(10);
+		Session::check_rotate_session(System::block_number());
+
+		// Check that RewardDestination is Stash
+		assert_eq!(Staking::payee(&10), RewardDestination::Stash);
+		// Check that reward went to the stash account
+		println!("{:?} {:?}", Balances::free_balance(&10), Balances::free_balance(&11));
+		assert_eq!(Balances::free_balance(&11), 10 + 10 + 10);
+		// Check that amount at stake is not increased
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 10, active: 1000 + 10, unlocking: vec![] }));
+
+		//Change RewardDestination to Controller
+		<Payee<Test>>::insert(&10, RewardDestination::Controller);
+
+		// Move forward the system for payment
+		System::set_block_number(3);
+		Timestamp::set_timestamp(15);
+		Session::check_rotate_session(System::block_number());
+
+		// Check that RewardDestination is Controller
+		assert_eq!(Staking::payee(&10), RewardDestination::Controller);
+		// Check that reward went to the controller account
+		println!("{:?} {:?}", Balances::free_balance(&10), Balances::free_balance(&11));
+		assert_eq!(Balances::free_balance(&10), 1 + 10);
+		// Check that amount at stake is not increased
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1010, active: 1010, unlocking: vec![] }));
+
+	});
+
+}
+*/
 #[test]
 fn validator_prefs_work() {
 	// TODO: Test that validator preferences are correctly honored
