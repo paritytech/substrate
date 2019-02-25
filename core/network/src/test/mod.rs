@@ -483,8 +483,18 @@ impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 	fn on_broadcasted(&self, _: HashMap<Hash, Vec<String>>) {}
 }
 
+pub trait SpecializationFactory {
+    fn create() -> Self;
+}
+
+impl SpecializationFactory for DummySpecialization {
+	fn create() -> DummySpecialization {
+		DummySpecialization
+	}
+}
+
 pub trait TestNetFactory: Sized {
-	type Specialization: NetworkSpecialization<Block> + Clone;
+	type Specialization: NetworkSpecialization<Block> + Clone + SpecializationFactory;
 	type Verifier: 'static + Verifier<Block>;
 	type PeerData: Default;
 
@@ -523,7 +533,38 @@ pub trait TestNetFactory: Sized {
 	}
 
 	/// Add a peer.
-	fn add_peer(&mut self, config: &ProtocolConfig);
+	fn add_peer(&mut self, config: &ProtocolConfig) {
+		let client = Arc::new(test_client::new());
+		let tx_pool = Arc::new(EmptyTransactionPool);
+		let verifier = self.make_verifier(client.clone(), config);
+		let (block_import, justification_import, data) = self.make_block_import(client.clone());
+		let (network_sender, network_port) = network_channel(ProtocolId::default());
+
+		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
+		let specialization = self::SpecializationFactory::create();
+		let protocol_sender = Protocol::new(
+			network_sender.clone(),
+			config.clone(),
+			client.clone(),
+			import_queue.clone(),
+			None,
+			tx_pool,
+			specialization,
+		).unwrap();
+
+		let peer = Arc::new(Peer::new(
+			client,
+			import_queue,
+			protocol_sender,
+			network_sender,
+			network_port,
+			data,
+		));
+
+		self.mut_peers(|peers| {
+			peers.push(peer)
+		});
+	}
 
 	/// Start network.
 	fn start(&mut self) {
@@ -672,38 +713,6 @@ pub trait TestNetFactory: Sized {
 	}
 }
 
-pub fn create_peer<D, V: 'static + Verifier<Block>, S: NetworkSpecialization<Block> + Clone>(
-	client: Arc<PeersClient>,
-	block_import: SharedBlockImport<Block>,
-	justification_import: Option<SharedJustificationImport<Block>>,
-	data:D,
-	verifier: Arc<V>,
-	specialization: S,
-	config: &ProtocolConfig
-) -> Arc<Peer<D, S>> {
-	let tx_pool = Arc::new(EmptyTransactionPool);
-	let (network_sender, network_port) = network_channel(ProtocolId::default());
-	let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
-	let protocol_sender = Protocol::new(
-		network_sender.clone(),
-		config.clone(),
-		client.clone(),
-		import_queue.clone(),
-		None,
-		tx_pool,
-		specialization,
-	).expect("Protocol creationg should work; qed");
-
-	Arc::new(Peer::new(
-		client,
-		import_queue,
-		protocol_sender,
-		network_sender,
-		network_port,
-		data,
-	))
-}
-
 pub struct TestNet {
 	peers: Vec<Arc<Peer<(), DummySpecialization>>>,
 	started: bool,
@@ -720,17 +729,6 @@ impl TestNetFactory for TestNet {
 			peers: Vec::new(),
 			started: false
 		}
-	}
-
-	fn add_peer(&mut self, config: &ProtocolConfig) {
-		let client = Arc::new(test_client::new());
-		let verifier = self.make_verifier(client.clone(), config);
-		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let specialization = DummySpecialization;
-		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
-		self.mut_peers(|peers| {
-			peers.push(peer)
-		});
 	}
 
 	fn make_verifier(&self, _client: Arc<PeersClient>, _config: &ProtocolConfig)
@@ -791,17 +789,6 @@ impl TestNetFactory for JustificationTestNet {
 		-> Arc<Self::Verifier>
 	{
 		self.0.make_verifier(client, config)
-	}
-
-	fn add_peer(&mut self, config: &ProtocolConfig) {
-		let client = Arc::new(test_client::new());
-		let verifier = self.make_verifier(client.clone(), config);
-		let (block_import, justification_import, data) = self.make_block_import(client.clone());
-		let specialization = DummySpecialization;
-		let peer = create_peer(client, block_import, justification_import, data, verifier, specialization, config);
-		self.mut_peers(|peers| {
-			peers.push(peer)
-		});
 	}
 
 	fn peer(&self, i: usize) -> &Peer<Self::PeerData, Self::Specialization> {
