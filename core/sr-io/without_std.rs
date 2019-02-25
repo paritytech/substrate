@@ -21,7 +21,7 @@ pub use rstd;
 pub use rstd::{mem, slice};
 
 use core::intrinsics;
-use rstd::vec::Vec;
+use rstd::{vec::Vec, ops::Deref};
 use hash_db::Hasher;
 use primitives::Blake2Hasher;
 
@@ -48,11 +48,108 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 	}
 }
 
+/// A function which implementation can be exchanged.
+///
+/// Internally this works by swapping function pointers.
+pub struct ExchangeableFunction<T>(T);
+
+impl<T> ExchangeableFunction<T> {
+	/// Replace the implementation with `new_impl`.
+	pub fn replace_implementation(self: &'static mut Self, new_impl: T)  -> RestoreImplementation<T> {
+		let old = mem::replace(&mut self.0, new_impl);
+
+		RestoreImplementation(self, Some(old))
+	}
+
+	/// Set the given implementation.
+	fn set_implementation(&mut self, new_impl: T) {
+		self.0 = new_impl;
+	}
+}
+
+impl<T> Deref for ExchangeableFunction<T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+/// Restores a function implementation on drop.
+struct RestoreImplementation<T: 'static>(&'static mut ExchangeableFunction<T>, Option<T>);
+
+impl<T> Drop for RestoreImplementation<T> {
+	fn drop(&mut self) {
+		self.0.set_implementation(self.1.take().expect("Value is only taken on drop; qed"));
+	}
+}
+
+/// Declare extern functions
+macro_rules! extern_functions {
+	(
+		@INTERN
+		{ $( $exchange_name:ident ( $( $exchange_params:tt )* ) $( -> $exchange_ret:ty )? ; )* }
+		$( #[$attr:meta] )*
+		exchange fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret:ty )?;
+		$( $rest:tt )*
+	) => {
+		$( #[$attr] )*
+		#[allow(non_upper_case_globals)]
+		pub static $name: ExchangeableFunction<unsafe extern "C" fn ( $( $arg_ty ),* ) $( -> $ret )?> = ExchangeableFunction(extern_functions::$name);
+
+		extern_functions!(
+			@INTERN
+			{ $( $exchange_name( $( $exchange_params )* ) $( -> $exchange_ret )? ; )* $name ( $( $arg: $arg_ty ),* ) $( -> $ret )? ; }
+			$( $rest )*
+		);
+	};
+	(
+		@INTERN
+		{ $( $exchange_name:ident ( $( $exchange_params:tt )* ) $( -> $exchange_ret:ty )?; )* }
+		$( #[$attr:meta] )*
+		fn $name:ident ( $( $params:tt )* ) $( -> $ret:ty )?;
+		$( $rest:tt )*
+	) => {
+		extern "C" {
+			$( #[$attr] )*
+			fn $name( $( $params )* ) $( -> $ret )?;
+		}
+
+		extern_functions!(
+			@INTERN
+			{ $( $exchange_name( $( $exchange_params )* ) $( -> $exchange_ret )?; )* }
+			$( $rest )*
+		);
+	};
+	(
+		@INTERN
+		{ $( $exchange_name:ident ( $( $exchange_params:tt )* ) $( -> $exchange_ret:ty )?; )* }
+	) => {
+		/// The exchangeable extern functions default implementations.
+		mod extern_functions {
+			extern "C" {
+				$(
+					pub fn $exchange_name( $( $exchange_params )* ) $( -> $exchange_ret )?;
+				)*
+			}
+		}
+	};
+	(
+		$( $rest:tt )*
+	) => {
+		extern_functions!(
+			@INTERN
+			{}
+			$( $rest )*
+		);
+	};
+}
+
 /// Host functions, provided by the executor.
 /// A WebAssembly runtime module would "import" these to access the execution environment
 /// (most importantly, storage) or perform heavy hash calculations.
 /// See also "ext_" functions in sr-sandbox and sr-std
-extern "C" {
+extern_functions! {
 	/// Printing, useful for debugging
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
@@ -92,7 +189,7 @@ extern "C" {
 	/// - `u32::max_value()` if the value does not exists.
 	///
 	/// - Otherwise, the number of bytes written for value.
-	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+	exchange fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	/// Gets the trie root of the storage.
 	fn ext_storage_root(result: *mut u8);
 	/// Get the change trie root of the current storage overlay at a block with given parent.
