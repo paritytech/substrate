@@ -39,12 +39,12 @@ use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
 use crate::{error, util::LruHashSet};
 
-const REQUEST_TIMEOUT_SEC: u64 = 40;
-const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
-const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(5100);
-
 /// Interval at which we send status updates on the SyncProvider status stream.
 pub const STATUS_INTERVAL_MS: u64 = 5000;
+
+const REQUEST_TIMEOUT_SEC: u64 = 40;
+const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
+const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(STATUS_INTERVAL_MS + 100);
 const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(STATUS_INTERVAL_MS);
 
 /// Current protocol version.
