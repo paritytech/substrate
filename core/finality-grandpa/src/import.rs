@@ -26,7 +26,7 @@ use client::backend::Backend;
 use client::runtime_api::Core as CoreApi;
 use consensus_common::{
 	BlockImport, Error as ConsensusError, ErrorKind as ConsensusErrorKind,
-	ImportBlock, ImportResult, JustificationImport,
+	ImportBlock, ImportResult, JustificationImport, PostImportActions,
 };
 use fg_primitives::GrandpaApi;
 use runtime_primitives::Justification;
@@ -390,9 +390,9 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let enacts_consensus_change = new_authorities.is_some();
 		let import_result = self.inner.import_block(block, new_authorities);
 
-		let import_result = {
+		let mut import_actions = {
 			match import_result {
-				Ok(ImportResult::Queued) => ImportResult::Queued,
+				Ok(ImportResult::Imported(actions)) => actions,
 				Ok(r) => {
 					debug!(target: "afg", "Restoring old authority set after block import result: {:?}", r);
 					pending_changes.revert();
@@ -423,10 +423,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			// well so we should probably only reject justifications from the old set.
 			justification = None;
 			let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
+
+			// we must clear all pending justifications requests, presumably they won't be
+			// finalized hence why this forced changes was triggered
+			import_actions |= PostImportActions::ClearJustificationRequests;
 		}
 
 		if !needs_justification && !enacts_consensus_change {
-			return Ok(import_result);
+			return Ok(ImportResult::Imported(import_actions));
 		}
 
 		match justification {
@@ -448,11 +452,11 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 					self.consensus_changes.lock().note_change((number, hash));
 				}
 
-				return Ok(ImportResult::NeedsJustification);
+				import_actions |= PostImportActions::RequestJustification;
 			}
 		}
 
-		Ok(import_result)
+		Ok(ImportResult::Imported(import_actions))
 	}
 
 	fn check_block(

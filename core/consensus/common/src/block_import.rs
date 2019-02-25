@@ -16,6 +16,7 @@
 
 //! Block import helpers.
 
+use bitflags::bitflags;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, DigestItemFor, Header as HeaderT, NumberFor};
 use runtime_primitives::Justification;
 use std::borrow::Cow;
@@ -23,19 +24,25 @@ use std::borrow::Cow;
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the import queue.
-	AlreadyQueued,
+	/// Block imported.
+	Imported(PostImportActions),
 	/// Already in the blockchain.
 	AlreadyInChain,
 	/// Block or parent is known to be bad.
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
-	/// Added to the import queue but must be justified
-	/// (usually required to safely enact consensus changes).
-	NeedsJustification,
+}
+
+bitflags! {
+	/// Bitmask of actions to be performed after a given block is imported.
+	#[derive(Default)]
+	pub struct PostImportActions: u8 {
+		/// Clear all pending justification requests.
+		const ClearJustificationRequests = 0b00000001;
+		/// Request a justification for the given block.
+		const RequestJustification = 0b00000010;
+	}
 }
 
 /// Block data origin.

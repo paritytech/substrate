@@ -222,9 +222,10 @@ where
 			.chain(self.pending_forced_changes.iter())
 	}
 
-	/// Get the earliest limit-block number, if any. If there are pending
-	/// changes across different forks, this method will return the earliest
-	/// effective number (across the different branches).
+	/// Get the earliest limit-block number, if any. If there are pending changes across
+	/// different forks, this method will return the earliest effective number (across the
+	/// different branches). Only standard changes are taken into account for the current
+	/// limit, since any existing forced change should preclude the voter from voting.
 	pub(crate) fn current_limit(&self) -> Option<N> {
 		self.pending_standard_changes.roots()
 			.min_by_key(|&(_, _, c)| c.effective_number())
@@ -257,8 +258,6 @@ where
 				// apply this change: make the set canonical
 				info!(target: "finality", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
-
-				// TODO: clear any requests for pending justifications
 
 				new_set = Some(AuthoritySet {
 					current_authorities: change.next_authorities.clone(),
