@@ -129,35 +129,44 @@ fn offline_should_slash_and_kick() {
 	});
 }
 
-// #[test]
-// fn note_offline_grace_should_work() {
-// 	// Tests that with grace, slashing is delayed
-// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-// 		Balances::set_free_balance(&10, 70);
-// 		Balances::set_free_balance(&20, 70);
-// 		assert_ok!(Staking::set_offline_slash_grace(1));
-// 		assert_eq!(Staking::offline_slash_grace(), 1);
+#[test]
+fn offline_grace_should_delay_slashing() {
+	// Tests that with grace, slashing is delayed
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Initialize account 10 with balance
+		Balances::set_free_balance(&10, 70);
+		// Verify account 10 has balance
+		assert_eq!(Balances::free_balance(&10), 70);
 
-// 		assert_eq!(Staking::slash_count(&10), 0);
-// 		assert_eq!(Balances::free_balance(&10), 70);
+		// Set offline slash grace
+		let offline_slash_grace = 1;
+		assert_ok!(Staking::set_offline_slash_grace(offline_slash_grace));
+		assert_eq!(Staking::offline_slash_grace(), 1);
 
-// 		System::set_extrinsic_index(1);
-// 		Staking::on_offline_validator(10, 1);
-// 		assert_eq!(Staking::slash_count(&10), 1);
-// 		assert_eq!(Balances::free_balance(&10), 70);
-// 		assert_eq!(Staking::slash_count(&20), 0);
-// 		assert_eq!(Balances::free_balance(&20), 70);
+		// Check unstaked_threshold is 3 (default)
+		let default_unstake_threshold = 3;
+		assert_eq!(Staking::validators(&10), ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 });
 
-// 		System::set_extrinsic_index(1);
-// 		Staking::on_offline_validator(10, 1);
-// 		Staking::on_offline_validator(20, 1);
-// 		assert_eq!(Staking::slash_count(&10), 2);
-// 		assert_eq!(Balances::free_balance(&10), 50);
-// 		assert_eq!(Staking::slash_count(&20), 1);
-// 		assert_eq!(Balances::free_balance(&20), 70);
-// 		assert!(Staking::forcing_new_era().is_none());
-// 	});
-// }
+		// Check slash count is zero
+		assert_eq!(Staking::slash_count(&10), 0);
+
+		// Report account 10 up to the threshold
+		Staking::on_offline_validator(10, default_unstake_threshold as usize + offline_slash_grace as usize);
+		// Confirm slash count
+		assert_eq!(Staking::slash_count(&10), 4);
+
+		// Nothing should happen
+		assert_eq!(Balances::free_balance(&10), 70);
+
+		// Report account 10 one more time
+		Staking::on_offline_validator(10, 1);
+		assert_eq!(Staking::slash_count(&10), 5);
+		// User gets slashed
+		assert_eq!(Balances::free_balance(&10), 0);
+		// New era is forced
+		assert!(Staking::forcing_new_era().is_some());
+	});
+}
 
 
 #[test]
