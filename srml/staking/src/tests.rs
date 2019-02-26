@@ -188,7 +188,7 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&2), 20); 
 
 		// add a dummy nominator.
-		println!("This is 10: {:?}", <Stakers<Test>>::get(&10));
+		// NOTE: this nominator is being added 'manually'. a Further test (nomination_and_reward..) will add it via '.nominate()'
 		<Stakers<Test>>::insert(&10, Exposure {
 			own: 500, // equal division indicates that the reward will be equally divided among validator and nominator.
 			total: 1000,
@@ -244,7 +244,7 @@ fn multi_era_reward_should_work() {
 		let session_reward = 10;
 
 		// This is set by the test config builder.
-		assert_eq!(Staking::current_session_reward(), 10);
+		assert_eq!(Staking::current_session_reward(), session_reward);
 
 		// check the balance of a validator accounts.
 		assert_eq!(Balances::total_balance(&10), 1); 
@@ -379,96 +379,116 @@ fn staking_should_work() {
 }
 
 
-// #[test]
-// fn nominating_and_rewards_should_work() {
-// 	// TODO: This should be rewritten and tested with the Phragmen algorithm
-// 	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
-// 		assert_eq!(Staking::era_length(), 1);
-// 		assert_eq!(Staking::validator_count(), 2);
-// 		assert_eq!(Staking::bonding_duration(), 3);
-// 		assert_eq!(Session::validators(), vec![10, 20]);
+#[test]
+fn nominating_and_rewards_should_work() {
+	// TODO: This should be rewritten and tested with the Phragmen algorithm
+	// For now it tests a functionality which somehow overlaps with other tests:
+	// the fact that the nominator is rewarded properly.
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1).sessions_per_era(1).build(), 
+	|| {
+		let session_reward = 10;
+		let initial_balance = 1000;
+		assert_eq!(Staking::era_length(), 1);
+		assert_eq!(Staking::validator_count(), 2);
+		assert_eq!(Staking::bonding_duration(), 3);
+		assert_eq!(Session::validators(), vec![10, 20]);
 
-// 		System::set_block_number(1);
-// 		assert_ok!(Staking::stake(Origin::signed(1)));
-// 		assert_ok!(Staking::stake(Origin::signed(2)));
-// 		assert_ok!(Staking::stake(Origin::signed(3)));
-// 		assert_ok!(Staking::nominate(Origin::signed(4), 1));
-// 		Session::check_rotate_session(System::block_number());
-// 		assert_eq!(Staking::current_era(), 1);
-// 		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
-// 		assert_eq!(Balances::total_balance(&1), 10);
-// 		assert_eq!(Balances::total_balance(&2), 20);
-// 		assert_eq!(Balances::total_balance(&3), 30);
-// 		assert_eq!(Balances::total_balance(&4), 40);
+		// default reward for the first session.
+		assert_eq!(Staking::current_session_reward(), session_reward);
 
-// 		System::set_block_number(2);
-// 		assert_ok!(Staking::unnominate(Origin::signed(4), 0));
-// 		Session::check_rotate_session(System::block_number());
-// 		assert_eq!(Staking::current_era(), 2);
-// 		assert_eq!(Session::validators(), vec![3, 2]);
-// 		assert_eq!(Balances::total_balance(&1), 16);
-// 		assert_eq!(Balances::total_balance(&2), 20);
-// 		assert_eq!(Balances::total_balance(&3), 60);
-// 		assert_eq!(Balances::total_balance(&4), 64);
+		// give the man some money
+		for i in 1..5 { Balances::set_free_balance(&i, initial_balance); }
+		Balances::set_free_balance(&10, initial_balance);
+		Balances::set_free_balance(&20, initial_balance);
 
-// 		System::set_block_number(3);
-// 		assert_ok!(Staking::stake(Origin::signed(4)));
-// 		assert_ok!(Staking::unstake(Origin::signed(3), (Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32).into()));
-// 		assert_ok!(Staking::nominate(Origin::signed(3), 1));
-// 		Session::check_rotate_session(System::block_number());
-// 		assert_eq!(Session::validators(), vec![1, 4]);
-// 		assert_eq!(Balances::total_balance(&1), 16);
-// 		assert_eq!(Balances::total_balance(&2), 40);
-// 		assert_eq!(Balances::total_balance(&3), 80);
-// 		assert_eq!(Balances::total_balance(&4), 64);
 
-// 		System::set_block_number(4);
-// 		Session::check_rotate_session(System::block_number());
-// 		assert_eq!(Balances::total_balance(&1), 26);
-// 		assert_eq!(Balances::total_balance(&2), 40);
-// 		assert_eq!(Balances::total_balance(&3), 133);
-// 		assert_eq!(Balances::total_balance(&4), 128);
-// 	});
-// }
+		System::set_block_number(1);
+		// record their balances.
+		for i in 1..5 { assert_eq!(Balances::total_balance(&i), initial_balance); }
 
-// #[test]
-// fn nominators_also_get_slashed() {
-// 	// TODO: Fix this test
-// 	// A nominator should be slashed if the validator they nominated is slashed
-// 	with_externalities(&mut new_test_ext(0, 2, 2, 0, true, 10), || {
-// 		assert_eq!(Staking::era_length(), 4);
-// 		assert_eq!(Staking::validator_count(), 2);
-// 		assert_eq!(Staking::bonding_duration(), 12);
-// 		assert_eq!(Session::validators(), vec![10, 20]);
 
-// 		System::set_block_number(2);
-// 		Session::check_rotate_session(System::block_number());
+		// bond two account pairs and state interest in nomination.
+		// NOTE: in the current naive version only the first vote matters and will be chosen anyhow.
 
-// 		Timestamp::set_timestamp(15);
-// 		System::set_block_number(4);
-// 		assert_ok!(Staking::stake(Origin::signed(1)));
-// 		assert_ok!(Staking::stake(Origin::signed(3)));
-// 		assert_ok!(Staking::nominate(Origin::signed(2), 3));
-// 		assert_ok!(Staking::nominate(Origin::signed(4), 1));
-// 		Session::check_rotate_session(System::block_number());
+		// 2 will nominate for 10, 10 has 1000 in stash, 500 will be 1/3 of the total 1500 
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::Controller));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+		// 4 will nominate for 20, 20 has 2000 in stash, 500 will be 1/5 of the total 2500 
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Stash));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![20, 10]));
+	
 
-// 		assert_eq!(Staking::current_era(), 1);
-// 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
-// 		assert_eq!(Balances::total_balance(&1), 10);
-// 		assert_eq!(Balances::total_balance(&2), 20);
-// 		assert_eq!(Balances::total_balance(&3), 30);
-// 		assert_eq!(Balances::total_balance(&4), 40);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 1);
+		// validators will not change, since selection currently is actually not dependent on nomination and votes, only stake.
+		assert_eq!(Session::validators(), vec![10, 20]);
+		// avalidators must have already received some rewards.
+		assert_eq!(Balances::total_balance(&10), initial_balance + session_reward);
+		assert_eq!(Balances::total_balance(&20), initial_balance + session_reward);
+		
 
-// 		System::set_block_number(5);
-// 		System::set_extrinsic_index(1);
-// 		Staking::on_offline_validator(1, 1);
-// 		Staking::on_offline_validator(3, 1);
-// 		assert_eq!(Balances::total_balance(&1), 0);			//slashed
-// 		assert_eq!(Balances::total_balance(&2), 20);		//not slashed
-// 		assert_eq!(Balances::total_balance(&3), 10);		//slashed
-// 		assert_eq!(Balances::total_balance(&4), 30);		//slashed
-// 	});
-// }
+		System::set_block_number(2);
+		// next session reward.
+		let new_session_reward = Staking::session_reward() * Staking::slot_stake();
+		// nothing else will happen, era ends and rewards are paid again,
+		// it is expected that nominators will also be paid.
+		Session::check_rotate_session(System::block_number());
+
+
+		// Nominator 2: staked 1/3 of the total, gets 1/3 of the reward, chose controller as destination
+		assert_eq!(Balances::total_balance(&2), initial_balance + new_session_reward/3);
+		// The Associated validator will get the other 2/3
+		assert_eq!(Balances::total_balance(&10), initial_balance + session_reward + 2*new_session_reward/3);
+
+		// Nominator 4: staked 1/5 of the total, gets 1/5 of the reward, chose stash as destination
+		// This means that the reward will go to 3, which is bonded as the stash of 4.
+		assert_eq!(Balances::total_balance(&3), initial_balance + new_session_reward/5);
+		// The Associated validator will get the other 4/5
+		assert_eq!(Balances::total_balance(&20), initial_balance + session_reward + 4*new_session_reward/5);
+	});
+}
+
+#[test]
+fn nominators_also_get_slashed() {
+	// A nominator should be slashed if the validator they nominated is slashed
+	with_externalities(&mut ExtBuilder::default()
+	.session_length(1).sessions_per_era(1).build(),
+	|| {
+		assert_eq!(Staking::era_length(), 1);
+		assert_eq!(Staking::validator_count(), 2);
+		// slash happens immediately.
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		// Account 10 has not been reported offline
+		assert_eq!(Staking::slash_count(&10), 0);
+		// initial validators
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		// give the man some money.
+		let initial_balance = 1000;
+		for i in 1..3 { Balances::set_free_balance(&i, initial_balance); }
+		Balances::set_free_balance(&10, initial_balance);
+
+		// 2 will nominate for 10
+		let nominator_stake = 500;
+		assert_ok!(Staking::bond(Origin::signed(1), 2, nominator_stake, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+
+		// new era, pay rewards,
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		// 10 goes offline
+		Staking::on_offline_validator(10, 4);
+		let slash_value = Staking::current_offline_slash()*8; 
+		let expo = Staking::stakers(10);
+		let actual_slash = expo.own.min(slash_value);
+		let nominator_actual_slash = nominator_stake.min(expo.total - actual_slash);
+		// initial + first era reward + slash
+		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - actual_slash);
+		assert_eq!(Balances::total_balance(&2), initial_balance - 500);
+	});
+}
 
 #[test]
 fn double_staking_should_fail() {
@@ -663,6 +683,7 @@ fn slashing_does_not_cause_underflow() {
 		assert_eq!(Balances::free_balance(&10), 0);
 	});
 }
+
 /*
 #[test]
 fn reward_destination_works() {
@@ -780,4 +801,13 @@ fn slot_stake_does_something() {
 fn on_free_balance_zero_removes_user_from_storage() {
 	// TODO: When free balance < existential deposit, user is removed
 	// All storage items about that user are cleaned up
+}
+
+#[test]
+fn bond_more_than_own_should_recover() {
+	// TODO: give an account little money and try to: 
+	// Bond it with a higer amount
+	// state interest in nomination with higher amount
+	// etc. 
+	// none should behave unexpectedly and all should use a `.min()` like logic.
 }
