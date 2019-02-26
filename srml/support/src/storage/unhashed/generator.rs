@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::codec;
+use runtime_io::twox_128;
 #[doc(hidden)]
 pub use crate::rstd::borrow::Borrow;
 #[doc(hidden)]
@@ -86,4 +87,68 @@ impl<H> UnhashedStorage for (crate::rstd::cell::RefCell<&mut sr_primitives::Stor
 			!key.starts_with(prefix)
 		})
 	}
+}
+
+/// An implementation of a map with a two keys.
+///
+/// It provides an important ability to efficiently remove all entries
+/// that have a common first key.
+///
+/// # Mapping of keys to a storage path
+///
+/// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
+/// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
+/// is a hash of a `Key2`.
+pub trait StorageDoubleMapXX<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> {
+	/// The type that get/take returns.
+	type Query;
+
+	/// Get the prefix key in storage.
+	fn prefix() -> &'static [u8];
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn key_for(k1: &K1, k2: &K2) -> Vec<u8> {
+		let mut key = Self::prefix_for(k1);
+		key.extend(&k2.using_encoded(twox_128));
+		key
+	}
+
+	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
+	fn prefix_for(k1: &K1) -> Vec<u8> {
+		let mut key = Self::prefix().to_vec();
+		codec::Encode::encode_to(k1, &mut key);
+		twox_128(&key).to_vec()
+	}
+
+	/// true if the value is defined in storage.
+	fn exists<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> bool {
+		storage.exists(&Self::key_for(k1, k2))
+	}
+
+	/// Load the value associated with the given key from the map.
+	fn get<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+
+	/// Take the value under a key.
+	fn take<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) -> Self::Query;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<S: UnhashedStorage>(k1: &K1, k2: &K2, val: &V, storage: &S) {
+		storage.put(&Self::key_for(k1, k2), val);
+	}
+
+	/// Remove the value under a key.
+	fn remove<S: UnhashedStorage>(k1: &K1, k2: &K2, storage: &S) {
+		storage.kill(&Self::key_for(k1, k2));
+	}
+
+	/// Removes all entries that shares the `k1` as the first key.
+	fn remove_prefix<S: UnhashedStorage>(k1: &K1, storage: &S) {
+		storage.kill_prefix(&Self::prefix_for(k1));
+	}
+
+	/// Mutate the value under a key.
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &S) -> R;
+
+	// TODO TODO: it seems we could add iteration for prefix and iteration for key for not that
+	// much cost !
 }

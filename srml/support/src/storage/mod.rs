@@ -379,6 +379,110 @@ impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator:
 	}
 }
 
+/// An implementation of a map with a two keys.
+///
+/// It provides an important ability to efficiently remove all entries
+/// that have a common first key.
+///
+/// # Mapping of keys to a storage path
+///
+/// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
+/// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
+/// is a hash of a `Key2`.
+pub trait StorageDoubleMapXX<K1: Codec, K2: Codec, V: Codec> {
+	/// The type that get/take returns.
+	type Query;
+
+	/// Get the prefix key in storage.
+	fn prefix() -> &'static [u8];
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn key_for<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Vec<u8>;
+
+	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
+	fn prefix_for<KArg1: Borrow<K1>>(k1: KArg1) -> Vec<u8>;
+
+	/// true if the value is defined in storage.
+	fn exists<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> bool;
+
+	/// Load the value associated with the given key from the map.
+	fn get<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query;
+
+	/// Take the value under a key.
+	fn take<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2, val: &V);
+
+	/// Remove the value under a key.
+	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2);
+
+	/// Removes all entries that shares the `k1` as the first key.
+	fn remove_prefix<KArg1: Borrow<K1>>(k1: KArg1);
+
+	/// Mutate the value under a key.
+	fn mutate<KArg1, KArg2, R, F>(k1: &K1, k2: &K2, f: F) -> R
+	where
+		KArg1: Borrow<K1>,
+		KArg2: Borrow<K2>,
+		F: FnOnce(&mut Self::Query) -> R;
+
+	// TODO TODO: it seems we could add iteration for prefix and iteration for key for not that
+	// much cost !
+}
+
+impl<K1: Codec, K2: Codec, V: Codec, U> StorageDoubleMapXX<K1, K2, V> for U
+where
+	U: unhashed::generator::StorageDoubleMapXX<K1, K2, V>
+{
+	type Query = U::Query;
+
+	fn prefix() -> &'static [u8] {
+		<U as unhashed::generator::StorageDoubleMapXX<K1, K2, V>>::prefix()
+	}
+
+	fn key_for<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Vec<u8> {
+		<U as unhashed::generator::StorageDoubleMapXX<K1, K2, V>>::key_for(k1.borrow(), k2.borrow())
+	}
+
+	fn prefix_for<KArg1: Borrow<K1>>(k1: KArg1) -> Vec<u8> {
+		<U as unhashed::generator::StorageDoubleMapXX<K1, K2, V>>::prefix_for(k1.borrow())
+	}
+
+	fn exists<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> bool {
+		U::exists(k1.borrow(), k2.borrow(), &RuntimeStorage)
+	}
+
+	fn get<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query {
+		U::get(k1.borrow(), k2.borrow(), &RuntimeStorage)
+	}
+
+	fn take<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query {
+		U::take(k1.borrow(), k2.borrow(), &RuntimeStorage)
+	}
+
+	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2, val: &V) {
+		U::insert(k1.borrow(), k2.borrow(), val, &RuntimeStorage)
+	}
+
+	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) {
+		U::remove(k1.borrow(), k2.borrow(), &RuntimeStorage)
+	}
+
+	fn remove_prefix<KArg1: Borrow<K1>>(k1: KArg1) {
+		U::remove_prefix(k1.borrow(), &RuntimeStorage)
+	}
+
+	fn mutate<KArg1, KArg2, R, F>(k1: &K1, k2: &K2, f: F) -> R
+	where
+		KArg1: Borrow<K1>,
+		KArg2: Borrow<K2>,
+		F: FnOnce(&mut Self::Query) -> R
+	{
+		U::mutate(k1.borrow(), k2.borrow(), f, &RuntimeStorage)
+	}
+}
+
 /// A trait to conveniently store a vector of storable data.
 pub trait StorageVec {
 	type Item: Default + Sized + Codec;
