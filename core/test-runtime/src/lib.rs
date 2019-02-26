@@ -25,6 +25,11 @@ use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Encode, Decode, Input};
 use parity_codec_derive::{Encode, Decode};
 
+use primitives::Blake2Hasher;
+use memory_db::MemoryDB;
+use trie_db::{TrieMut, Trie};
+use substrate_trie::{TrieDB, TrieDBMut};
+
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,
 	impl_runtime_apis,
@@ -214,6 +219,8 @@ cfg_if! {
 				fn function_signature_changed() -> u64;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
+				/// trie no_std testing
+				fn use_trie() -> u64;
 			}
 		}
 	} else {
@@ -234,6 +241,8 @@ cfg_if! {
 				fn function_signature_changed() -> Vec<u64>;
 				fn fail_on_native() -> u64;
 				fn fail_on_wasm() -> u64;
+				/// trie no_std testing
+				fn use_trie() -> u64;
 			}
 		}
 	}
@@ -335,6 +344,38 @@ cfg_if! {
 				fn fail_on_wasm() -> u64 {
 					1
 				}
+
+				fn use_trie() -> u64 {
+					let pairs = vec![
+						(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
+						(b"0103000000000000000469".to_vec(), b"0401000000".to_vec()),
+					];
+
+					let mut mdb = MemoryDB::default();
+					let mut root = rstd::default::Default::default();
+					let _ = {
+            let v = &pairs;
+						let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+						for i in 0..v.len() {
+							let key: &[u8]= &v[i].0;
+							let val: &[u8] = &v[i].1;
+							t.insert(key, val).unwrap();
+						}
+						t
+					};
+
+					let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).unwrap();
+
+					let iter = trie.iter().unwrap();
+					let mut iter_pairs = Vec::new();
+					for pair in iter {
+						let (key, value) = pair.unwrap();
+						iter_pairs.push((key, value.to_vec()));
+					}
+					iter_pairs.len() as u64
+				}
+
+
 			}
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
@@ -430,7 +471,39 @@ cfg_if! {
 				fn fail_on_wasm() -> u64 {
 					panic!("Failing because we are on wasm")
 				}
+
+				fn use_trie() -> u64 {
+					let pairs = [
+						(b"0103000000000000000464".to_vec(), b"0400000000".to_vec()),
+						(b"0103000000000000000469".to_vec(), b"0401000000".to_vec()),
+					].to_vec();
+
+					let mut mdb = MemoryDB::default();
+					let mut root = rstd::default::Default::default();
+					let _ = {
+            let v = &pairs;
+						let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+						for i in 0..v.len() {
+							let key: &[u8]= &v[i].0;
+							let val: &[u8] = &v[i].1;
+							t.insert(key, val).unwrap();
+						}
+						t
+					};
+
+					let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).unwrap();
+
+					let iter = trie.iter().unwrap();
+					let mut iter_pairs = Vec::new();
+					for pair in iter {
+						let (key, value) = pair.unwrap();
+						iter_pairs.push((key, value.to_vec()));
+					}
+					iter_pairs.len() as u64
+				}
 			}
+
+
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }

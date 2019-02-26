@@ -12,7 +12,9 @@ crate-type = ["cdylib"]
 substrate-test-runtime = { path = "..", default-features = false }
 
 [features]
-default = []
+default = [
+	"substrate-test-runtime/nightly",
+]
 std = [
 	"substrate-test-runtime/std",
 ]
@@ -23,3 +25,9 @@ lto = true
 
 [workspace]
 members = []
+
+[patch.crates-io]
+trie-db = { path = "../../../../parity-trie/trie-db" }
+hash-db = { path = "../../../../parity-trie/hash-db" }
+memory-db = { path = "../../../../parity-trie/memory-db" }
+elastic-array = { path = "../../../../elastic-array" }

@@ -30,6 +30,7 @@ pub use std::ptr;
 pub use std::rc;
 pub use std::slice;
 pub use std::vec;
+pub use std::default;
 pub use std::result;
 
 pub mod collections {

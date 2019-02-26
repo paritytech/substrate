@@ -21,6 +21,9 @@ runtime_io = { package = "sr-io", path = "../sr-io", default-features = false }
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
 runtime_version = { package = "sr-version", path = "../sr-version", default-features = false }
 runtime_support = { package = "srml-support", path = "../../srml/support", default-features = false }
+substrate-trie = { path = "../trie", default-features = false }
+trie-db = { version = "0.11", default-features = false }
+memory-db = { version = "0.11", default-features = false }
 cfg-if = "0.1.6"
 
 [dev-dependencies]
@@ -44,4 +47,12 @@ std = [
 	"runtime_primitives/std",
 	"runtime_version/std",
 	"consensus_aura/std",
+	"primitives/std",
+	"substrate-trie/std",
+	"trie-db/std",
+	"memory-db/std",
+]
+nightly = [
+  "trie-db/nightly",
+  "memory-db/nightly",
 ]
