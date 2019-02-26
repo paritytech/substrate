@@ -483,7 +483,7 @@ mod tests {
 			delay: 2,
 			canon_height: 1,
 			canon_hash: "hash_d",
-			delay_kind: DelayKind::Best,
+			delay_kind: DelayKind::Best { median_last_finalized: 0 },
 		};
 
 		let change_e = PendingChange {
@@ -491,7 +491,7 @@ mod tests {
 			delay: 2,
 			canon_height: 0,
 			canon_hash: "hash_e",
-			delay_kind: DelayKind::Best,
+			delay_kind: DelayKind::Best { median_last_finalized: 0 },
 		};
 
 		authorities.add_pending_change(change_d.clone(), &static_is_descendent_of(false)).unwrap();
@@ -680,14 +680,14 @@ mod tests {
 		};
 
 		let set_a = vec![([1; 32].into(), 5)];
-		let set_b = vec![([1; 32].into(), 5)];
+		let set_b = vec![([2; 32].into(), 5)];
 
 		let change_a = PendingChange {
 			next_authorities: set_a.clone(),
 			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_a",
-			delay_kind: DelayKind::Best,
+			delay_kind: DelayKind::Best { median_last_finalized: 42 },
 		};
 
 		let change_b = PendingChange {
@@ -695,7 +695,7 @@ mod tests {
 			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_b",
-			delay_kind: DelayKind::Best,
+			delay_kind: DelayKind::Best { median_last_finalized: 0 },
 		};
 
 		authorities.add_pending_change(change_a, &static_is_descendent_of(false)).unwrap();
@@ -716,12 +716,14 @@ mod tests {
 			delay: 3,
 			canon_height: 8,
 			canon_hash: "hash_a8",
-			delay_kind: DelayKind::Best,
+			delay_kind: DelayKind::Best { median_last_finalized: 0 },
 		};
 
-		assert!(authorities.add_pending_change(change_c, &is_descendent_of(|base: &&str, _| {
+		let is_descendent_of_a = is_descendent_of(|base: &&str, _| {
 			base.starts_with("hash_a")
-		})).is_err());
+		});
+
+		assert!(authorities.add_pending_change(change_c, &is_descendent_of_a).is_err());
 
 		// too early.
 		assert!(authorities.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true)).unwrap().is_none());
@@ -731,13 +733,13 @@ mod tests {
 
 		// on time -- chooses the right change.
 		assert_eq!(
-			authorities.apply_forced_changes("hash_a15", 15, &static_is_descendent_of(true)).unwrap().unwrap(),
-			AuthoritySet {
+			authorities.apply_forced_changes("hash_a15", 15, &is_descendent_of_a).unwrap().unwrap(),
+			(42, AuthoritySet {
 				current_authorities: set_a,
 				set_id: 1,
 				pending_standard_changes: ForkTree::new(),
 				pending_forced_changes: Vec::new(),
-			}
+			})
 		);
 	}
 }

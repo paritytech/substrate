@@ -235,7 +235,7 @@ impl Network<Block> for MessageRouting {
 struct TestApi {
 	genesis_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
-	forced_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
+	forced_changes: Arc<Mutex<HashMap<Hash, (BlockNumber, ScheduledChange<BlockNumber>)>>>,
 }
 
 impl TestApi {
@@ -354,7 +354,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: Option<(&DigestFor<Block>)>,
 		_: Vec<u8>,
 	)
-		-> Result<NativeOrEncoded<Option<ScheduledChange<NumberFor<Block>>>>> {
+		-> Result<NativeOrEncoded<Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>>> {
 		let parent_hash = match at {
 			&BlockId::Hash(at) => at,
 			_ => panic!("not requested by block hash!!"),
@@ -424,6 +424,7 @@ fn run_to_completion_with<F: FnOnce()>(
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			InherentDataProviders::new(),
 			futures::empty(),
 		).expect("all in order with client and network");
 
@@ -524,6 +525,7 @@ fn finalize_3_voters_1_observer() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			InherentDataProviders::new(),
 			futures::empty(),
 		).expect("all in order with client and network");
 
@@ -685,6 +687,7 @@ fn transition_3_voters_twice_1_observer() {
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
+			InherentDataProviders::new(),
 			futures::empty(),
 		).expect("all in order with client and network");
 
@@ -916,10 +919,10 @@ fn force_change_to_new_set() {
 		{
 			// add a forced transition at block 12.
 			let parent_hash = net.lock().peer(0).client().info().unwrap().chain.best_hash;
-			forced_transitions.lock().insert(parent_hash, ScheduledChange {
+			forced_transitions.lock().insert(parent_hash, (0, ScheduledChange {
 				next_authorities: voters.clone(),
 				delay: 10,
-			});
+			}));
 
 			// add a normal transition too to ensure that forced changes take priority.
 			normal_transitions.lock().insert(parent_hash, ScheduledChange {

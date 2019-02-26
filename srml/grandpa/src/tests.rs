@@ -31,7 +31,7 @@ use super::*;
 fn authorities_change_logged() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 0, false).unwrap();
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 0, None).unwrap();
 
 		System::note_finished_extrinsics();
 		Grandpa::on_finalise(1);
@@ -56,7 +56,7 @@ fn authorities_change_logged() {
 fn authorities_change_logged_after_delay() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, false).unwrap();
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, None).unwrap();
 		Grandpa::on_finalise(1);
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
@@ -86,23 +86,23 @@ fn authorities_change_logged_after_delay() {
 fn cannot_schedule_change_when_one_pending() {
 	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, false).unwrap();
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1, None).unwrap();
 		assert!(Grandpa::pending_change().is_some());
-		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
 
 		Grandpa::on_finalise(1);
 		let header = System::finalise();
 
 		System::initialise(&2, &header.hash(), &Default::default());
 		assert!(Grandpa::pending_change().is_some());
-		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
 
 		Grandpa::on_finalise(2);
 		let header = System::finalise();
 
 		System::initialise(&3, &header.hash(), &Default::default());
 		assert!(Grandpa::pending_change().is_none());
-		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_ok());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_ok());
 
 		Grandpa::on_finalise(3);
 		let _header = System::finalise();
@@ -119,7 +119,7 @@ fn new_decodes_from_old() {
 
 	let encoded = old.encode();
 	let new = StoredPendingChange::<u32, u64>::decode(&mut &encoded[..]).unwrap();
-	assert!(!new.forced);
+	assert!(new.forced.is_none());
 	assert_eq!(new.scheduled_at, old.scheduled_at);
 	assert_eq!(new.delay, old.delay);
 	assert_eq!(new.next_authorities, old.next_authorities);
@@ -132,21 +132,21 @@ fn dispatch_forced_change() {
 		Grandpa::schedule_change(
 			vec![(4, 1), (5, 1), (6, 1)],
 			5,
-			true,
+			Some(0),
 		).unwrap();
 
 		assert!(Grandpa::pending_change().is_some());
-		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, true).is_err());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1, Some(0)).is_err());
 
 		Grandpa::on_finalise(1);
 		let mut header = System::finalise();
 
 		for i in 2..7 {
 			System::initialise(&i, &header.hash(), &Default::default());
-			assert!(Grandpa::pending_change().unwrap().forced);
+			assert!(Grandpa::pending_change().unwrap().forced.is_some());
 			assert_eq!(Grandpa::next_forced(), Some(11));
-			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
-			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, true).is_err());
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, Some(0)).is_err());
 
 			Grandpa::on_finalise(i);
 			header = System::finalise();
@@ -158,7 +158,7 @@ fn dispatch_forced_change() {
 			System::initialise(&7, &header.hash(), &Default::default());
 			assert!(Grandpa::pending_change().is_none());
 			assert_eq!(Grandpa::grandpa_authorities(), vec![(4, 1), (5, 1), (6, 1)]);
-			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_ok());
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_ok());
 			Grandpa::on_finalise(7);
 			header = System::finalise();
 		}
@@ -168,7 +168,7 @@ fn dispatch_forced_change() {
 			System::initialise(&8, &header.hash(), &Default::default());
 			assert!(Grandpa::pending_change().is_some());
 			assert_eq!(Grandpa::grandpa_authorities(), vec![(4, 1), (5, 1), (6, 1)]);
-			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, false).is_err());
+			assert!(Grandpa::schedule_change(vec![(5, 1)], 1, None).is_err());
 			Grandpa::on_finalise(8);
 			header = System::finalise();
 		}
@@ -180,7 +180,7 @@ fn dispatch_forced_change() {
 			assert!(Grandpa::pending_change().is_none());
 			assert_eq!(Grandpa::grandpa_authorities(), vec![(5, 1)]);
 			assert_eq!(Grandpa::next_forced(), Some(11));
-			assert!(Grandpa::schedule_change(vec![(5, 1), (6, 1)], 5, true).is_err());
+			assert!(Grandpa::schedule_change(vec![(5, 1), (6, 1)], 5, Some(0)).is_err());
 			Grandpa::on_finalise(i);
 			header = System::finalise();
 		}
@@ -188,7 +188,7 @@ fn dispatch_forced_change() {
 		{
 			System::initialise(&11, &header.hash(), &Default::default());
 			assert!(Grandpa::pending_change().is_none());
-			assert!(Grandpa::schedule_change(vec![(5, 1), (6, 1), (7, 1)], 5, true).is_ok());
+			assert!(Grandpa::schedule_change(vec![(5, 1), (6, 1), (7, 1)], 5, Some(0)).is_ok());
 			assert_eq!(Grandpa::next_forced(), Some(21));
 			Grandpa::on_finalise(11);
 			header = System::finalise();
