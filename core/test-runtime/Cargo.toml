@@ -52,7 +52,3 @@ std = [
 	"trie-db/std",
 	"memory-db/std",
 ]
-nightly = [
-  "trie-db/nightly",
-  "memory-db/nightly",
-]

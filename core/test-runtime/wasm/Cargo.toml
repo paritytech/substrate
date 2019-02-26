@@ -13,7 +13,6 @@ substrate-test-runtime = { path = "..", default-features = false }
 
 [features]
 default = [
-	"substrate-test-runtime/nightly",
 ]
 std = [
 	"substrate-test-runtime/std",
