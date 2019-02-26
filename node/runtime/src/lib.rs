@@ -315,3 +315,5 @@ impl_runtime_apis! {
 		}
 	}
 }
+
+parachain::register_validate_block!(Block, Executive);

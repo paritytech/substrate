@@ -19,10 +19,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use runtime_primitives::traits::{Block as BlockT, One, Header as HeaderT};
-use rstd::{vec::Vec, collections::btree_map::BTreeMap, marker::PhantomData};
+use rstd::{vec::Vec, collections::btree_map::BTreeMap};
 use executive::ExecuteBlock;
 use parity_codec::Decode;
 use parity_codec_derive::{Encode, Decode};
+#[doc(hidden)]
+pub use rstd::slice;
 
 /// The parachain block that is created on a collator and validated by a validator.
 #[derive(Encode, Decode)]
@@ -32,20 +34,31 @@ struct ParachainBlock<B: BlockT> {
 	witness_data: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
-pub struct Parachain<Block: BlockT, E: ExecuteBlock<Block>>(PhantomData<(Block, E)>);
+#[doc(hidden)]
+pub fn validate_block<Block: BlockT, E: ExecuteBlock<Block>>(mut block: &[u8], mut prev_head: &[u8]) {
+	let block = ParachainBlock::<Block>::decode(&mut block).expect("Could not decode parachain block.");
+	let parent_header = <<Block as BlockT>::Header as Decode>::decode(&mut prev_head).expect("Could not decode parent header.");
 
-impl<Block: BlockT, E: ExecuteBlock<Block>> Parachain<Block, E> {
-	pub fn validate_block(block: Vec<u8>, prev_head: Vec<u8>) {
-		let block = ParachainBlock::<Block>::decode(&mut &block[..]).expect("Could not decode parachain block.");
-		let parent_header = <<Block as BlockT>::Header as Decode>::decode(&mut &prev_head[..]).expect("Could not decode parent header.");
+	let block_number = *parent_header.number() + One::one();
 
-		let block_number = *parent_header.number() + One::one();
-
-		E::execute_extrinsics_without_checks(block_number, block.extrinsics);
-	}
+	E::execute_extrinsics_without_checks(block_number, block.extrinsics);
 }
 
-#[no_mangle]
-fn validate_block(block: *const u8, block_len: u64, prev_head: *const u8, prev_head_len: u64) {
+/// Register the `validate_block` function that is used by parachains to validate blocks on a validator.
+#[macro_export]
+macro_rules! register_validate_block {
+	($block:ident, $executive:ident) => {
+		#[doc(hidden)]
+		mod parachain_validate_block {
+			use super::*;
 
+			#[no_mangle]
+			unsafe fn validate_block(block: *const u8, block_len: u64, prev_head: *const u8, prev_head_len: u64) {
+				let block = $crate::slice::from_raw_parts(block, block_len as usize);
+				let prev_head = $crate::slice::from_raw_parts(prev_head, prev_head_len as usize);
+
+				$crate::validate_block::<$block, $executive>(block, prev_head);
+			}
+		}
+	};
 }
