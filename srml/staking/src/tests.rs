@@ -129,35 +129,44 @@ fn offline_should_slash_and_kick() {
 	});
 }
 
-// #[test]
-// fn note_offline_grace_should_work() {
-// 	// Tests that with grace, slashing is delayed
-// 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
-// 		Balances::set_free_balance(&10, 70);
-// 		Balances::set_free_balance(&20, 70);
-// 		assert_ok!(Staking::set_offline_slash_grace(1));
-// 		assert_eq!(Staking::offline_slash_grace(), 1);
+#[test]
+fn offline_grace_should_delay_slashing() {
+	// Tests that with grace, slashing is delayed
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// Initialize account 10 with balance
+		Balances::set_free_balance(&10, 70);
+		// Verify account 10 has balance
+		assert_eq!(Balances::free_balance(&10), 70);
 
-// 		assert_eq!(Staking::slash_count(&10), 0);
-// 		assert_eq!(Balances::free_balance(&10), 70);
+		// Set offline slash grace
+		let offline_slash_grace = 1;
+		assert_ok!(Staking::set_offline_slash_grace(offline_slash_grace));
+		assert_eq!(Staking::offline_slash_grace(), 1);
 
-// 		System::set_extrinsic_index(1);
-// 		Staking::on_offline_validator(10, 1);
-// 		assert_eq!(Staking::slash_count(&10), 1);
-// 		assert_eq!(Balances::free_balance(&10), 70);
-// 		assert_eq!(Staking::slash_count(&20), 0);
-// 		assert_eq!(Balances::free_balance(&20), 70);
+		// Check unstaked_threshold is 3 (default)
+		let default_unstake_threshold = 3;
+		assert_eq!(Staking::validators(&10), ValidatorPrefs { unstake_threshold: default_unstake_threshold, validator_payment: 0 });
 
-// 		System::set_extrinsic_index(1);
-// 		Staking::on_offline_validator(10, 1);
-// 		Staking::on_offline_validator(20, 1);
-// 		assert_eq!(Staking::slash_count(&10), 2);
-// 		assert_eq!(Balances::free_balance(&10), 50);
-// 		assert_eq!(Staking::slash_count(&20), 1);
-// 		assert_eq!(Balances::free_balance(&20), 70);
-// 		assert!(Staking::forcing_new_era().is_none());
-// 	});
-// }
+		// Check slash count is zero
+		assert_eq!(Staking::slash_count(&10), 0);
+
+		// Report account 10 up to the threshold
+		Staking::on_offline_validator(10, default_unstake_threshold as usize + offline_slash_grace as usize);
+		// Confirm slash count
+		assert_eq!(Staking::slash_count(&10), 4);
+
+		// Nothing should happen
+		assert_eq!(Balances::free_balance(&10), 70);
+
+		// Report account 10 one more time
+		Staking::on_offline_validator(10, 1);
+		assert_eq!(Staking::slash_count(&10), 5);
+		// User gets slashed
+		assert_eq!(Balances::free_balance(&10), 0);
+		// New era is forced
+		assert!(Staking::forcing_new_era().is_some());
+	});
+}
 
 
 #[test]
@@ -641,7 +650,7 @@ fn max_unstake_threshold_works() {
 		assert_eq!(Staking::current_offline_slash(), 20);
 		// Account 10 will have unstake_threshold 10
 		<Validators<Test>>::insert(10, ValidatorPrefs {
-			unstake_threshold: 10,
+			unstake_threshold: MAX_UNSTAKE_THRESHOLD,
 			validator_payment: 0,
 		});
 		// Account 20 will have unstake_threshold 100, which should be limited to 10
@@ -651,12 +660,12 @@ fn max_unstake_threshold_works() {
 		});
 
 		// Report each user 1 more than the max_unstake_threshold
-		Staking::on_offline_validator(10, 11);
-		Staking::on_offline_validator(20, 11);
+		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
 
 		// Show that each balance only gets reduced by 2^max_unstake_threshold
-		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(10) * 20);
-		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(10) * 20);
+		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
+		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
 	});
 }
 
@@ -773,7 +782,32 @@ fn consolidate_unlocked_works() {
 
 #[test]
 fn bond_extra_works() {
-	// TODO: Learn what it is and test it
+	// Tests that extra `free_balance` in the stash can be added to stake
+	with_externalities(&mut ExtBuilder::default().build(),
+	|| {
+		// Check that account 10 is a validator
+		assert!(<Validators<Test>>::exists(10));
+		// Check that account 10 is bonded to account 11
+		assert_eq!(Staking::bonded(&11), Some(10));
+		// Check how much is at stake
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
+
+		// Give account 11 some large free balance greater than total
+		Balances::set_free_balance(&11, 1000000);
+		// Check the balance of the stash account
+		assert_eq!(Balances::free_balance(&11), 1000000);
+
+		// Call the bond_extra function from controller, add only 100
+		assert_ok!(Staking::bond_extra(Origin::signed(10), 100));
+		// There should be 100 more `total` and `active` in the ledger
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 100, active: 1000 + 100, unlocking: vec![] }));
+
+		// Call the bond_extra function with a large number, should handle it
+		assert_ok!(Staking::bond_extra(Origin::signed(10), u64::max_value()));
+		// The full amount of the funds should now be in the total and active
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000000, active: 1000000, unlocking: vec![] }));
+
+	});
 }
 
 #[test]
@@ -798,16 +832,119 @@ fn slot_stake_does_something() {
 }
 
 #[test]
-fn on_free_balance_zero_removes_user_from_storage() {
-	// TODO: When free balance < existential deposit, user is removed
-	// All storage items about that user are cleaned up
+fn on_free_balance_zero_stash_removes_validator() {
+	// Tests that validator storage items are cleaned up when stash is empty
+	// Tests that storage items are untouched when controller is empty
+	with_externalities(&mut ExtBuilder::default()
+		.existential_deposit(10)
+		.build(),
+	|| {
+		// Check that account 10 is a validator
+		assert!(<Validators<Test>>::exists(10));
+		// Check the balance of the validator account
+		assert_eq!(Balances::free_balance(&10), 256); 
+		// Check the balance of the stash account
+		assert_eq!(Balances::free_balance(&11), 2560); 
+		// Check these two accounts are bonded
+		assert_eq!(Staking::bonded(&11), Some(10));
+
+		// Set some storage items which we expect to be cleaned up
+		// Initiate slash count storage item
+		Staking::on_offline_validator(10, 1);
+		// Set payee information
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
+
+		// Check storage items that should be cleaned up
+		assert!(<Ledger<Test>>::exists(&10));
+		assert!(<Validators<Test>>::exists(&10));
+		assert!(<SlashCount<Test>>::exists(&10));
+		assert!(<Payee<Test>>::exists(&10));
+
+		// Reduce free_balance of controller to 0
+		Balances::set_free_balance(&10, 0);
+		// Check total balance of account 10
+		assert_eq!(Balances::total_balance(&10), 0); 
+
+		// Check the balance of the stash account has not been touched
+		assert_eq!(Balances::free_balance(&11), 2560); 
+		// Check these two accounts are still bonded
+		assert_eq!(Staking::bonded(&11), Some(10));
+
+		// Check storage items have not changed
+		assert!(<Ledger<Test>>::exists(&10));
+		assert!(<Validators<Test>>::exists(&10));
+		assert!(<SlashCount<Test>>::exists(&10));
+		assert!(<Payee<Test>>::exists(&10));
+
+		// Reduce free_balance of stash to 0
+		Balances::set_free_balance(&11, 0);
+		// Check total balance of stash
+		assert_eq!(Balances::total_balance(&11), 0); 
+
+		// Check storage items do not exist
+		assert!(!<Ledger<Test>>::exists(&10));
+		assert!(!<Validators<Test>>::exists(&10));
+		assert!(!<Nominators<Test>>::exists(&10));
+		assert!(!<SlashCount<Test>>::exists(&10));
+		assert!(!<Payee<Test>>::exists(&10));
+		assert!(!<Bonded<Test>>::exists(&11));
+	});
 }
 
 #[test]
-fn bond_more_than_own_should_recover() {
-	// TODO: give an account little money and try to: 
-	// Bond it with a higer amount
-	// state interest in nomination with higher amount
-	// etc. 
-	// none should behave unexpectedly and all should use a `.min()` like logic.
+fn on_free_balance_zero_stash_removes_nominator() {
+	// Tests that nominator storage items are cleaned up when stash is empty
+	// Tests that storage items are untouched when controller is empty
+	with_externalities(&mut ExtBuilder::default()
+		.existential_deposit(10)
+		.build(),
+	|| {
+		// Make 10 a nominator
+		assert_ok!(Staking::nominate(Origin::signed(10), vec![20]));
+		// Check that account 10 is a nominator
+		assert!(<Nominators<Test>>::exists(10));
+		// Check the balance of the nominator account
+		assert_eq!(Balances::free_balance(&10), 256); 
+		// Check the balance of the stash account
+		assert_eq!(Balances::free_balance(&11), 2560); 
+		// Check these two accounts are bonded
+		assert_eq!(Staking::bonded(&11), Some(10));
+
+		// Set payee information
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
+
+
+		// Check storage items that should be cleaned up
+		assert!(<Ledger<Test>>::exists(&10));
+		assert!(<Nominators<Test>>::exists(&10));
+		assert!(<Payee<Test>>::exists(&10));
+
+		// Reduce free_balance of controller to 0
+		Balances::set_free_balance(&10, 0);
+		// Check total balance of account 10
+		assert_eq!(Balances::total_balance(&10), 0); 
+
+		// Check the balance of the stash account has not been touched
+		assert_eq!(Balances::free_balance(&11), 2560); 
+		// Check these two accounts are still bonded
+		assert_eq!(Staking::bonded(&11), Some(10));
+
+		// Check storage items have not changed
+		assert!(<Ledger<Test>>::exists(&10));
+		assert!(<Nominators<Test>>::exists(&10));
+		assert!(<Payee<Test>>::exists(&10));
+
+		// Reduce free_balance of stash to 0
+		Balances::set_free_balance(&11, 0);
+		// Check total balance of stash
+		assert_eq!(Balances::total_balance(&11), 0); 
+
+		// Check storage items do not exist
+		assert!(!<Ledger<Test>>::exists(&10));
+		assert!(!<Validators<Test>>::exists(&10));
+		assert!(!<Nominators<Test>>::exists(&10));
+		assert!(!<SlashCount<Test>>::exists(&10));
+		assert!(!<Payee<Test>>::exists(&10));
+		assert!(!<Bonded<Test>>::exists(&11));
+	});
 }
