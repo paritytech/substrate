@@ -174,7 +174,7 @@ fn rewards_should_work() {
 	// should check that: 
 	// 1) rewards get recorded per session
 	// 2) rewards get paid per Era
-	// TODO: Check that nominators are also rewarded, check with @gav that this is the code
+	// 3) (bonus) Check that nominators are also rewarded
 	with_externalities(&mut ExtBuilder::default().build(), 
 	|| {
 		let delay = 2;
@@ -495,7 +495,8 @@ fn nominators_also_get_slashed() {
 		let nominator_actual_slash = nominator_stake.min(expo.total - actual_slash);
 		// initial + first era reward + slash
 		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - actual_slash);
-		assert_eq!(Balances::total_balance(&2), initial_balance - 500);
+		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_actual_slash);
+		assert!(Staking::forcing_new_era().is_some());
 	});
 }
 
@@ -765,8 +766,76 @@ fn reward_destination_works() {
 }
 */
 #[test]
-fn validator_prefs_work() {
-	// TODO: Test that validator preferences are correctly honored
+fn validator_payment_prefs_work() {
+	// Test that validator preferences are correctly honored
+	// Note: unstake threshold is being directly tested in slashing tests. 
+	// This test will focus on validator payment.
+	with_externalities(&mut ExtBuilder::default().build(), 
+	|| {
+		let session_reward = 10;
+		let validator_cut = 5;
+		// Initial config should be correct
+		assert_eq!(Staking::era_length(), 9);
+		assert_eq!(Staking::sessions_per_era(), 3);
+		assert_eq!(Staking::last_era_length_change(), 0);
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+
+		assert_eq!(Staking::current_session_reward(), session_reward);
+
+		// check the balance of a validator accounts.
+		assert_eq!(Balances::total_balance(&10), 1); 
+		// and the nominator (to-be)
+		assert_eq!(Balances::total_balance(&2), 20); 
+
+		// add a dummy nominator.
+		// NOTE: this nominator is being added 'manually'.
+		<Stakers<Test>>::insert(&10, Exposure {
+			own: 500, // equal division indicates that the reward will be equally divided among validator and nominator.
+			total: 1000,
+			others: vec![IndividualExposure {who: 2, value: 500 }] 
+		});
+		<Payee<Test>>::insert(&2, RewardDestination::Controller);
+		<Validators<Test>>::insert(&10, ValidatorPrefs { 
+			unstake_threshold: 3, 
+			validator_payment: validator_cut 
+		});
+
+		// ------------ Fast forward 
+		let mut block = 3;
+		// Block 3 => Session 1 => Era 0
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5);	// on time.
+		Session::check_rotate_session(System::block_number()); 
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 1);
+
+		// session triggered: the reward value stashed should be 10 -- defined in ExtBuilder genesis.
+		assert_eq!(Staking::current_session_reward(), session_reward);
+		assert_eq!(Staking::current_era_reward(), session_reward);
+		
+		block = 6; // Block 6 => Session 2 => Era 0 
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5);	// a little late.
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 2);
+
+		assert_eq!(Staking::current_session_reward(), session_reward);
+		assert_eq!(Staking::current_era_reward(), 2*session_reward);
+
+		block = 9; // Block 9 => Session 3 => Era 1
+		System::set_block_number(block);
+		Timestamp::set_timestamp(block*5);  // back to being punktlisch. no delayss
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Session::current_index(), 3);
+
+		// whats left to be shared is the sum of 3 rounds minus the validator's cut.
+		let shared_cut = 3 * session_reward - validator_cut;
+		assert_eq!(Balances::total_balance(&10), 1 + shared_cut/2 + validator_cut);
+		assert_eq!(Balances::total_balance(&2), 20 + shared_cut/2);
+	});
 }
 
 #[test]
