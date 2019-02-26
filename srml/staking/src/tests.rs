@@ -889,9 +889,14 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Check these two accounts are bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
+		// Set payee information
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Stash));
+
+
 		// Check storage items that should be cleaned up
 		assert!(<Ledger<Test>>::exists(&10));
 		assert!(<Nominators<Test>>::exists(&10));
+		assert!(<Payee<Test>>::exists(&10));
 
 		// Reduce free_balance of controller to 0
 		Balances::set_free_balance(&10, 0);
@@ -906,6 +911,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Check storage items have not changed
 		assert!(<Ledger<Test>>::exists(&10));
 		assert!(<Nominators<Test>>::exists(&10));
+		assert!(<Payee<Test>>::exists(&10));
 
 		// Reduce free_balance of stash to 0
 		Balances::set_free_balance(&11, 0);
