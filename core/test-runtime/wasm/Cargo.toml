@@ -29,4 +29,3 @@ members = []
 trie-db = { path = "../../../../parity-trie/trie-db" }
 hash-db = { path = "../../../../parity-trie/hash-db" }
 memory-db = { path = "../../../../parity-trie/memory-db" }
-elastic-array = { path = "../../../../elastic-array" }
