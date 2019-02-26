@@ -23,6 +23,7 @@ use crate::codec::{Codec, Encode, Decode, KeyedVec, Input};
 
 #[macro_use]
 pub mod generator;
+pub mod unhashed;
 
 struct IncrementalInput<'a> {
 	key: &'a [u8],
@@ -40,84 +41,73 @@ impl<'a> Input for IncrementalInput<'a> {
 
  /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	let key = twox_128(key);
-	runtime_io::read_storage(&key[..], &mut [0; 0][..], 0).map(|_| {
-		let mut input = IncrementalInput {
-			key: &key[..],
-			pos: 0,
-		};
-		Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
-	})
+	unhashed::get(&twox_128(key))
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	get(key).unwrap_or_else(Default::default)
+	unhashed::get_or_default(&twox_128(key))
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry.
 pub fn get_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
-	get(key).unwrap_or(default_value)
+	unhashed::get_or(&twox_128(key), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
 pub fn get_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-	get(key).unwrap_or_else(default_value)
+	unhashed::get_or_else(&twox_128(key), default_value)
 }
 
 /// Put `value` in storage under `key`.
 pub fn put<T: Encode>(key: &[u8], value: &T) {
-	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
+	unhashed::put(&twox_128(key), value)
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
 pub fn take<T: Decode + Sized>(key: &[u8]) -> Option<T> {
-	let r = get(key);
-	if r.is_some() {
-		kill(key);
-	}
-	r
+	unhashed::take(&twox_128(key))
 }
 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
 pub fn take_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	take(key).unwrap_or_else(Default::default)
+	unhashed::take_or_default(&twox_128(key))
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or<T: Decode + Sized>(key: &[u8], default_value: T) -> T {
-	take(key).unwrap_or(default_value)
+	unhashed::take_or(&twox_128(key), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
 pub fn take_or_else<T: Decode + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-	take(key).unwrap_or_else(default_value)
+	unhashed::take_or_else(&twox_128(key), default_value)
 }
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
-	runtime_io::exists_storage(&twox_128(key)[..])
+	unhashed::exists(&twox_128(key))
 }
 
 /// Ensure `key` has no explicit entry in storage.
 pub fn kill(key: &[u8]) {
-	runtime_io::clear_storage(&twox_128(key)[..]);
+	unhashed::kill(&twox_128(key))
 }
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-	runtime_io::storage(&twox_128(key)[..])
+	unhashed::get_raw(&twox_128(key))
 }
 
 /// Put a raw byte slice into storage.
 pub fn put_raw(key: &[u8], value: &[u8]) {
-	runtime_io::set_storage(&twox_128(key)[..], value)
+	unhashed::put_raw(&twox_128(key), value)
 }
 
 /// The underlying runtime storage.
@@ -125,27 +115,27 @@ pub struct RuntimeStorage;
 
 impl crate::GenericStorage for RuntimeStorage {
 	fn exists(&self, key: &[u8]) -> bool {
-		super::storage::exists(key)
+		exists(key)
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
 	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		super::storage::get(key)
+		get(key)
 	}
 
 	/// Put a value in under a key.
 	fn put<T: Encode>(&self, key: &[u8], val: &T) {
-		super::storage::put(key, val)
+		put(key, val)
 	}
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]) {
-		super::storage::kill(key)
+		kill(key)
 	}
 
 	/// Take a value from storage, deleting it after reading.
 	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
-		super::storage::take(key)
+		take(key)
 	}
 }
 
@@ -414,149 +404,6 @@ pub trait StorageVec {
 
 	fn count() -> u32 {
 		get_or_default(&b"len".to_keyed_vec(Self::PREFIX))
-	}
-}
-
-pub mod unhashed {
-	use crate::rstd::borrow::Borrow;
-	use super::{runtime_io, Codec, Decode, KeyedVec, Vec, IncrementalInput};
-
-	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-	pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
-		runtime_io::read_storage(key, &mut [0; 0][..], 0).map(|_| {
-			let mut input = IncrementalInput {
-				key,
-				pos: 0,
-			};
-			Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
-		})
-	}
-
-	/// Return the value of the item in storage under `key`, or the type's default if there is no
-	/// explicit entry.
-	pub fn get_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
-		get(key).unwrap_or_else(Default::default)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value` if there is no
-	/// explicit entry.
-	pub fn get_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
-		get(key).unwrap_or(default_value)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
-	/// explicit entry.
-	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-		get(key).unwrap_or_else(default_value)
-	}
-
-	/// Put `value` in storage under `key`.
-	pub fn put<T: Codec>(key: &[u8], value: &T) {
-		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
-	}
-
-	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-	pub fn take<T: Codec + Sized>(key: &[u8]) -> Option<T> {
-		let r = get(key);
-		if r.is_some() {
-			kill(key);
-		}
-		r
-	}
-
-	/// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
-	/// the default for its type.
-	pub fn take_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
-		take(key).unwrap_or_else(Default::default)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value` if there is no
-	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
-		take(key).unwrap_or(default_value)
-	}
-
-	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
-	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
-		take(key).unwrap_or_else(default_value)
-	}
-
-	/// Check to see if `key` has an explicit entry in storage.
-	pub fn exists(key: &[u8]) -> bool {
-		runtime_io::read_storage(key, &mut [0;0][..], 0).is_some()
-	}
-
-	/// Ensure `key` has no explicit entry in storage.
-	pub fn kill(key: &[u8]) {
-		runtime_io::clear_storage(key);
-	}
-
-	/// Ensure keys with the given `prefix` have no entries in storage.
-	pub fn kill_prefix(prefix: &[u8]) {
-		runtime_io::clear_prefix(prefix);
-	}
-
-	/// Get a Vec of bytes from storage.
-	pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-		runtime_io::storage(key)
-	}
-
-	/// Put a raw byte slice into storage.
-	pub fn put_raw(key: &[u8], value: &[u8]) {
-		runtime_io::set_storage(key, value)
-	}
-
-	/// A trait to conveniently store a vector of storable data.
-	pub trait StorageVec {
-		type Item: Default + Sized + Codec;
-		const PREFIX: &'static [u8];
-
-		/// Get the current set of items.
-		fn items() -> Vec<Self::Item> {
-			(0..Self::count()).into_iter().map(Self::item).collect()
-		}
-
-		/// Set the current set of items.
-		fn set_items<I, T>(items: I)
-			where
-				I: IntoIterator<Item=T>,
-				T: Borrow<Self::Item>,
-		{
-			let mut count: u32 = 0;
-
-			for i in items.into_iter() {
-				put(&count.to_keyed_vec(Self::PREFIX), i.borrow());
-				count = count.checked_add(1).expect("exceeded runtime storage capacity");
-			}
-
-			Self::set_count(count);
-		}
-
-		fn set_item(index: u32, item: &Self::Item) {
-			if index < Self::count() {
-				put(&index.to_keyed_vec(Self::PREFIX), item);
-			}
-		}
-
-		fn clear_item(index: u32) {
-			if index < Self::count() {
-				kill(&index.to_keyed_vec(Self::PREFIX));
-			}
-		}
-
-		fn item(index: u32) -> Self::Item {
-			get_or_default(&index.to_keyed_vec(Self::PREFIX))
-		}
-
-		fn set_count(count: u32) {
-			(count..Self::count()).for_each(Self::clear_item);
-			put(&b"len".to_keyed_vec(Self::PREFIX), &count);
-		}
-
-		fn count() -> u32 {
-			get_or_default(&b"len".to_keyed_vec(Self::PREFIX))
-		}
 	}
 }
 
