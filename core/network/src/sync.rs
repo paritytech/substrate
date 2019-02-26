@@ -541,31 +541,42 @@ impl<B: BlockT> ChainSync<B> {
 					}).collect()
 				},
 				PeerSyncState::AncestorSearch(num, state) => {
-					if blocks.len() == 0 { 
-						trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
-						protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
-						return None;
-					}
-					let block = blocks.get(0).expect("because of previous check, it has at least one element; qed.");
-					let our_block_hash = match protocol.client().block_hash(num) {
-						Ok(Some(our_block_hash)) => our_block_hash,
-						Ok(None) => {
+					let block_hash_match = match (blocks.get(0), protocol.client().block_hash(num)) {
+						(Some(ref block), Ok(Some(our_block_hash))) => block.hash == our_block_hash,
+						(None, _) => {
+							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
+							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
+							return None;
+						},
+						(_, Ok(None)) => {
 							trace!(target:"sync", "None response while trying to get hash of block number: {}", num);
 							return None;
 						},
-						Err(e) => {
-							trace!(target:"sync", "Error while trying to get hash of block number {}: {:?}", num, e);
+						(_, Err(e)) => {
+							let reason = format!("Error answering legitimate blockchain query: {:?}", e);
+							protocol.report_peer(who, Severity::Useless(reason));
 							return None;
-						}
+						},
 					};
-					let block_hash_match = block.hash == our_block_hash;
 					if block_hash_match && peer.common_number < num {
 						peer.common_number = num;
 					}
-					let (next_peer_state, num_to_request) = Self::handle_ancestor_search_state(num, state, block_hash_match);
-					if next_peer_state != PeerSyncState::Available { Self::request_ancestry(protocol, who, num_to_request); }
-					peer.state = next_peer_state;
-					vec![]
+					if !block_hash_match && num == As::sa(0) {
+						trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
+						protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
+						return None;
+					}
+					match Self::handle_ancestor_search_state(num, state, block_hash_match) {
+						(PeerSyncState::Available, _) => {
+							peer.state = PeerSyncState::Available;
+							Vec::new()
+						},
+						(next_peer_state, num_to_request) => {
+							Self::request_ancestry(protocol, who, num_to_request);
+							peer.state = next_peer_state;
+							return None;
+						}
+					}
 				},
 				PeerSyncState::Available | PeerSyncState::DownloadingJustification(..) => Vec::new(),
 			}
