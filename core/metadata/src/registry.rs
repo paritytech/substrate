@@ -1,7 +1,10 @@
 #[cfg(feature = "std")]
 use serde_derive::Serialize;
 
-use parity_codec_derive::{Encode, Decode};
+#[cfg(feature = "std")]
+use parity_codec_derive::Decode;
+
+use parity_codec_derive::Encode;
 
 use super::{TypeMetadata, TypeMetadataKind, MetadataName};
 
