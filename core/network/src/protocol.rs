@@ -329,7 +329,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.handle_network_msg(msg);
 				true
 			},
-		Incoming::FromClient(msg) => self.handle_client_msg(msg)
+			Incoming::FromClient(msg) => self.handle_client_msg(msg),
 		}
 	}
 
