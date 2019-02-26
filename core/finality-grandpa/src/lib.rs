@@ -67,8 +67,11 @@ use runtime_primitives::traits::{
 	DigestItemFor, DigestItem,
 };
 use fg_primitives::GrandpaApi;
+use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
+
+use srml_finality_tracker;
 
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
@@ -685,12 +688,37 @@ fn committer_communication<Block: BlockT<Hash=H256>, B, E, N, RA>(
 	(commit_in, commit_out)
 }
 
+/// Register the finality tracker inherent data provider (which is used by
+/// GRANDPA), if not registered already.
+fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H256>, RA>(
+	client: Arc<Client<B, E, Block, RA>>,
+	inherent_data_providers: &InherentDataProviders,
+) -> Result<(), consensus_common::Error> where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	RA: Send + Sync + 'static,
+{
+	if !inherent_data_providers.has_provider(&srml_finality_tracker::INHERENT_IDENTIFIER) {
+		inherent_data_providers
+			.register_provider(srml_finality_tracker::InherentDataProvider::new(move || {
+				match client.backend().blockchain().info() {
+					Err(e) => Err(std::borrow::Cow::Owned(e.to_string())),
+					Ok(info) => Ok(info.finalized_number),
+				}
+			}))
+			.map_err(|err| consensus_common::ErrorKind::InherentData(err.into()).into())
+	} else {
+		Ok(())
+	}
+}
+
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	config: Config,
 	link: LinkHalf<B, E, Block, RA>,
 	network: N,
+	inherent_data_providers: InherentDataProviders,
 	on_exit: impl Future<Item=(),Error=()> + Send + 'static,
 ) -> ::client::error::Result<impl Future<Item=(),Error=()> + Send + 'static> where
 	Block::Hash: Ord,
@@ -714,6 +742,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	// accidental reuse.
 	let (broadcast_worker, network) = communication::rebroadcasting_network(network);
 	let PersistentData { authority_set, set_state, consensus_changes } = persistent_data;
+
+	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
 	let voters = authority_set.current_authorities();
 

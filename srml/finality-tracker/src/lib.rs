@@ -69,7 +69,7 @@ impl<F, N> InherentDataProvider<F, N> {
 
 #[cfg(feature = "std")]
 impl<F, N: Encode> substrate_inherents::ProvideInherentData for InherentDataProvider<F, N>
-	where F: Fn() -> Result<N, &'static str>
+	where F: Fn() -> Result<N, RuntimeString>
 {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {
 		&INHERENT_IDENTIFIER
@@ -77,7 +77,6 @@ impl<F, N: Encode> substrate_inherents::ProvideInherentData for InherentDataProv
 
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
 		(self.inner)()
-			.map_err(Into::into)
 			.and_then(|n| inherent_data.put_data(INHERENT_IDENTIFIER, &n))
 	}
 
