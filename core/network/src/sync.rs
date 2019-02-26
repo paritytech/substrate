@@ -458,6 +458,8 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
+	/// Returns the new sync state of the peer and the block number that 
+	/// we need to request in case the sync state is other than Available.
 	fn handle_ancestor_search_state(
 		n: NumberFor<B>,
 		state: AncestorSearchState<B>,
@@ -557,13 +559,11 @@ impl<B: BlockT> ChainSync<B> {
 						}
 					};
 					let block_hash_match = block.hash == our_block_hash;
-					if block_hash_match {
+					if block_hash_match && peer.common_number < num {
 						peer.common_number = num;
 					}
-					println!("> num={} state={:?} match={:?}", num, state, block_hash_match);
 					let (next_peer_state, num_to_request) = Self::handle_ancestor_search_state(num, state, block_hash_match);
-					println!("< next_peer_state={:?} num_to_request={:?}", next_peer_state, num_to_request);
-					if num_to_request > As::sa(0) { Self::request_ancestry(protocol, who, num_to_request); }
+					if next_peer_state != PeerSyncState::Available { Self::request_ancestry(protocol, who, num_to_request); }
 					peer.state = next_peer_state;
 					vec![]
 				},

@@ -205,6 +205,11 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn canon_equals_to(&self, other: &Self) -> bool {
 		let this = self.storage.read();
 		let other = other.storage.read();
+		println!("hashes \n{:?}\n{:?}", this.hashes, other.hashes);
+		println!("best_hash \n{:?}\n{:?}", this.best_hash, other.best_hash);
+		println!("best_number \n{:?}\n{:?}", this.best_number, other.best_number);
+		println!("genesis_hash \n{:?}\n{:?}", this.genesis_hash, other.genesis_hash);
+		
 			this.hashes == other.hashes
 			&& this.best_hash == other.best_hash
 			&& this.best_number == other.best_number
