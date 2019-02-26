@@ -27,7 +27,7 @@ use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
-use crate::protocol::{self, Context, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
+use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use crate::error::Error;
@@ -143,7 +143,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
-		let protocol_sender = Protocol::new(
+		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			network_chan.clone(),
@@ -157,7 +157,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let versions = [(protocol::CURRENT_VERSION as u8)];
 		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
 		let (thread, network) = start_thread(
-			protocol_sender.clone(),
+			network_to_protocol_sender,
 			network_port,
 			params.network_config,
 			registered,
@@ -435,8 +435,8 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 }
 
 /// Starts the background thread that handles the networking.
-fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
-	protocol_sender: Sender<ProtocolMsg<B, S>>,
+fn start_thread<B: BlockT + 'static>(
+	protocol_sender: Sender<FromNetworkMsg<B>>,
 	network_port: NetworkPort<B>,
 	config: NetworkConfiguration,
 	registered: RegisteredProtocol<Message<B>>,
@@ -477,8 +477,8 @@ fn start_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 }
 
 /// Runs the background thread that handles the networking.
-fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
-	protocol_sender: Sender<ProtocolMsg<B, S>>,
+fn run_thread<B: BlockT + 'static>(
+	protocol_sender: Sender<FromNetworkMsg<B>>,
 	network_service: Arc<Mutex<NetworkService<Message<B>>>>,
 	network_port: NetworkPort<B>,
 	protocol_id: ProtocolId,
@@ -543,25 +543,25 @@ fn run_thread<B: BlockT + 'static, S: NetworkSpecialization<B>>(
 				if !protocols.is_empty() {
 					debug_assert_eq!(protocols, &[protocol_id]);
 					let _ = protocol_sender.send(
-						ProtocolMsg::PeerDisconnected(node_index, debug_info));
+						FromNetworkMsg::PeerDisconnected(node_index, debug_info));
 				}
 			}
 			NetworkServiceEvent::OpenedCustomProtocol { node_index, version, debug_info, .. } => {
 				debug_assert_eq!(version, protocol::CURRENT_VERSION as u8);
-				let _ = protocol_sender.send(ProtocolMsg::PeerConnected(node_index, debug_info));
+				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(node_index, debug_info));
 			}
 			NetworkServiceEvent::ClosedCustomProtocol { node_index, debug_info, .. } => {
-				let _ = protocol_sender.send(ProtocolMsg::PeerDisconnected(node_index, debug_info));
+				let _ = protocol_sender.send(FromNetworkMsg::PeerDisconnected(node_index, debug_info));
 			}
 			NetworkServiceEvent::CustomMessage { node_index, message, .. } => {
-				let _ = protocol_sender.send(ProtocolMsg::CustomMessage(node_index, message));
+				let _ = protocol_sender.send(FromNetworkMsg::CustomMessage(node_index, message));
 				return Ok(())
 			}
 			NetworkServiceEvent::Clogged { node_index, messages, .. } => {
 				debug!(target: "sync", "{} clogging messages:", messages.len());
 				for msg in messages.into_iter().take(5) {
 					debug!(target: "sync", "{:?}", msg);
-					let _ = protocol_sender.send(ProtocolMsg::PeerClogged(node_index, Some(msg)));
+					let _ = protocol_sender.send(FromNetworkMsg::PeerClogged(node_index, Some(msg)));
 				}
 			}
 		};
