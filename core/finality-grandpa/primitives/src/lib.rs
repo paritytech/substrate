@@ -95,7 +95,7 @@ decl_runtime_apis! {
 		/// the digest type it should return the same result regardless of the current
 		/// state.
 		fn grandpa_forced_change(digest: &DigestFor<Block>)
-			-> Option<ScheduledChange<NumberFor<Block>>>;
+			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>;
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.

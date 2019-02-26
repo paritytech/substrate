@@ -66,7 +66,7 @@ pub trait GrandpaChangeSignal<N> {
 	/// Try to cast the log entry as a contained signal.
 	fn as_signal(&self) -> Option<ScheduledChange<N>>;
 	/// Try to cast the log entry as a contained forced signal.
-	fn as_forced_signal(&self) -> Option<ScheduledChange<N>>;
+	fn as_forced_signal(&self) -> Option<(N, ScheduledChange<N>)>;
 }
 
 /// A logs in this module.
@@ -76,24 +76,25 @@ pub enum RawLog<N, SessionKey> {
 	/// Authorities set change has been signalled. Contains the new set of authorities
 	/// and the delay in blocks _to finalize_ before applying.
 	AuthoritiesChangeSignal(N, Vec<(SessionKey, u64)>),
-	/// A forced authorities set change. Contains the new set of authorities and the
-	/// delay in blocks _to import_ before applying.
-	ForcedAuthoritiesChangeSignal(N, Vec<(SessionKey, u64)>),
+	/// A forced authorities set change. Contains in this order: the median last
+	/// finalized block when the change was signaled, the delay in blocks _to import_
+	/// before applying and the new set of authorities.
+	ForcedAuthoritiesChangeSignal(N, N, Vec<(SessionKey, u64)>),
 }
 
 impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
 	/// Try to cast the log entry as a contained signal.
 	pub fn as_signal(&self) -> Option<(N, &[(SessionKey, u64)])> {
 		match *self {
-			RawLog::AuthoritiesChangeSignal(ref n, ref signal) => Some((n.clone(), signal)),
-			RawLog::ForcedAuthoritiesChangeSignal(_, _) => None,
+			RawLog::AuthoritiesChangeSignal(ref delay, ref signal) => Some((delay.clone(), signal)),
+			RawLog::ForcedAuthoritiesChangeSignal(_, _, _) => None,
 		}
 	}
 
 	/// Try to cast the log entry as a contained forced signal.
-	pub fn as_forced_signal(&self) -> Option<(N, &[(SessionKey, u64)])> {
+	pub fn as_forced_signal(&self) -> Option<(N, N, &[(SessionKey, u64)])> {
 		match *self {
-			RawLog::ForcedAuthoritiesChangeSignal(ref n, ref signal) => Some((n.clone(), signal)),
+			RawLog::ForcedAuthoritiesChangeSignal(ref median, ref delay, ref signal) => Some((median.clone(), delay.clone(), signal)),
 			RawLog::AuthoritiesChangeSignal(_, _) => None,
 		}
 	}
@@ -112,14 +113,14 @@ impl<N, SessionKey> GrandpaChangeSignal<N> for RawLog<N, SessionKey>
 		})
 	}
 
-	fn as_forced_signal(&self) -> Option<ScheduledChange<N>> {
-		RawLog::as_forced_signal(self).map(|(delay, next_authorities)| ScheduledChange {
+	fn as_forced_signal(&self) -> Option<(N, ScheduledChange<N>)> {
+		RawLog::as_forced_signal(self).map(|(median, delay, next_authorities)| (median, ScheduledChange {
 			delay,
 			next_authorities: next_authorities.iter()
 				.cloned()
 				.map(|(k, w)| (k.into(), w))
 				.collect(),
-		})
+		}))
 	}
 }
 
@@ -156,14 +157,15 @@ pub struct StoredPendingChange<N, SessionKey> {
 	pub delay: N,
 	/// The next authority set.
 	pub next_authorities: Vec<(SessionKey, u64)>,
-	/// Whether the change was forced.
-	pub forced: bool,
+	/// If defined it means the change was forced and the given block number
+	/// indicates the median last finalized block when the change was signaled.
+	pub forced: Option<N>,
 }
 
 impl<N: Decode, SessionKey: Decode> Decode for StoredPendingChange<N, SessionKey> {
 	fn decode<I: codec::Input>(value: &mut I) -> Option<Self> {
 		let old = OldStoredPendingChange::decode(value)?;
-		let forced = bool::decode(value).unwrap_or(false);
+		let forced = <Option<N>>::decode(value).unwrap_or(None);
 
 		Some(StoredPendingChange {
 			scheduled_at: old.scheduled_at,
@@ -223,13 +225,14 @@ decl_module! {
 		fn on_finalise(block_number: T::BlockNumber) {
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				if block_number == pending_change.scheduled_at {
-					if !pending_change.forced {
-						Self::deposit_log(RawLog::AuthoritiesChangeSignal(
+					if let Some(median) = pending_change.forced {
+						Self::deposit_log(RawLog::ForcedAuthoritiesChangeSignal(
+							median,
 							pending_change.delay,
 							pending_change.next_authorities.clone(),
 						));
 					} else {
-						Self::deposit_log(RawLog::ForcedAuthoritiesChangeSignal(
+						Self::deposit_log(RawLog::AuthoritiesChangeSignal(
 							pending_change.delay,
 							pending_change.next_authorities.clone(),
 						));
@@ -260,23 +263,24 @@ impl<T: Trait> Module<T> {
 	/// `in_blocks` after the current block. This value may be 0, in which
 	/// case the change is applied at the end of the current block.
 	///
-	/// If the `forced` flag is set to true, this indicates that the current
+	/// If the `forced` parameter is defined, this indicates that the current
 	/// set has been synchronously determined to be offline and that after
-	/// `in_blocks` the given change should be applied.
+	/// `in_blocks` the given change should be applied. The given block number
+	/// indicates the median last finalized block number.
 	///
 	/// No change should be signalled while any change is pending. Returns
 	/// an error if a change is already pending.
 	pub fn schedule_change(
 		next_authorities: Vec<(T::SessionKey, u64)>,
 		in_blocks: T::BlockNumber,
-		forced: bool,
+		forced: Option<T::BlockNumber>,
 	) -> Result {
 		use primitives::traits::As;
 
 		if Self::pending_change().is_none() {
 			let scheduled_at = system::ChainContext::<T>::default().current_height();
 
-			if forced {
+			if let Some(_) = forced {
 				if Self::next_forced().map_or(false, |next| next > scheduled_at) {
 					return Err("Cannot signal forced change so soon after last.");
 				}
@@ -306,15 +310,18 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> Module<T> where Ed25519AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
-	/// See if the digest contains any scheduled change.
-	pub fn scrape_digest_change(log: &Log<T>, forced: bool)
+	/// See if the digest contains any standard scheduled change.
+	pub fn scrape_digest_change(log: &Log<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
-		if forced {
-			<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_forced_signal(log)
-		} else {
-			<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_signal(log)
-		}
+		<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_signal(log)
+	}
+
+	/// See if the digest contains any forced scheduled change.
+	pub fn scrape_digest_forced_change(log: &Log<T>)
+		-> Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>
+	{
+		<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_forced_signal(log)
 	}
 }
 
@@ -352,7 +359,7 @@ impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 		// instant changes
 		let last_authorities = <Module<T>>::grandpa_authorities();
 		if next_authorities != last_authorities {
-			let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero(), false);
+			let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero(), None);
 		}
 	}
 }
@@ -377,7 +384,9 @@ impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthor
 			.map(|key| (key, 1)) // evenly-weighted.
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 
+		let median = <finality_tracker::Module<T>>::median();
+
 		// schedule a change for `further_wait` blocks.
-		let _ = <Module<T>>::schedule_change(next_authorities, further_wait, true);
+		let _ = <Module<T>>::schedule_change(next_authorities, further_wait, Some(median));
 	}
 }

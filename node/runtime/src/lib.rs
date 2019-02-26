@@ -302,7 +302,7 @@ impl_runtime_apis! {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
 				_=> None
 			}) {
-				if let Some(change) = Grandpa::scrape_digest_change(log, false) {
+				if let Some(change) = Grandpa::scrape_digest_change(log) {
 					return Some(change);
 				}
 			}
@@ -310,13 +310,13 @@ impl_runtime_apis! {
 		}
 
 		fn grandpa_forced_change(digest: &DigestFor<Block>)
-			-> Option<ScheduledChange<NumberFor<Block>>>
+			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
 				_=> None
 			}) {
-				if let Some(change) = Grandpa::scrape_digest_change(log, true) {
+				if let Some(change) = Grandpa::scrape_digest_forced_change(log) {
 					return Some(change);
 				}
 			}

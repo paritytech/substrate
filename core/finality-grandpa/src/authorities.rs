@@ -205,7 +205,7 @@ where
 		E:  std::error::Error,
 	{
 		match pending.delay_kind {
-			DelayKind::Best => {
+			DelayKind::Best { .. } => {
 				self.add_forced_change(pending, is_descendent_of)
 			},
 			DelayKind::Finalized => {
@@ -244,7 +244,7 @@ where
 		best_hash: H,
 		best_number: N,
 		is_descendent_of: &F,
-	) -> Result<Option<Self>, E>
+	) -> Result<Option<(N, Self)>, E>
 		where F: Fn(&H, &H) -> Result<bool, E>,
 	{
 		let mut new_set = None;
@@ -259,12 +259,17 @@ where
 				info!(target: "finality", "Applying authority set change forced at block #{:?}",
 					  change.canon_height);
 
-				new_set = Some(AuthoritySet {
+				let median_last_finalized = match change.delay_kind {
+					DelayKind::Best { ref median_last_finalized } => median_last_finalized.clone(),
+					_ => unreachable!("pending_forced_changes only contains forced changes; forced changes have delay kind Best; qed."),
+				};
+
+				new_set = Some((median_last_finalized, AuthoritySet {
 					current_authorities: change.next_authorities.clone(),
 					set_id: self.set_id + 1,
 					pending_standard_changes: ForkTree::new(), // new set, new changes.
 					pending_forced_changes: Vec::new(),
-				});
+				}));
 
 				break;
 			}
@@ -358,11 +363,11 @@ where
 
 /// Kinds of delays for pending changes.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
-pub(crate) enum DelayKind {
+pub(crate) enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
 	/// Depth in best chain.
-	Best,
+	Best { median_last_finalized: N },
 }
 
 /// A pending change to the authority set.
@@ -381,7 +386,7 @@ pub(crate) struct PendingChange<H, N> {
 	/// The announcing block's hash.
 	pub(crate) canon_hash: H,
 	/// The delay kind.
-	pub(crate) delay_kind: DelayKind,
+	pub(crate) delay_kind: DelayKind<N>,
 }
 
 impl<H: Decode, N: Decode> Decode for PendingChange<H, N> {

@@ -22,6 +22,7 @@ use futures::sync::mpsc;
 use parking_lot::RwLockWriteGuard;
 
 use client::{blockchain, CallExecutor, Client};
+use client::blockchain::HeaderBackend;
 use client::backend::Backend;
 use client::runtime_api::ApiExt;
 use consensus_common::{
@@ -194,12 +195,12 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 					},
 				},
 				Ok(None) => {},
-				Ok(Some(change)) => return Ok(Some(PendingChange {
+				Ok(Some((median_last_finalized, change))) => return Ok(Some(PendingChange {
 					next_authorities: change.next_authorities,
 					delay: change.delay,
 					canon_height: *header.number(),
 					canon_hash: hash,
-					delay_kind: DelayKind::Best,
+					delay_kind: DelayKind::Best { median_last_finalized },
 				})),
 			}
 		}
@@ -290,7 +291,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 			let old = guard.as_mut().clone();
 			guard.set_old(old);
 
-			if let DelayKind::Best = change.delay_kind {
+			if let DelayKind::Best { .. } = change.delay_kind {
 				do_pause = true;
 			}
 
@@ -305,9 +306,22 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 				.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))
 				.map_err(ConsensusError::from)?;
 
-			if let Some(new_set) = forced_change_set {
+			if let Some((median_last_finalized_number, new_set)) = forced_change_set {
 				let new_authorities = {
 					let (set_id, new_authorities) = new_set.current();
+
+					let best_finalized_number = self.inner.backend().blockchain().info()
+						.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))?
+						.finalized_number;
+
+					let canon_number = best_finalized_number.min(median_last_finalized_number);
+
+					let canon_hash =
+						self.inner.backend().blockchain().header(BlockId::Number(canon_number))
+							.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))?
+							.expect("the given block number is less or equal than the current best finalized number; \
+									 current best finalized number must exist in chain; qed.")
+							.hash();
 
 					// we start the new authority assuming the block that enacted the
 					// change is the canonical one. we could use the block that signalled
@@ -316,8 +330,8 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 					// there's any pending forced change (since forced changes would
 					// finalize "backwards")
 					NewAuthoritySet {
-						canon_number: number,
-						canon_hash: hash,
+						canon_number,
+						canon_hash,
 						set_id,
 						authorities: new_authorities.to_vec(),
 					}
@@ -377,8 +391,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<Ed25519AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
-		use client::blockchain::HeaderBackend;
-
 		let hash = block.post_header().hash();
 		let number = block.header.number().clone();
 
