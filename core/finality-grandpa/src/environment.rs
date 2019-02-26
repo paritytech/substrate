@@ -286,6 +286,21 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
+		use client::blockchain::HeaderBackend;
+
+		let status = self.inner.backend().blockchain().info()?;
+		if number <= status.finalized_number {
+			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
+			// the voter will be restarted at the median last finalized block, which can be lower than the local best
+			// finalized block.
+			warn!(target: "afg", "Safety violation detected, tried to finalize {:?} while the current best finalized is {:?}",
+				  number,
+				  status.finalized_number,
+			);
+
+			return Ok(());
+		}
+
 		finalize_block(
 			&*self.inner,
 			&self.authority_set,
