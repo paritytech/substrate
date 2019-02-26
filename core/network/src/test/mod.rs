@@ -23,6 +23,7 @@ mod sync;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -44,7 +45,7 @@ use network_libp2p::{NodeIndex, ProtocolId};
 use parity_codec::Encode;
 use parking_lot::Mutex;
 use primitives::{H256, Ed25519AuthorityId};
-use crate::protocol::{Context, Protocol, ProtocolMsg, ProtocolStatus};
+use crate::protocol::{Context, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::Justification;
@@ -117,6 +118,8 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
 
 pub struct Peer<D> {
+	pub is_offline: Arc<AtomicBool>,
+	pub is_major_syncing: Arc<AtomicBool>,
 	client: Arc<PeersClient>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
 
@@ -130,6 +133,8 @@ pub struct Peer<D> {
 
 impl<D> Peer<D> {
 	fn new(
+		is_offline: Arc<AtomicBool>,
+		is_major_syncing: Arc<AtomicBool>,
 		client: Arc<PeersClient>,
 		import_queue: Box<ImportQueue<Block>>,
 		protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
@@ -139,6 +144,8 @@ impl<D> Peer<D> {
 	) -> Self {
 		let network_port = Mutex::new(network_port);
 		Peer {
+			is_offline,
+			is_major_syncing,
 			client,
 			protocol_sender,
 			import_queue,
@@ -177,6 +184,16 @@ impl<D> Peer<D> {
 		let _ = self
 			.protocol_sender
 			.send(ProtocolMsg::BlockImported(hash, header.clone()));
+	}
+
+	// SyncOracle: are we connected to any peer?
+	fn is_offline(&self) -> bool {
+		self.is_offline.load(Ordering::Relaxed)
+	}
+
+	// SyncOracle: are we in the process of catching-up with the chain?
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing.load(Ordering::Relaxed)
 	}
 
 	/// Called on connection to other indicated peer.
@@ -264,12 +281,6 @@ impl<D> Peer<D> {
 	/// Restart sync for a peer.
 	fn restart_sync(&self) {
 		let _ = self.protocol_sender.send(ProtocolMsg::Abort);
-	}
-
-	pub fn status(&self) -> ProtocolStatus<Block> {
-		let (sender, port) = channel::unbounded();
-		let _ = self.protocol_sender.send(ProtocolMsg::Status(sender));
-		port.recv().unwrap()
 	}
 
 	/// Push a message into the gossip network and relay to peers.
@@ -467,7 +478,11 @@ pub trait TestNetFactory: Sized {
 
 		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
 		let specialization = DummySpecialization {};
+		let is_offline = Arc::new(AtomicBool::new(true));
+		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let protocol_sender = Protocol::new(
+			is_offline.clone(),
+			is_major_syncing.clone(),
 			network_sender.clone(),
 			config.clone(),
 			client.clone(),
@@ -478,6 +493,8 @@ pub trait TestNetFactory: Sized {
 		).unwrap();
 
 		let peer = Arc::new(Peer::new(
+			is_offline,
+			is_major_syncing,
 			client,
 			import_queue,
 			protocol_sender,
