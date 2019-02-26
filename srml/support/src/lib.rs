@@ -35,6 +35,7 @@ pub use paste;
 pub use sr_primitives as runtime_primitives;
 
 pub use self::storage::generator::Storage as GenericStorage;
+pub use self::storage::unhashed::generator::UnhashedStorage as GenericUnhashedStorage;
 
 #[macro_use]
 pub mod dispatch;

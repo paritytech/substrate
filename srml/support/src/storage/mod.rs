@@ -139,6 +139,37 @@ impl crate::GenericStorage for RuntimeStorage {
 	}
 }
 
+impl crate::GenericUnhashedStorage for RuntimeStorage {
+	fn exists(&self, key: &[u8]) -> bool {
+		unhashed::exists(key)
+	}
+
+	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
+	fn get<T: Decode>(&self, key: &[u8]) -> Option<T> {
+		unhashed::get(key)
+	}
+
+	/// Put a value in under a key.
+	fn put<T: Encode>(&self, key: &[u8], val: &T) {
+		unhashed::put(key, val)
+	}
+
+	/// Remove the bytes of a key from storage.
+	fn kill(&self, key: &[u8]) {
+		unhashed::kill(key)
+	}
+
+	/// Remove the bytes of a key from storage.
+	fn kill_prefix(&self, prefix: &[u8]) {
+		unhashed::kill_prefix(prefix)
+	}
+
+	/// Take a value from storage, deleting it after reading.
+	fn take<T: Decode>(&self, key: &[u8]) -> Option<T> {
+		unhashed::take(key)
+	}
+}
+
 /// A trait for working with macro-generated storage values under the substrate storage API.
 pub trait StorageValue<T: Codec> {
 	/// The type that get/take return.
