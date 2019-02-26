@@ -205,6 +205,9 @@ fn decl_store_extra_genesis(
 				DeclStorageTypeInfosKind::Map {key_type, .. } => {
 					quote!( pub #ident: Vec<(#key_type, #storage_type)>, )
 				},
+				DeclStorageTypeInfosKind::DoubleMap {key1_type, key2_type, .. } => {
+					quote!( pub #ident: Vec<(#key1_type, #key2_type, #storage_type)>, )
+				},
 			});
 			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
 				.unwrap_or_else(|| quote!( (|config: &GenesisConfig<#traitinstance>| config.#ident.clone()) )));
@@ -253,6 +256,18 @@ fn decl_store_extra_genesis(
 							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
 								.expect(#error_message);
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
+						}
+					}}
+				},
+				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+					quote!{{
+						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+						use #scrate::codec::{Encode, Decode};
+
+						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
+						let data = (#builder)(&self);
+						for (k1, k2, v) in data.into_iter() {
+							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
 						}
 					}}
 				},
@@ -444,6 +459,9 @@ fn decl_storage_items(
 			DeclStorageTypeInfosKind::Map { key_type, is_linked: true } => {
 				i.linked_map(key_type)
 			},
+			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type } => {
+				i.double_map(key1_type, key2_type)
+			},
 		};
 		impls.extend(implementation)
 	}
@@ -508,6 +526,17 @@ fn impl_store_fns(
 						}
 					}
 				}
+				DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+					quote!{
+						pub fn #get_fn<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #value_type
+						where
+							KArg1: #scrate::storage::generator::Borrow<#key1_type>,
+							KArg2: #scrate::storage::generator::Borrow<#key2_type>,
+						{
+							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#key1_type, #key2_type, #typ>> :: get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
+						}
+					}
+				}
 			};
 			items.extend(item);
 		}
@@ -551,6 +580,17 @@ fn store_functions_to_metadata (
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::Map {
 						key: #scrate::storage::generator::DecodeDifferent::Encode(#kty),
+						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+					}
+				}
+			},
+			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+				let k1ty = clean_type_string(&quote!(#key1_type).to_string());
+				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
+				quote!{
+					#scrate::storage::generator::StorageFunctionType::DoubleMap {
+						key1: #scrate::storage::generator::DecodeDifferent::Encode(#k1ty),
+						key2: #scrate::storage::generator::DecodeDifferent::Encode(#k2ty),
 						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
 					}
 				}
@@ -650,6 +690,10 @@ enum DeclStorageTypeInfosKind<'a> {
 		key_type: &'a syn::Type,
 		is_linked: bool,
 	},
+	DoubleMap {
+		key1_type: &'a syn::Type,
+		key2_type: &'a syn::Type,
+	}
 }
 
 impl<'a> DeclStorageTypeInfosKind<'a> {
@@ -671,6 +715,10 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 		DeclStorageType::LinkedMap(ref map) => (&map.value, DeclStorageTypeInfosKind::Map {
 			key_type: &map.key,
 			is_linked: true,
+		}),
+		DeclStorageType::DoubleMap(ref map) => (&map.value, DeclStorageTypeInfosKind::DoubleMap {
+			key1_type: &map.key1,
+			key2_type: &map.key2,
 		}),
 	};
 

@@ -477,4 +477,64 @@ impl<'a> Impls<'a> {
 			}
 		}
 	}
+
+	pub fn double_map(self, k1ty: &syn::Type, k2ty: &syn::Type) -> TokenStream2 {
+		let Self {
+			scrate,
+			visibility,
+			traitinstance,
+			traittype,
+			type_infos,
+			fielddefault,
+			prefix,
+			name,
+		} = self;
+		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
+		let option_simple_1 = option_unwrap(is_option);
+
+		let mutate_impl = if !is_option {
+			quote!{
+				<Self as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#k1ty, #k2ty, #typ>>::insert(key1, key2, &val, storage)
+			}
+		} else {
+			quote!{
+				match val {
+					Some(ref val) => <Self as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#k1ty, #k2ty, #typ>>::insert(key1, key2, &val, storage),
+					None => <Self as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#k1ty, #k2ty, #typ>>::remove(key1, key2, storage),
+				}
+			}
+		};
+		// generator for double map
+		quote!{
+			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
+
+			impl<#traitinstance: #traittype> #scrate::storage::unhashed::generator::StorageDoubleMapXX<#k1ty, #k2ty, #typ> for #name<#traitinstance> {
+				type Query = #value_type;
+
+				fn prefix() -> &'static [u8] {
+					#prefix.as_bytes()
+				}
+
+				fn get<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
+					let key = <Self as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#k1ty, #k2ty, #typ>>::key_for(key1, key2);
+					storage.get(&key).#option_simple_1(|| #fielddefault)
+				}
+
+				fn take<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
+					let key = <Self as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#k1ty, #k2ty, #typ>>::key_for(key1, key2);
+					storage.take(&key).#option_simple_1(|| #fielddefault)
+				}
+
+				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &S) -> R {
+					let mut val = <Self as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#k1ty, #k2ty, #typ>>::get(key1, key2, storage);
+
+					let ret = f(&mut val);
+					#mutate_impl ;
+					ret
+				}
+
+			}
+		}
+
+	}
 }

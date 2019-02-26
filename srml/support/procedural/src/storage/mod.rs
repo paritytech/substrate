@@ -119,6 +119,7 @@ struct DeclStorageBuild {
 enum DeclStorageType {
 	Map(DeclStorageMap),
 	LinkedMap(DeclStorageLinkedMap),
+	DoubleMap(DeclStorageDoubleMap),
 	Simple(syn::Type),
 }
 
@@ -139,6 +140,16 @@ struct DeclStorageLinkedMap {
 }
 
 #[derive(Parse, ToTokens, Debug)]
+struct DeclStorageDoubleMap {
+	pub map_keyword: ext::CustomToken<DoubleMapKeyword>,
+	pub key1: syn::Type,
+	pub comma_keyword: Token![,],
+	pub key2: syn::Type,
+	pub ass_keyword: Token![=>],
+	pub value: syn::Type,
+}
+
+#[derive(Parse, ToTokens, Debug)]
 struct DeclStorageDefault {
 	pub equal_token: Token![=],
 	pub expr: syn::Expr,
@@ -153,3 +164,4 @@ custom_keyword_impl!(AddExtraGenesis, "add_extra_genesis", "storage extra genesi
 custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
+custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");

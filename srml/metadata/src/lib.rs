@@ -264,7 +264,12 @@ pub enum StorageFunctionType {
 	Map {
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
-	}
+	},
+	DoubleMap {
+		key1: DecodeDifferentStr,
+		key2: DecodeDifferentStr,
+		value: DecodeDifferentStr,
+	},
 }
 
 /// A storage function modifier.
