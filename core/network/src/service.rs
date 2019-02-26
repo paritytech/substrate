@@ -45,7 +45,7 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
-	/// Get a stream of syns statuses.
+	/// Get a stream of sync statuses.
 	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>>;
 	/// Get currently connected peers
 	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
