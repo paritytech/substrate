@@ -79,7 +79,10 @@ decl_runtime_apis! {
 			-> Option<ScheduledChange<NumberFor<Block>>>;
 
 		/// Check a digest for forced changes.
-		/// Return `None` if there are no forced changes.
+		/// Return `None` if there are no forced changes. Otherwise, return a
+		/// tuple containing the pending change and the median last finalized
+		/// block number at the time the change was signalled.
+		///
 		/// Added in version 2.
 		///
 		/// Forced changes are applied after a delay of _imported_ blocks,

@@ -310,6 +310,10 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 				let new_authorities = {
 					let (set_id, new_authorities) = new_set.current();
 
+					// we will use the median last finalized number as a hint
+					// for the canon block the new authority set should start
+					// with. we use the minimum between the median and the local
+					// best finalized block.
 					let best_finalized_number = self.inner.backend().blockchain().info()
 						.map_err(|e| ConsensusErrorKind::ClientImport(e.to_string()))?
 						.finalized_number;
@@ -323,12 +327,6 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> GrandpaBlockImport<B, E, Block, RA
 									 current best finalized number must exist in chain; qed.")
 							.hash();
 
-					// we start the new authority assuming the block that enacted the
-					// change is the canonical one. we could use the block that signalled
-					// the change instead, but this would make verification of
-					// justifications more complicated, since we'd need to check if
-					// there's any pending forced change (since forced changes would
-					// finalize "backwards")
 					NewAuthoritySet {
 						canon_number,
 						canon_hash,
@@ -439,7 +437,14 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			// NOTE: when we do a force change we are "discrediting" the old set so we
 			// ignore any justifications from them. this block may contain a justification
 			// which should be checked and imported below against the new authority
-			// triggered by this forced change.
+			// triggered by this forced change. the new grandpa voter will start at the
+			// last median finalized block (which is before the block that enacts the
+			// change), full nodes syncing the chain will not be able to successfully
+			// import justifications for those blocks since their local authority set view
+			// is still of the set before the forced change was enacted, still after #1867
+			// they should import the block and discard the justification, and they will
+			// then request a justification from sync if it's necessary (which they should
+			// then be able to successfully validate).
 			let _ = self.send_voter_commands.unbounded_send(VoterCommand::ChangeAuthorities(new));
 
 			// we must clear all pending justifications requests, presumably they won't be

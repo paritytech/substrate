@@ -266,7 +266,8 @@ impl<T: Trait> Module<T> {
 	/// If the `forced` parameter is defined, this indicates that the current
 	/// set has been synchronously determined to be offline and that after
 	/// `in_blocks` the given change should be applied. The given block number
-	/// indicates the median last finalized block number.
+	/// indicates the median last finalized block number and it should be used
+	/// as the canon block when starting the new grandpa voter.
 	///
 	/// No change should be signalled while any change is pending. Returns
 	/// an error if a change is already pending.

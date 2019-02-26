@@ -234,8 +234,10 @@ where
 
 	/// Apply or prune any pending transitions based on a best-block trigger.
 	///
-	/// Returns `Ok(new_set)` when a forced change has occurred.
-	/// Only alters the internal state in this case.
+	/// Returns `Ok((median, new_set))` when a forced change has occurred. The
+	/// median represents the median last finalized block at the time the change
+	/// was signaled, and it should be used as the canon block when starting the
+	/// new grandpa voter. Only alters the internal state in this case.
 	///
 	/// These transitions are always forced and do not lead to justifications
 	/// which light clients can follow.
@@ -366,7 +368,8 @@ where
 pub(crate) enum DelayKind<N> {
 	/// Depth in finalized chain.
 	Finalized,
-	/// Depth in best chain.
+	/// Depth in best chain. The median last finalized block is calculated at the time the
+	/// change was signalled.
 	Best { median_last_finalized: N },
 }
 
