@@ -76,7 +76,7 @@ impl<T> Deref for ExchangeableFunction<T> {
 }
 
 /// Restores a function implementation on drop.
-struct RestoreImplementation<T: 'static>(&'static mut ExchangeableFunction<T>, Option<T>);
+pub struct RestoreImplementation<T: 'static>(&'static mut ExchangeableFunction<T>, Option<T>);
 
 impl<T> Drop for RestoreImplementation<T> {
 	fn drop(&mut self) {
