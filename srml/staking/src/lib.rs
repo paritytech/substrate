@@ -530,6 +530,26 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Actually make a payment to a staker. This uses the currency's reward function
+	/// to pay the right payee for the given staker account.
+	fn make_payout(who: &T::AccountId, amount: BalanceOf<T>) {
+		match Self::payee(who) {
+			RewardDestination::Controller => {
+				let _ = T::Currency::reward(&who, amount);
+			}
+			RewardDestination::Stash => {
+				let _ = Self::ledger(who).map(|l| T::Currency::reward(&l.stash, amount));
+			}
+			RewardDestination::Staked => <Ledger<T>>::mutate(who, |ml| {
+				if let Some(l) = ml.as_mut() {
+					l.active += amount;
+					l.total += amount;
+					let _ = T::Currency::reward(&l.stash, amount);
+				}
+			}),
+		}		
+	}
+
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
 	/// balance, pro-rata based on their exposure, after having removed the validator's pre-payout cut.
 	fn reward_validator(who: &T::AccountId, reward: BalanceOf<T>) {
@@ -541,28 +561,12 @@ impl<T: Trait> Module<T> {
 			let exposure = Self::stakers(who);
 			let total = exposure.total.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// FIXME #1572:  avoid overflow
-			for i in exposure.others.iter() {
-				let amount = safe_mul_rational(i.value);
-				let payee = Self::payee(&i.who);
-				match payee {
-					RewardDestination::Controller => {
-						let _ = T::Currency::reward(&i.who, amount);
-					}
-					RewardDestination::Stash => {
-						let _ = Self::ledger(&i.who).map(|l| T::Currency::reward(&l.stash, amount));
-					}
-				 	RewardDestination::Staked => <Ledger<T>>::mutate(&i.who, |ml| {
-						if let Some(l) = ml.as_mut() {
-							l.active += amount;
-							l.total += amount;
-							let _ = T::Currency::reward(&l.stash, amount);
-						}
-					}),
-				}
+			for i in &exposure.others {
+				Self::make_payout(&i.who, safe_mul_rational(i.value));
 			}
 			safe_mul_rational(exposure.own)
 		};
-		let _ = T::Currency::reward(who, validator_cut + off_the_table);
+		Self::make_payout(who, validator_cut + off_the_table);
 	}
 
 	/// Get the reward for the session, assuming it ends with this block.
@@ -739,11 +743,13 @@ impl<T: Trait> Module<T> {
 		let max_slashes = grace + unstake_threshold;
 
 		let event = if new_slash_count > max_slashes {
+			let slot_stake = Self::slot_stake();
 			// They're bailing.
 			let slash = Self::current_offline_slash()
 				// Multiply current_offline_slash by 2^(unstake_threshold with upper bound)
 				.checked_shl(unstake_threshold)
-				.unwrap_or_else(Self::slot_stake);
+				.map(|x| x.min(slot_stake))
+				.unwrap_or(slot_stake);
 			let _ = Self::slash_validator(&v, slash);
 			<Validators<T>>::remove(&v);
 			let _ = Self::apply_force_new_era(false);

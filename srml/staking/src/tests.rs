@@ -77,7 +77,6 @@ fn no_offline_should_work() {
 #[test]
 fn invulnerability_should_work() {
 	// Test that users can be invulnerable from slashing and being kicked
-	// TODO: Verify user is still in the validators
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		// Make account 10 invulnerable
@@ -90,11 +89,17 @@ fn invulnerability_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		// Account 10 has the 70 funds we gave it above
 		assert_eq!(Balances::free_balance(&10), 70);
-		// Set account 10 as an offline validator, should exit early if invulnerable
-		Staking::on_offline_validator(10, 1);
+		// Account 10 should be a validator
+		assert!(<Validators<Test>>::exists(&10));
+
+		// Set account 10 as an offline validator with a large number of reports
+		// Should exit early if invulnerable
+		Staking::on_offline_validator(10, 100);
+
 		// Show that account 10 has not been touched
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 70);
+		assert!(<Validators<Test>>::exists(&10));
 		// New era not being forced
 		assert!(Staking::forcing_new_era().is_none());
 	});
@@ -102,12 +107,12 @@ fn invulnerability_should_work() {
 
 #[test]
 fn offline_should_slash_and_kick() {
-	// Test that an offline validator gets slashed
-	// TODO: Confirm user is kicked
+	// Test that an offline validator gets slashed and kicked
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Give account 10 some balance
 		Balances::set_free_balance(&10, 1000);
-		println!("Stash Balance: {:?}", Balances::free_balance(&11));
+		// Confirm account 10 is a validator
+		assert!(<Validators<Test>>::exists(&10));
 		// Validators get slashed immediately
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Unstake threshold is 3
@@ -120,12 +125,14 @@ fn offline_should_slash_and_kick() {
 		Staking::on_offline_validator(10, 4);
 		// Confirm user has been reported
 		assert_eq!(Staking::slash_count(&10), 4);
+		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
+		assert!(Staking::slot_stake() > 2_u64.pow(3) * 20);
 		// Confirm balance has been reduced by 2^unstake_threshold * current_offline_slash()
 		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * 20);
+		// Confirm account 10 has been removed as a validator
+		assert!(!<Validators<Test>>::exists(&10));
 		// A new era is forced due to slashing
 		assert!(Staking::forcing_new_era().is_some());
-		println!("Stash Balance After: {:?}", Balances::free_balance(&11));
-
 	});
 }
 
@@ -181,6 +188,9 @@ fn rewards_should_work() {
 		// this test is only in the scope of one era. Since this variable changes 
 		// at the last block/new era, we'll save it.
 		let session_reward = 10;
+
+		// Set payee to controller
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
 		// Initial config should be correct
 		assert_eq!(Staking::era_length(), 9);
@@ -256,7 +266,10 @@ fn multi_era_reward_should_work() {
 		assert_eq!(Staking::current_session_reward(), session_reward);
 
 		// check the balance of a validator accounts.
-		assert_eq!(Balances::total_balance(&10), 1); 
+		assert_eq!(Balances::total_balance(&10), 1);
+
+		// Set payee to controller
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
 		let mut block = 3;
 		// Block 3 => Session 1 => Era 0
@@ -323,14 +336,13 @@ fn staking_should_work() {
 		assert_ok!(Staking::set_bonding_duration(2));
 		assert_eq!(Staking::bonding_duration(), 2);
 
-
 		// --- Block 1: 
 		System::set_block_number(1);
 		// give the man some coins 
 		Balances::set_free_balance(&3, 3000);
 		// initial stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
 		// account 3 controlled by 4.
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::default())); // balance of 3 = 3000, stashed = 1500
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller)); // balance of 3 = 3000, stashed = 1500
 		
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
@@ -403,6 +415,10 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Staking::bonding_duration(), 3);
 		assert_eq!(Session::validators(), vec![10, 20]);
 
+		// Set payee to controller
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+		assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
+
 		// default reward for the first session.
 		assert_eq!(Staking::current_session_reward(), session_reward);
 
@@ -472,6 +488,9 @@ fn nominators_also_get_slashed() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		// initial validators
 		assert_eq!(Session::validators(), vec![10, 20]);
+
+		// Set payee to controller
+		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
 
 		// give the man some money.
 		let initial_balance = 1000;
@@ -598,41 +617,51 @@ fn session_and_eras_work() {
 	});
 }
 
-
 #[test]
-fn balance_transfer_when_bonded_should_not_work() {
+fn cannot_transfer_staked_balance() {
 	// Tests that a stash account cannot transfer funds
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
-		assert_eq!(Balances::free_balance(&11), 10);
-		Balances::set_free_balance(&11, 100);
-		// Confirm that account 11 cannot transfer any balance
-		// TODO: Figure out why we dont use the illiquid error 
+		assert_eq!(Balances::free_balance(&11), 1000);
+		// Confirm account 11 (via controller 10) is totally staked
+		assert_eq!(Staking::stakers(&10).total, 1000);
+		// Confirm account 11 cannot transfer as a result
 		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "stash with too much under management");
+
+		// Give account 11 extra free balance
+		Balances::set_free_balance(&11, 10000);
+		// Confirm that account 11 can now transfer some balance
+		assert_ok!(Balances::transfer(Origin::signed(11), 20, 1));
 	});
 }
 
 
+
 #[test]
-fn reserving_balance_when_bonded_should_not_work() {
+fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		// Check that account 11 is stashed
+		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
-		assert_eq!(Balances::free_balance(&11), 10);
-		// Confirm account 11 cannot reserve balance
-		// TODO: Figure out why we dont use the illiquid error
+		assert_eq!(Balances::free_balance(&11), 1000);
+		// Confirm account 11 (via controller 10) is totally staked
+		assert_eq!(Staking::stakers(&10).total, 1000);
+		// Confirm account 11 cannot transfer as a result
 		assert_noop!(Balances::reserve(&11, 1), "stash with too much under management");
+
+		// Give account 11 extra free balance
+		Balances::set_free_balance(&11, 10000);
+		// Confirm account 11 can now reserve balance
+		assert_ok!(Balances::reserve(&11, 1));
 	});
 }
 
 #[test]
 fn max_unstake_threshold_works() {
 	// Tests that max_unstake_threshold gets used when prefs.unstake_threshold is large
-	// TODO: Why does this test fail?
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 		// Two users with maximum possible balance
@@ -664,6 +693,9 @@ fn max_unstake_threshold_works() {
 		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
 		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
 
+		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
+		assert!(Staking::slot_stake() > 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
+
 		// Show that each balance only gets reduced by 2^max_unstake_threshold
 		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
 		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
@@ -694,11 +726,10 @@ fn slashing_does_not_cause_underflow() {
 	});
 }
 
-/*
+
 #[test]
 fn reward_destination_works() {
-	// TODO: Test that rewards go to the right place when set
-	// Stake, stash, controller
+	// Rewards go to the correct destination as determined in Payee
 	with_externalities(&mut ExtBuilder::default()
 		.sessions_per_era(1)
 		.session_length(1)
@@ -709,12 +740,13 @@ fn reward_destination_works() {
 		// Check the balance of the validator account
 		assert_eq!(Balances::free_balance(&10), 1); 
 		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 10); 
+		assert_eq!(Balances::free_balance(&11), 1000); 
 		// Check these two accounts are bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Check how much is at stake
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
-
+		// Track current session reward
+		let mut current_session_reward = Staking::current_session_reward();
 
 		// Move forward the system for payment
 		System::set_block_number(1);
@@ -723,11 +755,14 @@ fn reward_destination_works() {
 
 		// Check that RewardDestination is Staked (default)
 		assert_eq!(Staking::payee(&10), RewardDestination::Staked);
+		// Check current session reward is 10
+		assert_eq!(current_session_reward, 10);
 		// Check that reward went to the stash account
-		println!("{:?} {:?}", Balances::free_balance(&10), Balances::free_balance(&11));
-		assert_eq!(Balances::free_balance(&11), 10 + 10);
+		assert_eq!(Balances::free_balance(&11), 1000 + 10);
 		// Check that amount at stake increased accordingly
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 10, active: 1000 + 10, unlocking: vec![] }));
+		// Update current session reward
+		current_session_reward = Staking::current_session_reward();
 
 		//Change RewardDestination to Stash
 		<Payee<Test>>::insert(&10, RewardDestination::Stash);
@@ -740,10 +775,11 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Stash
 		assert_eq!(Staking::payee(&10), RewardDestination::Stash);
 		// Check that reward went to the stash account
-		println!("{:?} {:?}", Balances::free_balance(&10), Balances::free_balance(&11));
-		assert_eq!(Balances::free_balance(&11), 10 + 10 + 10);
+		assert_eq!(Balances::free_balance(&11), 1010 + current_session_reward);
 		// Check that amount at stake is not increased
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 10, active: 1000 + 10, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1010, active: 1010, unlocking: vec![] }));
+		// Update current session reward
+		current_session_reward = Staking::current_session_reward();
 
 		//Change RewardDestination to Controller
 		<Payee<Test>>::insert(&10, RewardDestination::Controller);
@@ -756,15 +792,14 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Controller
 		assert_eq!(Staking::payee(&10), RewardDestination::Controller);
 		// Check that reward went to the controller account
-		println!("{:?} {:?}", Balances::free_balance(&10), Balances::free_balance(&11));
-		assert_eq!(Balances::free_balance(&10), 1 + 10);
+		assert_eq!(Balances::free_balance(&10), 1 + current_session_reward);
 		// Check that amount at stake is not increased
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1010, active: 1010, unlocking: vec![] }));
 
 	});
 
 }
-*/
+
 #[test]
 fn validator_payment_prefs_work() {
 	// Test that validator preferences are correctly honored
@@ -895,10 +930,51 @@ fn correct_number_of_validators_are_chosen() {
 	// TODO: Test emergency conditions?
 }
 
+/*
 #[test]
-fn slot_stake_does_something() {
-	// TODO: What does it do?
+fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
+	// Test that slot_stake is determined by the least staked validator
+	// Test that slot_stake is the maximum punishment that can happen to a validator
+	with_externalities(&mut ExtBuilder::default().build(), || {
+				println!("SLOT STAKE: {:?}", <SlotStake<Test>>::get());
+				println!("SLOT STAKE: {:?}", <SlotStake<Test>>::put(1000));
+
+
+		// Give account 10 some balance
+		Balances::set_free_balance(&10, 1000);
+		// Confirm account 10 is a validator
+		assert!(<Validators<Test>>::exists(&10));
+		// Validators get slashed immediately
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		// Unstake threshold is 3
+		assert_eq!(Staking::validators(&10).unstake_threshold, 3);
+		// Account 10 has not been slashed before
+		assert_eq!(Staking::slash_count(&10), 0);
+		// Account 10 has the funds we just gave it
+		assert_eq!(Balances::free_balance(&10), 1000);
+
+		// Slot stake should be lowest total stake from config
+		println!("SLOT STAKE: {:?}", Staking::slot_stake());
+		println!("SLOT STAKE: {:?}", <SlotStake<Test>>::get());
+		println!("STAKER 10 TOTAL {:?}", Staking::stakers(&10).total );
+		println!("STAKER 10 TOTAL {:?}", Staking::stakers(&20).total );
+
+
+		// Report account 10 as offline, one greater than unstake threshold
+		Staking::on_offline_validator(10, 4);
+		// Confirm user has been reported
+		assert_eq!(Staking::slash_count(&10), 4);
+		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
+		assert!(Staking::slot_stake() > 2_u64.pow(3) * 20);
+		// Confirm balance has been reduced by 2^unstake_threshold * current_offline_slash()
+		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * 20);
+		// Confirm account 10 has been removed as a validator
+		assert!(!<Validators<Test>>::exists(&10));
+		// A new era is forced due to slashing
+		assert!(Staking::forcing_new_era().is_some());
+	});
 }
+*/
 
 #[test]
 fn on_free_balance_zero_stash_removes_validator() {
@@ -913,7 +989,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		// Check the balance of the validator account
 		assert_eq!(Balances::free_balance(&10), 256); 
 		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 2560); 
+		assert_eq!(Balances::free_balance(&11), 256000); 
 		// Check these two accounts are bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -935,7 +1011,7 @@ fn on_free_balance_zero_stash_removes_validator() {
 		assert_eq!(Balances::total_balance(&10), 0); 
 
 		// Check the balance of the stash account has not been touched
-		assert_eq!(Balances::free_balance(&11), 2560); 
+		assert_eq!(Balances::free_balance(&11), 256000); 
 		// Check these two accounts are still bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -975,7 +1051,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		// Check the balance of the nominator account
 		assert_eq!(Balances::free_balance(&10), 256); 
 		// Check the balance of the stash account
-		assert_eq!(Balances::free_balance(&11), 2560); 
+		assert_eq!(Balances::free_balance(&11), 256000); 
 		// Check these two accounts are bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
@@ -994,7 +1070,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 		assert_eq!(Balances::total_balance(&10), 0); 
 
 		// Check the balance of the stash account has not been touched
-		assert_eq!(Balances::free_balance(&11), 2560); 
+		assert_eq!(Balances::free_balance(&11), 256000); 
 		// Check these two accounts are still bonded
 		assert_eq!(Staking::bonded(&11), Some(10));
 
