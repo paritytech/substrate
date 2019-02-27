@@ -20,14 +20,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
 use log::{warn, debug, error, trace, info};
 use futures::{Async, Future, Stream, stream, sync::oneshot};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
-use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
+use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use crate::error::Error;
@@ -47,7 +47,7 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
 	/// Get currently connected peers
-	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
+	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)>;
 }
 
 /// Minimum Requirements for a Hash within Networking
@@ -118,10 +118,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
-	// Are we connected to any peer?
+	/// Are we connected to any peer?
 	is_offline: Arc<AtomicBool>,
-	// Are we actively catching up with the chain?
+	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
+	/// Peers whom we are connected with.
+	peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<B>>>>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Protocol sender
@@ -143,9 +145,11 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
+		let peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),
+			peers.clone(),
 			network_chan.clone(),
 			params.config,
 			params.chain,
@@ -166,6 +170,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		let service = Arc::new(Service {
 			is_offline,
 			is_major_syncing,
+			peers,
 			network,
 			protocol_sender: protocol_sender.clone(),
 			bg_thread: Some(thread),
@@ -284,16 +289,9 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
 	}
 
-	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
-		let (sender, port) = channel::unbounded();
-		let _ = self.protocol_sender.send(ProtocolMsg::Peers(sender));
-		let peers = port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
-			or the ProtocolMsg::Stop message is received,
-			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.");
-		let network = self.network.lock();
-		peers.into_iter().map(|(idx, info)| {
-			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)
-		}).collect::<Vec<_>>()
+	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)> {
+		let peers = (*self.peers.read()).clone();
+		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
 	}
 }
 
@@ -430,8 +428,6 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 	Outgoing(NodeIndex, Message<B>),
 	/// Report a peer.
 	ReportPeer(NodeIndex, Severity),
-	/// Get a peer id.
-	GetPeerId(NodeIndex, Sender<Option<String>>),
 }
 
 /// Starts the background thread that handles the networking.
@@ -517,14 +513,6 @@ fn run_thread<B: BlockT + 'static>(
 					Severity::Timeout => network_service_2.lock().drop_node(who),
 				}
 			},
-			NetworkMsg::GetPeerId(who, sender) => {
-				let node_id = network_service_2
-					.lock()
-					.peer_id_of_node(who)
-					.cloned()
-					.map(|id| id.to_base58());
-				let _ = sender.send(node_id);
-			},
 		}
 		Ok(())
 	})
@@ -546,9 +534,9 @@ fn run_thread<B: BlockT + 'static>(
 						FromNetworkMsg::PeerDisconnected(node_index, debug_info));
 				}
 			}
-			NetworkServiceEvent::OpenedCustomProtocol { node_index, version, debug_info, .. } => {
+			NetworkServiceEvent::OpenedCustomProtocol { peer_id, node_index, version, debug_info, .. } => {
 				debug_assert_eq!(version, protocol::CURRENT_VERSION as u8);
-				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(node_index, debug_info));
+				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(peer_id, node_index, debug_info));
 			}
 			NetworkServiceEvent::ClosedCustomProtocol { node_index, debug_info, .. } => {
 				let _ = protocol_sender.send(FromNetworkMsg::PeerDisconnected(node_index, debug_info));
