@@ -429,12 +429,12 @@ mod tests {
 		}
 	}
 
-		struct AllowAll;
-		impl Validator<H256> for AllowAll {
-			fn validate(&self, _data: &[u8]) -> ValidationResult<H256> {
-				ValidationResult::Valid(H256::default())
-			}
+	struct AllowAll;
+	impl Validator<H256> for AllowAll {
+		fn validate(&self, _data: &[u8]) -> ValidationResult<H256> {
+			ValidationResult::Valid(H256::default())
 		}
+	}
 
 	#[test]
 	fn collects_garbage() {
