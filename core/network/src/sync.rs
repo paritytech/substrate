@@ -542,8 +542,10 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				PeerSyncState::AncestorSearch(num, state) => {
 					let block_hash_match = match (blocks.get(0), protocol.client().block_hash(num)) {
-						(Some(ref block), Ok(maybe_our_block_hash)) =>
-							maybe_our_block_hash.is_some() && block.hash == maybe_our_block_hash.expect("prev. check and order of eval; qed"),
+						(Some(ref block), Ok(maybe_our_block_hash)) => {
+							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", num, block.hash, who);
+							maybe_our_block_hash.is_some() && block.hash == maybe_our_block_hash.expect("prev. check and order of eval; qed")
+						},
 						(None, _) => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
 							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
@@ -566,6 +568,7 @@ impl<B: BlockT> ChainSync<B> {
 					match Self::handle_ancestor_search_state(num, state, block_hash_match) {
 						(PeerSyncState::Available, _) => {
 							peer.state = PeerSyncState::Available;
+							trace!(target:"sync", "Found common ancestor for peer {}: {} ({})", who, block.hash, n);
 							Vec::new()
 						},
 						(next_peer_state, num_to_request) => {
