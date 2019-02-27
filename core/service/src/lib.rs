@@ -33,7 +33,7 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 use log::{info, warn, debug};
 use futures::prelude::*;
 use keystore::Store as Keystore;
-use client::BlockchainEvents;
+use client::{BlockchainEvents, runtime_api::OffchainWorker};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As, ProvideRuntimeApi};
 use exit_future::Signal;
@@ -98,6 +98,7 @@ impl<Components: components::Components> Service<Components> {
 		task_executor: TaskExecutor,
 	) -> Result<Self, error::Error> where
 		ComponentClient<Components>: ProvideRuntimeApi,
+		<ComponentClient<Components> as ProvideRuntimeApi>::Api: OffchainWorker<ComponentBlock<Components>>,
 	{
 		let (signal, exit) = ::exit_future::signal();
 
@@ -180,10 +181,6 @@ impl<Components: components::Components> Service<Components> {
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
-					if let Some(offchain) = offchain.upgrade() {
-						tokio::spawn(offchain.on_block_imported(notification.header.number()));
-					}
-
 					if let Some(network) = network.upgrade() {
 						network.on_block_imported(notification.hash, notification.header);
 					}
@@ -194,6 +191,10 @@ impl<Components: components::Components> Service<Components> {
 							&*client,
 							&*txpool,
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
+					}
+
+					if let Some(offchain) = offchain.upgrade() {
+						offchain.on_block_imported(notification.header.number());
 					}
 
 					Ok(())

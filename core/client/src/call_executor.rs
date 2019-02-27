@@ -135,12 +135,18 @@ where
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
+	// TODO [ToDr] use proper offchain extensions
+	offchain_ext: Option<state_machine::NeverOffchainExt>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
 	/// Creates new instance of local call executor.
 	pub fn new(backend: Arc<B>, executor: E) -> Self {
-		LocalCallExecutor { backend, executor }
+		LocalCallExecutor {
+			backend,
+			executor,
+			offchain_ext: None,
+		}
 	}
 }
 
@@ -149,6 +155,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
+			offchain_ext: None,
 		}
 	}
 }
@@ -165,13 +172,14 @@ where
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy
+		strategy: ExecutionStrategy,
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
+			self.offchain_ext.as_ref(),
 			&mut changes,
 			&self.executor,
 			method,
@@ -211,6 +219,7 @@ where
 			state_machine::new(
 				&state,
 				self.backend.changes_trie_storage(),
+				self.offchain_ext.as_ref(),
 				changes,
 				&self.executor,
 				"Core_initialise_block",
@@ -226,6 +235,7 @@ where
 		let result = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
+			self.offchain_ext.as_ref(),
 			changes,
 			&self.executor,
 			method,
@@ -248,7 +258,7 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage());
+		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), self.offchain_ext.as_ref());
 		self.executor.runtime_version(&mut ext)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
@@ -272,6 +282,7 @@ where
 		state_machine::new(
 			state,
 			self.backend.changes_trie_storage(),
+			self.offchain_ext.as_ref(),
 			changes,
 			&self.executor,
 			method,

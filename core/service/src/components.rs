@@ -246,6 +246,7 @@ pub trait ServiceTrait<C: Components>:
 	+ 'static
 	+ StartRPC<C>
 	+ MaintainTransactionPool<C>
+	+ OffchainWorker<C>
 {}
 impl<C: Components, T> ServiceTrait<C> for T where
 	T: Deref<Target = Service<C>>

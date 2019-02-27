@@ -160,6 +160,18 @@ pub trait OffchainExt {
 	fn submit_extrinsic(&self, extrinsic: Vec<u8>);
 }
 
+pub enum NeverOffchainExt {}
+
+impl NeverOffchainExt {
+	pub fn new<'a>() -> Option<&'a Self> {
+		None
+	}
+}
+
+impl OffchainExt for NeverOffchainExt {
+	fn submit_extrinsic(&self, extrinsic: Vec<u8>) { unreachable!() }
+}
+
 /// Code execution engine.
 pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 	/// Externalities error type.
@@ -193,9 +205,9 @@ pub enum ExecutionStrategy {
 }
 
 type DefaultHandler<R, E> = fn(
-	Result<NativeOrEncoded<R>, E>,
-	Result<NativeOrEncoded<R>, E>
-) -> Result<NativeOrEncoded<R>, E>;
+	CallResult<R, E>,
+	CallResult<R, E>,
+) -> CallResult<R, E>;
 
 /// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
 #[derive(Clone)]
@@ -256,9 +268,33 @@ pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 	ExecutionManager::AlwaysWasm
 }
 
-pub struct StateMachine<'a, H, B, T, Exec> {
+/// Creates new substrate state machine.
+pub fn new<'a, H, B, T, O, Exec>(
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
+	offchain_ext: Option<&'a O>,
+	overlay: &'a mut OverlayedChanges,
+	exec: &'a Exec,
+	method: &'a str,
+	call_data: &'a [u8],
+) -> StateMachine<'a, H, B, T, O, Exec> {
+	StateMachine {
+		backend,
+		changes_trie_storage,
+		offchain_ext,
+		overlay,
+		exec,
+		method,
+		call_data,
+		_hasher: PhantomData,
+	}
+}
+
+/// The substrate state machine.
+pub struct StateMachine<'a, H, B, T, O, Exec> {
+	backend: &'a B,
+	changes_trie_storage: Option<&'a T>,
+	offchain_ext: Option<&'a O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
@@ -266,11 +302,12 @@ pub struct StateMachine<'a, H, B, T, Exec> {
 	_hasher: PhantomData<H>,
 }
 
-impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
+impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
+	O: OffchainExt,
 	H::Out: Ord + HeapSizeOf,
 {
 	/// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -282,13 +319,12 @@ impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
 	/// Note: changes to code will be in place if this call is made again. For running partial
 	/// blocks (e.g. a transaction at a time), ensure a different method is used.
 	pub fn execute(
-		self,
+		&mut self,
 		strategy: ExecutionStrategy,
-	) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
-		{
+	) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>> {
 		// We are not giving a native call and thus we are sure that the result can never be a native
 		// value.
-		self.execute_using_consensus_failure_handler::<_, _, _, _, _, NeverNativeValue, fn() -> _>(
+		self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			true,
 			None,
@@ -301,11 +337,11 @@ impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
 	}
 
 	fn execute_aux<R, NC>(
-		self,
+		&mut self,
 		compute_tx: bool,
 		use_native: bool,
 		native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>, Exec::Error>, bool, Option<B::Transaction>, Option<MemoryDB<H>>) where
+	) -> (CallResult<R, Exec::Error>, bool, Option<B::Transaction>, Option<MemoryDB<H>>) where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
@@ -326,38 +362,25 @@ impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
 		(result, was_native, storage_delta, changes_delta)
 	}
 
-	fn execute_call_with_both_strategy<Handler, R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe>(
-		overlay: &mut OverlayedChanges,
-		backend: &B,
-		changes_trie_storage: Option<&T>,
-		offchain_ext: Option<&O>
-		exec: &Exec,
-		method: &str,
-		call_data: &[u8],
+	fn execute_call_with_both_strategy<Handler, R, NC>(
+		&mut self,
 		compute_tx: bool,
 		mut native_call: Option<NC>,
 		orig_prospective: OverlayedChangeSet,
 		on_consensus_failure: Handler,
-	) -> (Result<NativeOrEncoded<R>, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>)
-	where
-		H: Hasher,
-		Exec: CodeExecutor<H>,
-		B: Backend<H>,
-		T: ChangesTrieStorage<H>,
-		H::Out: Ord + HeapSizeOf,
+	) -> (CallResult<R, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>) where
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 		Handler: FnOnce(
-			Result<NativeOrEncoded<R>, Exec::Error>,
-			Result<NativeOrEncoded<R>, Exec::Error>
-		) -> Result<NativeOrEncoded<R>, Exec::Error>
+			CallResult<R, Exec::Error>,
+			CallResult<R, Exec::Error>
+		) -> CallResult<R, Exec::Error>
 	{
-		let (result, was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage,
-			exec, method, call_data, compute_tx, true, native_call.take());
+		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(compute_tx, true, native_call.take());
 
 		if was_native {
-			overlay.prospective = orig_prospective.clone();
-			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = execute_aux(overlay, backend, changes_trie_storage,
-				exec, method, call_data, compute_tx, false, native_call);
+			self.overlay.prospective = orig_prospective.clone();
+			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(compute_tx, false, native_call);
 
 			if (result.is_ok() && wasm_result.is_ok()
 				&& result.as_ref().ok() == wasm_result.as_ref().ok())
@@ -371,107 +394,60 @@ impl<'a, H, B, T, Exec> StateMachine<'a, H, B, T, Exec> where
 		}
 	}
 
-fn execute_call_with_native_else_wasm_strategy<H, B, T, Exec, R: Decode + Encode + PartialEq,
-	NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe>(
-	overlay: &mut OverlayedChanges,
-	backend: &B,
-	changes_trie_storage: Option<&T>,
-	exec: &Exec,
-	method: &str,
-	call_data: &[u8],
-	compute_tx: bool,
-	mut native_call: Option<NC>,
-	orig_prospective: OverlayedChangeSet,
-) -> (Result<NativeOrEncoded<R>, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>)
-where
-	H: Hasher,
-	Exec: CodeExecutor<H>,
-	B: Backend<H>,
-	T: ChangesTrieStorage<H>,
-	H::Out: Ord + HeapSizeOf,
-{
-	let (result, was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage,
-		exec, method, call_data, compute_tx, true, native_call.take());
+	fn execute_call_with_native_else_wasm_strategy<R, NC>(
+		&mut self,
+		compute_tx: bool,
+		mut native_call: Option<NC>,
+		orig_prospective: OverlayedChangeSet,
+	) -> (CallResult<R, Exec::Error>, Option<B::Transaction>, Option<MemoryDB<H>>) where
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+	{
+		let (result, was_native, storage_delta, changes_delta) = self.execute_aux(compute_tx, true, native_call.take());
 
-	if !was_native || result.is_ok() {
-		(result, storage_delta, changes_delta)
-	} else {
-		overlay.prospective = orig_prospective.clone();
-		let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = execute_aux(overlay, backend,
-			changes_trie_storage, exec, method, call_data, compute_tx, false, native_call);
-		(wasm_result, wasm_storage_delta, wasm_changes_delta)
+		if !was_native || result.is_ok() {
+			(result, storage_delta, changes_delta)
+		} else {
+			self.overlay.prospective = orig_prospective.clone();
+			let (wasm_result, _, wasm_storage_delta, wasm_changes_delta) = self.execute_aux(compute_tx, false, native_call);
+			(wasm_result, wasm_storage_delta, wasm_changes_delta)
+		}
 	}
 
-/// Execute a call using the given state backend, overlayed changes, and call executor.
-/// Produces a state-backend-specific "transaction" which can be used to apply the changes
-/// to the backing store, such as the disk.
-///
-/// On an error, no prospective changes are written to the overlay.
-///
-/// Note: changes to code will be in place if this call is made again. For running partial
-/// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute_using_consensus_failure_handler<
-	H, B, T, Exec, Handler, R: Decode + Encode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
->(
-	backend: &B,
-	changes_trie_storage: Option<&T>,
-	overlay: &mut OverlayedChanges,
-	exec: &Exec,
-	method: &str,
-	call_data: &[u8],
-	manager: ExecutionManager<Handler>,
-	compute_tx: bool,
-	mut native_call: Option<NC>,
-) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>>
-where
-	H: Hasher,
-	Exec: CodeExecutor<H>,
-	B: Backend<H>,
-	T: ChangesTrieStorage<H>,
-	H::Out: Ord + HeapSizeOf,
-	Handler: FnOnce(
-		Result<NativeOrEncoded<R>, Exec::Error>,
-		Result<NativeOrEncoded<R>, Exec::Error>
-	) -> Result<NativeOrEncoded<R>, Exec::Error>
-{
-	// read changes trie configuration. The reason why we're doing it here instead of the
-	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
-	// proof-of-execution on light clients. And the proof is recorded by the backend which
-	// is created after OverlayedChanges
+	/// Execute a call using the given state backend, overlayed changes, and call executor.
+	/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+	/// to the backing store, such as the disk.
+	///
+	/// On an error, no prospective changes are written to the overlay.
+	///
+	/// Note: changes to code will be in place if this call is made again. For running partial
+	/// blocks (e.g. a transaction at a time), ensure a different method is used.
+	pub fn execute_using_consensus_failure_handler<Handler, R, NC>(
+		&mut self,
+		manager: ExecutionManager<Handler>,
+		compute_tx: bool,
+		mut native_call: Option<NC>,
+	) -> Result<(NativeOrEncoded<R>, Option<B::Transaction>, Option<MemoryDB<H>>), Box<Error>> where
+		R: Decode + Encode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
+		Handler: FnOnce(
+			CallResult<R, Exec::Error>,
+			CallResult<R, Exec::Error>
+		) -> CallResult<R, Exec::Error>
+	{
+		// read changes trie configuration. The reason why we're doing it here instead of the
+		// `OverlayedChanges` constructor is that we need proofs for this read as a part of
+		// proof-of-execution on light clients. And the proof is recorded by the backend which
+		// is created after OverlayedChanges
 
-	let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
-		let changes_trie_config = try_read_overlay_value(
-			overlay,
-			backend,
-			well_known_keys::CHANGES_TRIE_CONFIG
-		)?;
-		set_changes_trie_config(overlay, changes_trie_config, final_check)
-	};
-	init_overlay(overlay, false)?;
-
-	let result = {
-		let orig_prospective = overlay.prospective.clone();
-
-		let (result, storage_delta, changes_delta) = match manager {
-			ExecutionManager::Both(on_consensus_failure) => {
-				execute_call_with_both_strategy(overlay, backend, changes_trie_storage,
-					exec, method, call_data, compute_tx, native_call.take(),
-					orig_prospective, on_consensus_failure)
-			},
-			ExecutionManager::NativeElseWasm => {
-				execute_call_with_native_else_wasm_strategy(overlay, backend, changes_trie_storage,
-					exec, method, call_data, compute_tx, native_call.take(), orig_prospective)
-			},
-			ExecutionManager::AlwaysWasm => {
-				let (result, _, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage,
-					exec, method, call_data, compute_tx, false, native_call);
-				(result, storage_delta, changes_delta)
-			},
-			ExecutionManager::NativeWhenPossible => {
-				let (result, _was_native, storage_delta, changes_delta) = execute_aux(overlay, backend, changes_trie_storage,
-					exec, method, call_data, compute_tx, true, native_call);
-				(result, storage_delta, changes_delta)
-			},
+		let backend = self.backend.clone();
+		let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
+			let changes_trie_config = try_read_overlay_value(
+				overlay,
+				backend,
+				well_known_keys::CHANGES_TRIE_CONFIG
+			)?;
+			set_changes_trie_config(overlay, changes_trie_config, final_check)
 		};
 		init_overlay(self.overlay, false)?;
 
@@ -550,6 +526,7 @@ where
 	let mut sm = StateMachine {
 		backend: &proving_backend,
 		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
+		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
 		method,
@@ -599,6 +576,7 @@ where
 	let mut sm = StateMachine {
 		backend: trie_backend,
 		changes_trie_storage: None as Option<&changes_trie::InMemoryStorage<H>>,
+		offchain_ext: NeverOffchainExt::new(),
 		overlay,
 		exec,
 		method,
