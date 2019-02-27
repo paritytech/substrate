@@ -236,6 +236,7 @@ publish:s3:release:
 
 publish:s3:doc:
   stage:                           publish
+  allow_failure:                   true
   dependencies:
     - build:rust:doc:release
   cache: {}
