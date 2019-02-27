@@ -31,12 +31,11 @@ use crate::config::{ProtocolConfig, Roles};
 use rustc_hex::ToHex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::{cmp, num::NonZeroUsize, thread, time};
 use log::{trace, debug, warn};
 use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
-use crate::{error, util::LruHashSet};
+use crate::{error, util::{LruHashSet, SharedBool}};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
@@ -55,7 +54,7 @@ const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
+pub(crate) struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	network_chan: NetworkChan<B>,
 	port: Receiver<ProtocolMsg<B, S>>,
 	from_network_port: Receiver<FromNetworkMsg<B>>,
@@ -244,9 +243,9 @@ enum Incoming<B: BlockT, S: NetworkSpecialization<B>> {
 
 impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
-	pub fn new(
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
+	pub(crate) fn new(
+		is_offline: SharedBool,
+		is_major_syncing: SharedBool,
 		network_chan: NetworkChan<B>,
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,

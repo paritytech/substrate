@@ -16,7 +16,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
 use log::{warn, debug, error, trace, info};
 use futures::{Async, Future, Stream, stream, sync::oneshot};
@@ -30,7 +29,7 @@ use crate::message::{Message, ConsensusEngineId};
 use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
-use crate::error::Error;
+use crate::{error::Error, util::SharedBool};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use crate::specialization::NetworkSpecialization;
 
@@ -119,9 +118,9 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
 	// Are we connected to any peer?
-	is_offline: Arc<AtomicBool>,
+	is_offline: SharedBool,
 	// Are we actively catching up with the chain?
-	is_major_syncing: Arc<AtomicBool>,
+	is_major_syncing: SharedBool,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Protocol sender
@@ -141,8 +140,8 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
 		// Start in off-line mode, since we're not connected to any nodes yet.
-		let is_offline = Arc::new(AtomicBool::new(true));
-		let is_major_syncing = Arc::new(AtomicBool::new(false));
+		let is_offline = SharedBool::new(true);
+		let is_major_syncing = SharedBool::new(false);
 		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),
@@ -256,10 +255,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
 	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(Ordering::Relaxed)
+		self.is_major_syncing.get()
 	}
 	fn is_offline(&self) -> bool {
-		self.is_offline.load(Ordering::Relaxed)
+		self.is_offline.get()
 	}
 }
 

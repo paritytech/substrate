@@ -29,9 +29,7 @@ use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
 use runtime_primitives::generic::BlockId;
 use crate::message::{self, generic::Message as GenericMessage};
-use crate::config::Roles;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::{config::Roles, util::SharedBool};
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -303,9 +301,9 @@ pub struct ChainSync<B: BlockT> {
 	required_block_attributes: message::BlockAttributes,
 	justifications: PendingJustifications<B>,
 	import_queue: Box<ImportQueue<B>>,
-	is_stopping: AtomicBool,
-	is_offline: Arc<AtomicBool>,
-	is_major_syncing: Arc<AtomicBool>,
+	is_stopping: bool,
+	is_offline: SharedBool,
+	is_major_syncing: SharedBool
 }
 
 /// Reported sync state.
@@ -347,8 +345,8 @@ impl<B: BlockT> Status<B> {
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
 	pub(crate) fn new(
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
+		is_offline: SharedBool,
+		is_major_syncing: SharedBool,
 		role: Roles,
 		info: &ClientInfo<B>,
 		import_queue: Box<ImportQueue<B>>
@@ -367,7 +365,7 @@ impl<B: BlockT> ChainSync<B> {
 			justifications: PendingJustifications::new(),
 			required_block_attributes,
 			import_queue,
-			is_stopping: Default::default(),
+			is_stopping: false,
 			is_offline,
 			is_major_syncing,
 		}
@@ -479,13 +477,13 @@ impl<B: BlockT> ChainSync<B> {
 		let current_len = self.peers.len();
 		if previous_len == 0 && current_len > 0 {
 			// We were offline, and now we're connected to at least one peer.
-			self.is_offline.store(false, Ordering::Relaxed);
+			self.is_offline.set(false)
 		}
 		if previous_len < current_len {
 			// We added a peer, let's see if major_syncing should be updated.
 			match (previous_state, current_state) {
-				(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.store(true, Ordering::Relaxed),
-				(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
+				(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.set(true),
+				(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.set(false),
 				_ => {},
 			}
 		}
@@ -646,7 +644,7 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Maintain the sync process (download new blocks, fetch justifications).
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
-		if self.is_stopping.load(Ordering::SeqCst) {
+		if self.is_stopping {
 			return
 		}
 		let peers: Vec<NodeIndex> = self.peers.keys().map(|p| *p).collect();
@@ -677,8 +675,8 @@ impl<B: BlockT> ChainSync<B> {
 		self.justifications.justification_import_result(hash, number, success);
 	}
 
-	pub fn stop(&self) {
-		self.is_stopping.store(true, Ordering::SeqCst);
+	pub fn stop(&mut self) {
+		self.is_stopping = true;
 		self.import_queue.stop();
 	}
 
@@ -708,8 +706,8 @@ impl<B: BlockT> ChainSync<B> {
 		let current_state = self.state(&best_seen);
 		// If the latest queued block changed our state, update is_major_syncing.
 		match (previous_state, current_state) {
-			(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.store(true, Ordering::Relaxed),
-			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
+			(SyncState::Idle, SyncState::Downloading) => self.is_major_syncing.set(true),
+			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.set(false),
 			_ => {},
 		}
 		// Update common blocks
@@ -798,13 +796,13 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.remove(&who);
 		if self.peers.len() == 0 {
 			// We're not connected to any peer anymore.
-			self.is_offline.store(true, Ordering::Relaxed);
+			self.is_offline.set(true)
 		}
 		let current_best_seen = self.best_seen_block();
 		let current_state = self.state(&current_best_seen);
 		// We removed a peer, let's see if this put us in idle state and is_major_syncing should be updated.
 		match (previous_state, current_state) {
-			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.store(false, Ordering::Relaxed),
+			(SyncState::Downloading, SyncState::Idle) => self.is_major_syncing.set(false),
 			_ => {},
 		}
 		self.justifications.peer_disconnected(who);

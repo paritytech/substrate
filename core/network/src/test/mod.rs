@@ -23,14 +23,13 @@ mod sync;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
 use log::trace;
 use client;
 use client::block_builder::BlockBuilder;
-use crate::config::ProtocolConfig;
+use crate::{config::ProtocolConfig, util::SharedBool};
 use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
@@ -118,8 +117,8 @@ impl NetworkSpecialization<Block> for DummySpecialization {
 pub type PeersClient = client::Client<test_client::Backend, test_client::Executor, Block, test_client::runtime::RuntimeApi>;
 
 pub struct Peer<D> {
-	pub is_offline: Arc<AtomicBool>,
-	pub is_major_syncing: Arc<AtomicBool>,
+	pub(crate) is_offline: SharedBool,
+	pub(crate) is_major_syncing: SharedBool,
 	client: Arc<PeersClient>,
 	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
@@ -134,8 +133,8 @@ pub struct Peer<D> {
 
 impl<D> Peer<D> {
 	fn new(
-		is_offline: Arc<AtomicBool>,
-		is_major_syncing: Arc<AtomicBool>,
+		is_offline: SharedBool,
+		is_major_syncing: SharedBool,
 		client: Arc<PeersClient>,
 		import_queue: Box<ImportQueue<Block>>,
 		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
@@ -191,12 +190,12 @@ impl<D> Peer<D> {
 
 	// SyncOracle: are we connected to any peer?
 	fn is_offline(&self) -> bool {
-		self.is_offline.load(Ordering::Relaxed)
+		self.is_offline.get()
 	}
 
 	// SyncOracle: are we in the process of catching-up with the chain?
 	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(Ordering::Relaxed)
+		self.is_major_syncing.get()
 	}
 
 	/// Called on connection to other indicated peer.
@@ -481,8 +480,8 @@ pub trait TestNetFactory: Sized {
 
 		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
 		let specialization = DummySpecialization {};
-		let is_offline = Arc::new(AtomicBool::new(true));
-		let is_major_syncing = Arc::new(AtomicBool::new(false));
+		let is_offline = SharedBool::new(true);
+		let is_major_syncing = SharedBool::new(false);
 		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),

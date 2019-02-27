@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use linked_hash_set::LinkedHashSet;
-use std::{hash::Hash, num::NonZeroUsize};
+use std::{hash::Hash, num::NonZeroUsize, sync::{atomic::{AtomicBool, Ordering}, Arc}};
 
 /// Wrapper around `LinkedHashSet` which grows bounded.
 ///
@@ -45,6 +45,28 @@ impl<T: Hash + Eq> LruHashSet<T> {
 			return true
 		}
 		false
+	}
+}
+
+/// Wrapper around `Arc<AtomicBool>` with a fixed release-acquire
+/// ordering of store and load operations.
+#[derive(Clone, Debug)]
+pub(crate) struct SharedBool(Arc<AtomicBool>);
+
+impl SharedBool {
+	/// Create a new `SharedBool` with the given value.
+	pub(crate) fn new(x: bool) -> Self {
+		Self(Arc::new(AtomicBool::new(x)))
+	}
+
+	/// Set a new boolean value.
+	pub(crate) fn set(&self, x: bool) {
+		self.0.store(x, Ordering::Release);
+	}
+
+	/// Get the boolean value.
+	pub(crate) fn get(&self) -> bool {
+		self.0.load(Ordering::Acquire)
 	}
 }
 
