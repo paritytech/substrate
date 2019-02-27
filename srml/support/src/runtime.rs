@@ -234,7 +234,7 @@ macro_rules! construct_runtime {
 				$name: $module:: $( < $module_instance >:: )? { $( $modules ),* },
 			)*
 		);
-		$crate::__decl_outer_dispatch!( // TODO TODO: not sure all in all
+		$crate::__decl_outer_dispatch!(
 			$runtime;
 			;
 			$(

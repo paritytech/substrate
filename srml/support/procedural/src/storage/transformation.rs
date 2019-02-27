@@ -521,8 +521,7 @@ fn decl_storage_items(
 			let struct_ident = syn::Ident::new(&format!("Instance{}", i), proc_macro2::Span::call_site());
 
 			impls.extend(quote! {
-				// TODO TODO: Debug because of false bound in raw event, also see compilation on
-				// nostd
+				// Those trait are derived because of wrong bounds for generics
 				#[derive(Clone, Eq, PartialEq, Debug, #scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
 				pub struct #struct_ident;
 				impl #instantiable for #struct_ident {
@@ -860,8 +859,6 @@ fn get_instance_opts(
 		},
 		(None, None, None) => Ok(Default::default()),
 		(Some(instance), None, _) => Err(syn::Error::new(instance.span(), format!("Expect instantiable trait bound for instance: {}. {}", instance, right_syntax))),
-		// TODO TODO: delete.
-		// (Some(instance), _, None) => Err(syn::Error::new(instance.span(), format!("Expect default instance type for instance: {}. {}", instance, right_syntax))),
 		(None, Some(instantiable), _) => Err(syn::Error::new(instantiable.span(), format!("Expect instance generic for bound instantiable: {}. {}", instantiable, right_syntax))),
 		(None, _, Some(default_instance)) => Err(syn::Error::new(default_instance.span(), format!("Expect instance generic for default instance: {}. {}", default_instance, right_syntax))),
 	}

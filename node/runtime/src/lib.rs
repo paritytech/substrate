@@ -205,8 +205,6 @@ impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
 
-// TODO TODO: make log, Inherent, and Origin
-// TODO TODO: error when no event ?
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,

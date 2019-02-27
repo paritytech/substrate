@@ -64,10 +64,7 @@ pub trait Parameter: Codec + Clone + Eq {}
 #[cfg(not(feature = "std"))]
 impl<T> Parameter for T where T: Codec + Clone + Eq {}
 
-// TODO TODO: documenting that: I don't think we should make all module parametized. But let user
-// to make some module parametized. Thus the documentation should be extended at the end with
-// something like: "More: if you want your module to be instanced with multiple configuration and
-// used with multiple instance ....."
+// TODO TODO: documentation
 /// Declare a module struct and implement the dispatch logic.
 ///
 /// Usually used as follows:
