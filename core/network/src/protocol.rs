@@ -77,7 +77,6 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 /// A peer from whom we have received a Status message.
 #[derive(Clone)]
 pub struct ConnectedPeer<B: BlockT> {
-	pub peer_id: Option<PeerId>,
 	pub peer_info: PeerInfo<B>
 }
 
@@ -119,7 +118,7 @@ struct Peer<B: BlockT, H: ExHashT> {
 #[derive(Clone, Debug)]
 pub struct PeerInfo<B: BlockT> {
 	/// Network id.
-	pub peer_id: Option<PeerId>,
+	pub peer_id: PeerId,
 	/// Roles
 	pub roles: Roles,
 	/// Protocol version
@@ -696,9 +695,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 			let info = match self.handshaking_peers.remove(&who) {
 				Some(handshaking) => {
-					let peer_id = Some(handshaking.peer_id);
 					let peer_info = PeerInfo {
-						peer_id: peer_id.clone(),
+						peer_id: handshaking.peer_id,
 						protocol_version: status.version,
 						roles: status.roles,
 						best_hash: status.best_hash,
@@ -706,23 +704,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					};
 					self.connected_peers
 						.write()
-						.insert(who, ConnectedPeer { peer_id, peer_info: peer_info.clone() });
+						.insert(who, ConnectedPeer { peer_info: peer_info.clone() });
 					peer_info
 				},
 				None => {
-					// Note: can this actually happen?
 					debug!(target: "sync", "Received status from previously unconnected node {}", who);
-					let peer_info = PeerInfo {
-						peer_id: None,
-						protocol_version: status.version,
-						roles: status.roles,
-						best_hash: status.best_hash,
-						best_number: status.best_number
-					};
-					self.connected_peers
-						.write()
-						.insert(who, ConnectedPeer { peer_id: None, peer_info: peer_info.clone() });
-					peer_info
+					return;
 				},
 			};
 
@@ -787,13 +774,11 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.unzip();
 
 			if !to_send.is_empty() {
-				if let Some(id) = peer.info.peer_id.as_ref() {
-					for hash in hashes {
-						propagated_to
-							.entry(hash)
-							.or_insert_with(Vec::new)
-							.push(id.to_base58());
-					}
+				for hash in hashes {
+					propagated_to
+						.entry(hash)
+						.or_insert_with(Vec::new)
+						.push(peer.info.peer_id.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
 				self.network_chan.send(NetworkMsg::Outgoing(*who, GenericMessage::Transactions(to_send)))
