@@ -34,9 +34,9 @@ cache:                             {}
 
 .kubernetes_build:                 &kubernetes_build
   tags:
-    - kubernetes
+    - kubernetes-parity-build
   environment:
-    name: gke-build
+    name: parity-build
 
 
 
@@ -90,7 +90,6 @@ test:rust:stable:                  &test
     # but still want to have debug assertions.
     RUSTFLAGS: -Cdebug-assertions=y
     TARGET: native
-  # <<:                              *kubernetes_build
   tags:
     - linux-docker
   only:
@@ -268,12 +267,12 @@ publish:s3:doc:
   when:                            manual
   cache:                           {}
   retry:                           1
-  image:                           dtzar/helm-kubectl:$HELM_VERSION
+  image:                           parity/kubectl-helm:$HELM_VERSION
   <<:                              *build_only
   # variables:
   #   DEPLOY_TAG:                    "latest"
   tags:
-    - kubernetes
+    - kubernetes-parity-build
   before_script:
     - test -z "${DEPLOY_TAG}" &&
       test -f ./target/release/VERSION &&
