@@ -54,7 +54,7 @@ impl network::SyncProvider<Block> for Status {
 
 	fn peers(&self) -> Vec<(NodeIndex, NetworkPeerInfo<Block>)> {
 		vec![(1, NetworkPeerInfo {
-			peer_id: Some(self.peer_id.clone()),
+			peer_id: self.peer_id.clone(),
 			roles: Roles::FULL,
 			protocol_version: 1,
 			best_hash: Default::default(),
