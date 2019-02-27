@@ -16,6 +16,7 @@ parity-codec-derive = "3.0"
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
+substrate-telemetry = { path = "../telemetry" }
 client = { package = "substrate-client", path = "../client" }
 network = { package = "substrate-network", path = "../network" }
 service = { package = "substrate-service", path = "../service", optional = true }
