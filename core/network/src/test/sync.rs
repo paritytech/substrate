@@ -33,9 +33,6 @@ fn sync_peers_works() {
 		// Assert peers is up to date.
 		let peers = net.peer(peer).peers.read();
 		assert_eq!(peers.len(), 2);
-		for peer in peers.values() {
-			assert!(peer.peer_id.is_some());
-		}
 		// And then disconnect.
 		for other in 0..3 {
 			if other != peer {
