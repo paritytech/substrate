@@ -56,7 +56,9 @@ struct PeerSync<B: BlockT> {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum AncestorSearchState<B: BlockT> {
-	LinearSearch(NumberFor<B>),
+	// Using linear search, after given number of linear search steps.
+	LinearSearch(u32),
+	// Using binary search, with given left and right block height boundaries.
 	BinarySearch(NumberFor<B>, NumberFor<B>),
 }
 
@@ -427,7 +429,7 @@ impl<B: BlockT> ChainSync<B> {
 							common_number: As::sa(0),
 							best_hash: info.best_hash,
 							best_number: info.best_number,
-							state: PeerSyncState::AncestorSearch(common_best, AncestorSearchState::LinearSearch(As::sa(1))),
+							state: PeerSyncState::AncestorSearch(common_best, AncestorSearchState::LinearSearch(0)),
 							recently_announced: Default::default(),
 						});
 						Self::request_ancestry(protocol, who, common_best)
@@ -470,9 +472,9 @@ impl<B: BlockT> ChainSync<B> {
 				if block_hash_match {
 					return (PeerSyncState::Available, As::sa(0));
 				}
-				if m < As::sa(7) {
+				if m < 7 { // 7 is max number of linear search steps (choosen heuristically).
 					let n = n - As::sa(1);
-					(PeerSyncState::AncestorSearch(n, AncestorSearchState::LinearSearch(m + As::sa(1))), n)
+					(PeerSyncState::AncestorSearch(n, AncestorSearchState::LinearSearch(m + 1)), n)
 				} else {
 					let left = As::sa(0);
 					let right = n;
@@ -568,7 +570,6 @@ impl<B: BlockT> ChainSync<B> {
 					match Self::handle_ancestor_search_state(num, state, block_hash_match) {
 						(PeerSyncState::Available, _) => {
 							peer.state = PeerSyncState::Available;
-							trace!(target:"sync", "Found common ancestor for peer {}: {} ({})", who, block.hash, n);
 							Vec::new()
 						},
 						(next_peer_state, num_to_request) => {
