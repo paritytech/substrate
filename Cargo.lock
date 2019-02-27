@@ -1899,7 +1899,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",
  "substrate-service-test 0.3.0",
- "substrate-telemetry 0.3.0",
+ "substrate-telemetry 0.3.1",
  "substrate-transaction-pool 0.1.0",
  "tokio 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3645,7 +3645,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",
  "substrate-state-machine 0.1.0",
- "substrate-telemetry 0.3.0",
+ "substrate-telemetry 0.3.1",
  "sysinfo 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.15 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3677,7 +3677,7 @@ dependencies = [
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
- "substrate-telemetry 0.3.0",
+ "substrate-telemetry 0.3.1",
  "substrate-test-client 0.1.0",
  "substrate-trie 0.4.0",
 ]
@@ -4074,7 +4074,7 @@ dependencies = [
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-rpc-servers 0.1.0",
- "substrate-telemetry 0.3.0",
+ "substrate-telemetry 0.3.1",
  "substrate-test-client 0.1.0",
  "substrate-transaction-pool 0.1.0",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4130,7 +4130,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-telemetry"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
