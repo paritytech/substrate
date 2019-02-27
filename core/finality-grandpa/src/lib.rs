@@ -455,7 +455,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		self.validator.note_round(round, set_id);
 		let (tx, rx) = sync::oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(message_topic::<B>(round, set_id));
+			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, message_topic::<B>(round, set_id));
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream { outer: rx, inner: None }
@@ -480,7 +480,7 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 		self.validator.note_set(set_id);
 		let (tx, rx) = sync::oneshot::channel();
 		self.service.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(commit_topic::<B>(set_id));
+			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, commit_topic::<B>(set_id));
 			let _ = tx.send(inner_rx);
 		});
 		NetworkStream { outer: rx, inner: None }
