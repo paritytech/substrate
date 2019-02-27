@@ -45,7 +45,7 @@ use network_libp2p::{NodeIndex, ProtocolId};
 use parity_codec::Encode;
 use parking_lot::Mutex;
 use primitives::{H256, Ed25519AuthorityId};
-use crate::protocol::{Context, Protocol, ProtocolMsg};
+use crate::protocol::{Context, FromNetworkMsg, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::Justification;
@@ -192,6 +192,7 @@ pub struct Peer<D, S: NetworkSpecialization<Block> + Clone> {
 	pub is_offline: Arc<AtomicBool>,
 	pub is_major_syncing: Arc<AtomicBool>,
 	client: Arc<PeersClient>,
+	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, S>>,
 	network_link: TestLink<S>,
 	network_port: Arc<Mutex<NetworkPort<Block>>>,
@@ -207,6 +208,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		is_major_syncing: Arc<AtomicBool>,
 		client: Arc<PeersClient>,
 		import_queue: Box<ImportQueue<Block>>,
+		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
 		protocol_sender: Sender<ProtocolMsg<Block, S>>,
 		network_sender: NetworkChan<Block>,
 		network_port: NetworkPort<Block>,
@@ -219,6 +221,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 			is_offline,
 			is_major_syncing,
 			client,
+			network_to_protocol_sender,
 			protocol_sender,
 			import_queue,
 			network_link,
@@ -264,21 +267,21 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: NodeIndex) {
-		let _ = self.protocol_sender.send(ProtocolMsg::PeerConnected(other, String::new()));
+		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::PeerConnected(other, String::new()));
 	}
 
 	/// Called on disconnect from other indicated peer.
 	fn on_disconnect(&self, other: NodeIndex) {
 		let _ = self
-			.protocol_sender
-			.send(ProtocolMsg::PeerDisconnected(other, String::new()));
+			.network_to_protocol_sender
+			.send(FromNetworkMsg::PeerDisconnected(other, String::new()));
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
 	fn receive_message(&self, from: NodeIndex, msg: Message<Block>) {
 		let _ = self
-			.protocol_sender
-			.send(ProtocolMsg::CustomMessage(from, msg));
+			.network_to_protocol_sender
+			.send(FromNetworkMsg::CustomMessage(from, msg));
 	}
 
 	/// Produce the next pending message to send to another peer.
@@ -554,7 +557,7 @@ pub trait TestNetFactory: Sized {
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let specialization = self::SpecializationFactory::create();
-		let protocol_sender = Protocol::new(
+		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			network_sender.clone(),
@@ -571,6 +574,7 @@ pub trait TestNetFactory: Sized {
 			is_major_syncing,
 			client,
 			import_queue,
+			network_to_protocol_sender,
 			protocol_sender,
 			network_sender,
 			network_port,

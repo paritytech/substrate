@@ -217,7 +217,7 @@ impl<B: BlockT> BlockImporter<B> {
 		worker_sender: Sender<BlockImportWorkerMsg<B>>,
 		justification_import: Option<SharedJustificationImport<B>>,
 	) -> Sender<BlockImportMsg<B>> {
-		let (sender, port) = channel::unbounded();
+		let (sender, port) = channel::bounded(4);
 		let _ = thread::Builder::new()
 			.name("ImportQueue".into())
 			.spawn(move || {
@@ -371,7 +371,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 		verifier: Arc<V>,
 		block_import: SharedBlockImport<B>,
 	) -> Sender<BlockImportWorkerMsg<B>> {
-		let (sender, port) = channel::unbounded();
+		let (sender, port) = channel::bounded(4);
 		let _ = thread::Builder::new()
 			.name("ImportQueueWorker".into())
 			.spawn(move || {
