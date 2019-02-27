@@ -45,6 +45,8 @@ const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // Max number of blocks to download for unknown forks.
 // TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
+ // Max number of linear search steps (choosen heuristically), before switching to binary search.
+const MAX_NUM_OF_LINEAR_SEARCH_STEPS: u32 = 10;
 
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
@@ -468,13 +470,13 @@ impl<B: BlockT> ChainSync<B> {
 		block_hash_match: bool,
 	) -> (PeerSyncState<B>, NumberFor<B>) {
 		match state {
-			AncestorSearchState::LinearSearch(m) => {
+			AncestorSearchState::LinearSearch(step) => {
 				if block_hash_match {
 					return (PeerSyncState::Available, As::sa(0));
 				}
-				if m < 7 { // 7 is max number of linear search steps (choosen heuristically).
+				if step < MAX_NUM_OF_LINEAR_SEARCH_STEPS {
 					let n = n - As::sa(1);
-					(PeerSyncState::AncestorSearch(n, AncestorSearchState::LinearSearch(m + 1)), n)
+					(PeerSyncState::AncestorSearch(n, AncestorSearchState::LinearSearch(step + 1)), n)
 				} else {
 					let left = As::sa(0);
 					let right = n;
