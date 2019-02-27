@@ -76,16 +76,15 @@ impl<D: Drain> Drain for Multiply<D> {
 		let mut oks = Vec::new();
 		let mut errs = Vec::new();
 
-		let mut iter = self.0.iter();
-		while let Some(l) = iter.next() {
+		self.0.iter().for_each(|l| {
 			let res: Result<<D as Drain>::Ok, <D as Drain>::Err> = (*l).log(record, logger_values);
 			match res {
 				Ok(o) => oks.push(o),
 				Err(e) => errs.push(e),
 			}
-		}
+		});
 
-		if errs.len() > 0 {
+		if !errs.is_empty() {
 			result::Result::Err(errs)
 		} else {
 			result::Result::Ok(oks)
@@ -99,9 +98,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 	let mut out_syncs = Vec::new();
 
 	// Set up a filter/drain for each endpoint
-	let endpoints = config.endpoints.0;
-	let mut iter = endpoints.iter();
-	while let Some((url, verbosity)) = iter.next() {
+	config.endpoints.0.iter().for_each(|(url, verbosity)| {
 		let writer = TelemetryWriter::new(Arc::new(url.to_owned()));
 		let out_sync = writer.out.clone();
 		out_syncs.push(out_sync);
@@ -117,7 +114,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 
 		let filter = Box::new(filter) as Box<slog::Filter<_, _>>;
 		endpoint_drains.push(filter);
-	}
+	});
 
 	// Set up logging to all endpoints
 	let drain = slog_async::Async::new(Multiply::new(endpoint_drains).fuse());
@@ -129,8 +126,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 
 	// Spawn a thread for each endpoint
 	let on_connect = Arc::new(config.on_connect);
-	let mut iter = endpoints.iter();
-	while let Some((url, verbosity)) = iter.next() {
+	config.endpoints.0.iter().for_each(|(url, verbosity)| {
 		let url_ = url.clone();
 		let inner_url = Arc::new(url.to_owned());
 		let inner_verbosity = Arc::new(verbosity.to_owned());
@@ -157,7 +153,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 				thread::sleep(time::Duration::from_millis(5000));
 			}
 		});
-	}
+	});
 
 	return logger_guard;
 }
@@ -182,8 +178,10 @@ struct Connection {
 }
 
 impl Connection {
-	fn new(out: ws::Sender, out_sync: Arc<Mutex<Option<ws::Sender>>>,
-		   on_connect: Arc<Box<Fn() + Send + Sync + 'static>>, url: Arc<String>) -> Self {
+	fn new(out: ws::Sender,
+			out_sync: Arc<Mutex<Option<ws::Sender>>>,
+			on_connect: Arc<Box<Fn() + Send + Sync + 'static>>,
+			url: Arc<String>) -> Self {
 		Connection {
 			out,
 			out_sync,

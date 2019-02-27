@@ -298,27 +298,31 @@ impl<Block: BlockT> GossipValidator<Block> {
 		if set_id < rounds.set_id {
 			trace!(target: "afg", "Expired: Message with expired set_id {} (ours {})", set_id, rounds.set_id);
 			telemetry!(CONSENSUS_TRACE; "afg.expired_set_id";
-				"set_id" => ?set_id, "ours" => ?rounds.set_id);
+				"set_id" => ?set_id, "ours" => ?rounds.set_id
+			);
 			return true;
 		} else if set_id == rounds.set_id + 1 {
 			// allow a few first rounds of future set.
 			if round > MESSAGE_ROUND_TOLERANCE {
 				trace!(target: "afg", "Expired: Message too far in the future set, round {} (ours set_id {})", round, rounds.set_id);
 				telemetry!(CONSENSUS_TRACE; "afg.expired_msg_too_far_in_future_set";
-					"round" => ?round, "ours" => ?rounds.set_id);
+					"round" => ?round, "ours" => ?rounds.set_id
+				);
 				return true;
 			}
 		} else if set_id == rounds.set_id {
 			if round < rounds.min_live_round.saturating_sub(MESSAGE_ROUND_TOLERANCE) {
 				trace!(target: "afg", "Expired: Message round is out of bounds {} (ours {}-{})", round, rounds.min_live_round, rounds.max_round);
 				telemetry!(CONSENSUS_TRACE; "afg.msg_round_oob";
-					"round" => ?round, "our_min_live_round" => ?rounds.min_live_round, "our_max_round" => ?rounds.max_round);
+					"round" => ?round, "our_min_live_round" => ?rounds.min_live_round, "our_max_round" => ?rounds.max_round
+				);
 				return true;
 			}
 		} else {
 			trace!(target: "afg", "Expired: Message in invalid future set {} (ours {})", set_id, rounds.set_id);
 			telemetry!(CONSENSUS_TRACE; "afg.expired_msg_in_invalid_future_set";
-				"set_id" => ?set_id, "ours" => ?rounds.set_id);
+				"set_id" => ?set_id, "ours" => ?rounds.set_id
+			);
 			return true;
 		}
 		false
@@ -511,7 +515,8 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
 		debug!(target: "afg", "Announcing block {} to peers which we voted on in round {}", block, round);
 		telemetry!(CONSENSUS_DEBUG; "afg.announcing_blocks_to_voted_peers";
-			"block" => ?block, "round" => ?round);
+			"block" => ?block, "round" => ?round
+		);
 		self.service.announce_block(block)
 	}
 }
@@ -570,7 +575,8 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			let genesis_authorities = api.runtime_api()
 				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
 			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
-				"authorities_len" => ?genesis_authorities.len());
+				"authorities_len" => ?genesis_authorities.len()
+			);
 
 			let authority_set = SharedAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.inner().read().encode();
@@ -725,7 +731,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let (env, last_round_number, last_state, authority_set_change) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
-			"name" => ?config.name(), "set_id" => ?env.set_id);
+			"name" => ?config.name(), "set_id" => ?env.set_id
+		);
 
 		let chain_info = match client.info() {
 			Ok(i) => i,

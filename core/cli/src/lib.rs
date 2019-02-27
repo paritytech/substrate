@@ -403,7 +403,7 @@ where
 	// Override telemetry
 	if cli.no_telemetry {
 		config.telemetry_endpoints = None;
-	} else if cli.telemetry_endpoints.len() > 0 {
+	} else if !cli.telemetry_endpoints.is_empty() {
 		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 

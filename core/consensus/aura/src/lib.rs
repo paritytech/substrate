@@ -267,7 +267,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					e
 				);
 				telemetry!(CONSENSUS_WARN; "aura.unable_fetching_authorities";
-					"slot" => ?chain_head.hash(), "err" => ?e);
+					"slot" => ?chain_head.hash(), "err" => ?e
+				);
 				return Box::new(future::ok(()));
 			}
 		};
@@ -275,7 +276,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 		if self.sync_oracle.is_offline() && authorities.len() > 1 {
 			debug!(target: "aura", "Skipping proposal slot. Waiting for the network.");
 			telemetry!(CONSENSUS_DEBUG; "aura.skipping_proposal_slot";
-				"authorities_len" => authorities.len());
+				"authorities_len" => authorities.len()
+			);
 			return Box::new(future::ok(()));
 		}
 
@@ -288,7 +290,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					timestamp
 				);
 				telemetry!(CONSENSUS_DEBUG; "aura.starting_authorship";
-					"slot_num" => slot_num, "timestamp" => timestamp);
+					"slot_num" => slot_num, "timestamp" => timestamp
+				);
 
 				// we are the slot author. make a block and sign it.
 				let proposer = match env.init(&chain_head, &authorities) {
@@ -296,7 +299,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					Err(e) => {
 						warn!("Unable to author block in slot {:?}: {:?}", slot_num, e);
 						telemetry!(CONSENSUS_WARN; "aura.unable_authoring_block";
-							"slot" => slot_num, "err" => ?e);
+							"slot" => slot_num, "err" => ?e
+						);
 						return Box::new(future::ok(()))
 					}
 				};
@@ -325,7 +329,8 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 							slot_num
 						);
 						telemetry!(CONSENSUS_INFO; "aura.discarding_proposal_took_too_long";
-							"slot" => slot_num);
+							"slot" => slot_num
+						);
 						return
 					}
 
@@ -362,13 +367,15 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 					telemetry!(CONSENSUS_INFO; "aura.pre_sealed_block";
 						"header_num" => ?header_num,
 						"hash_now" => ?import_block.post_header().hash(),
-						"hash_previously" => ?pre_hash);
+						"hash_previously" => ?pre_hash
+					);
 
 					if let Err(e) = block_import.import_block(import_block, None) {
 						warn!(target: "aura", "Error with block built on {:?}: {:?}",
 							  parent_hash, e);
 						telemetry!(CONSENSUS_WARN; "aura.err_with_block_built_on";
-							"hash" => ?parent_hash, "err" => ?e);
+							"hash" => ?parent_hash, "err" => ?e
+						);
 					}
 				})
 				.map_err(|e| consensus_common::ErrorKind::ClientImport(format!("{:?}", e)).into())
@@ -474,7 +481,8 @@ impl<C, E> AuraVerifier<C, E>
 							diff
 						);
 						telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
-							"diff" => ?diff);
+							"diff" => ?diff
+						);
 						thread::sleep(Duration::from_secs(diff));
 						Ok(())
 					},
@@ -523,8 +531,7 @@ impl<C, E> AuraVerifier<C, E>
 					"halting for block {} seconds in the future",
 					diff
 				);
-				telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block";
-							"diff" => ?diff);
+				telemetry!(CONSENSUS_INFO; "aura.halting_for_future_block"; "diff" => ?diff);
 				thread::sleep(Duration::from_secs(diff));
 				Ok(())
 			},
@@ -610,8 +617,7 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 				}
 
 				trace!(target: "aura", "Checked {:?}; importing.", pre_header);
-				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing";
-					"pre_header" => ?pre_header);
+				telemetry!(CONSENSUS_TRACE; "aura.checked_and_importing"; "pre_header" => ?pre_header);
 
 				extra_verification.into_future().wait()?;
 
@@ -632,7 +638,8 @@ impl<B: Block, C, E> Verifier<B> for AuraVerifier<C, E> where
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
 				telemetry!(CONSENSUS_DEBUG; "aura.header_too_far_in_future";
-					"hash" => ?hash, "a" => ?a, "b" => ?b);
+					"hash" => ?hash, "a" => ?a, "b" => ?b
+				);
 				Err(format!("Header {:?} rejected: too far in the future", hash))
 			}
 		}
