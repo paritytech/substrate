@@ -332,7 +332,6 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour
 	fn inject_event(&mut self, event: PingEvent) {
 		match event {
 			PingEvent::PingSuccess { peer, time } => {
-				println!("ping");
 				trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer, time);
 				self.events.push(BehaviourOut::PingSuccess { peer_id: peer, ping_time: time });
 			}

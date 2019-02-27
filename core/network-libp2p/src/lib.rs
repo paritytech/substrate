@@ -32,6 +32,7 @@ pub use crate::traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeer
 pub use crate::traits::{ProtocolId, Secret, Severity};
 pub use libp2p::{Multiaddr, multiaddr::Protocol, build_multiaddr, PeerId, core::PublicKey};
 
+use libp2p::core::nodes::ConnectedPoint;
 use serde_derive::Serialize;
 use std::{collections::{HashMap, HashSet}, time::Duration};
 
@@ -112,4 +113,18 @@ pub enum NetworkStatePeerEndpoint {
 		/// Address data is sent back to.
 		send_back_addr: Multiaddr,
 	},
+}
+
+impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
+	fn from(endpoint: ConnectedPoint) -> Self {
+		match endpoint {
+			ConnectedPoint::Dialer { ref address } =>
+				NetworkStatePeerEndpoint::Dialing(address.clone()),
+			ConnectedPoint::Listener { ref listen_addr, ref send_back_addr } =>
+				NetworkStatePeerEndpoint::Listening {
+					listen_addr: listen_addr.clone(),
+					send_back_addr: send_back_addr.clone()
+				}
+		}
+	}
 }

@@ -16,7 +16,7 @@
 
 use crate::{
 	behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key_from_config,
-	transport, NetworkState, NetworkStatePeer, NetworkStatePeerEndpoint, NetworkStateNotConnectedPeer
+	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols};
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
@@ -238,15 +238,7 @@ where TMessage: CustomMessage + Send + 'static {
 					.map(|(a, s)| (a.clone(), s)).collect();
 
 				(info.peer_id.to_base58(), NetworkStatePeer {
-					endpoint: match info.endpoint {
-						ConnectedPoint::Dialer { ref address } =>
-							NetworkStatePeerEndpoint::Dialing(address.clone()),
-						ConnectedPoint::Listener { ref listen_addr, ref send_back_addr } =>
-							NetworkStatePeerEndpoint::Listening {
-								listen_addr: listen_addr.clone(),
-								send_back_addr: send_back_addr.clone()
-							}
-					},
+					endpoint: info.endpoint.clone().into(),
 					version_string: info.client_version.clone(),
 					latest_ping_time: info.latest_ping,
 					enabled: swarm.is_enabled(&info.peer_id),
