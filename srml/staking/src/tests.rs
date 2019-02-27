@@ -77,7 +77,6 @@ fn no_offline_should_work() {
 #[test]
 fn invulnerability_should_work() {
 	// Test that users can be invulnerable from slashing and being kicked
-	// TODO: Verify user is still in the validators
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		// Make account 10 invulnerable
@@ -90,11 +89,17 @@ fn invulnerability_should_work() {
 		assert_eq!(Staking::slash_count(&10), 0);
 		// Account 10 has the 70 funds we gave it above
 		assert_eq!(Balances::free_balance(&10), 70);
-		// Set account 10 as an offline validator, should exit early if invulnerable
-		Staking::on_offline_validator(10, 1);
+		// Account 10 should be a validator
+		assert!(<Validators<Test>>::exists(&10));
+
+		// Set account 10 as an offline validator with a large number of reports
+		// Should exit early if invulnerable
+		Staking::on_offline_validator(10, 100);
+
 		// Show that account 10 has not been touched
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 70);
+		assert!(<Validators<Test>>::exists(&10));
 		// New era not being forced
 		assert!(Staking::forcing_new_era().is_none());
 	});
@@ -102,12 +107,13 @@ fn invulnerability_should_work() {
 
 #[test]
 fn offline_should_slash_and_kick() {
-	// Test that an offline validator gets slashed
-	// TODO: Confirm user is kicked
+	// Test that an offline validator gets slashed and kicked
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Give account 10 some balance
 		Balances::set_free_balance(&10, 1000);
 		println!("Stash Balance: {:?}", Balances::free_balance(&11));
+		// Confirm account 10 is a validator
+		assert!(<Validators<Test>>::exists(&10));
 		// Validators get slashed immediately
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Unstake threshold is 3
@@ -122,6 +128,8 @@ fn offline_should_slash_and_kick() {
 		assert_eq!(Staking::slash_count(&10), 4);
 		// Confirm balance has been reduced by 2^unstake_threshold * current_offline_slash()
 		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * 20);
+		// Confirm account 10 has been removed as a validator
+		assert!(!<Validators<Test>>::exists(&10));
 		// A new era is forced due to slashing
 		assert!(Staking::forcing_new_era().is_some());
 		println!("Stash Balance After: {:?}", Balances::free_balance(&11));
@@ -631,7 +639,6 @@ fn reserving_balance_when_bonded_should_not_work() {
 #[test]
 fn max_unstake_threshold_works() {
 	// Tests that max_unstake_threshold gets used when prefs.unstake_threshold is large
-	// TODO: Why does this test fail?
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 		// Two users with maximum possible balance
