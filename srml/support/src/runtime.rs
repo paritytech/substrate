@@ -220,7 +220,7 @@ macro_rules! construct_runtime {
 				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }
 			),*
 		);
-		$crate::__decl_outer_origin!( // TODO TODO
+		$crate::__decl_outer_origin!(
 			$runtime;
 			$(
 				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }

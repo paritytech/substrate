@@ -29,9 +29,17 @@ use system::ensure_signed;
 ///
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait<Instance>: balances::Trait {
+	type Origin: From<Origin<Self, Instance>>;
 	type Amount;
 	/// The overarching event type.
 	type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
+}
+
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Origin<T: Trait<Instance>, Instance> {
+	Members(u32),
+	P(T::Amount),
 }
 
 decl_storage! {
@@ -117,7 +125,7 @@ decl_event!(
 // `ensure_root` and `ensure_inherent`.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait<Instance>, Instance: Instantiable> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait<Instance>, Instance: Instantiable> for enum Call where origin: <T as system::Trait>::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
 		/// For non-generic events, the generic parameter just needs to be dropped, so that it
@@ -227,7 +235,7 @@ decl_module! {
 impl<T: Trait<Instance>, Instance: Instantiable> Module<T, Instance> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
-	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
+	fn accumulate_foo(origin: <T as system::Trait>::Origin, increase_by: T::Balance) -> Result {
 		let _sender = ensure_signed(origin)?;
 
 		let prev = <Foo<T, Instance>>::get();

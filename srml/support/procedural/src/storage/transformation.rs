@@ -522,6 +522,7 @@ fn decl_storage_items(
 
 			impls.extend(quote! {
 				// Those trait are derived because of wrong bounds for generics
+				// TODO TODO: debug need std isn't it ?
 				#[derive(Clone, Eq, PartialEq, Debug, #scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
 				pub struct #struct_ident;
 				impl #instantiable for #struct_ident {
