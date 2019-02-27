@@ -542,14 +542,11 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				PeerSyncState::AncestorSearch(num, state) => {
 					let block_hash_match = match (blocks.get(0), protocol.client().block_hash(num)) {
-						(Some(ref block), Ok(Some(our_block_hash))) => block.hash == our_block_hash,
+						(Some(ref block), Ok(maybe_our_block_hash)) =>
+							maybe_our_block_hash.is_some() && block.hash == maybe_our_block_hash.expect("prev. check and order of eval; qed"),
 						(None, _) => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
 							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
-							return None;
-						},
-						(_, Ok(None)) => {
-							trace!(target:"sync", "None response while trying to get hash of block number: {}", num);
 							return None;
 						},
 						(_, Err(e)) => {
