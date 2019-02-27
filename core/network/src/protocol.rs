@@ -74,8 +74,8 @@ pub struct Protocol<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> {
 	transaction_pool: Arc<TransactionPool<H, B>>,
 }
 
-#[derive(Clone)]
 /// A peer from whom we have received a Status message.
+#[derive(Clone)]
 pub struct ConnectedPeer<B: BlockT> {
 	pub peer_id: Option<PeerId>,
 	pub peer_info: PeerInfo<B>
@@ -324,7 +324,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn handle_msg(&mut self, msg: ProtocolMsg<B, S>) -> bool {
 		match msg {
-			ProtocolMsg::PeerDisconnected(who, debug_info) => self.on_peer_disconnected( who, debug_info),
+			ProtocolMsg::PeerDisconnected(who, debug_info) => self.on_peer_disconnected(who, debug_info),
 			ProtocolMsg::PeerConnected(peer_id, who, debug_info) => self.on_peer_connected(peer_id, who, debug_info),
 			ProtocolMsg::PeerClogged(who, message) => self.on_clogged_peer(who, message),
 			ProtocolMsg::CustomMessage(who, message) => {
@@ -695,8 +695,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			let cache_limit = NonZeroUsize::new(1_000_000).expect("1_000_000 > 0; qed");
 
 			let info = match self.handshaking_peers.remove(&who) {
-				Some(hanshaking) => {
-					let peer_id = Some(hanshaking.peer_id);
+				Some(handshaking) => {
+					let peer_id = Some(handshaking.peer_id);
 					let peer_info = PeerInfo {
 						peer_id: peer_id.clone(),
 						protocol_version: status.version,
