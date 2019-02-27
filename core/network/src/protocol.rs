@@ -325,10 +325,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	fn handle_msg(&mut self, msg: Incoming<B, S>) -> bool {
 		match msg {
-			Incoming::FromNetwork(msg) => {
-				self.handle_network_msg(msg);
-				true
-			},
+			Incoming::FromNetwork(msg) => self.handle_network_msg(msg),
 			Incoming::FromClient(msg) => self.handle_client_msg(msg),
 		}
 	}
