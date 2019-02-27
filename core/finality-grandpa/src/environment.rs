@@ -246,9 +246,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		let incoming = ::communication::checked_message_stream::<Block, _>(
-			round,
-			self.set_id,
+		let incoming = crate::communication::checked_message_stream::<Block, _>(
 			self.network.messages_for(round, self.set_id),
 			self.voters.clone(),
 		);
