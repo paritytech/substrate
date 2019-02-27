@@ -270,7 +270,7 @@ impl<B: Block, C, E, I, Error, SO> SlotWorker<B> for AuraWorker<C, E, I, SO> whe
 		};
 
 		if self.sync_oracle.is_offline() && authorities.len() > 1 {
-			debug!(target: "aura", "Skipping proposal slot. Waiting for the netork.");
+			debug!(target: "aura", "Skipping proposal slot. Waiting for the network.");
 			return Box::new(future::ok(()));
 		}
 
