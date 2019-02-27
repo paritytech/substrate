@@ -41,11 +41,11 @@ use futures::Future;
 use futures::sync::{mpsc, oneshot};
 use keyring::Keyring;
 use crate::message::{Message, ConsensusEngineId};
-use network_libp2p::{NodeIndex, ProtocolId};
+use network_libp2p::{NodeIndex, ProtocolId, PeerId};
 use parity_codec::Encode;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use primitives::{H256, Ed25519AuthorityId};
-use crate::protocol::{Context, FromNetworkMsg, Protocol, ProtocolMsg};
+use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
 use runtime_primitives::Justification;
@@ -120,6 +120,7 @@ pub type PeersClient = client::Client<test_client::Backend, test_client::Executo
 pub struct Peer<D> {
 	pub is_offline: Arc<AtomicBool>,
 	pub is_major_syncing: Arc<AtomicBool>,
+	pub peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>>,
 	client: Arc<PeersClient>,
 	network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
 	pub protocol_sender: Sender<ProtocolMsg<Block, DummySpecialization>>,
@@ -136,6 +137,7 @@ impl<D> Peer<D> {
 	fn new(
 		is_offline: Arc<AtomicBool>,
 		is_major_syncing: Arc<AtomicBool>,
+		peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>>,
 		client: Arc<PeersClient>,
 		import_queue: Box<ImportQueue<Block>>,
 		network_to_protocol_sender: Sender<FromNetworkMsg<Block>>,
@@ -148,6 +150,7 @@ impl<D> Peer<D> {
 		Peer {
 			is_offline,
 			is_major_syncing,
+			peers,
 			client,
 			network_to_protocol_sender,
 			protocol_sender,
@@ -201,7 +204,7 @@ impl<D> Peer<D> {
 
 	/// Called on connection to other indicated peer.
 	fn on_connect(&self, other: NodeIndex) {
-		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::PeerConnected(other, String::new()));
+		let _ = self.network_to_protocol_sender.send(FromNetworkMsg::PeerConnected(PeerId::random(), other, String::new()));
 	}
 
 	/// Called on disconnect from other indicated peer.
@@ -483,9 +486,11 @@ pub trait TestNetFactory: Sized {
 		let specialization = DummySpecialization {};
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
+		let peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>> = Arc::new(Default::default());
 		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
 			is_offline.clone(),
 			is_major_syncing.clone(),
+			peers.clone(),
 			network_sender.clone(),
 			config.clone(),
 			client.clone(),
@@ -498,6 +503,7 @@ pub trait TestNetFactory: Sized {
 		let peer = Arc::new(Peer::new(
 			is_offline,
 			is_major_syncing,
+			peers,
 			client,
 			import_queue,
 			network_to_protocol_sender,
