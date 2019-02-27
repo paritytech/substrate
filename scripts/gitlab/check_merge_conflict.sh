@@ -45,6 +45,11 @@ EOT
 
 test "${mergeable}" = "true" && echo "|  yes, it is." && exit 0
 
+if [ "${baseref}" = "null" -o "${baserepo}" = "null" ]
+then
+	echo "| either connectivity issues with github or pull request not existant"
+	exit 3
+fi
 
 cat <<-EOT
 |  not mergeable
@@ -94,7 +99,6 @@ curl -sS -X POST \
 	-F "token=${CI_JOB_TOKEN}" \
 	-F "ref=master" \
 	-F "variables[REBUILD_WASM]=\"${baserepo}:${baseref}\"" \
-	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
 	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline \
 	| jq -r .web_url
 
