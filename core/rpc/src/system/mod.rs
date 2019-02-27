@@ -60,6 +60,15 @@ pub trait SystemApi<Hash, Number> {
 	/// Returns currently connected peers
 	#[rpc(name = "system_peers")]
 	fn system_peers(&self) -> Result<Vec<PeerInfo<Hash, Number>>>;
+
+	/// Returns current state of the network.
+	///
+	/// **Warning**: This API is not stable.
+	// Implementer note: when this gets stabilized, we should create a new struct in the `rpc`
+	// crate instead of returning a struct defined in `network`, so that we don't accidentally
+	// break the RPC API by touching `network`.
+	#[rpc(name = "system_network_state")]
+	fn system_network_state(&self) -> Result<network::NetworkState>;
 }
 
 /// System API implementation
@@ -119,5 +128,9 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 			best_hash: p.best_hash,
 			best_number: p.best_number,
 		}).collect())
+	}
+
+	fn system_network_state(&self) -> Result<network::NetworkState> {
+		Ok(self.sync.network_state())
 	}
 }

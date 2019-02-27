@@ -307,21 +307,25 @@ impl NetTopology {
 		anything_changed
 	}
 
-	/// Returns the addresses stored for a specific peer.
+	/// Returns the list of peers that are stored in the topology.
 	#[inline]
-	pub fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
-		let peer = if let Some(peer) = self.store.get_mut(peer) {
-			peer
-		} else {
-			return Vec::new()
-		};
+	pub fn known_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.store.keys()
+	}
 
+	/// Returns the addresses stored for a specific peer, and their reputation score.
+	///
+	/// If `include_expired` is true, includes expired addresses that shouldn't be taken into
+	/// account when dialing.
+	#[inline]
+	pub fn addresses_of_peer(&mut self, peer: &PeerId, include_expired: bool)
+		-> impl Iterator<Item = (&Multiaddr, u32)> {
 		let now_st = SystemTime::now();
 		let now_is = Instant::now();
 
-		let mut list = peer.addrs.iter_mut().filter_map(move |addr| {
+		let mut list = self.store.get_mut(peer).into_iter().flat_map(|p| p.addrs.iter_mut()).filter_map(move |addr| {
 			let (score, connected) = addr.score_and_is_connected();
-			if (addr.expires >= now_st && score > 0 && addr.back_off_until < now_is) || connected {
+			if include_expired || (addr.expires >= now_st && score > 0 && addr.back_off_until < now_is) || connected {
 				Some((score, &addr.addr))
 			} else {
 				None
@@ -329,7 +333,7 @@ impl NetTopology {
 		}).collect::<Vec<_>>();
 		list.sort_by(|a, b| a.0.cmp(&b.0));
 		// TODO: meh, optimize
-		list.into_iter().map(|(_, addr)| addr.clone()).collect::<Vec<_>>()
+		list.into_iter().map(|(score, addr)| (addr, score))
 	}
 
 	/// Marks the given peer as connected through the given endpoint.
