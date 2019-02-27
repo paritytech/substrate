@@ -52,7 +52,7 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), Error> {
 /// Meant for general diagnostic purposes.
 ///
 /// **Warning**: This API is not stable.
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkState {
 	/// PeerId of the local node.
@@ -76,7 +76,7 @@ pub struct NetworkState {
 	pub average_upload_per_sec: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStatePeer {
 	/// How we are connected to the node.
@@ -94,14 +94,14 @@ pub struct NetworkStatePeer {
 	pub known_addresses: HashMap<Multiaddr, u32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkStateNotConnectedPeer {
 	/// List of addresses known for this node, with its reputation score.
 	pub known_addresses: HashMap<Multiaddr, u32>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkStatePeerEndpoint {
 	/// We are dialing the given address.

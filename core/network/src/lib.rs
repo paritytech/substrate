@@ -42,7 +42,8 @@ pub use service::{Service, FetchFuture, TransactionPool, ManageNetwork, NetworkM
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
-    NodeIndex, ProtocolId, Severity, Protocol, Multiaddr, NetworkState,
+    NodeIndex, ProtocolId, Severity, Protocol, Multiaddr,
+	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
     obtain_private_key, build_multiaddr, PeerId, PublicKey
 };
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage, ConsensusEngineId};
