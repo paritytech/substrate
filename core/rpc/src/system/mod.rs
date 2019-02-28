@@ -65,7 +65,7 @@ pub trait SystemApi<Hash, Number> {
 	///
 	/// **Warning**: This API is not stable.
 	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
-	#[rpc(name = "system_network_state")]
+	#[rpc(name = "system_networkState")]
 	fn system_network_state(&self) -> Result<network::NetworkState>;
 }
 
