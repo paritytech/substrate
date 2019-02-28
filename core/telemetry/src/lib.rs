@@ -126,9 +126,7 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 
 	// Spawn a thread for each endpoint
 	let on_connect = Arc::new(config.on_connect);
-	config.endpoints.0.iter().for_each(|(url, verbosity)| {
-		let url_ = url.clone();
-		let inner_url = Arc::new(url.to_owned());
+	config.endpoints.0.into_iter().for_each(|(url, verbosity)| {
 		let inner_verbosity = Arc::new(verbosity.to_owned());
 		let inner_on_connect = Arc::clone(&on_connect);
 
@@ -139,15 +137,14 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 			loop {
 				let on_connect = Arc::clone(&inner_on_connect);
 				let out_sync = Arc::clone(&out_sync);
-				let url = Arc::clone(&inner_url);
 				let verbosity = Arc::clone(&inner_verbosity);
 
 				trace!(target: "telemetry",
-					"Connecting to Telemetry at {} with verbosity {}", Arc::clone(&url), Arc::clone(&verbosity));
+					"Connecting to Telemetry at {} with verbosity {}", url, Arc::clone(&verbosity));
 
-				let _ = ws::connect(url_.to_owned(),
-					move |out| {
-						Connection::new(out, Arc::clone(&out_sync), Arc::clone(&on_connect), Arc::clone(&url))
+				let _ = ws::connect(url.to_owned(),
+					|out| {
+						Connection::new(out, Arc::clone(&out_sync), Arc::clone(&on_connect), url.clone())
 					});
 
 				thread::sleep(time::Duration::from_millis(5000));
@@ -174,7 +171,7 @@ struct Connection {
 	out: ws::Sender,
 	out_sync: Arc<Mutex<Option<ws::Sender>>>,
 	on_connect: Arc<Box<Fn() + Send + Sync + 'static>>,
-	url: Arc<String>,
+	url: String,
 }
 
 impl Connection {
@@ -182,7 +179,7 @@ impl Connection {
 		out: ws::Sender,
 		out_sync: Arc<Mutex<Option<ws::Sender>>>,
 		on_connect: Arc<Box<Fn() + Send + Sync + 'static>>,
-		url: Arc<String>
+		url: String
 	) -> Self {
 		Connection {
 			out,
