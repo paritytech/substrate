@@ -11,7 +11,9 @@
 	  "/ip4/104.211.48.247/tcp/30333/p2p/QmV2zjgFRfxbgYZQC9qFr4aHsQt7tDBJRAdgqqxqTq1Kta",
 	  "/ip4/40.114.120.164/tcp/30333/p2p/QmQbPCeurXuKhzCw6Ar6ovizNKATMTnkkqFJKgZzbF2MJs"
   ],
-  "telemetryUrl": "wss://telemetry.polkadot.io/submit/",
+  "telemetryEndpoints": [
+	["wss://telemetry.polkadot.io/submit/", 0]
+  ],
   "protocolId": null,
   "consensusEngine": null,
   "genesis": {

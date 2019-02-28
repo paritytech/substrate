@@ -69,6 +69,7 @@ use runtime_primitives::traits::{
 use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
+use substrate_telemetry::*;
 
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
@@ -256,20 +257,32 @@ impl TopicTracker {
 	fn is_expired(&self, round: u64, set_id: u64) -> bool {
 		if set_id < self.set_id {
 			trace!(target: "afg", "Expired: Message with expired set_id {} (ours {})", set_id, self.set_id);
+			telemetry!(CONSENSUS_TRACE; "afg.expired_set_id";
+				"set_id" => ?set_id, "ours" => ?self.set_id
+			);
 			return true;
 		} else if set_id == self.set_id + 1 {
 			// allow a few first rounds of future set.
 			if round > MESSAGE_ROUND_TOLERANCE {
 				trace!(target: "afg", "Expired: Message too far in the future set, round {} (ours set_id {})", round, self.set_id);
+				telemetry!(CONSENSUS_TRACE; "afg.expired_msg_too_far_in_future_set";
+					"round" => ?round, "ours" => ?self.set_id
+				);
 				return true;
 			}
 		} else if set_id == self.set_id {
 			if round < self.min_live_round.saturating_sub(MESSAGE_ROUND_TOLERANCE) {
 				trace!(target: "afg", "Expired: Message round is out of bounds {} (ours {}-{})", round, self.min_live_round, self.max_round);
+				telemetry!(CONSENSUS_TRACE; "afg.msg_round_oob";
+					"round" => ?round, "our_min_live_round" => ?self.min_live_round, "our_max_round" => ?self.max_round
+				);
 				return true;
 			}
 		} else {
 			trace!(target: "afg", "Expired: Message in invalid future set {} (ours {})", set_id, self.set_id);
+			telemetry!(CONSENSUS_TRACE; "afg.expired_msg_in_invalid_future_set";
+				"set_id" => ?set_id, "ours" => ?self.set_id
+			);
 			return true;
 		}
 		false
@@ -335,6 +348,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			full.set_id
 		) {
 			debug!(target: "afg", "Bad message signature {}", full.message.id);
+			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return network_gossip::ValidationResult::Invalid;
 		}
 
@@ -352,6 +366,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
 			debug!(target: "afg", "Malformed compact commit");
+			telemetry!(CONSENSUS_DEBUG; "afg.malformed_compact_commit";
+				"precommits_len" => ?full.message.precommits.len(),
+				"auth_data_len" => ?full.message.auth_data.len(),
+				"precommits_is_empty" => ?full.message.precommits.is_empty(),
+			);
 			return network_gossip::ValidationResult::Invalid;
 		}
 
@@ -365,6 +384,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 				full.set_id,
 			) {
 				debug!(target: "afg", "Bad commit message signature {}", id);
+				telemetry!(CONSENSUS_DEBUG; "afg.bad_commit_msg_signature"; "id" => ?id);
 				return network_gossip::ValidationResult::Invalid;
 			}
 		}
@@ -381,6 +401,7 @@ impl<Block: BlockT> network_gossip::Validator<Block::Hash> for GossipValidator<B
 			Some(GossipMessage::Commit(message)) => self.validate_commit_message(message),
 			None => {
 				debug!(target: "afg", "Error decoding message");
+				telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 				network_gossip::ValidationResult::Invalid
 			}
 		}
@@ -510,6 +531,9 @@ impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B
 
 	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
 		debug!(target: "afg", "Announcing block {} to peers which we voted on in round {}", block, round);
+		telemetry!(CONSENSUS_DEBUG; "afg.announcing_blocks_to_voted_peers";
+			"block" => ?block, "round" => ?round
+		);
 		self.service.announce_block(block)
 	}
 }
@@ -567,6 +591,9 @@ pub fn block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			// are unsupported for following GRANDPA directly.
 			let genesis_authorities = api.runtime_api()
 				.grandpa_authorities(&BlockId::number(Zero::zero()))?;
+			telemetry!(CONSENSUS_DEBUG; "afg.loading_authorities";
+				"authorities_len" => ?genesis_authorities.len()
+			);
 
 			let authority_set = SharedAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.inner().read().encode();
@@ -720,6 +747,9 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let voter_work = future::loop_fn(initial_state, move |params| {
 		let (env, last_round_number, last_state, authority_set_change) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
+		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
+			"name" => ?config.name(), "set_id" => ?env.set_id
+		);
 
 		let chain_info = match client.info() {
 			Ok(i) => i,
@@ -807,7 +837,10 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	let voter_work = voter_work
 		.join(broadcast_worker)
 		.map(|((), ())| ())
-		.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
+		.map_err(|e| {
+			warn!("GRANDPA Voter failed: {:?}", e);
+			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);
+		});
 
 	Ok(voter_work.select(on_exit).then(|_| Ok(())))
 }

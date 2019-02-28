@@ -173,9 +173,11 @@ pub struct RunCmd {
 	#[structopt(long = "no-telemetry")]
 	pub no_telemetry: bool,
 
-	/// The URL of the telemetry server to connect to
-	#[structopt(long = "telemetry-url", value_name = "TELEMETRY_URL")]
-	pub telemetry_url: Option<String>,
+	/// The URL of the telemetry server to connect to. This flag can be passed multiple times
+	/// as a mean to specify multiple telemetry endpoints. Verbosity levels range from 0-9, with
+	/// 0 denoting the least verbosity. If no verbosity level is specified the default is 0.
+	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = "parse_telemetry_endpoints"))]
+	pub telemetry_endpoints: Vec<(String, u8)>,
 
 	/// The means of execution used when calling into the runtime while syncing blocks.
 	#[structopt(
@@ -237,6 +239,21 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pool_config: TransactionPoolParams,
+}
+
+/// Default to verbosity level 0, if none is provided.
+fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<std::error::Error>> {
+	let pos = s.find(' ');
+	match pos {
+		None => {
+			Ok((s.to_owned(), 0))
+		},
+		Some(pos_) => {
+			let verbosity = s[pos_ + 1..].parse()?;
+			let url = s[..pos_].parse()?;
+			Ok((url, verbosity))
+		}
+	}
 }
 
 impl_augment_clap!(RunCmd);

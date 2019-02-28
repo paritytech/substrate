@@ -25,6 +25,7 @@ pub use network::config::{NetworkConfiguration, Roles};
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
+use tel::TelemetryEndpoints;
 
 /// Service configuration.
 #[derive(Clone)]
@@ -64,7 +65,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
 	/// Telemetry service URL. `None` if disabled.
-	pub telemetry_url: Option<String>,
+	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 }
@@ -90,11 +91,13 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			execution_strategies: Default::default(),
 			rpc_http: None,
 			rpc_ws: None,
-			telemetry_url: None,
+			telemetry_endpoints: None,
 			default_heap_pages: None,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
-		configuration.telemetry_url = configuration.chain_spec.telemetry_url().map(str::to_owned);
+
+		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().clone();
+
 		configuration
 	}
 
