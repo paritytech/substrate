@@ -178,10 +178,12 @@ struct Connection {
 }
 
 impl Connection {
-	fn new(out: ws::Sender,
-			out_sync: Arc<Mutex<Option<ws::Sender>>>,
-			on_connect: Arc<Box<Fn() + Send + Sync + 'static>>,
-			url: Arc<String>) -> Self {
+	fn new(
+		out: ws::Sender,
+		out_sync: Arc<Mutex<Option<ws::Sender>>>,
+		on_connect: Arc<Box<Fn() + Send + Sync + 'static>>,
+		url: Arc<String>
+	) -> Self {
 		Connection {
 			out,
 			out_sync,
