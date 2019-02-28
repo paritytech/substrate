@@ -177,6 +177,11 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		}
 	}
 
+	/// Returns the list of reserved nodes.
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.reserved_peers.iter()
+	}
+
 	/// Adds a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.topology.add_bootstrap_addr(&peer_id, addr);
@@ -192,6 +197,11 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 	/// method will disconnect it and return its index.
 	pub fn remove_reserved_peer(&mut self, peer_id: PeerId) {
 		self.reserved_peers.remove(&peer_id);
+	}
+
+	/// Returns true if we only accept reserved nodes.
+	pub fn is_reserved_only(&self) -> bool {
+		self.reserved_only
 	}
 
 	/// Start accepting all peers again if we weren't.
@@ -258,6 +268,24 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		}
 	}
 
+	/// Returns a list of all the peers that are banned, and until when.
+	pub fn banned_peers(&self) -> impl Iterator<Item = (&PeerId, Instant)> {
+		self.banned_peers.iter().map(|&(ref id, until)| (id, until))
+	}
+
+	/// Returns true if we try to open protocols with the given peer.
+	pub fn is_enabled(&self, peer_id: &PeerId) -> bool {
+		self.enabled_peers.contains_key(peer_id)
+	}
+
+	/// Returns the list of protocols we have open with the given peer.
+	pub fn open_protocols<'a>(&'a self, peer_id: &'a PeerId) -> impl Iterator<Item = ProtocolId> + 'a {
+		self.open_protocols
+			.iter()
+			.filter(move |(p, _)| p == peer_id)
+			.map(|(_, proto)| *proto)
+	}
+
 	/// Sends a message to a peer using the given custom protocol.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
@@ -301,6 +329,16 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 	/// This should be done from time to time.
 	pub fn cleanup(&mut self) {
 		self.topology.cleanup();
+	}
+
+	/// Returns the list of peers in the topology.
+	pub fn known_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.topology.known_peers()
+	}
+
+	/// Returns a list of addresses known for this peer, and their reputation score.
+	pub fn known_addresses(&mut self, peer_id: &PeerId) -> impl Iterator<Item = (&Multiaddr, u32)> {
+		self.topology.addresses_of_peer(peer_id, true)
 	}
 
 	/// Updates the attempted connections to nodes.
@@ -381,7 +419,7 @@ where
 	}
 
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		self.topology.addresses_of_peer(peer_id)
+		self.topology.addresses_of_peer(peer_id, false).map(|(a, _)| a.clone()).collect()
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
