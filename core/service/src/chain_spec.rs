@@ -25,6 +25,7 @@ use runtime_primitives::{BuildStorage, StorageOverlay, ChildrenStorageOverlay};
 use serde_json as json;
 use crate::components::RuntimeGenesis;
 use network::Multiaddr;
+use tel::TelemetryEndpoints;
 
 enum GenesisSource<G> {
 	File(PathBuf),
@@ -87,7 +88,7 @@ struct ChainSpecFile {
 	pub name: String,
 	pub id: String,
 	pub boot_nodes: Vec<String>,
-	pub telemetry_url: Option<String>,
+	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	pub protocol_id: Option<String>,
 	pub consensus_engine: Option<String>,
 	pub properties: Option<Properties>,
@@ -124,8 +125,8 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		&self.spec.id
 	}
 
-	pub fn telemetry_url(&self) -> Option<&str> {
-		self.spec.telemetry_url.as_ref().map(String::as_str)
+	pub fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
+		&self.spec.telemetry_endpoints
 	}
 
 	pub fn protocol_id(&self) -> Option<&str> {
@@ -170,7 +171,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		id: &str,
 		constructor: fn() -> G,
 		boot_nodes: Vec<String>,
-		telemetry_url: Option<&str>,
+		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
 		consensus_engine: Option<&str>,
 		properties: Option<Properties>,
@@ -180,7 +181,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			name: name.to_owned(),
 			id: id.to_owned(),
 			boot_nodes: boot_nodes,
-			telemetry_url: telemetry_url.map(str::to_owned),
+			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
 			consensus_engine: consensus_engine.map(str::to_owned),
 			properties,
