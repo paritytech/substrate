@@ -309,7 +309,6 @@ macro_rules! impl_outer_event {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident where system = $system:ident {
-			$module:ident<T>,
 			$( $rest:tt $( <$t:ident> )*, )*
 		}
 	) => {
@@ -319,23 +318,7 @@ macro_rules! impl_outer_event {
 			$runtime;
 			$system;
 			Modules { $( $rest $(<$t>)*, )* };
-			$module::Event<$runtime>,;
-		);
-	};
-	(
-		$(#[$attr:meta])*
-		pub enum $name:ident for $runtime:ident where system = $system:ident {
-			$module:ident,
-			$( $rest:tt $( <$t:ident> )*, )*
-		}
-	) => {
-		$crate::impl_outer_event!(
-			$( #[$attr] )*;
-			$name;
-			$runtime;
-			$system;
-			Modules { $( $rest $(<$t>)*, )* };
-			$module::Event,;
+			;
 		);
 	};
 	(
