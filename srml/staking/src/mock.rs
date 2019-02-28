@@ -107,11 +107,11 @@ impl ExtBuilder {
 		self.sessions_per_era = sessions_per_era;
 		self
 	}
-	pub fn current_era(mut self, current_era: u64) -> Self {
+	pub fn _current_era(mut self, current_era: u64) -> Self {
 		self.current_era = current_era;
 		self
 	}
-	pub fn monied(mut self, monied: bool) -> Self {
+	pub fn _monied(mut self, monied: bool) -> Self {
 		self.monied = monied;
 		self
 	}
