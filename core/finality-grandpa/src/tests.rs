@@ -181,7 +181,10 @@ impl Network<Block> for MessageRouting {
 		self.validator.note_round(round, set_id);
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-		let messages = peer.consensus_gossip_messages_for(make_topic(round, set_id));
+		let messages = peer.consensus_gossip_messages_for(
+			GRANDPA_ENGINE_ID,
+			make_topic(round, set_id),
+		);
 
 		let messages = messages.map_err(
 			move |_| panic!("Messages for round {} dropped too early", round)
@@ -211,7 +214,10 @@ impl Network<Block> for MessageRouting {
 		self.validator.note_set(set_id);
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-        let messages = peer.consensus_gossip_messages_for(make_commit_topic(set_id));
+        let messages = peer.consensus_gossip_messages_for(
+			GRANDPA_ENGINE_ID,
+			make_commit_topic(set_id),
+		);
 
 		let messages = messages.map_err(
 			move |_| panic!("Commit messages for set {} dropped too early", set_id)
