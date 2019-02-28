@@ -491,23 +491,14 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 41);
-			assert_eq!(Balances::total_balance(&bob()), 69);
+			// block1 transfers from alice 69 to bob.
+			// -1 is the default fee
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1);
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess)
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: Event::indices(indices::RawEvent::NewAccountIndex(bob(), 2))
-				},
-				EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(balances::RawEvent::NewAccount(
-						bob().into(),
-						69
-					))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -550,8 +541,11 @@ mod tests {
 		).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 30);
-			assert_eq!(Balances::total_balance(&bob()), 78);
+			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
+			// 111 - 69 - 1 - 10 - 1 = 30
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1); 
+			// 100 + 69 + 10 - 1     = 178
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -591,10 +585,10 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::session(session::RawEvent::NewSession(1))
 				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::staking(staking::RawEvent::Reward(0))
-				},
+				// EventRecord {
+				// 	phase: Phase::Finalization,
+				// 	event: Event::staking(staking::RawEvent::Reward(0))
+				// },
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
@@ -636,15 +630,20 @@ mod tests {
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 41);
-			assert_eq!(Balances::total_balance(&bob()), 69);
+			// block1 transfers from alice 69 to bob.
+			// -1 is the default fee
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1);
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69);
 		});
 
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block2.0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::total_balance(&alice()), 30);
-			assert_eq!(Balances::total_balance(&bob()), 78);
+			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
+			// 111 - 69 - 1 - 10 - 1 = 30
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1); 
+			// 100 + 69 + 10 - 1     = 178
+			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 		});
 	}
 

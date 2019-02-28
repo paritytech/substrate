@@ -1,0 +1,135 @@
+# https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/
+# https://cloud.google.com/kubernetes-engine/docs/concepts/statefulset
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: substrate
+spec:
+  selector:
+    matchLabels:
+      app: substrate
+  serviceName: substrate
+  replicas: {{ .Values.nodes.replicas }}
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: substrate
+    spec:
+      {{- if .Values.rbac.enable }}
+      serviceAccountName: {{ .Values.rbac.name }}
+      {{- else }}
+      serviceAccountName: default
+      {{- end }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+                - key: node
+                  operator: In
+                  values:
+                  - substrate
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - substrate
+              topologyKey: "kubernetes.io/hostname"
+      terminationGracePeriodSeconds: 300
+      {{- if .Values.validator.keys }}
+      volumes:
+        - name: substrate-validator-secrets
+          secret:
+            secretName: substrate-secrets
+      initContainers:
+      - name: prepare-secrets
+        image: busybox
+        command: [ "/bin/sh" ]
+        args:
+          - -c
+          - sed -n -r "s/^${POD_NAME}-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/key;
+            sed -n -r "s/^${POD_NAME}-node-key ([^ ]+)$/\1/p" /etc/validator/secrets > {{ .Values.image.basepath }}/node-key
+        env:
+          # from (workaround for hostname)
+          # https://kubernetes.io/docs/tasks/inject-data-application/environment-variable-expose-pod-information/
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        volumeMounts:
+        - name: substrate-validator-secrets
+          readOnly: true
+          mountPath: "/etc/validator"
+        - name: substratedir
+          mountPath: {{ .Values.image.basepath }}
+      {{- end }}
+      containers:
+      - name: substrate
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        {{- if .Values.resources }}
+        resources:
+          requests:
+            memory: {{ .Values.resources.memory }}
+            cpu: {{ .Values.resources.cpu }}
+        {{- end }}
+        ports:
+        - containerPort: 30333
+          name: p2p
+        - containerPort: 9933
+          name: http-rpc
+        - containerPort: 9944
+          name: websocket-rpc
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - exec /usr/local/bin/substrate
+            --base-path {{ .Values.image.basepath }}
+            --name $(POD_NAME)
+            {{- if .Values.validator.enable }}
+            --validator
+            {{- end }}
+            {{- if .Values.validator.keys }}
+            --key $(cat {{ .Values.image.basepath }}/key)
+            --node-key $(cat {{ .Values.image.basepath }}/node-key)
+            {{- end }}
+            {{- range .Values.nodes.args }} {{ . }} {{- end }}
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        volumeMounts:
+        - name: substratedir
+          mountPath: {{ .Values.image.basepath }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http-rpc
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http-rpc
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
+  volumeClaimTemplates:
+  - metadata:
+      name: substratedir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: ssd
+      resources:
+        requests:
+          storage: 32Gi
+
