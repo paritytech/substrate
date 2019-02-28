@@ -96,7 +96,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 
-		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().into();
+		configuration.telemetry_endpoints = configuration.chain_spec.telemetry_endpoints().clone();
 
 		configuration
 	}

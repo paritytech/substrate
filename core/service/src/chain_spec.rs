@@ -125,8 +125,8 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		&self.spec.id
 	}
 
-	pub fn telemetry_endpoints(&self) -> Option<TelemetryEndpoints> {
-		self.spec.telemetry_endpoints.clone()
+	pub fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
+		&self.spec.telemetry_endpoints
 	}
 
 	pub fn protocol_id(&self) -> Option<&str> {
