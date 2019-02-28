@@ -46,6 +46,7 @@ macro_rules! impl_runtime_metadata {
 				$crate::metadata::RuntimeMetadata::V2 (
 					$crate::metadata::RuntimeMetadataV2 {
 						modules: $crate::__runtime_modules_to_metadata!(registry; $runtime;; $( $rest )*),
+						module_path: $crate::metadata::DecodeDifferent::Encode(module_path!()),
 						type_registry: registry,
 						block: block_type_name,
 					}
@@ -411,6 +412,7 @@ mod tests {
 	fn runtime_metadata() {
 		let expected = RuntimeMetadata::V2(
 			RuntimeMetadataV2 {
+				module_path: DecodeDifferent::Encode("tests"),
 				type_registry: MetadataRegistry::new(),
 				modules: vec![
 					ModuleMetadata {

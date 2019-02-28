@@ -335,6 +335,7 @@ impl Decode for RuntimeMetadataDeprecated {
 pub struct RuntimeMetadataV2 {
 	/// Contains details of each runtime module
 	pub modules: Vec<ModuleMetadata>,
+	pub module_path: DecodeDifferentStr,
 	/// Contains all the type descriptions in all the runtime modules
 	pub type_registry: substrate_metadata::MetadataRegistry,
 	/// The block type been used, which should include the type description of header and extrinsic
