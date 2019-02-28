@@ -699,11 +699,12 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<()>>>,
+		peers: Vec<Arc<Peer<(), DummySpecialization>>>,
 		started: bool,
 	}
 
 	impl TestNetFactory for AuraTestNet {
+		type Specialization = DummySpecialization;
 		type Verifier = AuraVerifier<PeersClient, NothingExtra>;
 		type PeerData = ();
 
@@ -734,15 +735,15 @@ mod tests {
 			})
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::PeerData> {
+		fn peer(&self, i: usize) -> &Peer<Self::PeerData, DummySpecialization> {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData>>> {
+		fn peers(&self) -> &Vec<Arc<Peer<Self::PeerData, DummySpecialization>>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::PeerData>>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<Arc<Peer<Self::PeerData, DummySpecialization>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 

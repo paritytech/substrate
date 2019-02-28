@@ -71,6 +71,7 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 }
 
 /// A link implementation that connects to the network.
+#[derive(Clone)]
 pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 	/// The protocol sender
 	pub(crate) protocol_sender: Sender<ProtocolMsg<B, S>>,
@@ -83,6 +84,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::BlockImportedSync(hash.clone(), number));
 	}
 
+	fn blocks_processed(&self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		let _ = self.protocol_sender.send(ProtocolMsg::BlocksProcessed(processed_blocks, has_error));
+	}
+
 	fn justification_imported(&self, who: NodeIndex, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		let _ = self.protocol_sender.send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
 		if !success {
@@ -93,10 +98,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
-	}
-
-	fn maintain_sync(&self) {
-		let _ = self.protocol_sender.send(ProtocolMsg::MaintainSync);
 	}
 
 	fn useless_peer(&self, who: NodeIndex, reason: &str) {

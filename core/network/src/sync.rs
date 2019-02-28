@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 use log::{debug, trace, warn};
@@ -26,10 +27,11 @@ use consensus::import_queue::{ImportQueue, IncomingBlock};
 use client::error::Error as ClientError;
 use crate::blocks::BlockCollection;
 use runtime_primitives::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
 use runtime_primitives::generic::BlockId;
 use crate::message::{self, generic::Message as GenericMessage};
 use crate::config::Roles;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -303,6 +305,8 @@ pub struct ChainSync<B: BlockT> {
 	required_block_attributes: message::BlockAttributes,
 	justifications: PendingJustifications<B>,
 	import_queue: Box<ImportQueue<B>>,
+	queue_blocks: HashSet<B::Hash>,
+	best_importing_number: NumberFor<B>,
 	is_stopping: AtomicBool,
 	is_offline: Arc<AtomicBool>,
 	is_major_syncing: Arc<AtomicBool>,
@@ -367,6 +371,8 @@ impl<B: BlockT> ChainSync<B> {
 			justifications: PendingJustifications::new(),
 			required_block_attributes,
 			import_queue,
+			queue_blocks: Default::default(),
+			best_importing_number: Zero::zero(),
 			is_stopping: Default::default(),
 			is_offline,
 			is_major_syncing,
@@ -375,11 +381,6 @@ impl<B: BlockT> ChainSync<B> {
 
 	fn best_seen_block(&self) -> Option<NumberFor<B>> {
 		self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number)
-	}
-
-	/// Returns import queue reference.
-	pub(crate) fn import_queue(&self) -> Box<ImportQueue<B>> {
-		self.import_queue.clone()
 	}
 
 	fn state(&self, best_seen: &Option<NumberFor<B>>) -> SyncState {
@@ -410,7 +411,7 @@ impl<B: BlockT> ChainSync<B> {
 		let previous_state = self.state(&previous_best_seen);
 
 		if let Some(info) = protocol.peer_info(who) {
-			match (block_status(&*protocol.client(), &*self.import_queue, info.best_hash), info.best_number) {
+			match (block_status(&*protocol.client(), &self.queue_blocks, info.best_hash), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
 					let reason = format!("Error legimimately reading blockchain status: {:?}", e);
@@ -424,7 +425,7 @@ impl<B: BlockT> ChainSync<B> {
 					let reason = format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number);
 					protocol.report_peer(who, Severity::Bad(reason));
 				},
-				(Ok(BlockStatus::Unknown), _) if self.import_queue.status().importing_count > MAJOR_SYNC_BLOCKS => {
+				(Ok(BlockStatus::Unknown), _) if self.queue_blocks.len() > MAJOR_SYNC_BLOCKS => {
 					// when actively syncing the common point moves too fast.
 					debug!(target:"sync", "New peer with unknown best hash {} ({}), assuming common block.", self.best_queued_hash, self.best_queued_number);
 					self.peers.insert(who, PeerSync {
@@ -498,7 +499,7 @@ impl<B: BlockT> ChainSync<B> {
 		who: NodeIndex,
 		request: message::BlockRequest<B>,
 		response: message::BlockResponse<B>
-	) -> Option<(BlockOrigin, Vec<IncomingBlock<B>>)> {
+	) {
 		let new_blocks: Vec<IncomingBlock<B>> = if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			let mut blocks = response.blocks;
 			if request.direction == message::Direction::Descending {
@@ -553,24 +554,24 @@ impl<B: BlockT> ChainSync<B> {
 									let n = n - As::sa(1);
 									peer.state = PeerSyncState::AncestorSearch(n);
 									Self::request_ancestry(protocol, who, n);
-									return None;
+									return;
 								},
 								Ok(_) => { // genesis mismatch
 									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
 									protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
-									return None;
+									return;
 								},
 								Err(e) => {
 									let reason = format!("Error answering legitimate blockchain query: {:?}", e);
 									protocol.report_peer(who, Severity::Useless(reason));
-									return None;
+									return;
 								}
 							}
 						},
 						None => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
 							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor".to_string()));
-							return None;
+							return;
 						}
 					}
 				},
@@ -593,7 +594,14 @@ impl<B: BlockT> ChainSync<B> {
 			self.block_queued(&hash, number);
 		}
 		self.maintain_sync(protocol);
-		Some((origin, new_blocks))
+		let new_best_importing_number = new_blocks
+			.last()
+			.and_then(|b| b.header.as_ref().map(|h| h.number().clone()))
+			.unwrap_or_else(|| Zero::zero());
+		self.queue_blocks
+			.extend(new_blocks.iter().map(|b| b.hash.clone()));
+		self.best_importing_number = max(new_best_importing_number, self.best_importing_number);
+		self.import_queue.import_blocks(origin, new_blocks);
 	}
 
 	/// Handle new justification data.
@@ -642,6 +650,16 @@ impl<B: BlockT> ChainSync<B> {
 		}
 
 		self.maintain_sync(protocol);
+	}
+
+	/// A batch of blocks have been processed, with or without errors.
+	pub fn blocks_processed(&mut self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		for hash in processed_blocks {
+			self.queue_blocks.remove(&hash);
+		}
+		if has_error {
+			self.best_importing_number = Zero::zero();
+		}
 	}
 
 	/// Maintain the sync process (download new blocks, fetch justifications).
@@ -787,7 +805,7 @@ impl<B: BlockT> ChainSync<B> {
 	}
 
 	fn is_known(&self, protocol: &mut Context<B>, hash: &B::Hash) -> bool {
-		block_status(&*protocol.client(), &*self.import_queue, *hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
+		block_status(&*protocol.client(), &self.queue_blocks, *hash).ok().map_or(false, |s| s != BlockStatus::Unknown)
 	}
 
 	/// Handle disconnected peer.
@@ -813,7 +831,8 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Restart the sync process.
 	pub(crate) fn restart(&mut self, protocol: &mut Context<B>) {
-		self.import_queue.clear();
+		self.queue_blocks.clear();
+		self.best_importing_number = Zero::zero();
 		self.blocks.clear();
 		match protocol.client().info() {
 			Ok(info) => {
@@ -884,9 +903,8 @@ impl<B: BlockT> ChainSync<B> {
 	// Issue a request for a peer to download new blocks, if any are available
 	fn download_new(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
-			let import_status = self.import_queue.status();
 			// when there are too many blocks in the queue => do not try to download new blocks
-			if import_status.importing_count > MAX_IMPORTING_BLOCKS {
+			if self.queue_blocks.len() > MAX_IMPORTING_BLOCKS {
 				trace!(target: "sync", "Too many blocks in the queue.");
 				return;
 			}
@@ -931,10 +949,10 @@ impl<B: BlockT> ChainSync<B> {
 /// Get block status, taking into account import queue.
 fn block_status<B: BlockT>(
 	chain: &crate::chain::Client<B>,
-	queue: &ImportQueue<B>,
+	queue_blocks: &HashSet<B::Hash>,
 	hash: B::Hash) -> Result<BlockStatus, ClientError>
 {
-	if queue.is_importing(&hash) {
+	if queue_blocks.contains(&hash) {
 		return Ok(BlockStatus::Queued);
 	}
 
