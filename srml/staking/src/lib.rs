@@ -269,7 +269,7 @@ decl_storage! {
 		///
 		/// This is used to derive rewards and punishments.
 		pub SlotStake get(slot_stake) build(|config: &GenesisConfig<T>| {
-			config.stakers.iter().map(|&(_, _, value)| value).min()
+			config.stakers.iter().map(|&(_, _, value)| value).min().unwrap_or_default()
 		}): BalanceOf<T>;
 
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
