@@ -379,11 +379,12 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	/// access the underlying consensus gossip handler
 	pub fn consensus_gossip_messages_for(
 		&self,
+		engine_id: ConsensusEngineId,
 		topic: <Block as BlockT>::Hash,
 	) -> mpsc::UnboundedReceiver<Vec<u8>> {
 		let (tx, rx) = oneshot::channel();
 		self.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(topic);
+			let inner_rx = gossip.messages_for(engine_id, topic);
 			let _ = tx.send(inner_rx);
 		});
 		rx.wait().ok().expect("1. Network is running, 2. it should handle the above closure successfully")

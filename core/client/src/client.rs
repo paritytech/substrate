@@ -61,7 +61,7 @@ use crate::in_mem;
 use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
 use consensus;
-use substrate_telemetry::telemetry;
+use substrate_telemetry::*;
 
 use log::{info, trace, warn};
 use error_chain::bail;
@@ -729,7 +729,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fork_choice,
 		);
 
-		telemetry!("block.import";
+		telemetry!(SUBSTRATE_INFO; "block.import";
 			"height" => height,
 			"best" => ?hash,
 			"origin" => ?origin
@@ -859,7 +859,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 							warn!("   Header {:?}", header);
 							warn!("   Native result {:?}", native_result);
 							warn!("   Wasm result {:?}", wasm_result);
-							telemetry!("block.execute.consensus_failure";
+							telemetry!(SUBSTRATE_INFO; "block.execute.consensus_failure";
 								"hash" => ?hash,
 								"origin" => ?origin,
 								"header" => ?header
