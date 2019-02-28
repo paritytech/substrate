@@ -385,8 +385,8 @@ decl_module! {
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			<Nominators<T>>::remove(&controller);
 			ensure!(prefs.unstake_threshold <= MAX_UNSTAKE_THRESHOLD, "unstake threshold too large");
+			<Nominators<T>>::remove(&controller);
 			<Validators<T>>::insert(controller, prefs);
 		}
 
