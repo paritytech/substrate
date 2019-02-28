@@ -13,6 +13,7 @@ substrate-primitives = { path = "../primitives" }
 substrate-client = { path = "../client" }
 substrate-network = { path = "../network" }
 substrate-service = { path = "../service", optional = true }
+substrate-telemetry = { path = "../telemetry" }
 log = "0.4"
 parking_lot = "0.7.1"
 tokio = "0.1.7"
