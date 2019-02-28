@@ -1,9 +1,9 @@
 #!/bin/sh
-# 
-# 
-# check for any changes in the node/src/runtime, srml/ and core/sr_* trees. if 
-# there are any changes found, it should mark the PR breaksconsensus and 
-# "auto-fail" the PR in some way unless a) the runtime is rebuilt and b) there 
+#
+#
+# check for any changes in the node/src/runtime, srml/ and core/sr_* trees. if
+# there are any changes found, it should mark the PR breaksconsensus and
+# "auto-fail" the PR in some way unless a) the runtime is rebuilt and b) there
 # isn't a change in the runtime/src/lib.rs file that alters the version.
 
 set -e # fail on any error
@@ -66,14 +66,14 @@ then
 	then
 		cat <<-EOT
 			
-			changes to the runtime sources and changes in the spec version. Wasm 
+			changes to the runtime sources and changes in the spec version. Wasm
 			binary blob is rebuilt. Looks good.
 		
 			spec_version: ${sub_spec_version} -> ${add_spec_version}
 		
 		EOT
 		exit 0
-	else 
+	else
 		cat <<-EOT
 			
 			changes to the runtime sources and changes in the spec version. Wasm
@@ -121,6 +121,11 @@ else
 	- core/sr-*
 
 	versions file: ${VERSIONS_FILE}
+
+	note: if the master branch was merged in as automated wasm rebuilds do it
+	might be the case that a {spec,impl}_version has been changed. but for pull
+	requests that involve wasm source file changes a version has to be changed
+	in the pull request itself.
 
 	EOT
 

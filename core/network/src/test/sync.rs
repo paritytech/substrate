@@ -25,6 +25,30 @@ use std::time::Duration;
 use super::*;
 
 #[test]
+fn sync_peers_works() {
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(3);
+	net.sync();
+	for peer in 0..3 {
+		// Assert peers is up to date.
+		let peers = net.peer(peer).peers.read();
+		assert_eq!(peers.len(), 2);
+		// And then disconnect.
+		for other in 0..3 {
+			if other != peer {
+				net.peer(peer).on_disconnect(other);
+			}
+		}
+	}
+	net.sync();
+	// Now peers are disconnected.
+	for peer in 0..3 {
+		let peers = net.peer(peer).peers.read();
+		assert_eq!(peers.len(), 0);
+	}
+}
+
+#[test]
 fn sync_cycle_from_offline_to_syncing_to_offline() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(3);
