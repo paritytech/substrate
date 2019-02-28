@@ -511,7 +511,6 @@ fn nominators_also_get_slashed() {
 		let slash_value = Staking::current_offline_slash()*8; 
 		let expo = Staking::stakers(10);
 		let actual_slash = expo.own.min(slash_value);
-		// TODO: Why is this not used? Should it be removed?
 		let nominator_actual_slash = nominator_stake.min(expo.total - actual_slash);
 		// initial + first era reward + slash
 		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - actual_slash);
@@ -679,14 +678,20 @@ fn max_unstake_threshold_works() {
 		assert_eq!(Balances::free_balance(&10), Balances::free_balance(&20));
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		assert_eq!(Staking::current_offline_slash(), 20);
-		// Account 10 will have unstake_threshold 10
-		<Validators<Test>>::insert(10, ValidatorPrefs {
+		// Account 10 will have max unstake_threshold
+		assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs {
 			unstake_threshold: MAX_UNSTAKE_THRESHOLD,
 			validator_payment: 0,
-		});
-		// Account 20 will have unstake_threshold 100, which should be limited to 10
+		}));
+		// Account 20 could not set their unstake_threshold past 10
+		assert_noop!(Staking::validate(Origin::signed(20), ValidatorPrefs {
+			unstake_threshold: 11,
+			validator_payment: 0}),
+			"unstake threshold too large"
+		);
+		// Give Account 20 unstake_threshold 11 anyway, should still be limited to 10
 		<Validators<Test>>::insert(20, ValidatorPrefs {
-			unstake_threshold: 100,
+			unstake_threshold: 11,
 			validator_payment: 0,
 		});
 
@@ -943,6 +948,7 @@ fn correct_number_of_validators_are_chosen() {
 /*
 #[test]
 fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
+	// TODO: Complete this test!
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator
 	with_externalities(&mut ExtBuilder::default()

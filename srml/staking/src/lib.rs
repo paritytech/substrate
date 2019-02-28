@@ -386,6 +386,7 @@ decl_module! {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
 			<Nominators<T>>::remove(&controller);
+			ensure!(prefs.unstake_threshold <= MAX_UNSTAKE_THRESHOLD, "unstake threshold too large");
 			<Validators<T>>::insert(controller, prefs);
 		}
 
@@ -770,6 +771,8 @@ impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 }
 
 impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
+	// TODO: Consider replacing uses of this function in favor for ensure_account_can_withdraw
+	// Then remove the function
 	fn ensure_account_liquid(who: &T::AccountId) -> Result {
 		if <Bonded<T>>::exists(who) {
 			Err("stash accounts are not liquid")
