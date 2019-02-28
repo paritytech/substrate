@@ -40,13 +40,13 @@ use crate::chain::Client;
 use client::light::fetcher::ChangesProof;
 use crate::{error, util::LruHashSet};
 
-/// Interval at which we send status updates on the SyncProvider status stream.
-pub const STATUS_INTERVAL_MS: u64 = 5000;
-
 const REQUEST_TIMEOUT_SEC: u64 = 40;
+/// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
+/// Interval at which we propagate exstrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2500);
-const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(STATUS_INTERVAL_MS);
+/// Interval at which we send status updates on the SyncProvider status stream.
+const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(5000);
 
 /// Current protocol version.
 pub(crate) const CURRENT_VERSION: u32 = 2;
@@ -350,7 +350,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				let peers = self.context_data.peers.iter().map(|(idx, p)| (*idx, p.info.clone())).collect();
 				let _ = sender.send(peers);
 			},
-			ProtocolMsg::Status => self.status(),
+			ProtocolMsg::Status => self.on_status(),
 			ProtocolMsg::BlockImported(hash, header) => self.on_block_imported(hash, &header),
 			ProtocolMsg::BlockFinalized(hash, header) => self.on_block_finalized(hash, &header),
 			ProtocolMsg::ExecuteWithSpec(task) => {
@@ -426,8 +426,8 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 		None
 	}
 
-	/// Returns protocol status
-	fn status(&mut self) {
+	/// Propagates protocol statuses.
+	fn on_status(&mut self) {
 		let status = ProtocolStatus {
 			sync: self.sync.status(),
 			num_peers: self.context_data.peers.values().count(),
@@ -438,9 +438,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.filter(|p| p.block_request.is_some())
 				.count(),
 		};
-		for sink in &*self.status_sinks.lock() {
-			let _ = sink.unbounded_send(status.clone());
-		}
+		self.status_sinks.lock().retain(|sink| sink.unbounded_send(status.clone()).is_ok());
 	}
 
 	fn on_custom_message(&mut self, who: NodeIndex, message: Message<B>) {
