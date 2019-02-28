@@ -149,11 +149,12 @@ impl<B: BlockT> BasicQueue<B> {
 
 impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 	fn start(&self, link: Box<Link<B>>) -> Result<(), std::io::Error> {
+		let (sender, port) = channel::unbounded();
 		let _ = self
 			.sender
-			.send(BlockImportMsg::Start(link))
+			.send(BlockImportMsg::Start(link, sender))
 			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
-		Ok(())
+		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed")
 	}
 
 	fn stop(&self) {
@@ -184,7 +185,7 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 pub enum BlockImportMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
-	Start(Box<Link<B>>),
+	Start(Box<Link<B>>, Sender<Result<(), std::io::Error>>),
 	Stop,
 }
 
@@ -266,11 +267,12 @@ impl<B: BlockT> BlockImporter<B> {
 			BlockImportMsg::ImportJustification(who, hash, number, justification) => {
 				self.handle_import_justification(who, hash, number, justification)
 			},
-			BlockImportMsg::Start(link) => {
+			BlockImportMsg::Start(link, sender) => {
 				if let Some(justification_import) = self.justification_import.as_ref() {
 					justification_import.on_start(&*link);
 				}
 				self.link = Some(link);
+				let _ = sender.send(Ok(()));
 			},
 			BlockImportMsg::Stop => return false,
 		}
@@ -566,8 +568,6 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 mod tests {
 	use super::*;
 	use test_client::runtime::{Block, Hash};
-	use std::thread;
-	use std::time::Duration;
 
 	#[derive(Debug, PartialEq)]
 	enum LinkMsg {
@@ -612,10 +612,11 @@ mod tests {
 		let (link_sender, link_port) = channel::unbounded();
 		let importer_sender = BlockImporter::<Block>::new(result_port, worker_sender, None);
 		let link = TestLink::new(link_sender);
-		let _ = importer_sender.send(BlockImportMsg::Start(Box::new(link.clone())));
+		let (ack_sender, start_ack_port) = channel::bounded(4);
+		let _ = importer_sender.send(BlockImportMsg::Start(Box::new(link.clone()), ack_sender));
 
 		// Ensure the importer handles Start before any result messages.
-		thread::sleep(Duration::from_millis(1));
+		let _ = start_ack_port.recv();
 
 		// Send a known
 		let results = vec![(Ok(BlockImportResult::ImportedKnown(Default::default())), Default::default())];
