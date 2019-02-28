@@ -26,6 +26,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use slog::{Drain, o};
 use log::trace;
+use rand::{thread_rng, Rng};
 pub use slog_scope::with_logger;
 pub use slog;
 use serde_derive::{Serialize, Deserialize};
@@ -147,7 +148,10 @@ pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard 
 						Connection::new(out, Arc::clone(&out_sync), Arc::clone(&on_connect), url.clone())
 					});
 
-				thread::sleep(time::Duration::from_millis(5000));
+				// Sleep for a random time between 5-10 secs. If there are general connection
+				// issues not all threads should be synchronized in their re-connection time.
+				let random_sleep = thread_rng().gen_range(0, 5);
+				thread::sleep(time::Duration::from_secs(5) + time::Duration::from_secs(random_sleep));
 			}
 		});
 	});
