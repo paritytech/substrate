@@ -511,6 +511,7 @@ fn nominators_also_get_slashed() {
 		let slash_value = Staking::current_offline_slash()*8; 
 		let expo = Staking::stakers(10);
 		let actual_slash = expo.own.min(slash_value);
+		// TODO: Why is this not used? Should it be removed?
 		let nominator_actual_slash = nominator_stake.min(expo.total - actual_slash);
 		// initial + first era reward + slash
 		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - actual_slash);
@@ -867,10 +868,6 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator
 	with_externalities(&mut ExtBuilder::default().build(), || {
-				println!("SLOT STAKE: {:?}", <SlotStake<Test>>::get());
-				println!("SLOT STAKE: {:?}", <SlotStake<Test>>::put(1000));
-
-
 		// Give account 10 some balance
 		Balances::set_free_balance(&10, 1000);
 		// Confirm account 10 is a validator
@@ -886,6 +883,7 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 
 		// Slot stake should be lowest total stake from config
 		println!("SLOT STAKE: {:?}", Staking::slot_stake());
+		println!("Session Reward {:?}", Staking::current_session_reward());
 		println!("SLOT STAKE: {:?}", <SlotStake<Test>>::get());
 		println!("STAKER 10 TOTAL {:?}", Staking::stakers(&10).total );
 		println!("STAKER 10 TOTAL {:?}", Staking::stakers(&20).total );
