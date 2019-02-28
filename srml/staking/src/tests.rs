@@ -945,39 +945,34 @@ fn correct_number_of_validators_are_chosen() {
 fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		// Give account 10 some balance
-		Balances::set_free_balance(&10, 1000);
-		// Confirm account 10 is a validator
-		assert!(<Validators<Test>>::exists(&10));
-		// Validators get slashed immediately
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		// Unstake threshold is 3
-		assert_eq!(Staking::validators(&10).unstake_threshold, 3);
-		// Account 10 has not been slashed before
-		assert_eq!(Staking::slash_count(&10), 0);
-		// Account 10 has the funds we just gave it
-		assert_eq!(Balances::free_balance(&10), 1000);
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1)
+		.sessions_per_era(1)
+		.build(),
+	|| {
+		// Confirm validator count is 2
+		assert_eq!(Staking::validator_count(), 2);
+		// Confirm account 10 and 20 are validators
+		assert!(<Validators<Test>>::exists(&10) && <Validators<Test>>::exists(&20));
+		// Confirm 10 has less stake than 20
+		assert!(Staking::stakers(&10).total < Staking::stakers(&20).total);
 
-		// Slot stake should be lowest total stake from config
-		println!("SLOT STAKE: {:?}", Staking::slot_stake());
-		println!("Session Reward {:?}", Staking::current_session_reward());
-		println!("SLOT STAKE: {:?}", <SlotStake<Test>>::get());
-		println!("STAKER 10 TOTAL {:?}", Staking::stakers(&10).total );
-		println!("STAKER 10 TOTAL {:?}", Staking::stakers(&20).total );
+		// We set account 10 staking total to 1000
+		assert_eq!(Staking::stakers(&10).total, 1000);
+		// We confirm initialized slot_stake is this value
+		assert_eq!(Staking::slot_stake(), Staking::stakers(&10).total);
 
-		// Report account 10 as offline, one greater than unstake threshold
-		Staking::on_offline_validator(10, 4);
-		// Confirm user has been reported
-		assert_eq!(Staking::slash_count(&10), 4);
-		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
-		assert!(Staking::slot_stake() > 2_u64.pow(3) * 20);
-		// Confirm balance has been reduced by 2^unstake_threshold * current_offline_slash()
-		assert_eq!(Balances::free_balance(&10), 1000 - 2_u64.pow(3) * 20);
-		// Confirm account 10 has been removed as a validator
-		assert!(!<Validators<Test>>::exists(&10));
-		// A new era is forced due to slashing
-		assert!(Staking::forcing_new_era().is_some());
+		// Now lets lower account 20 stake
+		<Stakers<Test>>::insert(&20, Exposure { total: 69, own: 69, others: vec![] });
+		
+		// Change to a new era to update slot_stake
+		System::set_block_number(1);
+		Timestamp::set_timestamp(5);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 1);
+
+		// Check that slot stake is now the lower stake value
+		assert_eq!(Staking::slot_stake(), 69);
 	});
 }
 */
