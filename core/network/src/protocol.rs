@@ -43,9 +43,9 @@ use crate::{error, util::LruHashSet};
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 /// Interval at which we perform time based maintenance
-const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1000);
+const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate exstrinsics;
-const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2500);
+const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
 /// Interval at which we send status updates on the SyncProvider status stream.
 const STATUS_INTERVAL: time::Duration = time::Duration::from_millis(5000);
 
