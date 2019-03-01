@@ -87,61 +87,53 @@ impl<T> Drop for RestoreImplementation<T> {
 /// Declare extern functions
 macro_rules! extern_functions {
 	(
-		@INTERN
-		{ $( $exchange_name:ident ( $( $exchange_params:tt )* ) $( -> $exchange_ret:ty )? ; )* }
-		$( #[$attr:meta] )*
-		exchange fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret:ty )?;
-		$( $rest:tt )*
+		$(
+			$( #[$attr:meta] )*
+			fn $name:ident ( $( $arg:ident : $arg_ty:ty ),* ) $( -> $ret:ty )?;
+		)*
 	) => {
-		$( #[$attr] )*
-		#[allow(non_upper_case_globals)]
-		pub static $name: ExchangeableFunction<unsafe extern "C" fn ( $( $arg_ty ),* ) $( -> $ret )?> = ExchangeableFunction(extern_functions::$name);
-
-		extern_functions!(
-			@INTERN
-			{ $( $exchange_name( $( $exchange_params )* ) $( -> $exchange_ret )? ; )* $name ( $( $arg: $arg_ty ),* ) $( -> $ret )? ; }
-			$( $rest )*
-		);
-	};
-	(
-		@INTERN
-		{ $( $exchange_name:ident ( $( $exchange_params:tt )* ) $( -> $exchange_ret:ty )?; )* }
-		$( #[$attr:meta] )*
-		fn $name:ident ( $( $params:tt )* ) $( -> $ret:ty )?;
-		$( $rest:tt )*
-	) => {
-		extern "C" {
+		$(
 			$( #[$attr] )*
-			fn $name( $( $params )* ) $( -> $ret )?;
-		}
+			#[allow(non_upper_case_globals)]
+			pub static mut $name: ExchangeableFunction<unsafe fn ( $( $arg_ty ),* ) $( -> $ret )?> =
+				ExchangeableFunction(extern_functions_host_impl::$name);
+		)*
 
-		extern_functions!(
-			@INTERN
-			{ $( $exchange_name( $( $exchange_params )* ) $( -> $exchange_ret )?; )* }
-			$( $rest )*
-		);
-	};
-	(
-		@INTERN
-		{ $( $exchange_name:ident ( $( $exchange_params:tt )* ) $( -> $exchange_ret:ty )?; )* }
-	) => {
-		/// The exchangeable extern functions default implementations.
-		mod extern_functions {
-			extern "C" {
-				$(
-					pub fn $exchange_name( $( $exchange_params )* ) $( -> $exchange_ret )?;
-				)*
+		/// The exchangeable extern functions host implementations.
+		mod extern_functions_host_impl {
+			$(
+				pub unsafe fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )? {
+					implementation::$name ( $( $arg ),* )
+				}
+			)*
+
+			mod implementation {
+				extern "C" {
+					$(
+						pub fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )?;
+					)*
+				}
 			}
 		}
-	};
-	(
-		$( $rest:tt )*
-	) => {
-		extern_functions!(
-			@INTERN
-			{}
-			$( $rest )*
-		);
+
+		/// The exchangeable extern functions `unimplemented` implementations.
+		#[allow(unused_variables)]
+		mod extern_functions_unimplemented {
+			$(
+				pub fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )? {
+					unimplemented!(concat!("\"", stringify!($name), "\" not implemented for current runtime."))
+				}
+			)*
+		}
+
+		/// All extern functions will call `unimplemented!` when being called.
+		///
+		/// # Returns
+		///
+		/// When dropping the returned structure, all extern functions will switch back to the previous implementation.
+		pub unsafe fn switch_extern_functions_to_unimplemented() -> ( $( RestoreImplementation<unsafe fn ( $( $arg_ty ),* ) $( -> $ret )?> ),* ) {
+			( $( $name.replace_implementation(extern_functions_unimplemented::$name) ),* )
+		}
 	};
 }
 
@@ -189,7 +181,7 @@ extern_functions! {
 	/// - `u32::max_value()` if the value does not exists.
 	///
 	/// - Otherwise, the number of bytes written for value.
-	exchange fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	/// Gets the trie root of the storage.
 	fn ext_storage_root(result: *mut u8);
 	/// Get the change trie root of the current storage overlay at a block with given parent.
@@ -229,18 +221,34 @@ extern_functions! {
 	/// See [`ext_get_allocated_storage`] for details.
 	///
 	/// A child storage is used e.g. by a contract.
-	fn ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
+	fn ext_get_allocated_child_storage(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		written_out: *mut u32
+	) -> *mut u8;
 	/// A child storage function.
 	///
 	/// See [`ext_get_storage_into`] for details.
 	///
 	/// A child storage is used e.g. by a contract.
-	fn ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
-	/// A child storage function.
-	///
-	/// See [`ext_storage_root`] for details.
+	fn ext_get_child_storage_into(
+		storage_key_data: *const u8,
+		storage_key_len: u32,
+		key_data: *const u8,
+		key_len: u32,
+		value_data: *mut u8,
+		value_len: u32,
+		value_offset: u32
+	) -> u32;
+	/// Commits all changes and calculates the child-storage root.
 	///
 	/// A child storage is used e.g. by a contract.
+	///
+	/// # Returns
+	///
+	/// - The pointer to the result vector and `written_out` contains its length.
 	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
 
 	/// The current relay chain identifier.
@@ -439,7 +447,7 @@ pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
 	let mut length: u32 = 0;
 	unsafe {
 		let ptr = ext_child_storage_root(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
-		if length == u32::max_value() {
+		if length == u32::max_value() || ptr.is_null() {
 			None
 		} else {
 			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
