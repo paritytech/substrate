@@ -176,7 +176,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		}
 
 		let is_default = root == default_root;
-
 		(root, is_default, write_overlay)
 	}
 
