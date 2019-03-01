@@ -118,12 +118,12 @@ pub enum NetworkStatePeerEndpoint {
 impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
 	fn from(endpoint: ConnectedPoint) -> Self {
 		match endpoint {
-			ConnectedPoint::Dialer { ref address } =>
-				NetworkStatePeerEndpoint::Dialing(address.clone()),
-			ConnectedPoint::Listener { ref listen_addr, ref send_back_addr } =>
+			ConnectedPoint::Dialer { address } =>
+				NetworkStatePeerEndpoint::Dialing(address),
+			ConnectedPoint::Listener { listen_addr, send_back_addr } =>
 				NetworkStatePeerEndpoint::Listening {
-					listen_addr: listen_addr.clone(),
-					send_back_addr: send_back_addr.clone()
+					listen_addr: listen_addr,
+					send_back_addr: send_back_addr
 				}
 		}
 	}

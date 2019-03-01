@@ -25,7 +25,7 @@ use futures::{prelude::*, Stream};
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, build_multiaddr};
 use libp2p::core::{Swarm, nodes::Substream, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::core::nodes::ConnectedPoint;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::collections::hash_map::Entry;
 use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
@@ -477,9 +477,12 @@ where TMessage: CustomMessage + Send + 'static {
 					// have any open custom protocol slot. Therefore it is not necessarily in the
 					// list.
 					if let Some(id) = self.index_by_id.get(&peer_id) {
-						self.nodes_info.get_mut(id)
-							.expect("index_by_id and nodes_info are always kept in sync; QED")
-							.client_version = Some(info.agent_version);
+						if let Some(n) = self.nodes_info.get_mut(id) {
+							n.client_version = Some(info.agent_version);
+						} else {
+							error!(target: "sub-libp2p",
+								"State inconsistency between index_by_id and nodes_info");
+						}
 					}
 				}
 				Ok(Async::Ready(Some(BehaviourOut::PingSuccess { peer_id, ping_time }))) => {
@@ -487,9 +490,12 @@ where TMessage: CustomMessage + Send + 'static {
 					// have any open custom protocol slot. Therefore it is not necessarily in the
 					// list.
 					if let Some(id) = self.index_by_id.get(&peer_id) {
-						self.nodes_info.get_mut(id)
-							.expect("index_by_id and nodes_info are always kept in sync; QED")
-							.latest_ping = Some(ping_time);
+						if let Some(n) = self.nodes_info.get_mut(id) {
+							n.latest_ping = Some(ping_time);
+						} else {
+							error!(target: "sub-libp2p",
+								"State inconsistency between index_by_id and nodes_info");
+						}
 					}
 				}
 				Ok(Async::NotReady) => break Ok(Async::NotReady),
