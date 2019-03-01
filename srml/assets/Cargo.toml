@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default-features = false }
-parity-codec = { version = "3.0", default-features = false }
+parity-codec = { version = "3.1", default-features = false }
 # Needed for various traits. In our case, `OnFinalise`.
 primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
 # Needed for type-safe access to storage DB.
