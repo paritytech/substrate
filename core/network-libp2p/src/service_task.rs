@@ -16,7 +16,7 @@
 
 use crate::{
 	behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key_from_config,
-	transport
+	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols};
 use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
@@ -32,7 +32,7 @@ use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio_timer::Interval;
 
 /// Starts the substrate libp2p service.
@@ -223,10 +223,63 @@ struct NodeInfo {
 	endpoint: ConnectedPoint,
 	/// Version reported by the remote, or `None` if unknown.
 	client_version: Option<String>,
+	/// Latest ping time with this node.
+	latest_ping: Option<Duration>,
 }
 
 impl<TMessage> Service<TMessage>
 where TMessage: CustomMessage + Send + 'static {
+	/// Returns a struct containing tons of useful information about the network.
+	pub fn state(&mut self) -> NetworkState {
+		let now = Instant::now();
+
+		let connected_peers = {
+			let swarm = &mut self.swarm;
+			self.nodes_info.values().map(move |info| {
+				let known_addresses = swarm.known_addresses(&info.peer_id)
+					.map(|(a, s)| (a.clone(), s)).collect();
+
+				(info.peer_id.to_base58(), NetworkStatePeer {
+					endpoint: info.endpoint.clone().into(),
+					version_string: info.client_version.clone(),
+					latest_ping_time: info.latest_ping,
+					enabled: swarm.is_enabled(&info.peer_id),
+					open_protocols: swarm.open_protocols(&info.peer_id).collect(),
+					known_addresses,
+				})
+			}).collect()
+		};
+
+		let not_connected_peers = {
+			let swarm = &mut self.swarm;
+			let index_by_id = &self.index_by_id;
+			let list = swarm.known_peers().filter(|p| !index_by_id.contains_key(p))
+				.cloned().collect::<Vec<_>>();
+			list.into_iter().map(move |peer_id| {
+				let known_addresses = swarm.known_addresses(&peer_id)
+					.map(|(a, s)| (a.clone(), s)).collect();
+				(peer_id.to_base58(), NetworkStateNotConnectedPeer {
+					known_addresses,
+				})
+			}).collect()
+		};
+
+		NetworkState {
+			peer_id: Swarm::local_peer_id(&self.swarm).to_base58(),
+			listened_addresses: Swarm::listeners(&self.swarm).cloned().collect(),
+			reserved_peers: self.swarm.reserved_peers().map(|p| p.to_base58()).collect(),
+			banned_peers: self.swarm.banned_nodes().map(|(p, until)| {
+				let dur = if until > now { until - now } else { Duration::new(0, 0) };
+				(p.to_base58(), dur.as_secs())
+			}).collect(),
+			is_reserved_only: self.swarm.is_reserved_only(),
+			average_download_per_sec: self.bandwidth.average_download_per_sec(),
+			average_upload_per_sec: self.bandwidth.average_upload_per_sec(),
+			connected_peers,
+			not_connected_peers,
+		}
+	}
+
 	/// Returns an iterator that produces the list of addresses we're listening on.
 	#[inline]
 	pub fn listeners(&self) -> impl Iterator<Item = &Multiaddr> {
@@ -360,6 +413,7 @@ where TMessage: CustomMessage + Send + 'static {
 					peer_id: entry.key().clone(),
 					endpoint,
 					client_version: None,
+					latest_ping: None,
 				});
 				id
 			},
@@ -370,6 +424,7 @@ where TMessage: CustomMessage + Send + 'static {
 					peer_id: entry.key().clone(),
 					endpoint,
 					client_version: None,
+					latest_ping: None,
 				});
 				entry.insert(id);
 				id
@@ -425,6 +480,16 @@ where TMessage: CustomMessage + Send + 'static {
 						self.nodes_info.get_mut(id)
 							.expect("index_by_id and nodes_info are always kept in sync; QED")
 							.client_version = Some(info.agent_version);
+					}
+				}
+				Ok(Async::Ready(Some(BehaviourOut::PingSuccess { peer_id, ping_time }))) => {
+					// Contrary to the other events, this one can happen even on nodes which don't
+					// have any open custom protocol slot. Therefore it is not necessarily in the
+					// list.
+					if let Some(id) = self.index_by_id.get(&peer_id) {
+						self.nodes_info.get_mut(id)
+							.expect("index_by_id and nodes_info are always kept in sync; QED")
+							.latest_ping = Some(ping_time);
 					}
 				}
 				Ok(Async::NotReady) => break Ok(Async::NotReady),
