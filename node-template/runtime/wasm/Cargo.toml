@@ -24,4 +24,4 @@ lto = true
 members = []
 
 [patch.crates-io]
-parity-codec = { path = "../../../../parity-codec" }
+parity-codec = { git = "https://github.com/paritytech/parity-codec", branch = "gui-impl-codec-core-phantom" }
