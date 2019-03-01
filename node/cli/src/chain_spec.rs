@@ -142,6 +142,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			transaction_base_fee: 1 * CENTS,
 			transaction_byte_fee: 10 * MILLICENTS,
 		}),
+		exampleConfigInstance1: None,
+		exampleConfigInstance2: None,
 	}
 }
 
@@ -272,6 +274,8 @@ pub fn testnet_genesis(
 			transaction_base_fee: 1,
 			transaction_byte_fee: 0,
 		}),
+		exampleConfigInstance1: None,
+		exampleConfigInstance2: None,
 	}
 }
 

@@ -475,9 +475,9 @@ fn decl_storage_items(
 			method_defs.extend(quote!{ fn #method_name(suffix: &'static [u8]) -> &'static [u8]; });
 			method_impls.extend(quote!{
 				fn #method_name(suffix: &'static [u8]) -> &'static [u8] {
-					static LAZY: #scrate::lazy::Lazy<Vec<u8>> = #scrate::lazy::Lazy::INIT;
+					static LAZY: #scrate::lazy::Lazy<#scrate::rstd::vec::Vec<u8>> = #scrate::lazy::Lazy::INIT;
 					LAZY.get(|| {
-						let mut final_prefix = Vec::new();
+						let mut final_prefix = #scrate::rstd::vec::Vec::new();
 						final_prefix.extend_from_slice(suffix);
 						final_prefix.extend_from_slice(Self::PREFIX.as_bytes());
 						final_prefix
@@ -491,9 +491,9 @@ fn decl_storage_items(
 				method_defs.extend(quote!{ fn #method_name(suffix: &'static [u8]) -> &'static [u8]; });
 				method_impls.extend(quote!{
 					fn #method_name(suffix: &'static [u8]) -> &'static [u8] {
-						static LAZY: #scrate::lazy::Lazy<Vec<u8>> = #scrate::lazy::Lazy::INIT;
+						static LAZY: #scrate::lazy::Lazy<#scrate::rstd::vec::Vec<u8>> = #scrate::lazy::Lazy::INIT;
 						LAZY.get(|| {
-							let mut final_prefix = Vec::new();
+							let mut final_prefix = #scrate::rstd::vec::Vec::new();
 							final_prefix.extend_from_slice("head of ".as_bytes());
 							final_prefix.extend_from_slice(suffix);
 							final_prefix.extend_from_slice(Self::PREFIX.as_bytes());
@@ -522,8 +522,8 @@ fn decl_storage_items(
 
 			impls.extend(quote! {
 				// Those trait are derived because of wrong bounds for generics
-				// TODO TODO: debug need std isn't it ?
-				#[derive(Clone, Eq, PartialEq, Debug, #scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
+				#[cfg_attr(feature = "std", derive(Debug))]
+				#[derive(Clone, Eq, PartialEq, #scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
 				pub struct #struct_ident;
 				impl #instantiable for #struct_ident {
 					const PREFIX: &'static str = "";

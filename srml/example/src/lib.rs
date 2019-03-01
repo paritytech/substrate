@@ -25,6 +25,7 @@ use system::ensure_signed;
 use inherents::{
 	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
 };
+use srml_support::rstd;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -55,8 +56,8 @@ pub type Log<T, Instance> = RawLog<
 #[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
 #[derive(srml_support::parity_codec_derive::Encode, srml_support::parity_codec_derive::Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<Amount, Instance> {
-	PhantomData(std::marker::PhantomData<Instance>),
-	AmountChange(Vec<Amount>),
+	PhantomData(rstd::marker::PhantomData<Instance>),
+	AmountChange(Amount),
 }
 
 decl_storage! {
@@ -278,7 +279,7 @@ impl<T: Trait<Instance>, Instance: Instantiable> ProvideInherent for Module<T, I
 		unimplemented!();
 	}
 
-	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> rstd::result::Result<(), Self::Error> {
 		unimplemented!();
 	}
 }

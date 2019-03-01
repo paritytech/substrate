@@ -244,11 +244,11 @@ macro_rules! __decl_generic_event {
 	) => {
 		pub type Event<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode)]
 		#[cfg_attr(feature = "std", derive(Debug))]
+		#[derive(Clone, PartialEq, Eq, $crate::parity_codec_derive::Encode, $crate::parity_codec_derive::Decode)]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),* $(, $instance)? > {
-			$(PhantomData(std::marker::PhantomData<$instance>),)?
+			$(PhantomData($crate::rstd::marker::PhantomData<$instance>),)?
 			$(
 				$events
 			)*

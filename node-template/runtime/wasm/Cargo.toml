@@ -22,3 +22,6 @@ lto = true
 
 [workspace]
 members = []
+
+[patch.crates-io]
+parity-codec = { path = "../../../../parity-codec" }
