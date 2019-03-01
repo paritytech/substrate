@@ -23,7 +23,7 @@ use futures::{Async, Future, Stream, stream, sync::oneshot};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
+use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol, NetworkState};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
@@ -46,6 +46,8 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
+	/// Get network state.
+	fn network_state(&self) -> NetworkState;
 	/// Get currently connected peers
 	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)>;
 }
@@ -288,6 +290,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
 			or the ProtocolMsg::Stop message is received,
 			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
+	}
+
+	fn network_state(&self) -> NetworkState {
+		self.network.lock().state()
 	}
 
 	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)> {

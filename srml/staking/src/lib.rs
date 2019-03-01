@@ -771,8 +771,6 @@ impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 }
 
 impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
-	// TODO: Consider replacing uses of this function in favor for ensure_account_can_withdraw
-	// Then remove the function
 	fn ensure_account_liquid(who: &T::AccountId) -> Result {
 		if <Bonded<T>>::exists(who) {
 			Err("stash accounts are not liquid")
