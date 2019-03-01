@@ -11,11 +11,12 @@ log = "0.4"
 parking_lot = "0.7.1"
 tokio = "0.1.7"
 rand = "0.6"
-parity-codec = "3.0"
-parity-codec-derive = "3.0"
+parity-codec = "3.1"
+parity-codec-derive = "3.1"
 runtime_primitives = { package = "sr-primitives", path = "../sr-primitives" }
 consensus_common = { package = "substrate-consensus-common", path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
+substrate-telemetry = { path = "../telemetry" }
 client = { package = "substrate-client", path = "../client" }
 inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 network = { package = "substrate-network", path = "../network" }
