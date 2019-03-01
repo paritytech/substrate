@@ -61,6 +61,7 @@ impl<Balance> OnDilution<Balance> for () {
 /// This implies that if you define the latter away from its default of replicating the
 /// former, then ensure you also redefine the former to return an `Err` in corresponding
 /// situations, otherwise you'll end up giving inconsistent information.
+// TODO: Remove in favour of explicit functionality in balances module: #1896
 pub trait EnsureAccountLiquid<AccountId, Balance> {
 	/// Ensures that the account is completely unencumbered. If this is `Ok` then there's no need to
 	/// check any other items. If it's an `Err`, then you must use one pair of the other items.
