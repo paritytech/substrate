@@ -181,12 +181,14 @@ fn decl_store_extra_genesis(
 
 		let mut opt_build;
 		// need build line
-		if let (Some(ref getter), Some(ref config)) = (getter, config) {
+		if let Some(ref config) = config {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
-			} else {
+			} else if let Some(ref getter) = getter {
 				let ident = &getter.getfn.content;
 				quote!( #ident )
+			} else {
+				return Err(syn::Error::new_spanned(name, format!("Invalid storage definiton, couldn't find config identifier: storage must either have a get identifier `get(ident)` or a defined config identifier `config(ident)`")));
 			};
 			if type_infos.kind.is_simple() && ext::has_parametric_type(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
