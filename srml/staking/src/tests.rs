@@ -945,12 +945,14 @@ fn correct_number_of_validators_are_chosen() {
 	// TODO: Test emergency conditions?
 }
 
-/*
+
 #[test]
 fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 	// TODO: Complete this test!
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator
+	// Note that rewardDestination is the stash account by default
+	// Note that unlike reward slash will affect free_balance, not the stash account.
 	with_externalities(&mut ExtBuilder::default()
 		.session_length(1)
 		.sessions_per_era(1)
@@ -962,26 +964,52 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		assert!(<Validators<Test>>::exists(&10) && <Validators<Test>>::exists(&20));
 		// Confirm 10 has less stake than 20
 		assert!(Staking::stakers(&10).total < Staking::stakers(&20).total);
-
-		// We set account 10 staking total to 1000
 		assert_eq!(Staking::stakers(&10).total, 1000);
+		assert_eq!(Staking::stakers(&20).total, 2000);
+
+		// Give the man some money.
+		Balances::set_free_balance(&10, 1000);
+		Balances::set_free_balance(&20, 1000);
+
+		// Confirm initial free balance.
+		assert_eq!(Balances::free_balance(&10), 1000);
+		assert_eq!(Balances::free_balance(&20), 1000);
+
 		// We confirm initialized slot_stake is this value
 		assert_eq!(Staking::slot_stake(), Staking::stakers(&10).total);
-
+		
 		// Now lets lower account 20 stake
 		<Stakers<Test>>::insert(&20, Exposure { total: 69, own: 69, others: vec![] });
-		
-		// Change to a new era to update slot_stake
+		assert_eq!(Staking::stakers(&20).total, 69);
+		<Ledger<Test>>::insert(&20, StakingLedger { stash: 22, total: 69, active: 69, unlocking: vec![] });
+
+		// New era --> rewards are paid --> stakes are changed 
 		System::set_block_number(1);
 		Timestamp::set_timestamp(5);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
 
-		// Check that slot stake is now the lower stake value
-		assert_eq!(Staking::slot_stake(), 69);
+		assert_eq!(Staking::current_era(), 1);
+		// -- new balances + reward
+		assert_eq!(Staking::stakers(&10).total, 1000 + 10);
+		assert_eq!(Staking::stakers(&20).total, 69 + 10);
+
+		// -- Note that rewards are going drectly to stash, not as free balance.
+		assert_eq!(Balances::free_balance(&10), 1000);
+		assert_eq!(Balances::free_balance(&20), 1000);
+
+		// -- slot stake should also be updated.
+		assert_eq!(Staking::slot_stake(), 79);
+
+		// // If 10 gets slashed now, despite having +1000 in stash, it will be slashed byt 79, which is the slot stake
+		Staking::on_offline_validator(10, 4);
+		// // Confirm user has been reported
+		assert_eq!(Staking::slash_count(&10), 4);
+		// // check the balance of 10 (slash will be deducted from free balance.)
+		assert_eq!(Balances::free_balance(&10), 1000 - 79);
+		
 	});
 }
-*/
+
 
 #[test]
 fn on_free_balance_zero_stash_removes_validator() {
