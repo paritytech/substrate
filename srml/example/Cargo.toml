@@ -13,6 +13,7 @@ srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
 balances = { package = "srml-balances", path = "../balances", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives" }
+inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 
 [dev-dependencies]
 sr-io = { path = "../../core/sr-io" }
@@ -28,4 +29,5 @@ std = [
 	"srml-support/std",
 	"system/std",
 	"balances/std",
+	"inherents/std",
 ]

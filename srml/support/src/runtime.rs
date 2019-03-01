@@ -265,7 +265,7 @@ macro_rules! construct_runtime {
 				},
 			)*
 		);
-		$crate::__decl_outer_inherent!( // TODO TODO
+		$crate::__decl_outer_inherent!(
 			$runtime;
 			$block;
 			$uncheckedextrinsic;

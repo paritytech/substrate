@@ -22,6 +22,9 @@
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::ensure_signed;
+use inherents::{
+	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
+};
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -264,6 +267,21 @@ impl<T: Trait<Instance>, Instance: Instantiable> Module<T, Instance> {
 	}
 }
 
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
+
+impl<T: Trait<Instance>, Instance: Instantiable> ProvideInherent for Module<T, Instance> {
+	type Call = Call<T, Instance>;
+	type Error = MakeFatalError<RuntimeString>;
+	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+	fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		unimplemented!();
+	}
+
+	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> std::result::Result<(), Self::Error> {
+		unimplemented!();
+	}
+}
 #[cfg(test)]
 mod tests {
 	use super::*;
