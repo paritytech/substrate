@@ -195,6 +195,14 @@ impl sudo::Trait for Runtime {
 }
 
 impl example::Trait<example::Instance1> for Runtime {
+	type Log = Log;
+	type Origin = Origin;
+	type Amount = ();
+	type Event = Event;
+}
+
+impl example::Trait<example::Instance2> for Runtime {
+	type Log = Log;
 	type Origin = Origin;
 	type Amount = ();
 	type Event = Event;
@@ -231,7 +239,8 @@ construct_runtime!(
 		Sudo: sudo,
 		Fees: fees::{Module, Storage, Config<T>, Event<T>},
 		BalancesInstance1: balances::<Instance1>::{Event<T, I>},
-		Example: example::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+		Example: example::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log()},
+		Example2: example::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log()},
 	}
 );
 

@@ -33,6 +33,7 @@ pub trait Trait<Instance>: balances::Trait {
 	type Amount;
 	/// The overarching event type.
 	type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
+	type Log: From<Log<Self, Instance>> + Into<system::DigestItemOf<Self>>;
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -40,6 +41,19 @@ pub trait Trait<Instance>: balances::Trait {
 pub enum Origin<T: Trait<Instance>, Instance> {
 	Members(u32),
 	P(T::Amount),
+}
+
+pub type Log<T, Instance> = RawLog<
+	<T as Trait<Instance>>::Amount,
+	Instance,
+>;
+
+/// A logs in this module.
+#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
+#[derive(srml_support::parity_codec_derive::Encode, srml_support::parity_codec_derive::Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<Amount, Instance> {
+	PhantomData(std::marker::PhantomData<Instance>),
+	AmountChange(Vec<Amount>),
 }
 
 decl_storage! {

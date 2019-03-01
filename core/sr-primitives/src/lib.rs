@@ -456,7 +456,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident( $( $sitem:ident ),* ) ),*
+			$( $module:ident $(<$instance:path>)? ( $( $sitem:ident ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -475,7 +475,7 @@ macro_rules! impl_outer_log {
 		#[allow(non_camel_case_types)]
 		pub enum InternalLog {
 			$(
-				$module($module::Log<$trait>),
+				$module($module::Log<$trait $(, $instance)? >),
 			)*
 		}
 
@@ -553,16 +553,16 @@ macro_rules! impl_outer_log {
 		}
 
 		$(
-			impl From<$module::Log<$trait>> for $name {
+			impl From<$module::Log<$trait $(, $instance)? >> for $name {
 				/// Converts single module log item into `$name`.
-				fn from(x: $module::Log<$trait>) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					$name(x.into())
 				}
 			}
 
-			impl From<$module::Log<$trait>> for InternalLog {
+			impl From<$module::Log<$trait $(, $instance)? >> for InternalLog {
 				/// Converts single module log item into `$internal`.
-				fn from(x: $module::Log<$trait>) -> Self {
+				fn from(x: $module::Log<$trait $(, $instance)? >) -> Self {
 					InternalLog::$module(x)
 				}
 			}
