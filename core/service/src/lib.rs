@@ -33,9 +33,9 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 use log::{info, warn, debug};
 use futures::prelude::*;
 use keystore::Store as Keystore;
-use client::{BlockchainEvents, runtime_api::OffchainWorker};
+use client::BlockchainEvents;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Header, As, ProvideRuntimeApi};
+use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -58,7 +58,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic
 };
-use components::{StartRPC, MaintainTransactionPool};
+use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
 pub use network::OnDemand;
 
@@ -96,10 +96,7 @@ impl<Components: components::Components> Service<Components> {
 	pub fn new(
 		mut config: FactoryFullConfiguration<Components::Factory>,
 		task_executor: TaskExecutor,
-	) -> Result<Self, error::Error> where
-		ComponentClient<Components>: ProvideRuntimeApi,
-		<ComponentClient<Components> as ProvideRuntimeApi>::Api: OffchainWorker<ComponentBlock<Components>>,
-	{
+	) -> Result<Self, error::Error> {
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
@@ -181,12 +178,14 @@ impl<Components: components::Components> Service<Components> {
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
+					let number = *notification.header.number();
+
 					if let Some(network) = network.upgrade() {
 						network.on_block_imported(notification.hash, notification.header);
 					}
 
 					if let (Some(txpool), Some(client)) = (txpool.upgrade(), wclient.upgrade()) {
-						Components::TransactionPool::on_block_imported(
+						Components::RuntimeServices::maintain_transaction_pool(
 							&BlockId::hash(notification.hash),
 							&*client,
 							&*txpool,
@@ -194,7 +193,10 @@ impl<Components: components::Components> Service<Components> {
 					}
 
 					if let Some(offchain) = offchain.upgrade() {
-						offchain.on_block_imported(notification.header.number());
+						Components::RuntimeServices::offchain_workers(
+							&number,
+							&offchain,
+						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 					}
 
 					Ok(())
@@ -274,7 +276,7 @@ impl<Components: components::Components> Service<Components> {
 			impl_version: config.impl_version.into(),
 			properties: config.chain_spec.properties(),
 		};
-		let rpc = Components::RPC::start_rpc(
+		let rpc = Components::RuntimeServices::start_rpc(
 			client.clone(), network.clone(), has_bootnodes, system_info, config.rpc_http,
 			config.rpc_ws, task_executor.clone(), transaction_pool.clone(),
 		)?;
@@ -332,6 +334,7 @@ impl<Components: components::Components> Service<Components> {
 		}
 	}
 
+	/// return a shared instance of Telemtry (if enabled)
 	pub fn telemetry(&self) -> Option<Arc<tel::Telemetry>> {
 		self._telemetry.as_ref().map(|t| t.clone())
 	}

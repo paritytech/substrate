@@ -410,7 +410,7 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 /// 2. added to the pool and propagated (transaction)
 pub fn submit_extrinsic(data: Vec<u8>) {
 	unsafe {
-		ext_submit_extrinsic(data.as_ptr(), data.len())
+		ext_submit_extrinsic(data.as_ptr(), data.len() as u32)
 	}
 }
 
