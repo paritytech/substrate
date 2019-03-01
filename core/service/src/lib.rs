@@ -193,6 +193,7 @@ impl<Components: components::Components> Service<Components> {
 					}
 
 					if let Some(offchain) = offchain.upgrade() {
+						dbg!("Running offchain workers.");
 						Components::RuntimeServices::offchain_workers(
 							&number,
 							&offchain,

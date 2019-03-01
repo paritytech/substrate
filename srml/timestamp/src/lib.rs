@@ -37,7 +37,7 @@ use parity_codec_derive::Decode;
 use parity_codec_derive::Encode;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
 use srml_support::for_each_tuple;
-use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
+use runtime_primitives::traits::{As, SimpleArithmetic, Zero, OffchainWorker};
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, cmp};
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
@@ -247,6 +247,15 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		} else {
 			Ok(())
 		}
+	}
+}
+
+impl<T: Trait> OffchainWorker<T::BlockNumber> for Module<T> {
+	fn generate_extrinsics(n: T::BlockNumber) {
+		use parity_codec::Encode;
+
+		let ex = n.encode();
+		runtime_io::submit_extrinsic(ex);
 	}
 }
 

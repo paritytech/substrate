@@ -206,6 +206,7 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 	Ok(res)
 }
 
+/// Submit extrinsic.
 pub fn submit_extrinsic(data: Vec<u8>) {
 	ext::with(|ext| {
 		ext.submit_extrinsic(data)

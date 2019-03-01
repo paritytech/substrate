@@ -12,6 +12,7 @@ edition = "2018"
 client = { package = "substrate-client", path = "../../core/client" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 futures = "0.1"
+log = "0.4"
 parity-codec = "3.0"
 parity-codec-derive = "3.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }

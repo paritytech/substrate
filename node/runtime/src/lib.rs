@@ -291,7 +291,9 @@ impl_runtime_apis! {
 
 	impl client_api::OffchainWorker<Block> for Runtime {
 		fn generate_extrinsics(number: NumberFor<Block>) {
-			unimplemented!()
+			use runtime_primitives::traits::OffchainWorker;
+			// TODO [ToDr] This should just run AllModules::generate_extrinsics()
+			timestamp::Module::<Self>::generate_extrinsics(number)
 		}
 	}
 

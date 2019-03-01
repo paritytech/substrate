@@ -1081,7 +1081,7 @@ mod tests {
 
 			fn on_initialise(n: T::BlockNumber) { if n.into() == 42 { panic!("on_initialise") } }
 			fn on_finalise(n: T::BlockNumber) { if n.into() == 42 { panic!("on_finalise") } }
-			// TODO [ToDr] add offchain_worker here
+			fn offchain_worker() {}
 		}
 	}
 

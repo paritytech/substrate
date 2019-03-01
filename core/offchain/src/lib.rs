@@ -30,7 +30,7 @@ use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
 };
-
+use log::debug;
 use futures::Future;
 
 // TODO [ToDr] move the declaration to separate primitives crate with std/no-std options.
@@ -65,7 +65,10 @@ impl<C, Block> OffchainWorkers<C, Block> where
 	pub fn on_block_imported(&self, number: &<Block::Header as traits::Header>::Number) -> impl Future<Item = (), Error = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
+		debug!("Checking offchain workers at {:?}", at);
+
 		if let Ok(true) = runtime.has_api::<OffchainWorker<Block>>(&at) {
+			debug!("Running offchain workers at {:?}", at);
 			runtime.generate_extrinsics_with_context(&at, ExecutionContext::OffchainWorker, *number).unwrap();
 		}
 		return futures::future::ok(())
