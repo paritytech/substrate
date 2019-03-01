@@ -128,6 +128,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		&self.spec.id
 	}
 
+	/// Telemetry endpoints (if any)
 	pub fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
 		&self.spec.telemetry_endpoints
 	}

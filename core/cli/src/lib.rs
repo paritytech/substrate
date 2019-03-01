@@ -25,7 +25,7 @@ mod params;
 pub mod error;
 pub mod informant;
 
-use client::ExecutionStrategies;
+use client::{ExecutionStrategies, ExecutionStrategy};
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -364,6 +364,7 @@ where
 		syncing: cli.syncing_execution.into(),
 		importing: cli.importing_execution.into(),
 		block_construction: cli.block_construction_execution.into(),
+		offchain_worker: ExecutionStrategy::NativeWhenPossible,
 		other: cli.other_execution.into(),
 	};
 

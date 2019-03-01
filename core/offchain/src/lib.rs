@@ -48,18 +48,20 @@ pub struct OffchainWorkers<C, Block> {
 	_block: PhantomData<Block>,
 }
 
-impl<C, Block> OffchainWorkers<C, Block> where
-	C: ProvideRuntimeApi,
-	C::Api: OffchainWorker<Block>,
-	Block: traits::Block,
-{
+impl<C, Block> OffchainWorkers<C, Block> {
 	pub fn new(client: Arc<C>) -> Self {
 		Self {
 			client,
 			_block: PhantomData,
 		}
 	}
+}
 
+impl<C, Block> OffchainWorkers<C, Block> where
+	Block: traits::Block,
+	C: ProvideRuntimeApi,
+	C::Api: OffchainWorker<Block>,
+{
 	pub fn on_block_imported(&self, number: &<Block::Header as traits::Header>::Number) -> impl Future<Item = (), Error = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
