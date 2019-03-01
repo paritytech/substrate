@@ -436,8 +436,6 @@ mod tests {
 
 	#[test]
 	fn changes_iterated_in_pre_order() {
-		// TODO: include forced change and make sure it's iterated last
-
 		let mut authorities = AuthoritySet {
 			current_authorities: Vec::new(),
 			set_id: 0,
