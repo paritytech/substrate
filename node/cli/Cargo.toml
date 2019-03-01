@@ -12,7 +12,7 @@ tokio = "0.1.7"
 futures = "0.1"
 exit-future = "0.1"
 cli = { package = "substrate-cli", path = "../../core/cli" }
-parity-codec = { version = "3.0" }
+parity-codec = { version = "3.1" }
 slog = "^2"
 sr-io = { path = "../../core/sr-io" }
 client = { package = "substrate-client", path = "../../core/client" }

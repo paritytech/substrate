@@ -15,5 +15,5 @@ sr-primitives = { path = "../../sr-primitives" }
 
 [dev-dependencies]
 assert_matches = "1.1"
-parity-codec = "3.0"
+parity-codec = "3.1"
 test_runtime = { package = "substrate-test-runtime", path = "../../test-runtime" }
