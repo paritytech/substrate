@@ -27,12 +27,11 @@
 use crate::block_import::{ImportBlock, BlockImport, JustificationImport, ImportResult, BlockOrigin};
 use crossbeam_channel::{self as channel, Receiver, Sender};
 
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::thread;
 
 use runtime_primitives::traits::{
-	AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor, Zero,
+	AuthorityIdFor, Block as BlockT, Header as HeaderT, NumberFor
 };
 use runtime_primitives::Justification;
 
@@ -85,14 +84,8 @@ pub trait ImportQueue<B: BlockT>: Send + Sync + ImportQueueClone<B> {
 	fn start(&self, _link: Box<Link<B>>) -> Result<(), std::io::Error> {
 		Ok(())
 	}
-	/// Clear the queue when sync is restarting.
-	fn clear(&self);
 	/// Clears the import queue and stops importing.
 	fn stop(&self);
-	/// Get queue status.
-	fn status(&self) -> ImportQueueStatus<B>;
-	/// Is block with given hash currently in the queue.
-	fn is_importing(&self, hash: &B::Hash) -> bool;
 	/// Import bunch of blocks.
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
 	/// Import a block justification.
@@ -107,15 +100,6 @@ impl<B: BlockT> Clone for Box<ImportQueue<B>> {
 	fn clone(&self) -> Box<ImportQueue<B>> {
 		self.clone_box()
 	}
-}
-
-/// Import queue status. It isn't completely accurate.
-#[derive(Debug)]
-pub struct ImportQueueStatus<B: BlockT> {
-	/// Number of blocks that are currently in the queue.
-	pub importing_count: usize,
-	/// The number of the best block that was ever in the queue since start/last failure.
-	pub best_importing_number: NumberFor<B>,
 }
 
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate thread,
@@ -165,18 +149,12 @@ impl<B: BlockT> BasicQueue<B> {
 
 impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 	fn start(&self, link: Box<Link<B>>) -> Result<(), std::io::Error> {
+		let (sender, port) = channel::unbounded();
 		let _ = self
 			.sender
-			.send(BlockImportMsg::Start(link))
+			.send(BlockImportMsg::Start(link, sender))
 			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
-		Ok(())
-	}
-
-	fn clear(&self) {
-		let _ = self
-			.sender
-			.send(BlockImportMsg::Clear)
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
+		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed")
 	}
 
 	fn stop(&self) {
@@ -184,24 +162,6 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 			.sender
 			.send(BlockImportMsg::Stop)
 			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
-	}
-
-	fn status(&self) -> ImportQueueStatus<B> {
-		let (sender, port) = channel::unbounded();
-		let _ = self
-			.sender
-			.send(BlockImportMsg::Status(sender))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
-		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed")
-	}
-
-	fn is_importing(&self, hash: &B::Hash) -> bool {
-		let (sender, port) = channel::unbounded();
-		let _ = self
-			.sender
-			.send(BlockImportMsg::IsImporting(hash.clone(), sender))
-			.expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed");
-		port.recv().expect("1. self is holding a sender to the Importer, 2. Importer should handle messages while there are senders around; qed")
 	}
 
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
@@ -224,11 +184,8 @@ impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
 
 pub enum BlockImportMsg<B: BlockT> {
 	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
-	Clear,
-	Status(Sender<ImportQueueStatus<B>>),
-	IsImporting(B::Hash, Sender<bool>),
 	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
-	Start(Box<Link<B>>),
+	Start(Box<Link<B>>, Sender<Result<(), std::io::Error>>),
 	Stop,
 }
 
@@ -251,8 +208,6 @@ struct BlockImporter<B: BlockT> {
 	port: Receiver<BlockImportMsg<B>>,
 	result_port: Receiver<BlockImportWorkerMsg<B>>,
 	worker_sender: Sender<BlockImportWorkerMsg<B>>,
-	queue_blocks: HashSet<B::Hash>,
-	best_importing_number: NumberFor<B>,
 	link: Option<Box<dyn Link<B>>>,
 	justification_import: Option<SharedJustificationImport<B>>,
 }
@@ -271,8 +226,6 @@ impl<B: BlockT> BlockImporter<B> {
 					port,
 					result_port,
 					worker_sender,
-					queue_blocks: HashSet::new(),
-					best_importing_number: Zero::zero(),
 					link: None,
 					justification_import,
 				};
@@ -310,25 +263,18 @@ impl<B: BlockT> BlockImporter<B> {
 		match msg {
 			BlockImportMsg::ImportBlocks(origin, incoming_blocks) => {
 				self.handle_import_blocks(origin, incoming_blocks)
-			}
-			BlockImportMsg::Clear => self.handle_clear(),
-			BlockImportMsg::Status(reply_sender) => self.handle_status(reply_sender),
-			BlockImportMsg::IsImporting(hash, reply_sender) => {
-				self.handle_is_importing(hash, reply_sender)
-			}
+			},
 			BlockImportMsg::ImportJustification(who, hash, number, justification) => {
 				self.handle_import_justification(who, hash, number, justification)
-			}
-			BlockImportMsg::Start(link) => {
+			},
+			BlockImportMsg::Start(link, sender) => {
 				if let Some(justification_import) = self.justification_import.as_ref() {
 					justification_import.on_start(&*link);
 				}
 				self.link = Some(link);
-			}
-			BlockImportMsg::Stop => {
-				self.handle_clear();
-				return false;
-			}
+				let _ = sender.send(Ok(()));
+			},
+			BlockImportMsg::Stop => return false,
 		}
 		true
 	}
@@ -339,15 +285,15 @@ impl<B: BlockT> BlockImporter<B> {
 			_ => unreachable!("Import Worker does not send ImportBlocks message; qed"),
 		};
 		let mut has_error = false;
+		let mut hashes = vec![];
 		for (result, hash) in results {
-			self.queue_blocks.remove(&hash);
+			hashes.push(hash);
 
 			if has_error {
 				continue;
 			}
 
 			if result.is_err() {
-				self.best_importing_number = Zero::zero();
 				has_error = true;
 			}
 
@@ -389,26 +335,9 @@ impl<B: BlockT> BlockImporter<B> {
 			};
 		}
 		if let Some(link) = self.link.as_ref() {
-			link.maintain_sync();
+			link.blocks_processed(hashes, has_error);
 		}
 		true
-	}
-
-	fn handle_clear(&mut self) {
-		self.queue_blocks.clear();
-		self.best_importing_number = Zero::zero();
-	}
-
-	fn handle_status(&self, reply_sender: Sender<ImportQueueStatus<B>>) {
-		let status = ImportQueueStatus {
-			importing_count: self.queue_blocks.len(),
-			best_importing_number: self.best_importing_number,
-		};
-		let _ = reply_sender.send(status);
-	}
-
-	fn handle_is_importing(&self, hash: B::Hash, reply_sender: Sender<bool>) {
-		let _ = reply_sender.send(self.queue_blocks.contains(&hash));
 	}
 
 	fn handle_import_justification(&self, who: Origin, hash: B::Hash, number: NumberFor<B>, justification: Justification) {
@@ -426,16 +355,6 @@ impl<B: BlockT> BlockImporter<B> {
 
 	fn handle_import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		trace!(target:"sync", "Scheduling {} blocks for import", blocks.len());
-
-		let new_best_importing_number = blocks
-			.last()
-			.and_then(|b| b.header.as_ref().map(|h| h.number().clone()))
-			.unwrap_or_else(|| Zero::zero());
-		self.queue_blocks
-			.extend(blocks.iter().map(|b| b.hash.clone()));
-		if new_best_importing_number > self.best_importing_number {
-			self.best_importing_number = new_best_importing_number;
-		}
 		self.worker_sender
 			.send(BlockImportWorkerMsg::ImportBlocks(origin, blocks))
 			.expect("1. This is holding a sender to the worker, 2. the worker should not quit while a sender is still held; qed");
@@ -530,12 +449,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 pub trait Link<B: BlockT>: Send {
 	/// Block imported.
 	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
+	/// Batch of blocks imported, with or without error.
+	fn blocks_processed(&self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
 	/// Justification import result.
 	fn justification_imported(&self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) { }
 	/// Request a justification for the given block.
 	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
-	/// Maintain sync.
-	fn maintain_sync(&self) {}
 	/// Disconnect from peer.
 	fn useless_peer(&self, _who: Origin, _reason: &str) {}
 	/// Disconnect from peer and restart sync.
@@ -674,8 +593,6 @@ mod tests {
 		fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
 			let _ = self.sender.send(LinkMsg::BlockImported);
 		}
-		fn maintain_sync(&self) {
-		}
 		fn useless_peer(&self, _: Origin, _: &str) {
 			let _ = self.sender.send(LinkMsg::Disconnected);
 		}
@@ -695,12 +612,11 @@ mod tests {
 		let (link_sender, link_port) = channel::unbounded();
 		let importer_sender = BlockImporter::<Block>::new(result_port, worker_sender, None);
 		let link = TestLink::new(link_sender);
-		let _ = importer_sender.send(BlockImportMsg::Start(Box::new(link.clone())));
+		let (ack_sender, start_ack_port) = channel::bounded(4);
+		let _ = importer_sender.send(BlockImportMsg::Start(Box::new(link.clone()), ack_sender));
 
 		// Ensure the importer handles Start before any result messages.
-		let (ack_sender, ack_port) = channel::unbounded();
-		let _ = importer_sender.send(BlockImportMsg::Status(ack_sender));
-		let _ = ack_port.recv();
+		let _ = start_ack_port.recv();
 
 		// Send a known
 		let results = vec![(Ok(BlockImportResult::ImportedKnown(Default::default())), Default::default())];

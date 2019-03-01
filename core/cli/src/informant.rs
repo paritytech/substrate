@@ -25,7 +25,7 @@ use tokio::runtime::TaskExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
 use client::{backend::Backend, BlockchainEvents};
-use substrate_telemetry::telemetry;
+use substrate_telemetry::*;
 use log::{info, warn};
 
 use runtime_primitives::generic::BlockId;
@@ -83,6 +83,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			} else { (0.0, 0) };
 
 			telemetry!(
+				SUBSTRATE_INFO;
 				"system.interval";
 				"status" => format!("{}{}", status, target),
 				"peers" => num_peers,
@@ -141,7 +142,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let txpool = service.transaction_pool();
 	let display_txpool_import = txpool.import_notification_stream().for_each(move |_| {
 		let status = txpool.status();
-		telemetry!("txpool.import"; "ready" => status.ready, "future" => status.future);
+		telemetry!(SUBSTRATE_INFO; "txpool.import"; "ready" => status.ready, "future" => status.future);
 		Ok(())
 	});
 

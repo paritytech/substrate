@@ -213,8 +213,8 @@ impl<B: BlockT, F: FnOnce(&mut ConsensusGossip<B>, &mut Context<B>)> GossipTask<
 
 /// Messages sent to Protocol from elsewhere inside the system.
 pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
-	/// Tell protocol to maintain sync.
-	MaintainSync,
+	/// A batch of blocks has been processed, with or without errors.
+	BlocksProcessed(Vec<B::Hash>, bool),
 	/// Tell protocol to restart sync.
 	RestartSync,
 	/// Propagate status updates.
@@ -381,11 +381,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			ProtocolMsg::GossipConsensusMessage(topic, engine_id, message) => {
 				self.gossip_consensus_message(topic, engine_id, message)
 			}
-			ProtocolMsg::MaintainSync => {
+			ProtocolMsg::BlocksProcessed(hashes, has_error) => {
+				self.sync.blocks_processed(hashes, has_error);
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
 				self.sync.maintain_sync(&mut context);
-			}
+			},
 			ProtocolMsg::RestartSync => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
@@ -638,16 +639,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				response,
 			);
 		} else {
-			// import_queue.import_blocks also acquires sync.write();
-			// Break the cycle by doing these separately from the outside;
-			let new_blocks = {
-				self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response)
-			};
-
-			if let Some((origin, new_blocks)) = new_blocks {
-				let import_queue = self.sync.import_queue();
-				import_queue.import_blocks(origin, new_blocks);
-			}
+			self.sync.on_block_data(&mut ProtocolContext::new(&mut self.context_data, &self.network_chan), peer, request, response);
 		}
 	}
 

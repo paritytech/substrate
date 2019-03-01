@@ -23,7 +23,7 @@ use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
+use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol, NetworkState};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
@@ -47,6 +47,8 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get a stream of sync statuses.
 	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>>;
+	/// Get network state.
+	fn network_state(&self) -> NetworkState;
 	/// Get currently connected peers
 	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)>;
 	/// Are we in the process of downloading the chain?
@@ -74,6 +76,7 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 }
 
 /// A link implementation that connects to the network.
+#[derive(Clone)]
 pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 	/// The protocol sender
 	pub(crate) protocol_sender: Sender<ProtocolMsg<B, S>>,
@@ -86,6 +89,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::BlockImportedSync(hash.clone(), number));
 	}
 
+	fn blocks_processed(&self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		let _ = self.protocol_sender.send(ProtocolMsg::BlocksProcessed(processed_blocks, has_error));
+	}
+
 	fn justification_imported(&self, who: NodeIndex, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		let _ = self.protocol_sender.send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
 		if !success {
@@ -96,10 +103,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
-	}
-
-	fn maintain_sync(&self) {
-		let _ = self.protocol_sender.send(ProtocolMsg::MaintainSync);
 	}
 
 	fn useless_peer(&self, who: NodeIndex, reason: &str) {
@@ -302,6 +305,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Servi
 		let (sink, stream) = mpsc::unbounded();
 		self.status_sinks.lock().push(sink);
 		stream
+	}
+
+	fn network_state(&self) -> NetworkState {
+		self.network.lock().state()
 	}
 
 	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)> {

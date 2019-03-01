@@ -46,6 +46,20 @@ impl network::SyncProvider<Block> for Status {
 		stream
 	}
 
+	fn network_state(&self) -> network::NetworkState {
+		network::NetworkState {
+			peer_id: String::new(),
+			listened_addresses: Default::default(),
+			is_reserved_only: false,
+			reserved_peers: Default::default(),
+			banned_peers: Default::default(),
+			connected_peers: Default::default(),
+			not_connected_peers: Default::default(),
+			average_download_per_sec: 0,
+			average_upload_per_sec: 0,
+		}
+	}
+
 	fn peers(&self) -> Vec<(NodeIndex, NetworkPeerInfo<Block>)> {
 		let mut peers = vec![];
 		for _peer in 0..self.peers {
@@ -183,5 +197,23 @@ fn system_peers() {
 			best_hash: Default::default(),
 			best_number: 1u64,
 		}]
+	);
+}
+
+#[test]
+fn system_network_state() {
+	assert_eq!(
+		api(None).system_network_state().unwrap(),
+		network::NetworkState {
+			peer_id: String::new(),
+			listened_addresses: Default::default(),
+			is_reserved_only: false,
+			reserved_peers: Default::default(),
+			banned_peers: Default::default(),
+			connected_peers: Default::default(),
+			not_connected_peers: Default::default(),
+			average_download_per_sec: 0,
+			average_upload_per_sec: 0,
+		}
 	);
 }

@@ -189,6 +189,8 @@ publish:docker:release:
   image:                           docker:stable
   services:
     - docker:dind
+  # collect VERSION artifact here to pass it on to kubernetes
+  <<:                              *collect_artifacts
   variables:
     DOCKER_HOST:                   tcp://localhost:2375
     DOCKER_DRIVER:                 overlay2
@@ -207,7 +209,8 @@ publish:docker:release:
     - docker push $CONTAINER_IMAGE:latest
   after_script:
     - docker logout
-
+    # only VERSION information is needed for the deployment
+    - find ./artifacts/ -depth -not -name VERSION -not -name artifacts -delete
 
 
 
@@ -267,6 +270,8 @@ publish:s3:doc:
   stage:                           deploy
   when:                            manual
   cache:                           {}
+  dependencies:
+    - publish:docker:release
   retry:                           1
   image:                           parity/kubectl-helm:$HELM_VERSION
   <<:                              *build_only
@@ -276,8 +281,8 @@ publish:s3:doc:
     - kubernetes-parity-build
   before_script:
     - test -z "${DEPLOY_TAG}" &&
-      test -f ./target/release/VERSION &&
-      DEPLOY_TAG="$(cat ./target/release/VERSION)"
+      test -f ./artifacts/VERSION &&
+      DEPLOY_TAG="$(cat ./artifacts/VERSION)"
     - test "${DEPLOY_TAG}" || ( echo "Neither DEPLOY_TAG nor VERSION information available"; exit 1 )
   script:
     - echo "Substrate version = ${DEPLOY_TAG}"
