@@ -16,12 +16,12 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, CodeHashOf, StorageOf, Trait};
+use super::{CodeHash, CodeHashOf, Trait};
 use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
-use srml_support::{StorageMap, StorageDoubleMap, traits::UpdateBalanceOutcome};
+use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -54,7 +54,7 @@ pub trait AccountDb<T: Trait> {
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		<StorageOf<T>>::get(account, &location.to_vec())
+    child::get_raw(account.as_ref::<[u8]>(), location) // TODO make a support trait , does not seems usefull
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<CodeHashOf<T>>::get(account)
@@ -69,7 +69,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					balances::Module::<T>::set_free_balance_creating(&address, balance)
 				{
 					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
-					// which will make removal of CodeHashOf and StorageOf for this account.
+					// which will make removal of CodeHashOf and AccountStorage for this account.
 					// In order to avoid writing over the deleted properties we `continue` here.
 					continue;
 				}
@@ -83,9 +83,9 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			}
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
-					<StorageOf<T>>::insert(&address, &k, value);
+					child::put_raw(address.as_ref::<[u8]>(), &k, &value[..]); // TODO move value (ref here is bad)
 				} else {
-					<StorageOf<T>>::remove(&address, &k);
+					child::kill(address.as_ref::<[u8]>(), &k);
 				}
 			}
 		}

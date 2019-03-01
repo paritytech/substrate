@@ -309,8 +309,8 @@ mod tests {
 		type Hash = substrate_primitives::H256;
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type AccountId = u64; // TODO only u64??
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = MetaEvent;
 		type Log = DigestItem;

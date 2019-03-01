@@ -107,6 +107,7 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 	}
 }
 
+// TODO implement child test primitives (or merge it in common use case)
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		match key {
@@ -142,6 +143,8 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		self.changes.clear_prefix(prefix);
 		self.inner.retain(|key, _| !key.starts_with(prefix));
 	}
+
+	fn clear_child_prefix(&mut self, _storage_key: &[u8], _prefix: &[u8]) { }
 
 	fn chain_id(&self) -> u64 { 42 }
 

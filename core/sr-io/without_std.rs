@@ -219,6 +219,19 @@ pub fn clear_prefix(prefix: &[u8]) {
 	}
 }
 
+/// Clear the child storage entries key of which starts with the given prefix.
+pub fn clear_child_prefix(storage_key: &[u8], prefix: &[u8]) {
+	unsafe {
+		ext_clear_child_prefix(
+			storage_key as ptr(),
+			storage_key.len as u32,
+			prefix.as_ptr(),
+			prefix.len() as u32
+		);
+	}
+}
+
+
 /// Clear an entire child storage.
 pub fn kill_child_storage(storage_key: &[u8]) {
 	unsafe {

@@ -132,10 +132,10 @@ where
 		let (root, is_default, transaction) = {
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
-				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 				.chain(self.overlay.prospective.children.get(storage_key)
 						.into_iter()
-						.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+						.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), v.value.clone()))));
 
 			self.backend.child_storage_root(storage_key, delta)
 		};
@@ -263,6 +263,21 @@ where
 			self.overlay.set_storage(key.to_vec(), None);
 		});
 	}
+
+	fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		let _guard = panic_handler::AbortGuard::new(true);
+		if is_child_storage_key(prefix) {
+			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
+			return;
+		}
+
+		self.mark_dirty();
+		self.overlay.clear_child_prefix(storage_key, prefix);
+		self.backend.for_keys_with_child_prefix(storage_key, prefix, |key| {
+			self.overlay.set_child_storage(storage_key.to_vec(), key.to_vec(), None);
+		});
+	}
+
 
 	fn chain_id(&self) -> u64 {
 		42

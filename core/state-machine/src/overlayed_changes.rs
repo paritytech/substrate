@@ -49,13 +49,21 @@ pub struct OverlayedValue {
 }
 
 /// Prospective or committed overlayed change set.
+/// TODO overlayed value can be split in two map (see previous children definition)
+/// maybe do it this way (but also for top in this case) : using top def for now as it is more tested
+/// Putting extrinsics out of `OverlayedValue` is  (single smaller hash set but I need to ensure it is also doable for top).
+/// TODO the cost of maintaining extrinsics is bad when not needed. TODO evaluate using btreeset
+/// u32 instead of hashset u32 !!!
+/// TODO ok basically here we change model to follow extrinsic for child trie too (if we want to
+/// generalize it is what must be done). Warning this is extra costy and we need a better way to
+/// skip it eg a bool flag in this struct.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
-	pub children: HashMap<Vec<u8>, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>)>,
+	pub children: HashMap<Vec<u8>, HashMap<Vec<u8>, OverlayedValue>>,
 }
 
 #[cfg(test)]
@@ -117,14 +125,14 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(storage_key) {
-			if let Some(val) = map.1.get(key) {
-				return Some(val.as_ref().map(AsRef::as_ref));
+			if let Some(val) = map.get(key) {
+				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
 		if let Some(map) = self.committed.children.get(storage_key) {
-			if let Some(val) = map.1.get(key) {
-				return Some(val.as_ref().map(AsRef::as_ref));
+			if let Some(val) = map.get(key) {
+				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
@@ -148,31 +156,45 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective child change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
+	/// TODO storage_key as &[u8]
 	pub(crate) fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key).or_default();
-		map_entry.1.insert(key, val);
+		let entry = map_entry.entry(key).or_default();
+		entry.value = val;
 
 		if let Some(extrinsic) = extrinsic_index {
-			map_entry.0.get_or_insert_with(Default::default)
+			entry.extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic);
 		}
 	}
 
 	/// Sync the child storage root.
+	/// TODO generalize to sync extrinsics parent
 	pub(crate) fn sync_child_storage_root(&mut self, storage_key: &[u8], root: Option<Vec<u8>>) {
 		let entry = self.prospective.top.entry(storage_key.to_vec()).or_default();
 		entry.value = root;
 
-		if let Some((Some(extrinsics), _)) = self.prospective.children.get(storage_key) {
-			for extrinsic in extrinsics {
-				entry.extrinsics.get_or_insert_with(Default::default)
-					.insert(*extrinsic);
+		if let Some(vals) = self.prospective.children.get(storage_key) {
+			for val in vals {
+				// TODO switch back to child struct (but also for top or it is not generalizable)
+				//
+				// TODO if not rewrite with map and iter
+				for oextrinsic in val.1.extrinsics.as_ref() {
+					for extrinsic in oextrinsic {
+						entry.extrinsics.get_or_insert_with(Default::default)
+							.insert(*extrinsic);
+					}
+				}
 			}
 		}
 	}
 
 	/// Clear child storage of given storage key.
+  /// TODO this currently only clear item from prospective or commit: it requires a new operation
+  /// to avoid element by element -> !! this should basically be considered as non working
+  /// implementation - plus the fact that we touch both prospective and comitted is not api
+  /// consistent.
 	///
 	/// NOTE that this doesn't take place immediately but written into the prospective
 	/// change set, and still can be reverted by [`discard_prospective`].
@@ -182,18 +204,23 @@ impl OverlayedChanges {
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key.to_vec()).or_default();
 
-		if let Some(extrinsic) = extrinsic_index {
-			map_entry.0.get_or_insert_with(Default::default)
-				.insert(extrinsic);
-		}
+		map_entry.values_mut().for_each(|e|{
+      e.value = None;
+      if let Some(extrinsic) = extrinsic_index {
+        e.extrinsics.get_or_insert_with(Default::default)
+          .insert(extrinsic);
+      }
+    });
 
-		map_entry.1.values_mut().for_each(|e| *e = None);
+    let map_entry = self.committed.children.entry(storage_key.to_vec()).or_default();
 
-		if let Some((_, committed_map)) = self.committed.children.get(storage_key) {
-			for (key, _) in committed_map.iter() {
-				map_entry.1.insert(key.clone(), None);
-			}
-		}
+		map_entry.values_mut().for_each(|e|{
+      e.value = None;
+      if let Some(extrinsic) = extrinsic_index {
+        e.extrinsics.get_or_insert_with(Default::default)
+          .insert(extrinsic);
+      }
+    });
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -203,11 +230,36 @@ impl OverlayedChanges {
 	///
 	/// [`discard_prospective`]: #method.discard_prospective
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.clear_prefix_inner(None, prefix)
+	}
+
+	/// Removes all key-value pairs which keys share the given prefix.
+	///
+	/// NOTE that this doesn't take place immediately but written into the prospective
+	/// change set, and still can be reverted by [`discard_prospective`].
+	///
+	/// [`discard_prospective`]: #method.discard_prospective
+	pub(crate) fn clear_child_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		self.clear_prefix_inner(Some(storage_key), prefix)
+	}
+
+
+  // TODO this is broken : it only clears pending prefix
+	fn clear_prefix_inner(&mut self, storage_key: Option<&[u8]>, prefix: &[u8]) {
 		let extrinsic_index = self.extrinsic_index();
 
+		let prospective = if let Some(storage_key) = storage_key {
+			if let Some(prospective_child) = self.prospective.children.get_mut(storage_key) {
+				prospective_child 
+			} else {
+				return;
+			}
+		} else {
+			&mut self.prospective.top
+		};
 		// Iterate over all prospective and mark all keys that share
 		// the given prefix as removed (None).
-		for (key, entry) in self.prospective.top.iter_mut() {
+		for (key, entry) in prospective.iter_mut() {
 			if key.starts_with(prefix) {
 				entry.value = None;
 
@@ -218,11 +270,21 @@ impl OverlayedChanges {
 			}
 		}
 
+		let committed = if let Some(storage_key) = storage_key {
+			if let Some(committed) = self.committed.children.get_mut(storage_key) {
+				committed
+			} else {
+				return;
+			}
+		} else {
+			&mut self.committed.top
+		};
+
 		// Then do the same with keys from commited changes.
 		// NOTE that we are making changes in the prospective change set.
-		for key in self.committed.top.keys() {
+		for key in committed.keys() {
 			if key.starts_with(prefix) {
-				let entry = self.prospective.top.entry(key.clone()).or_default();
+				let entry = prospective.entry(key.clone()).or_default();
 				entry.value = None;
 
 				if let Some(extrinsic) = extrinsic_index {
@@ -232,6 +294,7 @@ impl OverlayedChanges {
 			}
 		}
 	}
+
 
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
@@ -252,14 +315,17 @@ impl OverlayedChanges {
 						.extend(prospective_extrinsics);
 				}
 			}
-			for (storage_key, map) in self.prospective.children.drain() {
-				let entry = self.committed.children.entry(storage_key).or_default();
-				entry.1.extend(map.1.iter().map(|(k, v)| (k.clone(), v.clone())));
+			for (storage_key, mut map) in self.prospective.children.drain() {
+				let ttp = self.committed.children.entry(storage_key).or_default();
+        for (key, val) in map.drain() {
+          let entry = ttp.entry(key).or_default();
+          entry.value = val.value;
 
-				if let Some(prospective_extrinsics) = map.0 {
-					entry.0.get_or_insert_with(Default::default)
-						.extend(prospective_extrinsics);
-				}
+          if let Some(prospective_extrinsics) = val.extrinsics {
+            entry.extrinsics.get_or_insert_with(Default::default)
+              .extend(prospective_extrinsics);
+          }
+        }
 			}
 		}
 	}

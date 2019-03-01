@@ -67,7 +67,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type Digest = Digest;
 		type AccountId = u64;
-		type Lookup = IdentityLookup<u64>;
+		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
 		type Event = Event;
 		type Log = DigestItem;
