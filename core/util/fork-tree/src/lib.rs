@@ -349,57 +349,65 @@ impl<H, N, V> ForkTree<H, N, V> where
 	}
 }
 
-#[derive(Clone, Debug, Decode, Encode)]
-#[cfg_attr(test, derive(PartialEq))]
-struct Node<H, N, V> {
-	hash: H,
-	number: N,
-	data: V,
-	children: Vec<Node<H, N, V>>,
-}
+// Workaround for: https://github.com/rust-lang/rust/issues/34537
+mod node_implementation {
+	use super::*;
 
-impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
-	fn import<F, E: std::error::Error>(
-		&mut self,
-		mut hash: H,
-		mut number: N,
-		mut data: V,
-		is_descendent_of: &F,
-	) -> Result<Option<(H, N, V)>, Error<E>>
-		where E: fmt::Debug,
-			  F: Fn(&H, &H) -> Result<bool, E>,
-	{
-		if self.hash == hash {
-			return Err(Error::Duplicate);
-		};
+	#[derive(Clone, Debug, Decode, Encode)]
+	#[cfg_attr(test, derive(PartialEq))]
+	pub struct Node<H, N, V> {
+		pub hash: H,
+		pub number: N,
+		pub data: V,
+		pub children: Vec<Node<H, N, V>>,
+	}
 
-		if number <= self.number { return Ok(Some((hash, number, data))); }
+	impl<H: PartialEq, N: Ord, V> Node<H, N, V> {
+		pub fn import<F, E: std::error::Error>(
+			&mut self,
+			mut hash: H,
+			mut number: N,
+			mut data: V,
+			is_descendent_of: &F,
+		) -> Result<Option<(H, N, V)>, Error<E>>
+			where E: fmt::Debug,
+				  F: Fn(&H, &H) -> Result<bool, E>,
+		{
+			if self.hash == hash {
+				return Err(Error::Duplicate);
+			};
 
-		for node in self.children.iter_mut() {
-			match node.import(hash, number, data, is_descendent_of)? {
-				Some((h, n, d)) => {
-					hash = h;
-					number = n;
-					data = d;
-				},
-				None => return Ok(None),
+			if number <= self.number { return Ok(Some((hash, number, data))); }
+
+			for node in self.children.iter_mut() {
+				match node.import(hash, number, data, is_descendent_of)? {
+					Some((h, n, d)) => {
+						hash = h;
+						number = n;
+						data = d;
+					},
+					None => return Ok(None),
+				}
 			}
-		}
 
-		if is_descendent_of(&self.hash, &hash)? {
-			self.children.push(Node {
-				data,
-				hash: hash,
-				number: number,
-				children: Vec::new(),
-			});
+			if is_descendent_of(&self.hash, &hash)? {
+				self.children.push(Node {
+					data,
+					hash: hash,
+					number: number,
+					children: Vec::new(),
+				});
 
-			Ok(None)
-		} else {
-			Ok(Some((hash, number, data)))
+				Ok(None)
+			} else {
+				Ok(Some((hash, number, data)))
+			}
 		}
 	}
 }
+
+// Workaround for: https://github.com/rust-lang/rust/issues/34537
+use node_implementation::Node;
 
 struct ForkTreeIterator<'a, H, N, V> {
 	stack: Vec<&'a Node<H, N, V>>,

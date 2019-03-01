@@ -16,16 +16,27 @@
 
 use super::*;
 
-use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo, PublicKey};
+use network::{self, SyncState, SyncStatus, ProtocolStatus, NodeIndex, PeerId, PeerInfo as NetworkPeerInfo};
 use network::config::Roles;
 use test_client::runtime::Block;
 use assert_matches::assert_matches;
 
-#[derive(Default)]
 struct Status {
 	pub peers: usize,
 	pub is_syncing: bool,
 	pub is_dev: bool,
+	pub peer_id: PeerId,
+}
+
+impl Default for Status {
+	fn default() -> Status {
+		Status {
+			peer_id: PeerId::random(),
+			peers: 0,
+			is_syncing: false,
+			is_dev: false,
+		}
+	}
 }
 
 impl network::SyncProvider<Block> for Status {
@@ -41,8 +52,23 @@ impl network::SyncProvider<Block> for Status {
 		}
 	}
 
-	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, NetworkPeerInfo<Block>)> {
-		vec![(1, Some(PublicKey::Ed25519((0 .. 32).collect::<Vec<u8>>()).into()), NetworkPeerInfo {
+	fn network_state(&self) -> network::NetworkState {
+		network::NetworkState {
+			peer_id: String::new(),
+			listened_addresses: Default::default(),
+			is_reserved_only: false,
+			reserved_peers: Default::default(),
+			banned_peers: Default::default(),
+			connected_peers: Default::default(),
+			not_connected_peers: Default::default(),
+			average_download_per_sec: 0,
+			average_upload_per_sec: 0,
+		}
+	}
+
+	fn peers(&self) -> Vec<(NodeIndex, NetworkPeerInfo<Block>)> {
+		vec![(1, NetworkPeerInfo {
+			peer_id: self.peer_id.clone(),
 			roles: Roles::FULL,
 			protocol_version: 1,
 			best_hash: Default::default(),
@@ -108,6 +134,7 @@ fn system_health() {
 
 	assert_matches!(
 		api(Status {
+			peer_id: PeerId::random(),
 			peers: 5,
 			is_syncing: true,
 			is_dev: true,
@@ -121,6 +148,7 @@ fn system_health() {
 
 	assert_eq!(
 		api(Status {
+			peer_id: PeerId::random(),
 			peers: 5,
 			is_syncing: false,
 			is_dev: false,
@@ -134,6 +162,7 @@ fn system_health() {
 
 	assert_eq!(
 		api(Status {
+			peer_id: PeerId::random(),
 			peers: 0,
 			is_syncing: false,
 			is_dev: true,
@@ -148,15 +177,39 @@ fn system_health() {
 
 #[test]
 fn system_peers() {
+	let peer_id = PeerId::random();
 	assert_eq!(
-		api(None).system_peers().unwrap(),
+		api(Status {
+			peer_id: peer_id.clone(),
+			peers: 1,
+			is_syncing: false,
+			is_dev: true,
+		}).system_peers().unwrap(),
 		vec![PeerInfo {
 			index: 1,
-			peer_id: "QmS5oyTmdjwBowwAH1D9YQnoe2HyWpVemH8qHiU5RqWPh4".into(),
+			peer_id: peer_id.to_base58(),
 			roles: "FULL".into(),
 			protocol_version: 1,
 			best_hash: Default::default(),
 			best_number: 1u64,
 		}]
+	);
+}
+
+#[test]
+fn system_network_state() {
+	assert_eq!(
+		api(None).system_network_state().unwrap(),
+		network::NetworkState {
+			peer_id: String::new(),
+			listened_addresses: Default::default(),
+			is_reserved_only: false,
+			reserved_peers: Default::default(),
+			banned_peers: Default::default(),
+			connected_peers: Default::default(),
+			not_connected_peers: Default::default(),
+			average_download_per_sec: 0,
+			average_upload_per_sec: 0,
+		}
 	);
 }

@@ -26,6 +26,7 @@ use substrate_service;
 use hex_literal::{hex, hex_impl};
 
 use substrate_keystore::pad_seed;
+use substrate_telemetry::TelemetryEndpoints;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -153,7 +154,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		"staging_testnet",
 		staging_testnet_config_genesis,
 		boot_nodes,
-		Some(STAGING_TELEMETRY_URL.into()),
+		Some(TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])),
 		None,
 		None,
 		None,

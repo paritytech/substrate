@@ -403,12 +403,13 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		);
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 
-		if number.is_zero() {
-			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
+		let is_genesis = number.is_zero();
+		if is_genesis {
 			transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 		}
 
 		let finalized = match leaf_state {
+			_ if is_genesis => true,
 			NewBlockState::Final => true,
 			_ => false,
 		};
@@ -972,7 +973,7 @@ pub(crate) mod tests {
 	#[test]
 	fn test_leaves_pruned_on_finality() {
 		let db = LightStorage::<Block>::new_test();
-		let block0 = insert_final_block(&db, None, || default_header(&Default::default(), 0));
+		let block0 = insert_block(&db, None, || default_header(&Default::default(), 0));
 
 		let block1_a = insert_block(&db, None, || default_header(&block0, 1));
 		let block1_b = insert_block(&db, None, || header_with_extrinsics_root(&block0, 1, [1; 32].into()));

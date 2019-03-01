@@ -98,6 +98,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		self.custom_protocols.cleanup();
 	}
 
+	/// Returns the list of reserved nodes.
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.custom_protocols.reserved_peers()
+	}
+
 	/// Try to add a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.custom_protocols.add_reserved_peer(peer_id, addr)
@@ -109,6 +114,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	/// method will disconnect it and return its index.
 	pub fn remove_reserved_peer(&mut self, peer_id: PeerId) {
 		self.custom_protocols.remove_reserved_peer(peer_id)
+	}
+
+	/// Returns true if we only accept reserved nodes.
+	pub fn is_reserved_only(&self) -> bool {
+		self.custom_protocols.is_reserved_only()
 	}
 
 	/// Start accepting all peers again if we weren't.
@@ -129,6 +139,21 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		self.custom_protocols.ban_peer(peer_id)
 	}
 
+	/// Returns a list of all the peers that are banned, and until when.
+	pub fn banned_nodes(&self) -> impl Iterator<Item = (&PeerId, Instant)> {
+		self.custom_protocols.banned_peers()
+	}
+
+	/// Returns true if we try to open protocols with the given peer.
+	pub fn is_enabled(&self, peer_id: &PeerId) -> bool {
+		self.custom_protocols.is_enabled(peer_id)
+	}
+
+	/// Returns the list of protocols we have open with the given peer.
+	pub fn open_protocols<'a>(&'a self, peer_id: &'a PeerId) -> impl Iterator<Item = ProtocolId> + 'a {
+		self.custom_protocols.open_protocols(peer_id)
+	}
+
 	/// Disconnects the custom protocols from a peer.
 	///
 	/// The peer will still be able to use Kademlia or other protocols, but will get disconnected
@@ -141,6 +166,16 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 	#[inline]
 	pub fn drop_node(&mut self, peer_id: &PeerId) {
 		self.custom_protocols.disconnect_peer(peer_id)
+	}
+
+	/// Returns the list of peers in the topology.
+	pub fn known_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.custom_protocols.known_peers()
+	}
+
+	/// Returns a list of addresses known for this peer, and their reputation score.
+	pub fn known_addresses(&mut self, peer_id: &PeerId) -> impl Iterator<Item = (&Multiaddr, u32)> {
+		self.custom_protocols.known_addresses(peer_id)
 	}
 }
 
@@ -195,6 +230,14 @@ pub enum BehaviourOut<TMessage> {
 		peer_id: PeerId,
 		/// Information about the peer.
 		info: IdentifyInfo,
+	},
+
+	/// We have successfully pinged a peer.
+	PingSuccess {
+		/// Id of the peer that has been pinged.
+		peer_id: PeerId,
+		/// Time it took for the ping to come back.
+		ping_time: Duration,
 	},
 }
 
@@ -290,6 +333,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<PingEvent> for Behaviour
 		match event {
 			PingEvent::PingSuccess { peer, time } => {
 				trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer, time);
+				self.events.push(BehaviourOut::PingSuccess { peer_id: peer, ping_time: time });
 			}
 		}
 	}
