@@ -18,33 +18,26 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use runtime_primitives::traits::{Block as BlockT, One, Header as HeaderT};
+use runtime_primitives::traits::Block as BlockT;
 use rstd::{vec::Vec, collections::btree_map::BTreeMap};
-use executive::ExecuteBlock;
-use parity_codec::Decode;
 use parity_codec_derive::{Encode, Decode};
 #[doc(hidden)]
 pub use rstd::slice;
+
+#[cfg(not(feature = "std"))]
+#[doc(hidden)]
+pub mod validate_block;
 
 /// The parachain block that is created on a collator and validated by a validator.
 #[derive(Encode, Decode)]
 struct ParachainBlock<B: BlockT> {
 	extrinsics: Vec<<B as BlockT>::Extrinsic>,
 	/// The data that is required to emulate the storage accesses executed by all extrinsics.
-	witness_data: Vec<(Vec<u8>, Vec<u8>)>,
-}
-
-#[doc(hidden)]
-pub fn validate_block<Block: BlockT, E: ExecuteBlock<Block>>(mut block: &[u8], mut prev_head: &[u8]) {
-	let block = ParachainBlock::<Block>::decode(&mut block).expect("Could not decode parachain block.");
-	let parent_header = <<Block as BlockT>::Header as Decode>::decode(&mut prev_head).expect("Could not decode parent header.");
-
-	let block_number = *parent_header.number() + One::one();
-
-	E::execute_extrinsics_without_checks(block_number, block.extrinsics);
+	witness_data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
 /// Register the `validate_block` function that is used by parachains to validate blocks on a validator.
+#[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! register_validate_block {
 	($block:ident, $executive:ident) => {
@@ -57,8 +50,17 @@ macro_rules! register_validate_block {
 				let block = $crate::slice::from_raw_parts(block, block_len as usize);
 				let prev_head = $crate::slice::from_raw_parts(prev_head, prev_head_len as usize);
 
-				$crate::validate_block::<$block, $executive>(block, prev_head);
+				$crate::validate_block::validate_block::<$block, $executive>(block, prev_head);
 			}
 		}
 	};
+}
+
+/// Register the `validate_block` function that is used by parachains to validate blocks on a validator.
+///
+/// Does *nothing* when `std` feature is enabled.
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! register_validate_block {
+	($block:ident, $executive:ident) => {};
 }

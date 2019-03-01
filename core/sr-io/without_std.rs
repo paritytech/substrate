@@ -447,7 +447,7 @@ pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
 	let mut length: u32 = 0;
 	unsafe {
 		let ptr = ext_child_storage_root(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
-		if length == u32::max_value() || ptr.is_null() {
+		if length == u32::max_value() {
 			None
 		} else {
 			// Invariants required by Vec::from_raw_parts are not formally fulfilled.
