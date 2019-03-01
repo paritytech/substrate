@@ -17,7 +17,7 @@
 //! Tests and test helpers for GRANDPA.
 
 use super::*;
-use network::test::{Block, Hash, TestNetFactory, Peer, PeersClient};
+use network::test::{Block, DummySpecialization, Hash, TestNetFactory, Peer, PeersClient};
 use network::test::{PassThroughVerifier};
 use network::config::{ProtocolConfig, Roles};
 use parking_lot::Mutex;
@@ -52,12 +52,12 @@ type PeerData =
 			>
 		>
 	>;
-type GrandpaPeer = Peer<PeerData>;
+type GrandpaPeer = Peer<PeerData, DummySpecialization>;
 
 struct GrandpaTestNet {
 	peers: Vec<Arc<GrandpaPeer>>,
 	test_config: TestApi,
-	started: bool
+	started: bool,
 }
 
 impl GrandpaTestNet {
@@ -68,16 +68,15 @@ impl GrandpaTestNet {
 			test_config,
 		};
 		let config = Self::default_config();
-
 		for _ in 0..n_peers {
 			net.add_peer(&config);
 		}
-
 		net
 	}
 }
 
 impl TestNetFactory for GrandpaTestNet {
+	type Specialization = DummySpecialization;
 	type Verifier = PassThroughVerifier;
 	type PeerData = PeerData;
 
@@ -86,7 +85,7 @@ impl TestNetFactory for GrandpaTestNet {
 		GrandpaTestNet {
 			peers: Vec::new(),
 			test_config: Default::default(),
-			started: false
+			started: false,
 		}
 	}
 
@@ -122,7 +121,7 @@ impl TestNetFactory for GrandpaTestNet {
 		&self.peers
 	}
 
-	fn mut_peers<F: Fn(&mut Vec<Arc<GrandpaPeer>>)>(&mut self, closure: F) {
+	fn mut_peers<F: FnOnce(&mut Vec<Arc<GrandpaPeer>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
 
@@ -182,7 +181,10 @@ impl Network<Block> for MessageRouting {
 		self.validator.note_round(round, set_id);
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-		let messages = peer.consensus_gossip_messages_for(make_topic(round, set_id));
+		let messages = peer.consensus_gossip_messages_for(
+			GRANDPA_ENGINE_ID,
+			make_topic(round, set_id),
+		);
 
 		let messages = messages.map_err(
 			move |_| panic!("Messages for round {} dropped too early", round)
@@ -212,7 +214,10 @@ impl Network<Block> for MessageRouting {
 		self.validator.note_set(set_id);
 		let inner = self.inner.lock();
 		let peer = inner.peer(self.peer_id);
-        let messages = peer.consensus_gossip_messages_for(make_commit_topic(set_id));
+        let messages = peer.consensus_gossip_messages_for(
+			GRANDPA_ENGINE_ID,
+			make_commit_topic(set_id),
+		);
 
 		let messages = messages.map_err(
 			move |_| panic!("Commit messages for set {} dropped too early", set_id)

@@ -120,7 +120,7 @@ fn node_config<F: ServiceFactory> (
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
-		telemetry_url: None,
+		telemetry_endpoints: None,
 		default_heap_pages: None,
 	}
 }
