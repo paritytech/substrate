@@ -101,7 +101,7 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type OnFreeBalanceZero = (((Staking, Contract), Democracy), Session);
 	type OnNewAccount = Indices;
 	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
