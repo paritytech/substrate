@@ -29,10 +29,13 @@ use rstd::{cmp, result};
 use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
-use srml_support::traits::{UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, ArithmeticType};
+use srml_support::traits::{
+	UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, TransferAsset, WithdrawReason, ArithmeticType
+};
 use srml_support::dispatch::Result;
-use primitives::traits::{Zero, SimpleArithmetic,
-	As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug, TransferAsset};
+use primitives::traits::{
+	Zero, SimpleArithmetic, As, StaticLookup, Member, CheckedAdd, CheckedSub, MaybeSerializeDebug
+};
 use system::{IsDeadAccount, OnNewAccount, ensure_signed};
 
 mod mock;
@@ -52,7 +55,7 @@ pub trait Trait: system::Trait {
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
 
 	/// A function that returns true iff a given account can transfer its funds to another account.
-	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId>;
+	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId, Self::Balance>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -272,34 +275,6 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
-	///
-	/// This is a sensitive function since it circumvents any fees associated with account
-	/// setup. Ensure it is only called by trusted code.
-	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
-	/// you mean to actually mint value into existence, then use `reward` instead.
-	pub fn increase_free_balance_creating(who: &T::AccountId, value: T::Balance) -> UpdateBalanceOutcome {
-		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
-	}
-
-	/// Substrates `value` from the free balance of `who`. If the whole amount cannot be
-	/// deducted, an error is returned.
-	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
-	/// you mean to actually burn value out of existence, then use `slash` instead.
-	pub fn decrease_free_balance(
-		who: &T::AccountId,
-		value: T::Balance
-	) -> result::Result<UpdateBalanceOutcome, &'static str> {
-		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
-		let b = Self::free_balance(who);
-		if b < value {
-			return Err("account has too few funds")
-		}
-		Ok(Self::set_free_balance(who, b - value))
-	}
-
 	/// Transfer some liquid free balance to another staker.
 	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
 		let from_balance = Self::free_balance(transactor);
@@ -320,7 +295,7 @@ impl<T: Trait> Module<T> {
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		T::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
+		T::EnsureAccountLiquid::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
@@ -402,23 +377,27 @@ where
 	}
 
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		if T::EnsureAccountLiquid::ensure_account_liquid(who).is_ok() {
+		if T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve).is_ok() {
 			Self::free_balance(who) >= value
 		} else {
 			false
 		}
 	}
 
-	fn total_issuance() -> Self:: Balance {
-		Self::total_issuance()
+	fn total_issuance() -> Self::Balance {
+		<TotalIssuance<T>>::get()
+	}
+
+	fn minimum_balance() -> Self::Balance {
+		Self::existential_deposit()
 	}
 
 	fn free_balance(who: &T::AccountId) -> Self::Balance {
-		Self::free_balance(who)
+		<FreeBalance<T>>::get(who)
 	}
 
 	fn reserved_balance(who: &T::AccountId) -> Self::Balance {
-		Self::reserved_balance(who)
+		<ReservedBalance<T>>::get(who)
 	}
 
 	fn slash(who: &T::AccountId, value: Self::Balance) -> Option<Self::Balance> {
@@ -451,7 +430,7 @@ where
 		if b < value {
 			return Err("not enough free funds")
 		}
-		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, b - value);
 		Ok(())
@@ -508,8 +487,8 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 		Self::make_transfer(from, to, amount)
 	}
 
-	fn remove_from(who: &T::AccountId, value: T::Balance) -> Result {
-		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
+		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, reason)?;
 		let b = Self::free_balance(who);
 		ensure!(b >= value, "account has too few funds");
 		Self::set_free_balance(who, b - value);
@@ -517,7 +496,7 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 		Ok(())
 	}
 
-	fn add_to(who: &T::AccountId, value: T::Balance) -> Result {
+	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
 		Self::increase_total_stake_by(value);
 		Ok(())

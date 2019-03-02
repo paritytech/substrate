@@ -209,7 +209,7 @@ pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
-		let validators = staking::Module::<T>::validators();
+		let validators = session::Module::<T>::validators();
 
 		report.punish(
 			validators.len(),

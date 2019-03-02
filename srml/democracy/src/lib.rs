@@ -24,7 +24,7 @@ use primitives::traits::{Zero, As};
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::{decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid, ArithmeticType};
+use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid, WithdrawReason, ArithmeticType};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
@@ -415,12 +415,25 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> EnsureAccountLiquid<T::AccountId> for Module<T> {
+impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
 	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		if Self::bondage(who) <= <system::Module<T>>::block_number() {
+		if Self::bondage(who) > <system::Module<T>>::block_number() {
+			Err("stash accounts are not liquid")
+		} else {
+			Ok(())
+		}
+	}
+	fn ensure_account_can_withdraw(
+		who: &T::AccountId,
+		_value: BalanceOf<T>,
+		reason: WithdrawReason,
+	) -> Result {
+		if reason == WithdrawReason::TransactionPayment
+			|| Self::bondage(who) <= <system::Module<T>>::block_number()
+		{
 			Ok(())
 		} else {
-			Err("cannot transfer illiquid funds")
+			Err("cannot transfer voting funds")
 		}
 	}
 }
