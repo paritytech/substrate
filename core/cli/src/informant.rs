@@ -17,44 +17,41 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use ansi_term::Colour;
-use std::{fmt, time::{Duration, Instant}};
+use std::fmt;
+use std::time;
 use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
-use tokio::timer::Interval;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
 use client::{backend::Backend, BlockchainEvents};
 use substrate_telemetry::*;
-use log::{debug, info, warn};
+use log::{info, warn};
 
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
-
-const TIMER_INTERVAL_MS: u64 = 5000;
 
 /// Spawn informant on the event loop
 pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExecutor) where
 	C: Components,
 {
-	let interval = Interval::new(Instant::now(), Duration::from_millis(TIMER_INTERVAL_MS));
-
 	let network = service.network();
 	let client = service.client();
 	let txpool = service.transaction_pool();
 	let mut last_number = None;
+	let mut last_update = time::Instant::now();
 
 	let mut sys = System::new();
 	let self_pid = get_current_pid();
 
-	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
-		let sync_status = network.status();
+	let display_notifications = network.status().for_each(move |sync_status| {
 
 		if let Ok(info) = client.info() {
 			let best_number: u64 = info.chain.best_number.as_();
 			let best_hash = info.chain.best_hash;
 			let num_peers = sync_status.num_peers;
-			let speed = move || speed(best_number, last_number);
+			let speed = move || speed(best_number, last_number, last_update);
+			last_update = time::Instant::now();
 			let (status, target) = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
 				(SyncState::Idle, _) => ("Idle".into(), "".into()),
 				(SyncState::Downloading, None) => (format!("Syncing{}", speed()), "".into()),
@@ -153,9 +150,11 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	handle.spawn(exit.until(informant_work).map(|_| ()));
 }
 
-fn speed(best_number: u64, last_number: Option<u64>) -> String {
+fn speed(best_number: u64, last_number: Option<u64>, last_update: time::Instant) -> String {
+	let since_last_millis = last_update.elapsed().as_secs() * 1000;
+	let since_last_subsec_millis = last_update.elapsed().subsec_millis() as u64;
 	let speed = match last_number {
-		Some(num) => (best_number.saturating_sub(num) * 10_000 / TIMER_INTERVAL_MS) as f64,
+		Some(num) => (best_number.saturating_sub(num) * 10_000 / (since_last_millis + since_last_subsec_millis)) as f64,
 		None => 0.0
 	};
 
