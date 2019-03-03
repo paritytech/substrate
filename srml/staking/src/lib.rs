@@ -112,7 +112,11 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating, BlockNumber: HasCompact + PartialOrd> StakingLedger<AccountId, Balance, BlockNumber> {
+impl<
+	AccountId,
+	Balance: HasCompact + Copy + Saturating,
+	BlockNumber: HasCompact + PartialOrd
+> StakingLedger<AccountId, Balance, BlockNumber> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: BlockNumber) -> Self {

@@ -18,6 +18,7 @@
 
 use crate::rstd::result;
 use crate::codec::Codec;
+use crate::parity_codec_derive::{Encode, Decode};
 use crate::runtime_primitives::traits::{
 	MaybeSerializeDebug, SimpleArithmetic, As
 };
@@ -247,7 +248,7 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 }
 
 /// Reason for moving funds out of an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum WithdrawReason {
 	/// In order to pay for (system) transaction costs.
