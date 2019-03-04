@@ -16,14 +16,7 @@
 
 use crate::codec;
 use runtime_io::twox_128;
-#[doc(hidden)]
-pub use crate::rstd::borrow::Borrow;
-#[doc(hidden)]
-pub use crate::rstd::marker::PhantomData;
-#[doc(hidden)]
-pub use crate::rstd::boxed::Box;
-#[doc(hidden)]
-pub use crate::rstd::vec::Vec;
+use crate::rstd::vec::Vec;
 
 /// Abstraction around storage with unhashed access.
 pub trait UnhashedStorage {
