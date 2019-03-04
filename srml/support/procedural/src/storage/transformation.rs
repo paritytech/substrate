@@ -265,7 +265,7 @@ fn decl_store_extra_genesis(
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k1, k2, v) in data.into_iter() {
-							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
+							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
 						}
 					}}
 				},
@@ -531,7 +531,7 @@ fn impl_store_fns(
 							KArg1: #scrate::storage::generator::Borrow<#key1_type>,
 							KArg2: #scrate::storage::generator::Borrow<#key2_type>,
 						{
-							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMapXX<#key1_type, #key2_type, #typ>> :: get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
+							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>> :: get(k1.borrow(), k2.borrow(), &#scrate::storage::RuntimeStorage)
 						}
 					}
 				}

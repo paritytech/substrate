@@ -55,10 +55,10 @@ pub mod inherent;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMapXX};
+pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
-pub use self::double_map::StorageDoubleMap;
+pub use self::double_map::StorageDoubleMapWithHasher;
 pub use runtime_io::print;
 
 #[doc(inline)]

@@ -24,7 +24,7 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorit
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
-use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
+use srml_support::{StorageMap, StorageDoubleMapWithHasher, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
 use fees;

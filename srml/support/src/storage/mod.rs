@@ -389,7 +389,7 @@ impl<K: Codec, V: Codec, U> EnumerableStorageMap<K, V> for U where U: generator:
 /// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
 /// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
 /// is a hash of a `Key2`.
-pub trait StorageDoubleMapXX<K1: Codec, K2: Codec, V: Codec> {
+pub trait StorageDoubleMap<K1: Codec, K2: Codec, V: Codec> {
 	/// The type that get/take returns.
 	type Query;
 
@@ -428,22 +428,22 @@ pub trait StorageDoubleMapXX<K1: Codec, K2: Codec, V: Codec> {
 		F: FnOnce(&mut Self::Query) -> R;
 }
 
-impl<K1: Codec, K2: Codec, V: Codec, U> StorageDoubleMapXX<K1, K2, V> for U
+impl<K1: Codec, K2: Codec, V: Codec, U> StorageDoubleMap<K1, K2, V> for U
 where
-	U: unhashed::generator::StorageDoubleMapXX<K1, K2, V>
+	U: unhashed::generator::StorageDoubleMap<K1, K2, V>
 {
 	type Query = U::Query;
 
 	fn prefix() -> &'static [u8] {
-		<U as unhashed::generator::StorageDoubleMapXX<K1, K2, V>>::prefix()
+		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::prefix()
 	}
 
 	fn key_for<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Vec<u8> {
-		<U as unhashed::generator::StorageDoubleMapXX<K1, K2, V>>::key_for(k1.borrow(), k2.borrow())
+		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::key_for(k1.borrow(), k2.borrow())
 	}
 
 	fn prefix_for<KArg1: Borrow<K1>>(k1: KArg1) -> Vec<u8> {
-		<U as unhashed::generator::StorageDoubleMapXX<K1, K2, V>>::prefix_for(k1.borrow())
+		<U as unhashed::generator::StorageDoubleMap<K1, K2, V>>::prefix_for(k1.borrow())
 	}
 
 	fn exists<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> bool {

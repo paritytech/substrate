@@ -73,7 +73,7 @@ use parity_codec::{Codec, Encode};
 use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
-use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
+use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMapWithHasher, decl_module, decl_event, decl_storage};
 use srml_support::traits::OnFreeBalanceZero;
 use system::{ensure_signed, RawOrigin};
 use runtime_io::{blake2_256, twox_128};
@@ -348,7 +348,7 @@ decl_storage! {
 /// The storage items associated with an account/key.
 ///
 pub(crate) struct StorageOf<T>(rstd::marker::PhantomData<T>);
-impl<T: Trait> StorageDoubleMap for StorageOf<T> {
+impl<T: Trait> StorageDoubleMapWithHasher for StorageOf<T> {
 	const PREFIX: &'static [u8] = b"con:sto:";
 	type Key1 = T::AccountId;
 	type Key2 = Vec<u8>;
