@@ -23,7 +23,6 @@ pub mod system;
 
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Encode, Decode, Input};
-use parity_codec_derive::{Encode, Decode};
 
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,

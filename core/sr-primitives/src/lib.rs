@@ -31,7 +31,7 @@ use std::collections::HashMap;
 
 use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
-use parity_codec_derive::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use substrate_primitives::hexdisplay::ascii_format;
