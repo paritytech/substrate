@@ -26,9 +26,11 @@ use std::{
 
 use client::runtime_api::{ApiExt, OffchainWorker};
 use runtime_primitives::{
-	ExecutionContext,
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
+};
+use primitives::{
+	ExecutionContext, OffchainExt,
 };
 use log::debug;
 use futures::Future;
@@ -41,6 +43,14 @@ use futures::Future;
 // 		fn generate_extrinsics(number: <<Block as BlockT>::Header as HeaderT>::Number);
 // 	}
 // }
+
+struct Api;
+
+impl OffchainExt for Api {
+	fn submit_extrinsic(&mut self, _ext: Vec<u8>) {
+		unimplemented!()
+	}
+}
 
 /// An offchain workers manager.
 #[derive(Debug)]
@@ -72,7 +82,8 @@ impl<C, Block> OffchainWorkers<C, Block> where
 
 		if let Ok(true) = runtime.has_api::<OffchainWorker<Block>>(&at) {
 			debug!("Running offchain workers at {:?}", at);
-			runtime.generate_extrinsics_with_context(&at, ExecutionContext::OffchainWorker, *number).unwrap();
+			let api = Box::new(Api);
+			runtime.generate_extrinsics_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
 		}
 		return futures::future::ok(())
 	}

@@ -33,9 +33,9 @@ use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
 	ApiRef, ProvideRuntimeApi, Digest, DigestItem, AuthorityIdFor
 };
-use runtime_primitives::{BuildStorage, ExecutionContext};
+use runtime_primitives::BuildStorage;
 use crate::runtime_api::{CallRuntimeAt, ConstructRuntimeApi};
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue};
+use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash, NeverNativeValue, ExecutionContext};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use parity_codec::{Encode, Decode};
@@ -1330,7 +1330,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>
 {
 	fn call_api_at<
-		R: Encode + Decode + PartialEq, NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe
+		R: Encode + Decode + PartialEq,
+		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -1339,27 +1340,41 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 		changes: &mut OverlayedChanges,
 		initialised_block: &mut Option<BlockId<Block>>,
 		native_call: Option<NC>,
-		context: ExecutionContext
+		context: ExecutionContext,
 	) -> error::Result<NativeOrEncoded<R>> {
 		let manager = match context {
 			ExecutionContext::BlockConstruction => self.execution_strategies.block_construction.get_manager(),
 			ExecutionContext::Syncing => self.execution_strategies.syncing.get_manager(),
 			ExecutionContext::Importing => self.execution_strategies.importing.get_manager(),
-			ExecutionContext::OffchainWorker => self.execution_strategies.offchain_worker.get_manager(),
+			ExecutionContext::OffchainWorker(_) => self.execution_strategies.offchain_worker.get_manager(),
 			ExecutionContext::Other => self.execution_strategies.other.get_manager(),
 		};
-		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
-			at,
-			function,
-			&args,
-			changes,
-			initialised_block,
-			|| self.prepare_environment_block(at),
-			manager,
-			native_call,
-			// TODO [ToDr] This should have offchainext?
-			NeverOffchainExt::new(),
-		)
+
+		if let ExecutionContext::OffchainWorker(mut ext) = context {
+			self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
+				at,
+				function,
+				&args,
+				changes,
+				initialised_block,
+				|| self.prepare_environment_block(at),
+				manager,
+				native_call,
+				Some(&mut ext),
+			)
+		} else {
+			self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
+				at,
+				function,
+				&args,
+				changes,
+				initialised_block,
+				|| self.prepare_environment_block(at),
+				manager,
+				native_call,
+				NeverOffchainExt::new(),
+			)
+		}
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {

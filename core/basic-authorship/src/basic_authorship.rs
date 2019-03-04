@@ -28,11 +28,10 @@ use client::{
 };
 use codec::Decode;
 use consensus_common::{self, evaluation};
-use primitives::{H256, Blake2Hasher};
+use primitives::{H256, Blake2Hasher, ExecutionContext};
 use runtime_primitives::traits::{
 	Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi, AuthorityIdFor
 };
-use runtime_primitives::ExecutionContext;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};

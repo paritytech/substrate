@@ -284,23 +284,6 @@ impl From<H512> for Sr25519Signature {
 	}
 }
 
-/// Context for executing a call into the runtime.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
-#[repr(u8)]
-pub enum ExecutionContext {
-	/// Context for general importing (including own blocks).
-	Importing,
-	/// Context used when syncing the blockchain.
-	Syncing,
-	/// Context used for block construction.
-	BlockConstruction,
-	/// Offchain worker context.
-	OffchainWorker,
-	/// Context used for other calls.
-	Other,
-}
-
 #[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]

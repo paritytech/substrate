@@ -21,7 +21,7 @@ use std::{collections::HashSet, sync::Arc, panic::UnwindSafe, result, marker::Ph
 use futures::{IntoFuture, Future};
 
 use parity_codec::{Encode, Decode};
-use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded};
+use primitives::{H256, Blake2Hasher, convert_hash, NativeOrEncoded, OffchainExt};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT};
 use state_machine::{self, Backend as StateBackend, CodeExecutor, OverlayedChanges, ExecutionStrategy,
@@ -81,7 +81,7 @@ where
 	type Error = ClientError;
 
 	fn call<
-		O: state_machine::OffchainExt,
+		O: OffchainExt,
 	>(
 		&self,
 		id: &BlockId<Block>,
@@ -104,7 +104,7 @@ where
 	}
 
 	fn contextual_call<
-		O: state_machine::OffchainExt,
+		O: OffchainExt,
 		PB: Fn() -> ClientResult<Block::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -139,7 +139,7 @@ where
 	}
 
 	fn call_at_state<
-		O: state_machine::OffchainExt,
+		O: OffchainExt,
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -215,7 +215,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	type Error = ClientError;
 
 	fn call<
-		O: state_machine::OffchainExt,
+		O: OffchainExt,
 	>(
 		&self,
 		id: &BlockId<Block>,
@@ -231,7 +231,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	}
 
 	fn contextual_call<
-		O: state_machine::OffchainExt,
+		O: OffchainExt,
 		PB: Fn() -> ClientResult<Block::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -308,7 +308,7 @@ impl<Block, B, Remote, Local> CallExecutor<Block, Blake2Hasher> for
 	}
 
 	fn call_at_state<
-		O: state_machine::OffchainExt,
+		O: OffchainExt,
 		S: StateBackend<Blake2Hasher>,
 		FF: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,

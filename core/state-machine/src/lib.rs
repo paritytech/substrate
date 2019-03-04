@@ -23,7 +23,7 @@ use log::warn;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use parity_codec::{Decode, Encode};
-use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue};
+use primitives::{storage::well_known_keys, NativeOrEncoded, NeverNativeValue, OffchainExt};
 
 pub mod backend;
 mod changes_trie;
@@ -153,15 +153,6 @@ pub trait Externalities<H: Hasher> {
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
 
 	/// Submit extrinsic.
-	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
-}
-
-/// An extended externalities for offchain workers.
-pub trait OffchainExt {
-	/// Submits an extrinsics.
-	///
-	/// The extrinsic will either go to the pool (signed)
-	/// or to the next produced block (inherent).
 	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
 }
 
@@ -761,6 +752,7 @@ mod tests {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -781,6 +773,7 @@ mod tests {
 		assert_eq!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -801,6 +794,7 @@ mod tests {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: false,
@@ -869,7 +863,7 @@ mod tests {
 
 		{
 			let changes_trie_storage = InMemoryChangesTrieStorage::new();
-			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
+			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 			ext.clear_prefix(b"ab");
 		}
 		overlay.commit_prospective();
@@ -893,7 +887,7 @@ mod tests {
 		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
 		let changes_trie_storage = InMemoryChangesTrieStorage::new();
 		let mut overlay = OverlayedChanges::default();
-		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
+		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage), NeverOffchainExt::new());
 
 		assert!(ext.set_child_storage(b":child_storage:testchild".to_vec(), b"abc".to_vec(), b"def".to_vec()));
 		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), Some(b"def".to_vec()));
@@ -920,6 +914,7 @@ mod tests {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,
@@ -939,6 +934,7 @@ mod tests {
 		assert!(new(
 			&trie_backend::tests::test_trie(),
 			Some(&InMemoryChangesTrieStorage::new()),
+			NeverOffchainExt::new(),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				change_changes_trie_config: true,

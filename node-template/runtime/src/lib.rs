@@ -176,7 +176,7 @@ impl sudo::Trait for Runtime {
 }
 
 /// Used for the module template in `./template.rs`
-impl template::Trait for Runtime { 
+impl template::Trait for Runtime {
 	type Event = Event;
 }
 
@@ -241,6 +241,8 @@ impl_runtime_apis! {
 			Runtime::metadata().into()
 		}
 	}
+
+	// TODO [ToDr] Impl offchainworker
 
 	impl block_builder_api::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
