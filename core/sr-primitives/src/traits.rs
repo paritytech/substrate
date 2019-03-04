@@ -186,7 +186,7 @@ pub trait SimpleArithmetic:
 	CheckedMul +
 	CheckedDiv +
 	Saturating +
-	PartialOrd<Self> + Ord +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 {}
 impl<T:
@@ -204,7 +204,7 @@ impl<T:
 	CheckedMul +
 	CheckedDiv +
 	Saturating +
-	PartialOrd<Self> + Ord +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 > SimpleArithmetic for T {}
 

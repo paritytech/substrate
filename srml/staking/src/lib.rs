@@ -28,7 +28,7 @@ use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
-	Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason, ArithmeticType,
+	Currency, OnDilution, OnFreeBalanceZero, ArithmeticType,
 	LockIdentifier, LockableCurrency, WithdrawReasons
 };
 use session::OnSessionChange;
@@ -782,29 +782,6 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 	fn on_session_change(elapsed: T::Moment, should_reward: bool) {
 		Self::new_session(elapsed, should_reward);
-	}
-}
-
-impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
-	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		if <Bonded<T>>::exists(who) {
-			Err("stash accounts are not liquid")
-		} else {
-			Ok(())
-		}
-	}
-	fn ensure_account_can_withdraw(
-		who: &T::AccountId,
-		amount: BalanceOf<T>,
-		_reason: WithdrawReason,
-	) -> Result {
-		if let Some(controller) = Self::bonded(who) {
-			let ledger = Self::ledger(&controller).ok_or("stash without controller")?;
-			let free_balance = T::Currency::free_balance(&who);
-			ensure!(free_balance.saturating_sub(ledger.total) > amount,
-				"stash with too much under management");
-		}		
-		Ok(())
 	}
 }
 

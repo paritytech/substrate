@@ -104,10 +104,10 @@ impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct BalanceLock<Balance, BlockNumber> {
-	id: LockIdentifier,
-	amount: Balance,
-	until: BlockNumber,
-	reasons: WithdrawReasons,
+	pub id: LockIdentifier,
+	pub amount: Balance,
+	pub until: BlockNumber,
+	pub reasons: WithdrawReasons,
 }
 
 decl_storage! {
@@ -499,7 +499,6 @@ where
 {
 	type Moment = T::BlockNumber;
 
-	/// Introduce a new lock or change an existing one.
 	fn set_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
@@ -523,7 +522,36 @@ where
 		<Locks<T>>::insert(who, locks);
 	}
 
-	/// Remove an existing lock.
+	fn extend_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+		amount: T::Balance,
+		until: T::BlockNumber,
+		reasons: WithdrawReasons,
+	) {
+		let now = <system::Module<T>>::block_number();
+		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
+		let mut locks = Self::locks(who).into_iter().filter_map(|l|
+			if l.id == id {
+				new_lock.take().map(|nl| {
+					BalanceLock {
+						id: l.id,
+						amount: l.amount.max(nl.amount),
+						until: l.until.max(nl.until),
+						reasons: l.reasons | nl.reasons,
+					}
+				})
+			} else if l.until > now {
+				Some(l)
+			} else {
+				None
+			}).collect::<Vec<_>>();
+		if let Some(lock) = new_lock {
+			locks.push(lock)
+		}
+		<Locks<T>>::insert(who, locks);
+	}
+
 	fn remove_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,

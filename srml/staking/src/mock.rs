@@ -126,16 +126,16 @@ impl ExtBuilder {
 		} else {
 			1
 		};
-		consensus::GenesisConfig::<Test>{
+		let _ = consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![],
 		}.assimilate_storage(&mut t, &mut c);
-		session::GenesisConfig::<Test>{
+		let _ = session::GenesisConfig::<Test>{
 			session_length: self.session_length,
 			validators: vec![10, 20],
 			keys: vec![],
 		}.assimilate_storage(&mut t, &mut c);
-		balances::GenesisConfig::<Test>{
+		let _ = balances::GenesisConfig::<Test>{
 			balances: if self.monied {
 				if self.reward > 0 {
 					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor), (10, balance_factor), (11, balance_factor * 1000), (20, balance_factor), (21, balance_factor * 2000)]
@@ -150,7 +150,7 @@ impl ExtBuilder {
 			creation_fee: 0,
 			vesting: vec![],
 		}.assimilate_storage(&mut t, &mut c);
-		GenesisConfig::<Test>{
+		let _ = GenesisConfig::<Test>{
 			sessions_per_era: self.sessions_per_era,
 			current_era: self.current_era,
 			stakers: vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)],
@@ -164,7 +164,7 @@ impl ExtBuilder {
 			offline_slash_grace: 0,
 			invulnerables: vec![],
 		}.assimilate_storage(&mut t, &mut c);
-		timestamp::GenesisConfig::<Test>{
+		let _ = timestamp::GenesisConfig::<Test>{
 			period: 5,
 		}.assimilate_storage(&mut t, &mut c);
 		t.into()

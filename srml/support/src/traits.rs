@@ -246,6 +246,16 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 		reasons: WithdrawReasons,
 	);
 
+	/// Change any existing lock so that it becomes strictly less liquid in all
+	/// respects to the given parameters.
+	fn extend_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+		amount: Self::Balance,
+		until: Self::Moment,
+		reasons: WithdrawReasons,
+	);
+
 	/// Remove an existing lock.
 	fn remove_lock(
 		id: LockIdentifier,

@@ -259,7 +259,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
-	use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
+	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
