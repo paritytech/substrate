@@ -48,6 +48,7 @@
 
 use crate::codec;
 use crate::rstd::vec::Vec;
+#[cfg(feature = "std")]
 use crate::storage::unhashed::generator::UnhashedStorage;
 #[doc(hidden)]
 pub use crate::rstd::borrow::Borrow;
