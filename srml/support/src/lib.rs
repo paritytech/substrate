@@ -55,7 +55,7 @@ pub mod inherent;
 mod double_map;
 pub mod traits;
 
-pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap};
+pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMapXX};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use self::double_map::StorageDoubleMap;
@@ -164,6 +164,10 @@ mod tests {
 			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
 			pub GenericData get(generic_data): linked_map T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
+
+			pub DataDM build(|_| vec![(15u32, 16u32, 42u64)]): double_map u32, u32 => u64;
+			pub GenericDataDM: double_map T::BlockNumber, T::BlockNumber => T::BlockNumber;
+			pub GenericData2DM: double_map T::BlockNumber, T::BlockNumber => Option<T::BlockNumber>;
 		}
 	}
 
@@ -180,7 +184,7 @@ mod tests {
 	type Map = Data<Test>;
 
 	#[test]
-	fn basic_insert_remove_should_work() {
+	fn linked_map_basic_insert_remove_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			// initialised during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
@@ -206,7 +210,7 @@ mod tests {
 	}
 
 	#[test]
-	fn enumeration_and_head_should_work() {
+	fn linked_map_enumeration_and_head_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Map::head(), Some(15));
 			assert_eq!(Map::enumerate().collect::<Vec<_>>(), vec![(15, 42)]);
@@ -257,4 +261,42 @@ mod tests {
 		});
 	}
 
+	#[test]
+	fn double_map_basic_insert_remove_remove_prefix_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			type DoubleMap = DataDM<Test>;
+			// initialised during genesis
+			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
+
+			// get / insert / take
+			let key1 = 17u32;
+			let key2 = 18u32;
+			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+			DoubleMap::insert(key1, key2, 4u64);
+			assert_eq!(DoubleMap::get(key1, key2), 4u64);
+			assert_eq!(DoubleMap::take(key1, key2), 4u64);
+			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+
+			// mutate
+			DoubleMap::mutate(key1, key2, |val| {
+				*val = 15;
+			});
+			assert_eq!(DoubleMap::get(key1, key2), 15u64);
+
+			// remove
+			DoubleMap::remove(key1, key2);
+			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+
+			// remove prefix
+			DoubleMap::insert(key1, key2, 4u64);
+			DoubleMap::insert(key1, key2+1, 4u64);
+			DoubleMap::insert(key1+1, key2, 4u64);
+			DoubleMap::insert(key1+1, key2+1, 4u64);
+			DoubleMap::remove_prefix(key1);
+			assert_eq!(DoubleMap::get(key1, key2), 0u64);
+			assert_eq!(DoubleMap::get(key1, key2+1), 0u64);
+			assert_eq!(DoubleMap::get(key1+1, key2), 4u64);
+			assert_eq!(DoubleMap::get(key1+1, key2+1), 4u64);
+		});
+	}
 }

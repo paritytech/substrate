@@ -65,9 +65,6 @@ decl_storage! {
 
 		// A map that has enumerable entries.
 		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
-		Bar2 get(bar2) config(): double_map T::AccountId, T::AccountId => T::Balance;
-		Bar3 get(bar3) config() build(|_| vec![]): double_map T::AccountId, T::AccountId => Option<T::Balance>;
-
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(foo) config(): T::Balance;
