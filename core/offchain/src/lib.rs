@@ -42,6 +42,7 @@ use futures::Future;
 // 	}
 // }
 
+/// An offchain workers manager.
 #[derive(Debug)]
 pub struct OffchainWorkers<C, Block> {
 	client: Arc<C>,
@@ -49,6 +50,7 @@ pub struct OffchainWorkers<C, Block> {
 }
 
 impl<C, Block> OffchainWorkers<C, Block> {
+	/// Creates new `OffchainWorkers`.
 	pub fn new(client: Arc<C>) -> Self {
 		Self {
 			client,
@@ -62,6 +64,7 @@ impl<C, Block> OffchainWorkers<C, Block> where
 	C: ProvideRuntimeApi,
 	C::Api: OffchainWorker<Block>,
 {
+	/// Start the offchain workers after given block.
 	pub fn on_block_imported(&self, number: &<Block::Header as traits::Header>::Number) -> impl Future<Item = (), Error = ()> {
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);

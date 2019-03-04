@@ -342,9 +342,11 @@ where
 
 	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) {
 		let _guard = panic_handler::AbortGuard::new(true);
-		self.offchain_externalities
-			.unwrap()
-			.submit_extrinsic(extrinsic)
+		if let Some(ext) = self.offchain_externalities.as_mut() {
+			ext.submit_extrinsic(extrinsic);
+		} else {
+			warn!("Call to submit_extrinsic without offchain externalities set.");
+		}
 	}
 }
 

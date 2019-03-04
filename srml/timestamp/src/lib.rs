@@ -249,7 +249,6 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		}
 	}
 }
-
 impl<T: Trait> OffchainWorker<T::BlockNumber> for Module<T> {
 	fn generate_extrinsics(n: T::BlockNumber) {
 		use parity_codec::Encode;

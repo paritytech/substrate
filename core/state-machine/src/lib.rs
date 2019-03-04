@@ -156,20 +156,27 @@ pub trait Externalities<H: Hasher> {
 	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
 }
 
+/// An extended externalities for offchain workers.
 pub trait OffchainExt {
+	/// Submits an extrinsics.
+	///
+	/// The extrinsic will either go to the pool (signed)
+	/// or to the next produced block (inherent).
 	fn submit_extrinsic(&self, extrinsic: Vec<u8>);
 }
 
+/// An implementation of offchain extensions that should never be triggered.
 pub enum NeverOffchainExt {}
 
 impl NeverOffchainExt {
+	/// Create new offchain extensions.
 	pub fn new<'a>() -> Option<&'a Self> {
 		None
 	}
 }
 
 impl OffchainExt for NeverOffchainExt {
-	fn submit_extrinsic(&self, extrinsic: Vec<u8>) { unreachable!() }
+	fn submit_extrinsic(&self, _extrinsic: Vec<u8>) { unreachable!() }
 }
 
 /// Code execution engine.
