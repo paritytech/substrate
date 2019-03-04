@@ -20,8 +20,8 @@ trie = { package = "substrate-trie", path = "../trie", optional = true }
 substrate-telemetry = { path = "../telemetry", optional = true }
 hash-db = { version = "0.11", optional = true }
 kvdb = { git = "https://github.com/paritytech/parity-common", optional = true, rev="b0317f649ab2c665b7987b8475878fc4d2e1f81d" }
-parity-codec = { version = "3.0", default-features = false }
-parity-codec-derive = { version = "3.0", default-features = false }
+parity-codec = { version = "3.1", default-features = false }
+parity-codec-derive = { version = "3.1", default-features = false }
 primitives = { package = "substrate-primitives", path = "../primitives", default-features = false }
 runtime-primitives = { package = "sr-primitives", path = "../sr-primitives", default-features = false }
 runtime-version = { package = "sr-version", path = "../sr-version", default-features = false }

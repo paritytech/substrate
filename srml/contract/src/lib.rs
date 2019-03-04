@@ -69,7 +69,7 @@ use crate::account_db::AccountDb;
 use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use parity_codec::Codec;
+use parity_codec::{Codec, Encode};
 use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
@@ -140,7 +140,7 @@ where
 pub struct DefaultDispatchFeeComputor<T: Trait>(PhantomData<T>);
 impl<T: Trait> ComputeDispatchFee<T::Call, T::Balance> for DefaultDispatchFeeComputor<T> {
 	fn compute_dispatch_fee(call: &T::Call) -> T::Balance {
-		let encoded_len = parity_codec::Encode::encode(&call).len();
+		let encoded_len = call.using_encoded(|encoded| encoded.len());
 		let base_fee = <fees::Module<T>>::transaction_base_fee();
 		let byte_fee = <fees::Module<T>>::transaction_byte_fee();
 		<T::Balance as As<u64>>::sa(base_fee.as_() + byte_fee.as_() * encoded_len as u64)
