@@ -193,6 +193,13 @@ impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestIte
 	}
 }
 
+// Create a Hash with 69 for each byte
+fn hash69<T: AsMut<[u8]> + Default>() -> T {
+	let mut h = T::default();
+	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
+	h
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 
@@ -200,12 +207,12 @@ decl_storage! {
 
 		ExtrinsicCount: Option<u32>;
 		AllExtrinsicsLen: Option<u32>;
-		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), [69u8; 32])]): map T::BlockNumber => T::Hash;
+		pub BlockHash get(block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]): map T::BlockNumber => T::Hash;
 		ExtrinsicData get(extrinsic_data): map u32 => Vec<u8>;
-		RandomSeed get(random_seed) build(|_| [0u8; 32]): T::Hash;
+		RandomSeed get(random_seed) build(|_| T::Hash::default()): T::Hash;
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(block_number) build(|_| 1u64): T::BlockNumber;
-		ParentHash get(parent_hash) build(|_| [69u8; 32]): T::Hash;
+		Number get(block_number) build(|_| T::BlockNumber::sa(1u64)): T::BlockNumber;
+		ParentHash get(parent_hash) build(|_| hash69()): T::Hash;
 		ExtrinsicsRoot get(extrinsics_root): T::Hash;
 		Digest get(digest): T::Digest;
 
