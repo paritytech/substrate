@@ -239,8 +239,6 @@ fn decl_store_extra_genesis(
 
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
-						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-							.expect(#error_message);
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
@@ -252,8 +250,6 @@ fn decl_store_extra_genesis(
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-								.expect(#error_message);
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
