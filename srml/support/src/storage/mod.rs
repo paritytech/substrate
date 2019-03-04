@@ -412,7 +412,7 @@ pub trait StorageDoubleMapXX<K1: Codec, K2: Codec, V: Codec> {
 	fn take<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) -> Self::Query;
 
 	/// Store a value to be associated with the given key from the map.
-	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2, val: &V);
+	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>, VArg: Borrow<V>>(k1: KArg1, k2: KArg2, val: VArg);
 
 	/// Remove the value under a key.
 	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2);
@@ -421,7 +421,7 @@ pub trait StorageDoubleMapXX<K1: Codec, K2: Codec, V: Codec> {
 	fn remove_prefix<KArg1: Borrow<K1>>(k1: KArg1);
 
 	/// Mutate the value under a key.
-	fn mutate<KArg1, KArg2, R, F>(k1: &K1, k2: &K2, f: F) -> R
+	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: Borrow<K1>,
 		KArg2: Borrow<K2>,
@@ -461,8 +461,8 @@ where
 		U::take(k1.borrow(), k2.borrow(), &RuntimeStorage)
 	}
 
-	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2, val: &V) {
-		U::insert(k1.borrow(), k2.borrow(), val, &RuntimeStorage)
+	fn insert<KArg1: Borrow<K1>, KArg2: Borrow<K2>, VArg: Borrow<V>>(k1: KArg1, k2: KArg2, val: VArg) {
+		U::insert(k1.borrow(), k2.borrow(), val.borrow(), &RuntimeStorage)
 	}
 
 	fn remove<KArg1: Borrow<K1>, KArg2: Borrow<K2>>(k1: KArg1, k2: KArg2) {
@@ -473,7 +473,7 @@ where
 		U::remove_prefix(k1.borrow(), &RuntimeStorage)
 	}
 
-	fn mutate<KArg1, KArg2, R, F>(k1: &K1, k2: &K2, f: F) -> R
+	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: Borrow<K1>,
 		KArg2: Borrow<K2>,
