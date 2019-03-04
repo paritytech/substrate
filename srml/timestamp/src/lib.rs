@@ -144,7 +144,7 @@ macro_rules! impl_timestamp_set {
 
 for_each_tuple!(impl_timestamp_set);
 
-pub trait Trait: consensus::Trait + system::Trait {
+pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
 		+ Mul<Self::BlockNumber, Output = Self::Moment>
@@ -279,11 +279,6 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
-	}
-	impl consensus::Trait for Test {
-		type Log = DigestItem;
-		type SessionKey = UintAuthorityId;
-		type InherentOfflineReport = ();
 	}
 	impl Trait for Test {
 		type Moment = u64;

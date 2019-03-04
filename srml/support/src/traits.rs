@@ -228,6 +228,31 @@ pub trait Currency<AccountId> {
 	) -> result::Result<Option<Self::Balance>, &'static str>;
 }
 
+/// An identifier for a lock. Used for disambiguating different locks so that
+/// they can be individually replaced or removed.
+pub type LockIdentifier = [u8; 8];
+
+/// A currency whose accounts can have liquidity restructions.
+pub trait LockableCurrency<AccountId>: Currency<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// Introduce a new lock or change an existing one.
+	fn set_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+		amount: Self::Balance,
+		until: Self::Moment,
+		reasons: WithdrawReasons,
+	);
+
+	/// Remove an existing lock.
+	fn remove_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+	);
+}
+
 /// Charge bytes fee trait
 pub trait ChargeBytesFee<AccountId> {
 	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
@@ -247,16 +272,21 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 
-/// Reason for moving funds out of an account.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum WithdrawReason {
-	/// In order to pay for (system) transaction costs.
-	TransactionPayment,
-	/// In order to transfer ownership.
-	Transfer,
-	/// In order to reserve some funds for a later return or repatriation
-	Reserve,
+bitmask! {
+	/// Reasons for moving funds out of an account.
+	#[derive(Encode, Decode)]
+	pub mask WithdrawReasons: i8 where
+
+    /// Reason for moving funds out of an account.
+	#[derive(Encode, Decode)]
+    flags WithdrawReason {
+		/// In order to pay for (system) transaction costs.
+		TransactionPayment = 0b00000001,
+		/// In order to transfer ownership.
+		Transfer = 0b00000010,
+		/// In order to reserve some funds for a later return or repatriation
+		Reserve = 0b00000100,
+	}
 }
 
 /// Transfer fungible asset trait

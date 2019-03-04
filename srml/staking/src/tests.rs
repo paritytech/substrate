@@ -637,8 +637,6 @@ fn cannot_transfer_staked_balance() {
 	});
 }
 
-
-
 #[test]
 fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance

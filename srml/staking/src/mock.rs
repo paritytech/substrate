@@ -54,7 +54,7 @@ impl balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
-	type EnsureAccountLiquid = Staking;
+	type EnsureAccountLiquid = Balances;
 	type Event = ();
 }
 impl session::Trait for Test {

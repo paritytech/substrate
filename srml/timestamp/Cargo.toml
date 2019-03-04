@@ -14,7 +14,6 @@ runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitiv
 inherents = { package = "substrate-inherents", path = "../../core/inherents", default-features = false }
 srml-support = { path = "../support", default-features = false }
 system = { package = "srml-system", path = "../system", default-features = false }
-consensus = { package = "srml-consensus", path = "../consensus", default-features = false }
 
 [dev-dependencies]
 runtime_io = { package = "sr-io", path = "../../core/sr-io" }
@@ -26,7 +25,6 @@ std = [
 	"rstd/std",
 	"srml-support/std",
 	"runtime_primitives/std",
-	"consensus/std",
 	"serde/std",
 	"parity-codec/std",
 	"parity-codec-derive/std",

@@ -29,6 +29,7 @@ pub mod backend;
 mod changes_trie;
 mod ext;
 mod testing;
+mod basic;
 mod overlayed_changes;
 mod proving_backend;
 mod trie_backend;
@@ -37,6 +38,7 @@ mod trie_backend_essence;
 use overlayed_changes::OverlayedChangeSet;
 pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
+pub use basic::BasicExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
 pub use changes_trie::{

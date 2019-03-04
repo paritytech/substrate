@@ -50,7 +50,7 @@ macro_rules! impl_session_change {
 
 for_each_tuple!(impl_session_change);
 
-pub trait Trait: timestamp::Trait {
+pub trait Trait: timestamp::Trait + consensus::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 	type OnSessionChange: OnSessionChange<Self::Moment>;
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;

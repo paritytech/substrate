@@ -30,7 +30,8 @@ use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
 use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, TransferAsset, WithdrawReason, ArithmeticType
+	UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, TransferAsset,
+	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -100,17 +101,13 @@ impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
 	}
 }
 
-/// An identifier for a lock. Used for disambiguating different locks so that
-/// they can be individually replaced or removed.
-pub type LockIdentifier = [u8; 8];
-
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct BalanceLock<Balance, BlockNumber> {
 	id: LockIdentifier,
 	amount: Balance,
 	until: BlockNumber,
-	reasons: Vec<WithdrawReason>,
+	reasons: WithdrawReasons,
 }
 
 decl_storage! {
@@ -330,45 +327,6 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Introduce a new lock or change an existing one.
-	pub fn set_lock(
-		id: LockIdentifier,
-		who: &T::AccountId,
-		amount: T::Balance,
-		until: T::BlockNumber,
-		reasons: Vec<WithdrawReason>,
-	) {
-		let now = <system::Module<T>>::block_number();
-		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
-		let mut locks = Self::locks(who).into_iter().filter_map(|l|
-			if l.id == id {
-				new_lock.take()
-			} else if l.until > now {
-				Some(l)
-			} else {
-				None
-			}).collect::<Vec<_>>();
-		if let Some(lock) = new_lock {
-			locks.push(lock)
-		}
-		<Locks<T>>::insert(who, locks);
-	}
-
-	/// Remove an existing lock.
-	pub fn remove_lock(
-		id: LockIdentifier,
-		who: &T::AccountId,
-	) {
-		let now = <system::Module<T>>::block_number();
-		let locks = Self::locks(who).into_iter().filter_map(|l|
-			if l.until > now && l.id != id {
-				Some(l)
-			} else {
-				None
-			}).collect::<Vec<_>>();
-		<Locks<T>>::insert(who, locks);
-	}
-
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) {
 		T::OnNewAccount::on_new_account(&who);
@@ -535,35 +493,49 @@ where
 	}
 }
 
-impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
-	type Amount = T::Balance;
-
-	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
-		Self::make_transfer(from, to, amount)
-	}
-
-	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
-		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, reason)?;
-		let b = Self::free_balance(who);
-		ensure!(b >= value, "account has too few funds");
-		Self::set_free_balance(who, b - value);
-		Self::decrease_total_stake_by(value);
-		Ok(())
-	}
-
-	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
-		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
-		Self::increase_total_stake_by(value);
-		Ok(())
-	}
-}
-
-impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T>
+impl<T: Trait> LockableCurrency<T::AccountId> for Module<T>
 where
 	T::Balance: MaybeSerializeDebug
 {
-	fn is_dead_account(who: &T::AccountId) -> bool {
-		Self::total_balance(who).is_zero()
+	type Moment = T::BlockNumber;
+
+	/// Introduce a new lock or change an existing one.
+	fn set_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+		amount: T::Balance,
+		until: T::BlockNumber,
+		reasons: WithdrawReasons,
+	) {
+		let now = <system::Module<T>>::block_number();
+		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
+		let mut locks = Self::locks(who).into_iter().filter_map(|l|
+			if l.id == id {
+				new_lock.take()
+			} else if l.until > now {
+				Some(l)
+			} else {
+				None
+			}).collect::<Vec<_>>();
+		if let Some(lock) = new_lock {
+			locks.push(lock)
+		}
+		<Locks<T>>::insert(who, locks);
+	}
+
+	/// Remove an existing lock.
+	fn remove_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+	) {
+		let now = <system::Module<T>>::block_number();
+		let locks = Self::locks(who).into_iter().filter_map(|l|
+			if l.until > now && l.id != id {
+				Some(l)
+			} else {
+				None
+			}).collect::<Vec<_>>();
+		<Locks<T>>::insert(who, locks);
 	}
 }
 
@@ -594,11 +566,43 @@ impl<T: Trait> EnsureAccountLiquid<T::AccountId, T::Balance> for Module<T> {
 		let now = <system::Module<T>>::block_number();
 		let total = Self::free_balance(who);
 		if Self::locks(who).into_iter()
-			.all(|l| now >= l.until || total >= l.amount + amount || !l.reasons.contains(&reason))
+			.all(|l| now >= l.until || total >= l.amount + amount || !l.reasons.contains(reason))
 		{
 			Ok(())
 		} else {
 			Err("account liquidity restrictions prevent withdrawal")
 		}
+	}
+}
+
+impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
+	type Amount = T::Balance;
+
+	fn transfer(from: &T::AccountId, to: &T::AccountId, amount: T::Balance) -> Result {
+		Self::make_transfer(from, to, amount)
+	}
+
+	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
+		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, reason)?;
+		let b = Self::free_balance(who);
+		ensure!(b >= value, "account has too few funds");
+		Self::set_free_balance(who, b - value);
+		Self::decrease_total_stake_by(value);
+		Ok(())
+	}
+
+	fn deposit(who: &T::AccountId, value: T::Balance) -> Result {
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value);
+		Self::increase_total_stake_by(value);
+		Ok(())
+	}
+}
+
+impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T>
+where
+	T::Balance: MaybeSerializeDebug
+{
+	fn is_dead_account(who: &T::AccountId) -> bool {
+		Self::total_balance(who).is_zero()
 	}
 }
