@@ -148,7 +148,4 @@ pub trait StorageDoubleMapXX<K1: codec::Codec, K2: codec::Codec, V: codec::Codec
 
 	/// Mutate the value under a key.
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: UnhashedStorage>(k1: &K1, k2: &K2, f: F, storage: &S) -> R;
-
-	// TODO TODO: it seems we could add iteration for prefix and iteration for key for not that
-	// much cost !
 }

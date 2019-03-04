@@ -426,9 +426,6 @@ pub trait StorageDoubleMapXX<K1: Codec, K2: Codec, V: Codec> {
 		KArg1: Borrow<K1>,
 		KArg2: Borrow<K2>,
 		F: FnOnce(&mut Self::Query) -> R;
-
-	// TODO TODO: it seems we could add iteration for prefix and iteration for key for not that
-	// much cost !
 }
 
 impl<K1: Codec, K2: Codec, V: Codec, U> StorageDoubleMapXX<K1, K2, V> for U
