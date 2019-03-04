@@ -59,7 +59,7 @@ use log::info;
 use lazy_static::lazy_static;
 
 use futures::Future;
-use substrate_telemetry::{telemetry, TelemetryEndpoints};
+use substrate_telemetry::TelemetryEndpoints;
 
 const MAX_NODE_NAME_LENGTH: usize = 32;
 
