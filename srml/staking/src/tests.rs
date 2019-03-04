@@ -27,8 +27,6 @@ use srml_support::traits::Currency;
 #[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
-	// TODO: Verify this check is comprehensive
-	// - Session Per Era, Session Reward
 	with_externalities(&mut ExtBuilder::default().build(),
 	|| {
 		assert_eq!(Staking::bonded(&11), Some(10)); // Account 11 is stashed and locked, and account 10 is the controller
@@ -51,9 +49,25 @@ fn basic_setup_works() {
 		// Account 10 is exposed by 100 * balance_factor from their own stash in account 11
 		assert_eq!(Staking::stakers(10), Exposure { total: 1000, own: 1000, others: vec![] });
 		assert_eq!(Staking::stakers(20), Exposure { total: 2000, own: 2000, others: vec![] });
+
+		// The number of validators required.
+		assert_eq!(Staking::validator_count(), 2);
+
+		// Initial Era and session
+		assert_eq!(Staking::current_era(), 0);
+		assert_eq!(Session::current_index(), 0);
+
+		// initial rewards
+		assert_eq!(Staking::current_session_reward(), 10);
+
+		// initial slot_stake
+		assert_eq!(Staking::slot_stake(), 1000);
+
+		// initial slash_count of validators 
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::slash_count(&20), 0);
 	});
 }
-
 
 #[test]
 fn no_offline_should_work() {
@@ -83,7 +97,7 @@ fn invulnerability_should_work() {
 		assert_ok!(Staking::set_invulnerables(vec![10]));
 		// Give account 10 some funds
 		Balances::set_free_balance(&10, 70);
-		// There is no slash grade period
+		// There is no slash grace -- slash immediately.
 		assert_eq!(Staking::offline_slash_grace(), 0);
 		// Account 10 has not been slashed
 		assert_eq!(Staking::slash_count(&10), 0);
@@ -101,6 +115,7 @@ fn invulnerability_should_work() {
 		assert_eq!(Balances::free_balance(&10), 70);
 		assert!(<Validators<Test>>::exists(&10));
 		// New era not being forced
+		// NOTE: new era is always forced once slashing happens -> new validators need to be chosen.
 		assert!(Staking::forcing_new_era().is_none());
 	});
 }
@@ -175,13 +190,94 @@ fn offline_grace_should_delay_slashing() {
 	});
 }
 
+#[test]
+fn reporting_misbehaviors_work() {
+	// TODO: Does this code exist?
+	// WONTFIX.
+}
+
+#[test]
+fn max_unstake_threshold_works() {
+	// Tests that max_unstake_threshold gets used when prefs.unstake_threshold is large
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
+		// Two users with maximum possible balance
+		Balances::set_free_balance(&10, u64::max_value());
+		Balances::set_free_balance(&20, u64::max_value());
+
+		// Give them full exposer as a staker
+		<Stakers<Test>>::insert(&10, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
+		<Stakers<Test>>::insert(&20, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
+
+		// Check things are initialized correctly
+		assert_eq!(Balances::free_balance(&10), u64::max_value());
+		assert_eq!(Balances::free_balance(&20), u64::max_value());
+		assert_eq!(Balances::free_balance(&10), Balances::free_balance(&20));
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::current_offline_slash(), 20);
+		// Account 10 will have max unstake_threshold
+		assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs {
+			unstake_threshold: MAX_UNSTAKE_THRESHOLD,
+			validator_payment: 0,
+		}));
+		// Account 20 could not set their unstake_threshold past 10
+		assert_noop!(Staking::validate(Origin::signed(20), ValidatorPrefs {
+			unstake_threshold: 11,
+			validator_payment: 0}),
+			"unstake threshold too large"
+		);
+		// Give Account 20 unstake_threshold 11 anyway, should still be limited to 10
+		<Validators<Test>>::insert(20, ValidatorPrefs {
+			unstake_threshold: 11,
+			validator_payment: 0,
+		});
+
+		// Make slot_stake really large, as to not affect punishment curve
+		<SlotStake<Test>>::put(u64::max_value());
+		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
+		assert!(Staking::slot_stake() > 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
+
+		// Report each user 1 more than the max_unstake_threshold
+		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
+		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
+
+		// Show that each balance only gets reduced by 2^max_unstake_threshold
+		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
+		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
+	});
+}
+
+#[test]
+fn slashing_does_not_cause_underflow() {
+	// Tests that slashing more than a user has does not underflow
+	with_externalities(&mut ExtBuilder::default().build(), || {
+		// One user with less than `max_value` will test underflow does not occur
+		Balances::set_free_balance(&10, 1);
+
+		// Verify initial conditions
+		assert_eq!(Balances::free_balance(&10), 1);
+		assert_eq!(Staking::offline_slash_grace(), 0);
+
+		// Set validator preference so that 2^unstake_threshold would cause overflow (greater than 64)
+		<Validators<Test>>::insert(10, ValidatorPrefs {
+			unstake_threshold: 10,
+			validator_payment: 0,
+		});
+
+		// Should not panic
+		Staking::on_offline_validator(10, 100);
+		// Confirm that underflow has not occurred, and account balance is set to zero
+		assert_eq!(Balances::free_balance(&10), 0);
+	});
+}
+
 
 #[test]
 fn rewards_should_work() {
 	// should check that:
-	// 1) rewards get recorded per session
-	// 2) rewards get paid per Era
-	// 3) (bonus) Check that nominators are also rewarded
+	// * rewards get recorded per session
+	// * rewards get paid per Era
+	// * Check that nominators are also rewarded
 	with_externalities(&mut ExtBuilder::default().nominate(true).build(),
 	|| {
 		let delay = 2;
@@ -315,6 +411,7 @@ fn multi_era_reward_should_work() {
 		// intermediate test.
 		assert_eq!(Staking::current_era_reward(), 2*new_session_reward);
 		
+		// new era is triggered here.
 		block=18;System::set_block_number(block);Timestamp::set_timestamp(block*5);Session::check_rotate_session(System::block_number());
 		
 		// pay time
@@ -327,27 +424,27 @@ fn staking_should_work() {
 	// should test:
 	// * new validators can be added to the default set
 	// * new ones will be chosen per era
-	// * either one can unlock the stash and back-down from being a validator.
+	// * either one can unlock the stash and back-down from being a validator via `chill`ing.
 	with_externalities(&mut ExtBuilder::default().session_length(1).build(), || {
 		assert_eq!(Staking::era_length(), 3);
 		assert_eq!(Staking::validator_count(), 2);
 		// remember + compare this along with the test.
 		assert_eq!(Session::validators(), vec![10, 20]);
-		assert_ok!(Staking::set_bonding_duration(2));
-		assert_eq!(Staking::bonding_duration(), 2);
+
+		// put some money in account that we'll use.
+		for i in 1..5 { Balances::set_free_balance(&i, 1000); }
 
 		// bond one account pair and state interest in nomination.
 		// this is needed to keep 10 and 20 in the validator list with phragmen
-		for i in 1..5 { Balances::set_free_balance(&i, 1000); }
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20, 4]));
 
 		// --- Block 1:
 		System::set_block_number(1);
-		// give the man some coins
+		
+		// give the man some funds
 		Balances::set_free_balance(&3, 3000);
-		// initial stakers: vec![(11, 10, balance_factor * 100), (21, 20, balance_factor * 200)],
-		// account 3 controlled by 4.
+		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller)); // balance of 3 = 3000, stashed = 1500
 		
 		Session::check_rotate_session(System::block_number());
@@ -358,9 +455,9 @@ fn staking_should_work() {
 
 		// --- Block 2:
 		System::set_block_number(2);
-		// Explicitly state the desire to validate for all of them.
+		// Explicitly state the desire to validate
 		// note that the controller account will state interest as representative of the stash-controller pair.
-		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs { unstake_threshold: 3, validator_payment: 0 }));
+		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
 
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
@@ -373,7 +470,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 
 		// the votes for all three accounts are the same, 500 each,
-		// 20 and 4 have more staked value, 1500 and 2000 respectively, will be chosen.
+		// 20 and 4 have more staked value, 1500 and 2000 respectively; they will be chosen.
 		assert_eq!(Session::validators().len(), 2);
 		assert_eq!(Session::validators(), vec![4, 20]);
 		assert_eq!(Staking::current_era(), 1);
@@ -383,7 +480,9 @@ fn staking_should_work() {
 		System::set_block_number(4);
 
 		// unlock the entire stashed value.
+		// Note that this will ne be enough to remove 4 as a validator candidate!
 		Staking::unbond(Origin::signed(4), Staking::ledger(&4).unwrap().active).unwrap();
+		// explicit chill indicated that 4 no longer wants to be a validator.
 		Staking::chill(Origin::signed(4)).unwrap();
 		
 		Session::check_rotate_session(System::block_number());
@@ -399,14 +498,25 @@ fn staking_should_work() {
 		assert_eq!(Staking::current_era(), 1);
 
 
-		// --- Block 6: 4 will not be a validator as it has nothing in stash.
+		// --- Block 6: 4 will not be a validator.
 		System::set_block_number(6);
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators().contains(&4), false);
+		assert_eq!(Session::validators(), vec![20, 10]);
 	});
 }
 
+#[test]
+fn no_one_nominates_does_not_panic() {
+	// TODO: Test the behavior when no one is nominating.
+}
+
+#[test]
+fn correct_number_of_validators_are_chosen() {
+	// TODO: Check that number is at least minimum, and at most what is set
+	// TODO: Test emergency conditions?
+}
 
 #[test]
 fn nominating_and_rewards_should_work() {
@@ -428,8 +538,6 @@ fn nominating_and_rewards_should_work() {
 	with_externalities(&mut ExtBuilder::default()
 		.session_length(1).sessions_per_era(1).validator_pool(true).build(),
 	|| {
-		let session_reward = 10;
-		let initial_balance = 1000;
 		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Staking::bonding_duration(), 3);
@@ -441,9 +549,11 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
 
 		// default reward for the first session.
+		let session_reward = 10;
 		assert_eq!(Staking::current_session_reward(), session_reward);
 
 		// give the man some money
+		let initial_balance = 1000;
 		for i in 1..5 { Balances::set_free_balance(&i, initial_balance); }
 		Balances::set_free_balance(&10, initial_balance);
 		Balances::set_free_balance(&20, initial_balance);
@@ -453,10 +563,10 @@ fn nominating_and_rewards_should_work() {
 		for i in 1..5 { assert_eq!(Balances::total_balance(&i), initial_balance); }
 
 		// bond two account pairs and state interest in nomination.
-		// 2 will nominate for 10,
+		// 2 will nominate for 10, 20, 30
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::Controller));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20, 30]));
-		// 4 will nominate for 20,
+		// 4 will nominate for 10, 20, 40
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Stash));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 20, 40]));
 	
@@ -468,17 +578,18 @@ fn nominating_and_rewards_should_work() {
 		// validators must have already received some rewards.
 		assert_eq!(Balances::total_balance(&10), initial_balance + session_reward);
 		assert_eq!(Balances::total_balance(&20), initial_balance + session_reward);
+
 		// ------ check the staked value of all parties.
-		// total expo of 10
+		// total expo of 10, with 500 coming from nominators (externals), according to phragmen.
 		assert_eq!(Staking::stakers(10).own, 1000);
 		assert_eq!(Staking::stakers(10).total, 1000 + 500);
-		// 2 and 4 supported 10, each with stake 250.
+		// 2 and 4 supported 10, each with stake 250, according to phragmen.
 		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![250, 250]);
 		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![4, 2]);
-		// total expo of 20
+		// total expo of 20, with 500 coming from nominators (externals), according to phragmen.
 		assert_eq!(Staking::stakers(20).own, 2000);
 		assert_eq!(Staking::stakers(20).total, 2000 + 500);
-		// 2 and 4 supported 20, each with stake 250.
+		// 2 and 4 supported 20, each with stake 250, according to phragmen.
 		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![250, 250]);
 		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![4, 2]);
 		
@@ -487,19 +598,18 @@ fn nominating_and_rewards_should_work() {
 		// next session reward.
 		let new_session_reward = Staking::session_reward() * Staking::slot_stake();
 		// nothing else will happen, era ends and rewards are paid again,
-		// it is expected that nominators will also be paid.
+		// it is expected that nominators will also be paid. See below
 		Session::check_rotate_session(System::block_number());
 
-
-		// Nominator 2: has 250 / 1500 from 10 + 250 / 2500 from 20's reward. ==> 1/6 + 1/10
+		// Nominator 2: has [250/1500 ~ 1/6 from 10] + [250/2500 ~ 1/10 from 20]'s reward. ==> 1/6 + 1/10
 		assert_eq!(Balances::total_balance(&2), initial_balance + (new_session_reward/6 + new_session_reward/10));
-		// The Associated validator will get the other 4/6 - 1500 minus 1/6(250) by each nominator
+		// The Associated validator will get the other 4/6 --> 1500(total) minus 1/6(250) by each nominator -> 6/6 - 1/6 - 1/6
 		assert_eq!(Balances::total_balance(&10), initial_balance + session_reward + 4*new_session_reward/6) ;
 
-		// Nominator 4: has 250 / 1500 from 10 + 250 / 2500 from 20's reward. ==> 1/6 + 1/10
+		// Nominator 4: has [250/1500 ~ 1/6 from 10] + [250/2500 ~ 1/10 from 20]'s reward. ==> 1/6 + 1/10
 		// This nominator chose stash as the reward destination. This means that the reward will go to 3, which is bonded as the stash of 4.
 		assert_eq!(Balances::total_balance(&3), initial_balance + (new_session_reward/6 + new_session_reward/10));
-		// The Associated validator will get the other 8/10 - 2500 minus 1/10(250) by each nominator
+		// The Associated validator will get the other 8/10 --> 2500(total) minus 1/10(250) by each nominator -> 10/10 - 1/10 - 1/10
 		assert_eq!(Balances::total_balance(&20), initial_balance + session_reward + 8*new_session_reward/10);
 	});
 }
@@ -538,13 +648,14 @@ fn nominators_also_get_slashed() {
 
 		// 10 goes offline
 		Staking::on_offline_validator(10, 4);
-		let slash_value = Staking::current_offline_slash()*8;
+		let slash_value = 2_u64.pow(3) * Staking::current_offline_slash();
 		let expo = Staking::stakers(10);
 		let actual_slash = expo.own.min(slash_value);
 		let nominator_actual_slash = nominator_stake.min(expo.total - actual_slash);
 		// initial + first era reward + slash
 		assert_eq!(Balances::total_balance(&10), initial_balance + 10 - actual_slash);
 		assert_eq!(Balances::total_balance(&2), initial_balance - nominator_actual_slash);
+		// Because slashing happened.
 		assert!(Staking::forcing_new_era().is_some());
 	});
 }
@@ -668,8 +779,6 @@ fn cannot_transfer_staked_balance() {
 	});
 }
 
-
-
 #[test]
 fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance
@@ -689,82 +798,6 @@ fn cannot_reserve_staked_balance() {
 		assert_ok!(Balances::reserve(&11, 1));
 	});
 }
-
-#[test]
-fn max_unstake_threshold_works() {
-	// Tests that max_unstake_threshold gets used when prefs.unstake_threshold is large
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		const MAX_UNSTAKE_THRESHOLD: u32 = 10;
-		// Two users with maximum possible balance
-		Balances::set_free_balance(&10, u64::max_value());
-		Balances::set_free_balance(&20, u64::max_value());
-
-		// Give them full exposer as a staker
-		<Stakers<Test>>::insert(&10, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
-		<Stakers<Test>>::insert(&20, Exposure { total: u64::max_value(), own: u64::max_value(), others: vec![]});
-
-		// Check things are initialized correctly
-		assert_eq!(Balances::free_balance(&10), u64::max_value());
-		assert_eq!(Balances::free_balance(&20), u64::max_value());
-		assert_eq!(Balances::free_balance(&10), Balances::free_balance(&20));
-		assert_eq!(Staking::offline_slash_grace(), 0);
-		assert_eq!(Staking::current_offline_slash(), 20);
-		// Account 10 will have max unstake_threshold
-		assert_ok!(Staking::validate(Origin::signed(10), ValidatorPrefs {
-			unstake_threshold: MAX_UNSTAKE_THRESHOLD,
-			validator_payment: 0,
-		}));
-		// Account 20 could not set their unstake_threshold past 10
-		assert_noop!(Staking::validate(Origin::signed(20), ValidatorPrefs {
-			unstake_threshold: 11,
-			validator_payment: 0}),
-			"unstake threshold too large"
-		);
-		// Give Account 20 unstake_threshold 11 anyway, should still be limited to 10
-		<Validators<Test>>::insert(20, ValidatorPrefs {
-			unstake_threshold: 11,
-			validator_payment: 0,
-		});
-
-		// Make slot_stake really large, as to not affect punishment curve
-		<SlotStake<Test>>::put(u64::max_value());
-		// Confirm `slot_stake` is greater than exponential punishment, else math below will be different
-		assert!(Staking::slot_stake() > 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
-
-		// Report each user 1 more than the max_unstake_threshold
-		Staking::on_offline_validator(10, MAX_UNSTAKE_THRESHOLD as usize + 1);
-		Staking::on_offline_validator(20, MAX_UNSTAKE_THRESHOLD as usize + 1);
-
-		// Show that each balance only gets reduced by 2^max_unstake_threshold
-		assert_eq!(Balances::free_balance(&10), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
-		assert_eq!(Balances::free_balance(&20), u64::max_value() - 2_u64.pow(MAX_UNSTAKE_THRESHOLD) * 20);
-	});
-}
-
-#[test]
-fn slashing_does_not_cause_underflow() {
-	// Tests that slashing more than a user has does not underflow
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		// One user with less than `max_value` will test underflow does not occur
-		Balances::set_free_balance(&10, 1);
-
-		// Verify initial conditions
-		assert_eq!(Balances::free_balance(&10), 1);
-		assert_eq!(Staking::offline_slash_grace(), 0);
-
-		// Set validator preference so that 2^unstake_threshold would cause overflow (greater than 64)
-		<Validators<Test>>::insert(10, ValidatorPrefs {
-			unstake_threshold: 10,
-			validator_payment: 0,
-		});
-
-		// Should not panic
-		Staking::on_offline_validator(10, 100);
-		// Confirm that underflow has not occurred, and account balance is set to zero
-		assert_eq!(Balances::free_balance(&10), 0);
-	});
-}
-
 
 #[test]
 fn reward_destination_works() {
@@ -922,22 +955,6 @@ fn validator_payment_prefs_work() {
 }
 
 #[test]
-fn staking_ledger_grows_and_shrinks() {
-	// TODO: Show that staking ledger grows with new events
-	// TODO: Show that staking ledger shrinks when user is removed
-	// @kianenigma: I find this invalid. Staking ledger is used in so many operations
-	// that one testcases for it would simply be in vein. we should instead tune all other
-	// tests to make sure that they are checking the state of the ledger correctly.
-	// Some of the places where ledger is being updated:
-	// * bond(), unbond(), bond_extra(), withdraw_unbonded(),
-}
-
-#[test]
-fn consolidate_unlocked_works() {
-	// TODO: Figure out what it does and then test it
-}
-
-#[test]
 fn bond_extra_works() {
 	// Tests that extra `free_balance` in the stash can be added to stake
 	// NOTE: this tests only verifies `StakingLedger` for correct updates. 
@@ -969,12 +986,10 @@ fn bond_extra_works() {
 	});
 }
 
-
-
 #[test]
 fn bond_extra_and_withdraw_unbonded_works() {
 	// * Should test
-	// * Given an account being binded [and chosen as a validator](not mandatory)
+	// * Given an account being bonded [and chosen as a validator](not mandatory)
 	// * It can add extra funds to the bonded account.
 	// * it can unbond a portion of its funds from the stash account.
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
@@ -1074,19 +1089,6 @@ fn bond_extra_and_withdraw_unbonded_works() {
 }
 
 #[test]
-fn reporting_misbehaviors_work() {
-	// TODO: Does this code exist?
-	// UPDATE: afaik this is invalid and does not exist.
-}
-
-#[test]
-fn correct_number_of_validators_are_chosen() {
-	// TODO: Check that number is at least minimum, and at most what is set
-	// TODO: Test emergency conditions?
-}
-
-
-#[test]
 fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 	// Test that slot_stake is determined by the least staked validator
 	// Test that slot_stake is the maximum punishment that can happen to a validator
@@ -1133,7 +1135,7 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		assert_eq!(Staking::stakers(&10).total, 1000 + 10);
 		assert_eq!(Staking::stakers(&20).total, 69 + 10);
 
-		// -- Note that rewards are going drectly to stash, not as free balance.
+		// -- Note that rewards are going directly to stash, not as free balance.
 		assert_eq!(Balances::free_balance(&10), 1000);
 		assert_eq!(Balances::free_balance(&20), 1000);
 
@@ -1149,7 +1151,6 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 		
 	});
 }
-
 
 #[test]
 fn on_free_balance_zero_stash_removes_validator() {
@@ -1272,9 +1273,94 @@ fn on_free_balance_zero_stash_removes_nominator() {
 #[test]
 fn phragmen_poc() {
 	// Tests the POC test of the phragmen, mentioned in the paper and reference implementation.
+	// Initial votes:
+	// vote_list = [
+	// 		("A", 10.0, ["X", "Y"]),
+	// 		("B", 20.0, ["X", "Z"]),
+	// 		("C", 30.0, ["Y", "Z"])
+	// ]
+	//
+	// Sequential Phragmén gives
+	// Z  is elected with stake  35.0 and score  0.02
+	// Y  is elected with stake  25.0 and score  0.04
+	//
+	// A  has load  0.04 and supported 
+	// X  with stake  0.0 Y  with stake  10.0 
+	// B  has load  0.02 and supported 
+	// X  with stake  0.0 Z  with stake  20.0 
+	// C  has load  0.04 and supported 
+	// Y  with stake  15.0 Z  with stake  15.0 
+	// 
+	// NOTE: doesn't X/Y/Z's stash value make a difference here in phragmen? 
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1).sessions_per_era(1).build(),
+	|| {
+		// initial setup of 10 and 20, both validators 
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 2000, active: 2000, unlocking: vec![] }));
+
+		assert_eq!(Staking::validators(10), ValidatorPrefs::default());
+		assert_eq!(Staking::validators(20), ValidatorPrefs::default());
+
+		assert_eq!(Balances::free_balance(10), 1);
+		assert_eq!(Balances::free_balance(20), 1);
+		
+		// no one is a nominator
+		assert_eq!(<Nominators<Test>>::enumerate().count(), 0 as usize);
+
+		// Bond [30, 31] as the third validator
+		assert_ok!(Staking::bond(Origin::signed(31), 30, 1000, RewardDestination::default()));
+		assert_ok!(Staking::validate(Origin::signed(30), ValidatorPrefs::default()));
+
+		// bond [2,1](A), [4,3](B), [6,5](C) as the 3 nominators
+		// Give all of them some balance to be able to bond properly.
+		for i in &[1, 3, 5] { Balances::set_free_balance(i, 50); }
+		// Linking names to the above test:
+		// 10 => X
+		// 20 => Y
+		// 30 => Z
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 10, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 20, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 30]));
+
+		assert_ok!(Staking::bond(Origin::signed(5), 6, 30, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(6), vec![20, 30]));
+
+		// New era => election algorithm will trigger
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+
+
+		// e.g. Z and Y are chosen 
+		assert_eq!(Session::validators(), vec![30, 20]);
+
+		// with stake 35 and 25 respectively
+		assert_eq!(Staking::stakers(30).own, 0); // This is only because 30 has been bonded on the fly. 35 is the point, not 'own' Exposure.
+		assert_eq!(Staking::stakers(30).total, 0 + 35);
+		assert_eq!(Staking::stakers(20).own, 2010);
+		assert_eq!(Staking::stakers(20).total, 2010 + 25);
+
+		// 30(Z) was supported by B-4 and C-6 with stake 20 and 15 respectively.
+		assert_eq!(Staking::stakers(30).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![15, 20]);
+		assert_eq!(Staking::stakers(30).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![6, 4]);
+		
+		// 20(Y) was supported by A-2 and C-6 with stake 10 and 15 respectively.
+		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![15, 10]);
+		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![6, 2]);
+	});
 }
 
 #[test]
-fn no_one_nominates_does_not_panic() {
-	// Test the behavior when no one is nominating.
+fn staking_ledger_grows_and_shrinks() {
+	// TODO: Show that staking ledger grows with new events
+	// TODO: Show that staking ledger shrinks when user is removed
+	// @kianenigma: I find this invalid. Staking ledger is used in so many operations
+	// that one testcases for it would simply be in vein. we should instead tune all other
+	// tests to make sure that they are checking the state of the ledger correctly.
+	// Some of the places where ledger is being updated:
+	// * bond(), unbond(), bond_extra(), withdraw_unbonded(),
 }

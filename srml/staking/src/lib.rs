@@ -558,7 +558,7 @@ impl<T: Trait> Module<T> {
 	fn slash_validator(v: &T::AccountId, slash: BalanceOf<T>) {
 		// The exposure (backing stake) information of the validator to be slashed.
 		let exposure = Self::stakers(v);
-		// The amount we are actually going to slash (can't be bigger than thair total exposure)
+		// The amount we are actually going to slash (can't be bigger than their total exposure)
 		let slash = slash.min(exposure.total);
 		// The amount we'll slash from the validator's stash directly.
 		let own_slash = exposure.own.min(slash);
@@ -802,7 +802,7 @@ impl<T: Trait> Module<T> {
 
 		// Figure out the minimum stake behind a slot.
 		let slot_stake = elected_candidates.iter().min_by_key(|c| c.exposure.total)
-			.expect("elected candidates cannoto be empty").exposure.total;
+			.expect("elected candidates cannot be empty").exposure.total;
 		<SlotStake<T>>::put(&slot_stake);
 
 		// Populate Stakers.
