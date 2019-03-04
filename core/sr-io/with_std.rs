@@ -248,7 +248,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::default();
+		let mut t = BasicExternalities::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -258,7 +258,7 @@ mod std_tests {
 			true
 		}));
 
-		t = TestExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
+		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
 
 		assert!(!with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
@@ -269,7 +269,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = TestExternalities::new(map![
+		let mut t = BasicExternalities::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		]);
 
@@ -285,7 +285,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = TestExternalities::new(map![
+		let mut t = BasicExternalities::new(map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

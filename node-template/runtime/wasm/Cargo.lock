@@ -1667,6 +1667,7 @@ dependencies = [
 name = "substrate-serializer"
 version = "0.1.0"
 dependencies = [
+ "serde 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

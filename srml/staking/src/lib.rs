@@ -275,8 +275,8 @@ decl_storage! {
 
 			with_externalities(&mut ext, || {
 				for &(ref stash, ref controller, balance) in &config.stakers {
-					<Module<T>>::bond(T::Origin::from(Some(stash.clone()).into()), T::Lookup::unlookup(controller.clone()), balance, RewardDestination::Staked);
-					<Module<T>>::validate(T::Origin::from(Some(controller.clone()).into()), Default::default());
+					let _ = <Module<T>>::bond(T::Origin::from(Some(stash.clone()).into()), T::Lookup::unlookup(controller.clone()), balance, RewardDestination::Staked);
+					let _ = <Module<T>>::validate(T::Origin::from(Some(controller.clone()).into()), Default::default());
 				}
 				<Module<T>>::select_validators();
 			});
@@ -706,7 +706,6 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Figure out the minimum stake behind a slot.
-		println!("candidates: {:?}", candidates);
 		let slot_stake = candidates.last().map(|i| i.1.total).unwrap_or_default();
 		<SlotStake<T>>::put(&slot_stake);
 

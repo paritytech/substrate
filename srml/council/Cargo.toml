@@ -29,6 +29,7 @@ std = [
 	"parity-codec-derive/std",
 	"substrate-primitives/std",
 	"rstd/std",
+	"serde",
 	"runtime_io/std",
 	"srml-support/std",
 	"primitives/std",

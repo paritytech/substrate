@@ -21,8 +21,6 @@ use std::iter::FromIterator;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use trie::trie_root;
-use crate::backend::InMemory;
-use crate::changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage, AnchorBlockId};
 use primitives::storage::well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES};
 use parity_codec::Encode;
 use super::{Externalities, OverlayedChanges};
@@ -150,7 +148,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		None
 	}
 
-	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> {
+	fn storage_changes_root(&mut self, _parent: H::Out, _parent_num: u64) -> Option<H::Out> {
         None
 	}
 }
@@ -164,7 +162,7 @@ mod tests {
 	#[test]
 	fn commit_should_work() {
 		let mut ext = BasicExternalities::default();
-        let ext = (&mut ext as &mut Externalities<Blake2Hasher>);
+        let ext = &mut ext as &mut Externalities<Blake2Hasher>;
         ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
         ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
         ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
@@ -175,7 +173,7 @@ mod tests {
 	#[test]
 	fn set_and_retrieve_code() {
 		let mut ext = BasicExternalities::default();
-        let ext = (&mut ext as &mut Externalities<Blake2Hasher>);
+        let ext = &mut ext as &mut Externalities<Blake2Hasher>;
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
