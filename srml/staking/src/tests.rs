@@ -438,7 +438,7 @@ fn nominating_and_rewards_should_work() {
 
 		// 2 will nominate for 10, 10 has 1000 in stash, 500 will be 1/3 of the total 1500 
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
 		// 4 will nominate for 20, 20 has 2000 in stash, 500 will be 1/5 of the total 2500 
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Stash));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![20, 10]));
