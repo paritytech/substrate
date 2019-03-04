@@ -19,6 +19,9 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
+#[macro_use(telemetry)]
+extern crate substrate_telemetry;
+
 #[macro_use]
 mod traits;
 mod params;
