@@ -430,7 +430,7 @@ macro_rules! impl_outer_config {
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
 			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
-            	$(
+				$(
 					if let Some(extra) = self.$snake {
 						extra.assimilate_storage(&mut top, &mut children)?;
 					}
