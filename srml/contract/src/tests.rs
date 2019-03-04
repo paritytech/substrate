@@ -224,13 +224,13 @@ fn account_removal_removes_storage() {
 			{
 				Balances::set_free_balance(&1, 110);
 				Balances::increase_total_stake_by(110);
-				<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
-				<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
+				<StorageOf<Test>>::insert(&1, &b"foo".to_vec(), b"1".to_vec());
+				<StorageOf<Test>>::insert(&1, &b"bar".to_vec(), b"2".to_vec());
 
 				Balances::set_free_balance(&2, 110);
 				Balances::increase_total_stake_by(110);
-				<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
-				<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
+				<StorageOf<Test>>::insert(&2, &b"hello".to_vec(), b"3".to_vec());
+				<StorageOf<Test>>::insert(&2, &b"world".to_vec(), b"4".to_vec());
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
@@ -242,15 +242,15 @@ fn account_removal_removes_storage() {
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
 			{
-				assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
-				assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
+				assert_eq!(<StorageOf<Test>>::get(&1, &b"foo".to_vec()), None);
+				assert_eq!(<StorageOf<Test>>::get(&1, &b"bar".to_vec()), None);
 
 				assert_eq!(
-					<StorageOf<Test>>::get(2, b"hello".to_vec()),
+					<StorageOf<Test>>::get(&2, &b"hello".to_vec()),
 					Some(b"3".to_vec())
 				);
 				assert_eq!(
-					<StorageOf<Test>>::get(2, b"world".to_vec()),
+					<StorageOf<Test>>::get(&2, &b"world".to_vec()),
 					Some(b"4".to_vec())
 				);
 			}

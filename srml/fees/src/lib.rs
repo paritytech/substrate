@@ -19,10 +19,12 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use srml_support::{dispatch::Result, traits::ArithmeticType, StorageMap, decl_event, decl_storage, decl_module};
+use srml_support::{
+	dispatch::Result, StorageMap, decl_event, decl_storage, decl_module,
+	traits::{ArithmeticType, ChargeBytesFee, ChargeFee, TransferAsset, WithdrawReason}
+};
 use runtime_primitives::traits::{
-	As, ChargeBytesFee, ChargeFee,
-	TransferAsset, CheckedAdd, CheckedSub, CheckedMul, Zero
+	As, CheckedAdd, CheckedSub, CheckedMul, Zero
 };
 use system;
 
@@ -96,7 +98,7 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
 		let new_fee = current_fee.checked_add(&amount).ok_or_else(|| "fee got overflow after charge")?;
 
-		T::TransferAsset::remove_from(transactor, amount)?;
+		T::TransferAsset::withdraw(transactor, amount, WithdrawReason::TransactionPayment)?;
 
 		<CurrentTransactionFee<T>>::insert(extrinsic_index, new_fee);
 		Ok(())
@@ -107,7 +109,7 @@ impl<T: Trait> ChargeFee<T::AccountId> for Module<T> {
 		let current_fee = Self::current_transaction_fee(extrinsic_index);
 		let new_fee = current_fee.checked_sub(&amount).ok_or_else(|| "fee got underflow after refund")?;
 
-		T::TransferAsset::add_to(transactor, amount)?;
+		T::TransferAsset::deposit(transactor, amount)?;
 
 		<CurrentTransactionFee<T>>::insert(extrinsic_index, new_fee);
 		Ok(())

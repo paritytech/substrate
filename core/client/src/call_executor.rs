@@ -169,15 +169,14 @@ where
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let return_data = state_machine::execute_using_consensus_failure_handler::<
-			_, _, _, _, _, NeverNativeValue, fn() -> _
-		>(
+		let return_data = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
 			&mut changes,
 			&self.executor,
 			method,
 			call_data,
+		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			false,
 			None,
@@ -209,15 +208,14 @@ where
 		let state = self.backend.state_at(*at)?;
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let header = prepare_environment_block()?;
-			state_machine::execute_using_consensus_failure_handler::<
-				_, _, _, _, _, R, fn() -> _,
-			>(
+			state_machine::new(
 				&state,
 				self.backend.changes_trie_storage(),
 				changes,
 				&self.executor,
 				"Core_initialise_block",
 				&header.encode(),
+			).execute_using_consensus_failure_handler::<_, R, fn() -> _>(
 				execution_manager.clone(),
 				false,
 				None,
@@ -225,13 +223,14 @@ where
 			*initialised_block = Some(*at);
 		}
 
-		let result = state_machine::execute_using_consensus_failure_handler(
+		let result = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
 			changes,
 			&self.executor,
 			method,
 			call_data,
+		).execute_using_consensus_failure_handler(
 			execution_manager,
 			false,
 			native_call,
@@ -270,13 +269,14 @@ where
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
 	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
-		state_machine::execute_using_consensus_failure_handler(
+		state_machine::new(
 			state,
 			self.backend.changes_trie_storage(),
 			changes,
 			&self.executor,
 			method,
 			call_data,
+		).execute_using_consensus_failure_handler(
 			manager,
 			true,
 			native_call,
