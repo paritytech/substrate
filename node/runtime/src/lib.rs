@@ -60,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 31,
-	impl_version: 33,
+	spec_version: 32,
+	impl_version: 32,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -101,7 +101,7 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type OnFreeBalanceZero = (((Staking, Contract), Democracy), Session);
 	type OnNewAccount = Indices;
 	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
