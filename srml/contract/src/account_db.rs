@@ -16,17 +16,19 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, CodeHashOf, Trait};
+use super::{CodeHash, CodeHashOf, Trait, SubTrie};
 use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child};
+use substrate_primitives::storage::well_known_keys;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
 	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
 	code: Option<Option<CodeHash<T>>>,
+  storage_key_space: Vec<u8>,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -36,6 +38,7 @@ impl<T: Trait> Default for ChangeEntry<T> {
 		ChangeEntry {
 			balance: Default::default(),
 			code: Default::default(),
+      storage_key_space: Default::default(),
 			storage: Default::default(),
 		}
 	}
@@ -44,17 +47,64 @@ impl<T: Trait> Default for ChangeEntry<T> {
 pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 pub trait AccountDb<T: Trait> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
+/*	fn get_subtrie<'a>(
+    &self,
+    key_space: &[u8],
+    account: &T::AccountId,
+    subtries: &'a mut SubtriesCache<<T as system::Trait>::Hash>)
+    -> Option<&'a SubTrie<<T as system::Trait>::Hash>>;*/
+	fn get_subtrie(&self, parent_key_space: &[u8], account: &T::AccountId) -> Option<SubTrie>;
+	fn get_storage(&self, key_space: &[u8], location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
 	fn commit(&mut self, change_set: ChangeSet<T>);
 }
 
+
+/*
+// TODO move this cache in externality with a subtrie struct with more content (aka root & other)
+pub struct SubtriesCache<H> {
+	// TODO switch to lru ??
+	cache: BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, Option<SubTrie<H>>>>,
+}
+impl<H> SubtriesCache<H> {
+	pub fn new() -> Self {
+		SubtriesCache{ cache: BTreeMap::new() }
+	}
+	pub fn get(&self, parent_key_space: &[u8], account_key: &[u8]) -> Option<&Option<SubTrie<H>>> {
+		self.cache.get(parent_key_space).and_then(|r|r.get(account_key))
+	}
+	pub fn entry(&mut self, parent_key_space: Vec<u8>, account_key: Vec<u8>) -> Entry<Vec<u8>, Option<SubTrie<H>>> {
+		self.cache.entry(parent_key_space)
+			.or_insert_with(|| BTreeMap::new())
+			.entry(account_key)
+	}
+}
+*/
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-    child::get_raw(account.as_ref::<[u8]>(), location) // TODO make a support trait , does not seems usefull
+	fn get_subtrie(&self, key_space: &[u8], account: &T::AccountId) -> Option<SubTrie> {
+		use parity_codec::KeyedVec;
+		// warn slow to_keyed_vec
+		let keyed_account = account.to_keyed_vec(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
+    // TODO change child to return reference on cache??
+		let res: Option<SubTrie> = child::get(key_space, &keyed_account[..]);
+    res
+/*		if let Some(res) = subtries.get(key_space, &keyed_account[..]) {
+			res.as_ref()
+		} else {
+			let res: Option<SubTrie<<T as system::Trait>::Hash>> = child::get(key_space, &keyed_account[..]);
+			subtries.entry(key_space.to_vec(), keyed_account)
+				.or_insert(res).as_ref()
+		}*/
+	}
+	fn get_storage(&self, key_space: &[u8], location: &[u8]) -> Option<Vec<u8>> {
+		/*use super::KeySpaceGenerator;
+		// same thing here parent to default top empty
+		let keyspace = <T as Trait>::KeySpaceGenerator::key_space(account, &[]);// TODO this needs subtrie caching!! -> this is not working as every call is different: value need to be access from parent trie*/
+			// TODO get keyspace primitive
+		child::get_raw(key_space, location) // TODO make a support trait , does not seems usefull
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<CodeHashOf<T>>::get(account)
@@ -64,6 +114,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	}
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
+			let keyspace = changed.storage_key_space;
 			if let Some(balance) = changed.balance {
 				if let UpdateBalanceOutcome::AccountKilled =
 					balances::Module::<T>::set_free_balance_creating(&address, balance)
@@ -83,15 +134,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			}
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
-					child::put_raw(address.as_ref::<[u8]>(), &k, &value[..]); // TODO move value (ref here is bad)
+					child::put_raw(&keyspace[..], &k, &value[..]); // TODO move value (ref here is bad) TODO need address to for parent root update??
 				} else {
-					child::kill(address.as_ref::<[u8]>(), &k);
+					child::kill(&keyspace[..], &k); // TODO also need address???
 				}
 			}
 		}
 	}
 }
-
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	local: RefCell<ChangeSet<T>>,
 	underlying: &'a AccountDb<T>,
@@ -138,13 +188,18 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
-		self.local
+	fn get_subtrie(&self, key_space: &[u8], account: &T::AccountId) -> Option<SubTrie> {
+		self.underlying.get_subtrie(key_space, account)
+	}
+	fn get_storage(&self, key_space: &[u8], location: &[u8]) -> Option<Vec<u8>> {
+    unimplemented!() // TODO changeset over key space
+/*		self.local
 			.borrow()
-			.get(account)
+			.get(key_space)
 			.and_then(|a| a.storage.get(location))
 			.cloned()
-			.unwrap_or_else(|| self.underlying.get_storage(account, location))
+			.unwrap_or_else(|| self.underlying.get_storage(key_space, location))
+*/
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local

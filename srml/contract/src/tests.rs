@@ -33,7 +33,7 @@ use hex_literal::*;
 use assert_matches::assert_matches;
 use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
-	Trait, ComputeDispatchFee
+	Trait, ComputeDispatchFee, KeySpaceGenerator
 };
 
 mod contract {
@@ -99,6 +99,7 @@ impl Trait for Test {
 	type DetermineContractAddress = DummyContractAddressFor;
 	type Event = MetaEvent;
 	type ComputeDispatchFee = DummyComputeDispatchFee;
+	type KeySpaceGenerator = DummyKeySpaceGenerator;
 }
 
 type Balances = balances::Module<Test>;
@@ -110,6 +111,16 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 	fn contract_address_for(_code_hash: &H256, _data: &[u8], origin: &u64) -> u64 {
 		*origin + 1
 	}
+}
+
+pub struct DummyKeySpaceGenerator;
+impl KeySpaceGenerator<u64> for DummyKeySpaceGenerator {
+	fn key_space(account_id: &u64, top: &[u8]) -> Vec<u8> {
+    let mut res = Vec::new();
+    res.extend_from_slice(top);
+    res.extend_from_slice(&account_id.to_be_bytes()[..]);
+    res
+  }
 }
 
 pub struct DummyComputeDispatchFee;

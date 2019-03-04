@@ -92,6 +92,62 @@ pub trait ComputeDispatchFee<Call, Balance> {
 	fn compute_dispatch_fee(call: &Call) -> Balance;
 }
 
+#[derive(Encode,Decode,Clone,Debug)]
+/// Information for managing a sub trie abstraction.
+/// This is the required info to cache for an account
+pub struct SubTrie {
+//	/// unique ID for the subtree encoded as a byte
+//	pub root: H,
+	/// unique ID for the subtree encoded as a byte
+	pub key_space: Vec<u8>,
+//	/// unique ID of the parent subtree (needed to update root hash on commit)
+//	pub parent_key_space: Vec<u8>,
+	/// the size of stored value in octet
+	pub current_mem_stored: u64,
+/*/// builder for iterator on childs: for subtrie deletion
+	/// for this subtrie implementation childs are stored under a static prefix
+	pub child_keyspace_prefix: &'static [u8],*/
+}
+
+/// Get a key space (key space must be unique and collision resistant depending upon its context)
+/// Note that it is different than encode because key space should have collision resistance
+/// property (being a proper uniqueid).
+/// TODO using untyped byte array for keyspace make thing backend dependant (the db ultimately need
+/// to make good use of that), but it could make sense to use T::Hash
+/// TODO it could make sense to directly use account id.
+pub trait KeySpaceGenerator<AccountId: Sized> {
+	/// get a keyspace for an account, using reference to parent account keyspace to ensure
+	/// uniqueness of keyspace
+	/// The implementation must ensure every new key space is unique: two consecutive call with the
+	/// same parameter needs to return different key space values.
+	fn key_space(account_id: &AccountId, top: &[u8]) -> Vec<u8>;
+}
+
+/// Get key space from `account_id`
+pub struct KeySpaceFromParentCounter<T: Trait>(PhantomData<T>);
+
+/// This generator use inner counter for account id and apply hash over `AccountId +
+/// parent_keyspace + accountid_counter`
+impl<T: Trait> KeySpaceGenerator<T::AccountId> for KeySpaceFromParentCounter<T>
+where
+	T::AccountId: AsRef<[u8]> {
+	fn key_space(account_id: &T::AccountId, top: &[u8]) -> Vec<u8> {
+		//let new_seed = <AccountCounter<T>>::get(account_id).ok_or(|| 0).unwrap_or(0).wrapping_add(1);
+		let new_seed = <AccountCounter<T>>::get().wrapping_add(1);
+
+		let mut buf = Vec::new();
+		buf.extend_from_slice(account_id.as_ref());
+		buf.extend_from_slice(top.as_ref());
+		buf.extend_from_slice(&new_seed.to_be_bytes()[..]);
+		// this line is yelling use Hash instead of vec, but it seems implementation dependant
+		let res = T::Hashing::hash(&buf[..]).as_ref().into();
+	
+		//<AccountCounter<T>>::insert(account_id, new_seed);
+		<AccountCounter<T>>::put(new_seed);
+		res
+	}
+}
+
 pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	/// The outer call dispatch type.
 	type Call: Parameter + Dispatchable<Origin=<Self as system::Trait>::Origin>;
@@ -110,6 +166,8 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 	/// It is recommended (though not required) for this function to return a fee that would be taken
 	/// by executive module for regular dispatch.
 	type ComputeDispatchFee: ComputeDispatchFee<Self::Call, <Self as balances::Trait>::Balance>;
+	/// keyspace id generator
+	type KeySpaceGenerator: KeySpaceGenerator<Self::AccountId>;
 }
 
 /// Simple contract address determintator.
@@ -342,6 +400,9 @@ decl_storage! {
 		pub PristineCode: map CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for the execution.
 		pub CodeStorage: map CodeHash<T> => Option<wasm::PrefabWasmModule>;
+		/// The subtrie counter associated with an account id
+		pub AccountCounter: u64 = 0;
+		//pub AccountCounter: map T::AccountId => Option<u64>;
 	}
 }
 

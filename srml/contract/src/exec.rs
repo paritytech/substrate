@@ -224,7 +224,9 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
+	// TODO can we remove self_account
 	pub self_account: T::AccountId,
+	pub self_keyspace: Vec<u8>, // TODO ref?
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
@@ -247,6 +249,7 @@ where
 		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb);
 		ExecutionContext {
 			self_account: origin,
+			self_keyspace: Vec::new(),
 			depth: 0,
 			overlay,
 			events: Vec::new(),
@@ -258,9 +261,22 @@ where
 	}
 
 	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
+		use super::KeySpaceGenerator;
+    // for contract we do not have multilayer of trie, we there for refer to top &[] key space
+    // TODO design multilayer of trie (this nested is not good for it as it is only transaction
+    // related, a right abstraction will use Vec<T::AccountId> as address (mainly that would be
+    // useless but for isolated things it would make sense: it is probably more a matter of 
+    // having an new instruction that run under a account isolated context (call into account).
+    // Thinking of ring and isolation this could make sense (ring context similar for ext
+    // here it would be for storage).
+		let key_space = overlay.get_subtrie(&[], &dest).map(|st|st.key_space)
+			.unwrap_or_else(||
+				<T as Trait>::KeySpaceGenerator::key_space(&dest, &[])
+			);
 		ExecutionContext {
 			overlay: overlay,
 			self_account: dest,
+			self_keyspace: key_space,
 			depth: self.depth + 1,
 			events: Vec::new(),
 			calls: Vec::new(),
@@ -554,7 +570,7 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.ctx.overlay.get_storage(&self.ctx.self_account, key)
+		self.ctx.overlay.get_storage(&self.ctx.self_keyspace, key)
 	}
 
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {

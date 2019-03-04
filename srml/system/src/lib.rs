@@ -81,13 +81,7 @@ pub trait Trait: 'static + Eq + Clone {
 	type Hash: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
-  // TODO EMCH: I am making AccountId AsRef, there is currently some crazy code (eg DoubleStorage)
-  // using encoded to get some Vec<u8>, running into a Vec allocation in the middle TODO if the
-  // encoded of current impl of accountid is same as its as_ref impl switch to as_ref for them too
-  // TODO there may be a better approach
-  // TODO AsRef refacto is painfull due to u64 being use in every test -> create a new trait like
-  // IntoKeySpace which  return impl AsRef<[u8]>??
-	type AccountId: AsRef<[u8]> + Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
+	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 	type Lookup: StaticLookup<Target = Self::AccountId>;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
