@@ -24,7 +24,7 @@ use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
 use srml_support::traits::{Currency, OnDilution, ArithmeticType};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
