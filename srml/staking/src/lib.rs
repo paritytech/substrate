@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use rstd::{prelude::*, result};
-use parity_codec::HasCompact;
+use parity_codec::{HasCompact, CompactAs};
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
@@ -29,7 +29,7 @@ use srml_support::traits::{
 	Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason, ArithmeticType
 };
 use session::OnSessionChange;
-use primitives::Perbill;
+use primitives::{Perbill, Perquill};
 use primitives::traits::{Zero, One, As, StaticLookup, Saturating};
 use system::ensure_signed;
 
@@ -41,6 +41,47 @@ const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
+
+// a wrapper around validation candidates list and some metadata needed for election process.
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Candidate<AccountId, Balance: HasCompact> {
+	// The validator's account
+	who: AccountId,
+	// Exposure struct, holding info about the value that the validator has in stake.
+	exposure: Exposure<AccountId, Balance>,
+	// Accumulator of the stake of this candidate based on received votes.
+	approval_stake: Balance,
+	// Intermediary value used to sort candidates. See phragmen reference implementation
+	score: Perquill,
+}
+
+// a wrapper around the nomination info of a single nominator for a group of validators.
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Nominations<AccountId, Balance: HasCompact> {
+	// The nominator's account
+	who: AccountId,
+	// List of validators proposed by this nominator.
+	nominees: Vec<Vote<AccountId, Balance>>,
+	// the stake amount proposed by the nominator as a part of the vote. Same as `nom.budget` in reference.
+	stake: Balance,
+	// is incremented each time a nominee that this nominator voted for has been elected.
+	load: Perquill,
+}
+
+// Wrapper around a nominator vote and the load of that vote. Referred to as 'edge' in the
+// phragmen reference implementation.
+#[derive(Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct Vote<AccountId, Balance: HasCompact> {
+	// account being voted for
+	who: AccountId,
+	// load of this vote.
+	load: Perquill,
+	// Final backing stake of this vote.
+	backing_stake: Balance
+}
 
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
@@ -213,7 +254,7 @@ decl_storage! {
 		pub Payee get(payee): map T::AccountId => RewardDestination;
 
 		/// The set of keys are all controllers that want to validate.
-		/// 
+		///
 		/// The values are the preferences that a validator has.
 		pub Validators get(validators) build(|config: &GenesisConfig<T>| {
 			config.stakers.iter().map(|(_stash, controller, _value)| (
@@ -223,9 +264,14 @@ decl_storage! {
 		}): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The set of keys are all controllers that want to nominate.
-		/// 
+		///
 		/// The value are the nominations.
-		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
+		pub Nominators get(nominators) build(|config: &GenesisConfig<T>| {
+			config.nominators.iter().map(|(who, nominees)| (
+				who.clone(),
+				nominees.clone(),
+			)).collect::<Vec<_>>()
+		}): linked_map T::AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
@@ -243,7 +289,7 @@ decl_storage! {
 		// The historical validators and their nominations for a given era. Stored as a trie root of the mapping
 		// `T::AccountId` => `Exposure<T::AccountId, BalanceOf<T>>`, which is just the contents of `Stakers`,
 		// under a key that is the `era`.
-		// 
+		//
 		// Every era change, this will be appended with the trie root of the contents of `Stakers`, and the oldest
 		// entry removed down to a specific number of entries (probably around 90 for a 3 month history).
 //		pub HistoricalStakers get(historical_stakers): map T::BlockNumber => Option<H256>;
@@ -283,6 +329,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>)>;
+		config(nominators): Vec<(T::AccountId, Vec<T::AccountId>)>
 	}
 }
 
@@ -380,7 +427,7 @@ decl_module! {
 		/// Declare the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
@@ -393,7 +440,7 @@ decl_module! {
 		/// Declare the desire to nominate `targets` for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
@@ -411,7 +458,7 @@ decl_module! {
 		/// Declare no desire to either validate or nominate.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
@@ -423,7 +470,7 @@ decl_module! {
 		/// (Re-)set the payment target for a controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
@@ -627,57 +674,110 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Reassign all Stakers.
-
 		// Map of (would-be) validator account to amount of stake backing it.
 		
-		// First, we pull all validators, together with their stash balance into a Vec (cpu=O(V), mem=O(V))
-		let mut candidates = <Validators<T>>::enumerate()
-			.map(|(who, _)| {
-				let stash_balance = Self::stash_balance(&who);
-				(who, Exposure { total: stash_balance, own: stash_balance, others: vec![] })
-			})
-			.collect::<Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>>();
-		// Second, we sort by accountid (cpu=O(V.log(V)))
-		candidates.sort_unstable_by_key(|i| i.0.clone());
-		// Third, iterate through nominators and add their balance to the first validator in their approval
-		// list. cpu=O(N.log(V))
-		for (who, nominees) in <Nominators<T>>::enumerate() {
-			// For this trivial nominator mapping, we just assume that nominators always
-			// have themselves assigned to the first validator in their list.
-			if nominees.is_empty() {
-				// Not possible, but we protect against it anyway.
-				continue;
-			}
-			if let Ok(index) = candidates.binary_search_by(|i| i.0.cmp(&nominees[0])) {
-				let stash_balance = Self::stash_balance(&who);
-				candidates[index].1.total += stash_balance;
-				candidates[index].1.others.push(IndividualExposure { who, value: stash_balance });
-			}
-		}
+		let rounds = <ValidatorCount<T>>::get() as usize;
+		let mut elected_candidates: Vec<Candidate<T::AccountId, BalanceOf<T>>> = vec![];
 
-		// Get the new staker set by sorting by total backing stake and truncating.
-		// cpu=O(V.log(s)) average, O(V.s) worst.
-		let count = Self::validator_count() as usize;
-		let candidates = if candidates.len() <= count {
-			candidates
-		} else {
-			candidates.into_iter().fold(vec![], |mut winners: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>, entry| {
-				if let Err(insert_point) = winners.binary_search_by_key(&entry.1.total, |i| i.1.total) {
-					if winners.len() < count {
-						winners.insert(insert_point, entry)
-					} else {
-						if insert_point > 0 {
-							// Big enough to be considered: insert at beginning and swap up to relevant point.
-							winners[0] = entry;
-							for i in 0..(insert_point - 1) {
-								winners.swap(i, i + 1)
-							}
+		// 1- Pre-process candidates and place them in a container 
+		let mut candidates = <Validators<T>>::enumerate().map(|(who, _)| {
+			let stash_balance = Self::stash_balance(&who);
+			Candidate {
+				who,
+				approval_stake: BalanceOf::<T>::zero(),
+				score: Perquill::zero(),
+				exposure: Exposure { total: stash_balance, own: stash_balance, others: vec![] },
+			}
+		}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
+		
+		// 2- Collect the nominators with the associated votes.
+		// Also collect approval stake along the way.
+		let mut nominations = <Nominators<T>>::enumerate().map(|(who, nominees)| {
+			let nominator_stake = Self::stash_balance(&who);
+			for n in &nominees {
+				if let Some(index) = candidates.iter().position(|i| i.who == *n) {
+					candidates[index].approval_stake += nominator_stake;
+				}
+			}
+
+			Nominations {
+				who,
+				nominees: nominees.into_iter()
+					.map(|n| Vote {who: n, load: Perquill::zero(), backing_stake: BalanceOf::<T>::zero()})
+					.collect::<Vec<Vote<T::AccountId, BalanceOf<T>>>>(),
+				stake: nominator_stake,
+				load : Perquill::zero(),
+			}
+		}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
+
+		// TODO: is this a valid optimization? Maybe someone votes with stake == 0?
+		// candidates who have 0 stake => have no votes. best to kick them out not.
+		candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
+			.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
+
+		// otherwise there is no need to have election
+		// TODO: if we want to throw phragmen in a func, this is a good place.
+		if candidates.len() > rounds {
+			// Main election loop
+			for _round in 0..rounds {
+				// Loop 1: initialize score
+				for nominaotion in &nominations {
+					for vote in &nominaotion.nominees {
+						let candidate = &vote.who;
+						if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
+							let approval_stake = candidates[index].approval_stake;
+							candidates[index].score = Perquill::from_fraction(1f64/approval_stake.as_() as f64);
 						}
 					}
 				}
-				winners
-			})
-		};
+				// Loop 2: increment score.
+				for nominaotion in &nominations {
+					for vote in &nominaotion.nominees {
+						let candidate = &vote.who;
+						if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
+							let approval_stake = candidates[index].approval_stake;
+							// TODO: casting, casting everywhere...
+							let temp = nominaotion.stake.as_() * *nominaotion.load.encode_as() as u64 / approval_stake.as_();
+							candidates[index].score = Perquill::decode_from(candidates[index].score.encode_as() + temp) ;
+						}
+					}
+				}
+
+				// Find the best
+				let (winner_index, _) = candidates.iter().enumerate().min_by_key(|&(_i, c)| c.score.encode_as())
+					.expect("candidates length is checked to be >0; qed");
+
+				// update nominator and vote load
+				let winner = candidates.remove(winner_index);
+				for nominator_idx in 0..nominations.len() {
+					for vote_idx in 0..nominations[nominator_idx].nominees.len() {
+						if nominations[nominator_idx].nominees[vote_idx].who == winner.who {
+							nominations[nominator_idx].nominees[vote_idx].load = Perquill::decode_from(winner.score.encode_as() -  nominations[nominator_idx].load.encode_as());
+							nominations[nominator_idx].load = winner.score;
+						}
+					}
+				}
+				elected_candidates.push(winner);
+			} // end of all rounds
+
+			// Update backing stake of candidates and nominators
+			for nomination in &mut nominations {
+				for vote in &mut nomination.nominees {
+					// if the target of this vote is among the winners, otherwise let go.
+					if let Some(index) = elected_candidates.iter().position(|c| c.who == vote.who) {
+						vote.backing_stake = <BalanceOf<T> as As<u64>>::sa(nomination.stake.as_() * vote.load.encode_as() / nomination.load.encode_as());
+						elected_candidates[index].exposure.total += vote.backing_stake;
+						// Update IndividualExposure of those who nominated and their vote won
+						elected_candidates[index].exposure.others.push(IndividualExposure {who: nomination.who.clone(), value: vote.backing_stake });
+					}
+				}
+			}
+		}
+		else { // end of `if candidates.len() > rounds`
+			// if we don't have enough candidates, just choose all.
+			// TODO: but what if it is less than MinValidators?
+			elected_candidates = candidates;
+		}		
 
 		// Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
@@ -689,16 +789,17 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Figure out the minimum stake behind a slot.
-		let slot_stake = candidates.last().map(|i| i.1.total).unwrap_or_default();
+		let slot_stake = elected_candidates.iter().min_by_key(|c| c.exposure.total)
+			.expect("elected candidates cannoto be empty").exposure.total;
 		<SlotStake<T>>::put(&slot_stake);
 
 		// Populate Stakers.
-		for (who, exposure) in &candidates {
-			<Stakers<T>>::insert(who, exposure);
+		for candidate in &elected_candidates {
+			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
 		}
 		// Set the new validator set.
 		<session::Module<T>>::set_validators(
-			&candidates.into_iter().map(|i| i.0).collect::<Vec<_>>()
+			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
 		);
 
 		// Update the balances for slashing/rewarding according to the stakes.

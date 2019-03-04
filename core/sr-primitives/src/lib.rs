@@ -248,6 +248,79 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
+/// Perquill is parts-per-quintillion. It stores a value between 0 and 1 in fixed point and
+/// provides a means to multiply some other value by that.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+pub struct Perquill(u64);
+
+impl Perquill {
+	/// Nothing.
+	pub fn zero() -> Perquill { Perquill(0) }
+
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
+	/// Everything.
+	pub fn one() -> Perquill { Perquill(1_000_000_000_000_000_000) }
+
+	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
+	pub fn from_billionths(x: u64) -> Perquill { Perquill(x.min(1_000_000_000) * 1_000_000_000 ) }
+
+	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
+	pub fn from_millionths(x: u64) -> Perquill { Perquill(x.min(1_000_000) * 1000_000_000_000) }
+
+	#[cfg(feature = "std")]
+	/// Construct new instance whose value is equal to `x` (between 0 and 1).
+	pub fn from_fraction(x: f64) -> Perquill { Perquill((x.max(0.0).min(1.0) * 1_000_000_000_000_000_000.0) as u64) }
+}
+
+impl std::fmt::Debug for Perquill {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Perquill(~{}) ", self.0 as f64/1_000_000_000_000_000_000.0)
+    }
+}
+
+impl<N> ::rstd::ops::Mul<N> for Perquill
+where
+	N: traits::As<u64>
+{
+	type Output = N;
+	fn mul(self, b: N) -> Self::Output {
+		<N as traits::As<u64>>::sa(b.as_().saturating_mul(self.0 as u64) / 1_000_000_000_000_000_000)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<f64> for Perquill {
+	fn from(x: f64) -> Perquill {
+		Perquill::from_fraction(x)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<f32> for Perquill {
+	fn from(x: f32) -> Perquill {
+		Perquill::from_fraction(x as f64)
+	}
+}
+
+impl codec::CompactAs for Perquill {
+	type As = u64;
+	fn encode_as(&self) -> &u64 {
+		&self.0
+	}
+	fn decode_from(x: u64) -> Perquill {
+		Perquill(x)
+	}
+}
+
+impl From<codec::Compact<Perquill>> for Perquill {
+	fn from(x: codec::Compact<Perquill>) -> Perquill {
+		x.0
+	}
+}
+
 /// Ed25519 signature verify.
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]

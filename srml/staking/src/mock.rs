@@ -79,6 +79,8 @@ pub struct ExtBuilder {
 	current_era: u64,
 	monied: bool,
 	reward: u64,
+	validator_pool: bool,
+	nominate: bool,
 }
 
 impl Default for ExtBuilder {
@@ -90,6 +92,8 @@ impl Default for ExtBuilder {
 			current_era: 0,
 			monied: true,
 			reward: 10,
+			validator_pool: false,
+			nominate: false,
 		}
 	}
 }
@@ -119,6 +123,16 @@ impl ExtBuilder {
 		self.reward = reward;
 		self
 	}
+	pub fn validator_pool(mut self, validator_pool: bool) -> Self { 
+		// NOTE: this should only be set to true with monied = false.
+		self.validator_pool = validator_pool;
+		self
+	}
+	pub fn nominate(mut self, nominate: bool) -> Self {
+		// NOTE: this only sets a dummy nominator for tests that want 10 and 20 (default validators) to be chosen by default.
+		self.nominate = nominate;
+		self
+	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		let balance_factor = if self.existential_deposit > 0 {
@@ -132,18 +146,24 @@ impl ExtBuilder {
 		}.build_storage().unwrap().0);
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: self.session_length,
-			validators: vec![10, 20],
+			validators: if self.validator_pool { vec![10, 20, 30, 40] }  else { vec![10, 20] },
 			keys: vec![],
 		}.build_storage().unwrap().0);
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: if self.monied {
 				if self.reward > 0 {
-					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor), (10, balance_factor), (11, balance_factor * 1000), (20, balance_factor), (21, balance_factor * 2000)]
+					vec![
+						(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor),
+						(10, balance_factor), (11, balance_factor * 1000), (20, balance_factor), (21, balance_factor * 2000)]
 				} else {
 					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor)]
 				}
 			} else {
-				vec![(10, balance_factor), (11, balance_factor * 1000), (20, balance_factor), (21, balance_factor * 2000)]
+				vec![
+					(10, balance_factor), (11, balance_factor * 10),
+					(20, balance_factor), (21, balance_factor * 20),
+					(30, balance_factor), (31, balance_factor * 30),
+					(40, balance_factor), (41, balance_factor * 40)]
 			},
 			existential_deposit: self.existential_deposit,
 			transfer_fee: 0,
@@ -153,7 +173,11 @@ impl ExtBuilder {
 		t.extend(GenesisConfig::<Test>{
 			sessions_per_era: self.sessions_per_era,
 			current_era: self.current_era,
-			stakers: vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)],
+			stakers: if self.validator_pool {
+				vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000), (31, 30, balance_factor * 3000), (41, 40, balance_factor * 4000)]
+			} else {
+				vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)]
+			},
 			validator_count: 2,
 			minimum_validator_count: 0,
 			bonding_duration: self.sessions_per_era * self.session_length * 3,
@@ -163,6 +187,7 @@ impl ExtBuilder {
 			current_offline_slash: 20,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
+			nominators: if self.nominate { vec![(10, vec![20]), (20, vec![10])]} else { vec![] },
 		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
