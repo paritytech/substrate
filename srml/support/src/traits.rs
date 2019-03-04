@@ -232,9 +232,9 @@ bitmask! {
 	#[derive(Encode, Decode)]
 	pub mask WithdrawReasons: i8 where
 
-    /// Reason for moving funds out of an account.
+	/// Reason for moving funds out of an account.
 	#[derive(Encode, Decode)]
-    flags WithdrawReason {
+	flags WithdrawReason {
 		/// In order to pay for (system) transaction costs.
 		TransactionPayment = 0b00000001,
 		/// In order to transfer ownership.
