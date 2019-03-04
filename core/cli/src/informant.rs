@@ -25,7 +25,7 @@ use tokio::runtime::TaskExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
 use client::{backend::Backend, BlockchainEvents};
-use substrate_telemetry::*;
+use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 use log::{info, warn};
 
 use runtime_primitives::generic::BlockId;

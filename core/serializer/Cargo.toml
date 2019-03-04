@@ -5,5 +5,5 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", default-features = false }
+serde = { version = "1.0", optional = true }
 serde_json = "1.0"
