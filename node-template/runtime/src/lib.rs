@@ -158,8 +158,6 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
 	type OnNewAccount = Indices;
-	/// Restrict whether an account can transfer funds. We don't place any further restrictions.
-	type EnsureAccountLiquid = ();
 	/// The uniquitous event type.
 	type Event = Event;
 }

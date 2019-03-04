@@ -54,61 +54,6 @@ impl<Balance> OnDilution<Balance> for () {
 	fn on_dilution(_minted: Balance, _portion: Balance) {}
 }
 
-/// Determinator for whether a given account is able to use its **free** balance.
-/// 
-/// By convention, `ensure_account_liquid` overrules `ensure_account_can_withdraw`. If a
-/// caller gets `Ok` from the former, then they do not need to call the latter.
-/// 
-/// This implies that if you define the latter away from its default of replicating the
-/// former, then ensure you also redefine the former to return an `Err` in corresponding
-/// situations, otherwise you'll end up giving inconsistent information.
-// TODO: Remove in favour of explicit functionality in balances module: #1896
-pub trait EnsureAccountLiquid<AccountId, Balance> {
-	/// Ensures that the account is completely unencumbered. If this is `Ok` then there's no need to
-	/// check any other items. If it's an `Err`, then you must use one pair of the other items.
-	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str>;
-
-	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
-	/// for the given reason.
-	/// 
-	/// `Err(...)` with the reason why not otherwise.
-	/// 
-	/// By default this just reflects the results of `ensure_account_liquid`.
-	/// 
-	/// @warning If you redefine this away from the default, ensure that you define
-	/// `ensure_account_liquid` in accordance.
-	fn ensure_account_can_withdraw(
-		who: &AccountId,
-		_amount: Balance,
-		_reason: WithdrawReason
-	) -> result::Result<(), &'static str> {
-		Self::ensure_account_liquid(who)
-	}
-}
-impl<
-	AccountId,
-	Balance: Copy,
-	X: EnsureAccountLiquid<AccountId, Balance>,
-	Y: EnsureAccountLiquid<AccountId, Balance>,
-> EnsureAccountLiquid<AccountId, Balance> for (X, Y) {
-	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str> {
-		X::ensure_account_liquid(who)?;
-		Y::ensure_account_liquid(who)
-	}
-
-	fn ensure_account_can_withdraw(
-		who: &AccountId,
-		amount: Balance,
-		reason: WithdrawReason
-	) -> result::Result<(), &'static str> {
-		X::ensure_account_can_withdraw(who, amount, reason)?;
-		Y::ensure_account_can_withdraw(who, amount, reason)
-	}
-}
-impl<AccountId, Balance> EnsureAccountLiquid<AccountId, Balance> for () {
-	fn ensure_account_liquid(_who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
-}
-
 /// Outcome of a balance update.
 pub enum UpdateBalanceOutcome {
 	/// Account balance was simply updated.

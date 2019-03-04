@@ -287,7 +287,6 @@ mod tests {
 		type Balance = u64;
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
-		type EnsureAccountLiquid = ();
 		type Event = ();
 	}
 	impl Trait for Test {

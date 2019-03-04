@@ -30,7 +30,7 @@ use parity_codec::Codec;
 use parity_codec_derive::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
 use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, TransferAsset,
+	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, TransferAsset,
 	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency
 };
 use srml_support::dispatch::Result;
@@ -54,9 +54,6 @@ pub trait Trait: system::Trait {
 
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
-
-	/// A function that returns true iff a given account can transfer its funds to another account.
-	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId, Self::Balance>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -308,7 +305,7 @@ impl<T: Trait> Module<T> {
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		T::EnsureAccountLiquid::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer)?;
+		Self::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
@@ -373,6 +370,51 @@ impl<T: Trait> Module<T> {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
+
+	/// Ensures that the account is completely unencumbered. If this is `Ok` then there's no need to
+	/// check any other items. If it's an `Err`, then you must use one pair of the other items.
+	pub fn ensure_account_liquid(who: &T::AccountId) -> Result {
+		let locks = Self::locks(who);
+		if locks.is_empty() {
+			return Ok(())
+		}
+		let now = <system::Module<T>>::block_number();
+		if locks.iter().all(|l| l.until <= now) {
+			<Locks<T>>::remove(who);
+			Ok(())
+		} else {
+			Err("account has current liquidity restrictions")
+		}
+	}
+
+	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
+	/// for the given reason.
+	/// 
+	/// `Err(...)` with the reason why not otherwise.
+	/// 
+	/// By default this just reflects the results of `ensure_account_liquid`.
+	/// 
+	/// @warning If you redefine this away from the default, ensure that you define
+	/// `ensure_account_liquid` in accordance.
+	pub fn ensure_account_can_withdraw(
+		who: &T::AccountId,
+		amount: T::Balance,
+		reason: WithdrawReason
+	) -> Result {
+		let locks = Self::locks(who);
+		if locks.is_empty() {
+			return Ok(())
+		}
+		let now = <system::Module<T>>::block_number();
+		let total = Self::free_balance(who);
+		if Self::locks(who).into_iter()
+			.all(|l| now >= l.until || total >= l.amount + amount || !l.reasons.contains(reason))
+		{
+			Ok(())
+		} else {
+			Err("account liquidity restrictions prevent withdrawal")
+		}
+	}
 }
 
 impl<T: Trait> Currency<T::AccountId> for Module<T>
@@ -390,7 +432,7 @@ where
 	}
 
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		if T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve).is_ok() {
+		if Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve).is_ok() {
 			Self::free_balance(who) >= value
 		} else {
 			false
@@ -443,7 +485,7 @@ where
 		if b < value {
 			return Err("not enough free funds")
 		}
-		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve)?;
+		Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, b - value);
 		Ok(())
@@ -567,42 +609,6 @@ where
 	}
 }
 
-impl<T: Trait> EnsureAccountLiquid<T::AccountId, T::Balance> for Module<T> {
-	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		let locks = Self::locks(who);
-		if locks.is_empty() {
-			return Ok(())
-		}
-		let now = <system::Module<T>>::block_number();
-		if locks.iter().all(|l| l.until <= now) {
-			<Locks<T>>::remove(who);
-			Ok(())
-		} else {
-			Err("account has current liquidity restrictions")
-		}
-	}
-
-	fn ensure_account_can_withdraw(
-		who: &T::AccountId,
-		amount: T::Balance,
-		reason: WithdrawReason
-	) -> Result {
-		let locks = Self::locks(who);
-		if locks.is_empty() {
-			return Ok(())
-		}
-		let now = <system::Module<T>>::block_number();
-		let total = Self::free_balance(who);
-		if Self::locks(who).into_iter()
-			.all(|l| now >= l.until || total >= l.amount + amount || !l.reasons.contains(reason))
-		{
-			Ok(())
-		} else {
-			Err("account liquidity restrictions prevent withdrawal")
-		}
-	}
-}
-
 impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	type Amount = T::Balance;
 
@@ -611,7 +617,7 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	}
 
 	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
-		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, reason)?;
+		Self::ensure_account_can_withdraw(who, value, reason)?;
 		let b = Self::free_balance(who);
 		ensure!(b >= value, "account has too few funds");
 		Self::set_free_balance(who, b - value);
