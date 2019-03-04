@@ -117,7 +117,7 @@ decl_storage! {
 		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
 		/// Number of blocks by which to delay enactment of successful, non-unanimous-council-instigated referendum proposals.
 		pub EnactDelayPeriod get(enact_delay_period) config(): T::BlockNumber = T::BlockNumber::sa(0);
-		pub Proposals get(proposals) build(|_| vec![0u8; 0]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+		pub Proposals get(proposals) build(|_| vec![]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
 		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
 		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
 		pub CouncilVoteOf get(vote_of): map (T::Hash, T::AccountId) => Option<bool>;
