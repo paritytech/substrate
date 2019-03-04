@@ -361,9 +361,9 @@ decl_module! {
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up for
 		/// staking.
-		/// 
+		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn bond_extra(origin, max_additional: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
@@ -379,14 +379,14 @@ decl_module! {
 		}
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
-		/// period ends. If this leaves an amount actively bonded less than 
+		/// period ends. If this leaves an amount actively bonded less than
 		/// T::Currency::existential_deposit(), then it is increased to the full amount.
-		/// 
+		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
-		/// the funds out of management ready for transfer. 
-		/// 
+		/// the funds out of management ready for transfer.
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
-		/// 
+		///
 		/// See also `withdraw_unbonded`.
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
@@ -411,12 +411,12 @@ decl_module! {
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
-		/// 
+		///
 		/// This essentially frees up that balance to be used by the stash account to do
 		/// whatever it wants.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
-		/// 
+		///
 		/// See also `unbond`.
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
@@ -679,7 +679,7 @@ impl<T: Trait> Module<T> {
 		let rounds = <ValidatorCount<T>>::get() as usize;
 		let mut elected_candidates: Vec<Candidate<T::AccountId, BalanceOf<T>>> = vec![];
 
-		// 1- Pre-process candidates and place them in a container 
+		// 1- Pre-process candidates and place them in a container
 		let mut candidates = <Validators<T>>::enumerate().map(|(who, _)| {
 			let stash_balance = Self::stash_balance(&who);
 			Candidate {
@@ -711,12 +711,13 @@ impl<T: Trait> Module<T> {
 		}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
 
 		// TODO: is this a valid optimization? Maybe someone votes with stake == 0?
-		// candidates who have 0 stake => have no votes. best to kick them out not.
+		// TODO: we can store a num_vote in each candidate to easily extend this filter.
+		// candidates who have 0 stake => have no votes or all null-votes. best to kick them out not.
 		candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
 			.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
-		// otherwise there is no need to have election
 		// TODO: if we want to throw phragmen in a func, this is a good place.
+		// otherwise there is no need to have election
 		if candidates.len() > rounds {
 			// Main election loop
 			for _round in 0..rounds {
@@ -736,9 +737,12 @@ impl<T: Trait> Module<T> {
 						let candidate = &vote.who;
 						if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
 							let approval_stake = candidates[index].approval_stake;
-							// TODO: casting, casting everywhere...
-							let temp = nominaotion.stake.as_() * *nominaotion.load.encode_as() as u64 / approval_stake.as_();
-							candidates[index].score = Perquill::decode_from(candidates[index].score.encode_as() + temp) ;
+							// TODO: casting, casting everywhere... Perquill::from_Xth()?
+							let temp =
+								nominaotion.stake.as_()
+								* *nominaotion.load.encode_as() as u64
+								/ approval_stake.as_();
+							candidates[index].score = Perquill::decode_from(candidates[index].score.encode_as() + temp);
 						}
 					}
 				}
@@ -752,7 +756,9 @@ impl<T: Trait> Module<T> {
 				for nominator_idx in 0..nominations.len() {
 					for vote_idx in 0..nominations[nominator_idx].nominees.len() {
 						if nominations[nominator_idx].nominees[vote_idx].who == winner.who {
-							nominations[nominator_idx].nominees[vote_idx].load = Perquill::decode_from(winner.score.encode_as() -  nominations[nominator_idx].load.encode_as());
+							nominations[nominator_idx].nominees[vote_idx].load =
+								Perquill::decode_from(winner.score.encode_as()
+								- nominations[nominator_idx].load.encode_as());
 							nominations[nominator_idx].load = winner.score;
 						}
 					}
@@ -765,10 +771,16 @@ impl<T: Trait> Module<T> {
 				for vote in &mut nomination.nominees {
 					// if the target of this vote is among the winners, otherwise let go.
 					if let Some(index) = elected_candidates.iter().position(|c| c.who == vote.who) {
-						vote.backing_stake = <BalanceOf<T> as As<u64>>::sa(nomination.stake.as_() * vote.load.encode_as() / nomination.load.encode_as());
+						vote.backing_stake = <BalanceOf<T> as As<u64>>::sa(
+							nomination.stake.as_()
+							* vote.load.encode_as()
+							/ nomination.load.encode_as()
+						);
 						elected_candidates[index].exposure.total += vote.backing_stake;
 						// Update IndividualExposure of those who nominated and their vote won
-						elected_candidates[index].exposure.others.push(IndividualExposure {who: nomination.who.clone(), value: vote.backing_stake });
+						elected_candidates[index].exposure.others.push(
+							IndividualExposure {who: nomination.who.clone(), value: vote.backing_stake }
+						);
 					}
 				}
 			}
