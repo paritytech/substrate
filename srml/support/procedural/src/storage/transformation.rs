@@ -226,11 +226,6 @@ fn decl_store_extra_genesis(
 		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
 			is_trait_needed = true;
-			let error_message = format!(
-				"Genesis parameters encoding of {} does not match the expected type ({:?}).",
-				name,
-				type_infos.value_type,
-			);
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
