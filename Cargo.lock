@@ -3324,6 +3324,10 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-executive 0.1.0",
+ "substrate-executor 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-test-runtime 0.1.0",
 ]
 
 [[package]]
@@ -4193,6 +4197,8 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "sr-version 0.1.0",
+ "srml-executive 0.1.0",
+ "srml-parachain 0.1.0",
  "srml-support 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",

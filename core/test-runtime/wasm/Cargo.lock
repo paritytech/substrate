@@ -992,6 +992,14 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "safe-mix"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "schnorrkel"
 version = "0.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1208,6 +1216,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-executive"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+]
+
+[[package]]
 name = "srml-metadata"
 version = "0.1.0"
 dependencies = [
@@ -1217,6 +1238,18 @@ dependencies = [
  "serde_derive 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-parachain"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-executive 0.1.0",
 ]
 
 [[package]]
@@ -1267,6 +1300,23 @@ dependencies = [
  "proc-macro2 0.4.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 0.15.26 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "srml-system"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-support 0.1.0",
+ "substrate-primitives 0.1.0",
 ]
 
 [[package]]
@@ -1468,6 +1518,8 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "sr-version 0.1.0",
+ "srml-executive 0.1.0",
+ "srml-parachain 0.1.0",
  "srml-support 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
@@ -1988,6 +2040,7 @@ dependencies = [
 "checksum rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "403bb3a286107a04825a5f82e1270acc1e14028d3d554d7a1e08914549575ab8"
 "checksum rustc_version 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 "checksum ryu 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "eb9e9b8cde282a9fe6a42dd4681319bfb63f121b8a8ee9439c6f4107e58a46f7"
+"checksum safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7f7bf422d23a88c16d5090d455f182bc99c60af4df6a345c63428acf5129e347"
 "checksum schnorrkel 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fe554f318830b48e5da8ab1ccb1ffd02b79228364dac7766b7cd1ec461ca5116"
 "checksum scopeguard 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "94258f53601af11e6a49f722422f6e3425c52b06245a5cf9bc09908b174f5e27"
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"

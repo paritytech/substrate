@@ -27,6 +27,8 @@ pub use rstd::slice;
 #[cfg(not(feature = "std"))]
 #[doc(hidden)]
 pub mod validate_block;
+#[cfg(test)]
+mod tests;
 
 /// The parachain block that is created on a collator and validated by a validator.
 #[derive(Encode, Decode)]
@@ -36,11 +38,44 @@ struct ParachainBlock<B: BlockT> {
 	witness_data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
+impl<B: BlockT> Default for ParachainBlock<B> {
+	fn default() -> Self {
+		Self {
+			extrinsics: Vec::default(),
+			witness_data: BTreeMap::default(),
+		}
+	}
+}
+
 /// Register the `validate_block` function that is used by parachains to validate blocks on a validator.
-#[cfg(not(feature = "std"))]
+///
+/// Does *nothing* when `std` feature is enabled.
+///
+/// Expects as parameters the block and the block executor.
+///
+/// # Example
+///
+/// ```
+///     struct Block;
+///     struct BlockExecutor;
+///
+///     srml_parachain::register_validate_block!(Block, BlockExecutor);
+///
+/// # fn main() {}
+/// ```
 #[macro_export]
 macro_rules! register_validate_block {
-	($block:ident, $executive:ident) => {
+	($block:ty, $block_executor:ty) => {
+		$crate::register_validate_block_impl!($block, $block_executor);
+	};
+}
+
+/// The actual implementation of `register_validate_block` for `no_std`.
+#[cfg(not(feature = "std"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! register_validate_block_impl {
+	($block:ty, $block_executor:ty) => {
 		#[doc(hidden)]
 		mod parachain_validate_block {
 			use super::*;
@@ -50,17 +85,16 @@ macro_rules! register_validate_block {
 				let block = $crate::slice::from_raw_parts(block, block_len as usize);
 				let prev_head = $crate::slice::from_raw_parts(prev_head, prev_head_len as usize);
 
-				$crate::validate_block::validate_block::<$block, $executive>(block, prev_head);
+				$crate::validate_block::validate_block::<$block, $block_executor>(block, prev_head);
 			}
 		}
 	};
 }
 
-/// Register the `validate_block` function that is used by parachains to validate blocks on a validator.
-///
-/// Does *nothing* when `std` feature is enabled.
+/// The actual implementation of `register_validate_block` for `std`.
 #[cfg(feature = "std")]
+#[doc(hidden)]
 #[macro_export]
-macro_rules! register_validate_block {
-	($block:ident, $executive:ident) => {};
+macro_rules! register_validate_block_impl {
+	($block:ty, $block_executor:ty) => {};
 }

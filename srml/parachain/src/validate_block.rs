@@ -1,7 +1,7 @@
 use crate::ParachainBlock;
 use runtime_primitives::traits::{Block as BlockT, One, Header as HeaderT};
 use rstd::{vec::Vec, collections::btree_map::BTreeMap, slice, ptr};
-use parity_codec::Decode;
+use codec::Decode;
 use executive::ExecuteBlock;
 
 static mut STORAGE: Option<BTreeMap<Vec<u8>, Vec<u8>>> = None;
