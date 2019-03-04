@@ -1,10 +1,10 @@
-use crate::ParachainBlock;
+use crate::{ParachainBlock, WitnessData};
 use runtime_primitives::traits::{Block as BlockT, One, Header as HeaderT};
-use rstd::{vec::Vec, collections::btree_map::BTreeMap, slice, ptr};
+use rstd::{slice, ptr};
 use codec::Decode;
 use executive::ExecuteBlock;
 
-static mut STORAGE: Option<BTreeMap<Vec<u8>, Vec<u8>>> = None;
+static mut STORAGE: Option<WitnessData> = None;
 
 unsafe fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 {
 	let key = slice::from_raw_parts(key_data, key_len as usize);
@@ -39,6 +39,7 @@ pub fn validate_block<Block: BlockT, E: ExecuteBlock<Block>>(mut block: &[u8], m
 		(
 			// Let all extern functions throw `unimplemented` when being called.
 			rio::switch_extern_functions_to_unimplemented(),
+			// Replace `get` and `set` with our custom implementation
 			rio::ext_get_allocated_storage.replace_implementation(ext_get_allocated_storage),
 			rio::ext_set_storage.replace_implementation(ext_set_storage)
 		)

@@ -297,11 +297,6 @@ mod tests {
 		])
 	}
 
-	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
-		Extrinsic::Transfer(tx, signature)
-	}
-
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
 		let mut t = new_test_ext();
 
@@ -319,7 +314,6 @@ mod tests {
 		};
 
 		block_executor(b, &mut t);
-
 	}
 
 	#[test]
@@ -355,12 +349,12 @@ mod tests {
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
-				construct_signed_tx(Transfer {
+				Transfer {
 					from: Keyring::Alice.to_raw_public().into(),
 					to: Keyring::Bob.to_raw_public().into(),
 					amount: 69,
 					nonce: 0,
-				})
+				}.into_signed_tx()
 			],
 		};
 
@@ -380,18 +374,18 @@ mod tests {
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
-				construct_signed_tx(Transfer {
+				Transfer {
 					from: Keyring::Bob.to_raw_public().into(),
 					to: Keyring::Alice.to_raw_public().into(),
 					amount: 27,
 					nonce: 0,
-				}),
-				construct_signed_tx(Transfer {
+				}.into_signed_tx(),
+				Transfer {
 					from: Keyring::Alice.to_raw_public().into(),
 					to: Keyring::Charlie.to_raw_public().into(),
 					amount: 69,
 					nonce: 1,
-				}),
+				}.into_signed_tx(),
 			],
 		};
 

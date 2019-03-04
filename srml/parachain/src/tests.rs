@@ -5,7 +5,7 @@ use keyring::Keyring;
 use primitives::map;
 use runtime_primitives::traits::Block as BlockT;
 use executor::{WasmExecutor, error::Result, wasmi::RuntimeValue::{I64, I32}};
-use test_runtime::{Block, Header};
+use test_runtime::{Block, Header, Transfer};
 
 use std::collections::BTreeMap;
 
@@ -52,14 +52,37 @@ fn call_validate_block(block: ParachainBlock<Block>, prev_header: <Block as Bloc
 	)
 }
 
-#[test]
-fn validate_block_with_empty_block() {
-	let prev_header = Header {
+fn create_extrinsics() -> Vec<<Block as BlockT>::Extrinsic> {
+	vec![
+		Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Bob.to_raw_public().into(),
+			amount: 69,
+			nonce: 0,
+		}.into_signed_tx()
+	]
+}
+
+fn create_prev_header() -> Header {
+	Header {
 		parent_hash: Default::default(),
 		number: 1,
 		state_root: Default::default(),
 		extrinsics_root: Default::default(),
 		digest: Default::default(),
-	};
+	}
+}
+
+#[test]
+fn validate_block_with_empty_block() {
+	let prev_header = create_prev_header();
 	call_validate_block(ParachainBlock::default(), prev_header).expect("Calls `validate_block`");
+}
+
+#[test]
+fn validate_block_with_empty_witness_data() {
+	let prev_header = create_prev_header();
+
+	let block = ParachainBlock::new(create_extrinsics(), Default::default());
+	call_validate_block(block, prev_header).expect("Calls `validate_block`");
 }

@@ -18,7 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")] pub mod genesismap;
+#[cfg(feature = "std")]
+pub mod genesismap;
 pub mod system;
 
 use rstd::{prelude::*, marker::PhantomData};
@@ -76,6 +77,15 @@ pub struct Transfer {
 	pub to: AccountId,
 	pub amount: u64,
 	pub nonce: u64,
+}
+
+impl Transfer {
+	/// Convert into a signed extrinsic.
+	#[cfg(feature = "std")]
+	pub fn into_signed_tx(self) -> Extrinsic {
+		let signature = keyring::Keyring::from_raw_public(self.from.to_fixed_bytes()).unwrap().sign(&self.encode()).into();
+		Extrinsic::Transfer(self, signature)
+	}
 }
 
 /// Extrinsic for test-runtime.

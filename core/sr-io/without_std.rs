@@ -407,9 +407,11 @@ pub fn kill_child_storage(storage_key: &[u8]) {
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 	unsafe {
 		match ext_get_storage_into(
-			key.as_ptr(), key.len() as u32,
-			value_out.as_mut_ptr(), value_out.len() as u32,
-			value_offset as u32
+			key.as_ptr(),
+			key.len() as u32,
+			value_out.as_mut_ptr(),
+			value_out.len() as u32,
+			value_offset as u32,
 		) {
 			none if none == u32::max_value() => None,
 			length => Some(length as usize),

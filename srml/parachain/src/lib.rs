@@ -30,12 +30,24 @@ pub mod validate_block;
 #[cfg(test)]
 mod tests;
 
+type WitnessData = BTreeMap<Vec<u8>, Vec<u8>>;
+
 /// The parachain block that is created on a collator and validated by a validator.
 #[derive(Encode, Decode)]
 struct ParachainBlock<B: BlockT> {
 	extrinsics: Vec<<B as BlockT>::Extrinsic>,
 	/// The data that is required to emulate the storage accesses executed by all extrinsics.
-	witness_data: BTreeMap<Vec<u8>, Vec<u8>>,
+	witness_data: WitnessData,
+}
+
+impl<B: BlockT> ParachainBlock<B> {
+	#[cfg(test)]
+	fn new(extrinsics: Vec<<B as BlockT>::Extrinsic>, witness_data: WitnessData) -> Self {
+		Self {
+			extrinsics,
+			witness_data,
+		}
+	}
 }
 
 impl<B: BlockT> Default for ParachainBlock<B> {
