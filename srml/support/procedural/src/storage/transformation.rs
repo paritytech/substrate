@@ -474,14 +474,14 @@ fn decl_storage_items(
 
 			let method_name = syn::Ident::new(&format!("build_prefix_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
 
-			method_defs.extend(quote!{ fn #method_name(suffix: &'static [u8]) -> &'static [u8]; });
+			method_defs.extend(quote!{ fn #method_name(prefix: &'static [u8]) -> &'static [u8]; });
 			method_impls.extend(quote!{
-				fn #method_name(suffix: &'static [u8]) -> &'static [u8] {
+				fn #method_name(prefix: &'static [u8]) -> &'static [u8] {
 					static LAZY: #scrate::lazy::Lazy<#scrate::rstd::vec::Vec<u8>> = #scrate::lazy::Lazy::INIT;
 					LAZY.get(|| {
 						let mut final_prefix = #scrate::rstd::vec::Vec::new();
-						final_prefix.extend_from_slice(suffix);
-						final_prefix.extend_from_slice(Self::PREFIX.as_bytes());
+						final_prefix.extend_from_slice(prefix);
+						final_prefix.extend_from_slice(Self::INSTANCE_PREFIX.as_bytes());
 						final_prefix
 					})
 				}
@@ -490,15 +490,15 @@ fn decl_storage_items(
 			if let DeclStorageTypeInfosKind::Map { is_linked: true, .. } = type_infos.kind {
 				let method_name = syn::Ident::new(&format!("build_head_key_once_for_{}", name.to_string()), proc_macro2::Span::call_site());
 
-				method_defs.extend(quote!{ fn #method_name(suffix: &'static [u8]) -> &'static [u8]; });
+				method_defs.extend(quote!{ fn #method_name(prefix: &'static [u8]) -> &'static [u8]; });
 				method_impls.extend(quote!{
-					fn #method_name(suffix: &'static [u8]) -> &'static [u8] {
+					fn #method_name(prefix: &'static [u8]) -> &'static [u8] {
 						static LAZY: #scrate::lazy::Lazy<#scrate::rstd::vec::Vec<u8>> = #scrate::lazy::Lazy::INIT;
 						LAZY.get(|| {
 							let mut final_prefix = #scrate::rstd::vec::Vec::new();
 							final_prefix.extend_from_slice("head of ".as_bytes());
-							final_prefix.extend_from_slice(suffix);
-							final_prefix.extend_from_slice(Self::PREFIX.as_bytes());
+							final_prefix.extend_from_slice(prefix);
+							final_prefix.extend_from_slice(Self::INSTANCE_PREFIX.as_bytes());
 							final_prefix
 						})
 					}
@@ -508,7 +508,7 @@ fn decl_storage_items(
 
 		impls.extend(quote! {
 			pub trait #instantiable {
-				const PREFIX: &'static str;
+				const INSTANCE_PREFIX: &'static str;
 				#method_defs
 			}
 		});
@@ -520,7 +520,8 @@ fn decl_storage_items(
 		}
 
 		for i in 0..NUMBER_OF_INSTANCE {
-			let struct_ident = syn::Ident::new(&format!("Instance{}", i), proc_macro2::Span::call_site());
+			let instance_name = format!("Instance{}", i);
+			let struct_ident = syn::Ident::new(&instance_name, proc_macro2::Span::call_site());
 
 			impls.extend(quote! {
 				// Those trait are derived because of wrong bounds for generics
@@ -528,7 +529,7 @@ fn decl_storage_items(
 				#[derive(Clone, Eq, PartialEq, #scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
 				pub struct #struct_ident;
 				impl #instantiable for #struct_ident {
-					const PREFIX: &'static str = "";
+					const INSTANCE_PREFIX: &'static str = #instance_name;
 					#method_impls
 				}
 			});
