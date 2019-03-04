@@ -162,7 +162,7 @@ pub trait OffchainExt {
 	///
 	/// The extrinsic will either go to the pool (signed)
 	/// or to the next produced block (inherent).
-	fn submit_extrinsic(&self, extrinsic: Vec<u8>);
+	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
 }
 
 /// An implementation of offchain extensions that should never be triggered.
@@ -170,13 +170,13 @@ pub enum NeverOffchainExt {}
 
 impl NeverOffchainExt {
 	/// Create new offchain extensions.
-	pub fn new<'a>() -> Option<&'a Self> {
+	pub fn new<'a>() -> Option<&'a mut Self> {
 		None
 	}
 }
 
 impl OffchainExt for NeverOffchainExt {
-	fn submit_extrinsic(&self, _extrinsic: Vec<u8>) { unreachable!() }
+	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) { unreachable!() }
 }
 
 /// Code execution engine.
@@ -279,7 +279,7 @@ pub fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 pub fn new<'a, H, B, T, O, Exec>(
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
-	offchain_ext: Option<&'a O>,
+	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
@@ -301,7 +301,7 @@ pub fn new<'a, H, B, T, O, Exec>(
 pub struct StateMachine<'a, H, B, T, O, Exec> {
 	backend: &'a B,
 	changes_trie_storage: Option<&'a T>,
-	offchain_ext: Option<&'a O>,
+	offchain_ext: Option<&'a mut O>,
 	overlay: &'a mut OverlayedChanges,
 	exec: &'a Exec,
 	method: &'a str,
@@ -352,7 +352,8 @@ impl<'a, H, B, T, O, Exec> StateMachine<'a, H, B, T, O, Exec> where
 		R: Decode + Encode + PartialEq,
 		NC: FnOnce() -> result::Result<R, &'static str> + UnwindSafe,
 	{
-		let mut externalities = ext::Ext::new(self.overlay, self.backend, self.changes_trie_storage, self.offchain_ext);
+		let offchain = self.offchain_ext.as_mut();
+		let mut externalities = ext::Ext::new(self.overlay, self.backend, self.changes_trie_storage, offchain.map(|x| &mut **x));
 		let (result, was_native) = self.exec.call(
 			&mut externalities,
 			self.method,

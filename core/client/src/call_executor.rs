@@ -19,7 +19,7 @@ use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{
-	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy
+	self, OverlayedChanges, Ext, CodeExecutor, ExecutionManager, ExecutionStrategy, NeverOffchainExt,
 };
 use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
@@ -42,12 +42,15 @@ where
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(
+	fn call<
+		O: state_machine::OffchainExt,
+	>(
 		&self,
 		id: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
+		side_effects_handler: Option<&mut O>,
 	) -> Result<Vec<u8>, error::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -56,6 +59,7 @@ where
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
 	fn contextual_call<
+		O: state_machine::OffchainExt,
 		PB: Fn() -> error::Result<B::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -73,6 +77,7 @@ where
 		prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> error::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 
 	/// Extract RuntimeVersion of given block
@@ -84,6 +89,7 @@ where
 	///
 	/// No changes are made.
 	fn call_at_state<
+		O: state_machine::OffchainExt,
 		S: state_machine::Backend<H>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -98,6 +104,7 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<H>>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
@@ -135,8 +142,6 @@ where
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
-	// TODO [ToDr] use proper offchain extensions
-	offchain_ext: Option<state_machine::NeverOffchainExt>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -145,7 +150,6 @@ impl<B, E> LocalCallExecutor<B, E> {
 		LocalCallExecutor {
 			backend,
 			executor,
-			offchain_ext: None,
 		}
 	}
 }
@@ -155,7 +159,6 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
-			offchain_ext: None,
 		}
 	}
 }
@@ -168,18 +171,19 @@ where
 {
 	type Error = E::Error;
 
-	fn call(&self,
+	fn call<O: state_machine::OffchainExt>(&self,
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
+		side_effects_handler: Option<&mut O>,
 	) -> error::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let return_data = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
-			self.offchain_ext.as_ref(),
+			side_effects_handler,
 			&mut changes,
 			&self.executor,
 			method,
@@ -195,6 +199,7 @@ where
 	}
 
 	fn contextual_call<
+		O: state_machine::OffchainExt,
 		PB: Fn() -> error::Result<Block::Header>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -212,6 +217,7 @@ where
 		prepare_environment_block: PB,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
+		mut side_effects_handler: Option<&mut O>,
 	) -> Result<NativeOrEncoded<R>, error::Error> where ExecutionManager<EM>: Clone {
 		let state = self.backend.state_at(*at)?;
 		if method != "Core_initialise_block" && initialised_block.map(|id| id != *at).unwrap_or(true) {
@@ -219,7 +225,7 @@ where
 			state_machine::new(
 				&state,
 				self.backend.changes_trie_storage(),
-				self.offchain_ext.as_ref(),
+				side_effects_handler.as_mut().map(|x| &mut **x),
 				changes,
 				&self.executor,
 				"Core_initialise_block",
@@ -235,7 +241,7 @@ where
 		let result = state_machine::new(
 			&state,
 			self.backend.changes_trie_storage(),
-			self.offchain_ext.as_ref(),
+			side_effects_handler,
 			changes,
 			&self.executor,
 			method,
@@ -258,12 +264,13 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), self.offchain_ext.as_ref());
+		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage(), NeverOffchainExt::new());
 		self.executor.runtime_version(&mut ext)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<
+		O: state_machine::OffchainExt,
 		S: state_machine::Backend<Blake2Hasher>,
 		F: FnOnce(
 			Result<NativeOrEncoded<R>, Self::Error>,
@@ -278,11 +285,12 @@ where
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
 		native_call: Option<NC>,
+		side_effects_handler: Option<&mut O>,
 	) -> error::Result<(NativeOrEncoded<R>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		state_machine::new(
 			state,
 			self.backend.changes_trie_storage(),
-			self.offchain_ext.as_ref(),
+			side_effects_handler,
 			changes,
 			&self.executor,
 			method,

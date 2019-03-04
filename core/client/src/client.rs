@@ -43,7 +43,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor, ChangesTrieAnchorBlockId,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
-	key_changes, key_changes_proof, OverlayedChanges,
+	key_changes, key_changes_proof, OverlayedChanges, NeverOffchainExt,
 };
 use hash_db::Hasher;
 
@@ -344,7 +344,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityIdFor<Block>>> {
 		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
-			None => self.executor.call(id, "Core_authorities", &[], ExecutionStrategy::NativeElseWasm)
+			None => self.executor.call(id, "Core_authorities", &[], ExecutionStrategy::NativeElseWasm, NeverOffchainExt::new())
 				.and_then(|r| Vec::<AuthorityIdFor<Block>>::decode(&mut &r[..])
 					.ok_or_else(|| error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
@@ -871,7 +871,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						}),
 					}
 				};
-				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, NeverNativeValue, fn() -> _>(
+				let (_, storage_update, changes_update) = self.executor.call_at_state::<_, _, _, NeverNativeValue, fn() -> _>(
 					transaction_state,
 					&mut overlay,
 					"Core_execute_block",
@@ -881,6 +881,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 						_ => get_execution_manager(self.execution_strategies().importing),
 					},
 					None,
+					NeverOffchainExt::new(),
 				)?;
 
 				overlay.commit_prospective();
@@ -1347,7 +1348,7 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			ExecutionContext::OffchainWorker => self.execution_strategies.offchain_worker.get_manager(),
 			ExecutionContext::Other => self.execution_strategies.other.get_manager(),
 		};
-		self.executor.contextual_call::<_, fn(_,_) -> _,_,_>(
+		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
 			at,
 			function,
 			&args,
@@ -1356,6 +1357,8 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			|| self.prepare_environment_block(at),
 			manager,
 			native_call,
+			// TODO [ToDr] This should have offchainext?
+			NeverOffchainExt::new(),
 		)
 	}
 

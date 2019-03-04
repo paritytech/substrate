@@ -82,7 +82,7 @@ where
 	changes_trie_transaction: Option<(u64, MemoryDB<H>, H::Out)>,
 	/// Additional externalities for offchain workers.
 	/// If None the some methods from the trait might not supported.
-	offchain_externalities: Option<&'a O>,
+	offchain_externalities: Option<&'a mut O>,
 }
 
 impl<'a, H, B, T, O> Ext<'a, H, B, T, O>
@@ -98,7 +98,7 @@ where
 		overlay: &'a mut OverlayedChanges,
 		backend: &'a B,
 		changes_trie_storage: Option<&'a T>,
-		offchain_externalities: Option<&'a O>,
+		offchain_externalities: Option<&'a mut O>,
 	) -> Self {
 		Ext {
 			overlay,
