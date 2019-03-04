@@ -442,8 +442,7 @@ fn staking_should_work() {
 		// --- Block 1:
 		System::set_block_number(1);
 		
-		// give the man some funds
-		Balances::set_free_balance(&3, 3000);
+		
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller)); // balance of 3 = 3000, stashed = 1500
 		
@@ -470,7 +469,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 
 		// the votes for all three accounts are the same, 500 each,
-		// 20 and 4 have more staked value, 1500 and 2000 respectively; they will be chosen.
+		// 20 and 4 have more staked value, 1500 and 2000 respectively; they will be chosen. TODO: double check.
 		assert_eq!(Session::validators().len(), 2);
 		assert_eq!(Session::validators(), vec![4, 20]);
 		assert_eq!(Staking::current_era(), 1);
@@ -1351,6 +1350,100 @@ fn phragmen_poc() {
 		// 20(Y) was supported by A-2 and C-6 with stake 10 and 15 respectively.
 		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![15, 10]);
 		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![6, 2]);
+	});
+}
+
+#[test]
+fn switching_roles() {
+	// Show: It should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1).build(),
+	|| {
+		// initial validators 
+		assert_eq!(Staking::validator_count(), 2);
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		// put some money in account that we'll use.
+		for i in 1..7 { Balances::set_free_balance(&i, 5000); }
+
+		// add 2 nominators
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 6]));
+
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![20, 2]));
+		
+		// add a new validator candidate
+		assert_ok!(Staking::bond(Origin::signed(5), 6, 1500, RewardDestination::Controller));
+		assert_ok!(Staking::validate(Origin::signed(6), ValidatorPrefs::default()));
+
+		// new block 
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+
+		// no change 
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		// new block 
+		System::set_block_number(2);
+		Session::check_rotate_session(System::block_number());
+
+		// no change 
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		// new block --> ne era --> new validators
+		System::set_block_number(3);
+		Session::check_rotate_session(System::block_number());
+
+		// with current nominators 10 and 4 have the most stake
+		assert_eq!(Session::validators(), vec![6, 10]);
+
+		// 2 decides to be a validator. Consequences: 
+		// 6 will not be chosen in the next round (no votes)
+		// 2 itself will be chosen + 20 who now has the higher votes
+		// 10 wil have no votes.
+		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
+
+		System::set_block_number(4);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Session::validators(), vec![6, 10]);
+
+		System::set_block_number(5);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Session::validators(), vec![6, 10]);
+
+		// ne era 
+		System::set_block_number(6);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Session::validators(), vec![2, 20]);
+	});
+}
+
+#[test]
+fn wrong_vote_is_null() {
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1).sessions_per_era(1).validator_pool(true).build(),
+	|| {
+		// initial validators 
+		assert_eq!(Staking::validator_count(), 2);
+		// from the first era onward, only two will be chosen
+		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
+
+		// put some money in account that we'll use.
+		for i in 1..3 { Balances::set_free_balance(&i, 5000); }
+
+		// add 1 nominators
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![
+			10, 20, 			// good votes 
+			1, 2, 15, 1000, 25  // crap votes. No effect.
+		]));
+
+		// new block 
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+
+		assert_eq!(Session::validators(), vec![20, 10]);
 	});
 }
 

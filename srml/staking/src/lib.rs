@@ -709,7 +709,7 @@ impl<T: Trait> Module<T> {
 				load : Perquill::zero(),
 			}
 		}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
-
+		
 		// TODO: is this a valid optimization? Maybe someone votes with stake == 0?
 		// TODO: we can store a num_vote in each candidate to easily extend this filter.
 		// candidates who have 0 stake => have no votes or all null-votes. best to kick them out not.
