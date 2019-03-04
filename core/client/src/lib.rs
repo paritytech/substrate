@@ -20,9 +20,6 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-#[macro_use(telemetry)]
-extern crate substrate_telemetry;
-
 #[macro_use]
 pub mod runtime_api;
 #[cfg(feature = "std")]

@@ -19,9 +19,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-#[macro_use(telemetry)]
-extern crate substrate_telemetry;
-
 #[macro_use]
 mod traits;
 mod params;
@@ -62,7 +59,7 @@ use log::info;
 use lazy_static::lazy_static;
 
 use futures::Future;
-use substrate_telemetry::TelemetryEndpoints;
+use substrate_telemetry::{telemetry, TelemetryEndpoints};
 
 const MAX_NODE_NAME_LENGTH: usize = 32;
 

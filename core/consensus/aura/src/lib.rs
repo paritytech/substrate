@@ -26,9 +26,6 @@
 //! Blocks from future steps will be either deferred or rejected depending on how
 //! far in the future they are.
 
-#[macro_use(telemetry)]
-extern crate substrate_telemetry;
-
 use std::{sync::Arc, time::Duration, thread};
 
 use parity_codec::Encode;
@@ -55,7 +52,7 @@ use srml_aura::{
 	InherentType as AuraInherent, AuraInherentData,
 	timestamp::{TimestampInherentData, InherentType as TimestampInherent, InherentError as TIError}
 };
-use substrate_telemetry::{CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN, CONSENSUS_INFO};
 
 use aura_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 
