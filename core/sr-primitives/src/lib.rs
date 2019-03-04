@@ -27,7 +27,7 @@ pub use parity_codec as codec;
 pub use serde_derive;
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
@@ -86,14 +86,6 @@ macro_rules! create_runtime_str {
 pub use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
-
-/// A set of key value pairs for storage.
-#[cfg(feature = "std")]
-pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
-
-/// A set of key value pairs for children storage;
-#[cfg(feature = "std")]
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]

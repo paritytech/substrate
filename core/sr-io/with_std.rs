@@ -17,18 +17,28 @@
 #[doc(hidden)]
 pub use parity_codec as codec;
 // re-export hashing functions.
-pub use primitives::{blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519};
+pub use primitives::{
+	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519
+};
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, BasicExternalities, TestExternalities};
 
 use environmental::{environmental, thread_local_impl};
-use primitives::hexdisplay::HexDisplay;
-use primitives::H256;
+use primitives::{hexdisplay::HexDisplay, H256};
 use hash_db::Hasher;
 
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
 environmental!(ext: trait Externalities<Blake2Hasher>);
+
+/// A set of key value pairs for storage.
+pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
+
+/// A set of key value pairs for children storage;
+pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
@@ -211,6 +221,18 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
 pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Hasher>, f: F) -> R {
 	ext::using(ext, f)
+}
+
+/// Execute the given closure with global function available whose functionality routes into the
+/// externalities `ext`. Forwards the value that the closure returns.
+// NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
+pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
+	let mut alt_storage = Default::default();
+	rstd::mem::swap(&mut alt_storage, storage);
+	let mut ext: BasicExternalities = alt_storage.into();
+	let r = ext::using(&mut ext, f);
+	*storage = ext.into();
+	r
 }
 
 /// Trait for things which can be printed.

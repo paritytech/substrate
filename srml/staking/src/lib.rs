@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-use runtime_io::{with_externalities, BasicExternalities};
+use runtime_io::with_storage;
 use rstd::{prelude::*, result};
 use parity_codec::HasCompact;
 use parity_codec_derive::{Encode, Decode};
@@ -269,18 +269,13 @@ decl_storage! {
 	add_extra_genesis {
 		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>)>;
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
-			let mut alt_storage = Default::default();
-			rstd::mem::swap(&mut alt_storage, storage);
-			let mut ext: BasicExternalities = alt_storage.into();
-
-			with_externalities(&mut ext, || {
+			with_storage(storage, || {
 				for &(ref stash, ref controller, balance) in &config.stakers {
 					let _ = <Module<T>>::bond(T::Origin::from(Some(stash.clone()).into()), T::Lookup::unlookup(controller.clone()), balance, RewardDestination::Staked);
 					let _ = <Module<T>>::validate(T::Origin::from(Some(controller.clone()).into()), Default::default());
 				}
 				<Module<T>>::select_validators();
 			});
-			*storage = ext.into();
 		});
 	}	
 }
