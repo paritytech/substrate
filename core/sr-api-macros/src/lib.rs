@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Macros for declaring and implementing runtime apis.
-
+#![feature(uniform_paths)]
 #![recursion_limit = "512"]
 extern crate proc_macro;
 

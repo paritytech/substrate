@@ -17,7 +17,7 @@
 //! Democratic system: Handles administration of general stakeholder voting.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
+#![feature(uniform_paths)]
 use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, As};

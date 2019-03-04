@@ -17,7 +17,7 @@
 //! Consensus module for runtime; manages the authority set ready for the native code.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
+#![feature(uniform_paths)]
 #[cfg(feature = "std")]
 use serde_derive::Serialize;
 use rstd::prelude::*;

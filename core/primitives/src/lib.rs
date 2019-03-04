@@ -69,8 +69,8 @@ mod tests;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
-pub use authority_id::Ed25519AuthorityId;
-pub use changes_trie::ChangesTrieConfiguration;
+pub use self::authority_id::Ed25519AuthorityId;
+pub use self::changes_trie::ChangesTrieConfiguration;
 
 pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out

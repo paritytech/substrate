@@ -26,6 +26,7 @@
 //! The necessary items are re-exported via the `fg_primitives` crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(uniform_paths)]
 
 // re-export since this is necessary for `impl_apis` in runtime.
 pub use substrate_finality_grandpa_primitives as fg_primitives;
