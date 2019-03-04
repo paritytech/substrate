@@ -61,7 +61,7 @@ use crate::in_mem;
 use crate::block_builder::{self, api::BlockBuilder as BlockBuilderAPI};
 use crate::genesis;
 use consensus;
-use substrate_telemetry::*;
+use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
 
 use log::{info, trace, warn};
 use error_chain::bail;

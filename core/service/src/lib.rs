@@ -41,7 +41,7 @@ use exit_future::Signal;
 pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
 use parity_codec::{Encode, Decode};
-use tel::*;
+use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
