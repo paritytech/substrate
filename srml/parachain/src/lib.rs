@@ -20,7 +20,7 @@
 
 use runtime_primitives::traits::Block as BlockT;
 use rstd::{vec::Vec, collections::btree_map::BTreeMap};
-use parity_codec_derive::{Encode, Decode};
+use codec::{Encode, Decode};
 #[doc(hidden)]
 pub use rstd::slice;
 
