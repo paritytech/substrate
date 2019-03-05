@@ -26,10 +26,7 @@
 use serde_derive::Serialize;
 #[cfg(feature = "std")]
 use parity_codec::{Decode, Input};
-#[cfg(feature = "std")]
-use parity_codec_derive::Decode;
 use parity_codec::{Encode, Output};
-use parity_codec_derive::Encode;
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]

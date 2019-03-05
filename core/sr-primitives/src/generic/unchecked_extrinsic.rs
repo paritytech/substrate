@@ -20,7 +20,6 @@
 use std::fmt;
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
 use crate::codec::{Decode, Encode, Codec, Input, HasCompact};
 use crate::traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
 use super::CheckedExtrinsic;

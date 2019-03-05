@@ -20,7 +20,7 @@ use fork_tree::ForkTree;
 use parking_lot::RwLock;
 use substrate_primitives::Ed25519AuthorityId;
 use grandpa::VoterSet;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use log::{debug, info};
 
 use std::cmp::Ord;

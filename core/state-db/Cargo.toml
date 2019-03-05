@@ -8,8 +8,7 @@ edition = "2018"
 parking_lot = "0.7.1"
 log = "0.4"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
-parity-codec = "3.1"
-parity-codec-derive = "3.1"
+parity-codec = { version = "3.1", features = ["derive"] }
 
 [dev-dependencies]
 env_logger = "0.6"

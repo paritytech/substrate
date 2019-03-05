@@ -23,7 +23,7 @@ use blake2_rfc;
 use ring::{rand, signature, signature::KeyPair};
 use crate::{hash::H512, Ed25519AuthorityId};
 use base58::{ToBase58, FromBase58};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Deserializer, Deserialize};
