@@ -627,7 +627,7 @@ where
 /// differs from previous OR config decode has failed.
 pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>, final_check: bool) -> Result<(), Box<Error>> {
 	let config = match config {
-		Some(v) => Some(changes_trie::Configuration::decode(&mut &v[..])
+		Some(v) => Some(Decode::decode(&mut &v[..])
 			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
 		None => None,
 	};
