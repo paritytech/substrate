@@ -512,9 +512,72 @@ fn no_one_nominates_does_not_panic() {
 }
 
 #[test]
-fn correct_number_of_validators_are_chosen() {
-	// TODO: Check that number is at least minimum, and at most what is set
-	// TODO: Test emergency conditions?
+fn less_than_needed_candidates_works() {
+	// Test the situation where the number of validators are less than `ValidatorCount` but more than <MinValidators>
+	// The expected behavior is to choose all the candidates that have some vote.
+	with_externalities(&mut ExtBuilder::default()
+		.minimum_validator_count(1)
+		.validator_count(3)
+		.session_length(1)
+		.validator_pool(true)
+		.sessions_per_era(1)
+		.build(), 
+	|| {
+		assert_eq!(Staking::era_length(), 1);
+		assert_eq!(Staking::validator_count(), 3);
+		
+		assert_eq!(Staking::minimum_validator_count(), 1);
+		assert_eq!(Staking::validator_count(), 3);
+
+		// initial validators 
+		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
+
+		// only one nominator will exist and it will 
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+
+		// and 20 are now valid candidates.
+		// trigger era
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 1);
+
+		// both validators will be chosen again. NO election algorithm is even executed.
+		assert_eq!(Session::validators(), vec![20, 10]);
+
+		// TODO: what is the correct exposure value now for this?
+	});
+}
+
+#[test]
+fn no_candidate_emergency_condition() {
+	// Test the situation where the number of validators are less than `ValidatorCount` and less than <MinValidators>
+	// The expected behavior is to choose all candidates from the previous era.
+	with_externalities(&mut ExtBuilder::default()
+		.minimum_validator_count(1)
+		.validator_count(3)
+		.session_length(1)
+		.validator_pool(true)
+		.sessions_per_era(1)
+		.build(), 
+	|| {
+		assert_eq!(Staking::era_length(), 1);
+		assert_eq!(Staking::validator_count(), 3);
+		
+		assert_eq!(Staking::minimum_validator_count(), 1);
+		assert_eq!(Staking::validator_count(), 3);
+
+		// initial validators 
+		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
+
+		// trigger era
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+		assert_eq!(Staking::current_era(), 1);
+
+		// No one nominates => no one has a proper vote => no change
+		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
+	});
 }
 
 #[test]

@@ -81,6 +81,8 @@ pub struct ExtBuilder {
 	reward: u64,
 	validator_pool: bool,
 	nominate: bool,
+	validator_count: u32,
+	minimum_validator_count: u32,
 }
 
 impl Default for ExtBuilder {
@@ -94,6 +96,8 @@ impl Default for ExtBuilder {
 			reward: 10,
 			validator_pool: false,
 			nominate: false,
+			validator_count: 2,
+			minimum_validator_count: 0,
 		}
 	}
 }
@@ -131,6 +135,14 @@ impl ExtBuilder {
 	pub fn nominate(mut self, nominate: bool) -> Self {
 		// NOTE: this only sets a dummy nominator for tests that want 10 and 20 (default validators) to be chosen by default.
 		self.nominate = nominate;
+		self
+	}
+	pub fn validator_count(mut self, count: u32) -> Self {
+		self.validator_count = count;
+		self
+	}
+	pub fn minimum_validator_count(mut self, count: u32) -> Self {
+		self.minimum_validator_count = count;
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
@@ -178,8 +190,8 @@ impl ExtBuilder {
 			} else {
 				vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)]
 			},
-			validator_count: 2,
-			minimum_validator_count: 0,
+			validator_count: self.validator_count,
+			minimum_validator_count: self.minimum_validator_count,
 			bonding_duration: self.sessions_per_era * self.session_length * 3,
 			session_reward: Perbill::from_millionths((1000000 * self.reward / balance_factor) as u32),
 			offline_slash: if self.monied { Perbill::from_percent(40) } else { Perbill::zero() },

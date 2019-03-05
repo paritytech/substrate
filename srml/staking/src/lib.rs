@@ -710,14 +710,11 @@ impl<T: Trait> Module<T> {
 			}
 		}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
 		
-		// TODO: is this a valid optimization? Maybe someone votes with stake == 0?
-		// TODO: we can store a num_vote in each candidate to easily extend this filter.
 		// candidates who have 0 stake => have no votes or all null-votes. best to kick them out not.
-		candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
+		let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
 			.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
-		// TODO: if we want to throw phragmen in a func, this is a good place.
-		// otherwise there is no need to have election
+		// If we have more candidates then needed, run phragmen.
 		if candidates.len() > rounds {
 			// Main election loop
 			for _round in 0..rounds {
@@ -786,9 +783,22 @@ impl<T: Trait> Module<T> {
 			}
 		}
 		else { // end of `if candidates.len() > rounds`
-			// if we don't have enough candidates, just choose all.
-			// TODO: but what if it is less than MinValidators?
-			elected_candidates = candidates;
+			if candidates.len() > Self::minimum_validator_count() as usize {
+				// if we don't have enough candidates, just choose all that have some vote.
+				elected_candidates = candidates;
+			}
+			else {
+				// if we have less than minimum, use the previous validator set.
+				elected_candidates = <Validators<T>>::enumerate().map(|(who, _)| {
+					let exposure = Self::stakers(&who);
+						Candidate {
+							who,
+							approval_stake: BalanceOf::<T>::zero(),		// don't care
+							score: Perquill::zero(), 					// don't care
+							exposure,
+						}
+				}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
+			}
 		}		
 
 		// Clear Stakers and reduce their slash_count.
