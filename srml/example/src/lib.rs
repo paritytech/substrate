@@ -54,7 +54,7 @@ pub type Log<T, Instance> = RawLog<
 
 /// A logs in this module.
 #[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
-#[derive(srml_support::parity_codec_derive::Encode, srml_support::parity_codec_derive::Decode, PartialEq, Eq, Clone)]
+#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<Amount, Instance> {
 	PhantomData(rstd::marker::PhantomData<Instance>),
 	AmountChange(Amount),

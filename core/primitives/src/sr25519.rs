@@ -23,7 +23,7 @@ use blake2_rfc;
 use rand::rngs::OsRng;
 use schnorrkel::{signing_context, Keypair, MiniSecretKey, PublicKey};
 use sha2::Sha512;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use crate::hash::H512;
 
 #[cfg(feature = "std")]

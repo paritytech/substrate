@@ -7,8 +7,7 @@ edition = "2018"
 
 [dependencies]
 futures = "0.1.17"
-codec = { package = "parity-codec", version = "3.0" }
-parity-codec-derive = { version = "3.1" }
+codec = { package = "parity-codec", version = "3.1", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../primitives" }
 consensus = { package = "substrate-consensus-common", path = "../common" }
 client = { package = "substrate-client", path = "../../client" }

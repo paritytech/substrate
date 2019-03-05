@@ -239,8 +239,6 @@ mod tests {
 		ModuleMetadata, RuntimeMetadataPrefixed
 	};
 	use crate::codec::{Encode, Decode};
-	use parity_codec_derive::{Decode, Encode};
-
 
 	mod system {
 		pub trait Trait {

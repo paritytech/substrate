@@ -261,11 +261,6 @@ fn decl_store_extra_genesis(
 		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
 			is_trait_needed = true;
-			let error_message = format!(
-				"Genesis parameters encoding of {} does not match the expected type ({:?}).",
-				name,
-				type_infos.value_type,
-			);
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
@@ -274,8 +269,6 @@ fn decl_store_extra_genesis(
 
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
-						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-							.expect(#error_message);
 						<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
@@ -287,8 +280,6 @@ fn decl_store_extra_genesis(
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-								.expect(#error_message);
 							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
@@ -526,7 +517,7 @@ fn decl_storage_items(
 			impls.extend(quote! {
 				// Those trait are derived because of wrong bounds for generics
 				#[cfg_attr(feature = "std", derive(Debug))]
-				#[derive(Clone, Eq, PartialEq, #scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
+				#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
 				pub struct #struct_ident;
 				impl #instantiable for #struct_ident {
 					const INSTANCE_PREFIX: &'static str = #instance_name;

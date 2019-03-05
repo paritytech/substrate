@@ -8,8 +8,7 @@ edition = "2018"
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 pwasm-utils = { version = "0.6.1", default-features = false }
-parity-codec = { version = "3.1", default-features = false }
-parity-codec-derive = { version = "3.1", default-features = false }
+parity-codec = { version = "3.1", default-features = false, features = ["derive"] }
 parity-wasm = { version = "0.31", default-features = false }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
 runtime-primitives = { package = "sr-primitives", path = "../../core/sr-primitives", default-features = false }
@@ -34,7 +33,6 @@ std = [
 	"serde/std",
 	"serde_derive",
 	"parity-codec/std",
-	"parity-codec-derive/std",
 	"substrate-primitives/std",
 	"runtime-primitives/std",
 	"runtime-io/std",
