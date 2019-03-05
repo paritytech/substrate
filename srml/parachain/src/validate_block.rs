@@ -50,14 +50,14 @@ unsafe fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *m
 unsafe fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32 {
 	let key = slice::from_raw_parts(key_data, key_len as usize);
 
-	if STORAGE.as_mut().expect(STORAGE_SET_EXPECT).contains(key) {
+	if STORAGE.as_mut().expect(STORAGE_SET_EXPECT).contains_key(key) {
 		1
 	} else {
 		0
 	}
 }
 
-unsafe fn ext_clear_storage(prefix_data: *const u8, prefix_len: u32) {
+unsafe fn ext_clear_storage(key_data: *const u8, key_len: u32) {
 	let key = slice::from_raw_parts(key_data, key_len as usize);
 
 	STORAGE.as_mut().expect(STORAGE_SET_EXPECT).remove(key);

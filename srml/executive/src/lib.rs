@@ -23,7 +23,7 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	OnInitialise, ChargeBytesFee, Hash, As, Digest, NumberFor, Block as BlockT
+	OnInitialise, Hash, As, Digest, NumberFor, Block as BlockT
 };
 use srml_support::{Dispatchable, traits::ChargeBytesFee};
 use parity_codec::{Codec, Encode};
