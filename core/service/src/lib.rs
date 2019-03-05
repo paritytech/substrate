@@ -192,10 +192,11 @@ impl<Components: components::Components> Service<Components> {
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
 					}
 
-					if let Some(offchain) = offchain.upgrade() {
+					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.upgrade()) {
 						Components::RuntimeServices::offchain_workers(
 							&number,
 							&offchain,
+							&txpool,
 						).map_err(|e| warn!("Offchain workers error processing new block: {:?}", e))?;
 					}
 

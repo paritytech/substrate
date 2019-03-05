@@ -18,6 +18,7 @@ parity-codec-derive = "3.0"
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
 sr-api-macros = { path = "../sr-api-macros" }
+transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
 env_logger = { version = "0.6" }

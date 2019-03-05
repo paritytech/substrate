@@ -3979,6 +3979,7 @@ dependencies = [
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-test-client 0.1.0",
+ "substrate-transaction-pool 0.1.0",
 ]
 
 [[package]]

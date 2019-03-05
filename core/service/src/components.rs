@@ -242,6 +242,7 @@ pub trait OffchainWorker<C: Components> {
 	fn offchain_workers(
 		number: &FactoryBlockNumber<C::Factory>,
 		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<()>;
 }
 
@@ -252,10 +253,11 @@ impl<C: Components> OffchainWorker<Self> for C where
 	fn offchain_workers(
 		number: &FactoryBlockNumber<C::Factory>,
 		offchain: &offchain::OffchainWorkers<ComponentClient<C>, ComponentBlock<C>>,
+		pool: &Arc<TransactionPool<C::TransactionPoolApi>>,
 	) -> error::Result<()> {
 		use futures::Future;
 		// TODO futures?
-		Ok(offchain.on_block_imported(number).wait().map_err(|_| "Unable to run offchain workers.")?)
+		Ok(offchain.on_block_imported(number, pool).wait().map_err(|_| "Unable to run offchain workers.")?)
 	}
 }
 

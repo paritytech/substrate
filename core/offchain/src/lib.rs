@@ -25,15 +25,15 @@ use std::{
 };
 
 use client::runtime_api::{ApiExt, OffchainWorker};
+use futures::Future;
+use log::{info, debug, warn};
+use parity_codec::Decode;
+use primitives::{ExecutionContext, OffchainExt};
 use runtime_primitives::{
 	generic::BlockId,
 	traits::{self, ProvideRuntimeApi},
 };
-use primitives::{
-	ExecutionContext, OffchainExt,
-};
-use log::debug;
-use futures::Future;
+use transaction_pool::txpool::{Pool, ChainApi};
 
 // TODO [ToDr] move the declaration to separate primitives crate with std/no-std options.
 // decl_runtime_apis! {
@@ -44,11 +44,27 @@ use futures::Future;
 // 	}
 // }
 
-struct Api;
+struct Api<A: ChainApi> {
+	pool: Arc<Pool<A>>,
+	at: BlockId<A::Block>,
+}
 
-impl OffchainExt for Api {
-	fn submit_extrinsic(&mut self, _ext: Vec<u8>) {
-		unimplemented!()
+impl<A: ChainApi> OffchainExt for Api<A> {
+	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
+		info!("Submitting to the pool: {:?}", ext);
+		let xt = match Decode::decode(&mut &*ext) {
+			Some(xt) => xt,
+			None => {
+				warn!("Unable to decode extrinsic: {:?}", ext);
+				return
+			},
+		};
+
+		// TODO [ToDr] Call API recursively panics!
+		match self.pool.submit_one(&self.at, xt) {
+			Ok(hash) => debug!("[{:?}] Offchain transaction added to the pool.", hash),
+			Err(err) => warn!("Incorrect offchain transaction: {:?}", err),
+		}
 	}
 }
 
@@ -75,14 +91,23 @@ impl<C, Block> OffchainWorkers<C, Block> where
 	C::Api: OffchainWorker<Block>,
 {
 	/// Start the offchain workers after given block.
-	pub fn on_block_imported(&self, number: &<Block::Header as traits::Header>::Number) -> impl Future<Item = (), Error = ()> {
+	pub fn on_block_imported<A>(
+		&self,
+		number: &<Block::Header as traits::Header>::Number,
+		pool: &Arc<Pool<A>>,
+	) -> impl Future<Item = (), Error = ()> where
+		A: ChainApi<Block=Block> + 'static,
+	{
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
 		debug!("Checking offchain workers at {:?}", at);
 
 		if let Ok(true) = runtime.has_api::<OffchainWorker<Block>>(&at) {
 			debug!("Running offchain workers at {:?}", at);
-			let api = Box::new(Api);
+			let api = Box::new(Api {
+				pool: pool.clone(),
+				at: at.clone(),
+			});
 			runtime.generate_extrinsics_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
 		}
 		return futures::future::ok(())
