@@ -98,11 +98,16 @@ impl TimestampInherentData for InherentData {
 pub struct InherentDataProvider;
 
 #[cfg(feature = "std")]
+/// Implementation of ProvideInherentData
 impl ProvideInherentData for InherentDataProvider {
+	/// returns the identifier (storage key) for timestamp inherent data
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {
 		&INHERENT_IDENTIFIER
 	}
 
+	/// provides the current system timestamp (in seconds from epoch) as timestamp inherent data
+	/// uses the std library's SystemTime to get the current time
+	/// stores the timestamp against the timestamp INHERENT_IDENTIFIER in the inherent data storage
 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), RuntimeString> {
 		use std::time::SystemTime;
 
@@ -116,6 +121,7 @@ impl ProvideInherentData for InherentDataProvider {
 			})
 	}
 
+	/// tries to converts the inherent error into an string
 	fn error_to_string(&self, error: &[u8]) -> Option<String> {
 		InherentError::try_from(&INHERENT_IDENTIFIER, error).map(|e| format!("{:?}", e))
 	}
@@ -144,6 +150,7 @@ macro_rules! impl_timestamp_set {
 
 for_each_tuple!(impl_timestamp_set);
 
+/// the module configuration trait
 pub trait Trait: consensus::Trait + system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
@@ -176,6 +183,7 @@ decl_module! {
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 		}
 
+		/// checks if the timestamp was set in the current block
 		fn on_finalise() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}
@@ -184,8 +192,10 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
+
 		/// Current time for the current block.
 		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
+
 		/// The minimum (and advised) period between blocks.
 		pub BlockPeriod get(block_period) config(period): T::Moment = T::Moment::sa(5);
 
@@ -211,17 +221,27 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+/// extracts the timestamp inherent from inherent data
+/// gets the inherent against the timestamp INHERENT_IDENTIFIER
+/// tries to deserialize the timestamp inherent into the InherentType (u64)
 fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
 	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
 		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
 		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
 }
 
+/// Implementation of `ProvideInherent` trait for timestamp module
+/// create_inherent - to set a new timestamp by the block proposer
+/// check_inherent - to validate the timestamp by other validators
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = InherentError;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
+	/// Creates inherent data in storage for timestamp inherent
+	/// Extracts timestamp inherent from the inherent data
+	/// Finds out the max between current timestamp and now + block period
+	/// Sets the new timestamp by calling the `set` dispatchable function
 	fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 		let data = extract_inherent_data(data).expect("Gets and decodes timestamp inherent data");
 
@@ -229,6 +249,9 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		Some(Call::set(next_time.into()))
 	}
 
+	/// Allows other validators to validate the inherent data for timestamp
+	/// Checks if the timestamp is not too far in the future (current + max drift)
+	/// or too behind in the past (current - (now + block period))
 	fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
 		const MAX_TIMESTAMP_DRIFT: u64 = 60;
 
