@@ -84,5 +84,13 @@ fn validate_block_with_empty_witness_data() {
 	let prev_header = create_prev_header();
 
 	let block = ParachainBlock::new(create_extrinsics(), Default::default());
-	call_validate_block(block, prev_header).expect("Calls `validate_block`");
+	assert!(call_validate_block(block, prev_header).is_err());
+}
+
+#[test]
+fn validate_block_with_witness_data() {
+	let prev_header = create_prev_header();
+
+	let block = ParachainBlock::new(create_extrinsics(), create_witness_data());
+	call_validate_block(block, prev_header).expect("`validate_block` succeeds");
 }

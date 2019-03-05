@@ -47,6 +47,22 @@ unsafe fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *m
 	}
 }
 
+unsafe fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32 {
+	let key = slice::from_raw_parts(key_data, key_len as usize);
+
+	if STORAGE.as_mut().expect(STORAGE_SET_EXPECT).contains(key) {
+		1
+	} else {
+		0
+	}
+}
+
+unsafe fn ext_clear_storage(prefix_data: *const u8, prefix_len: u32) {
+	let key = slice::from_raw_parts(key_data, key_len as usize);
+
+	STORAGE.as_mut().expect(STORAGE_SET_EXPECT).remove(key);
+}
+
 /// Validate a given parachain block on a validator.
 pub fn validate_block<Block: BlockT, E: ExecuteBlock<Block>>(mut block: &[u8], mut prev_head: &[u8]) {
 	let block = ParachainBlock::<Block>::decode(&mut block).expect("Could not decode parachain block.");
@@ -55,12 +71,12 @@ pub fn validate_block<Block: BlockT, E: ExecuteBlock<Block>>(mut block: &[u8], m
 	let _guard = unsafe {
 		STORAGE = Some(block.witness_data);
 		(
-			// Let all extern functions throw `unimplemented` when being called.
-			rio::switch_extern_functions_to_unimplemented(),
-			// Replace `get` and `set` with our custom implementation
+			// Replace storage calls with our own implementations
 			rio::ext_get_allocated_storage.replace_implementation(ext_get_allocated_storage),
-			rio::ext_set_storage.replace_implementation(ext_set_storage),
 			rio::ext_get_storage_into.replace_implementation(ext_get_storage_into),
+			rio::ext_set_storage.replace_implementation(ext_set_storage),
+			rio::ext_exists_storage.replace_implementation(ext_exists_storage),
+			rio::ext_clear_storage.replace_implementation(ext_clear_storage),
 		)
 	};
 

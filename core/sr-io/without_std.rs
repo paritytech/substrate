@@ -20,7 +20,7 @@ pub use parity_codec as codec;
 pub use rstd;
 pub use rstd::{mem, slice};
 
-use core::intrinsics;
+use core::{intrinsics, panic::PanicInfo};
 use rstd::{vec::Vec, ops::Deref};
 use hash_db::Hasher;
 use primitives::Blake2Hasher;
@@ -29,18 +29,18 @@ use cfg_if::cfg_if;
 
 cfg_if! {
 	if #[cfg(feature = "wasm-nice-panic-message")] {
-		fn wasm_nice_panic_message() -> bool {
+		fn wasm_nice_panic_message(info: &PanicInfo) -> bool {
 			use core::fmt::Write;
 			let mut message = rstd::alloc::string::String::new();
 			if write!(message, "{}", info).is_ok() {
-				extern_functions_host_impl::ext_print_utf8(message.as_ptr() as *const u8, message.len() as u32);
+				unsafe { extern_functions_host_impl::ext_print_utf8(message.as_ptr() as *const u8, message.len() as u32); }
 				true
 			} else {
 				false
 			}
 		}
 	} else {
-		fn wasm_nice_panic_message() -> bool {
+		fn wasm_nice_panic_message(_: &PanicInfo) -> bool {
 			false
 		}
 	}
@@ -48,9 +48,9 @@ cfg_if! {
 
 #[panic_handler]
 #[no_mangle]
-pub fn panic(info: &::core::panic::PanicInfo) -> ! {
+pub fn panic(info: &PanicInfo) -> ! {
 	unsafe {
-		if !wasm_nice_panic_message() {
+		if !wasm_nice_panic_message(info) {
 			if let Some(loc) = info.location() {
 				extern_functions_host_impl::ext_print_utf8(loc.file().as_ptr() as *const u8, loc.file().len() as u32);
 				extern_functions_host_impl::ext_print_num(loc.line() as u64);
