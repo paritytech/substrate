@@ -295,16 +295,14 @@ impl<T: Trait> Module<T> {
 			None => return Err("got overflow after adding a fee to value"),
 		};
 
-		let vesting_balance = Self::vesting_balance(transactor);
 		let new_from_balance = match from_balance.checked_sub(&liability) {
 			None => return Err("balance too low to send value"),
-			Some(b) if b < vesting_balance => return Err("vesting balance too high to send value"),
 			Some(b) => b,
 		};
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		Self::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer)?;
+		Self::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
@@ -397,17 +395,22 @@ impl<T: Trait> Module<T> {
 	/// `ensure_account_liquid` in accordance.
 	pub fn ensure_account_can_withdraw(
 		who: &T::AccountId,
-		amount: T::Balance,
-		reason: WithdrawReason
+		_amount: T::Balance,
+		reason: WithdrawReason,
+		new_balance: T::Balance,
 	) -> Result {
+		match reason {
+			WithdrawReason::Reserve | WithdrawReason::Transfer if Self::vesting_balance(who) > new_balance =>
+				return Err("vesting balance too high to send value"),
+			_ => {}
+		}
 		let locks = Self::locks(who);
 		if locks.is_empty() {
 			return Ok(())
 		}
 		let now = <system::Module<T>>::block_number();
-		let total = Self::free_balance(who);
 		if Self::locks(who).into_iter()
-			.all(|l| now >= l.until || l.amount.checked_add(&amount).map_or(false, |x| total >= x) || !l.reasons.contains(reason))
+			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
 		{
 			Ok(())
 		} else {
@@ -431,11 +434,11 @@ where
 	}
 
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		if Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve).is_ok() {
-			Self::free_balance(who) >= value
-		} else {
-			false
-		}
+		Self::free_balance(who)
+			.checked_sub(&value)
+			.map_or(false, |new_balance|
+				Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+			)
 	}
 
 	fn total_issuance() -> Self::Balance {
@@ -484,9 +487,10 @@ where
 		if b < value {
 			return Err("not enough free funds")
 		}
-		Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve)?;
+		let new_balance = b - value;
+		Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve, new_balance)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
-		Self::set_free_balance(who, b - value);
+		Self::set_free_balance(who, new_balance);
 		Ok(())
 	}
 
@@ -616,10 +620,11 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	}
 
 	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
-		Self::ensure_account_can_withdraw(who, value, reason)?;
 		let b = Self::free_balance(who);
 		ensure!(b >= value, "account has too few funds");
-		Self::set_free_balance(who, b - value);
+		let new_balance = b - value;
+		Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
+		Self::set_free_balance(who, new_balance);
 		Self::decrease_total_stake_by(value);
 		Ok(())
 	}
