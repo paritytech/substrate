@@ -21,7 +21,110 @@
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System};
 use runtime_io::with_externalities;
-use srml_support::{assert_noop, assert_ok, assert_err};
+use srml_support::{
+	assert_noop, assert_ok, assert_err,
+	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons, TransferAsset}
+};
+
+const ID_1: LockIdentifier = *b"1       ";
+const ID_2: LockIdentifier = *b"2       ";
+const ID_3: LockIdentifier = *b"3       ";
+
+#[test]
+fn basic_locking_should_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.creation_fee(50)
+			.monied(true)
+			.build(),
+		|| {
+			assert_eq!(Balances::free_balance(&1), 2560);
+			Balances::set_lock(ID_1, &1, 2500, u64::max_value(), WithdrawReasons::all());
+			assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 100), "account liquidity restrictions prevent withdrawal");
+		}
+	);
+}
+
+#[test]
+fn partial_locking_should_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.creation_fee(50)
+			.monied(true)
+			.build(),
+		|| {
+			Balances::set_lock(ID_1, &1, 1280, u64::max_value(), WithdrawReasons::all());
+			assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 100));
+		}
+	);
+}
+
+#[test]
+fn lock_removal_should_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.creation_fee(50)
+			.monied(true)
+			.build(),
+		|| {
+			Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
+			Balances::remove_lock(ID_1, &1);
+			assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 100));
+		}
+	);
+}
+
+#[test]
+fn lock_replacement_should_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.creation_fee(50)
+			.monied(true)
+			.build(),
+		|| {
+			Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
+			Balances::set_lock(ID_1, &1, 1280, u64::max_value(), WithdrawReasons::all());
+			assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 100));
+		}
+	);
+}
+
+#[test]
+fn double_locking_should_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.creation_fee(50)
+			.monied(true)
+			.build(),
+		|| {
+			Balances::set_lock(ID_1, &1, 1280, u64::max_value(), WithdrawReasons::all());
+			Balances::set_lock(ID_2, &1, 1280, u64::max_value(), WithdrawReasons::all());
+			assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 100));
+		}
+	);
+}
+
+#[test]
+fn combination_locking_should_work() {
+	with_externalities(
+		&mut ExtBuilder::default()
+			.existential_deposit(10)
+			.creation_fee(50)
+			.monied(true)
+			.build(),
+		|| {
+			Balances::set_lock(ID_1, &1, u64::max_value(), 0, WithdrawReasons::none());
+			Balances::set_lock(ID_2, &1, 0, u64::max_value(), WithdrawReasons::none());
+			Balances::set_lock(ID_3, &1, 0, 0, WithdrawReasons::all());
+			assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 100));
+		}
+	);
+}
 
 #[test]
 fn default_indexing_on_new_accounts_should_not_work2() {

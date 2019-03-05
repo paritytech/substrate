@@ -407,7 +407,7 @@ impl<T: Trait> Module<T> {
 		let now = <system::Module<T>>::block_number();
 		let total = Self::free_balance(who);
 		if Self::locks(who).into_iter()
-			.all(|l| now >= l.until || total >= l.amount + amount || !l.reasons.contains(reason))
+			.all(|l| now >= l.until || l.amount.checked_add(&amount).map_or(false, |x| total >= x) || !l.reasons.contains(reason))
 		{
 			Ok(())
 		} else {
