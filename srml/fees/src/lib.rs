@@ -33,12 +33,34 @@ mod tests;
 
 type AssetOf<T> = <<T as Trait>::TransferAsset as ArithmeticType>::Type;
 
+pub trait OnFeeCharged<Amount> {
+	fn on_fee_charged(fee: &Amount);
+}
+
+impl<Amount> OnFeeCharged<Amount> for () {
+	fn on_fee_charged(_: &Amount) {}
+}
+
+impl<
+	Amount,
+	X: OnFeeCharged<Amount>,
+	Y: OnFeeCharged<Amount>,
+> OnFeeCharged<Amount> for (X, Y) {
+	fn on_fee_charged(fee: &Amount) {
+		X::on_fee_charged(fee);
+		Y::on_fee_charged(fee);
+	}
+}
+
 pub trait Trait: system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// A function does the asset transfer between accounts
 	type TransferAsset: ArithmeticType + TransferAsset<Self::AccountId, Amount=AssetOf<Self>>;
+
+	/// A function invoked in `on_finalise`, with accumulated fees of the whole block.
+	type OnFeeCharged: OnFeeCharged<AssetOf<Self>>;
 }
 
 decl_module! {
@@ -47,6 +69,11 @@ decl_module! {
 
 		fn on_finalise() {
 			let extrinsic_count = <system::Module<T>>::extrinsic_count();
+			let block_fee = (0..extrinsic_count).fold(<AssetOf<T>>::sa(0), |total, index| {
+				let current = <CurrentTransactionFee<T>>::get(index);
+				total + current
+			});
+			T::OnFeeCharged::on_fee_charged(&block_fee);
 			(0..extrinsic_count).for_each(|index| {
 				// Deposit `Charged` event if some amount of fee charged.
 				let fee = <CurrentTransactionFee<T>>::take(index);

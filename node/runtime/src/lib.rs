@@ -110,6 +110,7 @@ impl balances::Trait for Runtime {
 impl fees::Trait for Runtime {
 	type Event = Event;
 	type TransferAsset = Balances;
+	type OnFeeCharged = ();
 }
 
 impl consensus::Trait for Runtime {
