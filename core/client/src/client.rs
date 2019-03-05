@@ -27,7 +27,7 @@ use runtime_primitives::{
 };
 use consensus::{
 	Error as ConsensusError, ErrorKind as ConsensusErrorKind, ImportBlock, ImportResult,
-	BlockOrigin, ForkChoiceStrategy
+	BlockOrigin, ForkChoiceStrategy,
 };
 use runtime_primitives::traits::{
 	Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash,
@@ -619,9 +619,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	/// Lock the import lock, and run operations inside.
-	pub fn lock_import_and_run<R, F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> error::Result<R>>(
-		&self, f: F
-	) -> error::Result<R> {
+	pub fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
+		F: FnOnce(&mut ClientImportOperation<Block, Blake2Hasher, B>) -> Result<R, Err>,
+		Err: From<error::Error>,
+	{
 		let inner = || {
 			let _import_lock = self.import_lock.lock();
 
@@ -827,7 +828,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			operation.notify_imported = Some((hash, origin, import_headers.into_post(), is_new_best, storage_changes));
 		}
 
-		Ok(ImportResult::Queued)
+		Ok(ImportResult::imported())
 	}
 
 	fn block_execution(
@@ -1391,13 +1392,15 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
+
 		match self.backend.blockchain().status(BlockId::Hash(hash))
 			.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?
 		{
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
 			blockchain::BlockStatus::Unknown => {},
 		}
-		Ok(ImportResult::Queued)
+
+		Ok(ImportResult::imported())
 	}
 }
 
@@ -1414,7 +1417,7 @@ impl<B, E, Block, RA> consensus::Authorities<Block> for Client<B, E, Block, RA> 
 
 impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
@@ -1425,7 +1428,7 @@ impl<B, E, Block, RA> CurrentHeight for Client<B, E, Block, RA> where
 
 impl<B, E, Block, RA> BlockNumberToHash for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;

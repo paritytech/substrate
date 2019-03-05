@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -22,6 +21,7 @@ use log::{debug, warn, info};
 use parity_codec::Encode;
 use futures::prelude::*;
 use tokio::timer::Delay;
+use parking_lot::RwLock;
 
 use client::{
 	backend::Backend, BlockchainEvents, CallExecutor, Client, error::Error as ClientError
@@ -36,13 +36,41 @@ use runtime_primitives::traits::{
 use substrate_primitives::{Blake2Hasher, ed25519,Ed25519AuthorityId, H256};
 
 use crate::{
-	AUTHORITY_SET_KEY, CONSENSUS_CHANGES_KEY, LAST_COMPLETED_KEY,
-	Commit, Config, Error, Network, Precommit, Prevote, LastCompleted,
+	Commit, Config, Error, Network, Precommit, Prevote,
+	CommandOrError, NewAuthoritySet, VoterCommand,
 };
-use crate::authorities::{AuthoritySet, SharedAuthoritySet};
+
+use crate::authorities::SharedAuthoritySet;
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
+
+/// Data about a completed round.
+pub(crate) type CompletedRound<H, N> = (u64, RoundState<H, N>);
+
+/// A read-only view of the last completed round.
+pub(crate) struct LastCompletedRound<H, N> {
+	inner: RwLock<CompletedRound<H, N>>,
+}
+
+impl<H: Clone, N: Clone> LastCompletedRound<H, N> {
+	/// Create a new tracker based on some starting last-completed round.
+	pub(crate) fn new(round: CompletedRound<H, N>) -> Self {
+		LastCompletedRound { inner: RwLock::new(round) }
+	}
+
+	/// Read the last completed round.
+	pub(crate) fn read(&self) -> CompletedRound<H, N> {
+		self.inner.read().clone()
+	}
+
+	// NOTE: not exposed outside of this module intentionally.
+	fn with<F, R>(&self, f: F) -> R
+		where F: FnOnce(&mut CompletedRound<H, N>) -> R
+	{
+		f(&mut *self.inner.write())
+	}
+}
 
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
@@ -53,6 +81,7 @@ pub(crate) struct Environment<B, E, Block: BlockT, N: Network<Block>, RA> {
 	pub(crate) consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	pub(crate) network: N,
 	pub(crate) set_id: u64,
+	pub(crate) last_completed: LastCompletedRound<Block::Hash, NumberFor<Block>>,
 }
 
 impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
@@ -166,54 +195,6 @@ impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash, NumberFo
 	}
 }
 
-/// A new authority set along with the canonical block it changed at.
-#[derive(Debug)]
-pub(crate) struct NewAuthoritySet<H, N> {
-	pub(crate) canon_number: N,
-	pub(crate) canon_hash: H,
-	pub(crate) set_id: u64,
-	pub(crate) authorities: Vec<(Ed25519AuthorityId, u64)>,
-}
-
-/// Signals either an early exit of a voter or an error.
-#[derive(Debug)]
-pub(crate) enum ExitOrError<H, N> {
-	/// An error occurred.
-	Error(Error),
-	/// Early exit of the voter: the new set ID and the new authorities along with respective weights.
-	AuthoritiesChanged(NewAuthoritySet<H, N>),
-}
-
-impl<H, N> From<Error> for ExitOrError<H, N> {
-	fn from(e: Error) -> Self {
-		ExitOrError::Error(e)
-	}
-}
-
-impl<H, N> From<ClientError> for ExitOrError<H, N> {
-	fn from(e: ClientError) -> Self {
-		ExitOrError::Error(Error::Client(e))
-	}
-}
-
-impl<H, N> From<grandpa::Error> for ExitOrError<H, N> {
-	fn from(e: grandpa::Error) -> Self {
-		ExitOrError::Error(Error::from(e))
-	}
-}
-
-impl<H: fmt::Debug, N: fmt::Debug> ::std::error::Error for ExitOrError<H, N> { }
-
-impl<H, N> fmt::Display for ExitOrError<H, N> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ExitOrError::Error(ref e) => write!(f, "{:?}", e),
-			ExitOrError::AuthoritiesChanged(_) => write!(f, "restarting voter on new authorities"),
-		}
-	}
-}
-
-
 impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N, RA> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -237,7 +218,7 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 		SinkError = Self::Error,
 	> + Send>;
 
-	type Error = ExitOrError<Block::Hash, NumberFor<Block>>;
+	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 
 	fn round_data(
 		&self,
@@ -295,17 +276,32 @@ impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash, Numb
 			state.finalized.as_ref().map(|e| e.1),
 		);
 
-		let encoded_state = (round, state).encode();
-		let res = Backend::insert_aux(&**self.inner.backend(), &[(LAST_COMPLETED_KEY, &encoded_state[..])], &[]);
-		if let Err(e) = res {
-			warn!(target: "afg", "Shutting down voter due to error bookkeeping last completed round in DB: {:?}", e);
-			Err(Error::Client(e).into())
-		} else {
+		self.last_completed.with(|last_completed| {
+			let set_state = crate::aux_schema::VoterSetState::Live(round, state.clone());
+			crate::aux_schema::write_voter_set_state(&**self.inner.backend(), &set_state)?;
+
+			*last_completed = (round, state); // after writing to DB successfully.
 			Ok(())
-		}
+		})
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>, round: u64, commit: Commit<Block>) -> Result<(), Self::Error> {
+		use client::blockchain::HeaderBackend;
+
+		let status = self.inner.backend().blockchain().info()?;
+		if number <= status.finalized_number && self.inner.backend().blockchain().hash(number)? == Some(hash) {
+			// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
+			// the voter will be restarted at the median last finalized block, which can be lower than the local best
+			// finalized block.
+			warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
+				  hash,
+				  number,
+				  status.finalized_number,
+			);
+
+			return Ok(());
+		}
+
 		finalize_block(
 			&*self.inner,
 			&self.authority_set,
@@ -375,7 +371,7 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 	hash: Block::Hash,
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
-) -> Result<(), ExitOrError<Block::Hash, NumberFor<Block>>> where
+) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
@@ -385,72 +381,43 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 	// FIXME #1483: clone only when changed
 	let old_authority_set = authority_set.clone();
-	// needed in case there is an authority set change, used for reverting in
-	// case of error
-	let mut old_last_completed = None;
-
-	let mut consensus_changes = consensus_changes.lock();
-	let status = authority_set.apply_changes(
-		hash,
-		number,
-		&is_descendent_of(client, None),
-	).map_err(|e| Error::Safety(e.to_string()))?;
-
-	if status.changed {
-		// write new authority set state to disk.
-		let encoded_set = authority_set.encode();
-
-		let write_result = if let Some((ref canon_hash, ref canon_number)) = status.new_set_block {
-			// we also overwrite the "last completed round" entry with a blank slate
-			// because from the perspective of the finality gadget, the chain has
-			// reset.
-			let round_state = RoundState::genesis((*canon_hash, *canon_number));
-			let last_completed: LastCompleted<_, _> = (0, round_state);
-			let encoded = last_completed.encode();
-
-			old_last_completed = Backend::get_aux(&**client.backend(), LAST_COMPLETED_KEY)?;
-
-			Backend::insert_aux(
-				&**client.backend(),
-				&[
-					(AUTHORITY_SET_KEY, &encoded_set[..]),
-					(LAST_COMPLETED_KEY, &encoded[..]),
-				],
-				&[]
-			)
-		} else {
-			Backend::insert_aux(&**client.backend(), &[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
-		};
-
-		if let Err(e) = write_result {
-			warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
-			warn!(target: "finality", "Node is in a potentially inconsistent state.");
-
-			return Err(e.into());
-		}
-	}
-
-	// check if this is this is the first finalization of some consensus changes
-	let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
-		.finalize((number, hash), |at_height| canonical_at_height(client, (hash, number), at_height))?;
-
 	// holds the old consensus changes in case it is changed below, needed for
 	// reverting in case of failure
 	let mut old_consensus_changes = None;
-	if alters_consensus_changes {
-		old_consensus_changes = Some(consensus_changes.clone());
 
-		let encoded = consensus_changes.encode();
-		let write_result = Backend::insert_aux(&**client.backend(), &[(CONSENSUS_CHANGES_KEY, &encoded[..])], &[]);
-		if let Err(e) = write_result {
-			warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
-			warn!(target: "finality", "Node is in a potentially inconsistent state.");
+	let mut consensus_changes = consensus_changes.lock();
+	let canon_at_height = |canon_number| {
+		// "true" because the block is finalized
+		canonical_at_height(client, (hash, number), true, canon_number)
+	};
 
-			return Err(e.into());
+	let update_res: Result<_, Error> = client.lock_import_and_run(|import_op| {
+		let status = authority_set.apply_standard_changes(
+			hash,
+			number,
+			&is_descendent_of(client, None),
+		).map_err(|e| Error::Safety(e.to_string()))?;
+
+		// check if this is this is the first finalization of some consensus changes
+		let (alters_consensus_changes, finalizes_consensus_changes) = consensus_changes
+			.finalize((number, hash), &canon_at_height)?;
+
+		if alters_consensus_changes {
+			old_consensus_changes = Some(consensus_changes.clone());
+
+			let write_result = crate::aux_schema::update_consensus_changes(
+				&*consensus_changes,
+				|insert| client.apply_aux(import_op, insert, &[]),
+			);
+
+			if let Err(e) = write_result {
+				warn!(target: "finality", "Failed to write updated consensus changes to disk. Bailing.");
+				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+
+				return Err(e.into());
+			}
 		}
-	}
 
-	let aux = |authority_set: &AuthoritySet<Block::Hash, NumberFor<Block>>| {
 		// NOTE: this code assumes that honest voters will never vote past a
 		// transition block, thus we don't have to worry about the case where
 		// we have a transition with `effective_block = N`, but we finalize
@@ -496,12 +463,12 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
-		client.finalize_block(BlockId::Hash(hash), justification, true).map_err(|e| {
+		client.apply_finality(import_op, BlockId::Hash(hash), justification, true).map_err(|e| {
 			warn!(target: "finality", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 			e
 		})?;
 
-		if let Some((canon_hash, canon_number)) = status.new_set_block {
+		let new_authorities = if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
 			let (new_id, set_ref) = authority_set.current();
 
@@ -511,54 +478,46 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 				info!("Applying GRANDPA set change to new set {:?}", set_ref);
 			}
 
-			Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
+			Some(NewAuthoritySet {
 				canon_hash,
 				canon_number,
 				set_id: new_id,
 				authorities: set_ref.to_vec(),
-			}))
+			})
 		} else {
-			Ok(())
-		}
-	};
+			None
+		};
 
-	match aux(&authority_set) {
-		Err(ExitOrError::Error(err)) => {
-			debug!(target: "afg", "Reverting authority set and/or consensus changes after block finalization error: {:?}", err);
-
-			let mut revert_aux = Vec::new();
-
-			if status.changed {
-				revert_aux.push((AUTHORITY_SET_KEY, old_authority_set.encode()));
-				if let Some(old_last_completed) = old_last_completed {
-					revert_aux.push((LAST_COMPLETED_KEY, old_last_completed));
-				}
-
-				*authority_set = old_authority_set.clone();
-			}
-
-			if let Some(old_consensus_changes) = old_consensus_changes {
-				revert_aux.push((CONSENSUS_CHANGES_KEY, old_consensus_changes.encode()));
-
-				*consensus_changes = old_consensus_changes;
-			}
-
-			let write_result = Backend::insert_aux(
-				&**client.backend(),
-				revert_aux.iter().map(|(k, v)| (*k, &**v)).collect::<Vec<_>>().iter(),
-				&[],
+		if status.changed {
+			let write_result = crate::aux_schema::update_authority_set(
+				&authority_set,
+				new_authorities.as_ref(),
+				|insert| client.apply_aux(import_op, insert, &[]),
 			);
 
 			if let Err(e) = write_result {
-				warn!(target: "finality", "Failed to revert consensus changes to disk. Bailing.");
+				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
 				warn!(target: "finality", "Node is in a potentially inconsistent state.");
 
 				return Err(e.into());
 			}
+		}
 
-			Err(ExitOrError::Error(err))
-		},
-		res => res,
+		Ok(new_authorities.map(VoterCommand::ChangeAuthorities))
+	});
+
+	match update_res {
+		Ok(Some(command)) => Err(CommandOrError::VoterCommand(command)),
+		Ok(None) => Ok(()),
+		Err(e) => {
+			*authority_set = old_authority_set;
+
+			if let Some(old_consensus_changes) = old_consensus_changes {
+				*consensus_changes = old_consensus_changes;
+			}
+
+			Err(CommandOrError::Error(e))
+		}
 	}
 }
 
@@ -567,27 +526,39 @@ pub(crate) fn finalize_block<B, Block: BlockT<Hash=H256>, E, RA>(
 pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 	client: &Client<B, E, Block, RA>,
 	base: (Block::Hash, NumberFor<Block>),
+	base_is_canonical: bool,
 	height: NumberFor<Block>,
 ) -> Result<Option<Block::Hash>, ClientError> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 {
-	use runtime_primitives::traits::{One, Zero};
+	use runtime_primitives::traits::{One, Zero, BlockNumberToHash};
 
 	if height > base.1 {
 		return Ok(None);
 	}
 
 	if height == base.1 {
-		return Ok(Some(base.0));
+		if base_is_canonical {
+			return Ok(Some(base.0));
+		} else {
+			return Ok(client.block_number_to_hash(height));
+		}
+	} else if base_is_canonical {
+		return Ok(client.block_number_to_hash(height));
 	}
 
-	let mut current = match client.header(&BlockId::Hash(base.0))? {
+	let one = NumberFor::<Block>::one();
+
+	// start by getting _canonical_ block with number at parent position and then iterating
+	// backwards by hash.
+	let mut current = match client.header(&BlockId::Number(base.1 - one))? {
 		Some(header) => header,
 		_ => return Ok(None),
 	};
 
-	let mut steps = base.1 - height;
+	// we've already checked that base > height above.
+	let mut steps = base.1 - height - one;
 
 	while steps > NumberFor::<Block>::zero() {
 		current = match client.header(&BlockId::Hash(*current.parent_hash()))? {
@@ -595,7 +566,7 @@ pub(crate) fn canonical_at_height<B, E, Block: BlockT<Hash=H256>, RA>(
 			_ => return Ok(None),
 		};
 
-		steps -= NumberFor::<Block>::one();
+		steps -= one;
 	}
 
 	Ok(Some(current.hash()))

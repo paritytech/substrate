@@ -61,6 +61,7 @@ decl_runtime_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
+	#[api_version(2)]
 	pub trait GrandpaApi {
 		/// Check a digest for pending changes.
 		/// Return `None` if there are no pending changes.
@@ -76,6 +77,28 @@ decl_runtime_apis! {
 		/// state.
 		fn grandpa_pending_change(digest: &DigestFor<Block>)
 			-> Option<ScheduledChange<NumberFor<Block>>>;
+
+		/// Check a digest for forced changes.
+		/// Return `None` if there are no forced changes. Otherwise, return a
+		/// tuple containing the pending change and the median last finalized
+		/// block number at the time the change was signalled.
+		///
+		/// Added in version 2.
+		///
+		/// Forced changes are applied after a delay of _imported_ blocks,
+		/// while pending changes are applied after a delay of _finalized_ blocks.
+		///
+		/// Precedence towards earlier or later digest items can be given
+		/// based on the rules of the chain.
+		///
+		/// No change should be scheduled if one is already and the delay has not
+		/// passed completely.
+		///
+		/// This should be a pure function: i.e. as long as the runtime can interpret
+		/// the digest type it should return the same result regardless of the current
+		/// state.
+		fn grandpa_forced_change(digest: &DigestFor<Block>)
+			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>;
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.

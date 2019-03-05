@@ -23,11 +23,14 @@ pub(crate) struct ConsensusChanges<H, N> {
 	pending_changes: Vec<(N, H)>,
 }
 
-impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
+impl<H, N> ConsensusChanges<H, N> {
 	/// Create empty consensus changes.
 	pub(crate) fn empty() -> Self {
 		ConsensusChanges { pending_changes: Vec::new(), }
 	}
+}
+
+impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 
 	/// Note unfinalized change of consensus-related data.
 	pub(crate) fn note_change(&mut self, at: (N, H)) {
