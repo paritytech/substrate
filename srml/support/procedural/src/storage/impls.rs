@@ -492,15 +492,17 @@ impl<'a> Impls<'a> {
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
 
+		let as_double_map = quote!{ <Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>> };
+
 		let mutate_impl = if !is_option {
 			quote!{
-				<Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>>::insert(key1, key2, &val, storage)
+				#as_double_map::insert(key1, key2, &val, storage)
 			}
 		} else {
 			quote!{
 				match val {
-					Some(ref val) => <Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>>::insert(key1, key2, &val, storage),
-					None => <Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>>::remove(key1, key2, storage),
+					Some(ref val) => #as_double_map::insert(key1, key2, &val, storage),
+					None => #as_double_map::remove(key1, key2, storage),
 				}
 			}
 		};
@@ -516,17 +518,17 @@ impl<'a> Impls<'a> {
 				}
 
 				fn get<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
-					let key = <Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>>::key_for(key1, key2);
+					let key = #as_double_map::key_for(key1, key2);
 					storage.get(&key).#option_simple_1(|| #fielddefault)
 				}
 
 				fn take<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
-					let key = <Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>>::key_for(key1, key2);
+					let key = #as_double_map::key_for(key1, key2);
 					storage.take(&key).#option_simple_1(|| #fielddefault)
 				}
 
 				fn mutate<R, F: FnOnce(&mut Self::Query) -> R, S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, f: F, storage: &S) -> R {
-					let mut val = <Self as #scrate::storage::unhashed::generator::StorageDoubleMap<#k1ty, #k2ty, #typ>>::get(key1, key2, storage);
+					let mut val = #as_double_map::get(key1, key2, storage);
 
 					let ret = f(&mut val);
 					#mutate_impl ;
