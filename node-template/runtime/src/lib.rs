@@ -167,6 +167,7 @@ impl balances::Trait for Runtime {
 impl fees::Trait for Runtime {
 	type TransferAsset = Balances;
 	type Event = Event;
+	type OnFeeCharged = ();
 }
 
 impl sudo::Trait for Runtime {
