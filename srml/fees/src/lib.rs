@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use srml_support::{
-	dispatch::Result, StorageMap, decl_event, decl_storage, decl_module,
+	dispatch::Result, StorageMap, decl_event, decl_storage, decl_module, for_each_tuple,
 	traits::{ArithmeticType, ChargeBytesFee, ChargeFee, TransferAsset, WithdrawReason}
 };
 use runtime_primitives::traits::{
@@ -37,20 +37,23 @@ pub trait OnFeeCharged<Amount> {
 	fn on_fee_charged(fee: &Amount);
 }
 
-impl<Amount> OnFeeCharged<Amount> for () {
-	fn on_fee_charged(_: &Amount) {}
-}
+macro_rules! impl_fee_charged {
+	() => (
+		impl<T> OnFeeCharged<T> for () {
+			fn on_fee_charged(_: &T) {}
+		}
+	);
 
-impl<
-	Amount,
-	X: OnFeeCharged<Amount>,
-	Y: OnFeeCharged<Amount>,
-> OnFeeCharged<Amount> for (X, Y) {
-	fn on_fee_charged(fee: &Amount) {
-		X::on_fee_charged(fee);
-		Y::on_fee_charged(fee);
+	( $($t:ident)* ) => {
+		impl<T, $($t: OnFeeCharged<T>),*> OnFeeCharged<T> for ($($t,)*) {
+			fn on_fee_charged(fee: &T) {
+				$($t::on_fee_charged(fee);)*
+			}
+		}
 	}
 }
+
+for_each_tuple!(impl_fee_charged);
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
@@ -69,18 +72,17 @@ decl_module! {
 
 		fn on_finalise() {
 			let extrinsic_count = <system::Module<T>>::extrinsic_count();
-			let block_fee = (0..extrinsic_count).fold(<AssetOf<T>>::sa(0), |total, index| {
-				let current = <CurrentTransactionFee<T>>::get(index);
-				total + current
-			});
-			T::OnFeeCharged::on_fee_charged(&block_fee);
+			// the accumulated fee of the whole block
+			let mut block_fee = <AssetOf<T>>::sa(0);
 			(0..extrinsic_count).for_each(|index| {
 				// Deposit `Charged` event if some amount of fee charged.
 				let fee = <CurrentTransactionFee<T>>::take(index);
 				if !fee.is_zero() {
+					block_fee += fee;
 					Self::deposit_event(RawEvent::Charged(index, fee));
 				}
 			});
+			T::OnFeeCharged::on_fee_charged(&block_fee);
 		}
 	}
 }
