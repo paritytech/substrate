@@ -531,8 +531,14 @@ fn run_thread<B: BlockT + 'static>(
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
 						network_service_2.lock().ban_node(who)
 					},
-					Severity::Useless(_) => network_service_2.lock().drop_node(who),
-					Severity::Timeout => network_service_2.lock().drop_node(who),
+					Severity::Useless(message) => {
+						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
+						network_service_2.lock().drop_node(who)
+					},
+					Severity::Timeout => {
+						info!(target: "sync", "Dropping {:?} because it is useless", who);
+						network_service_2.lock().drop_node(who)
+					},
 				}
 			},
 		}
