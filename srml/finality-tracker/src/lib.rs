@@ -138,8 +138,6 @@ impl<T: Trait> Module<T> {
 			<Self as Store>::RecentHints::put(vec![T::BlockNumber::zero()]);
 			<Self as Store>::OrderedHints::put(vec![T::BlockNumber::zero()]);
 			<Self as Store>::Median::put(T::BlockNumber::zero());
-			<Self as Store>::WindowSize::put(T::BlockNumber::sa(DEFAULT_WINDOW_SIZE));
-			<Self as Store>::ReportLatency::put(T::BlockNumber::sa(DEFAULT_DELAY));
 
 			<Self as Store>::Initialized::put(true);
 		}
