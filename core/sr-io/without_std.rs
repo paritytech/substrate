@@ -121,7 +121,7 @@ macro_rules! extern_functions {
 		mod extern_functions_unimplemented {
 			$(
 				pub fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )? {
-					unimplemented!(concat!("\"", stringify!($name), "\" not implemented for current runtime."))
+					unimplemented!(concat!("\"", stringify!($name), "\" not implemented for the current runtime."))
 				}
 			)*
 		}
@@ -137,16 +137,18 @@ macro_rules! extern_functions {
 	};
 }
 
+/// Host functions for printing, useful for debugging.
+extern "C" {
+	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
+	fn ext_print_hex(data: *const u8, len: u32);
+	fn ext_print_num(value: u64);
+}
+
 /// Host functions, provided by the executor.
 /// A WebAssembly runtime module would "import" these to access the execution environment
 /// (most importantly, storage) or perform heavy hash calculations.
 /// See also "ext_" functions in sr-sandbox and sr-std
 extern_functions! {
-	/// Printing, useful for debugging
-	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
-	fn ext_print_hex(data: *const u8, len: u32);
-	fn ext_print_num(value: u64);
-
 	/// Set value for key in storage.
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	/// Remove key and value from storage.
