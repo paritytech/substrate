@@ -22,7 +22,7 @@
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, Convert};
 use srml_support::{StorageValue, StorageMap, for_each_tuple, decl_module, decl_event, decl_storage};
-use srml_support::dispatch::Result;
+use srml_support::{dispatch::Result, traits::OnFreeBalanceZero};
 use system::ensure_signed;
 use rstd::ops::Mul;
 
@@ -141,13 +141,10 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of validators.
 	///
-	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
+	/// Called by `staking::new_era()` only. `rotate_session` must be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
 		<Validators<T>>::put(&new.to_vec());
-		<consensus::Module<T>>::set_authorities(
-			&new.iter().cloned().map(T::ConvertAccountIdToSessionKey::convert).collect::<Vec<_>>()
-		);
 	}
 
 	/// Hook to be called after transaction processing.
@@ -190,11 +187,13 @@ impl<T: Trait> Module<T> {
 		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 
 		// Update any changes in session keys.
-		Self::validators().iter().enumerate().for_each(|(i, v)| {
-			if let Some(n) = <NextKeyFor<T>>::take(v) {
-				<consensus::Module<T>>::set_authority(i as u32, &n);
-			}
-		});
+		for (i, v) in Self::validators().into_iter().enumerate() {
+			<consensus::Module<T>>::set_authority(
+				i as u32,
+				&<NextKeyFor<T>>::get(&v)
+					.unwrap_or_else(|| T::ConvertAccountIdToSessionKey::convert(v))
+			);
+		};
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
@@ -212,6 +211,12 @@ impl<T: Trait> Module<T> {
 		let length_minus_1 = length - One::one();
 		let block_number = <system::Module<T>>::block_number();
 		length_minus_1 - (block_number - Self::last_length_change() + length_minus_1) % length
+	}
+}
+
+impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
+		<NextKeyFor<T>>::remove(who);
 	}
 }
 

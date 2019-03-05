@@ -25,8 +25,6 @@ pub use serde;
 pub use sr_std as rstd;
 #[doc(hidden)]
 pub use parity_codec as codec;
-#[doc(hidden)]
-pub use parity_codec_derive;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
