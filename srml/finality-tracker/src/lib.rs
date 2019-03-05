@@ -108,7 +108,7 @@ decl_storage! {
 		Update: Option<T::BlockNumber>;
 
 		// when initialized through config this is set in the beginning.
-		Initialized get(initialized) build(|_| ()): Option<()>;
+		Initialized get(initialized) build(|_| false): bool;
 	}
 }
 
@@ -134,14 +134,14 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	fn update_hint(hint: Option<T::BlockNumber>) {
-		if Self::initialized().is_none() {
+		if !Self::initialized() {
 			<Self as Store>::RecentHints::put(vec![T::BlockNumber::zero()]);
 			<Self as Store>::OrderedHints::put(vec![T::BlockNumber::zero()]);
 			<Self as Store>::Median::put(T::BlockNumber::zero());
 			<Self as Store>::WindowSize::put(T::BlockNumber::sa(DEFAULT_WINDOW_SIZE));
 			<Self as Store>::ReportLatency::put(T::BlockNumber::sa(DEFAULT_DELAY));
 
-			<Self as Store>::Initialized::put(());
+			<Self as Store>::Initialized::put(true);
 		}
 
 		let mut recent = Self::recent_hints();

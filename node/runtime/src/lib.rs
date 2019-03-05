@@ -300,7 +300,7 @@ impl_runtime_apis! {
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-				_=> None
+				_ => None
 			}) {
 				if let Some(change) = Grandpa::scrape_digest_change(log) {
 					return Some(change);
@@ -314,7 +314,7 @@ impl_runtime_apis! {
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-				_=> None
+				_ => None
 			}) {
 				if let Some(change) = Grandpa::scrape_digest_forced_change(log) {
 					return Some(change);
