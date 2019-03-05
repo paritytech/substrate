@@ -16,9 +16,7 @@
 
 //! Definition of a sandbox environment.
 
-#[cfg(test)]
-use parity_codec::Encode;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.

@@ -101,6 +101,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		}
 	}
 
+	fn clear_justification_requests(&self) {
+		let _ = self.protocol_sender.send(ProtocolMsg::ClearJustificationRequests);
+	}
+
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
@@ -531,8 +535,14 @@ fn run_thread<B: BlockT + 'static>(
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
 						network_service_2.lock().ban_node(who)
 					},
-					Severity::Useless(_) => network_service_2.lock().drop_node(who),
-					Severity::Timeout => network_service_2.lock().drop_node(who),
+					Severity::Useless(message) => {
+						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
+						network_service_2.lock().drop_node(who)
+					},
+					Severity::Timeout => {
+						info!(target: "sync", "Dropping {:?} because it timed out", who);
+						network_service_2.lock().drop_node(who)
+					},
 				}
 			},
 		}

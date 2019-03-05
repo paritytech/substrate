@@ -34,7 +34,7 @@ macro_rules! map {
 
 use rstd::prelude::*;
 use rstd::ops::Deref;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 #[cfg(feature = "std")]
