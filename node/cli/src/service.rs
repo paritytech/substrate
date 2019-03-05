@@ -112,6 +112,7 @@ construct_service_factory! {
 					},
 					link_half,
 					grandpa::NetworkBridge::new(service.network()),
+					service.config.custom.inherent_data_providers.clone(),
 					service.on_exit(),
 				)?);
 
