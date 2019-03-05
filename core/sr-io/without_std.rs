@@ -25,14 +25,37 @@ use rstd::{vec::Vec, ops::Deref};
 use hash_db::Hasher;
 use primitives::Blake2Hasher;
 
+use cfg_if::cfg_if;
+
+cfg_if! {
+	if #[cfg(feature = "wasm-nice-panic-message")] {
+		fn wasm_nice_panic_message() -> bool {
+			use core::fmt::Write;
+			let mut message = rstd::alloc::string::String::new();
+			if write!(message, "{}", info).is_ok() {
+				extern_functions_host_impl::ext_print_utf8(message.as_ptr() as *const u8, message.len() as u32);
+				true
+			} else {
+				false
+			}
+		}
+	} else {
+		fn wasm_nice_panic_message() -> bool {
+			false
+		}
+	}
+}
+
 #[panic_handler]
 #[no_mangle]
 pub fn panic(info: &::core::panic::PanicInfo) -> ! {
 	unsafe {
-		if let Some(loc) = info.location() {
-			ext_print_utf8(loc.file().as_ptr() as *const u8, loc.file().len() as u32);
-			ext_print_num(loc.line() as u64);
-			ext_print_num(loc.column() as u64);
+		if !wasm_nice_panic_message() {
+			if let Some(loc) = info.location() {
+				extern_functions_host_impl::ext_print_utf8(loc.file().as_ptr() as *const u8, loc.file().len() as u32);
+				extern_functions_host_impl::ext_print_num(loc.line() as u64);
+				extern_functions_host_impl::ext_print_num(loc.column() as u64);
+			}
 		}
 		intrinsics::abort()
 	}
@@ -43,7 +66,7 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
 
 	unsafe {
-		ext_print_utf8(OOM_MSG.as_ptr(), OOM_MSG.len() as u32);
+		extern_functions_host_impl::ext_print_utf8(OOM_MSG.as_ptr(), OOM_MSG.len() as u32);
 		intrinsics::abort();
 	}
 }
@@ -137,18 +160,16 @@ macro_rules! extern_functions {
 	};
 }
 
-/// Host functions for printing, useful for debugging.
-extern "C" {
-	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
-	fn ext_print_hex(data: *const u8, len: u32);
-	fn ext_print_num(value: u64);
-}
-
 /// Host functions, provided by the executor.
 /// A WebAssembly runtime module would "import" these to access the execution environment
 /// (most importantly, storage) or perform heavy hash calculations.
 /// See also "ext_" functions in sr-sandbox and sr-std
 extern_functions! {
+	/// Host functions for printing, useful for debugging.
+	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
+	fn ext_print_hex(data: *const u8, len: u32);
+	fn ext_print_num(value: u64);
+
 	/// Set value for key in storage.
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	/// Remove key and value from storage.

@@ -18,6 +18,7 @@ tiny-keccak = { version = "1.4.2", optional = true }
 environmental = { version = "~1.0", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 trie = { package = "substrate-trie", path = "../trie", optional = true }
+cfg-if = "0.1.7"
 
 [features]
 default = ["std"]
@@ -35,3 +36,4 @@ std = [
 ]
 nightly = []
 strict = []
+wasm-nice-panic-message = []
