@@ -16,7 +16,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use crate::H256;
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.

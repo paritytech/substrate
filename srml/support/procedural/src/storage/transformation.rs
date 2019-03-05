@@ -181,12 +181,14 @@ fn decl_store_extra_genesis(
 
 		let mut opt_build;
 		// need build line
-		if let (Some(ref getter), Some(ref config)) = (getter, config) {
+		if let Some(ref config) = config {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
-			} else {
+			} else if let Some(ref getter) = getter {
 				let ident = &getter.getfn.content;
 				quote!( #ident )
+			} else {
+				return Err(syn::Error::new_spanned(name, format!("Invalid storage definiton, couldn't find config identifier: storage must either have a get identifier `get(ident)` or a defined config identifier `config(ident)`")));
 			};
 			if type_infos.kind.is_simple() && ext::has_parametric_type(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
@@ -224,11 +226,6 @@ fn decl_store_extra_genesis(
 		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
 			is_trait_needed = true;
-			let error_message = format!(
-				"Genesis parameters encoding of {} does not match the expected type ({:?}).",
-				name,
-				type_infos.value_type,
-			);
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
@@ -237,8 +234,6 @@ fn decl_store_extra_genesis(
 
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
-						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-							.expect(#error_message);
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
 				},
@@ -250,8 +245,6 @@ fn decl_store_extra_genesis(
 						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-								.expect(#error_message);
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}

@@ -155,17 +155,6 @@ fn balance_transfer_works() {
 }
 
 #[test]
-fn balance_reduction_works() {
-	with_externalities(&mut ExtBuilder::default().build(), || {
-		Balances::set_free_balance(&1, 111);
-		Balances::increase_total_stake_by(111);
-		assert_ok!(Balances::decrease_free_balance(&1, 69).map(|_| ()));
-		assert_eq!(Balances::total_balance(&1), 42);
-		assert_noop!(Balances::decrease_free_balance(&1, 69).map(|_| ()), "account has too few funds");
-	});
-}
-
-#[test]
 fn reserving_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);

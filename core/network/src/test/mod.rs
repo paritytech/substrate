@@ -558,11 +558,14 @@ pub trait TestNetFactory: Sized {
 		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
 		let import_queue = Box::new(BasicQueue::new(verifier, block_import, justification_import));
+		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let specialization = self::SpecializationFactory::create();
 		let peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<Block>>>> = Arc::new(Default::default());
+
 		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
+			status_sinks,
 			is_offline.clone(),
 			is_major_syncing.clone(),
 			peers.clone(),
