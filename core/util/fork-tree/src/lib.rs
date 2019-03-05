@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 
 use std::fmt;
-use parity_codec_derive::{Decode, Encode};
+use parity_codec::{Decode, Encode};
 
 /// Error occured when interating with the tree.
 #[derive(Clone, Debug, PartialEq)]

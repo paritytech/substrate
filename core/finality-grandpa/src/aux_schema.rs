@@ -17,7 +17,6 @@
 //! Schema for stuff in the aux-db.
 
 use parity_codec::{Encode, Decode};
-use parity_codec_derive::{Encode, Decode};
 use client::backend::AuxStore;
 use client::error::{Result as ClientResult, Error as ClientError, ErrorKind as ClientErrorKind};
 use fork_tree::ForkTree;

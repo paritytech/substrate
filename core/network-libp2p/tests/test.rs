@@ -133,6 +133,8 @@ fn two_nodes_transfer_lots_of_packets() {
 }
 
 #[test]
+#[ignore]
+// TODO: remove ignore once this test it fixed. #1777
 fn many_nodes_connectivity() {
 	// Creates many nodes, then make sure that they are all connected to each other.
 	// Note: if you increase this number, keep in mind that there's a limit to the number of

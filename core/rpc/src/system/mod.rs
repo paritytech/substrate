@@ -109,10 +109,9 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 	}
 
 	fn system_health(&self) -> Result<Health> {
-		let status = self.sync.status();
 		Ok(Health {
-			peers: status.num_peers,
-			is_syncing: status.sync.is_major_syncing(),
+			peers: self.sync.peers().len(),
+			is_syncing: self.sync.is_major_syncing(),
 			should_have_peers: self.should_have_peers,
 		})
 	}

@@ -61,7 +61,6 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use parity_codec::{Encode, Decode};
-use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 	DigestItemFor, DigestItem,
@@ -70,7 +69,7 @@ use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher};
-use substrate_telemetry::*;
+use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN};
 
 use srml_finality_tracker;
 

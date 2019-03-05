@@ -22,7 +22,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use substrate_primitives::Ed25519AuthorityId;
 use sr_primitives::traits::{DigestFor, NumberFor};
 use client::decl_runtime_apis;
