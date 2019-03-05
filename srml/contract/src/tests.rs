@@ -92,6 +92,7 @@ impl consensus::Trait for Test {
 impl fees::Trait for Test {
 	type Event = MetaEvent;
 	type TransferAsset = Balances;
+	type OnFeeCharged = ();
 }
 impl Trait for Test {
 	type Call = Call;

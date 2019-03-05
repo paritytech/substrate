@@ -78,6 +78,7 @@ impl system::Trait for Test {
 impl Trait for Test {
 	type Event = TestEvent;
 	type TransferAsset = TransferAssetMock;
+	type OnFeeCharged = ();
 }
 
 pub type System = system::Module<Test>;

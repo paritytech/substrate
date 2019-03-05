@@ -325,6 +325,7 @@ mod tests {
 	impl fees::Trait for Runtime {
 		type Event = MetaEvent;
 		type TransferAsset = balances::Module<Runtime>;
+		type OnFeeCharged = ();
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
