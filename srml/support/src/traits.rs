@@ -17,8 +17,7 @@
 //! Traits for SRML
 
 use crate::rstd::result;
-use crate::codec::Codec;
-use crate::parity_codec_derive::{Encode, Decode};
+use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
 	MaybeSerializeDebug, SimpleArithmetic, As
 };

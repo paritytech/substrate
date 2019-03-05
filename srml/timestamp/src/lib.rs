@@ -32,17 +32,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use parity_codec::Encode;
 #[cfg(feature = "std")]
-use parity_codec_derive::Decode;
-use parity_codec_derive::Encode;
+use parity_codec::Decode;
+#[cfg(feature = "std")]
+use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
 use srml_support::for_each_tuple;
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, cmp};
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
-#[cfg(feature = "std")]
-use inherents::ProvideInherentData;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";

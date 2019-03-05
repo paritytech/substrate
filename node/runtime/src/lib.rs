@@ -21,7 +21,7 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use support::{Serialize, Deserialize};
 use support::construct_runtime;

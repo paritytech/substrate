@@ -23,8 +23,7 @@
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
 use rstd::{prelude::*, result};
-use parity_codec::HasCompact;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{

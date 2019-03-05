@@ -19,7 +19,6 @@
 use bitflags::bitflags;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use parity_codec::{Encode, Decode, Input, Output};
-use parity_codec_derive::{Encode, Decode};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -131,7 +130,6 @@ pub mod generic {
 	use parity_codec::{Encode, Decode};
 	use network_libp2p::{CustomMessage, CustomMessageId};
 	use runtime_primitives::Justification;
-	use parity_codec_derive::{Encode, Decode};
 	use crate::config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,

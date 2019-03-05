@@ -34,7 +34,7 @@ pub use substrate_finality_grandpa_primitives as fg_primitives;
 use serde_derive::Serialize;
 use rstd::prelude::*;
 use parity_codec as codec;
-use parity_codec_derive::{Encode, Decode};
+use codec::{Encode, Decode};
 use fg_primitives::ScheduledChange;
 use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
