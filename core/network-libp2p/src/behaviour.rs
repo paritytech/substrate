@@ -25,7 +25,7 @@ use libp2p::identify::{Identify, IdentifyEvent, protocol::IdentifyInfo};
 use libp2p::kad::{Kademlia, KademliaOut, KadConnectionType};
 use libp2p::ping::{Ping, PingEvent};
 use log::{debug, trace, warn};
-use std::{cmp, io, time::Duration, time::Instant};
+use std::{cmp, io, fmt, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::Delay;
 use void;
@@ -442,6 +442,29 @@ where
 		}
 
 		Async::NotReady
+	}
+}
+
+/// The severity of misbehaviour of a peer that is reported.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Severity {
+	/// Peer is timing out. Could be bad connectivity of overload of work on either of our sides.
+	Timeout,
+	/// Peer has been notably useless. E.g. unable to answer a request that we might reasonably consider
+	/// it could answer.
+	Useless(String),
+	/// Peer has behaved in an invalid manner. This doesn't necessarily need to be Byzantine, but peer
+	/// must have taken concrete action in order to behave in such a way which is wantanly invalid.
+	Bad(String),
+}
+
+impl fmt::Display for Severity {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Severity::Timeout => write!(fmt, "Timeout"),
+			Severity::Useless(r) => write!(fmt, "Useless ({})", r),
+			Severity::Bad(r) => write!(fmt, "Bad ({})", r),
+		}
 	}
 }
 

@@ -23,7 +23,7 @@ use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
 use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol, NetworkState};
+use network_libp2p::{multiaddr, RegisteredProtocol, NetworkState};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
@@ -361,7 +361,7 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ManageNetwork for Service
 			.next()
 			.map(|addr| {
 				let mut addr = addr.clone();
-				addr.append(Libp2pProtocol::P2p(network.peer_id().clone().into()));
+				addr.append(multiaddr::Protocol::P2p(network.peer_id().clone().into()));
 				addr.to_string()
 			});
 		ret

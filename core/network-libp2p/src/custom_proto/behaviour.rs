@@ -71,7 +71,7 @@ pub struct CustomProtos<TMessage, TSubstream> {
 	/// List of the IDs of peers that are forbidden, and the moment their ban expires.
 	banned_peers: Vec<(PeerId, Instant)>,
 
-	/// When this delay expires, we need to synchronize our active connectons with the
+	/// When this delay expires, we need to synchronize our active connections with the
 	/// network topology.
 	next_connect_to_nodes: Delay,
 

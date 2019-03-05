@@ -32,3 +32,7 @@ state-machine = { package = "substrate-state-machine", path = "../../core/state-
 substrate-telemetry = { path = "../../core/telemetry" }
 names = "0.11.0"
 structopt = "0.2"
+
+[dev-dependencies]
+quickcheck = "0.8"
+tempdir = "0.3"

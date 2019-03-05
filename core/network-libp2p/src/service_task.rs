@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	behaviour::Behaviour, behaviour::BehaviourOut, secret::obtain_private_key_from_config,
+	behaviour::Behaviour, behaviour::BehaviourOut,
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols};
@@ -49,15 +49,15 @@ where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
 	}
 
 	// Private and public keys configuration.
-	let local_private_key = obtain_private_key_from_config(&config)?;
-	let local_public_key = local_private_key.to_public_key();
-	let local_peer_id = local_public_key.clone().into_peer_id();
+	let local_identity = config.node_key.clone().into_keypair()?;
+	let local_public = local_identity.public();
+	let local_peer_id = local_public.clone().into_peer_id();
 
 	// Build the swarm.
 	let (mut swarm, bandwidth) = {
 		let registered_custom = RegisteredProtocols(registered_custom.into_iter().collect());
-		let behaviour = Behaviour::new(&config, local_public_key.clone(), registered_custom);
-		let (transport, bandwidth) = transport::build_transport(local_private_key);
+		let behaviour = Behaviour::new(&config, local_public, registered_custom);
+		let (transport, bandwidth) = transport::build_transport(local_identity);
 		(Swarm::new(transport, behaviour, local_peer_id.clone()), bandwidth)
 	};
 
