@@ -26,7 +26,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::mem;
 use crate::codec::{Encode, Decode};
 use crate::{CommitSet, Error, MetaDb, to_meta_key, Hash};
-use parity_codec_derive::{Encode, Decode};
 use log::{trace, warn};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";

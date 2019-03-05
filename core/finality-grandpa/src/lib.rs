@@ -61,7 +61,6 @@ use client::{
 };
 use client::blockchain::HeaderBackend;
 use parity_codec::{Encode, Decode};
-use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
 	DigestItemFor, DigestItem,
