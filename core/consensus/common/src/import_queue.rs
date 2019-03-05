@@ -24,7 +24,9 @@
 //! The `BasicQueue` and `BasicVerifier` traits allow serial queues to be
 //! instantiated simply.
 
-use crate::block_import::{ImportBlock, BlockImport, JustificationImport, ImportResult, BlockOrigin};
+use crate::block_import::{
+	BlockImport, BlockOrigin, ImportBlock, ImportedAux, ImportResult, JustificationImport,
+};
 use crossbeam_channel::{self as channel, Receiver, Sender};
 
 use std::sync::Arc;
@@ -307,31 +309,37 @@ impl<B: BlockT> BlockImporter<B> {
 
 			match result {
 				Ok(BlockImportResult::ImportedKnown(number)) => link.block_imported(&hash, number),
-				Ok(BlockImportResult::ImportedUnknown(number)) => {
-					link.block_imported(&hash, number)
-				}
-				Ok(BlockImportResult::ImportedUnjustified(number)) => {
+				Ok(BlockImportResult::ImportedUnknown(number, aux)) => {
 					link.block_imported(&hash, number);
-					link.request_justification(&hash, number);
+
+					if aux.clear_justification_requests {
+						trace!(target: "sync", "Block imported clears all pending justification requests {}: {:?}", number, hash);
+						link.clear_justification_requests();
+					}
+
+					if aux.needs_justification {
+						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
+						link.request_justification(&hash, number);
+					}
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
 						link.note_useless_and_restart_sync(peer, "Sent block with incomplete header to import");
 					}
-				}
+				},
 				Err(BlockImportError::VerificationFailed(who, e)) => {
 					if let Some(peer) = who {
 						link.note_useless_and_restart_sync(peer, &format!("Verification failed: {}", e));
 					}
-				}
+				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
 						link.note_useless_and_restart_sync(peer, "Sent us a bad block");
 					}
-				}
+				},
 				Err(BlockImportError::UnknownParent) | Err(BlockImportError::Error) => {
-					link.restart()
-				}
+					link.restart();
+				},
 			};
 		}
 		if let Some(link) = self.link.as_ref() {
@@ -448,13 +456,15 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
 	/// Block imported.
-	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
+	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Batch of blocks imported, with or without error.
 	fn blocks_processed(&self, _processed_blocks: Vec<B::Hash>, _has_error: bool) {}
 	/// Justification import result.
-	fn justification_imported(&self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) { }
+	fn justification_imported(&self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
+	/// Clear all pending justification requests.
+	fn clear_justification_requests(&self) {}
 	/// Request a justification for the given block.
-	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
+	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Disconnect from peer.
 	fn useless_peer(&self, _who: Origin, _reason: &str) {}
 	/// Disconnect from peer and restart sync.
@@ -469,9 +479,7 @@ pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
 	/// Imported known block.
 	ImportedKnown(N),
 	/// Imported unknown block.
-	ImportedUnknown(N),
-	/// Imported unjustified block that requires one.
-	ImportedUnjustified(N),
+	ImportedUnknown(N, ImportedAux),
 }
 
 /// Block import error.
@@ -520,17 +528,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 				Ok(BlockImportResult::ImportedKnown(number))
 			},
-			Ok(ImportResult::AlreadyQueued) => {
-				trace!(target: "sync", "Block already queued {}: {:?}", number, hash);
-				Ok(BlockImportResult::ImportedKnown(number))
-			},
-			Ok(ImportResult::Queued) => {
-				Ok(BlockImportResult::ImportedUnknown(number))
-			},
-			Ok(ImportResult::NeedsJustification) => {
-				trace!(target: "sync", "Block queued but requires justification {}: {:?}", number, hash);
-				Ok(BlockImportResult::ImportedUnjustified(number))
-			},
+			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux)),
 			Ok(ImportResult::UnknownParent) => {
 				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 				Err(BlockImportError::UnknownParent)
@@ -547,7 +545,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 	};
 
 	match import_error(import_handle.check_block(hash, parent))? {
-		BlockImportResult::ImportedUnknown(_) => (),
+		BlockImportResult::ImportedUnknown { .. } => (),
 		r @ _ => return Ok(r), // Any other successfull result means that the block is already imported.
 	}
 
@@ -629,7 +627,7 @@ mod tests {
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send an unknown
-		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default())), Default::default())];
+		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(), Default::default())), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 

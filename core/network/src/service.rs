@@ -101,6 +101,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		}
 	}
 
+	fn clear_justification_requests(&self) {
+		let _ = self.protocol_sender.send(ProtocolMsg::ClearJustificationRequests);
+	}
+
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}

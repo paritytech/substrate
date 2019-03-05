@@ -1940,6 +1940,7 @@ dependencies = [
  "srml-democracy 0.1.0",
  "srml-executive 0.1.0",
  "srml-fees 0.1.0",
+ "srml-finality-tracker 0.1.0",
  "srml-grandpa 0.1.0",
  "srml-indices 0.1.0",
  "srml-session 0.1.0",
@@ -3213,6 +3214,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-finality-tracker"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-session 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-inherents 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "srml-grandpa"
 version = "0.1.0"
 dependencies = [
@@ -3222,6 +3244,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
+ "srml-finality-tracker 0.1.0",
  "srml-session 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
@@ -3786,9 +3809,11 @@ dependencies = [
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
+ "srml-finality-tracker 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-common 0.1.0",
  "substrate-finality-grandpa-primitives 0.1.0",
+ "substrate-inherents 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
