@@ -372,10 +372,33 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 				.count();
 			self.max_outgoing_connections - num_outgoing_connections
 		};
-
 		trace!(target: "sub-libp2p", "Connect-to-nodes round; attempting to fill {:?} slots",
 			num_to_open);
 
+		// We first try to enable existing connections.
+		for peer_id in &self.connected_peers {
+			if num_to_open == 0 {
+				break
+			}
+
+			if self.enabled_peers.contains_key(peer_id) {
+				continue;
+			}
+
+			if let Some((_, expire)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
+				if *expire >= Instant::now() {
+					continue;
+				}
+			}
+
+			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (active)", peer_id);
+			self.events.push(NetworkBehaviourAction::SendEvent {
+				peer_id: peer_id.clone(),
+				event: CustomProtosHandlerIn::Enable(Endpoint::Dialer),
+			});
+		}
+
+		// Then, try to open new connections.
 		let local_peer_id = params.local_peer_id().clone();
 		let (to_try, will_change) = self.topology.addrs_to_attempt();
 		for (peer_id, _) in to_try {
