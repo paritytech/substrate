@@ -20,7 +20,7 @@
 //
 use std::{self, time, sync::Arc};
 
-use log::{info, debug};
+use log::{info, debug, warn};
 
 use client::{
 	self, error, Client as SubstrateClient, CallExecutor,
@@ -101,8 +101,6 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
 			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
-		dbg!("Inherent data pushed");
-
 		build_ctx(&mut block_builder);
 
 		block_builder.bake().map_err(Into::into)
@@ -116,7 +114,7 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	/// The transaction pool.
 	pub transaction_pool: Arc<TransactionPool<A>>,
 	/// The inherents pool
-	pub inherents_pool: Arc<InherentsPool>,
+	pub inherents_pool: Arc<InherentsPool<<A::Block as BlockT>::Extrinsic>>,
 }
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
@@ -161,7 +159,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
-	inherents_pool: Arc<InherentsPool>,
+	inherents_pool: Arc<InherentsPool<<Block as BlockT>::Extrinsic>>,
 	now: Box<Fn() -> time::Instant>,
 }
 
@@ -191,13 +189,10 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
 {
-	fn propose_with(&self, mut inherent_data: InherentData, deadline: time::Instant)
+	fn propose_with(&self, inherent_data: InherentData, deadline: time::Instant)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
-
-		// Fill up the inherent data from the queue
-		self.inherents_pool.drain_to(&mut inherent_data);
 
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -208,11 +203,23 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 			&self.parent_id,
 			inherent_data,
 			|block_builder| {
+				// Add inherents from the internal pool
+
+				let inherents = self.inherents_pool.drain();
+				debug!("Pushing {} queued inherents.", inherents.len());
+				for i in inherents {
+					if let Err(e) = block_builder.push_extrinsic(i) {
+						warn!("Error while pushing inherent extrinsic from the pool: {:?}", e);
+					}
+				}
+
+				// proceed with transactions
 				let mut is_first = true;
 				let mut skipped = 0;
 				let mut unqueue_invalid = Vec::new();
 				let pending_iterator = self.transaction_pool.ready();
 
+				debug!("Attempting to push transactions from the pool.");
 				for pending in pending_iterator {
 					if (self.now)() > deadline {
 						debug!("Consensus deadline reached when pushing block transactions, proceeding with proposing.");
@@ -344,10 +351,7 @@ mod tests {
 			inherents_pool: inpool.clone(),
 		};
 
-		let mut data = InherentData::new();
-		let id: [u8; 8] = *b"testdata";
-		data.put_data(id, &12u32).unwrap();
-		inpool.add(data);
+		inpool.add(extrinsic(0));
 
 		let proposer = proposer_factory.init(
 			&client.header(&BlockId::number(0)).unwrap().unwrap(),

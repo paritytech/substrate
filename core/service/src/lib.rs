@@ -71,7 +71,7 @@ pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
-	inherents_pool: Arc<InherentsPool>,
+	inherents_pool: Arc<InherentsPool<ComponentExtrinsic<Components>>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
@@ -363,7 +363,7 @@ impl<Components> Service<Components> where Components: components::Components {
 	}
 
 	/// Get shared inherents pool instance.
-	pub fn inherents_pool(&self) -> Arc<InherentsPool> {
+	pub fn inherents_pool(&self) -> Arc<InherentsPool<ComponentExtrinsic<Components>>> {
 		self.inherents_pool.clone()
 	}
 

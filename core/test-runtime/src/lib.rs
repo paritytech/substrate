@@ -292,12 +292,8 @@ cfg_if! {
 					system::finalise_block()
 				}
 
-				fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-					if !data.is_empty() {
-						vec![Extrinsic::IncludeData(data.encode())]
-					} else {
-						vec![]
-					}
+				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+					vec![]
 				}
 
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
@@ -387,12 +383,8 @@ cfg_if! {
 					system::finalise_block()
 				}
 
-				fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-					if !data.is_empty() {
-						vec![Extrinsic::IncludeData(data.encode())]
-					} else {
-						vec![]
-					}
+				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+					vec![]
 				}
 
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {

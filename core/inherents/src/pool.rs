@@ -16,7 +16,6 @@
 
 //! Inherents Pool
 
-use super::InherentData;
 use std::{fmt, mem};
 use parking_lot::Mutex;
 
@@ -24,29 +23,35 @@ use parking_lot::Mutex;
 ///
 /// The pool is responsible to collect inherents asynchronously generated
 /// by some other parts of the code and make them ready for the next block production.
-#[derive(Default)]
-pub struct InherentsPool {
-	data: Mutex<InherentData>,
+pub struct InherentsPool<T> {
+	data: Mutex<Vec<T>>,
 }
 
-impl fmt::Debug for InherentsPool {
+impl<T> Default for InherentsPool<T> {
+	fn default() -> Self {
+		InherentsPool {
+			data: Mutex::new(vec![]),
+		}
+	}
+}
+
+impl<T: fmt::Debug> fmt::Debug for InherentsPool<T> {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		let mut builder = fmt.debug_struct("InherentsPool");
-		if let Some(d) = self.data.try_lock() {
-			builder.field("data", &d.data);
+		if let Some(data) = self.data.try_lock() {
+			builder.field("data", &*data);
 		}
 		builder.finish()
 	}
 }
 
-impl InherentsPool {
-	pub fn add(&self, data: InherentData) {
-		self.data.lock().merge(data);
-
+impl<T> InherentsPool<T> {
+	pub fn add(&self, extrinsic: T) {
+		self.data.lock().push(extrinsic);
 	}
-	pub fn drain_to(&self, other: &mut InherentData) {
-		let data = mem::replace(&mut *self.data.lock(), InherentData::new());
-		other.merge(data);
+
+	pub fn drain(&self) -> Vec<T> {
+		mem::replace(&mut *self.data.lock(), vec![])
 	}
 }
 

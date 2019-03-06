@@ -32,7 +32,7 @@ use parity_codec::Decode;
 use primitives::{ExecutionContext, OffchainExt};
 use runtime_primitives::{
 	generic::BlockId,
-	traits::{self, ProvideRuntimeApi},
+	traits::{self, ProvideRuntimeApi, Extrinsic},
 };
 use transaction_pool::txpool::{Pool, ChainApi};
 
@@ -40,14 +40,13 @@ pub use offchain_primitives::OffchainWorkerApi;
 
 struct Api<A: ChainApi> {
 	transaction_pool: Arc<Pool<A>>,
-	inherents_pool: Arc<InherentsPool>,
+	inherents_pool: Arc<InherentsPool<<A::Block as traits::Block>::Extrinsic>>,
 	at: BlockId<A::Block>,
 }
 
 impl<A: ChainApi> OffchainExt for Api<A> {
 	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
-		info!("Submitting to the pool: {:?}", ext);
-		let xt = match Decode::decode(&mut &*ext) {
+		let xt = match <A::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
 			Some(xt) => xt,
 			None => {
 				warn!("Unable to decode extrinsic: {:?}", ext);
@@ -55,27 +54,30 @@ impl<A: ChainApi> OffchainExt for Api<A> {
 			},
 		};
 
-		// TODO [ToDr] Move to inherent data
-
-		// TODO [ToDr] Call API recursively panics!
-		match self.transaction_pool.submit_one(&self.at, xt) {
-			Ok(hash) => debug!("[{:?}] Offchain transaction added to the pool.", hash),
-			Err(err) => warn!("Incorrect offchain transaction: {:?}", err),
+		info!("Submitting to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
+		if xt.is_signed() == Some(false) {
+			self.inherents_pool.add(xt);
+		} else {
+			// TODO [ToDr] Calling the API recursively panics!
+			match self.transaction_pool.submit_one(&self.at, xt) {
+				Ok(hash) => debug!("[{:?}] Offchain transaction added to the pool.", hash),
+				Err(err) => warn!("Incorrect offchain transaction: {:?}", err),
+			}
 		}
 	}
 }
 
 /// An offchain workers manager.
 #[derive(Debug)]
-pub struct OffchainWorkers<C, Block> {
+pub struct OffchainWorkers<C, Block: traits::Block> {
 	client: Arc<C>,
-	inherents_pool: Arc<InherentsPool>,
+	inherents_pool: Arc<InherentsPool<<Block as traits::Block>::Extrinsic>>,
 	_block: PhantomData<Block>,
 }
 
-impl<C, Block> OffchainWorkers<C, Block> {
+impl<C, Block: traits::Block> OffchainWorkers<C, Block> {
 	/// Creates new `OffchainWorkers`.
-	pub fn new(client: Arc<C>, inherents_pool: Arc<InherentsPool>) -> Self {
+	pub fn new(client: Arc<C>, inherents_pool: Arc<InherentsPool<<Block as traits::Block>::Extrinsic>>) -> Self {
 		Self {
 			client,
 			inherents_pool,
