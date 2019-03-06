@@ -106,6 +106,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -124,6 +125,7 @@ macro_rules! decl_module {
 			{}
 			{}
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -136,6 +138,7 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event $(<$dpeg:ident>)* () = default;
@@ -148,6 +151,7 @@ macro_rules! decl_module {
 			{ $vis fn deposit_event $(<$dpeg>)* () = default; }
 			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
+			{ $( $offchain )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -159,6 +163,7 @@ macro_rules! decl_module {
 		{}
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn deposit_event $(<$dpeg:ident>)* (
@@ -173,6 +178,7 @@ macro_rules! decl_module {
 			{ $vis fn deposit_event $(<$dpeg>)* ($( $param_name: $param ),* ) { $( $impl )* } }
 			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
+			{ $( $offchain )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -184,6 +190,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialise:tt )* }
 		{}
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -196,6 +203,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialise )* }
 			{ fn on_finalise( $( $param_name : $param ),* ) { $( $impl )* } }
+			{ $( $offchain )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -207,6 +215,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{}
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_initialise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -219,6 +228,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ fn on_initialise( $( $param_name : $param ),* ) { $( $impl )* } }
 			{ $( $on_finalise )* }
+			{ $( $offchain )* }
 			[ $($t)* ]
 			$($rest)*
 		);
@@ -230,6 +240,32 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		fn offchain_worker($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_initialise )* }
+			{ $( $on_finalise )* }
+			{ fn offchain_worker( $( $param_name : $param ),* ) { $( $impl )* } }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialise:tt )* }
+		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -244,6 +280,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
+			{ $( $offchain )* }
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
@@ -261,6 +298,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -281,6 +319,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -301,6 +340,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
@@ -315,6 +355,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
+			{ $( $offchain )* }
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
@@ -332,6 +373,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 		[ $($t:tt)* ]
 	) => {
 		decl_module!(@imp
@@ -343,6 +385,7 @@ macro_rules! decl_module {
 			{ $( $deposit_event )* }
 			{ $( $on_initialise )* }
 			{ $( $on_finalise )* }
+			{ $( $offchain )* }
 		);
 	};
 
@@ -480,6 +523,39 @@ macro_rules! decl_module {
 		}
 	};
 
+	(@impl_offchain
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		fn offchain_worker() { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			for $module<$trait_instance>
+		{
+			fn generate_extrinsics(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+		}
+	};
+
+	(@impl_offchain
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			for $module<$trait_instance>
+		{
+			fn generate_extrinsics($param: $param_ty) { $( $impl )* }
+		}
+	};
+
+	(@impl_offchain
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OffchainWorker<$trait_instance::BlockNumber>
+			for $module<$trait_instance>
+		{}
+	};
+
 	(@impl_function
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$origin_ty:ty;
@@ -558,6 +634,7 @@ macro_rules! decl_module {
 		{ $( $deposit_event:tt )* }
 		{ $( $on_initialise:tt )* }
 		{ $( $on_finalise:tt )* }
+		{ $( $offchain:tt )* }
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
@@ -584,6 +661,12 @@ macro_rules! decl_module {
 			@impl_on_finalise
 			$mod_type<$trait_instance: $trait_name>;
 			$( $on_finalise )*
+		}
+
+		decl_module! {
+			@impl_offchain
+			$mod_type<$trait_instance: $trait_name>;
+			$( $offchain )*
 		}
 
 		decl_module! {
