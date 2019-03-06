@@ -28,9 +28,6 @@ use srml_support::traits::Currency;
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
 	with_externalities(&mut ExtBuilder::default()
-		.nominate(true)
-		.sessions_per_era(1)
-		.session_length(1)
 		.build(),
 	|| {
 		assert_eq!(Staking::bonded(&11), Some(10)); // Account 11 is stashed and locked, and account 10 is the controller
@@ -290,7 +287,10 @@ fn rewards_should_work() {
 	// * rewards get recorded per session
 	// * rewards get paid per Era
 	// * Check that nominators are also rewarded
-	with_externalities(&mut ExtBuilder::default().nominate(true).build(),
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(3)
+		.sessions_per_era(3)
+	.build(),
 	|| {
 		let delay = 2;
 		// this test is only in the scope of one era. Since this variable changes
@@ -440,7 +440,12 @@ fn staking_should_work() {
 	// * new validators can be added to the default set
 	// * new ones will be chosen per era
 	// * either one can unlock the stash and back-down from being a validator via `chill`ing.
-	with_externalities(&mut ExtBuilder::default().session_length(1).build(), || {
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1)
+		.sessions_per_era(3)
+		.nominate(false)
+		.build(),
+	|| {
 		assert_eq!(Staking::era_length(), 3);
 		// remember + compare this along with the test.
 		assert_eq!(Session::validators(), vec![100, 20, 10]);
@@ -457,8 +462,8 @@ fn staking_should_work() {
 
 		// --- Block 1:
 		System::set_block_number(1);
-		
-		
+
+
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller)); // balance of 3 = 3000, stashed = 1500
 		
@@ -618,10 +623,6 @@ fn nominating_and_rewards_should_work() {
 		.validator_pool(true)
 		.build(),
 	|| {
-		// roll the first era
-		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
-
 		// initial validators 
 		// note that since the test is `.nominate(false)` 100 is also treated initially as a validators
 		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
@@ -651,9 +652,9 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Stash));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 20, 40]));
 	
-		System::set_block_number(2);
+		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 2);
+		assert_eq!(Staking::current_era(), 1);
 		// 10 and 20 have more votes, they will be chosen by phragmen.
 		assert_eq!(Session::validators(), vec![20, 10]);
 		// validators must have already received some rewards.
@@ -967,7 +968,10 @@ fn validator_payment_prefs_work() {
 	// Test that validator preferences are correctly honored
 	// Note: unstake threshold is being directly tested in slashing tests.
 	// This test will focus on validator payment.
-	with_externalities(&mut ExtBuilder::default().nominate(true).build(),
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(3)
+		.sessions_per_era(3)
+		.build(),
 	|| {
 		let session_reward = 10;
 		let validator_cut = 5;
@@ -1382,7 +1386,8 @@ fn phragmen_poc_works() {
 	// 
 	// NOTE: doesn't X/Y/Z's stash value make a difference here in phragmen? 
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(1).sessions_per_era(1).build(),
+		.nominate(false)
+		.build(),
 	|| {
 		// initial setup of 10 and 20, both validators + 100.
 		assert_eq!(Session::validators(), vec![100, 20, 10]);
@@ -1432,9 +1437,9 @@ fn phragmen_poc_works() {
 		// This is only because 30 has been bonded on the fly. 35 is the point, not 'own' Exposure.
 		assert_eq!(Staking::stakers(30).own, 0); 
 		assert_eq!(Staking::stakers(30).total, 0 + 35);
-		
-		assert_eq!(Staking::stakers(20).own, 2000);
-		assert_eq!(Staking::stakers(20).total, 2000 + 25);  
+		// same as above. +25 is the point
+		assert_eq!(Staking::stakers(20).own, 2010);
+		assert_eq!(Staking::stakers(20).total, 2010 + 25);  
 
 		// 30(Z) was supported by B-4 and C-6 with stake 20 and 15 respectively.
 		assert_eq!(Staking::stakers(30).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![15, 20]);
@@ -1450,7 +1455,9 @@ fn phragmen_poc_works() {
 fn switching_roles() {
 	// Show: It should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(1).build(),
+		.nominate(false)
+		.sessions_per_era(3)
+		.build(),
 	|| {
 		assert_eq!(Session::validators(), vec![100, 20, 10]);
 
@@ -1513,7 +1520,11 @@ fn switching_roles() {
 #[test]
 fn wrong_vote_is_null() {
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(1).sessions_per_era(1).validator_pool(true).build(),
+		.session_length(1)
+		.sessions_per_era(1)
+		.nominate(false)
+		.validator_pool(true)
+	.build(),
 	|| {
 		// from the first era onward, only two will be chosen
 		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);

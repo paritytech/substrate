@@ -198,14 +198,14 @@ impl ExtBuilder {
 					(21, 20, balance_factor * 2000),
 					(31, 30, balance_factor * 3000),
 					(41, 40, balance_factor * 4000),
-					// nominators 
+					// nominator
 					(101, 100, balance_factor * 500)
 				]
 			} else {
 				vec![
 					(11, 10, balance_factor * 1000), 
 					(21, 20, balance_factor * 2000),
-					// nominators 
+					// nominator
 					(101, 100, balance_factor * 500)
 				]
 			},

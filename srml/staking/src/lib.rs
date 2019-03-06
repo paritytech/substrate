@@ -575,7 +575,6 @@ impl<T: Trait> Module<T> {
 		let own_slash = own_slash - T::Currency::slash(v, own_slash).unwrap_or_default();
 		// The amount remaining that we can't slash from the validator, that must be taken from the nominators.
 		let rest_slash = slash - own_slash;
-		println!("Slashing!! {:?}", exposure);
 		if !rest_slash.is_zero() {
 			// The total to be slashed from the nominators.
 			let total = exposure.total - exposure.own;
@@ -624,7 +623,6 @@ impl<T: Trait> Module<T> {
 			}
 			safe_mul_rational(exposure.own)
 		};
-		println!("Rewarding {:?} by {:?}", who, validator_cut + off_the_table);
 		Self::make_payout(who, validator_cut + off_the_table);
 	}
 
@@ -711,6 +709,9 @@ impl<T: Trait> Module<T> {
 				exposure: Exposure { total: stash_balance, own: stash_balance, others: vec![] },
 			}
 		}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
+
+		// Just to be used when we are below minimum validator count
+		let original_candidates = candidates.clone();
 		
 		// 2- Collect the nominators with the associated votes.
 		// Also collect approval stake along the way.
@@ -731,11 +732,6 @@ impl<T: Trait> Module<T> {
 				load : Perquill::zero(),
 			}
 		}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
-
-		println!("+++ Selecting candidates {} / {} ", candidates.len(), nominations.len());
-		println!("+++ candidates {:?} ", candidates);
-		println!("+++ nominaotions {:?} ", nominations);
-		
 		
 		// 3- optimization: 
 		// candidates who have 0 stake => have no votes or all null-votes. best to kick them out not.
@@ -810,57 +806,47 @@ impl<T: Trait> Module<T> {
 					}
 				}
 			}
-		}
-		else { // end of `if candidates.len() > rounds`
+		} // if candidates.len() > rounds 
+		else {
 			if candidates.len() > Self::minimum_validator_count() as usize {
 				// if we don't have enough candidates, just choose all that have some vote.
-				println!("++ Code yellow. Choosing all candidates");
 				elected_candidates = candidates;
 			}
 			else {
 				// if we have less than minimum, use the previous validator set.
-				println!("Code red. choosing previous candidates");
-				elected_candidates = <Validators<T>>::enumerate().map(|(who, _)| {
-					let exposure = Self::stakers(&who);
-						Candidate {
-							who,
-							approval_stake: BalanceOf::<T>::zero(),		// don't care
-							score: Perquill::zero(), 					// don't care
-							exposure,
-						}
-				}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
+				elected_candidates = original_candidates;
 			}
 		}		
 
 		// Figure out the minimum stake behind a slot.
 		let slot_stake;
 		if let Some(min_candidate) = elected_candidates.iter().min_by_key(|c| c.exposure.total) {
-			slot_stake = min_candidate.exposure.total.clone();
-
-			// Clear Stakers and reduce their slash_count.
-			for v in <session::Module<T>>::validators().iter() {
-				<Stakers<T>>::remove(v);
-				let slash_count = <SlashCount<T>>::take(v);
-				if slash_count > 1 {
-					<SlashCount<T>>::insert(v, slash_count - 1);
-				}
-			}
-
-			// Populate Stakers.
-			for candidate in &elected_candidates {
-				<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
-			}
-
-			// Set the new validator set.
-			<session::Module<T>>::set_validators(
-				&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
-			);
-
+			slot_stake = min_candidate.exposure.total;
 		}
 		else {
-			// This will only happen in the very first era.
+			// This will only happen in the very first era. 
 			slot_stake = BalanceOf::<T>::zero();
 		}
+
+		// Clear Stakers and reduce their slash_count.
+		for v in <session::Module<T>>::validators().iter() {
+			<Stakers<T>>::remove(v);
+			let slash_count = <SlashCount<T>>::take(v);
+			if slash_count > 1 {
+				<SlashCount<T>>::insert(v, slash_count - 1);
+			}
+		}
+
+		// Populate Stakers.
+		for candidate in &elected_candidates {
+			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
+		}
+
+		// Set the new validator set.
+		<session::Module<T>>::set_validators(
+			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
+		);
+		
 		<SlotStake<T>>::put(&slot_stake);
 		slot_stake
 	}
