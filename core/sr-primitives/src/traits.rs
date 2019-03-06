@@ -27,9 +27,9 @@ use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{
-	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+pub use num_traits::{
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	CheckedShl, CheckedShr, Saturating
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -126,59 +126,6 @@ pub trait BlockNumberToHash {
 	}
 }
 
-/// Charge bytes fee trait
-pub trait ChargeBytesFee<AccountId> {
-	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return Ok iff the payment was successful.
-	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-/// Charge fee trait
-pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
-	/// The type of fee amount.
-	type Amount;
-
-	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
-	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Refund `amount` of previous charged fees from `transactor`. Return Ok iff the refund was successful.
-	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
-/// Transfer fungible asset trait
-pub trait TransferAsset<AccountId> {
-	/// The type of asset amount.
-	type Amount;
-
-	/// Transfer asset from `from` account to `to` account with `amount` of asset.
-	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Remove asset from `who` account by deducing `amount` in the account balances.
-	fn remove_from(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Add asset to `who` account by increasing `amount` in the account balances.
-	fn add_to(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
-impl<T> ChargeBytesFee<T> for () {
-	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> ChargeFee<T> for () {
-	type Amount = ();
-
-	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> TransferAsset<T> for () {
-	type Amount = ();
-
-	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn remove_from(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn add_to(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-}
-
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
@@ -236,6 +183,7 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord +
 	HasCompact
 {}
@@ -253,6 +201,7 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord +
 	HasCompact
 > SimpleArithmetic for T {}

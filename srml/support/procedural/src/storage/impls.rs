@@ -217,7 +217,7 @@ impl<'a> Impls<'a> {
 		// generator for linked map
 		let helpers = quote! {
 			/// Linkage data of an element (it's successor and predecessor)
-			#[derive(#scrate::parity_codec_derive::Encode, #scrate::parity_codec_derive::Decode)]
+			#[derive(#scrate::codec::Encode, #scrate::codec::Decode)]
 			pub(crate) struct #linkage<Key> {
 				/// Previous element key in storage (None for the first element)
 				pub previous: Option<Key>,
