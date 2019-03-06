@@ -35,7 +35,7 @@ use runtime_primitives::traits::{
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ApplyError;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use inherents::InherentData;
+use inherents::{InherentData, pool::InherentsPool};
 
 /// Build new blocks.
 pub trait BlockBuilder<Block: BlockT> {
@@ -101,6 +101,8 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 		runtime_api.inherent_extrinsics_with_context(at, ExecutionContext::BlockConstruction, inherent_data)?
 			.into_iter().try_for_each(|i| block_builder.push(i))?;
 
+		dbg!("Inherent data pushed");
+
 		build_ctx(&mut block_builder);
 
 		block_builder.bake().map_err(Into::into)
@@ -113,6 +115,8 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	pub client: Arc<C>,
 	/// The transaction pool.
 	pub transaction_pool: Arc<TransactionPool<A>>,
+	/// The inherents pool
+	pub inherents_pool: Arc<InherentsPool>,
 }
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
@@ -142,6 +146,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
+			inherents_pool: self.inherents_pool.clone(),
 			now: Box::new(time::Instant::now),
 		};
 
@@ -156,6 +161,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
+	inherents_pool: Arc<InherentsPool>,
 	now: Box<Fn() -> time::Instant>,
 }
 
@@ -185,10 +191,13 @@ impl<Block, C, A> Proposer<Block, C, A>	where
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>,
 {
-	fn propose_with(&self, inherent_data: InherentData, deadline: time::Instant)
+	fn propose_with(&self, mut inherent_data: InherentData, deadline: time::Instant)
 		-> Result<<C as AuthoringApi>::Block, error::Error>
 	{
 		use runtime_primitives::traits::BlakeTwo256;
+
+		// Fill up the inherent data from the queue
+		self.inherents_pool.drain_to(&mut inherent_data);
 
 		/// If the block is full we will attempt to push at most
 		/// this number of transactions before quitting for real.
@@ -298,6 +307,7 @@ mod tests {
 		let proposer_factory = ProposerFactory {
 			client: client.clone(),
 			transaction_pool: txpool.clone(),
+			inherents_pool: Default::default(),
 		};
 
 		let mut proposer = proposer_factory.init(
@@ -320,4 +330,35 @@ mod tests {
 		assert_eq!(txpool.ready().count(), 2);
 	}
 
+	#[test]
+	fn should_include_inherents_from_the_pool() {
+		// given
+		let client = Arc::new(test_client::new());
+		let chain_api = transaction_pool::ChainApi::new(client.clone());
+		let txpool = Arc::new(TransactionPool::new(Default::default(), chain_api));
+		let inpool = Arc::new(InherentsPool::default());
+
+		let proposer_factory = ProposerFactory {
+			client: client.clone(),
+			transaction_pool: txpool.clone(),
+			inherents_pool: inpool.clone(),
+		};
+
+		let mut data = InherentData::new();
+		let id: [u8; 8] = *b"testdata";
+		data.put_data(id, &12u32).unwrap();
+		inpool.add(data);
+
+		let proposer = proposer_factory.init(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			&[]
+		).unwrap();
+
+		// when
+		let deadline = time::Duration::from_secs(3);
+		let block = proposer.propose(Default::default(), deadline).unwrap();
+
+		// then
+		assert_eq!(block.extrinsics().len(), 1);
+	}
 }

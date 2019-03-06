@@ -83,6 +83,7 @@ pub struct Transfer {
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<Ed25519AuthorityId>),
 	Transfer(Transfer, Ed25519Signature),
+	IncludeData(Vec<u8>),
 }
 
 #[cfg(feature = "std")]
@@ -106,6 +107,7 @@ impl BlindCheckable for Extrinsic {
 					Err(runtime_primitives::BAD_SIGNATURE)
 				}
 			},
+			Extrinsic::IncludeData(data) => Ok(Extrinsic::IncludeData(data)),
 		}
 	}
 }
@@ -290,8 +292,12 @@ cfg_if! {
 					system::finalise_block()
 				}
 
-				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-					vec![]
+				fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+					if !data.is_empty() {
+						vec![Extrinsic::IncludeData(data.encode())]
+					} else {
+						vec![]
+					}
 				}
 
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
@@ -381,8 +387,12 @@ cfg_if! {
 					system::finalise_block()
 				}
 
-				fn inherent_extrinsics(_data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
-					vec![]
+				fn inherent_extrinsics(data: InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+					if !data.is_empty() {
+						vec![Extrinsic::IncludeData(data.encode())]
+					} else {
+						vec![]
+					}
 				}
 
 				fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {

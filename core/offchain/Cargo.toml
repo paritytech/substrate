@@ -12,12 +12,12 @@ edition = "2018"
 client = { package = "substrate-client", path = "../../core/client" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }
 futures = "0.1"
+inherents = { package = "substrate-inherents", path = "../../core/inherents" }
 log = "0.4"
-parity-codec = "3.0"
-parity-codec-derive = "3.0"
+offchain-primitives = { package = "substrate-offchain-primitives", path = "./primitives" }
+parity-codec = { version = "3.1", features = ["derive"] }
 primitives = { package = "substrate-primitives", path = "../../core/primitives" }
 runtime_primitives = { package = "sr-primitives", path = "../../core/sr-primitives" }
-sr-api-macros = { path = "../sr-api-macros" }
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]

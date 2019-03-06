@@ -248,7 +248,7 @@ pub trait OffchainWorker<C: Components> {
 
 impl<C: Components> OffchainWorker<Self> for C where
 	ComponentClient<C>: ProvideRuntimeApi,
-	<ComponentClient<C> as ProvideRuntimeApi>::Api: runtime_api::OffchainWorker<ComponentBlock<C>>,
+	<ComponentClient<C> as ProvideRuntimeApi>::Api: offchain::OffchainWorkerApi<ComponentBlock<C>>,
 {
 	fn offchain_workers(
 		number: &FactoryBlockNumber<C::Factory>,

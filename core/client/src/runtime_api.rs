@@ -136,11 +136,5 @@ decl_runtime_apis! {
 		/// Validate the given transaction.
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
-
-	/// The offchain worker api.
-	pub trait OffchainWorker {
-		/// Starts the off-chain task for given block number.
-		fn generate_extrinsics(number: <<Block as BlockT>::Header as HeaderT>::Number);
-	}
 }
 

@@ -28,19 +28,17 @@ pub mod chain_ops;
 use std::io;
 use std::net::SocketAddr;
 use std::collections::HashMap;
-#[doc(hidden)]
-pub use std::{ops::Deref, result::Result, sync::Arc};
-use log::{info, warn, debug};
-use futures::prelude::*;
-use keystore::Store as Keystore;
+
 use client::BlockchainEvents;
+use exit_future::Signal;
+use futures::prelude::*;
+use inherents::pool::InherentsPool;
+use keystore::Store as Keystore;
+use log::{info, warn, debug};
+use parity_codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
-use exit_future::Signal;
-#[doc(hidden)]
-pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
-use parity_codec::{Encode, Decode};
 use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};
@@ -60,7 +58,11 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 };
 use components::{StartRPC, MaintainTransactionPool, OffchainWorker};
 #[doc(hidden)]
+pub use std::{ops::Deref, result::Result, sync::Arc};
+#[doc(hidden)]
 pub use network::OnDemand;
+#[doc(hidden)]
+pub use tokio::runtime::TaskExecutor;
 
 const DEFAULT_PROTOCOL_ID: &'static str = "sup";
 
@@ -69,6 +71,7 @@ pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
+	inherents_pool: Arc<InherentsPool>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
@@ -167,7 +170,8 @@ impl<Components: components::Components> Service<Components> {
 		)?;
 		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
-		let offchain_workers = Arc::new(offchain::OffchainWorkers::new(client.clone()));
+		let inherents_pool = Arc::new(InherentsPool::default());
+		let offchain_workers = Arc::new(offchain::OffchainWorkers::new(client.clone(), inherents_pool.clone()));
 
 		{
 			// block notifications
@@ -312,6 +316,7 @@ impl<Components: components::Components> Service<Components> {
 			client,
 			network: Some(network),
 			transaction_pool,
+			inherents_pool,
 			signal: Some(signal),
 			keystore,
 			config,
@@ -352,9 +357,14 @@ impl<Components> Service<Components> where Components: components::Components {
 		self.network.as_ref().expect("self.network always Some").clone()
 	}
 
-	/// Get shared extrinsic pool instance.
+	/// Get shared transaction pool instance.
 	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
 		self.transaction_pool.clone()
+	}
+
+	/// Get shared inherents pool instance.
+	pub fn inherents_pool(&self) -> Arc<InherentsPool> {
+		self.inherents_pool.clone()
 	}
 
 	/// Get shared keystore.

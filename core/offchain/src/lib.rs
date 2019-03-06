@@ -24,8 +24,9 @@ use std::{
 	sync::Arc,
 };
 
-use client::runtime_api::{ApiExt, OffchainWorker};
+use client::runtime_api::ApiExt;
 use futures::Future;
+use inherents::pool::InherentsPool;
 use log::{info, debug, warn};
 use parity_codec::Decode;
 use primitives::{ExecutionContext, OffchainExt};
@@ -35,17 +36,11 @@ use runtime_primitives::{
 };
 use transaction_pool::txpool::{Pool, ChainApi};
 
-// TODO [ToDr] move the declaration to separate primitives crate with std/no-std options.
-// decl_runtime_apis! {
-// 	/// The offchain worker api.
-// 	pub trait OffchainWorkerApi {
-// 		/// Starts the off-chain task for given block number.
-// 		fn generate_extrinsics(number: <<Block as BlockT>::Header as HeaderT>::Number);
-// 	}
-// }
+pub use offchain_primitives::OffchainWorkerApi;
 
 struct Api<A: ChainApi> {
-	pool: Arc<Pool<A>>,
+	transaction_pool: Arc<Pool<A>>,
+	inherents_pool: Arc<InherentsPool>,
 	at: BlockId<A::Block>,
 }
 
@@ -60,8 +55,10 @@ impl<A: ChainApi> OffchainExt for Api<A> {
 			},
 		};
 
+		// TODO [ToDr] Move to inherent data
+
 		// TODO [ToDr] Call API recursively panics!
-		match self.pool.submit_one(&self.at, xt) {
+		match self.transaction_pool.submit_one(&self.at, xt) {
 			Ok(hash) => debug!("[{:?}] Offchain transaction added to the pool.", hash),
 			Err(err) => warn!("Incorrect offchain transaction: {:?}", err),
 		}
@@ -72,14 +69,16 @@ impl<A: ChainApi> OffchainExt for Api<A> {
 #[derive(Debug)]
 pub struct OffchainWorkers<C, Block> {
 	client: Arc<C>,
+	inherents_pool: Arc<InherentsPool>,
 	_block: PhantomData<Block>,
 }
 
 impl<C, Block> OffchainWorkers<C, Block> {
 	/// Creates new `OffchainWorkers`.
-	pub fn new(client: Arc<C>) -> Self {
+	pub fn new(client: Arc<C>, inherents_pool: Arc<InherentsPool>) -> Self {
 		Self {
 			client,
+			inherents_pool,
 			_block: PhantomData,
 		}
 	}
@@ -88,7 +87,7 @@ impl<C, Block> OffchainWorkers<C, Block> {
 impl<C, Block> OffchainWorkers<C, Block> where
 	Block: traits::Block,
 	C: ProvideRuntimeApi,
-	C::Api: OffchainWorker<Block>,
+	C::Api: OffchainWorkerApi<Block>,
 {
 	/// Start the offchain workers after given block.
 	pub fn on_block_imported<A>(
@@ -102,10 +101,11 @@ impl<C, Block> OffchainWorkers<C, Block> where
 		let at = BlockId::number(*number);
 		debug!("Checking offchain workers at {:?}", at);
 
-		if let Ok(true) = runtime.has_api::<OffchainWorker<Block>>(&at) {
+		if let Ok(true) = runtime.has_api::<OffchainWorkerApi<Block>>(&at) {
 			debug!("Running offchain workers at {:?}", at);
 			let api = Box::new(Api {
-				pool: pool.clone(),
+				transaction_pool: pool.clone(),
+				inherents_pool: self.inherents_pool.clone(),
 				at: at.clone(),
 			});
 			runtime.generate_extrinsics_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();

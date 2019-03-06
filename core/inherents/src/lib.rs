@@ -43,6 +43,9 @@ use parking_lot::RwLock;
 #[cfg(feature = "std")]
 use std::{sync::Arc, format};
 
+#[cfg(feature = "std")]
+pub mod pool;
+
 pub use runtime_primitives::RuntimeString;
 
 /// An identifier for an inherent.
@@ -59,6 +62,11 @@ impl InherentData {
 	/// Create a new instance.
 	pub fn new() -> Self {
 		Self::default()
+	}
+
+	/// Returns true if there are no inherents in this object.
+	pub fn is_empty(&self) -> bool {
+		self.data.is_empty()
 	}
 
 	/// Put data for an inherent into the internal storage.
@@ -114,6 +122,14 @@ impl InherentData {
 					.map(Some),
 			None => Ok(None)
 		}
+	}
+
+	/// Merge the `InherentData` together with some other instance.
+	///
+	/// NOTE all inherents existing in both sets are going to be
+	/// replaced with new ones coming from `data`.
+	pub fn merge(&mut self, mut data: InherentData) {
+		self.data.append(&mut data.data);
 	}
 }
 
@@ -441,8 +457,25 @@ mod tests {
 	#[test]
 	fn adding_same_inherent_returns_an_error() {
 		let mut data = InherentData::new();
+		assert!(data.is_empty());
 		data.put_data(TEST_INHERENT_0, &8).unwrap();
+		assert!(!data.is_empty());
 		assert!(data.put_data(TEST_INHERENT_0, &10).is_err());
+	}
+
+	#[test]
+	fn should_merge_two_inherent_datum() {
+		let mut data = InherentData::new();
+		data.put_data(TEST_INHERENT_0, &8u32).unwrap();
+
+		let mut data2 = InherentData::new();
+		data2.put_data(TEST_INHERENT_0, &12u32).unwrap();
+		data2.put_data(TEST_INHERENT_1, &12u32).unwrap();
+
+		data.merge(data2);
+
+		assert_eq!(data.get_data(&TEST_INHERENT_0).unwrap(), Some(12u32));
+		assert_eq!(data.get_data(&TEST_INHERENT_1).unwrap(), Some(12u32));
 	}
 
 	#[derive(Clone)]
