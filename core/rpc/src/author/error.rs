@@ -63,6 +63,41 @@ impl From<Error> for rpc::Error {
 				message: e.description().into(),
 				data: Some(format!("{:?}", e).into()),
 			},
+			Error(ErrorKind::Pool(txpool::error::ErrorKind::InvalidTransaction(code)), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 3),
+				message: "Invalid Transaction".into(),
+				data: Some(code.into()),
+			},
+			Error(ErrorKind::Pool(txpool::error::ErrorKind::UnknownTransactionValidity(code)), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 4),
+				message: "Unknown Transaction Validity".into(),
+				data: Some(code.into()),
+			},
+			Error(ErrorKind::Pool(txpool::error::ErrorKind::TemporarilyBanned), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 5),
+				message: "Transaction is temporarily banned".into(),
+				data: None,
+			},
+			Error(ErrorKind::Pool(txpool::error::ErrorKind::AlreadyImported(hash)), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 6),
+				message: "Transaction Already Imported".into(),
+				data: Some(format!("{:?}", hash).into()),
+			},
+			Error(ErrorKind::Pool(txpool::error::ErrorKind::TooLowPriority(old, new)), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 7),
+				message: format!("Priority is too low: ({} vs {})", old, new),
+				data: Some("The transaction has too low priority to replace another transaction already in the pool.".into()),
+			},
+			Error(ErrorKind::Pool(txpool::error::ErrorKind::CycleDetected), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 8),
+				message: "Cycle Detected".into(),
+				data: None,
+			},
+			Error(ErrorKind::Pool(txpool::error::ErrorKind::ImmediatelyDropped), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 9),
+				message: "Immediately Dropped" .into(),
+				data: Some("The transaction couldn't enter the pool because of the limit".into()),
+			},
 			e => errors::internal(e),
 		}
 	}
