@@ -25,32 +25,17 @@ use rstd::{vec::Vec, ops::Deref};
 use hash_db::Hasher;
 use primitives::Blake2Hasher;
 
-use cfg_if::cfg_if;
-
-cfg_if! {
-	if #[cfg(feature = "wasm-nice-panic-message")] {
-		fn wasm_nice_panic_message(info: &PanicInfo) -> bool {
-			use core::fmt::Write;
-			let mut message = rstd::alloc::string::String::new();
-			if write!(message, "{}", info).is_ok() {
-				unsafe { extern_functions_host_impl::ext_print_utf8(message.as_ptr() as *const u8, message.len() as u32); }
-				true
-			} else {
-				false
-			}
-		}
-	} else {
-		fn wasm_nice_panic_message(_: &PanicInfo) -> bool {
-			false
-		}
-	}
-}
-
 #[panic_handler]
 #[no_mangle]
 pub fn panic(info: &PanicInfo) -> ! {
 	unsafe {
-		if !wasm_nice_panic_message(info) {
+		#[cfg(feature = "wasm-nice-panic-message")]
+		{
+			let message = rstd::alloc::format!("{}", info);
+			extern_functions_host_impl::ext_print_utf8(message.as_ptr() as *const u8, message.len() as u32);
+		}
+		#[cfg(not(feature = "wasm-nice-panic-message"))]
+		{
 			if let Some(loc) = info.location() {
 				extern_functions_host_impl::ext_print_utf8(loc.file().as_ptr() as *const u8, loc.file().len() as u32);
 				extern_functions_host_impl::ext_print_num(loc.line() as u64);
