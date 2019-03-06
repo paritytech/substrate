@@ -482,5 +482,3 @@ cfg_if! {
 		}
 	}
 }
-
-parachain::register_validate_block!(Block, system::BlockExecutor);

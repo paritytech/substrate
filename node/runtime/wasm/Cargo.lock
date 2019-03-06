@@ -663,7 +663,6 @@ dependencies = [
  "srml-finality-tracker 0.1.0",
  "srml-grandpa 0.1.0",
  "srml-indices 0.1.0",
- "srml-parachain 0.1.0",
  "srml-session 0.1.0",
  "srml-staking 0.1.0",
  "srml-sudo 0.1.0",
@@ -1487,17 +1486,6 @@ dependencies = [
  "serde_derive 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
-]
-
-[[package]]
-name = "srml-parachain"
-version = "0.1.0"
-dependencies = [
- "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 0.1.0",
- "sr-primitives 0.1.0",
- "sr-std 0.1.0",
- "srml-executive 0.1.0",
 ]
 
 [[package]]

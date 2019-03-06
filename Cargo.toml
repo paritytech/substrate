@@ -71,7 +71,6 @@ members = [
 	"srml/grandpa",
 	"srml/indices",
 	"srml/metadata",
-	"srml/parachain",
 	"srml/session",
 	"srml/staking",
 	"srml/sudo",
