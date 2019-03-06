@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -60,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 32,
-	impl_version: 32,
+	spec_version: 34,
+	impl_version: 34,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -99,19 +99,10 @@ impl indices::Trait for Runtime {
 	type Event = Event;
 }
 
-impl balances::Trait<balances::Instance1> for Runtime {
-	type Balance = Balance;
-	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
-	type OnNewAccount = Indices;
-	type EnsureAccountLiquid = (Staking, Democracy);
-	type Event = Event;
-}
-
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = (((Staking, Contract), Democracy), Session);
+	type OnFreeBalanceZero = ((Staking, Contract), Session);
 	type OnNewAccount = Indices;
-	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
 }
 
@@ -124,7 +115,7 @@ impl consensus::Trait for Runtime {
 	type Log = Log;
 	type SessionKey = SessionKey;
 
-	// the aura module handles offline-reports internally
+	// The Aura module handles offline-reports internally
 	// rather than using an explicit report system.
 	type InherentOfflineReport = ();
 }
@@ -194,24 +185,14 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
-impl example::Trait<example::Instance1> for Runtime {
-	type Log = Log;
-	type Origin = Origin;
-	type Amount = ();
-	type Event = Event;
-}
-
-impl example::Trait<example::Instance2> for Runtime {
-	type Log = Log;
-	type Origin = Origin;
-	type Amount = ();
-	type Event = Event;
-}
-
 impl grandpa::Trait for Runtime {
 	type SessionKey = SessionKey;
 	type Log = Log;
 	type Event = Event;
+}
+
+impl finality_tracker::Trait for Runtime {
+	type OnFinalizationStalled = grandpa::SyncedAuthorities<Runtime>;
 }
 
 construct_runtime!(
@@ -233,14 +214,12 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
+		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
 		Fees: fees::{Module, Storage, Config<T>, Event<T>},
-		BalancesInstance1: balances::<Instance1>::{Event<T, I>},
-		Example: example::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Example2: example::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
 	}
 );
 
@@ -320,9 +299,23 @@ impl_runtime_apis! {
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-				_=> None
+				_ => None
 			}) {
 				if let Some(change) = Grandpa::scrape_digest_change(log) {
+					return Some(change);
+				}
+			}
+			None
+		}
+
+		fn grandpa_forced_change(digest: &DigestFor<Block>)
+			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
+		{
+			for log in digest.logs.iter().filter_map(|l| match l {
+				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
+				_ => None
+			}) {
+				if let Some(change) = Grandpa::scrape_digest_forced_change(log) {
 					return Some(change);
 				}
 			}

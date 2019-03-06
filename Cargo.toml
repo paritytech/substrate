@@ -68,6 +68,7 @@ members = [
 	"srml/example",
 	"srml/executive",
 	"srml/fees",
+	"srml/finality-tracker",
 	"srml/grandpa",
 	"srml/indices",
 	"srml/metadata",

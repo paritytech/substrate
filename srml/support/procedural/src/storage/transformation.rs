@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -267,7 +267,6 @@ fn decl_store_extra_genesis(
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
 						<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
 					}}
@@ -277,7 +276,6 @@ fn decl_store_extra_genesis(
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
 							<#name<#traitinstance, #instance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
@@ -419,11 +417,27 @@ fn decl_store_extra_genesis(
 					let mut r: #scrate::runtime_primitives::StorageOverlay = Default::default();
 					let mut c: #scrate::runtime_primitives::ChildrenStorageOverlay = Default::default();
 
-					#builders
+					{
+						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
+						#builders
+					}
 
 					#scall(&mut r, &mut c, &self);
 
 					Ok((r, c))
+				}
+				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+					use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+					let storage = (RefCell::new(r), PhantomData::<Self>::default());
+
+					#builders
+
+					let r = storage.0.into_inner();
+
+					#scall(r, c, &self);
+
+					Ok(())
 				}
 			}
 		}
