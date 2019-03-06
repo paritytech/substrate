@@ -8,6 +8,10 @@ edition = "2018"
 substrate-primitives = { version = "*", path = "../core/primitives" }
 rand = "0.6"
 clap = { version = "~2.32", features = ["yaml"] }
+substrate-bip39 = "0.2.0"
+tiny-bip39 = "0.6.0"
+schnorrkel = "0.0.0"
+rustc-hex = "2.0"
 
 [features]
 bench = []

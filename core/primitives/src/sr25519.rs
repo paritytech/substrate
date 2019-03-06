@@ -21,10 +21,12 @@
 use base58::{FromBase58, ToBase58};
 use blake2_rfc;
 use rand::rngs::OsRng;
-use schnorrkel::{signing_context, Keypair, MiniSecretKey, PublicKey};
+use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey};
+use substrate_bip39::mini_secret_from_entropy;
 use sha2::Sha512;
 use parity_codec::{Encode, Decode};
 use crate::hash::H512;
+use bip39::{Mnemonic, Language};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
@@ -159,6 +161,36 @@ impl AsRef<Pair> for Pair {
 	}
 }
 
+impl From<schnorrkel::MiniSecretKey> for Pair {
+	fn from(sec: schnorrkel::MiniSecretKey) -> Pair {
+		Pair(sec.expand_to_keypair::<Sha512>())
+	}
+}
+
+impl From<schnorrkel::SecretKey> for Pair {
+	fn from(sec: schnorrkel::SecretKey) -> Pair {
+		Pair(Keypair::from(sec))
+	}
+}
+
+impl From<schnorrkel::Keypair> for Pair {
+	fn from(p: schnorrkel::Keypair) -> Pair {
+		Pair(p)
+	}
+}
+
+impl From<Pair> for schnorrkel::Keypair {
+	fn from(p: Pair) -> schnorrkel::Keypair {
+		p.0
+	}
+}
+
+impl AsRef<schnorrkel::Keypair> for Pair {
+	fn as_ref(&self) -> &schnorrkel::Keypair {
+		&self.0
+	}
+}
+
 impl ::std::fmt::Display for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
@@ -170,6 +202,13 @@ impl ::std::fmt::Debug for Public {
 		let s = self.to_ss58check();
 		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
+}
+
+pub enum DeriveJunction {
+	SoftRaw([u8; 32]),
+	HardRaw([u8; 32]),
+	SoftIndex(u64),
+	HardIndex(u64),
 }
 
 impl Pair {
@@ -188,6 +227,27 @@ impl Pair {
 			.expect("32 bytes can always build a key; qed");
 		let kp = mini_key.expand_to_keypair::<Sha512>();
 		Pair(kp)
+	}
+
+	/// Make a new key pair from a seed phrase.
+	/// This is generated using schnorrkel's Mini-Secret-Keys.
+	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
+	pub fn from_entropy(entropy: &[u8], password: Option<&str>) -> Pair {
+		let key = mini_secret_from_entropy(entropy, password.unwrap_or(""))
+			.expect("32 bytes can always build a key; qed");
+		Pair(key.expand_to_keypair::<Sha512>())
+	}
+
+	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
+	pub fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Pair> {
+		Mnemonic::from_phrase(phrase, Language::English)
+			.ok()
+			.map(|m| Self::from_entropy(m.entropy(), password))
+	}
+
+	/// Recursively derive a child key with some given path.
+	pub fn derive(&self, _path: &[DeriveJunction]) -> Pair {
+		unimplemented!()
 	}
 
 	/// Sign a message.
