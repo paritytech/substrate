@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -292,6 +292,14 @@ impl<B: BlockT> PendingJustifications<B> {
 		self.previous_requests.retain(|(h, n), _| roots.contains(&(h, n, &())));
 
 		Ok(())
+	}
+
+	/// Clear all data.
+	fn clear(&mut self) {
+		self.justifications = ForkTree::new();
+		self.pending_requests.clear();
+		self.peer_requests.clear();
+		self.previous_requests.clear();
 	}
 }
 
@@ -689,6 +697,11 @@ impl<B: BlockT> ChainSync<B> {
 		);
 
 		self.justifications.dispatch(&mut self.peers, protocol);
+	}
+
+	/// Clears all pending justification requests.
+	pub fn clear_justification_requests(&mut self) {
+		self.justifications.clear();
 	}
 
 	pub fn justification_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {

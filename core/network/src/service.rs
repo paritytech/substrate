@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -99,6 +99,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 			let reason = Severity::Bad(format!("Invalid justification provided for #{}", hash).to_string());
 			let _ = self.network_sender.send(NetworkMsg::ReportPeer(who, reason));
 		}
+	}
+
+	fn clear_justification_requests(&self) {
+		let _ = self.protocol_sender.send(ProtocolMsg::ClearJustificationRequests);
 	}
 
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
@@ -531,8 +535,14 @@ fn run_thread<B: BlockT + 'static>(
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
 						network_service_2.lock().ban_node(who)
 					},
-					Severity::Useless(_) => network_service_2.lock().drop_node(who),
-					Severity::Timeout => network_service_2.lock().drop_node(who),
+					Severity::Useless(message) => {
+						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
+						network_service_2.lock().drop_node(who)
+					},
+					Severity::Timeout => {
+						info!(target: "sync", "Dropping {:?} because it timed out", who);
+						network_service_2.lock().drop_node(who)
+					},
 				}
 			},
 		}
