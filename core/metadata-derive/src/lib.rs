@@ -27,7 +27,7 @@ use syn::{DeriveInput, Generics, Ident, GenericParam};
 
 mod encode;
 
-#[proc_macro_derive(EncodeMetadata)]
+#[proc_macro_derive(EncodeMetadata, attributes(codec))]
 pub fn encode_derive(input: TokenStream) -> TokenStream {
 	let input: DeriveInput = match syn::parse(input) {
 		Ok(input) => input,

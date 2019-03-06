@@ -18,7 +18,6 @@
 
 #![cfg(test)]
 #![allow(dead_code)]
-#![feature(custom_attribute)]
 
 extern crate substrate_metadata;
 extern crate substrate_metadata_derive;
