@@ -162,18 +162,18 @@ mod tests {
 	#[test]
 	fn commit_should_work() {
 		let mut ext = BasicExternalities::default();
-        let ext = &mut ext as &mut Externalities<Blake2Hasher>;
-        ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
-        ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
-        ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-        const ROOT: [u8; 32] = hex!("0b33ed94e74e0f8e92a55923bece1ed02d16cf424e124613ddebc53ac3eeeabe");
-        assert_eq!(ext.storage_root(), H256::from(ROOT));
+		let ext = &mut ext as &mut Externalities<Blake2Hasher>;
+		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
+		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
+		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
+		const ROOT: [u8; 32] = hex!("0b33ed94e74e0f8e92a55923bece1ed02d16cf424e124613ddebc53ac3eeeabe");
+		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 
 	#[test]
 	fn set_and_retrieve_code() {
 		let mut ext = BasicExternalities::default();
-        let ext = &mut ext as &mut Externalities<Blake2Hasher>;
+		let ext = &mut ext as &mut Externalities<Blake2Hasher>;
 
 		let code = vec![1, 2, 3];
 		ext.set_storage(CODE.to_vec(), code.clone());
