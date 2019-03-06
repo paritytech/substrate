@@ -531,7 +531,7 @@ mod tests {
 				}
 			]);
 		});
-		
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -543,7 +543,7 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
 			// 111 - 69 - 1 - 10 - 1 = 30
-			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1); 
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1);
 			// 100 + 69 + 10 - 1     = 178
 			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 			assert_eq!(System::events(), vec![
@@ -641,7 +641,7 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
 			// 111 - 69 - 1 - 10 - 1 = 30
-			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1); 
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1);
 			// 100 + 69 + 10 - 1     = 178
 			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 		});
@@ -896,7 +896,7 @@ mod tests {
 	#[test]
 	fn full_wasm_block_import_works_with_changes_trie() {
 		let block1 = changes_trie_block();
-		
+
 		let mut t = new_test_ext(COMPACT_CODE, true);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 

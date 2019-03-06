@@ -295,9 +295,8 @@ impl_runtime_apis! {
 	}
 
 	impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
-		fn generate_extrinsics(number: NumberFor<Block>) {
-			use runtime_primitives::traits::OffchainWorker;
-			timestamp::Module::<Self>::generate_extrinsics(number)
+		fn offchain_worker(number: NumberFor<Block>) {
+			Executive::offchain_worker(number)
 		}
 	}
 

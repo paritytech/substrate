@@ -23,7 +23,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	OnInitialise, Hash, As, Digest};
+	OnInitialise, Hash, As, Digest, OffchainWorker};
 use srml_support::{Dispatchable, traits::ChargeBytesFee};
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -60,7 +60,7 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Payment: ChargeBytesFee<System::AccountId>,
-	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber>,
+	AllModules: OnInitialise<System::BlockNumber> + OnFinalise<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
@@ -271,6 +271,11 @@ impl<
 				INVALID_INDEX
 			})
 		}
+	}
+
+	/// Start an offchain worker and generate extrinsics.
+	pub fn offchain_worker(n: System::BlockNumber) {
+		<AllModules as OffchainWorker<System::BlockNumber>>::generate_extrinsics(n)
 	}
 }
 

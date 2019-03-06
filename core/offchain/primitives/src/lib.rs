@@ -26,6 +26,6 @@ decl_runtime_apis! {
 	/// The offchain worker api.
 	pub trait OffchainWorkerApi {
 		/// Starts the off-chain task for given block number.
-		fn generate_extrinsics(number: <<Block as BlockT>::Header as HeaderT>::Number);
+		fn offchain_worker(number: <<Block as BlockT>::Header as HeaderT>::Number);
 	}
 }

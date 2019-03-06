@@ -662,6 +662,7 @@ dependencies = [
  "srml-timestamp 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-aura-primitives 0.1.0",
+ "substrate-offchain-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -1609,6 +1610,14 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "substrate-offchain-primitives"
+version = "0.1.0"
+dependencies = [
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
 ]
 
 [[package]]

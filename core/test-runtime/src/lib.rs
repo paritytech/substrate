@@ -343,7 +343,7 @@ cfg_if! {
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
-				fn generate_extrinsics(block: u64) {
+				fn offchain_worker(block: u64) {
 					runtime_io::submit_extrinsic(block.encode())
 				}
 			}
@@ -444,7 +444,7 @@ cfg_if! {
 			}
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
-				fn generate_extrinsics(block: u64) {
+				fn offchain_worker(block: u64) {
 					runtime_io::submit_extrinsic(block.encode())
 				}
 			}

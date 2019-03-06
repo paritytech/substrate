@@ -87,7 +87,7 @@ impl<C, Block> OffchainWorkers<C, Block> where
 			self.executor.spawn(runner.process());
 
 			let api = Box::new(api);
-			runtime.generate_extrinsics_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
+			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
 		}
 	}
 }
