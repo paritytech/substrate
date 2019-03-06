@@ -14,8 +14,9 @@ The balances module provides functions for:
 - Account removal
 - Lookup of an index to reclaim an account
 - Increasing or decreasing total stake
+- Setting and removing locks on chains that implement `LockableCurrency`
 
-The dispatchable function `transfer` ensures that the sender has signed the transaction. When using publicly exposed functions from other modules, you will need to do these checks yourself, as many functions will affect storage without ensuring, for example, that the sender is the signer.
+The dispatchable function `transfer` ensures that the sender has signed the transaction. When using the publicly exposed functions in the implementation, you will need to do these checks yourself, as many functions will affect storage without ensuring, for example, that the sender is the signer.
 
 ## Public Interface
 
@@ -26,7 +27,7 @@ The dispatchable function `transfer` ensures that the sender has signed the tran
 
 ### Dispatchable Functions
 
-// TODO: Add link to rust docs
+// TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24)
 - `transfer` - Transfer some liquid free balance to another staker.
 - `set_balance` - Set the balances of a given account. Only dispatchable by a user with root priviledges.
 
@@ -34,7 +35,7 @@ The dispatchable function `transfer` ensures that the sender has signed the tran
 
 The following example shows how to use the balances module in your custom module.
 
-1. Import the `balances` module and derive your module configuration trait with the balances trait.
+1 Import the `balances` module and derive your module configuration trait with the balances trait.
 
 ```
 use balances;
@@ -42,7 +43,7 @@ use balances;
 pub trait Trait: balances::Trait { }
 ```
 
-2. In your module, call the balance module:
+1 In your module, call the balance module:
 
 ```
 // Get existential deposit
@@ -52,7 +53,7 @@ let ed = Balances::existential_deposit();
 let tf = Balances::transfer_fee();
 ```
 
-3. Include a balance transfer in a block (example from the `executor` module tests):
+3 Include a balance transfer in a block (example from the `executor` module tests):
 
 ```
 let mut t = new_test_ext(COMPACT_CODE, false);
@@ -81,14 +82,9 @@ The balances module depends on the `system` and `srml_support` modules as well a
 
 Configuration is in `<your-node-name>/src/chain_spec.rs`. The following storage items are configurable:
 
-- TotalIssuance
-- ExistentialDeposit
-- TransferFee
-- CreationFee
-- Vesting
-- FreeBalance
-
-## Further information
-
-// links to other docs, relevant GitHub issues and other information
-
+- `TotalIssuance`
+- `ExistentialDeposit`
+- `TransferFee`
+- `CreationFee`
+- `Vesting`
+- `FreeBalance`
