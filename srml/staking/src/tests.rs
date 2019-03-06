@@ -191,11 +191,6 @@ fn offline_grace_should_delay_slashing() {
 	});
 }
 
-#[test]
-fn reporting_misbehaviors_work() {
-	// TODO: Does this code exist?
-	// WONTFIX.
-}
 
 #[test]
 fn max_unstake_threshold_works() {
@@ -251,12 +246,7 @@ fn max_unstake_threshold_works() {
 #[test]
 fn slashing_does_not_cause_underflow() {
 	// Tests that slashing more than a user has does not underflow
-	with_externalities(&mut ExtBuilder::default()
-		.sessions_per_era(1)
-		.session_length(1)
-		.nominate(true)
-		.build(),
-	|| {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		// One user with less than `max_value` will test underflow does not occur
 		Balances::set_free_balance(&10, 1);
 
@@ -441,7 +431,6 @@ fn staking_should_work() {
 	// * new ones will be chosen per era
 	// * either one can unlock the stash and back-down from being a validator via `chill`ing.
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(1)
 		.sessions_per_era(3)
 		.nominate(false)
 		.build(),
@@ -525,11 +514,6 @@ fn staking_should_work() {
 		assert_eq!(Session::validators().contains(&4), false);
 		assert_eq!(Session::validators(), vec![20, 10]);
 	});
-}
-
-#[test]
-fn no_one_nominates_does_not_panic() {
-	// TODO: Test the behavior when no one is nominating.
 }
 
 #[test]
@@ -699,9 +683,7 @@ fn nominating_and_rewards_should_work() {
 #[test]
 fn nominators_also_get_slashed() {
 	// A nominator should be slashed if the validator they nominated is slashed
-	with_externalities(&mut ExtBuilder::default()
-	.session_length(1).sessions_per_era(1).build(),
-	|| {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 2);
 		// slash happens immediately.
@@ -750,7 +732,8 @@ fn double_staking_should_fail() {
 	// * an account already bonded as stash cannot nominate.
 	// * an account already bonded as controller can nominate.
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(1).sessions_per_era(2).build(),
+		.sessions_per_era(2)
+		.build(),
 	|| {
 		let arbitrary_value = 5;
 		System::set_block_number(1);
@@ -770,9 +753,7 @@ fn double_staking_should_fail() {
 #[test]
 fn session_and_eras_work() {
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(1)
 		.sessions_per_era(2)
-		.nominate(true)
 		.reward(10)
 		.build(),
 	|| {
@@ -864,12 +845,7 @@ fn cannot_transfer_staked_balance() {
 #[test]
 fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance
-	with_externalities(&mut ExtBuilder::default()
-		.session_length(1)
-		.sessions_per_era(1)
-		.nominate(true)
-		.build(), 
-	|| {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 		
@@ -892,12 +868,7 @@ fn cannot_reserve_staked_balance() {
 #[test]
 fn reward_destination_works() {
 	// Rewards go to the correct destination as determined in Payee
-	with_externalities(&mut ExtBuilder::default()
-		.sessions_per_era(1)
-		.nominate(true)
-		.session_length(1)
-		.build(),
-	|| {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Check that account 10 is a validator
 		assert!(<Validators<Test>>::exists(10));
 		// Check the balance of the validator account
@@ -1087,10 +1058,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 	// * it can unbond a portion of its funds from the stash account.
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
 	with_externalities(&mut ExtBuilder::default()
-		.nominate(true)
-		.sessions_per_era(1)
-		.session_length(1)
-		.reward(10) // it is default, just for verbosity
+		.reward(10) // it is the default, just for verbosity
 		.build(), 
 	|| {
 		// Set payee to controller. avoids confusion
@@ -1187,12 +1155,7 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 	// Test that slot_stake is the maximum punishment that can happen to a validator
 	// Note that rewardDestination is the stash account by default
 	// Note that unlike reward slash will affect free_balance, not the stash account.
-	with_externalities(&mut ExtBuilder::default()
-		.session_length(1)
-		.sessions_per_era(1)
-		.nominate(true)
-		.build(),
-	|| {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		// Confirm validator count is 2
 		assert_eq!(Staking::validator_count(), 2);
 		// Confirm account 10 and 20 are validators

@@ -738,7 +738,7 @@ impl<T: Trait> Module<T> {
 		let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
 			.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
-		// If we have more candidates then needed, run phragmen.
+		// 4- If we have more candidates then needed, run phragmen.
 		if candidates.len() > rounds {
 			// Main election loop
 			for _round in 0..rounds {
@@ -771,7 +771,7 @@ impl<T: Trait> Module<T> {
 				let (winner_index, _) = candidates.iter().enumerate().min_by_key(|&(_i, c)| c.score.extract())
 					.expect("candidates length is checked to be >0; qed");
 
-				// update nominator and vote load
+				// loop 3: update nominator and vote load
 				let winner = candidates.remove(winner_index);
 				for nominator_idx in 0..nominations.len() {
 					for vote_idx in 0..nominations[nominator_idx].nominees.len() {
@@ -785,10 +785,12 @@ impl<T: Trait> Module<T> {
 						}
 					}
 				}
+
 				elected_candidates.push(winner);
+
 			} // end of all rounds
 
-			// Update backing stake of candidates and nominators
+			// 4.1- Update backing stake of candidates and nominators
 			for nomination in &mut nominations {
 				for vote in &mut nomination.nominees {
 					// if the target of this vote is among the winners, otherwise let go.
@@ -818,7 +820,7 @@ impl<T: Trait> Module<T> {
 			}
 		}		
 
-		// Figure out the minimum stake behind a slot.
+		// 5- Figure out the minimum stake behind a slot.
 		let slot_stake;
 		if let Some(min_candidate) = elected_candidates.iter().min_by_key(|c| c.exposure.total) {
 			slot_stake = min_candidate.exposure.total;
@@ -828,7 +830,7 @@ impl<T: Trait> Module<T> {
 			slot_stake = BalanceOf::<T>::zero();
 		}
 
-		// Clear Stakers and reduce their slash_count.
+		// 6- Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
 			<Stakers<T>>::remove(v);
 			let slash_count = <SlashCount<T>>::take(v);
@@ -837,12 +839,12 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// Populate Stakers.
+		// 7- Populate Stakers.
 		for candidate in &elected_candidates {
 			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
 		}
 
-		// Set the new validator set.
+		// 8- Set the new validator set.
 		<session::Module<T>>::set_validators(
 			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
 		);
