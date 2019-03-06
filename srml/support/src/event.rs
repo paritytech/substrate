@@ -362,7 +362,7 @@ macro_rules! impl_outer_event {
 		$system:ident;
 		Modules {
 			$module:ident,
-			$( $rest:tt, )*
+			$( $rest:tt )*
 		};
 		$( $module_name:ident::Event $( <$generic_param:ident $(, $generic_instance:path)? > )*, )*;
 	) => {
@@ -371,7 +371,7 @@ macro_rules! impl_outer_event {
 			$name;
 			$runtime;
 			$system;
-			Modules { $( $rest, )* };
+			Modules { $( $rest )* };
 			$( $module_name::Event $( <$generic_param $(, $generic_instance)? > )*, )* $module::Event,;
 		);
 	};
