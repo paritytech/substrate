@@ -620,7 +620,10 @@ mod tests {
 				FnEncode(|| vec![
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: vec![MetadataName::U64, MetadataName::U32],
+						arguments: vec![
+							TypeName { display_name: DecodeDifferent::Encode("Balance"), type_name: MetadataName::U64 },
+							TypeName { display_name: DecodeDifferent::Encode("Origin"), type_name: MetadataName::U32 },
+						],
 						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
 					},
 					EventMetadata {
@@ -635,12 +638,16 @@ mod tests {
 				FnEncode(|| vec![
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestEvent"),
-						arguments: vec![MetadataName::U64],
+						arguments: vec![
+							TypeName { display_name: DecodeDifferent::Encode("Balance"), type_name: MetadataName::U64 },
+						],
 						documentation: DecodeDifferent::Encode(&[])
 					},
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestOrigin"),
-						arguments: vec![MetadataName::U32],
+						arguments: vec![
+							TypeName { display_name: DecodeDifferent::Encode("Origin"), type_name: MetadataName::U32 },
+						],
 						documentation: DecodeDifferent::Encode(&[]),
 					},
 				])

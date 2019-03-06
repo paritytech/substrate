@@ -259,7 +259,7 @@ macro_rules! __runtime_modules_to_metadata_calls_storage {
 mod tests {
 	use super::*;
 	use srml_metadata::{
-		EventMetadata,
+		EventMetadata, TypeName,
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageFunctionMetadata,
 		ModuleMetadata, RuntimeMetadataPrefixed
@@ -445,7 +445,12 @@ mod tests {
 							FnEncode(|| vec![
 								EventMetadata {
 									name: DecodeDifferent::Encode("TestEvent"),
-									arguments: vec![MetadataName::U64],
+									arguments: vec![
+										TypeName {
+											display_name: DecodeDifferent::Encode("Balance"),
+											type_name: MetadataName::U64
+										}
+									],
 									documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
 								}
 							])
@@ -459,7 +464,10 @@ mod tests {
 								StorageFunctionMetadata {
 									name: DecodeDifferent::Encode("StorageMethod"),
 									modifier: StorageFunctionModifier::Optional,
-									ty: StorageFunctionType::Plain(MetadataName::U32),
+									ty: StorageFunctionType::Plain(TypeName {
+										display_name: DecodeDifferent::Encode("u32"),
+										type_name: MetadataName::U32
+									}),
 									default: DecodeDifferent::Encode(
 										DefaultByteGetter(
 											&event_module2::__GetByteStructStorageMethod(::std::marker::PhantomData::<TestRuntime>)
@@ -474,7 +482,12 @@ mod tests {
 							FnEncode(|| vec![
 								EventMetadata {
 									name: DecodeDifferent::Encode("TestEvent"),
-									arguments: vec![MetadataName::U64],
+									arguments: vec![
+										TypeName {
+											display_name: DecodeDifferent::Encode("Balance"),
+											type_name: MetadataName::U64
+										}
+									],
 									documentation: DecodeDifferent::Encode(&[])
 								}
 							])

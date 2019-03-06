@@ -1241,7 +1241,10 @@ mod tests {
 				arguments: vec![
 					FunctionArgumentMetadata {
 						name: DecodeDifferent::Encode("_data"),
-						ty: MetadataName::Compact(Box::new(MetadataName::U32)),
+						ty: TypeName {
+							display_name: DecodeDifferent::Encode("u32"),
+							type_name: MetadataName::Compact(Box::new(MetadataName::U32)),
+						},
 					},
 				],
 				documentation: DecodeDifferent::Encode(&[]),
@@ -1251,11 +1254,17 @@ mod tests {
 				arguments: vec![
 					FunctionArgumentMetadata {
 						name: DecodeDifferent::Encode("_data"),
-						ty: MetadataName::I32,
+						ty: TypeName {
+							display_name: DecodeDifferent::Encode("i32"),
+							type_name: MetadataName::I32,
+						},
 					},
 					FunctionArgumentMetadata {
 						name: DecodeDifferent::Encode("_data2"),
-						ty: MetadataName::Str,
+						ty: TypeName {
+							display_name: DecodeDifferent::Encode("String"),
+							type_name: MetadataName::Str,
+						},
 					}
 				],
 				documentation: DecodeDifferent::Encode(&[]),
@@ -1270,7 +1279,10 @@ mod tests {
 				arguments: vec![
 					FunctionArgumentMetadata {
 						name: DecodeDifferent::Encode("_data"),
-						ty: MetadataName::I32,
+						ty: TypeName {
+							display_name: DecodeDifferent::Encode("i32"),
+							type_name: MetadataName::I32,
+						},
 					}
 				],
 				documentation: DecodeDifferent::Encode(&[]),
