@@ -183,7 +183,7 @@ decl_module! {
 
 		/// Transfer some liquid free balance to another staker.
 		/// `transfer` will set the `FreeBalance` of the sender and receiver.
-		/// It will decrease the total stake of the system by the fee amount.
+		/// It will decrease the total stake of the system by the `TransferFee`.
 		/// If the sender's account is below the existential deposit as a result
 		/// of the transfer, the account will be reaped.
 		pub fn transfer(
@@ -225,10 +225,13 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Set the free balance of an account to some new value.
+	/// Set the reserved balance of an account to some new value. Will enforce `ExistentialDeposit`
+	/// law, annulling the account as needed.
 	///
-	/// Will enforce `ExistentialDeposit` law, annulling the account as needed.
-	/// In that case it will return `AccountKilled`.
+	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
+	/// is known that the account already exists.
+	///
+	/// Returns either `Updated` or `AccountKilled`.
 	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
 			<ReservedBalance<T>>::insert(who, balance);
@@ -241,12 +244,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the free balance of an account to some new value. Will enforce `ExistentialDeposit`
-	/// law annulling the account as needed.
+	/// law, annulling the account as needed.
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
 	///
-	/// Returns if the account was successfully updated or update has led to killing of the account.
+	/// Returns either `Updated` or `AccountKilled`.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
@@ -260,13 +263,12 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Set the free balance on an account to some new value.
+	/// Set the free balance on an account to some new value. Will enforce `ExistentialDeposit`
+	/// law, annulling the account as needed.
 	///
-	/// Same as [`set_free_balance`], but will create a new account.
+	/// Same as `set_free_balance`, but will create a new account.
 	///
-	/// Returns if the account was successfully updated or update has led to killing of the account.
-	///
-	/// [`set_free_balance`]: #method.set_free_balance
+	/// Returns either `Updated` or `AccountKilled`.
 	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		let ed = <Module<T>>::existential_deposit();
 		// If the balance is too low, then the account is reaped.
@@ -292,7 +294,12 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Transfer some liquid free balance to another staker.
+	/// Transfer some liquid free balance from one account to another.
+	///
+	/// Enforces `ExistentialDeposit` law, reaping the sender's account if it's balance is
+	/// too low as a result of the transfer.
+	///
+	/// Will create a new account for the destination if the account does not exist.
 	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
@@ -335,6 +342,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::NewAccount(who.clone(), balance.clone()));
 	}
 
+	/// Remove an account whose balance is below the existential deposit.
 	fn reap_account(who: &T::AccountId) {
 		<system::AccountNonce<T>>::remove(who);
 		Self::deposit_event(RawEvent::ReapedAccount(who.clone()));
@@ -363,14 +371,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Increase `TotalIssuance` by Value.
+	/// Increase `TotalIssuance` by `value`.
 	pub fn increase_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_add(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
 
-	/// Decrease `TotalIssuance` by Value.
+	/// Decrease `TotalIssuance` by `value`.
 	pub fn decrease_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_sub(&value) {
 			<TotalIssuance<T>>::put(v);
@@ -532,6 +540,12 @@ where
 {
 	type Moment = T::BlockNumber;
 
+	/// Creates a new `BalanceLock` struct on account `who`.
+	///
+	/// If the new lock is valid (i.e. not already expired), it will push the struct to
+	/// the `Locks` vec in storage. Note that you can lock more funds than a user has.
+	///
+	/// If the lock `id` already exists, this will replace it.
 	fn set_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
@@ -555,6 +569,14 @@ where
 		<Locks<T>>::insert(who, locks);
 	}
 
+	/// Extends a `BalanceLock` (selected by `id`) or creates a new one if it does not exist.
+	///
+	/// Calling `extend_lock` on an existing lock `id` differs from `set_lock` in that it
+	/// applied the most severe constraints of the two, while `set_lock` replaces the lock
+	/// with the new parameters. As in:
+	/// - maximum `amount`
+	/// - farthest duration (`until`)
+	/// - bitwise mask of all `reasons`
 	fn extend_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
@@ -585,6 +607,7 @@ where
 		<Locks<T>>::insert(who, locks);
 	}
 
+	/// Removes `BalanceLock` `id` on account `who`.
 	fn remove_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,

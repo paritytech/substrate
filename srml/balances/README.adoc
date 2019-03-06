@@ -1,0 +1,94 @@
+# Balances Module
+
+The balances module provides the functionality for handling balances.
+
+## Overview
+
+The balances module provides functions for:
+
+- Getting and setting free balance
+- Retrieving total, reserved, and unreserved balances
+- Repatriating a reserved balance to a beneficiary account that exists
+- Transfering a balance between accounts (when not reserved)
+- Slashing an account balance
+- Account removal
+- Lookup of an index to reclaim an account
+- Increasing or decreasing total stake
+
+The dispatchable function `transfer` ensures that the sender has signed the transaction. When using publicly exposed functions from other modules, you will need to do these checks yourself, as many functions will affect storage without ensuring, for example, that the sender is the signer.
+
+## Public Interface
+
+### Types
+
+- Balance
+- AccountId
+
+### Dispatchable Functions
+
+// TODO: Add link to rust docs
+- `transfer` - Transfer some liquid free balance to another staker.
+- `set_balance` - Set the balances of a given account. Only dispatchable by a user with root priviledges.
+
+## Usage
+
+The following example shows how to use the balances module in your custom module.
+
+1. Import the `balances` module and derive your module configuration trait with the balances trait.
+
+```
+use balances;
+
+pub trait Trait: balances::Trait { }
+```
+
+2. In your module, call the balance module:
+
+```
+// Get existential deposit
+let ed = Balances::existential_deposit();
+
+// Get transfer fee for the network
+let tf = Balances::transfer_fee();
+```
+
+3. Include a balance transfer in a block (example from the `executor` module tests):
+
+```
+let mut t = new_test_ext(COMPACT_CODE, false);
+let block1 = construct_block(
+    &mut t,
+    1,
+    GENESIS_HASH.into(),
+    vec![
+        CheckedExtrinsic {
+            signed: None,
+            function: Call::Timestamp(timestamp::Call::set(42)),
+        },
+        CheckedExtrinsic {
+            signed: Some((alice(), 0)),
+            function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+        },
+    ]
+);
+```
+
+## Dependencies
+
+The balances module depends on the `system` and `srml_support` modules as well as Substrate Core libraries and the Rust standard library.
+
+### Genesis config
+
+Configuration is in `<your-node-name>/src/chain_spec.rs`. The following storage items are configurable:
+
+- TotalIssuance
+- ExistentialDeposit
+- TransferFee
+- CreationFee
+- Vesting
+- FreeBalance
+
+## Further information
+
+// links to other docs, relevant GitHub issues and other information
+
