@@ -45,6 +45,11 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "bitmask"
+version = "0.5.0"
+source = "git+https://github.com/paritytech/bitmask#c2d8d196e30b018d1385be8357fdca61b978facf"
+
+[[package]]
 name = "blake2-rfc"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1300,7 +1305,7 @@ version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-session 0.1.0",
@@ -1513,6 +1518,7 @@ dependencies = [
  "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-consensus 0.1.0",
@@ -1541,6 +1547,7 @@ dependencies = [
 name = "srml-support"
 version = "0.1.0"
 dependencies = [
+ "bitmask 0.5.0 (git+https://github.com/paritytech/bitmask)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1611,7 +1618,6 @@ dependencies = [
  "serde 1.0.81 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
- "srml-consensus 0.1.0",
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-inherents 0.1.0",
@@ -2224,6 +2230,7 @@ dependencies = [
 "checksum backtrace-sys 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)" = "c66d56ac8dabd07f6aacdaf633f4b8262f5b3601a810a0dcddffd5c22c69daa0"
 "checksum base58 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5024ee8015f02155eee35c711107ddd9a9bf3cb689cf2a9089c97e79b6e1ae83"
 "checksum bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "228047a76f468627ca71776ecdebd732a3423081fcf5125585bcd7c49886ce12"
+"checksum bitmask 0.5.0 (git+https://github.com/paritytech/bitmask)" = "<none>"
 "checksum blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)" = "5d6d530bdd2d52966a6d03b7a964add7ae1a288d25214066fd4b600f0f796400"
 "checksum block-buffer 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1339a1042f5d9f295737ad4d9a6ab6bf81c84a933dba110b9200cd6d1448b814"
 "checksum block-buffer 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "49665c62e0e700857531fa5d3763e91b539ff1abeebd56808d378b495870d60d"

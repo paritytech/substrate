@@ -318,9 +318,9 @@ mod tests {
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
-					(keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
 					(keyring::ed25519::Keyring::Charlie.to_raw_public().into(), 1),
+					(keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
+					(keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
 				],
 			}),
 			fees: Some(FeesConfig {
@@ -449,9 +449,9 @@ mod tests {
 
 		let mut digest = generic::Digest::<Log>::default();
 		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-			(Keyring::One.to_raw_public().into(), 1),
-			(Keyring::Two.to_raw_public().into(), 1),
-			([3u8; 32].into(), 1),
+			(Keyring::Charlie.to_raw_public().into(), 1),
+			(Keyring::Alice.to_raw_public().into(), 1),
+			(Keyring::Bob.to_raw_public().into(), 1),
 		])));
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
@@ -592,9 +592,9 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-						(Keyring::One.to_raw_public().into(), 1),
-						(Keyring::Two.to_raw_public().into(), 1),
-						([3u8; 32].into(), 1),
+						(Keyring::Charlie.to_raw_public().into(), 1),
+						(Keyring::Alice.to_raw_public().into(), 1),
+						(Keyring::Bob.to_raw_public().into(), 1),
 					])),
 				},
 				EventRecord {

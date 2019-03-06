@@ -60,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 33,
-	impl_version: 33,
+	spec_version: 34,
+	impl_version: 34,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -101,9 +101,8 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = (((Staking, Contract), Democracy), Session);
+	type OnFreeBalanceZero = ((Staking, Contract), Session);
 	type OnNewAccount = Indices;
-	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
 }
 
@@ -116,7 +115,7 @@ impl consensus::Trait for Runtime {
 	type Log = Log;
 	type SessionKey = SessionKey;
 
-	// the aura module handles offline-reports internally
+	// The Aura module handles offline-reports internally
 	// rather than using an explicit report system.
 	type InherentOfflineReport = ();
 }

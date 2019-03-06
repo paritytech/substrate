@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 hex-literal = { version = "0.1.0", optional = true }
-serde = { version = "1.0", default-features = false }
+serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "3.1", default-features = false, features = ["derive"] }
 srml-metadata = { path = "../metadata", default-features = false }
@@ -17,6 +17,7 @@ inherents = { package = "substrate-inherents", path = "../../core/inherents", de
 srml-support-procedural = { path = "./procedural" }
 paste = "0.1"
 once_cell = { version = "0.1.6", default-features = false, optional = true }
+bitmask = { git = "https://github.com/paritytech/bitmask", default-features = false }
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
@@ -26,7 +27,8 @@ default = ["std"]
 std = [
 	"hex-literal",
 	"once_cell",
-	"serde/std",
+	"bitmask/std",
+	"serde",
 	"serde_derive",
 	"runtime_io/std",
 	"parity-codec/std",
