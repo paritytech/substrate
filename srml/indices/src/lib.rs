@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -197,5 +197,8 @@ impl<T: Trait> StaticLookup for Module<T> {
 	type Target = T::AccountId;
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
 		Self::lookup_address(a).ok_or("invalid account index")
+	}
+	fn unlookup(a: Self::Target) -> Self::Source {
+		address::Address::Id(a)
 	}
 }

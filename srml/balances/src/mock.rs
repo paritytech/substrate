@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -54,7 +54,6 @@ impl Trait for Runtime {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
-	type EnsureAccountLiquid = ();
 	type ChargeFee = fees::Module<Runtime>;
 	type Event = ();
 }
