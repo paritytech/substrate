@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use blake2_rfc;
 use rand::rngs::OsRng;
 use schnorrkel::{signing_context, Keypair, MiniSecretKey, PublicKey};
 use sha2::Sha512;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use crate::hash::H512;
 
 #[cfg(feature = "std")]

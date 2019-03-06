@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 use client;
 use service::{FullBackend, FullExecutor, ServiceFactory};
 
-pub type BlockImportForService<F> = ::GrandpaBlockImport<
+pub type BlockImportForService<F> = crate::GrandpaBlockImport<
 	FullBackend<F>,
 	FullExecutor<F>,
 	<F as ServiceFactory>::Block,
@@ -32,7 +32,7 @@ pub type BlockImportForService<F> = ::GrandpaBlockImport<
     >,
 >;
 
-pub type LinkHalfForService<F> = ::LinkHalf<
+pub type LinkHalfForService<F> = crate::LinkHalf<
 	FullBackend<F>,
 	FullExecutor<F>,
 	<F as ServiceFactory>::Block,

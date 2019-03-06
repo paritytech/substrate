@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -62,6 +62,10 @@ decl_storage! {
 		// equipped with `fn getter_name() -> Type` for basic value items or
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
 		Dummy get(dummy) config(): Option<T::Balance>;
+
+		// A map that has enumerable entries.
+		Bar get(bar) config(): linked_map T::AccountId => T::Balance;
+
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(foo) config(): T::Balance;
@@ -276,7 +280,6 @@ mod tests {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type EnsureAccountLiquid = ();
 		type Event = ();
 	}
 	impl Trait for Test {
@@ -292,6 +295,8 @@ mod tests {
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
+			// we configure the map with (key, value) pairs.
+			bar: vec![(1, 2), (2, 3)],
 			foo: 24,
 		}.build_storage().unwrap().0);
 		t.into()

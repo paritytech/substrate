@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ use kvdb::{KeyValueDB, DBTransaction};
 use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
 use parity_codec::{Encode, Decode};
-use parity_codec_derive::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, AuthorityIdFor};
 use crate::utils::{self, COLUMN_META};

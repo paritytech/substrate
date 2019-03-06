@@ -1,12 +1,13 @@
 #!/bin/sh
-# 
-# 
-# check for any changes in the node/src/runtime, srml/ and core/sr_* trees. if 
-# there are any changes found, it should mark the PR breaksconsensus and 
-# "auto-fail" the PR in some way unless a) the runtime is rebuilt and b) there 
+#
+#
+# check for any changes in the node/src/runtime, srml/ and core/sr_* trees. if
+# there are any changes found, it should mark the PR breaksconsensus and
+# "auto-fail" the PR in some way unless a) the runtime is rebuilt and b) there
 # isn't a change in the runtime/src/lib.rs file that alters the version.
 
 set -e # fail on any error
+
 
 # give some context
 git log --graph --oneline --decorate=short -n 10
@@ -14,6 +15,18 @@ git log --graph --oneline --decorate=short -n 10
 
 RUNTIME="node/runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"
 VERSIONS_FILE="node/runtime/src/lib.rs"
+
+github_label () {
+	echo
+	echo "# run github-api job for labelling it ${1}"
+	curl -sS -X POST \
+		-F "token=${CI_JOB_TOKEN}" \
+		-F "ref=master" \
+		-F "variables[LABEL]=${1}" \
+		-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
+		${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+}
+
 
 
 
@@ -45,28 +58,22 @@ sub_spec_version="$(git diff origin/master...${CI_COMMIT_SHA} ${VERSIONS_FILE} \
 # see if the version and the binary blob changed
 if [ "${add_spec_version}" != "${sub_spec_version}" ]
 then
-	echo
-	echo "# run github-api job for labelling it breaksapi"
-	curl -sS -X POST \
-		-F "token=${CI_JOB_TOKEN}" \
-		-F "ref=master" \
-		-F "variables[BREAKSAPI]=true" \
-		-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
-		${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+
+	github_label "B2-breaksapi"
 
 	if git diff --name-only origin/master...${CI_COMMIT_SHA} \
 		| grep -q "${RUNTIME}"
 	then
 		cat <<-EOT
 			
-			changes to the runtime sources and changes in the spec version. Wasm 
+			changes to the runtime sources and changes in the spec version. Wasm
 			binary blob is rebuilt. Looks good.
 		
 			spec_version: ${sub_spec_version} -> ${add_spec_version}
 		
 		EOT
 		exit 0
-	else 
+	else
 		cat <<-EOT
 			
 			changes to the runtime sources and changes in the spec version. Wasm
@@ -115,6 +122,11 @@ else
 
 	versions file: ${VERSIONS_FILE}
 
+	note: if the master branch was merged in as automated wasm rebuilds do it
+	might be the case that a {spec,impl}_version has been changed. but for pull
+	requests that involve wasm source file changes a version has to be changed
+	in the pull request itself.
+
 	EOT
 
 	# drop through into pushing `gotissues` and exit 1...
@@ -122,14 +134,7 @@ fi
 
 # dropped through. there's something wrong; mark `gotissues` and exit 1.
 
-echo
-echo "# run github-api job for labelling it gotissues"
-curl -sS -X POST \
-	-F "token=${CI_JOB_TOKEN}" \
-	-F "ref=master" \
-	-F "variables[GOTISSUES]=true" \
-	-F "variables[PRNO]=${CI_COMMIT_REF_NAME}" \
-	${GITLAB_API}/projects/${GITHUB_API_PROJECT}/trigger/pipeline
+github_label "A4-gotissues"
 
 
 exit 1

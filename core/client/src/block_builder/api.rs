@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use runtime_primitives::{traits::Block as BlockT, ApplyResult, RuntimeString};
 use rstd::vec::Vec;
 use sr_api_macros::decl_runtime_apis;
 pub use inherents::{InherentData, CheckInherentsResult};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 
 /// The old representation of the inherent data.
 #[doc(hide)]

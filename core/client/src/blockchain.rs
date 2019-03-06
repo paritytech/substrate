@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -84,6 +84,9 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// in other words, that have no children, are chain heads.
 	/// Results must be ordered best (longest, heighest) chain first.
 	fn leaves(&self) -> Result<Vec<Block::Hash>>;
+
+	/// Return hashes of all blocks that are children of the block with `parent_hash`.
+	fn children(&self, parent_hash: Block::Hash) -> Result<Vec<Block::Hash>>;
 }
 
 /// Blockchain optional data cache.

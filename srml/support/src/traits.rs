@@ -17,8 +17,10 @@
 //! Traits for SRML
 
 use crate::rstd::result;
-use crate::codec::Codec;
-use crate::runtime_primitives::traits::{MaybeSerializeDebug, SimpleArithmetic, As};
+use crate::codec::{Codec, Encode, Decode};
+use crate::runtime_primitives::traits::{
+	MaybeSerializeDebug, SimpleArithmetic, As
+};
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -51,26 +53,6 @@ impl<Balance> OnDilution<Balance> for () {
 	fn on_dilution(_minted: Balance, _portion: Balance) {}
 }
 
-/// Determinator for whether a given account is able to transfer balance.
-pub trait EnsureAccountLiquid<AccountId> {
-	/// Returns `Ok` iff the account is able to transfer funds normally. `Err(...)`
-	/// with the reason why not otherwise.
-	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str>;
-}
-impl<
-	AccountId,
-	X: EnsureAccountLiquid<AccountId>,
-	Y: EnsureAccountLiquid<AccountId>,
-> EnsureAccountLiquid<AccountId> for (X, Y) {
-	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str> {
-		X::ensure_account_liquid(who)?;
-		Y::ensure_account_liquid(who)
-	}
-}
-impl<AccountId> EnsureAccountLiquid<AccountId> for () {
-	fn ensure_account_liquid(_who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
-}
-
 /// Outcome of a balance update.
 pub enum UpdateBalanceOutcome {
 	/// Account balance was simply updated.
@@ -79,10 +61,14 @@ pub enum UpdateBalanceOutcome {
 	AccountKilled,
 }
 
+pub trait ArithmeticType {
+	type Type: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+}
+
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: SimpleArithmetic + As<usize> + As<u64> + Codec + Copy + MaybeSerializeDebug + Default;
+	type Balance;
 
 	// PUBLIC IMMUTABLES
 
@@ -98,7 +84,11 @@ pub trait Currency<AccountId> {
 	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool;
 
 	/// The total amount of stake on the system.
-	fn total_issuance() -> Self:: Balance;
+	fn total_issuance() -> Self::Balance;
+
+	/// The minimum balance any single account may have. This is equivalent to Balances module's
+	/// Existential Deposit.
+	fn minimum_balance() -> Self::Balance;
 
 	/// The 'free' balance of a given account.
 	///
@@ -180,4 +170,109 @@ pub trait Currency<AccountId> {
 		beneficiary: &AccountId,
 		value: Self::Balance
 	) -> result::Result<Option<Self::Balance>, &'static str>;
+}
+
+/// An identifier for a lock. Used for disambiguating different locks so that
+/// they can be individually replaced or removed.
+pub type LockIdentifier = [u8; 8];
+
+/// A currency whose accounts can have liquidity restructions.
+pub trait LockableCurrency<AccountId>: Currency<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// Introduce a new lock or change an existing one.
+	fn set_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+		amount: Self::Balance,
+		until: Self::Moment,
+		reasons: WithdrawReasons,
+	);
+
+	/// Change any existing lock so that it becomes strictly less liquid in all
+	/// respects to the given parameters.
+	fn extend_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+		amount: Self::Balance,
+		until: Self::Moment,
+		reasons: WithdrawReasons,
+	);
+
+	/// Remove an existing lock.
+	fn remove_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+	);
+}
+
+/// Charge bytes fee trait
+pub trait ChargeBytesFee<AccountId> {
+	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
+	/// `encoded_len` bytes. Return Ok iff the payment was successful.
+	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
+}
+
+/// Charge fee trait
+pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
+	/// The type of fee amount.
+	type Amount;
+
+	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
+	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+
+	/// Refund `amount` of previous charged fees from `transactor`. Return Ok iff the refund was successful.
+	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+}
+
+bitmask! {
+	/// Reasons for moving funds out of an account.
+	#[derive(Encode, Decode)]
+	pub mask WithdrawReasons: i8 where
+
+	/// Reason for moving funds out of an account.
+	#[derive(Encode, Decode)]
+	flags WithdrawReason {
+		/// In order to pay for (system) transaction costs.
+		TransactionPayment = 0b00000001,
+		/// In order to transfer ownership.
+		Transfer = 0b00000010,
+		/// In order to reserve some funds for a later return or repatriation
+		Reserve = 0b00000100,
+	}
+}
+
+/// Transfer fungible asset trait
+pub trait TransferAsset<AccountId> {
+	/// The type of asset amount.
+	type Amount;
+
+	/// Transfer asset from `from` account to `to` account with `amount` of asset.
+	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+
+	/// Remove asset from `who` account by deducting `amount` in the account balances.
+	fn withdraw(who: &AccountId, amount: Self::Amount, reason: WithdrawReason) -> Result<(), &'static str>;
+
+	/// Add asset to `who` account by increasing `amount` in the account balances.
+	fn deposit(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
+}
+
+impl<T> ChargeBytesFee<T> for () {
+	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
+}
+
+impl<T> ChargeFee<T> for () {
+	type Amount = ();
+
+	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+}
+
+impl<T> TransferAsset<T> for () {
+	type Amount = ();
+
+	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
+	fn withdraw(_: &T, _: Self::Amount, _: WithdrawReason) -> Result<(), &'static str> { Ok(()) }
+	fn deposit(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }

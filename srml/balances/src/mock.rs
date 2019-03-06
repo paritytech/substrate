@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -49,7 +49,6 @@ impl Trait for Runtime {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
-	type EnsureAccountLiquid = ();
 	type Event = ();
 }
 
@@ -106,8 +105,6 @@ impl ExtBuilder {
 			} else {
 				vec![(10, balance_factor), (20, balance_factor)]
 			},
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			existential_deposit: self.existential_deposit,
 			transfer_fee: self.transfer_fee,
 			creation_fee: self.creation_fee,
