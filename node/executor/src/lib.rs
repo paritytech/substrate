@@ -308,7 +308,9 @@ mod tests {
 				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
-				nominators: vec![],
+				nominators: vec![(
+					bob(), vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three])
+				],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -447,6 +449,8 @@ mod tests {
 				}
 			]
 		);
+
+		// println!("block2 : {:?}", block2);
 
 		let mut digest = generic::Digest::<Log>::default();
 		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
