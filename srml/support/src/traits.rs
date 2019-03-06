@@ -17,7 +17,7 @@
 //! Traits for SRML
 
 use crate::rstd::result;
-use crate::codec::Codec;
+use crate::codec::{Codec, Encode, Decode};
 use crate::runtime_primitives::traits::{
 	MaybeSerializeDebug, SimpleArithmetic, As
 };
@@ -51,61 +51,6 @@ pub trait OnDilution<Balance> {
 
 impl<Balance> OnDilution<Balance> for () {
 	fn on_dilution(_minted: Balance, _portion: Balance) {}
-}
-
-/// Determinator for whether a given account is able to use its **free** balance.
-/// 
-/// By convention, `ensure_account_liquid` overrules `ensure_account_can_withdraw`. If a
-/// caller gets `Ok` from the former, then they do not need to call the latter.
-/// 
-/// This implies that if you define the latter away from its default of replicating the
-/// former, then ensure you also redefine the former to return an `Err` in corresponding
-/// situations, otherwise you'll end up giving inconsistent information.
-// TODO: Remove in favour of explicit functionality in balances module: #1896
-pub trait EnsureAccountLiquid<AccountId, Balance> {
-	/// Ensures that the account is completely unencumbered. If this is `Ok` then there's no need to
-	/// check any other items. If it's an `Err`, then you must use one pair of the other items.
-	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str>;
-
-	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
-	/// for the given reason.
-	/// 
-	/// `Err(...)` with the reason why not otherwise.
-	/// 
-	/// By default this just reflects the results of `ensure_account_liquid`.
-	/// 
-	/// @warning If you redefine this away from the default, ensure that you define
-	/// `ensure_account_liquid` in accordance.
-	fn ensure_account_can_withdraw(
-		who: &AccountId,
-		_amount: Balance,
-		_reason: WithdrawReason
-	) -> result::Result<(), &'static str> {
-		Self::ensure_account_liquid(who)
-	}
-}
-impl<
-	AccountId,
-	Balance: Copy,
-	X: EnsureAccountLiquid<AccountId, Balance>,
-	Y: EnsureAccountLiquid<AccountId, Balance>,
-> EnsureAccountLiquid<AccountId, Balance> for (X, Y) {
-	fn ensure_account_liquid(who: &AccountId) -> result::Result<(), &'static str> {
-		X::ensure_account_liquid(who)?;
-		Y::ensure_account_liquid(who)
-	}
-
-	fn ensure_account_can_withdraw(
-		who: &AccountId,
-		amount: Balance,
-		reason: WithdrawReason
-	) -> result::Result<(), &'static str> {
-		X::ensure_account_can_withdraw(who, amount, reason)?;
-		Y::ensure_account_can_withdraw(who, amount, reason)
-	}
-}
-impl<AccountId, Balance> EnsureAccountLiquid<AccountId, Balance> for () {
-	fn ensure_account_liquid(_who: &AccountId) -> result::Result<(), &'static str> { Ok(()) }
 }
 
 /// Outcome of a balance update.
@@ -227,6 +172,41 @@ pub trait Currency<AccountId> {
 	) -> result::Result<Option<Self::Balance>, &'static str>;
 }
 
+/// An identifier for a lock. Used for disambiguating different locks so that
+/// they can be individually replaced or removed.
+pub type LockIdentifier = [u8; 8];
+
+/// A currency whose accounts can have liquidity restructions.
+pub trait LockableCurrency<AccountId>: Currency<AccountId> {
+	/// The quantity used to denote time; usually just a `BlockNumber`.
+	type Moment;
+
+	/// Introduce a new lock or change an existing one.
+	fn set_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+		amount: Self::Balance,
+		until: Self::Moment,
+		reasons: WithdrawReasons,
+	);
+
+	/// Change any existing lock so that it becomes strictly less liquid in all
+	/// respects to the given parameters.
+	fn extend_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+		amount: Self::Balance,
+		until: Self::Moment,
+		reasons: WithdrawReasons,
+	);
+
+	/// Remove an existing lock.
+	fn remove_lock(
+		id: LockIdentifier,
+		who: &AccountId,
+	);
+}
+
 /// Charge bytes fee trait
 pub trait ChargeBytesFee<AccountId> {
 	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
@@ -246,16 +226,21 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 
-/// Reason for moving funds out of an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum WithdrawReason {
-	/// In order to pay for (system) transaction costs.
-	TransactionPayment,
-	/// In order to transfer ownership.
-	Transfer,
-	/// In order to reserve some funds for a later return or repatriation
-	Reserve,
+bitmask! {
+	/// Reasons for moving funds out of an account.
+	#[derive(Encode, Decode)]
+	pub mask WithdrawReasons: i8 where
+
+	/// Reason for moving funds out of an account.
+	#[derive(Encode, Decode)]
+	flags WithdrawReason {
+		/// In order to pay for (system) transaction costs.
+		TransactionPayment = 0b00000001,
+		/// In order to transfer ownership.
+		Transfer = 0b00000010,
+		/// In order to reserve some funds for a later return or repatriation
+		Reserve = 0b00000100,
+	}
 }
 
 /// Transfer fungible asset trait

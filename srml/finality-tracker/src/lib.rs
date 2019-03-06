@@ -21,13 +21,13 @@
 #[macro_use]
 extern crate srml_support;
 
-use substrate_inherents::{
+use inherents::{
 	RuntimeString, InherentIdentifier, ProvideInherent,
 	InherentData, MakeFatalError,
 };
 use srml_support::StorageValue;
-use sr_primitives::traits::{As, One, Zero};
-use sr_std::{prelude::*, result, cmp, vec};
+use primitives::traits::{As, One, Zero};
+use rstd::{prelude::*, result, cmp, vec};
 use parity_codec::Decode;
 use srml_system::{ensure_inherent, Trait as SystemTrait};
 
@@ -68,7 +68,7 @@ impl<F, N> InherentDataProvider<F, N> {
 }
 
 #[cfg(feature = "std")]
-impl<F, N: Encode> substrate_inherents::ProvideInherentData for InherentDataProvider<F, N>
+impl<F, N: Encode> inherents::ProvideInherentData for InherentDataProvider<F, N>
 	where F: Fn() -> Result<N, RuntimeString>
 {
 	fn inherent_identifier(&self) -> &'static InherentIdentifier {
@@ -261,9 +261,9 @@ mod tests {
 
 	use sr_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
-	use sr_primitives::BuildStorage;
-	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalise, Header as HeaderT};
-	use sr_primitives::testing::{Digest, DigestItem, Header};
+	use primitives::BuildStorage;
+	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalise, Header as HeaderT};
+	use primitives::testing::{Digest, DigestItem, Header};
 	use srml_support::impl_outer_origin;
 	use srml_system as system;
 	use lazy_static::lazy_static;
