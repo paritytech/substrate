@@ -24,7 +24,7 @@ extern crate rustc_hex;
 use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
 use substrate_bip39::{mini_secret_from_entropy};
-use bip39::{Mnemonic, Language, MnemonicType, Seed};
+use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay};
 use schnorrkel::keys::MiniSecretKey;
 use rustc_hex::FromHex;
