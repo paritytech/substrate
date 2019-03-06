@@ -27,7 +27,7 @@ pub use parity_codec as codec;
 pub use serde_derive;
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
@@ -87,17 +87,9 @@ pub use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
 
-/// A set of key value pairs for storage.
-#[cfg(feature = "std")]
-pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
-
-/// A set of key value pairs for children storage;
-#[cfg(feature = "std")]
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
-
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
-pub trait BuildStorage {
+pub trait BuildStorage: Sized {
 	/// Hash given slice.
 	///
 	/// Default to xx128 hashing.
@@ -107,13 +99,31 @@ pub trait BuildStorage {
 		r
 	}
 	/// Build the storage out of this builder.
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String>;
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+		let mut storage = Default::default();
+		let mut child_storage = Default::default();
+		self.assimilate_storage(&mut storage, &mut child_storage)?;
+		Ok((storage, child_storage))
+	}
+	/// Assimilate the storage for this module into pre-existing overlays.
+	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		let (s, cs) = self.build_storage()?;
+		storage.extend(s);
+		for (other_child_key, other_child_map) in cs {
+			child_storage.entry(other_child_key).or_default().extend(other_child_map);
+		}
+		Ok(())
+	}
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
+	}
+	fn assimilate_storage(self, storage: &mut StorageOverlay, _child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		storage.extend(self);
+		Ok(())
 	}
 }
 
@@ -411,6 +421,14 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
+			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+				$(
+					if let Some(extra) = self.$snake {
+						extra.assimilate_storage(top, children)?;
+					}
+				)*
+				Ok(())
+			}
 			fn build_storage(self) -> ::std::result::Result<($crate::StorageOverlay, $crate::ChildrenStorageOverlay), String> {
 				let mut top = $crate::StorageOverlay::new();
 				let mut children = $crate::ChildrenStorageOverlay::new();

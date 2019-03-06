@@ -20,16 +20,18 @@
 
 use rstd::prelude::*;
 use rstd::result;
-use primitives::traits::{Zero, As};
+use primitives::traits::{Zero, As, Bounded};
 use parity_codec::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::{decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid, WithdrawReason, ArithmeticType};
+use srml_support::traits::{Currency, LockableCurrency, WithdrawReason, ArithmeticType, LockIdentifier};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
+
+const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 /// A proposal index.
 pub type PropIndex = u32;
@@ -68,7 +70,7 @@ impl Vote {
 type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 
 pub trait Trait: system::Trait + Sized {
-	type Currency: ArithmeticType + Currency<<Self as system::Trait>::AccountId, Balance=BalanceOf<Self>>;
+	type Currency: ArithmeticType + LockableCurrency<<Self as system::Trait>::AccountId, Moment=Self::BlockNumber, Balance=BalanceOf<Self>>;
 
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
 
@@ -207,9 +209,6 @@ decl_storage! {
 		pub ReferendumInfoOf get(referendum_info): map ReferendumIndex => Option<(ReferendumInfo<T::BlockNumber, T::Proposal>)>;
 		/// Queue of successful referenda to be dispatched.
 		pub DispatchQueue get(dispatch_queue): map T::BlockNumber => Vec<Option<(T::Proposal, ReferendumIndex)>>;
-
-		/// The block at which the `who`'s funds become liquid.
-		pub Bondage get(bondage): map T::AccountId => T::BlockNumber;
 
 		/// Get the voters for the current proposal.
 		pub VotersFor get(voters_for): map ReferendumIndex => Vec<T::AccountId>;
@@ -371,7 +370,7 @@ impl<T: Trait> Module<T> {
 			// lock should they win...
 			let locked_until = now + lock_period * T::BlockNumber::sa((vote.multiplier()) as u64);
 			// ...extend their bondage until at least then.
-			<Bondage<T>>::mutate(a, |b| if *b < locked_until { *b = locked_until });
+			T::Currency::extend_lock(DEMOCRACY_ID, &a, Bounded::max_value(), locked_until, WithdrawReason::Transfer.into());
 		}
 
 		Self::clear_referendum(index);
@@ -409,35 +408,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
-	fn on_free_balance_zero(who: &T::AccountId) {
-		<Bondage<T>>::remove(who);
-	}
-}
-
-impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
-	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		if Self::bondage(who) > <system::Module<T>>::block_number() {
-			Err("stash accounts are not liquid")
-		} else {
-			Ok(())
-		}
-	}
-	fn ensure_account_can_withdraw(
-		who: &T::AccountId,
-		_value: BalanceOf<T>,
-		reason: WithdrawReason,
-	) -> Result {
-		if reason == WithdrawReason::TransactionPayment
-			|| Self::bondage(who) <= <system::Module<T>>::block_number()
-		{
-			Ok(())
-		} else {
-			Err("cannot transfer voting funds")
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -447,6 +417,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256, IdentityLookup};
 	use primitives::testing::{Digest, DigestItem, Header};
+	use balances::BalanceLock;
 
 	const AYE: Vote = Vote(-1);
 	const NAY: Vote = Vote(0);
@@ -482,7 +453,6 @@ mod tests {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type EnsureAccountLiquid = ();
 		type Event = ();
 	}
 	impl Trait for Test {
@@ -790,12 +760,12 @@ mod tests {
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
-			assert_eq!(Democracy::bondage(1), 0);
-			assert_eq!(Democracy::bondage(2), 6);
-			assert_eq!(Democracy::bondage(3), 5);
-			assert_eq!(Democracy::bondage(4), 4);
-			assert_eq!(Democracy::bondage(5), 3);
-			assert_eq!(Democracy::bondage(6), 0);
+			assert_eq!(Balances::locks(1), vec![]);
+			assert_eq!(Balances::locks(2), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 6, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(3), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 5, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(4), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 4, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(5), vec![BalanceLock { id: DEMOCRACY_ID, amount: u64::max_value(), until: 3, reasons: WithdrawReason::Transfer.into() }]);
+			assert_eq!(Balances::locks(6), vec![]);
 
 			System::set_block_number(2);
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));

@@ -49,7 +49,6 @@ impl Trait for Runtime {
 	type Balance = u64;
 	type OnFreeBalanceZero = ();
 	type OnNewAccount = ();
-	type EnsureAccountLiquid = ();
 	type Event = ();
 }
 

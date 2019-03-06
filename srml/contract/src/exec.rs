@@ -20,8 +20,8 @@ use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
+use srml_support::traits::WithdrawReason;
 use timestamp;
-use srml_support::traits::EnsureAccountLiquid;
 
 pub type BalanceOf<T> = <T as balances::Trait>::Balance;
 pub type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -520,7 +520,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if would_create && value < ctx.config.existential_deposit {
 		return Err("value too low to create account");
 	}
-	<T as balances::Trait>::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
+	<balances::Module<T>>::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
 
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,

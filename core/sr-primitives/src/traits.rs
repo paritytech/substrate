@@ -23,8 +23,7 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
-use substrate_primitives;
-use substrate_primitives::Blake2Hasher;
+use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -84,6 +83,8 @@ pub trait StaticLookup {
 	type Target;
 	/// Attempt a lookup.
 	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	/// Convert from Target back to Source.
+	fn unlookup(t: Self::Target) -> Self::Source;
 }
 
 /// A lookup implementation returning the input value.
@@ -93,6 +94,7 @@ impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+	fn unlookup(x: T) -> T { x }
 }
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
@@ -184,7 +186,7 @@ pub trait SimpleArithmetic:
 	CheckedMul +
 	CheckedDiv +
 	Saturating +
-	PartialOrd<Self> + Ord +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 {}
 impl<T:
@@ -202,7 +204,7 @@ impl<T:
 	CheckedMul +
 	CheckedDiv +
 	Saturating +
-	PartialOrd<Self> + Ord +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 > SimpleArithmetic for T {}
 
@@ -298,7 +300,10 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default;
+
+	/// The associated hash_db Hasher type.
+	type Hasher: Hasher<Out=Self::Output>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -338,6 +343,7 @@ pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
 	type Output = substrate_primitives::H256;
+	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
@@ -479,6 +485,7 @@ impl<T: ::rstd::hash::Hash> MaybeHash for T {}
 pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
+
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
