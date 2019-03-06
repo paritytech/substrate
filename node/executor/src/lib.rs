@@ -308,6 +308,7 @@ mod tests {
 				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
+				nominators: vec![],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),

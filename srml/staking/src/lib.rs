@@ -724,7 +724,7 @@ impl<T: Trait> Module<T> {
 						let candidate = &vote.who;
 						if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
 							let approval_stake = candidates[index].approval_stake;
-							candidates[index].score = Perquill::from_fraction(1f64/approval_stake.as_() as f64);
+							candidates[index].score = Perquill::from_xth(approval_stake.as_());
 						}
 					}
 				}
@@ -734,18 +734,17 @@ impl<T: Trait> Module<T> {
 						let candidate = &vote.who;
 						if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
 							let approval_stake = candidates[index].approval_stake;
-							// TODO: casting, casting everywhere... Perquill::from_Xth()?
 							let temp =
 								nominaotion.stake.as_()
-								* *nominaotion.load.encode_as() as u64
+								* nominaotion.load.extract()
 								/ approval_stake.as_();
-							candidates[index].score = Perquill::decode_from(candidates[index].score.encode_as() + temp);
+							candidates[index].score = Perquill::decode_from(candidates[index].score.extract() + temp);
 						}
 					}
 				}
 
 				// Find the best
-				let (winner_index, _) = candidates.iter().enumerate().min_by_key(|&(_i, c)| c.score.encode_as())
+				let (winner_index, _) = candidates.iter().enumerate().min_by_key(|&(_i, c)| c.score.extract())
 					.expect("candidates length is checked to be >0; qed");
 
 				// update nominator and vote load
@@ -754,8 +753,8 @@ impl<T: Trait> Module<T> {
 					for vote_idx in 0..nominations[nominator_idx].nominees.len() {
 						if nominations[nominator_idx].nominees[vote_idx].who == winner.who {
 							nominations[nominator_idx].nominees[vote_idx].load =
-								Perquill::decode_from(winner.score.encode_as()
-								- nominations[nominator_idx].load.encode_as());
+								Perquill::decode_from(winner.score.extract()
+								- nominations[nominator_idx].load.extract());
 							nominations[nominator_idx].load = winner.score;
 						}
 					}
@@ -770,8 +769,8 @@ impl<T: Trait> Module<T> {
 					if let Some(index) = elected_candidates.iter().position(|c| c.who == vote.who) {
 						vote.backing_stake = <BalanceOf<T> as As<u64>>::sa(
 							nomination.stake.as_()
-							* vote.load.encode_as()
-							/ nomination.load.encode_as()
+							* vote.load.extract()
+							/ nomination.load.extract()
 						);
 						elected_candidates[index].exposure.total += vote.backing_stake;
 						// Update IndividualExposure of those who nominated and their vote won

@@ -250,11 +250,14 @@ impl From<codec::Compact<Perbill>> for Perbill {
 
 /// Perquill is parts-per-quintillion. It stores a value between 0 and 1 in fixed point and
 /// provides a means to multiply some other value by that.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Perquill(u64);
 
 impl Perquill {
+	/// Returns the internal u64 value
+	pub fn extract(&self) -> u64 { self.0 }
+
 	/// Nothing.
 	pub fn zero() -> Perquill { Perquill(0) }
 
@@ -270,15 +273,12 @@ impl Perquill {
 	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
 	pub fn from_millionths(x: u64) -> Perquill { Perquill(x.min(1_000_000) * 1000_000_000_000) }
 
+	/// Construct new instance where `x` is denominator and the nominator is 1.
+	pub fn from_xth(x: u64) -> Perquill { Perquill(1_000_000_000_000_000_000 / x.min(1_000_000_000_000_000_000)) }
+
 	#[cfg(feature = "std")]
 	/// Construct new instance whose value is equal to `x` (between 0 and 1).
 	pub fn from_fraction(x: f64) -> Perquill { Perquill((x.max(0.0).min(1.0) * 1_000_000_000_000_000_000.0) as u64) }
-}
-
-impl std::fmt::Debug for Perquill {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Perquill(~{}) ", self.0 as f64/1_000_000_000_000_000_000.0)
-    }
 }
 
 impl<N> ::rstd::ops::Mul<N> for Perquill
