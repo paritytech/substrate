@@ -50,6 +50,61 @@ fn sync_from_two_peers_with_ancestry_search_works() {
 }
 
 #[test]
+fn sync_from_two_peers_with_ancestry_search_works_common_100() {
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(3);
+	
+	net.peer(0).push_blocks(100, false);
+	net.peer(1).push_blocks(100, false);
+	net.peer(2).push_blocks(100, false);
+	
+	net.peer(0).push_blocks(10, true);
+	net.peer(1).push_blocks(100, false);
+	net.peer(2).push_blocks(100, false);
+	
+	net.sync();
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain());
+}
+
+#[test]
+fn sync_from_two_peers_with_ancestry_search_works_common_1() {
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(3);
+	
+	net.peer(0).push_blocks(1, false);
+	net.peer(1).push_blocks(1, false);
+	net.peer(2).push_blocks(1, false);
+	
+	net.peer(0).push_blocks(10, true);
+	net.peer(1).push_blocks(100, false);
+	net.peer(2).push_blocks(100, false);
+	
+	net.sync();
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain());
+}
+
+#[test]
+fn sync_from_two_peers_with_ancestry_search_works_common_2() {
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(3);
+	
+	net.peer(0).push_blocks(2, false);
+	net.peer(1).push_blocks(2, false);
+	net.peer(2).push_blocks(2, false);
+	
+	net.peer(0).push_blocks(10, true);
+	net.peer(1).push_blocks(100, false);
+	net.peer(2).push_blocks(100, false);
+	
+	net.sync();
+	assert!(net.peer(0).client.backend().as_in_memory().blockchain()
+		.canon_equals_to(net.peer(1).client.backend().as_in_memory().blockchain());
+}
+
+
+#[test]
 fn sync_long_chain_works() {
 	let mut net = TestNet::new(2);
 	net.peer(1).push_blocks(500, false);

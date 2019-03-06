@@ -45,8 +45,6 @@ const ANNOUNCE_HISTORY_SIZE: usize = 64;
 // Max number of blocks to download for unknown forks.
 // TODO: this should take finality into account. See https://github.com/paritytech/substrate/issues/1606
 const MAX_UNKNOWN_FORK_DOWNLOAD_LEN: u32 = 32;
- // Max number of linear search steps (choosen heuristically), before switching to binary search.
-const MAX_NUM_OF_LINEAR_SEARCH_STEPS: u32 = 10;
 
 struct PeerSync<B: BlockT> {
 	pub common_number: NumberFor<B>,
@@ -58,9 +56,11 @@ struct PeerSync<B: BlockT> {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 enum AncestorSearchState<B: BlockT> {
-	// Using linear search, after given number of linear search steps.
-	LinearSearch(u32),
-	// Using binary search, with given left and right block height boundaries.
+	/// Use exponential backoff to find an ancestor, then switch to binary search.
+	/// We keep track of the exponent.
+	ExponentialBackoff(NumberFor<B>),
+	/// Using binary search to find the best ancestor.
+	/// We keep track of left and right bounds.
 	BinarySearch(NumberFor<B>, NumberFor<B>),
 }
 
@@ -427,11 +427,12 @@ impl<B: BlockT> ChainSync<B> {
 					if our_best > As::sa(0) {
 						let common_best = ::std::cmp::min(our_best, info.best_number);
 						debug!(target:"sync", "New peer with unknown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
+						println!("our_best {:?}", our_best);
 						self.peers.insert(who, PeerSync {
 							common_number: As::sa(0),
 							best_hash: info.best_hash,
 							best_number: info.best_number,
-							state: PeerSyncState::AncestorSearch(common_best, AncestorSearchState::LinearSearch(0)),
+							state: PeerSyncState::AncestorSearch(common_best, AncestorSearchState::ExponentialBackoff(As::sa(1))),
 							recently_announced: Default::default(),
 						});
 						Self::request_ancestry(protocol, who, common_best)
@@ -462,39 +463,42 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	/// Returns the new sync state of the peer and the block number that 
-	/// we need to request in case the sync state is other than Available.
 	fn handle_ancestor_search_state(
-		n: NumberFor<B>,
 		state: AncestorSearchState<B>,
+		n: NumberFor<B>,
 		block_hash_match: bool,
-	) -> (PeerSyncState<B>, NumberFor<B>) {
+	) -> Option<(AncestorSearchState<B>, NumberFor<B>)> {
+		println!("ancestor search: {:?} {:?} {:?}", n, block_hash_match, state);
 		match state {
-			AncestorSearchState::LinearSearch(step) => {
-				if block_hash_match {
-					return (PeerSyncState::Available, As::sa(0));
+			AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
+				if block_hash_match && next_distance_to_tip == As::sa(1) {
+					// We found the ancestor so there is no more ancestor search state.
+					println!("ancestor found at {:?}", n);
+					return None;
 				}
-				if step < MAX_NUM_OF_LINEAR_SEARCH_STEPS {
-					let n = n - As::sa(1);
-					(PeerSyncState::AncestorSearch(n, AncestorSearchState::LinearSearch(step + 1)), n)
-				} else {
-					let left = As::sa(0);
-					let right = n;
+				if block_hash_match {
+					let left = n;
+					let right = left + next_distance_to_tip / As::sa(2);
 					let middle = left + (right - left) / As::sa(2);
-					(PeerSyncState::AncestorSearch(middle, AncestorSearchState::BinarySearch(left, right)), middle)
+					Some((AncestorSearchState::BinarySearch(left, right), middle))
+				} else {
+					let n = if n >= next_distance_to_tip { n - next_distance_to_tip } else { As::sa(0) };
+					let next_distance_to_tip = next_distance_to_tip * As::sa(2);
+					Some((AncestorSearchState::ExponentialBackoff(next_distance_to_tip), n))
 				}
 			},
 			AncestorSearchState::BinarySearch(mut left, mut right) => {
-				if left == n {
-					return (PeerSyncState::Available, As::sa(0));
+				if left >= n {
+					return None;
 				}
 				if block_hash_match {
 					left = n;
 				} else {
 					right = n;
 				}
+				assert!(right >=  left);
 				let middle = left + (right - left) / As::sa(2);
-				(PeerSyncState::AncestorSearch(middle, AncestorSearchState::BinarySearch(left, right)), middle)
+				Some((AncestorSearchState::BinarySearch(left, right), middle))
 			},
 		}
 	}
@@ -569,16 +573,13 @@ impl<B: BlockT> ChainSync<B> {
 						protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer".to_string()));
 						return None;
 					}
-					match Self::handle_ancestor_search_state(num, state, block_hash_match) {
-						(PeerSyncState::Available, _) => {
-							peer.state = PeerSyncState::Available;
-							Vec::new()
-						},
-						(next_peer_state, num_to_request) => {
-							Self::request_ancestry(protocol, who, num_to_request);
-							peer.state = next_peer_state;
-							return None;
-						}
+					if let Some((next_state, next_block_num)) = Self::handle_ancestor_search_state(state, num, block_hash_match) {
+						peer.state = PeerSyncState::AncestorSearch(next_block_num, next_state);
+						Self::request_ancestry(protocol, who, next_block_num);
+						return None;
+					} else {
+						peer.state = PeerSyncState::Available;
+						vec![]
 					}
 				},
 				PeerSyncState::Available | PeerSyncState::DownloadingJustification(..) => Vec::new(),
