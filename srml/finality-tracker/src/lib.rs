@@ -261,9 +261,9 @@ mod tests {
 
 	use sr_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
-	use sr_primitives::BuildStorage;
-	use sr_primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalise, Header as HeaderT};
-	use sr_primitives::testing::{Digest, DigestItem, Header};
+	use primitives::BuildStorage;
+	use primitives::traits::{BlakeTwo256, IdentityLookup, OnFinalise, Header as HeaderT};
+	use primitives::testing::{Digest, DigestItem, Header};
 	use srml_support::impl_outer_origin;
 	use srml_system as system;
 	use lazy_static::lazy_static;
