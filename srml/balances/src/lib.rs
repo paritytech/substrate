@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Balances: Handles setting and retrieval of free balance,
-//! retrieving total balance, reserve and unreserve balance,
+//! retrieving total, reserved, and unreserved balances,
 //! repatriating a reserved balance to a beneficiary account that exists,
 //! transfering a balance between accounts (when not reserved),
 //! slashing an account balance, account removal, rewards,
-//! lookup of an index to reclaim an account (when not balance not reserved),
+//! lookup of an index to reclaim an account (when balance not reserved),
 //! increasing total stake.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -101,11 +101,11 @@ impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		/// The total amount of stake on the system.
+		/// The total amount of stake in the system.
 		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
-		/// The minimum amount allowed to keep an account open.
+		/// The minimum amount required to keep an account open.
 		pub ExistentialDeposit get(existential_deposit) config(): T::Balance;
 		/// The fee required to make a transfer.
 		pub TransferFee get(transfer_fee) config(): T::Balance;
@@ -136,11 +136,11 @@ decl_storage! {
 
 		/// The 'free' balance of a given account.
 		///
-		/// This is the only balance that matters in terms of most operations on tokens. It is
-		/// alone used to determine the balance when in the contract execution environment. When this
+		/// This is the only balance that matters in terms of most operations on tokens. It
+		/// alone is used to determine the balance when in the contract execution environment. When this
 		/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
 		/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
-		/// is invoked, giving a chance to external modules to cleanup data associated with
+		/// is invoked, giving a chance to external modules to clean up data associated with
 		/// the deleted account.
 		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
@@ -172,6 +172,10 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Transfer some liquid free balance to another staker.
+		/// `transfer` will set the `FreeBalance` of the sender and receiver.
+		/// It will decrease the total stake of the system by the fee amount.
+		/// If the sender's account is below the existential deposit as a result
+		/// of the transfer, the account will be reaped.
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -182,7 +186,11 @@ decl_module! {
 			Self::make_transfer(&transactor, &dest, value)?;
 		}
 
-		/// Set the balances of a given account.
+		/// Set the balances of a given account. Only dispatchable by root.
+		/// This will alter `FreeBalance` and `ReservedBalance` in storage.
+		/// If the new free or reserved balance is below the existential deposit, 
+		/// it will also decrease the total stake of the system (`TotalIssuance`)
+		/// and reset the account nonce (`system::AccountNonce`).
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] free: T::Balance,
@@ -209,7 +217,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the free balance of an account to some new value.
 	///
-	/// Will enforce ExistentialDeposit law, anulling the account as needed.
+	/// Will enforce `ExistentialDeposit` law, annulling the account as needed.
 	/// In that case it will return `AccountKilled`.
 	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
@@ -222,15 +230,15 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit
-	/// law anulling the account as needed.
+	/// Set the free balance of an account to some new value. Will enforce `ExistentialDeposit`
+	/// law annulling the account as needed.
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
 	///
 	/// Returns if the account was successfully updated or update has led to killing of the account.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
-		// Commented out for no - but consider it instructive.
+		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			<FreeBalance<T>>::insert(who, balance);
@@ -313,7 +321,6 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) {
 		T::OnNewAccount::on_new_account(&who);
@@ -347,13 +354,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Increase TotalIssuance by Value.
+	/// Increase `TotalIssuance` by Value.
 	pub fn increase_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_add(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
-	/// Decrease TotalIssuance by Value.
+
+	/// Decrease `TotalIssuance` by Value.
 	pub fn decrease_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_sub(&value) {
 			<TotalIssuance<T>>::put(v);
