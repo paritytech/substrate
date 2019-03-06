@@ -86,28 +86,21 @@ mod system {
 	}
 }
 
-// TODO TODO: event with no instance, event with only trait and event with trait and instance
-// TODO TODO: default instance and no default instance
-// TODO TODO: read and write to all kind of storage with different instance
-// TODO TODO: user defined instantiable trait
-// TODO TODO: inherent, log, origin, config tests
+// TODO TODO: inherent, log, origin tests
 
 // Test for:
-// * Event with Trait but no Instance
 // * No default instance
 // * Custom InstantiableTrait
 mod module1 {
 	use super::*;
 
 	pub trait Trait<Instance>: system::Trait {
-		type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
 	}
-
-	impl<T: Trait<Instance>, Instance: InstantiableThing> Currency for Module<T, Instance> {}
 
 	decl_module! {
 		pub struct Module<T: Trait<Instance>, Instance: InstantiableThing> for enum Call where origin: T::Origin {
-			fn deposit_event<T>() = default;
+			fn deposit_event<T, Instance>() = default;
 		}
 	}
 
@@ -120,51 +113,24 @@ mod module1 {
 	}
 
 	decl_event! {
-		pub enum Event<T> where Digest = <T as system::Trait>::Digest {
+		pub enum Event<T, Instance> where Digest = <T as system::Trait>::Digest {
 			Variant(Digest),
 		}
 	}
 }
 
 // Test for:
-// * Event with no Trait
-// * Default instance
-mod module2 {
-	use super::*;
-
-	pub trait Trait<Instance=DefaultInstance>: system::Trait {
-		type Event: From<Event> + Into<<Self as system::Trait>::Event>;
-	}
-
-	decl_module! {
-		pub struct Module<T: Trait<Instance>, Instance: InstantiableThing=DefaultInstance> for enum Call where origin: T::Origin {
-			fn deposit_event() = default;
-		}
-	}
-
-	decl_storage! {
-		trait Store for Module<T: Trait<Instance>, Instance: InstantiableThing=DefaultInstance> as Module2 {
-			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
-		}
-	}
-
-	decl_event! {
-		pub enum Event {
-			Variant(u32),
-		}
-	}
-}
-
-// Test for:
-// * Event trait and instance
+// * default instance
 // * use of no_genesis_config_phantom_data
-mod module3 {
+mod module2 {
 	use super::*;
 
 	pub trait Trait<Instance=DefaultInstance>: module1::Trait<module1::Instance1> + system::Trait {
 		type Amount: Parameter + Default;
 		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
 	}
+
+	impl<T: Trait<Instance>, Instance: Instantiable> Currency for Module<T, Instance> {}
 
 	decl_module! {
 		pub struct Module<T: Trait<Instance>, Instance: Instantiable=DefaultInstance> for enum Call where origin: T::Origin {
@@ -173,7 +139,7 @@ mod module3 {
 	}
 
 	decl_storage! {
-		trait Store for Module<T: Trait<Instance>, Instance: Instantiable=DefaultInstance> as Module3 {
+		trait Store for Module<T: Trait<Instance>, Instance: Instantiable=DefaultInstance> as Module2 {
 			pub Data get(data) config(): T::Amount;
 		}
 		extra_genesis_skip_phantom_data_field;
@@ -187,12 +153,11 @@ mod module3 {
 }
 
 // Test for:
-// * Depends on multiple module with instances and default
-mod module4 {
+// * Depends on multiple instances of a module with instances
+mod module3 {
 	use super::*;
 
-	pub trait Trait: module2::Trait + system::Trait {
-		type OtherModule2: module2::Trait<module2::Instance1>;
+	pub trait Trait: module2::Trait + module2::Trait<module2::Instance1> + system::Trait {
 		type Currency: Currency;
 		type Currency2: Currency;
 	}
@@ -203,25 +168,32 @@ mod module4 {
 	}
 }
 
-// TODO TODO: implement module1
-// TODO TODO: implement module1 of another instance
 impl module1::Trait<module1::Instance1> for Runtime {
 	type Event = Event;
 }
-impl module2::Trait for Runtime {
+impl module1::Trait<module1::Instance2> for Runtime {
 	type Event = Event;
 }
-// TODO TODO: implement module2 of another instance
-impl module3::Trait for Runtime {
+impl module2::Trait for Runtime {
+	type Amount = u16;
+	type Event = Event;
+}
+impl module2::Trait<module2::Instance1> for Runtime {
 	type Amount = u32;
 	type Event = Event;
 }
-// // TODO TODO: implement module3 of another instance
-// impl module4::Trait for Runtime {
-// 	type OtherModule2 = module2::Module<Self, module2::Instance1>;
-// 	type Currency = module2::Module<Self, module2::Instance2>;
-// 	type Currency2 = module2::Module<Self, module2::Instance3>;
-// }
+impl module2::Trait<module2::Instance2> for Runtime {
+	type Amount = u32;
+	type Event = Event;
+}
+impl module2::Trait<module2::Instance3> for Runtime {
+	type Amount = u64;
+	type Event = Event;
+}
+impl module3::Trait for Runtime {
+	type Currency = Module2_2;
+	type Currency2 = Module2_3;
+}
 
 pub type Signature = Ed25519Signature;
 pub type AccountId = <Signature as Verify>::Signer;
@@ -237,11 +209,8 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
-// TODO TODO: test two generic with event without instance
-//            fails: because of implementation.
-// TODO TODO: test two generic with config without instance
+// TODO TODO: try to deposit event inside structure
 // TODO TODO: test two generic with log without instance
-// TODO TODO: test two generic with origin without instance
 
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, ()>) where
@@ -250,13 +219,13 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
-		Module1: module1::<Instance1>::{Event<T>},
-		// Module1: module1::<Instance2>::{Event<T>},
-		Module2: module2::{Module, Call, Storage, Event},
-		// Module22: module2::<Instance2>::{Module, Call, Storage, Event},
-		// Module23: module2::<Instance3>::{Module, Call, Storage, Event},
-		Module3: module3::{Event<T>},
-		// Module4: module4::{Module, Call},
+		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
+		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
+		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>},
+		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
+		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
+		Module2_3: module2::<Instance3>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
+		Module3: module3::{Module, Call},
 	}
 );
 
@@ -266,12 +235,19 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Inde
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	GenesisConfig{
+		// TODO TODO: better name
+		module1ConfigInstance1: None,
+		module1ConfigInstance2: None,
+		module2: None,
+		module2ConfigInstance1: None,
+		module2ConfigInstance2: None,
+		module2ConfigInstance3: None,
 	}.build_storage().unwrap().0.into()
 }
 
 #[test]
 fn basic_insert_remove_should_work() {
 	with_externalities(&mut new_test_ext(), || {
-		// TODO TODO
+		// TODO TODO: read and write to all kind of storage with different instance
 	});
 }
