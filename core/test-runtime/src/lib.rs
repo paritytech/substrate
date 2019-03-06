@@ -341,6 +341,12 @@ cfg_if! {
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
 			}
+
+			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+				fn generate_extrinsics(block: u64) {
+					runtime_io::submit_extrinsic(block.encode())
+				}
+			}
 		}
 	} else {
 		impl_runtime_apis! {
@@ -435,6 +441,12 @@ cfg_if! {
 
 			impl consensus_aura::AuraApi<Block> for Runtime {
 				fn slot_duration() -> u64 { 1 }
+			}
+
+			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
+				fn generate_extrinsics(block: u64) {
+					runtime_io::submit_extrinsic(block.encode())
+				}
 			}
 		}
 	}

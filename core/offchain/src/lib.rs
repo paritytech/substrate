@@ -25,85 +25,19 @@ use std::{
 };
 
 use client::runtime_api::ApiExt;
-use futures::{Stream, Future, sync::mpsc};
 use inherents::pool::InherentsPool;
-use log::{info, debug, warn};
-use parity_codec::Decode;
-use primitives::{ExecutionContext, OffchainExt};
+use log::{debug, warn};
+use primitives::ExecutionContext;
 use runtime_primitives::{
 	generic::BlockId,
-	traits::{self, ProvideRuntimeApi, Extrinsic},
+	traits::{self, ProvideRuntimeApi},
 };
 use tokio::runtime::TaskExecutor;
 use transaction_pool::txpool::{Pool, ChainApi};
 
+mod api;
+
 pub use offchain_primitives::OffchainWorkerApi;
-
-enum ExtMessage {
-	SubmitExtrinsic(Vec<u8>),
-}
-
-struct AsyncApi(mpsc::UnboundedSender<ExtMessage>);
-
-impl OffchainExt for AsyncApi {
-	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
-		let _ = self.0.unbounded_send(ExtMessage::SubmitExtrinsic(ext));
-	}
-}
-
-struct Api<A: ChainApi> {
-	receiver: Option<mpsc::UnboundedReceiver<ExtMessage>>,
-	transaction_pool: Arc<Pool<A>>,
-	inherents_pool: Arc<InherentsPool<<A::Block as traits::Block>::Extrinsic>>,
-	at: BlockId<A::Block>,
-}
-
-impl<A: ChainApi> Api<A> {
-	pub fn new(
-		transaction_pool: Arc<Pool<A>>,
-		inherents_pool: Arc<InherentsPool<<A::Block as traits::Block>::Extrinsic>>,
-		at: BlockId<A::Block>,
-	) -> (AsyncApi, Self) {
-		let (tx, rx) = mpsc::unbounded();
-		let api = Self {
-			receiver: Some(rx),
-			transaction_pool,
-			inherents_pool,
-			at,
-		};
-		(AsyncApi(tx), api)
-	}
-
-	pub fn process(mut self) -> impl Future<Item=(), Error=()> {
-		let receiver = self.receiver.take().expect("Take invoked only once.");
-
-		receiver.for_each(move |msg| {
-			match msg {
-				ExtMessage::SubmitExtrinsic(ext) => self.submit_extrinsic(ext),
-			}
-			Ok(())
-		})
-	}
-
-	fn submit_extrinsic(&mut self, ext: Vec<u8>) {
-		let xt = match <A::Block as traits::Block>::Extrinsic::decode(&mut &*ext) {
-			Some(xt) => xt,
-			None => {
-				warn!("Unable to decode extrinsic: {:?}", ext);
-				return
-			},
-		};
-
-		info!("Submitting to the pool: {:?} (isSigned: {:?})", xt, xt.is_signed());
-		match self.transaction_pool.submit_one(&self.at, xt.clone()) {
-			Ok(hash) => debug!("[{:?}] Offchain transaction added to the pool.", hash),
-			Err(_) => {
-				debug!("Offchain inherent added to the pool.");
-				self.inherents_pool.add(xt);
-			},
-		}
-	}
-}
 
 /// An offchain workers manager.
 #[derive(Debug)]
@@ -149,7 +83,7 @@ impl<C, Block> OffchainWorkers<C, Block> where
 
 		if let Ok(true) = runtime.has_api::<OffchainWorkerApi<Block>>(&at) {
 			debug!("Running offchain workers at {:?}", at);
-			let (api, runner) = Api::new(pool.clone(), self.inherents_pool.clone(), at.clone());
+			let (api, runner) = api::Api::new(pool.clone(), self.inherents_pool.clone(), at.clone());
 			self.executor.spawn(runner.process());
 
 			let api = Box::new(api);
@@ -160,8 +94,24 @@ impl<C, Block> OffchainWorkers<C, Block> where
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use futures::Future;
+
 	#[test]
-	fn should_insert_to_the_pool() {
-		assert_eq!(true, false);
+	fn should_call_into_runtime_and_produce_extrinsic() {
+		// given
+		let _ = env_logger::try_init();
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let client = Arc::new(test_client::new());
+		let pool = Arc::new(Pool::new(Default::default(), ::transaction_pool::ChainApi::new(client.clone())));
+		let inherents = Arc::new(InherentsPool::default());
+
+		// when
+		let offchain = OffchainWorkers::new(client, inherents.clone(), runtime.executor());
+		offchain.on_block_imported(&1u64, &pool);
+
+		// then
+		runtime.shutdown_on_idle().wait().unwrap();
+		assert_eq!(inherents.drain().len(), 1);
 	}
 }

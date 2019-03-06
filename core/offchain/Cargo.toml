@@ -22,8 +22,7 @@ tokio = "0.1.7"
 transaction_pool = { package = "substrate-transaction-pool", path = "../../core/transaction-pool" }
 
 [dev-dependencies]
-env_logger = { version = "0.6" }
-keyring = { package = "substrate-keyring", path = "../../core/keyring" }
+env_logger = "0.6"
 test_client = { package = "substrate-test-client", path = "../../core/test-client" }
 
 [features]
