@@ -48,7 +48,7 @@ fn import_single_good_block_works() {
 	let (_, _hash, number, block) = prepare_good_block();
 	assert_eq!(
 		import_single_block(&test_client::new(), BlockOrigin::File, block, Arc::new(PassThroughVerifier(true))),
-		Ok(BlockImportResult::ImportedUnknown(number))
+		Ok(BlockImportResult::ImportedUnknown(number, Default::default()))
 	);
 }
 
