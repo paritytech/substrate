@@ -183,8 +183,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "substrate-metadata"
 version = "0.1.0"
 dependencies = [
- "parity-codec 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",

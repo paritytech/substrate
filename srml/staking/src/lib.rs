@@ -43,7 +43,7 @@ const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
 /// A destination account for payment.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum RewardDestination {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
@@ -82,7 +82,7 @@ impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 }
 
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct UnlockChunk<Balance: HasCompact, BlockNumber: HasCompact> {
 	/// Amount of funds to be unlocked.
@@ -94,7 +94,7 @@ pub struct UnlockChunk<Balance: HasCompact, BlockNumber: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -130,7 +130,7 @@ impl<AccountId, Balance: HasCompact + Copy + Saturating, BlockNumber: HasCompact
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// Which nominator.
@@ -141,7 +141,7 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Exposure<AccountId, Balance: HasCompact> {
 	/// The total balance backing this validator.
@@ -213,7 +213,7 @@ decl_storage! {
 		pub Payee get(payee): map T::AccountId => RewardDestination;
 
 		/// The set of keys are all controllers that want to validate.
-		/// 
+		///
 		/// The values are the preferences that a validator has.
 		pub Validators get(validators) build(|config: &GenesisConfig<T>| {
 			config.stakers.iter().map(|(_stash, controller, _value)| (
@@ -223,7 +223,7 @@ decl_storage! {
 		}): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The set of keys are all controllers that want to nominate.
-		/// 
+		///
 		/// The value are the nominations.
 		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
 
@@ -243,7 +243,7 @@ decl_storage! {
 		// The historical validators and their nominations for a given era. Stored as a trie root of the mapping
 		// `T::AccountId` => `Exposure<T::AccountId, BalanceOf<T>>`, which is just the contents of `Stakers`,
 		// under a key that is the `era`.
-		// 
+		//
 		// Every era change, this will be appended with the trie root of the contents of `Stakers`, and the oldest
 		// entry removed down to a specific number of entries (probably around 90 for a 3 month history).
 //		pub HistoricalStakers get(historical_stakers): map T::BlockNumber => Option<H256>;
@@ -314,9 +314,9 @@ decl_module! {
 
 		/// Add some extra amount that have appeared in the stash `free_balance` into the balance up for
 		/// staking.
-		/// 
+		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn bond_extra(origin, max_additional: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
@@ -332,14 +332,14 @@ decl_module! {
 		}
 
 		/// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
-		/// period ends. If this leaves an amount actively bonded less than 
+		/// period ends. If this leaves an amount actively bonded less than
 		/// T::Currency::existential_deposit(), then it is increased to the full amount.
-		/// 
+		///
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
-		/// the funds out of management ready for transfer. 
-		/// 
+		/// the funds out of management ready for transfer.
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
-		/// 
+		///
 		/// See also `withdraw_unbonded`.
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
@@ -364,12 +364,12 @@ decl_module! {
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
-		/// 
+		///
 		/// This essentially frees up that balance to be used by the stash account to do
 		/// whatever it wants.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
-		/// 
+		///
 		/// See also `unbond`.
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
@@ -380,7 +380,7 @@ decl_module! {
 		/// Declare the desire to validate for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
@@ -393,7 +393,7 @@ decl_module! {
 		/// Declare the desire to nominate `targets` for the origin controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
@@ -411,7 +411,7 @@ decl_module! {
 		/// Declare no desire to either validate or nominate.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
@@ -423,7 +423,7 @@ decl_module! {
 		/// (Re-)set the payment target for a controller.
 		///
 		/// Effects will be felt at the beginning of the next era.
-		/// 
+		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
@@ -505,7 +505,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
-	
+
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
 	/// and reduces the nominators' balance if needed.
 	fn slash_validator(v: &T::AccountId, slash: BalanceOf<T>) {
@@ -548,7 +548,7 @@ impl<T: Trait> Module<T> {
 					let _ = T::Currency::reward(&l.stash, amount);
 				}
 			}),
-		}		
+		}
 	}
 
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
@@ -629,7 +629,7 @@ impl<T: Trait> Module<T> {
 		// Reassign all Stakers.
 
 		// Map of (would-be) validator account to amount of stake backing it.
-		
+
 		// First, we pull all validators, together with their stash balance into a Vec (cpu=O(V), mem=O(V))
 		let mut candidates = <Validators<T>>::enumerate()
 			.map(|(who, _)| {
@@ -754,7 +754,7 @@ impl<T: Trait> Module<T> {
 			let _ = Self::slash_validator(&v, slash);
 			<Validators<T>>::remove(&v);
 			let _ = Self::apply_force_new_era(false);
-			
+
 			RawEvent::OfflineSlash(v.clone(), slash)
 		} else {
 			RawEvent::OfflineWarning(v.clone(), slash_count)
@@ -788,7 +788,7 @@ impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
 			let free_balance = T::Currency::free_balance(&who);
 			ensure!(free_balance.saturating_sub(ledger.total) > amount,
 				"stash with too much under management");
-		}		
+		}
 		Ok(())
 	}
 }

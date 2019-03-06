@@ -330,7 +330,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
-			type BlockNumber: EncodeMetadata;
+			type BlockNumber: substrate_metadata::EncodeMetadata;
 		}
 
 		decl_event!(

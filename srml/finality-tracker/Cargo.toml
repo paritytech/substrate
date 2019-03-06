@@ -16,6 +16,7 @@ sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-system = { path = "../system", default-features = false }
 srml-session = { path = "../session", default-features = false }
+substrate-metadata = { path = "../../core/metadata", default-features = false }
 
 [dev-dependencies]
 substrate-primitives = { path = "../../core/primitives", default-features = false }
@@ -35,4 +36,5 @@ std = [
 	"srml-system/std",
 	"srml-session/std",
 	"substrate-inherents/std",
+	"substrate-metadata/std",
 ]

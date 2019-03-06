@@ -3257,6 +3257,7 @@ dependencies = [
  "srml-support 0.1.0",
  "srml-system 0.1.0",
  "substrate-inherents 0.1.0",
+ "substrate-metadata 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
