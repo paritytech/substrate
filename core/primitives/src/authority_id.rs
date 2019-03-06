@@ -16,7 +16,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use substrate_metadata_derive::EncodeMetadata;
 use crate::H256;
 

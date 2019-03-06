@@ -26,8 +26,6 @@ pub use sr_std as rstd;
 #[doc(hidden)]
 pub use parity_codec as codec;
 #[doc(hidden)]
-pub use parity_codec_derive;
-#[doc(hidden)]
 pub use substrate_metadata;
 #[doc(hidden)]
 pub use substrate_metadata_derive;

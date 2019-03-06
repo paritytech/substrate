@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0", default-features = false }
-parity-codec = { version = "3.0", default-features = false }
+parity-codec = { version = "3.1", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }

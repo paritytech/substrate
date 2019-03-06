@@ -27,9 +27,7 @@ use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-#[cfg(feature = "std")]
-use parity_codec::Decode;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};
@@ -209,7 +207,7 @@ pub struct StakingSlasher<T>(::rstd::marker::PhantomData<T>);
 
 impl<T: staking::Trait + Trait> HandleReport for StakingSlasher<T> {
 	fn handle_report(report: AuraReport) {
-		let validators = staking::Module::<T>::validators();
+		let validators = session::Module::<T>::validators();
 
 		report.punish(
 			validators.len(),

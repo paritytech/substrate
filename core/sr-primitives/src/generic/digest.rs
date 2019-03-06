@@ -20,7 +20,6 @@
 use serde_derive::Serialize;
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
 
 use crate::codec::{Decode, Encode, Codec, Input};
 use crate::traits::{self, Member, DigestItem as DigestItemT, MaybeHash};

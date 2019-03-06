@@ -264,8 +264,7 @@ mod tests {
 		ModuleMetadata, RuntimeMetadataPrefixed
 	};
 	use crate::codec::{Encode, Decode};
-	use parity_codec_derive::{Decode, Encode};
-	use substrate_metadata::*;
+	use substrate_metadata::{MetadataRegistry, MetadataName};
 	use substrate_metadata_derive::EncodeMetadata;
 
 	mod system {
@@ -331,7 +330,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
-			type BlockNumber: substrate_metadata::EncodeMetadata;
+			type BlockNumber: EncodeMetadata;
 		}
 
 		decl_event!(
