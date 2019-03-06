@@ -17,6 +17,7 @@
 //! The Offchain Worker runtime api primitives.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
 
 use client::decl_runtime_apis;
 use runtime_primitives::traits::{Header as HeaderT, Block as BlockT};

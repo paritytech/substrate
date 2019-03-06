@@ -171,7 +171,11 @@ impl<Components: components::Components> Service<Components> {
 		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
 		let inherents_pool = Arc::new(InherentsPool::default());
-		let offchain_workers = Arc::new(offchain::OffchainWorkers::new(client.clone(), inherents_pool.clone()));
+		let offchain_workers = Arc::new(offchain::OffchainWorkers::new(
+			client.clone(),
+			inherents_pool.clone(),
+			task_executor.clone(),
+		));
 
 		{
 			// block notifications

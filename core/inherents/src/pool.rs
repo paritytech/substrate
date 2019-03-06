@@ -46,10 +46,14 @@ impl<T: fmt::Debug> fmt::Debug for InherentsPool<T> {
 }
 
 impl<T> InherentsPool<T> {
+	/// Add inherent extrinsic to the pool.
+	///
+	/// This inherent will be appended to the next produced block.
 	pub fn add(&self, extrinsic: T) {
 		self.data.lock().push(extrinsic);
 	}
 
+	/// Drain all currently queued inherents.
 	pub fn drain(&self) -> Vec<T> {
 		mem::replace(&mut *self.data.lock(), vec![])
 	}
@@ -58,40 +62,14 @@ impl<T> InherentsPool<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::InherentIdentifier;
-
-	const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
-	const TEST_INHERENT_1: InherentIdentifier = *b"testinh1";
-	const TEST_INHERENT_2: InherentIdentifier = *b"testinh2";
 
 	#[test]
 	fn should_drain_inherents_to_given_data() {
 		let pool = InherentsPool::default();
-		let mut data = InherentData::new();
-		data.put_data(TEST_INHERENT_0, &12u32).unwrap();
-		pool.add(data);
+		pool.add(5);
+		pool.add(7);
 
-		let mut data = InherentData::new();
-		data.put_data(TEST_INHERENT_1, &12u32).unwrap();
-		pool.add(data);
-
-		let mut data = InherentData::new();
-		data.put_data(TEST_INHERENT_1, &8u32).unwrap();
-		data.put_data(TEST_INHERENT_2, &12u32).unwrap();
-
-
-		pool.drain_to(&mut data);
-
-		assert_eq!(data.get_data(&TEST_INHERENT_0).unwrap(), Some(12u32));
-		assert_eq!(data.get_data(&TEST_INHERENT_1).unwrap(), Some(12u32));
-		assert_eq!(data.get_data(&TEST_INHERENT_2).unwrap(), Some(12u32));
-
-		// The pool should be empty now
-		let mut data = InherentData::new();
-		pool.drain_to(&mut data);
-		assert_eq!(data.get_data::<u32>(&TEST_INHERENT_0).unwrap(), None);
-		assert_eq!(data.get_data::<u32>(&TEST_INHERENT_1).unwrap(), None);
-		assert_eq!(data.get_data::<u32>(&TEST_INHERENT_2).unwrap(), None);
-
+		assert_eq!(pool.drain(), vec![5, 7]);
+		assert_eq!(pool.drain(), vec![]);
 	}
 }
