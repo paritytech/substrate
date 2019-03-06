@@ -504,23 +504,27 @@ fn decl_storage_items(
 			}
 		});
 
-		if let Some(default_instance) = default_instance {
-			impls.extend(quote! {
-				pub type #default_instance = Instance0;
-			});
-		}
+		let instances = (0..NUMBER_OF_INSTANCE)
+			.map(|i| {
+				let name = format!("Instance{}", i);
+				let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+				(name, ident)
+			})
+			.chain(default_instance
+				.clone()
+				.map(|ident| {
+					(ident.to_string(), ident)
+				})
+			);
 
-		for i in 0..NUMBER_OF_INSTANCE {
-			let instance_name = format!("Instance{}", i);
-			let struct_ident = syn::Ident::new(&instance_name, proc_macro2::Span::call_site());
-
+		for (prefix, ident) in instances {
 			impls.extend(quote! {
 				// Those trait are derived because of wrong bounds for generics
 				#[cfg_attr(feature = "std", derive(Debug))]
 				#[derive(Clone, Eq, PartialEq, #scrate::codec::Encode, #scrate::codec::Decode)]
-				pub struct #struct_ident;
-				impl #instantiable for #struct_ident {
-					const INSTANCE_PREFIX: &'static str = #instance_name;
+				pub struct #ident;
+				impl #instantiable for #ident {
+					const INSTANCE_PREFIX: &'static str = #prefix;
 					#method_impls
 				}
 			});
