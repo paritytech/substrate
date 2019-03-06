@@ -29,7 +29,8 @@ use rstd::{cmp, result};
 use parity_codec::{Codec, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, decl_event, decl_storage, decl_module, ensure};
 use srml_support::traits::{
-	UpdateBalanceOutcome, Currency, EnsureAccountLiquid, OnFreeBalanceZero, TransferAsset, WithdrawReason, ArithmeticType
+	UpdateBalanceOutcome, Currency, OnFreeBalanceZero, TransferAsset,
+	WithdrawReason, WithdrawReasons, ArithmeticType, LockIdentifier, LockableCurrency
 };
 use srml_support::dispatch::Result;
 use primitives::traits::{
@@ -52,9 +53,6 @@ pub trait Trait: system::Trait {
 
 	/// Handler for when a new account is created.
 	type OnNewAccount: OnNewAccount<Self::AccountId>;
-
-	/// A function that returns true iff a given account can transfer its funds to another account.
-	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId, Self::Balance>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -97,6 +95,15 @@ impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
 			Zero::zero()
 		}
 	}
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct BalanceLock<Balance, BlockNumber> {
+	pub id: LockIdentifier,
+	pub amount: Balance,
+	pub until: BlockNumber,
+	pub reasons: WithdrawReasons,
 }
 
 decl_storage! {
@@ -160,6 +167,9 @@ decl_storage! {
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
+
+		/// Any liquidity locks on some account balances.
+		pub Locks get(locks): map T::AccountId => Vec<BalanceLock<T::Balance, T::BlockNumber>>;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
@@ -285,16 +295,14 @@ impl<T: Trait> Module<T> {
 			None => return Err("got overflow after adding a fee to value"),
 		};
 
-		let vesting_balance = Self::vesting_balance(transactor);
 		let new_from_balance = match from_balance.checked_sub(&liability) {
 			None => return Err("balance too low to send value"),
-			Some(b) if b < vesting_balance => return Err("vesting balance too high to send value"),
 			Some(b) => b,
 		};
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		T::EnsureAccountLiquid::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer)?;
+		Self::ensure_account_can_withdraw(transactor, value, WithdrawReason::Transfer, new_from_balance)?;
 
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
@@ -313,7 +321,6 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) {
 		T::OnNewAccount::on_new_account(&who);
@@ -329,6 +336,7 @@ impl<T: Trait> Module<T> {
 	fn on_free_too_low(who: &T::AccountId) {
 		Self::decrease_total_stake_by(Self::free_balance(who));
 		<FreeBalance<T>>::remove(who);
+		<Locks<T>>::remove(who);
 
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
 
@@ -359,6 +367,35 @@ impl<T: Trait> Module<T> {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
+
+	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
+	/// for the given reason.
+	/// 
+	/// `Err(...)` with the reason why not otherwise.
+	pub fn ensure_account_can_withdraw(
+		who: &T::AccountId,
+		_amount: T::Balance,
+		reason: WithdrawReason,
+		new_balance: T::Balance,
+	) -> Result {
+		match reason {
+			WithdrawReason::Reserve | WithdrawReason::Transfer if Self::vesting_balance(who) > new_balance =>
+				return Err("vesting balance too high to send value"),
+			_ => {}
+		}
+		let locks = Self::locks(who);
+		if locks.is_empty() {
+			return Ok(())
+		}
+		let now = <system::Module<T>>::block_number();
+		if Self::locks(who).into_iter()
+			.all(|l| now >= l.until || new_balance >= l.amount || !l.reasons.contains(reason))
+		{
+			Ok(())
+		} else {
+			Err("account liquidity restrictions prevent withdrawal")
+		}
+	}
 }
 
 impl<T: Trait> Currency<T::AccountId> for Module<T>
@@ -376,11 +413,11 @@ where
 	}
 
 	fn can_reserve(who: &T::AccountId, value: Self::Balance) -> bool {
-		if T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve).is_ok() {
-			Self::free_balance(who) >= value
-		} else {
-			false
-		}
+		Self::free_balance(who)
+			.checked_sub(&value)
+			.map_or(false, |new_balance|
+				Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve, new_balance).is_ok()
+			)
 	}
 
 	fn total_issuance() -> Self::Balance {
@@ -429,9 +466,10 @@ where
 		if b < value {
 			return Err("not enough free funds")
 		}
-		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve)?;
+		let new_balance = b - value;
+		Self::ensure_account_can_withdraw(who, value, WithdrawReason::Reserve, new_balance)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
-		Self::set_free_balance(who, b - value);
+		Self::set_free_balance(who, new_balance);
 		Ok(())
 	}
 
@@ -479,6 +517,80 @@ where
 	}
 }
 
+impl<T: Trait> LockableCurrency<T::AccountId> for Module<T>
+where
+	T::Balance: MaybeSerializeDebug
+{
+	type Moment = T::BlockNumber;
+
+	fn set_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+		amount: T::Balance,
+		until: T::BlockNumber,
+		reasons: WithdrawReasons,
+	) {
+		let now = <system::Module<T>>::block_number();
+		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
+		let mut locks = Self::locks(who).into_iter().filter_map(|l|
+			if l.id == id {
+				new_lock.take()
+			} else if l.until > now {
+				Some(l)
+			} else {
+				None
+			}).collect::<Vec<_>>();
+		if let Some(lock) = new_lock {
+			locks.push(lock)
+		}
+		<Locks<T>>::insert(who, locks);
+	}
+
+	fn extend_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+		amount: T::Balance,
+		until: T::BlockNumber,
+		reasons: WithdrawReasons,
+	) {
+		let now = <system::Module<T>>::block_number();
+		let mut new_lock = Some(BalanceLock { id, amount, until, reasons });
+		let mut locks = Self::locks(who).into_iter().filter_map(|l|
+			if l.id == id {
+				new_lock.take().map(|nl| {
+					BalanceLock {
+						id: l.id,
+						amount: l.amount.max(nl.amount),
+						until: l.until.max(nl.until),
+						reasons: l.reasons | nl.reasons,
+					}
+				})
+			} else if l.until > now {
+				Some(l)
+			} else {
+				None
+			}).collect::<Vec<_>>();
+		if let Some(lock) = new_lock {
+			locks.push(lock)
+		}
+		<Locks<T>>::insert(who, locks);
+	}
+
+	fn remove_lock(
+		id: LockIdentifier,
+		who: &T::AccountId,
+	) {
+		let now = <system::Module<T>>::block_number();
+		let locks = Self::locks(who).into_iter().filter_map(|l|
+			if l.until > now && l.id != id {
+				Some(l)
+			} else {
+				None
+			}).collect::<Vec<_>>();
+		<Locks<T>>::insert(who, locks);
+	}
+}
+
 impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	type Amount = T::Balance;
 
@@ -487,10 +599,11 @@ impl<T: Trait> TransferAsset<T::AccountId> for Module<T> {
 	}
 
 	fn withdraw(who: &T::AccountId, value: T::Balance, reason: WithdrawReason) -> Result {
-		T::EnsureAccountLiquid::ensure_account_can_withdraw(who, value, reason)?;
 		let b = Self::free_balance(who);
 		ensure!(b >= value, "account has too few funds");
-		Self::set_free_balance(who, b - value);
+		let new_balance = b - value;
+		Self::ensure_account_can_withdraw(who, value, reason, new_balance)?;
+		Self::set_free_balance(who, new_balance);
 		Self::decrease_total_stake_by(value);
 		Ok(())
 	}

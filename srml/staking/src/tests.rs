@@ -332,7 +332,7 @@ fn staking_should_work() {
 		assert_eq!(Staking::era_length(), 3);
 		assert_eq!(Staking::validator_count(), 2);
 		// remember + compare this along with the test.
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 		assert_ok!(Staking::set_bonding_duration(2));
 		assert_eq!(Staking::bonding_duration(), 2);
 
@@ -347,7 +347,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		// No effects will be seen so far.s
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 		
 
 		// --- Block 2: 
@@ -359,7 +359,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		// No effects will be seen so far. Era has not been yet triggered.
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 
 		// --- Block 3: the validators will now change. 
@@ -413,7 +413,7 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Staking::bonding_duration(), 3);
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -447,7 +447,7 @@ fn nominating_and_rewards_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		// validators will not change, since selection currently is actually not dependent on nomination and votes, only stake.
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 		// avalidators must have already received some rewards.
 		assert_eq!(Balances::total_balance(&10), initial_balance + session_reward);
 		assert_eq!(Balances::total_balance(&20), initial_balance + session_reward);
@@ -487,7 +487,7 @@ fn nominators_also_get_slashed() {
 		// Account 10 has not been reported offline
 		assert_eq!(Staking::slash_count(&10), 0);
 		// initial validators
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -500,7 +500,7 @@ fn nominators_also_get_slashed() {
 		// 2 will nominate for 10
 		let nominator_stake = 500;
 		assert_ok!(Staking::bond(Origin::signed(1), 2, nominator_stake, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		// new era, pay rewards,
 		System::set_block_number(2);
@@ -628,7 +628,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&10).total, 1000);
 		// Confirm account 11 cannot transfer as a result
-		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "stash with too much under management");
+		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
 		Balances::set_free_balance(&11, 10000);
@@ -636,8 +636,6 @@ fn cannot_transfer_staked_balance() {
 		assert_ok!(Balances::transfer(Origin::signed(11), 20, 1));
 	});
 }
-
-
 
 #[test]
 fn cannot_reserve_staked_balance() {
@@ -650,7 +648,7 @@ fn cannot_reserve_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&10).total, 1000);
 		// Confirm account 11 cannot transfer as a result
-		assert_noop!(Balances::reserve(&11, 1), "stash with too much under management");
+		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
 		Balances::set_free_balance(&11, 10000);

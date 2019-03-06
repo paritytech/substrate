@@ -21,7 +21,136 @@
 use super::*;
 use mock::{Balances, ExtBuilder, Runtime, System};
 use runtime_io::with_externalities;
-use srml_support::{assert_noop, assert_ok, assert_err};
+use srml_support::{
+	assert_noop, assert_ok, assert_err,
+	traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons, Currency, TransferAsset}
+};
+
+const ID_1: LockIdentifier = *b"1       ";
+const ID_2: LockIdentifier = *b"2       ";
+const ID_3: LockIdentifier = *b"3       ";
+
+#[test]
+fn basic_locking_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		assert_eq!(Balances::free_balance(&1), 10);
+		Balances::set_lock(ID_1, &1, 9, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 5), "account liquidity restrictions prevent withdrawal");
+	});
+}
+
+#[test]
+fn partial_locking_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn lock_removal_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
+		Balances::remove_lock(ID_1, &1);
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn lock_replacement_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, u64::max_value(), u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn double_locking_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		Balances::set_lock(ID_2, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn combination_locking_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, u64::max_value(), 0, WithdrawReasons::none());
+		Balances::set_lock(ID_2, &1, 0, u64::max_value(), WithdrawReasons::none());
+		Balances::set_lock(ID_3, &1, 0, 0, WithdrawReasons::all());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn lock_value_extension_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 5, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 2, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 8, u64::max_value(), WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 3), "account liquidity restrictions prevent withdrawal");
+	});
+}
+
+#[test]
+fn lock_reasons_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Transfer.into());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1), "account liquidity restrictions prevent withdrawal");
+		assert_ok!(<Balances as Currency<_>>::reserve(&1, 1));
+		assert_ok!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment));
+
+		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::Reserve.into());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+		assert_noop!(<Balances as Currency<_>>::reserve(&1, 1), "account liquidity restrictions prevent withdrawal");
+		assert_ok!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment));
+
+		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+		assert_ok!(<Balances as Currency<_>>::reserve(&1, 1));
+		assert_noop!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment), "account liquidity restrictions prevent withdrawal");
+	});
+}
+
+#[test]
+fn lock_block_number_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1), "account liquidity restrictions prevent withdrawal");
+
+		System::set_block_number(2);
+		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+	});
+}
+
+#[test]
+fn lock_block_number_extension_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, 2, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 10, 1, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		System::set_block_number(2);
+		Balances::extend_lock(ID_1, &1, 10, 8, WithdrawReasons::all());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 3), "account liquidity restrictions prevent withdrawal");
+	});
+}
+
+#[test]
+fn lock_reasons_extension_should_work() {
+	with_externalities(&mut ExtBuilder::default().monied(true).build(), || {
+		Balances::set_lock(ID_1, &1, 10, 10, WithdrawReason::Transfer.into());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReasons::none());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+		Balances::extend_lock(ID_1, &1, 10, 10, WithdrawReason::Reserve.into());
+		assert_noop!(<Balances as TransferAsset<_>>::transfer(&1, &2, 6), "account liquidity restrictions prevent withdrawal");
+	});
+}
 
 #[test]
 fn default_indexing_on_new_accounts_should_not_work2() {
