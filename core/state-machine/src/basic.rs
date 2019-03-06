@@ -149,7 +149,7 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 	}
 
 	fn storage_changes_root(&mut self, _parent: H::Out, _parent_num: u64) -> Option<H::Out> {
-        None
+		None
 	}
 }
 
