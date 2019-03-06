@@ -18,10 +18,14 @@
 use serde_derive::Serialize;
 use runtime_io::{with_externalities, Blake2Hasher};
 use srml_support::rstd::prelude::*;
+use srml_support::rstd as rstd;
 use srml_support::codec::{Encode, Decode};
 use srml_support::runtime_primitives::{generic, Ed25519Signature, testing::H256, BuildStorage};
 use srml_support::runtime_primitives::traits::{BlakeTwo256, Block as _, Verify, Digest};
 use srml_support::{Parameter, construct_runtime, decl_module, decl_storage, decl_event};
+use inherents::{
+	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
+};
 
 pub trait Currency {
 }
@@ -86,20 +90,20 @@ mod system {
 	}
 }
 
-// TODO TODO: inherent, log, origin tests
-
 // Test for:
 // * No default instance
 // * Custom InstantiableTrait
+// * Origin, Inherent, Log
 mod module1 {
 	use super::*;
 
 	pub trait Trait<Instance>: system::Trait {
 		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
+		type Origin: From<Origin<Self, Instance>>;
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait<Instance>, Instance: InstantiableThing> for enum Call where origin: T::Origin {
+		pub struct Module<T: Trait<Instance>, Instance: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, Instance>() = default;
 		}
 	}
@@ -117,6 +121,42 @@ mod module1 {
 			Variant(Digest),
 		}
 	}
+
+	#[derive(PartialEq, Eq, Clone)]
+	#[cfg_attr(feature = "std", derive(Debug))]
+	pub enum Origin<T: Trait<Instance>, Instance> {
+		Members(u32),
+		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+	}
+
+	pub type Log<T, Instance> = RawLog<
+		T,
+		Instance,
+	>;
+
+	/// A logs in this module.
+	#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
+	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
+	pub enum RawLog<T, Instance> {
+		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+		AmountChange(u32),
+	}
+
+	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
+
+	impl<T: Trait<Instance>, Instance: InstantiableThing> ProvideInherent for Module<T, Instance> {
+		type Call = Call<T, Instance>;
+		type Error = MakeFatalError<RuntimeString>;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+			unimplemented!();
+		}
+
+		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> rstd::result::Result<(), Self::Error> {
+			unimplemented!();
+		}
+	}
 }
 
 // Test for:
@@ -125,7 +165,7 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Trait<Instance=DefaultInstance>: module1::Trait<module1::Instance1> + system::Trait {
+	pub trait Trait<Instance=DefaultInstance>: system::Trait {
 		type Amount: Parameter + Default;
 		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
 	}
@@ -170,9 +210,11 @@ mod module3 {
 
 impl module1::Trait<module1::Instance1> for Runtime {
 	type Event = Event;
+	type Origin = Origin;
 }
 impl module1::Trait<module1::Instance2> for Runtime {
 	type Event = Event;
+	type Origin = Origin;
 }
 impl module2::Trait for Runtime {
 	type Amount = u16;
@@ -211,6 +253,7 @@ impl system::Trait for Runtime {
 
 // TODO TODO: try to deposit event inside structure
 // TODO TODO: test two generic with log without instance
+// TODO TODO: how can we test generation of inherent, log, origin ?
 
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, ()>) where
@@ -219,8 +262,8 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
-		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
-		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
+		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
+		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
 		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>},
 		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
 		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
