@@ -226,7 +226,7 @@ impl<T:
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same
 /// as `Zero`.
 pub trait Clear {
-	/// True iff no bits are set.
+	/// True off no bits are set.
 	fn is_clear(&self) -> bool;
 
 	/// Return the value of Self that is clear.

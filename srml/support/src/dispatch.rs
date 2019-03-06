@@ -27,7 +27,7 @@ pub use srml_metadata::{
 	FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };
 
-/// Result of a module function call; either nothing (functions are only called for "side efeects")
+/// Result of a module function call; either nothing (functions are only called for "side effects")
 /// or an error message.
 pub type Result = result::Result<(), &'static str>;
 

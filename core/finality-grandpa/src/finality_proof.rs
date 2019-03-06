@@ -170,14 +170,14 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 		}
 	}
 
-	// check that the last header in finalization path is the jsutification target block
+	// check that the last header in finalization path is the justification target block
 	let just_block = proof.justification.target_block();
 	{
 		let finalized_header = proof.finalization_path.last()
 			.expect("checked above that proof.finalization_path is not empty; qed");
 		if *finalized_header.number() != just_block.0 || finalized_header.hash() != just_block.1 {
 			return Err(ClientErrorKind::BadJustification(
-				"finality proof: target jsutification block is not a part of finalized path".into()
+				"finality proof: target justification block is not a part of finalized path".into()
 			).into());
 		}
 	}

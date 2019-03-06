@@ -50,7 +50,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
 	spec_version: 1,
-	impl_version: 1,
+	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -203,7 +203,7 @@ cfg_if! {
 			pub trait TestAPI {
 				/// Return the balance of the given account id.
 				fn balance_of(id: AccountId) -> u64;
-				/// A benchmkark function that adds one to the given value and returns the result.
+				/// A benchmark function that adds one to the given value and returns the result.
 				fn benchmark_add_one(val: &u64) -> u64;
 				/// A benchmark function that adds one to each value in the given vector and returns the
 				/// result.
@@ -226,7 +226,7 @@ cfg_if! {
 			pub trait TestAPI {
 				/// Return the balance of the given account id.
 				fn balance_of(id: AccountId) -> u64;
-				/// A benchmkark function that adds one to the given value and returns the result.
+				/// A benchmark function that adds one to the given value and returns the result.
 				fn benchmark_add_one(val: &u64) -> u64;
 				/// A benchmark function that adds one to each value in the given vector and returns the
 				/// result.

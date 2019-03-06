@@ -67,7 +67,7 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 ///
 /// mod event2 {
 ///     // Event that uses the generic parameter `Balance`.
-///     // If no name for the generic parameter is speciefied explicitly,
+///     // If no name for the generic parameter is specified explicitly,
 ///     // the name will be taken from the type name of the trait.
 ///     decl_event!(
 ///	       pub enum Event<T> where <T as super::Trait>::Balance {
