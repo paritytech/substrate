@@ -368,31 +368,10 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Ensures that the account is completely unencumbered. If this is `Ok` then there's no need to
-	/// check any other items. If it's an `Err`, then you must use one pair of the other items.
-	pub fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		let locks = Self::locks(who);
-		if locks.is_empty() {
-			return Ok(())
-		}
-		let now = <system::Module<T>>::block_number();
-		if locks.iter().all(|l| l.until <= now) {
-			<Locks<T>>::remove(who);
-			Ok(())
-		} else {
-			Err("account has current liquidity restrictions")
-		}
-	}
-
 	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
 	/// for the given reason.
 	/// 
 	/// `Err(...)` with the reason why not otherwise.
-	/// 
-	/// By default this just reflects the results of `ensure_account_liquid`.
-	/// 
-	/// @warning If you redefine this away from the default, ensure that you define
-	/// `ensure_account_liquid` in accordance.
 	pub fn ensure_account_can_withdraw(
 		who: &T::AccountId,
 		_amount: T::Balance,
