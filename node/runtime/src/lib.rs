@@ -115,7 +115,7 @@ impl consensus::Trait for Runtime {
 	type Log = Log;
 	type SessionKey = SessionKey;
 
-	// the aura module handles offline-reports internally
+	// The Aura module handles offline-reports internally
 	// rather than using an explicit report system.
 	type InherentOfflineReport = ();
 }
