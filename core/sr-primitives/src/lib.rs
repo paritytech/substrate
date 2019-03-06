@@ -40,8 +40,6 @@ use substrate_metadata_derive::EncodeMetadata;
 
 #[cfg(feature = "std")]
 use substrate_primitives::hexdisplay::ascii_format;
-#[cfg(feature = "std")]
-use substrate_primitives::Ed25519AuthorityId;
 
 #[cfg(feature = "std")]
 pub mod testing;
@@ -255,68 +253,13 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// An identifier for an account on this system.
-#[derive(Eq, PartialEq, Copy, Clone, Default, Encode, Decode, EncodeMetadata, Ord, PartialOrd)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct AccountId(pub H256);
-
-impl AccountId {
-	/// Extracts a byte slice containing the entire fixed hash.
-	pub fn as_bytes(&self) -> &[u8] {
-		self.0.as_bytes()
-	}
-
-	/// Returns the inner bytes array.
-	pub fn to_fixed_bytes(&self) -> [u8; 32] {
-		self.0.to_fixed_bytes()
-	}
-}
-
-impl From<H256> for AccountId {
-	fn from(h: H256) -> AccountId {
-		AccountId(h)
-	}
-}
-
-impl From<[u8; 32]> for AccountId {
-	fn from(h: [u8; 32]) -> AccountId {
-		AccountId(h.into())
-	}
-}
-
-impl Into<[u8; 32]> for AccountId {
-	fn into(self) -> [u8; 32] {
-		self.0.into()
-	}
-}
-
-impl AsRef<[u8]> for AccountId {
-	fn as_ref(&self) -> &[u8] {
-		self.0.as_ref()
-	}
-}
-
-#[cfg(feature = "std")]
-impl From<Ed25519AuthorityId> for AccountId {
-	fn from(id: Ed25519AuthorityId) -> AccountId {
-		AccountId(id.0.into())
-	}
-}
-
-#[cfg(feature = "std")]
-impl std::fmt::Display for AccountId {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		self.0.fmt(f)
-	}
-}
-
 /// Ed25519 signature verify.
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Ed25519Signature(pub H512);
 
 impl Verify for Ed25519Signature {
-	type Signer = AccountId;
+	type Signer = H256;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::ed25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
 	}
@@ -334,7 +277,7 @@ impl From<H512> for Ed25519Signature {
 pub struct Sr25519Signature(pub H512);
 
 impl Verify for Sr25519Signature {
-	type Signer = AccountId;
+	type Signer = H256;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
 		runtime_io::sr25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
 	}
