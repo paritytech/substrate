@@ -122,6 +122,13 @@ type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 #[cfg(not(feature = "std"))]
 type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
 
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct TypeName {
+	pub type_name: MetadataName,
+	pub display_name: DecodeDifferentStr,
+}
+
 /// All the metadata about a function.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -136,7 +143,7 @@ pub struct FunctionMetadata {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct FunctionArgumentMetadata {
 	pub name: DecodeDifferentStr,
-	pub ty: MetadataName,
+	pub ty: TypeName,
 }
 
 /// Newtype wrapper for support encoding functions (actual the result of the function).
@@ -188,7 +195,7 @@ pub struct OuterEventMetadata {
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct EventMetadata {
 	pub name: DecodeDifferentStr,
-	pub arguments: Vec<MetadataName>,
+	pub arguments: Vec<TypeName>,
 	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
@@ -252,10 +259,10 @@ impl std::fmt::Debug for DefaultByteGetter {
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum StorageFunctionType {
-	Plain(MetadataName),
+	Plain(TypeName),
 	Map {
-		key: MetadataName,
-		value: MetadataName,
+		key: TypeName,
+		value: TypeName,
 	}
 }
 
@@ -325,6 +332,7 @@ impl Decode for RuntimeMetadataDeprecated {
 pub struct RuntimeMetadataV2 {
 	/// Contains details of each runtime module
 	pub modules: Vec<ModuleMetadata>,
+	pub module_path: DecodeDifferentStr,
 	/// Contains all the type descriptions in all the runtime modules
 	pub type_registry: substrate_metadata::MetadataRegistry,
 	/// The block type been used, which should include the type description of header and extrinsic

@@ -58,7 +58,7 @@ pub use crate::rstd::boxed::Box;
 pub use srml_metadata::{
 	DecodeDifferent, StorageFunctionMetadata,
 	StorageFunctionType, StorageFunctionModifier,
-	DefaultByte, DefaultByteGetter
+	DefaultByte, DefaultByteGetter, TypeName
 };
 
 /// Abstraction around storage.
