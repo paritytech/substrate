@@ -120,7 +120,7 @@ impl<B: BlockT> ImportQueueClone<B> for BasicQueue<B> {
 /// "BasicQueue" is a wrapper around a channel sender to the "BlockImporter".
 /// "BasicQueue" itself does not keep any state or do any importing work, and can therefore be send to other threads.
 ///
-/// "BasiqQueue" implements "ImportQueue" by sending messages to the "BlockImporter", which runs in it's own thread.
+/// "BasicQueue" implements "ImportQueue" by sending messages to the "BlockImporter", which runs in it's own thread.
 ///
 /// The "BlockImporter" is responsible for handling incoming requests from the "BasicQueue",
 /// some of these requests are handled by the "BlockImporter" itself, such as "is_importing" or "status",
