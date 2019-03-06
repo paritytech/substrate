@@ -20,18 +20,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+use runtime_io::with_storage;
 use rstd::{prelude::*, result};
 use parity_codec::{HasCompact, Encode, Decode};
 use srml_support::{StorageValue, StorageMap, EnumerableStorageMap, dispatch::Result};
 use srml_support::{decl_module, decl_event, decl_storage, ensure};
 use srml_support::traits::{
-	Currency, OnDilution, EnsureAccountLiquid, OnFreeBalanceZero, WithdrawReason, ArithmeticType
+	Currency, OnDilution, OnFreeBalanceZero, ArithmeticType,
+	LockIdentifier, LockableCurrency, WithdrawReasons
 };
 use session::OnSessionChange;
 use primitives::Perbill;
-use primitives::traits::{Zero, One, As, StaticLookup, Saturating};
+use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
 use system::ensure_signed;
-
 mod mock;
 
 mod tests;
@@ -111,7 +113,11 @@ pub struct StakingLedger<AccountId, Balance: HasCompact, BlockNumber: HasCompact
 	pub unlocking: Vec<UnlockChunk<Balance, BlockNumber>>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + Saturating, BlockNumber: HasCompact + PartialOrd> StakingLedger<AccountId, Balance, BlockNumber> {
+impl<
+	AccountId,
+	Balance: HasCompact + Copy + Saturating,
+	BlockNumber: HasCompact + PartialOrd
+> StakingLedger<AccountId, Balance, BlockNumber> {
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
 	fn consolidate_unlocked(self, current_era: BlockNumber) -> Self {
@@ -157,7 +163,10 @@ type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The staking balance.
-	type Currency: ArithmeticType + Currency<Self::AccountId, Balance=BalanceOf<Self>>;
+	type Currency:
+		ArithmeticType +
+		Currency<Self::AccountId, Balance=BalanceOf<Self>> +
+		LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
 	/// Some tokens minted.
 	type OnRewardMinted: OnDilution<BalanceOf<Self>>;
@@ -165,6 +174,8 @@ pub trait Trait: system::Trait + session::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
+
+const STAKING_ID: LockIdentifier = *b"staking ";
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
@@ -192,21 +203,9 @@ decl_storage! {
 		pub Invulnerables get(invulnerables) config(): Vec<T::AccountId>;
 
 		/// Map from all locked "stash" accounts to the controller account.
-		pub Bonded get(bonded) build(|config: &GenesisConfig<T>| {
-			config.stakers.iter().map(|(stash, controller, _)| (stash.clone(), controller.clone())).collect::<Vec<_>>()
-		}): map T::AccountId => Option<T::AccountId>;
+		pub Bonded get(bonded): map T::AccountId => Option<T::AccountId>;
 		/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
-		pub Ledger get(ledger) build(|config: &GenesisConfig<T>| {
-			config.stakers.iter().map(|(stash, controller, value)| (
-				controller.clone(),
-				StakingLedger {
-					stash: stash.clone(),
-					total: *value,
-					active: *value,
-					unlocking: Vec::<UnlockChunk<BalanceOf<T>, T::BlockNumber>>::new(),
-				},
-			)).collect::<Vec<_>>()
-		}): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+		pub Ledger get(ledger): map T::AccountId => Option<StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// Where the reward payment should be made.
 		pub Payee get(payee): map T::AccountId => RewardDestination;
@@ -214,12 +213,7 @@ decl_storage! {
 		/// The set of keys are all controllers that want to validate.
 		/// 
 		/// The values are the preferences that a validator has.
-		pub Validators get(validators) build(|config: &GenesisConfig<T>| {
-			config.stakers.iter().map(|(_stash, controller, _value)| (
-				controller.clone(),
-				ValidatorPrefs::<BalanceOf<T>>::default(),
-			)).collect::<Vec<_>>()
-		}): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
+		pub Validators get(validators): linked_map T::AccountId => ValidatorPrefs<BalanceOf<T>>;
 
 		/// The set of keys are all controllers that want to nominate.
 		/// 
@@ -228,16 +222,7 @@ decl_storage! {
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
-		pub Stakers get(stakers) build(|config: &GenesisConfig<T>| {
-			config.stakers.iter().map(|(_stash, controller, value)| (
-				controller.clone(),
-				Exposure {
-					total: *value,
-					own: *value,
-					others: Vec::<IndividualExposure<T::AccountId, _>>::new(),
-				},
-			)).collect::<Vec<_>>()
-		}): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
+		pub Stakers get(stakers): map T::AccountId => Exposure<T::AccountId, BalanceOf<T>>;
 
 		// The historical validators and their nominations for a given era. Stored as a trie root of the mapping
 		// `T::AccountId` => `Exposure<T::AccountId, BalanceOf<T>>`, which is just the contents of `Stakers`,
@@ -282,7 +267,16 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>)>;
-	}
+		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
+			with_storage(storage, || {
+				for &(ref stash, ref controller, balance) in &config.stakers {
+					let _ = <Module<T>>::bond(T::Origin::from(Some(stash.clone()).into()), T::Lookup::unlookup(controller.clone()), balance, RewardDestination::Staked);
+					let _ = <Module<T>>::validate(T::Origin::from(Some(controller.clone()).into()), Default::default());
+				}
+				<Module<T>>::select_validators();
+			});
+		});
+	}	
 }
 
 decl_module! {
@@ -307,7 +301,7 @@ decl_module! {
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 
-			<Ledger<T>>::insert(&controller, StakingLedger { stash, total: value, active: value, unlocking: vec![] });
+			Self::update_ledger(&controller, StakingLedger { stash, total: value, active: value, unlocking: vec![] });
 			<Payee<T>>::insert(&controller, payee);
 		}
 
@@ -326,7 +320,7 @@ decl_module! {
 				let extra = (stash_balance - ledger.total).min(max_additional);
 				ledger.total += extra;
 				ledger.active += extra;
-				<Ledger<T>>::insert(&controller, ledger);
+				Self::update_ledger(&controller, ledger);
 			}
 		}
 
@@ -358,7 +352,7 @@ decl_module! {
 
 				let era = Self::current_era() + Self::bonding_duration();
 				ledger.unlocking.push(UnlockChunk { value, era });
-				<Ledger<T>>::insert(&controller, ledger);
+				Self::update_ledger(&controller, ledger);
 			}
 		}
 
@@ -373,7 +367,8 @@ decl_module! {
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
-			<Ledger<T>>::insert(&controller, ledger.consolidate_unlocked(Self::current_era()));
+			let ledger = ledger.consolidate_unlocked(Self::current_era());
+			Self::update_ledger(&controller, ledger);
 		}
 
 		/// Declare the desire to validate for the origin controller.
@@ -503,8 +498,14 @@ impl<T: Trait> Module<T> {
 		Self::stakers(who).total
 	}
 
-	// PUBLIC MUTABLES (DANGEROUS)
-	
+	// MUTABLES (DANGEROUS)
+
+	/// Update the ledger for a controller. This will also update the stash lock.
+	fn update_ledger(controller: &T::AccountId, ledger: StakingLedger<T::AccountId, BalanceOf<T>, T::BlockNumber>) {
+		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, T::BlockNumber::max_value(), WithdrawReasons::all());
+		<Ledger<T>>::insert(controller, ledger);
+	}
+
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
 	/// and reduces the nominators' balance if needed.
 	fn slash_validator(v: &T::AccountId, slash: BalanceOf<T>) {
@@ -540,13 +541,13 @@ impl<T: Trait> Module<T> {
 			RewardDestination::Stash => {
 				let _ = Self::ledger(who).map(|l| T::Currency::reward(&l.stash, amount));
 			}
-			RewardDestination::Staked => <Ledger<T>>::mutate(who, |ml| {
-				if let Some(l) = ml.as_mut() {
+			RewardDestination::Staked =>
+				if let Some(mut l) = Self::ledger(who) {
 					l.active += amount;
 					l.total += amount;
 					let _ = T::Currency::reward(&l.stash, amount);
-				}
-			}),
+					Self::update_ledger(who, l);
+				},
 		}		
 	}
 
@@ -626,7 +627,17 @@ impl<T: Trait> Module<T> {
 		}
 
 		// Reassign all Stakers.
+		let slot_stake = Self::select_validators();
 
+		// Update the balances for slashing/rewarding according to the stakes.
+		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * slot_stake);
+		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
+	}
+
+	/// Select a new validator set from the assembled stakers and their role preferences.
+	///
+	/// @returns the new SlotStake value.
+	fn select_validators() -> BalanceOf<T> {
 		// Map of (would-be) validator account to amount of stake backing it.
 		
 		// First, we pull all validators, together with their stash balance into a Vec (cpu=O(V), mem=O(V))
@@ -658,6 +669,7 @@ impl<T: Trait> Module<T> {
 		// cpu=O(V.log(s)) average, O(V.s) worst.
 		let count = Self::validator_count() as usize;
 		let candidates = if candidates.len() <= count {
+			candidates.sort_unstable_by(|a, b| b.1.total.cmp(&a.1.total));
 			candidates
 		} else {
 			candidates.into_iter().fold(vec![], |mut winners: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>, entry| {
@@ -700,9 +712,7 @@ impl<T: Trait> Module<T> {
 			&candidates.into_iter().map(|i| i.0).collect::<Vec<_>>()
 		);
 
-		// Update the balances for slashing/rewarding according to the stakes.
-		<CurrentOfflineSlash<T>>::put(Self::offline_slash() * slot_stake);
-		<CurrentSessionReward<T>>::put(Self::session_reward() * slot_stake);
+		slot_stake
 	}
 
 	/// Call when a validator is determined to be offline. `count` is the
@@ -766,29 +776,6 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 	fn on_session_change(elapsed: T::Moment, should_reward: bool) {
 		Self::new_session(elapsed, should_reward);
-	}
-}
-
-impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
-	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		if <Bonded<T>>::exists(who) {
-			Err("stash accounts are not liquid")
-		} else {
-			Ok(())
-		}
-	}
-	fn ensure_account_can_withdraw(
-		who: &T::AccountId,
-		amount: BalanceOf<T>,
-		_reason: WithdrawReason,
-	) -> Result {
-		if let Some(controller) = Self::bonded(who) {
-			let ledger = Self::ledger(&controller).ok_or("stash without controller")?;
-			let free_balance = T::Currency::free_balance(&who);
-			ensure!(free_balance.saturating_sub(ledger.total) > amount,
-				"stash with too much under management");
-		}		
-		Ok(())
 	}
 }
 
