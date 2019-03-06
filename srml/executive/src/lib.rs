@@ -319,7 +319,6 @@ mod tests {
 		type Balance = u64;
 		type OnFreeBalanceZero = ();
 		type OnNewAccount = ();
-		type EnsureAccountLiquid = ();
 		type Event = MetaEvent;
 	}
 	impl fees::Trait for Runtime {

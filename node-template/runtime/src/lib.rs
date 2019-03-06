@@ -7,7 +7,7 @@
 
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;
@@ -158,8 +158,6 @@ impl balances::Trait for Runtime {
 	type OnFreeBalanceZero = ();
 	/// What to do if a new account is created.
 	type OnNewAccount = Indices;
-	/// Restrict whether an account can transfer funds. We don't place any further restrictions.
-	type EnsureAccountLiquid = ();
 	/// The uniquitous event type.
 	type Event = Event;
 }

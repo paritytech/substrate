@@ -54,7 +54,6 @@ impl balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Staking;
 	type OnNewAccount = ();
-	type EnsureAccountLiquid = Staking;
 	type Event = ();
 }
 impl session::Trait for Test {
@@ -89,13 +88,13 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			existential_deposit: 0,
-			session_length: 3,
-			sessions_per_era: 3,
+			session_length: 1,
+			sessions_per_era: 1,
 			current_era: 0,
 			monied: true,
 			reward: 10,
 			validator_pool: false,
-			nominate: false,
+			nominate: true,
 			validator_count: 2,
 			minimum_validator_count: 0,
 		}
@@ -146,29 +145,37 @@ impl ExtBuilder {
 		self
 	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		let balance_factor = if self.existential_deposit > 0 {
 			256
 		} else {
 			1
 		};
-		t.extend(consensus::GenesisConfig::<Test>{
+		let _ = consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![],
-		}.build_storage().unwrap().0);
-		t.extend(session::GenesisConfig::<Test>{
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = session::GenesisConfig::<Test>{
 			session_length: self.session_length,
+			// NOTE: if config.nominate == false then 100 is also selected in the initial round.
 			validators: if self.validator_pool { vec![10, 20, 30, 40] }  else { vec![10, 20] },
 			keys: vec![],
-		}.build_storage().unwrap().0);
-		t.extend(balances::GenesisConfig::<Test>{
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = balances::GenesisConfig::<Test>{
 			balances: if self.monied {
 				if self.reward > 0 {
 					vec![
-						(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor),
-						(10, balance_factor), (11, balance_factor * 1000), (20, balance_factor), (21, balance_factor * 2000)]
+						(1, 10 * balance_factor),(2, 20 * balance_factor),
+						(3, 300 * balance_factor),(4, 400 * balance_factor),
+						(10, balance_factor), (11, balance_factor * 1000),
+						(20, balance_factor), (21, balance_factor * 2000),
+						(100, 2000 * balance_factor), (101, 2000 * balance_factor)
+					]
 				} else {
-					vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 300 * balance_factor), (4, 400 * balance_factor)]
+					vec![
+						(1, 10 * balance_factor), (2, 20 * balance_factor),
+						(3, 300 * balance_factor), (4, 400 * balance_factor)
+					]
 				}
 			} else {
 				vec![
@@ -181,14 +188,26 @@ impl ExtBuilder {
 			transfer_fee: 0,
 			creation_fee: 0,
 			vesting: vec![],
-		}.build_storage().unwrap().0);
-		t.extend(GenesisConfig::<Test>{
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = GenesisConfig::<Test>{
 			sessions_per_era: self.sessions_per_era,
 			current_era: self.current_era,
 			stakers: if self.validator_pool {
-				vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000), (31, 30, balance_factor * 3000), (41, 40, balance_factor * 4000)]
+				vec![
+					(11, 10, balance_factor * 1000),
+					(21, 20, balance_factor * 2000),
+					(31, 30, balance_factor * 3000),
+					(41, 40, balance_factor * 4000),
+					// nominators 
+					(101, 100, balance_factor * 500)
+				]
 			} else {
-				vec![(11, 10, balance_factor * 1000), (21, 20, balance_factor * 2000)]
+				vec![
+					(11, 10, balance_factor * 1000), 
+					(21, 20, balance_factor * 2000),
+					// nominators 
+					(101, 100, balance_factor * 500)
+				]
 			},
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
@@ -199,11 +218,11 @@ impl ExtBuilder {
 			current_offline_slash: 20,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-			nominators: if self.nominate { vec![(10, vec![20]), (20, vec![10])]} else { vec![] },
-		}.build_storage().unwrap().0);
-		t.extend(timestamp::GenesisConfig::<Test>{
+			nominators: if self.nominate { vec![(100, vec![10, 20]) } else { vec![] },
+		}.assimilate_storage(&mut t, &mut c);
+		let _ = timestamp::GenesisConfig::<Test>{
 			period: 5,
-		}.build_storage().unwrap().0);
+		}.assimilate_storage(&mut t, &mut c);
 		t.into()
 	}
 }

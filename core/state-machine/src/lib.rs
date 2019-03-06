@@ -29,6 +29,7 @@ pub mod backend;
 mod changes_trie;
 mod ext;
 mod testing;
+mod basic;
 mod overlayed_changes;
 mod proving_backend;
 mod trie_backend;
@@ -37,6 +38,7 @@ mod trie_backend_essence;
 use overlayed_changes::OverlayedChangeSet;
 pub use trie::{TrieMut, TrieDBMut, DBValue, MemoryDB};
 pub use testing::TestExternalities;
+pub use basic::BasicExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
 pub use changes_trie::{
@@ -625,7 +627,7 @@ where
 /// differs from previous OR config decode has failed.
 pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>, final_check: bool) -> Result<(), Box<Error>> {
 	let config = match config {
-		Some(v) => Some(changes_trie::Configuration::decode(&mut &v[..])
+		Some(v) => Some(Decode::decode(&mut &v[..])
 			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
 		None => None,
 	};

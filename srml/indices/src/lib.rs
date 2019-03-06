@@ -198,4 +198,7 @@ impl<T: Trait> StaticLookup for Module<T> {
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
 		Self::lookup_address(a).ok_or("invalid account index")
 	}
+	fn unlookup(a: Self::Target) -> Self::Source {
+		address::Address::Id(a)
+	}
 }

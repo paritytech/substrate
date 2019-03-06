@@ -17,18 +17,28 @@
 #[doc(hidden)]
 pub use parity_codec as codec;
 // re-export hashing functions.
-pub use primitives::{blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519};
+pub use primitives::{
+	blake2_256, twox_128, twox_256, ed25519, Blake2Hasher, sr25519
+};
 pub use tiny_keccak::keccak256 as keccak_256;
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
-pub use substrate_state_machine::{Externalities, TestExternalities};
+pub use substrate_state_machine::{Externalities, BasicExternalities, TestExternalities};
 
 use environmental::{environmental, thread_local_impl};
-use primitives::hexdisplay::HexDisplay;
-use primitives::H256;
+use primitives::{hexdisplay::HexDisplay, H256};
 use hash_db::Hasher;
 
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+
 environmental!(ext: trait Externalities<Blake2Hasher>);
+
+/// A set of key value pairs for storage.
+pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
+
+/// A set of key value pairs for children storage;
+pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
@@ -196,7 +206,7 @@ pub fn sr25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 
 /// Verify and recover a SECP256k1 ECDSA signature.
 /// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-/// - returns `Err` if the signatue is bad, otherwise the 64-byte pubkey (doesn't include the 0x04 prefix).
+/// - returns `Err` if the signature is bad, otherwise the 64-byte pubkey (doesn't include the 0x04 prefix).
 pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64], EcdsaVerifyError> {
 	let rs = secp256k1::Signature::parse_slice(&sig[0..64]).map_err(|_| EcdsaVerifyError::BadRS)?;
 	let v = secp256k1::RecoveryId::parse(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8).map_err(|_| EcdsaVerifyError::BadV)?;
@@ -211,6 +221,17 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
 pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Hasher>, f: F) -> R {
 	ext::using(ext, f)
+}
+
+/// Execute the given closure with global functions available whose functionality routes into
+/// externalities that draw from and populate `storage`. Forwards the value that the closure returns.
+pub fn with_storage<R, F: FnOnce() -> R>(storage: &mut StorageOverlay, f: F) -> R {
+	let mut alt_storage = Default::default();
+	rstd::mem::swap(&mut alt_storage, storage);
+	let mut ext: BasicExternalities = alt_storage.into();
+	let r = ext::using(&mut ext, f);
+	*storage = ext.into();
+	r
 }
 
 /// Trait for things which can be printed.
@@ -248,7 +269,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher>::default();
+		let mut t = BasicExternalities::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -258,7 +279,7 @@ mod std_tests {
 			true
 		}));
 
-		t = TestExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
+		t = BasicExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
 
 		assert!(!with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
@@ -269,7 +290,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher>::new(map![
+		let mut t = BasicExternalities::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		]);
 
@@ -285,7 +306,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = TestExternalities::<Blake2Hasher>::new(map![
+		let mut t = BasicExternalities::new(map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

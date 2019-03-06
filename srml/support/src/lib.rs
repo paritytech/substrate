@@ -19,14 +19,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
+#[macro_use]
+extern crate bitmask;
+
 #[cfg(feature = "std")]
 pub use serde;
 #[doc(hidden)]
 pub use sr_std as rstd;
 #[doc(hidden)]
 pub use parity_codec as codec;
-#[doc(hidden)]
-pub use parity_codec_derive;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;

@@ -27,7 +27,11 @@ use srml_support::traits::Currency;
 #[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
-	with_externalities(&mut ExtBuilder::default().build(),
+	with_externalities(&mut ExtBuilder::default()
+		.nominate(true)
+		.sessions_per_era(1)
+		.session_length(1)
+		.build(),
 	|| {
 		assert_eq!(Staking::bonded(&11), Some(10)); // Account 11 is stashed and locked, and account 10 is the controller
 		assert_eq!(Staking::bonded(&21), Some(20)); // Account 21 is stashed and locked, and account 20 is the controller
@@ -250,7 +254,12 @@ fn max_unstake_threshold_works() {
 #[test]
 fn slashing_does_not_cause_underflow() {
 	// Tests that slashing more than a user has does not underflow
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	with_externalities(&mut ExtBuilder::default()
+		.sessions_per_era(1)
+		.session_length(1)
+		.nominate(true)
+		.build(),
+	|| {
 		// One user with less than `max_value` will test underflow does not occur
 		Balances::set_free_balance(&10, 1);
 
@@ -263,6 +272,9 @@ fn slashing_does_not_cause_underflow() {
 			unstake_threshold: 10,
 			validator_payment: 0,
 		});
+
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
 
 		// Should not panic
 		Staking::on_offline_validator(10, 100);
@@ -353,7 +365,10 @@ fn multi_era_reward_should_work() {
 	// should check that:
 	// The value of current_session_reward is set at the end of each era, based on
 	// slot_stake and session_reward. Check and verify this.
-	with_externalities(&mut ExtBuilder::default().nominate(true).build(),
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(3)
+		.sessions_per_era(3)
+		.build(),
 	|| {
 		let delay = 0;
 		let session_reward = 10;
@@ -427,9 +442,10 @@ fn staking_should_work() {
 	// * either one can unlock the stash and back-down from being a validator via `chill`ing.
 	with_externalities(&mut ExtBuilder::default().session_length(1).build(), || {
 		assert_eq!(Staking::era_length(), 3);
-		assert_eq!(Staking::validator_count(), 2);
 		// remember + compare this along with the test.
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_ok!(Staking::set_bonding_duration(2));
+		assert_eq!(Staking::bonding_duration(), 2);
 
 		// put some money in account that we'll use.
 		for i in 1..5 { Balances::set_free_balance(&i, 1000); }
@@ -449,7 +465,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		// No effects will be seen so far.s
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![100, 20, 10]);
 		
 
 		// --- Block 2:
@@ -461,7 +477,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		// No effects will be seen so far. Era has not been yet triggered.
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![100, 20, 10]);
 
 
 		// --- Block 3: the validators will now change.
@@ -518,9 +534,8 @@ fn less_than_needed_candidates_works() {
 	with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(1)
 		.validator_count(3)
-		.session_length(1)
+		.nominate(false)
 		.validator_pool(true)
-		.sessions_per_era(1)
 		.build(), 
 	|| {
 		assert_eq!(Staking::era_length(), 1);
@@ -530,7 +545,8 @@ fn less_than_needed_candidates_works() {
 		assert_eq!(Staking::validator_count(), 3);
 
 		// initial validators 
-		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
+		// note that since the test is `.nominate(false)` 100 is also treated initially as a validators
+		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
 
 		// only one nominator will exist and it will 
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
@@ -556,9 +572,8 @@ fn no_candidate_emergency_condition() {
 	with_externalities(&mut ExtBuilder::default()
 		.minimum_validator_count(1)
 		.validator_count(3)
-		.session_length(1)
+		.nominate(false)
 		.validator_pool(true)
-		.sessions_per_era(1)
 		.build(), 
 	|| {
 		assert_eq!(Staking::era_length(), 1);
@@ -568,7 +583,8 @@ fn no_candidate_emergency_condition() {
 		assert_eq!(Staking::validator_count(), 3);
 
 		// initial validators 
-		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
+		// note that since the test is `.nominate(false)` 100 is also treated initially as a validators
+		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
 
 		// trigger era
 		System::set_block_number(1);
@@ -576,7 +592,7 @@ fn no_candidate_emergency_condition() {
 		assert_eq!(Staking::current_era(), 1);
 
 		// No one nominates => no one has a proper vote => no change
-		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
 	});
 }
 
@@ -598,13 +614,17 @@ fn nominating_and_rewards_should_work() {
 	// 10  with stake  250.0 20  with stake  250.0 40  with stake  0.0
 
 	with_externalities(&mut ExtBuilder::default()
-		.session_length(1).sessions_per_era(1).validator_pool(true).build(),
+		.nominate(false)
+		.validator_pool(true)
+		.build(),
 	|| {
-		assert_eq!(Staking::era_length(), 1);
-		assert_eq!(Staking::validator_count(), 2);
-		assert_eq!(Staking::bonding_duration(), 3);
-		// initially, all 4 are set, from the next era we will choose only 2
-		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
+		// roll the first era
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+
+		// initial validators 
+		// note that since the test is `.nominate(false)` 100 is also treated initially as a validators
+		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -620,7 +640,6 @@ fn nominating_and_rewards_should_work() {
 		Balances::set_free_balance(&10, initial_balance);
 		Balances::set_free_balance(&20, initial_balance);
 
-		System::set_block_number(1);
 		// record their balances.
 		for i in 1..5 { assert_eq!(Balances::total_balance(&i), initial_balance); }
 
@@ -632,9 +651,9 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Stash));
 		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 20, 40]));
 	
-
+		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Staking::current_era(), 1);
+		assert_eq!(Staking::current_era(), 2);
 		// 10 and 20 have more votes, they will be chosen by phragmen.
 		assert_eq!(Session::validators(), vec![20, 10]);
 		// validators must have already received some rewards.
@@ -689,7 +708,7 @@ fn nominators_also_get_slashed() {
 		// Account 10 has not been reported offline
 		assert_eq!(Staking::slash_count(&10), 0);
 		// initial validators
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -702,7 +721,7 @@ fn nominators_also_get_slashed() {
 		// 2 will nominate for 10
 		let nominator_stake = 500;
 		assert_ok!(Staking::bond(Origin::signed(1), 2, nominator_stake, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 
 		// new era, pay rewards,
 		System::set_block_number(2);
@@ -832,7 +851,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 (via controller 10) is totally staked
 		assert_eq!(Staking::stakers(&10).total, 1000);
 		// Confirm account 11 cannot transfer as a result
-		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "stash with too much under management");
+		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
 		Balances::set_free_balance(&11, 10000);
@@ -844,15 +863,23 @@ fn cannot_transfer_staked_balance() {
 #[test]
 fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	with_externalities(&mut ExtBuilder::default()
+		.session_length(1)
+		.sessions_per_era(1)
+		.nominate(true)
+		.build(), 
+	|| {
+		System::set_block_number(1);
+		Session::check_rotate_session(System::block_number());
+		
 		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
-		assert_eq!(Balances::free_balance(&11), 1000);
+		assert_eq!(Balances::free_balance(&11), 1010);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::stakers(&10).total, 1000);
+		assert_eq!(Staking::stakers(&10).total, 1010);
 		// Confirm account 11 cannot transfer as a result
-		assert_noop!(Balances::reserve(&11, 1), "stash with too much under management");
+		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
 
 		// Give account 11 extra free balance
 		Balances::set_free_balance(&11, 10000);
@@ -1333,7 +1360,7 @@ fn on_free_balance_zero_stash_removes_nominator() {
 }
 
 #[test]
-fn phragmen_poc() {
+fn phragmen_poc_works() {
 	// Tests the POC test of the phragmen, mentioned in the paper and reference implementation.
 	// Initial votes:
 	// vote_list = [
@@ -1357,8 +1384,8 @@ fn phragmen_poc() {
 	with_externalities(&mut ExtBuilder::default()
 		.session_length(1).sessions_per_era(1).build(),
 	|| {
-		// initial setup of 10 and 20, both validators 
-		assert_eq!(Session::validators(), vec![10, 20]);
+		// initial setup of 10 and 20, both validators + 100.
+		assert_eq!(Session::validators(), vec![100, 20, 10]);
 
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 2000, active: 2000, unlocking: vec![] }));
@@ -1397,14 +1424,17 @@ fn phragmen_poc() {
 		Session::check_rotate_session(System::block_number());
 
 
-		// e.g. Z and Y are chosen 
+		// Z and Y are chosen 
 		assert_eq!(Session::validators(), vec![30, 20]);
 
 		// with stake 35 and 25 respectively
-		assert_eq!(Staking::stakers(30).own, 0); // This is only because 30 has been bonded on the fly. 35 is the point, not 'own' Exposure.
+
+		// This is only because 30 has been bonded on the fly. 35 is the point, not 'own' Exposure.
+		assert_eq!(Staking::stakers(30).own, 0); 
 		assert_eq!(Staking::stakers(30).total, 0 + 35);
-		assert_eq!(Staking::stakers(20).own, 2010);
-		assert_eq!(Staking::stakers(20).total, 2010 + 25);
+		
+		assert_eq!(Staking::stakers(20).own, 2000);
+		assert_eq!(Staking::stakers(20).total, 2000 + 25);  
 
 		// 30(Z) was supported by B-4 and C-6 with stake 20 and 15 respectively.
 		assert_eq!(Staking::stakers(30).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![15, 20]);
@@ -1422,9 +1452,7 @@ fn switching_roles() {
 	with_externalities(&mut ExtBuilder::default()
 		.session_length(1).build(),
 	|| {
-		// initial validators 
-		assert_eq!(Staking::validator_count(), 2);
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![100, 20, 10]);
 
 		// put some money in account that we'll use.
 		for i in 1..7 { Balances::set_free_balance(&i, 5000); }
@@ -1445,14 +1473,14 @@ fn switching_roles() {
 		Session::check_rotate_session(System::block_number());
 
 		// no change 
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![100, 20, 10]);
 
 		// new block 
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
 
 		// no change 
-		assert_eq!(Session::validators(), vec![10, 20]);
+		assert_eq!(Session::validators(), vec![100, 20, 10]);
 
 		// new block --> ne era --> new validators
 		System::set_block_number(3);
@@ -1487,10 +1515,8 @@ fn wrong_vote_is_null() {
 	with_externalities(&mut ExtBuilder::default()
 		.session_length(1).sessions_per_era(1).validator_pool(true).build(),
 	|| {
-		// initial validators 
-		assert_eq!(Staking::validator_count(), 2);
 		// from the first era onward, only two will be chosen
-		assert_eq!(Session::validators(), vec![10, 20, 30, 40]);
+		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
 
 		// put some money in account that we'll use.
 		for i in 1..3 { Balances::set_free_balance(&i, 5000); }
