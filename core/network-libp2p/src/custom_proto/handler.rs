@@ -934,15 +934,23 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			return KeepAlive::Until(self.warm_up_end)
 		}
 
+		let mut keep_forever = false;
+
 		for protocol in self.protocols.iter() {
 			match protocol.state {
+				PerProtocolState::Init { .. } | PerProtocolState::Opening { .. } => {}
+				PerProtocolState::BackCompat { .. } | PerProtocolState::Normal { .. } =>
+					keep_forever = true,
 				PerProtocolState::Disabled { .. } | PerProtocolState::ShuttingDown(_) |
 				PerProtocolState::Poisoned => return KeepAlive::Now,
-				_ => {}
 			}
 		}
 
-		KeepAlive::Forever
+		if keep_forever {
+			KeepAlive::Forever
+		} else {
+			KeepAlive::Now
+		}
 	}
 
 	fn shutdown(&mut self) {
