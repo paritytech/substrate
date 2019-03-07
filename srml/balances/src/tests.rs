@@ -110,7 +110,7 @@ fn lock_reasons_should_work() {
 		assert_ok!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment));
 
 		Balances::set_lock(ID_1, &1, 10, u64::max_value(), WithdrawReason::TransactionPayment.into());
-		assert_ok!(<Balances as TransferAsset<_>>::transfer(&1, &2, 1));
+		assert_ok!(Balances::ensure_account_can_withdraw(&1, 1, WithdrawReason::Transfer, 9));
 		assert_ok!(<Balances as Currency<_>>::reserve(&1, 1));
 		assert_noop!(<Balances as TransferAsset<_>>::withdraw(&1, 1, WithdrawReason::TransactionPayment), "account liquidity restrictions prevent withdrawal");
 	});
