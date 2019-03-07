@@ -468,36 +468,40 @@ impl<B: BlockT> ChainSync<B> {
 
 	fn handle_ancestor_search_state(
 		state: AncestorSearchState<B>,
-		n: NumberFor<B>,
+		curr_block_num: NumberFor<B>,
 		block_hash_match: bool,
 	) -> Option<(AncestorSearchState<B>, NumberFor<B>)> {
-		println!("ancestor search: {:?} {:?} {:?}", n, block_hash_match, state);
+		println!("ancestor search: {:?} {:?} {:?}", curr_block_num, block_hash_match, state);
 		match state {
 			AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
 				if block_hash_match && next_distance_to_tip == As::sa(1) {
 					// We found the ancestor so there is no more ancestor search state.
-					println!("ancestor found at {:?}", n);
+					println!("ancestor found at {:?}", curr_block_num);
 					return None;
 				}
 				if block_hash_match {
-					let left = n;
+					let left = curr_block_num;
 					let right = left + next_distance_to_tip / As::sa(2);
 					let middle = left + (right - left) / As::sa(2);
 					Some((AncestorSearchState::BinarySearch(left, right), middle))
 				} else {
-					let n = if n >= next_distance_to_tip { n - next_distance_to_tip } else { As::sa(0) };
+					let next_block_num = if curr_block_num >= next_distance_to_tip {
+						curr_block_num - next_distance_to_tip
+					} else {
+						As::sa(0)
+					};
 					let next_distance_to_tip = next_distance_to_tip * As::sa(2);
-					Some((AncestorSearchState::ExponentialBackoff(next_distance_to_tip), n))
+					Some((AncestorSearchState::ExponentialBackoff(next_distance_to_tip), next_block_num))
 				}
 			},
 			AncestorSearchState::BinarySearch(mut left, mut right) => {
-				if left >= n {
+				if left >= curr_block_num {
 					return None;
 				}
 				if block_hash_match {
-					left = n;
+					left = curr_block_num;
 				} else {
-					right = n;
+					right = curr_block_num;
 				}
 				assert!(right >=  left);
 				let middle = left + (right - left) / As::sa(2);
@@ -555,7 +559,7 @@ impl<B: BlockT> ChainSync<B> {
 					let block_hash_match = match (blocks.get(0), protocol.client().block_hash(num)) {
 						(Some(ref block), Ok(maybe_our_block_hash)) => {
 							trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", num, block.hash, who);
-							maybe_our_block_hash.is_some() && block.hash == maybe_our_block_hash.expect("prev. check and order of eval; qed")
+							maybe_our_block_hash.map_or(false, |x| x == block.hash)
 						},
 						(None, _) => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
