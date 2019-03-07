@@ -31,18 +31,8 @@ use rustc_hex::FromHex;
 
 mod vanity;
 
-trait AsBytes {
-	fn as_bytes(&self) -> &[u8];
-	fn as_bytes_mut(&mut self) -> &mut [u8];
-}
-
-impl AsBytes for [u8; 32] {
-	fn as_bytes(&self) -> &[u8] { &self[..] }
-	fn as_bytes_mut(&mut self) -> &mut [u8] { &mut self[..] }
-}
-
 trait Crypto {
-	type Seed: AsBytes + Sized + Default;
+	type Seed: AsRef<[u8]> + AsMut<[u8]> + Sized + Default;
 	type Pair;
 	fn generate_phrase() -> String {
 		Mnemonic::new(MnemonicType::Words12, Language::English).phrase().to_owned()
@@ -58,7 +48,7 @@ trait Crypto {
 	fn print_from_seed(seed: &Self::Seed) {
 		let pair = Self::pair_from_seed(seed);
 		println!("Seed 0x{} is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
-			HexDisplay::from(&seed.as_bytes()),
+			HexDisplay::from(&seed.as_ref()),
 			HexDisplay::from(&Self::public_from_pair(&pair)),
 			Self::ss58_from_pair(&pair)
 		);
@@ -68,7 +58,7 @@ trait Crypto {
 		let pair = Self::pair_from_seed(&seed);
 		println!("Phrase `{}` is account:\n  Seed: 0x{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
 			phrase,
-			HexDisplay::from(&seed.as_bytes()),
+			HexDisplay::from(&seed.as_ref()),
 			HexDisplay::from(&Self::public_from_pair(&pair)),
 			Self::ss58_from_pair(&pair)
 		);
@@ -185,7 +175,7 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) {
 				panic!("Seed is incorrect size. It must be {} bytes for this cryptography", correct_size);
 			}
 			let mut seed = C::Seed::default();
-			seed.as_bytes_mut().copy_from_slice(&seed_data);
+			seed.as_mut().copy_from_slice(&seed_data);
 			C::print_from_seed(&seed);
 		},
 		_ => print_usage(&matches),

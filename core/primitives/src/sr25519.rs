@@ -34,6 +34,8 @@ use serde::{de, Deserialize, Deserializer, Serializer};
 // signing context
 const SIGNING_CTX: &'static [u8] = b"substrate transaction";
 
+/// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
+///
 /// Instead of importing it for the local module, alias it to be available as a public type
 pub type Signature = H512;
 
@@ -47,11 +49,11 @@ pub struct LocalizedSignature {
 	pub signature: Signature,
 }
 
-/// A public key.
+/// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Public(pub [u8; 32]);
 
-/// A schnorrkel key pair.
+/// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
 pub struct Pair(Keypair);
 
 impl ::std::hash::Hash for Public {
@@ -129,6 +131,11 @@ impl Public {
 		v.extend(&r.as_bytes()[0..2]);
 		v.to_base58()
 	}
+
+	/// Derive a child key from a series of given junctions.
+	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Public> {
+		unimplemented!()
+	}
 }
 
 impl AsRef<[u8; 32]> for Public {
@@ -161,14 +168,14 @@ impl AsRef<Pair> for Pair {
 	}
 }
 
-impl From<schnorrkel::MiniSecretKey> for Pair {
-	fn from(sec: schnorrkel::MiniSecretKey) -> Pair {
+impl From<MiniSecretKey> for Pair {
+	fn from(sec: MiniSecretKey) -> Pair {
 		Pair(sec.expand_to_keypair::<Sha512>())
 	}
 }
 
-impl From<schnorrkel::SecretKey> for Pair {
-	fn from(sec: schnorrkel::SecretKey) -> Pair {
+impl From<SecretKey> for Pair {
+	fn from(sec: SecretKey) -> Pair {
 		Pair(Keypair::from(sec))
 	}
 }
@@ -204,10 +211,17 @@ impl ::std::fmt::Debug for Public {
 	}
 }
 
+/// A since derivation junction description. It is the single parameter used when creating
+/// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
+/// a new public key from an existing public key.
 pub enum DeriveJunction {
+	/// Soft derivation using a 32 byte quantity. Public keys have a correspondent derivation.
 	SoftRaw([u8; 32]),
-	HardRaw([u8; 32]),
+	/// Soft derivation using an 8 byte index. Public keys have a correspondent derivation.
 	SoftIndex(u64),
+	/// Hard derivation using a 32 byte quantity. Public keys do not have a correspondent derivation.
+	HardRaw([u8; 32]),
+	/// Hard derivation using an 8 byte index. Public keys do not have a correspondent derivation.
 	HardIndex(u64),
 }
 
@@ -215,8 +229,8 @@ impl Pair {
 	/// Generate new secure (random) key pair.
 	pub fn generate() -> Pair {
 		let mut csprng: OsRng = OsRng::new().expect("os random generator works; qed");
-		let keypair: Keypair = Keypair::generate(&mut csprng);
-		Pair(keypair)
+		let key_pair: Keypair = Keypair::generate(&mut csprng);
+		Pair(key_pair)
 	}
 
 	/// Make a new key pair from a seed phrase.
@@ -245,8 +259,8 @@ impl Pair {
 			.map(|m| Self::from_entropy(m.entropy(), password))
 	}
 
-	/// Recursively derive a child key with some given path.
-	pub fn derive(&self, _path: &[DeriveJunction]) -> Pair {
+	/// Derive a child key from a series of given junctions.
+	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Pair {
 		unimplemented!()
 	}
 
