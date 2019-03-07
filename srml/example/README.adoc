@@ -1,7 +1,6 @@
 // IMPORTANT NOTES:
 //
-// * Documentation comments (i.e. `/// comment`) - should accompany module functions and be restricted to the module interface, not the internals of the module implementation. Only state inputs, outputs, and a brief description that mentions whether calling it requires root, but without repeating the source code details. 
-// * Documentation comments (i.e. `/// comment`) - capitalise the first word and end with a full stop
+// * Documentation comments (i.e. `/// comment`) - should accompany module functions and be restricted to the module interface, not the internals of the module implementation. Only state inputs, outputs, and a brief description that mentions whether calling it requires root, but without repeating the source code details. Capitalise the first word of each documentation comment and end it with a full stop. Generic example of annotating source code with documentation comments: https://github.com/paritytech/substrate#72-contributing-to-documentation-for-substrate-packages
 // * Self-documenting code - Try to refactor code to be self-documenting.
 // * Code comments - Supplement complex code with a brief explanation, not every line of code.
 // * Identifiers - surround by backticks (i.e. `INHERENT_IDENTIFIER`, `InherentType`, `u64`)
@@ -64,9 +63,11 @@
 // What parameter values are valid and why
 
 ### Storage Items
+
 // Explain any storage items included in this module
 
 ### Digest Items
+
 // Explain any digest items included in this module
 
 ### Inherent Data
