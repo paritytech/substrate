@@ -44,6 +44,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{ed25519, H256};
 use ed25519::Public as AuthorityId;
+use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::justification::GrandpaJustification;
 
@@ -196,6 +197,8 @@ fn do_check_finality_proof<Block: BlockT<Hash=H256>, C, J>(
 	// and now check justification
 	proof.justification.verify(set_id, &grandpa_authorities.into_iter().collect())?;
 
+	telemetry!(CONSENSUS_INFO; "afg.finality_proof_ok";
+		"set_id" => ?set_id, "finalized_header_hash" => ?block.1);
 	Ok(proof.finalization_path)
 }
 
