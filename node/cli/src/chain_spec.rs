@@ -61,7 +61,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	)];
 	// generated with secret: subkey -p danta-root restore $secret
 	let endowed_accounts: Vec<AccountId> = vec![
-		hex!["343df6f04ffae0840f214f6cb0da00b612c7e9347f980e7afafc520582f79136"].into(), // 5DFCkiP9vky31C1ZP3LpuQYinLAFwQqq6vda7NXa8ALCpq5D TODO: change once we switch to sr25519
+		hex!["343df6f04ffae0840f214f6cb0da00b612c7e9347f980e7afafc520582f79136"].into(), // 5DFCkiP9vky31C1ZP3LpuQYinLAFwQqq6vda7NXa8ALCpq5D
 	];
 	const MILLICENTS: u128 = 1_000_000_000;
 	const CENTS: u128 = 1_000 * MILLICENTS;    // assume this is worth about a cent.

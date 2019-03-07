@@ -137,12 +137,12 @@ impl Public {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// `None` if there are any hard junctions in there.
-	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, mut path: Iter) -> Option<Public> {
+	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Option<Public> {
 		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
 		for j in path {
 			match j {
 				DeriveJunction::Soft(cc) => acc = acc.derived_key_simple(ChainCode(cc), &[]).0,
-				DeriveJunction::Hard(cc) => return None,
+				DeriveJunction::Hard(_cc) => return None,
 			}
 		}
 		Some(Self(acc.to_bytes()))
@@ -341,7 +341,7 @@ impl Pair {
 	}
 
 	/// Derive a child key from a series of given junctions.
-	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, mut path: Iter) -> Pair {
+	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Pair {
 		let init = self.0.secret.clone();
 		let result = path.fold(init, |acc, j| match j {
 			DeriveJunction::Soft(cc) => acc.derived_key_simple(ChainCode(cc), &[]).0,

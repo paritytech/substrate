@@ -23,7 +23,7 @@ extern crate rustc_hex;
 
 use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
-use substrate_bip39::{mini_secret_from_entropy};
+use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
 use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay};
 use schnorrkel::keys::MiniSecretKey;
@@ -37,7 +37,11 @@ trait Crypto {
 	fn generate_phrase() -> String {
 		Mnemonic::new(MnemonicType::Words12, Language::English).phrase().to_owned()
 	}
-	fn generate_seed() -> Self::Seed;
+	fn generate_seed() -> Self::Seed {
+		let mut seed: Self::Seed = Default::default();
+		OsRng::new().unwrap().fill_bytes(seed.as_mut());
+		seed
+	}
 	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed;
 	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair;
 	fn pair_from_phrase(phrase: &str, password: Option<&str>) -> Self::Pair {
@@ -65,17 +69,25 @@ trait Crypto {
 	}
 }
 
-struct OriginalEd25519;
+struct Ed25519;
 
-impl Crypto for OriginalEd25519 {
+impl Crypto for Ed25519 {
 	type Seed = [u8; 32];
 	type Pair = ed25519::Pair;
 
-	fn generate_seed() -> Self::Seed {
-		let mut seed = [0u8; 32];
-		OsRng::new().unwrap().fill_bytes(&mut seed[..]);
-		seed
+	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed {
+		Sr25519::seed_from_phrase(phrase, password)
 	}
+	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair { ed25519::Pair::from_seed(seed) }
+	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
+	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { (&pair.public().0[..]).to_owned() }
+}
+
+struct OriginalEd25519;
+
+impl Crypto for OriginalEd25519 {
+	type Seed = <Ed25519 as Crypto>::Seed;
+	type Pair = <Ed25519 as Crypto>::Pair;
 
 	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed {
 		if password.is_some() {
@@ -97,9 +109,9 @@ impl Crypto for OriginalEd25519 {
 		seed
 	}
 
-	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair { ed25519::Pair::from_seed(seed) }
-	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
-	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { (&pair.public().0[..]).to_owned() }
+	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair { Ed25519::pair_from_seed(seed) }
+	fn ss58_from_pair(pair: &Self::Pair) -> String { Ed25519::ss58_from_pair(pair) }
+	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { Ed25519::public_from_pair(pair) }
 }
 
 struct Sr25519;
@@ -107,12 +119,6 @@ struct Sr25519;
 impl Crypto for Sr25519 {
 	type Seed = [u8; 32];
 	type Pair = sr25519::Pair;
-
-	fn generate_seed() -> Self::Seed {
-		let mut seed = [0u8; 32];
-		OsRng::new().unwrap().fill_bytes(&mut seed[..]);
-		seed
-	}
 
 	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed {
 		mini_secret_from_entropy(
@@ -188,6 +194,8 @@ fn main() {
 
 	if matches.is_present("ed25519original") {
 		execute::<OriginalEd25519>(matches)
+	} else if matches.is_present("ed25519") {
+		execute::<Ed25519>(matches)
 	} else {
 		execute::<Sr25519>(matches)
 	}
