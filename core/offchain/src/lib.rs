@@ -79,13 +79,14 @@ impl<C, Block> OffchainWorkers<C, Block> where
 	{
 		let runtime = self.client.runtime_api();
 		let at = BlockId::number(*number);
-		debug!("Checking offchain workers at {:?}", at);
+		let has_api = runtime.has_api::<OffchainWorkerApi<Block>>(&at);
+		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
-		if let Ok(true) = runtime.has_api::<OffchainWorkerApi<Block>>(&at) {
-			debug!("Running offchain workers at {:?}", at);
+		if let Ok(true) = has_api {
 			let (api, runner) = api::Api::new(pool.clone(), self.inherents_pool.clone(), at.clone());
 			self.executor.spawn(runner.process());
 
+			debug!("Running offchain workers at {:?}", at);
 			let api = Box::new(api);
 			runtime.offchain_worker_with_context(&at, ExecutionContext::OffchainWorker(api), *number).unwrap();
 		}
@@ -108,7 +109,7 @@ mod tests {
 
 		// when
 		let offchain = OffchainWorkers::new(client, inherents.clone(), runtime.executor());
-		offchain.on_block_imported(&1u64, &pool);
+		offchain.on_block_imported(&0u64, &pool);
 
 		// then
 		runtime.shutdown_on_idle().wait().unwrap();
