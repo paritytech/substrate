@@ -1,0 +1,124 @@
+// IMPORTANT NOTES:
+//
+// * Documentation comments (i.e. `/// comment`) - should accompany module functions and be restricted to the module interface, not the internals of the module implementation. Only state inputs, outputs, and a brief description that mentions whether calling it requires root, but without repeating the source code details. 
+// * Documentation comments (i.e. `/// comment`) - capitalise the first word and end with a full stop
+// * Self-documenting code - Try to refactor code to be self-documenting.
+// * Code comments - Supplement complex code with a brief explanation, not every line of code.
+// * Identifiers - surround by backticks (i.e. `INHERENT_IDENTIFIER`, `InherentType`, `u64`)
+// * Usage scenarios - should be simple doctests. The compiler should ensure they stay valid.
+// * Extended tutorials - should be moved to external files and refer to.
+
+// EXAMPLE CUSTOM MODULE README
+
+// Add custom module name
+# <INSERT_MODULE_NAME> Module
+
+// Simple description
+
+## Overview
+
+// Description
+// What this module is for.
+// What functionality the module provides.
+// When to use the module (use case examples)
+// How it is used.
+// Inputs it uses and the source of each input.
+// Outputs it produces.
+
+## Public Interface
+
+### Supported Origins
+
+// What origins are used and supported in this module (root, signed, inherent)
+// i.e. root when `ensure_root` used
+// i.e. inherent when `ensure_inherent` used
+// i.e. signed when `ensure_signed` used
+* inherent - <INSERT_DESCRIPTION>
+
+### Types
+
+// Type aliases
+* `ExampleType` - <INSERT_DESCRIPTION>
+
+// IMPORTANT: Reference documentation of aspects such as `storageItems` and `dispatchable` functions should only be included in the https://docs.rs Rustdocs for Substrate and not repeated in the README file.
+
+### Public Inspection functions - Immutable (getters)
+
+// Insert a heading for each getter function signature
+#### `example_getter_name()`
+
+// What it returns
+// Why, when, and how often to call it
+// When it could panic or error
+// When safety issues to consider
+
+### Public Mutable functions (changing state)
+
+// Insert a heading for each setter function signature
+#### `example_setter_name(origin, parameter_name: T::ExampleType)`
+
+// What state it changes
+// Why, when, and how often to call it
+// When it could panic or error
+// When safety issues to consider
+// What parameter values are valid and why
+
+### Storage Items
+// Explain any storage items included in this module
+
+### Digest Items
+// Explain any digest items included in this module
+
+### Inherent Data
+
+// Explain what inherent data (if any) is defined in the module and any other related types
+
+##### Events:
+
+// Insert events for this module if any
+
+##### Errors:
+
+// Explain what generates errors
+
+## Usage
+
+// Insert examples, and code snippets for module usage
+
+// The following example shows how to use the <INSERT_MODULE_NAME> module in your custom module to <INSERT_USAGE_SUMMARY>.
+
+1. Import the `INSERT_MODULE_NAME` module and derive your module configuration trait with the `INSERT_MODULE_NAME` trait.
+
+```
+use <INSERT_MODULE_NAME>;
+
+pub trait Trait: <INSERT_MODULE_NAME>::Trait { }
+```
+
+2. In your module call the `INSERT_MODULE_NAME` module's `example_getter_name()` function to get <EXPLAIN_WHAT_IT_RETURNS>.
+
+```
+const example_value = <INSERT_MODULE_NAME>::Module<T>>::example_getter_name();
+```
+
+## Implementation Details
+
+### Module configuration trait
+
+// Explain implementation details that look important or distinguish the module
+
+The module configuration trait of the `INSERT_MODULE_NAME` module derives from the `INSERT_MODULE_NAME` module and it defines the `ExampleType` type to represent <EXPLAIN_WHAT_IT_REPRESENTS>.
+
+### Other implemented traits
+
+// Explain other implementation trait details
+
+## Extensibility
+
+// Explain how to modify or customise the module to make it their own
+
+## Dependencies
+
+// Dependencies on other SRML modules
+// Genesis configuration modifications that may be made to incorporate this module
+// Interaction with other modules
