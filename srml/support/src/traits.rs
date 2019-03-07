@@ -96,7 +96,7 @@ pub trait Currency<AccountId> {
 	/// alone used to determine the balance when in the contract execution environment. When this
 	/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
 	/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
-	/// is invoked, giving a chance to external modules to cleanup data associated with
+	/// is invoked, giving a chance to external modules to clean up data associated with
 	/// the deleted account.
 	///
 	/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
@@ -123,7 +123,8 @@ pub trait Currency<AccountId> {
 	/// free balance. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
+	/// then `Some(remaining)` will be returned. If all of `value` is deducted, the function
+	/// will return `None`.
 	fn slash(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 
 	/// Adds up to `value` to the free balance of `who`.
@@ -135,7 +136,8 @@ pub trait Currency<AccountId> {
 	///
 	/// If `who` doesn't exist, it is created
 	///
-	/// Returns if the account was successfully updated or update has led to killing of the account.
+	/// Returns `Updated` if the account was successfully updated
+	/// or `AccountKilled` if the update has led to killing the account.
 	///
 	/// NOTE: This assumes that the total stake remains unchanged after this operation.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
@@ -146,17 +148,24 @@ pub trait Currency<AccountId> {
 	/// be returned to notify of this. This is different behaviour to `unreserve`.
 	fn reserve(who: &AccountId, value: Self::Balance) -> result::Result<(), &'static str>;
 
-	/// Moves up to `value` from reserved balance to balance. This function cannot fail.
+	/// Moves up to `value` from reserved balance to free balance. This function cannot fail.
 	///
-	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
+	/// As much funds up to `value` will be moved as possible. If the reserve balance of `who`
+	/// is less than `value`, then `Some(remaining)` will be returned. If all of `value` is
+	/// moved, the function will return `None`.
+	///
 	/// NOTE: This is different to `reserve`.
+	///
+	/// NOTE: If the remaining reserved balance is less than `ExistentialDeposit`, it will
+	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 
-	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
+	/// Deducts up to `value` from reserved balance of `who` and the total stake of the system.
+	/// This function cannot fail.
 	///
-	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
+	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
+	/// is less than `value`, then `Some(remaining)` will be returned. If all of `value` is
+	/// moved, the function will return `None`.
 	fn slash_reserved(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 
 	/// Moves up to `value` from reserved balance of account `slashed` to free balance of account

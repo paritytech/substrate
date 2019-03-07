@@ -16,7 +16,7 @@ The balances module provides functions for:
 - Increasing or decreasing total stake
 - Setting and removing locks on chains that implement `LockableCurrency`
 
-The dispatchable function `transfer` ensures that the sender has signed the transaction. When using the publicly exposed functions in the implementation, you will need to do these checks yourself, as many functions will affect storage without ensuring, for example, that the sender is the signer.
+The dispatchable function `transfer` ensures that the sender has signed the transaction. When using the publicly exposed functions in the implementation, you will need to do these checks in your runtime, as many functions will affect storage without ensuring, for example, that the sender is the signer.
 
 ## Public Interface
 
