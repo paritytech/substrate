@@ -22,49 +22,22 @@
 
 use srml_support::{StorageValue, dispatch::Result, decl_module, decl_storage, decl_event};
 use system::ensure_signed;
-use inherents::{
-	ProvideInherent, InherentData, InherentIdentifier, RuntimeString, MakeFatalError
-};
-use srml_support::rstd;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 ///
 /// `system::Trait` should always be included in our implied traits.
-pub trait Trait<Instance>: balances::Trait {
-	type Origin: From<Origin<Self, Instance>>;
-	type Amount;
+pub trait Trait: balances::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
-	type Log: From<Log<Self, Instance>> + Into<system::DigestItemOf<Self>>;
-}
-
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub enum Origin<T: Trait<Instance>, Instance> {
-	Members(u32),
-	P(T::Amount),
-}
-
-pub type Log<T, Instance> = RawLog<
-	<T as Trait<Instance>>::Amount,
-	Instance,
->;
-
-/// A logs in this module.
-#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
-#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
-pub enum RawLog<Amount, Instance> {
-	PhantomData(rstd::marker::PhantomData<Instance>),
-	AmountChange(Amount),
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 decl_storage! {
 	// A macro for the Storage trait, and its implementation, for this module.
 	// This allows for type-safe usage of the Substrate storage database, so you can
 	// keep things around between blocks.
-	trait Store for Module<T: Trait<Instance>, Instance: Instantiable> as Example {
+	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
 		//   `pub? Name get(getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
@@ -103,8 +76,7 @@ decl_storage! {
 /// circumstances that have happened that users, Dapps and/or chain explorers would find
 /// interesting and otherwise difficult to detect.
 decl_event!(
-	pub enum Event<T, Instance> where B = <T as balances::Trait>::Balance, A = <T as Trait<Instance>>::Amount {
-		Amount(A),
+	pub enum Event<T> where B = <T as balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),
@@ -143,12 +115,12 @@ decl_event!(
 // `ensure_root` and `ensure_inherent`.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait<Instance>, Instance: Instantiable> for enum Call where origin: <T as system::Trait>::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// Deposit one of this module's events by using the default implementation.
 		/// It is also possible to provide a custom implementation.
 		/// For non-generic events, the generic parameter just needs to be dropped, so that it
 		/// looks like: `fn deposit_event() = default;`.
-		fn deposit_event<T, Instance>() = default;
+		fn deposit_event<T>() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
@@ -204,7 +176,7 @@ decl_module! {
 			// <Dummy<T>>::put(&new_dummy);
 
 			// Here's the new one of read and then modify the value.
-			<Dummy<T, Instance>>::mutate(|dummy| {
+			<Dummy<T>>::mutate(|dummy| {
 				let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
 				*dummy = Some(new_dummy);
 			});
@@ -227,7 +199,7 @@ decl_module! {
 		// for you and `Ok(())` will be returned.
 		fn set_dummy(#[compact] new_value: T::Balance) {
 			// Put the new value into storage.
-			<Dummy<T, Instance>>::put(new_value);
+			<Dummy<T>>::put(new_value);
 		}
 
 		// The signature could also look like: `fn on_initialise()`
@@ -240,7 +212,7 @@ decl_module! {
 		fn on_finalise(_n: T::BlockNumber) {
 			// Anything that needs to be done at the end of the block.
 			// We just kill our dummy storage item.
-			<Dummy<T, Instance>>::kill();
+			<Dummy<T>>::kill();
 		}
 	}
 }
@@ -250,15 +222,15 @@ decl_module! {
 // - Public interface. These are functions that are `pub` and generally fall into inspector
 // functions that do not write to storage and operation functions that do.
 // - Private functions. These are your usual private utilities unavailable to other modules.
-impl<T: Trait<Instance>, Instance: Instantiable> Module<T, Instance> {
+impl<T: Trait> Module<T> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
-	fn accumulate_foo(origin: <T as system::Trait>::Origin, increase_by: T::Balance) -> Result {
+	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
 		let _sender = ensure_signed(origin)?;
 
-		let prev = <Foo<T, Instance>>::get();
+		let prev = <Foo<T>>::get();
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
-		let result = <Foo<T, Instance>>::mutate(|foo| {
+		let result = <Foo<T>>::mutate(|foo| {
 			*foo = *foo + increase_by;
 			*foo
 		});
@@ -268,21 +240,6 @@ impl<T: Trait<Instance>, Instance: Instantiable> Module<T, Instance> {
 	}
 }
 
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
-
-impl<T: Trait<Instance>, Instance: Instantiable> ProvideInherent for Module<T, Instance> {
-	type Call = Call<T, Instance>;
-	type Error = MakeFatalError<RuntimeString>;
-	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
-
-	fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
-		unimplemented!();
-	}
-
-	fn check_inherent(_call: &Self::Call, _data: &InherentData) -> rstd::result::Result<(), Self::Error> {
-		unimplemented!();
-	}
-}
 #[cfg(test)]
 mod tests {
 	use super::*;

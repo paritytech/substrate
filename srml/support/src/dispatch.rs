@@ -91,6 +91,8 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 /// parameters, or one parameter, which has the runtime's block number type.
 #[macro_export]
 macro_rules! decl_module {
+	// Macro transformations (to convert invocations with incomplete parameters to the canonical
+	// form)
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<Instance>, Instance: $instantiable:path $(= $module_default_instance:path)?)?>
