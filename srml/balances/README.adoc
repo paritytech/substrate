@@ -43,7 +43,7 @@ use balances;
 pub trait Trait: balances::Trait { }
 ```
 
-1 In your module, call the balance module:
+2 In your module, call the balance module:
 
 ```
 // Get existential deposit
