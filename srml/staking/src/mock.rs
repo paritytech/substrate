@@ -218,7 +218,7 @@ impl ExtBuilder {
 			current_offline_slash: 20,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-			nominators: if self.nominate { vec![(100, vec![10, 20]) } else { vec![] },
+			nominators: if self.nominate { vec![ (100, vec![10, 20]) ] } else { vec![] },
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = timestamp::GenesisConfig::<Test>{
 			period: 5,
