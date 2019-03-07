@@ -397,7 +397,10 @@ impl<B: BlockT> ChainSync<B> {
 	/// Handle new connected peer.
 	pub(crate) fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex) {
 		if let Some(info) = protocol.peer_info(who) {
-			match (block_status(&*protocol.client(), &*self.import_queue, info.best_hash), info.best_number) {
+			println!("on new peer {:?}", info);
+			let status = block_status(&*protocol.client(), &*self.import_queue, info.best_hash);
+			println!("block_status={:?}", status);
+			match (status, info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
 					let reason = format!("Error legimimately reading blockchain status: {:?}", e);
