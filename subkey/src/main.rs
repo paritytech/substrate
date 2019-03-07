@@ -190,7 +190,9 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) {
 
 fn main() {
 	let yaml = load_yaml!("cli.yml");
-	let matches = clap::App::from_yaml(yaml).get_matches();
+	let matches = clap::App::from_yaml(yaml)
+		.version(env!("CARGO_PKG_VERSION"))
+		.get_matches();
 
 	if matches.is_present("ed25519original") {
 		execute::<OriginalEd25519>(matches)

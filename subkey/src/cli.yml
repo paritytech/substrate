@@ -1,6 +1,6 @@
 name: subkey
 author: "Parity Team <admin@parity.io>"
-about: A substrate key utility
+about: Utility for generating and restoring with Substrate keys
 args:
   - ed25519-legacy:
       short: o
