@@ -32,7 +32,7 @@ use crate::chain::FinalityProofProvider;
 use client::{self, ClientInfo, BlockchainEvents, FinalityNotifications, in_mem::Backend as InMemoryBackend, error::Result as ClientResult};
 use client::block_builder::BlockBuilder;
 use client::backend::AuxStore;
-use crate::config::ProtocolConfig;
+use crate::config::{ProtocolConfig, Roles};
 use consensus::import_queue::{BasicQueue, ImportQueue, IncomingBlock};
 use consensus::import_queue::{Link, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport, Verifier};
 use consensus::{Error as ConsensusError, ErrorKind as ConsensusErrorKind};
@@ -695,9 +695,12 @@ pub trait TestNetFactory: Sized {
 
 	/// Add a light peer.
 	fn add_light_peer(&mut self, config: &ProtocolConfig) {
+		let mut config = config.clone();
+		config.roles = Roles::LIGHT;
+
 		let client = Arc::new(test_client::new_light());
 		let tx_pool = Arc::new(EmptyTransactionPool);
-		let verifier = self.make_verifier(PeersClient::Light(client.clone()), config);
+		let verifier = self.make_verifier(PeersClient::Light(client.clone()), &config);
 		let (block_import, justification_import, finality_proof_import, data) = self.make_block_import(PeersClient::Light(client.clone()));
 		let (network_sender, network_port) = network_channel(ProtocolId::default());
 
@@ -714,7 +717,7 @@ pub trait TestNetFactory: Sized {
 			is_major_syncing.clone(),
 			peers.clone(),
 			network_sender.clone(),
-			config.clone(),
+			config,
 			client.clone(),
 			self.make_finality_proof_provider(PeersClient::Light(client.clone())),
 			import_queue.clone(),
@@ -780,7 +783,8 @@ pub trait TestNetFactory: Sized {
 						}
 						peers[recipient].receive_message(peer as NodeIndex, packet)
 					}
-					Some(NetworkMsg::ReportPeer(who, _)) => {
+					Some(NetworkMsg::ReportPeer(who, reason)) => {
+						trace!("Disconnecting test peer {} from {}: {}", who, peer, reason);
 						to_disconnect.insert(who);
 					}
 					Some(_msg) => continue,

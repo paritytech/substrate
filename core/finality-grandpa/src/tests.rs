@@ -1057,22 +1057,21 @@ fn allows_reimporting_change_blocks() {
 
 #[test]
 fn justification_is_fetched_by_light_client_when_consensus_data_changes() {
-	/* TODO: fix me
-	
 	let _ = ::env_logger::try_init();
 
  	let peers = &[Keyring::Alice];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
-	net.add_light_peer(&GrandpaTestNet::default_config());
 
- 	// import block#1 WITH consensus data change
+ 	// import block#1 WITH consensus data change + ensure if is finalized (with justification)
 	let new_authorities = vec![Ed25519AuthorityId::from([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
-	net.sync();
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(1, net.clone(), peers);
+
+	// add && sync light peer
+	net.lock().add_light_peer(&GrandpaTestNet::default_config());
 	net.lock().sync();
 
  	// ... and check that the block#1 is finalized on light client
-	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);*/
+	assert_eq!(net.lock().peer(1).client().info().unwrap().chain.finalized_number, 1);
 }
