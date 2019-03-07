@@ -19,7 +19,7 @@
 use client;
 use service::{FullBackend, FullExecutor, LightBackend, LightExecutor, ServiceFactory};
 
-pub type BlockImportForService<F> = ::GrandpaBlockImport<
+pub type BlockImportForService<F> = crate::GrandpaBlockImport<
 	FullBackend<F>,
 	FullExecutor<F>,
 	<F as ServiceFactory>::Block,
@@ -32,14 +32,14 @@ pub type BlockImportForService<F> = ::GrandpaBlockImport<
 	>,
 >;
 
-pub type LinkHalfForService<F> = ::LinkHalf<
+pub type LinkHalfForService<F> = crate::LinkHalf<
 	FullBackend<F>,
 	FullExecutor<F>,
 	<F as ServiceFactory>::Block,
 	<F as ServiceFactory>::RuntimeApi
 >;
 
-pub type BlockImportForLightService<F> = ::light_import::GrandpaLightBlockImport<
+pub type BlockImportForLightService<F> = crate::light_import::GrandpaLightBlockImport<
 	LightBackend<F>,
 	LightExecutor<F>,
 	<F as ServiceFactory>::Block,

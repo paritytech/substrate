@@ -19,7 +19,6 @@
 use bitflags::bitflags;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use parity_codec::{Encode, Decode, Input, Output};
-use parity_codec_derive::{Encode, Decode};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
@@ -30,6 +29,9 @@ pub use self::generic::{
 
 /// A unique ID of a request.
 pub type RequestId = u64;
+
+/// Consensus engine unique ID.
+pub type ConsensusEngineId = [u8; 4];
 
 /// Type alias for using the message type using block type parameters.
 pub type Message<B> = generic::Message<
@@ -127,16 +129,21 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use parity_codec::{Encode, Decode};
-	use network_libp2p::CustomMessage;
+	use network_libp2p::{CustomMessage, CustomMessageId};
 	use runtime_primitives::Justification;
-	use parity_codec_derive::{Encode, Decode};
 	use crate::config::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
-		RequestId, Transactions, Direction
+		RequestId, Transactions, Direction, ConsensusEngineId,
 	};
-	/// Consensus is opaque to us
-	pub type ConsensusMessage = Vec<u8>;
+	/// Consensus is mostly opaque to us
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	pub struct ConsensusMessage {
+		/// Identifies consensus engine.
+		pub engine_id: ConsensusEngineId,
+		/// Message payload.
+		pub data: Vec<u8>,
+	}
 
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -178,7 +185,7 @@ pub mod generic {
 		/// Transactions.
 		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
-		Consensus(Hash, ConsensusMessage, bool), // topic, opaque Vec<u8>, broadcast
+		Consensus(ConsensusMessage),
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.
@@ -214,6 +221,28 @@ pub mod generic {
 		fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
 			Decode::decode(&mut &bytes[..]).ok_or(())
 		}
+
+		fn request_id(&self) -> CustomMessageId {
+			match *self {
+				Message::Status(_) => CustomMessageId::OneWay,
+				Message::BlockRequest(ref req) => CustomMessageId::Request(req.id),
+				Message::BlockResponse(ref resp) => CustomMessageId::Response(resp.id),
+				Message::BlockAnnounce(_) => CustomMessageId::OneWay,
+				Message::Transactions(_) => CustomMessageId::OneWay,
+				Message::Consensus(_) => CustomMessageId::OneWay,
+				Message::RemoteCallRequest(ref req) => CustomMessageId::Request(req.id),
+				Message::RemoteCallResponse(ref resp) => CustomMessageId::Response(resp.id),
+				Message::RemoteReadRequest(ref req) => CustomMessageId::Request(req.id),
+				Message::RemoteReadResponse(ref resp) => CustomMessageId::Response(resp.id),
+				Message::RemoteHeaderRequest(ref req) => CustomMessageId::Request(req.id),
+				Message::RemoteHeaderResponse(ref resp) => CustomMessageId::Response(resp.id),
+				Message::RemoteChangesRequest(ref req) => CustomMessageId::Request(req.id),
+				Message::RemoteChangesResponse(ref resp) => CustomMessageId::Response(resp.id),
+				Message::FinalityProofRequest(ref req) => CustomMessageId::Request(req.id),
+				Message::FinalityProofResponse(ref resp) => CustomMessageId::Response(resp.id),
+				Message::ChainSpecific(_) => CustomMessageId::OneWay,
+			}
+		}
 	}
 
 	/// Status sent on connection.
@@ -221,6 +250,8 @@ pub mod generic {
 	pub struct Status<Hash, Number> {
 		/// Protocol version.
 		pub version: u32,
+		/// Minimum supported version.
+		pub min_supported_version: u32,
 		/// Supported roles.
 		pub roles: Roles,
 		/// Best block number.
@@ -347,6 +378,8 @@ pub mod generic {
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Finality proof request.
 	pub struct FinalityProofRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
 		/// Hash of the block to request proof for.
 		pub block: H,
 		/// Hash of the last known finalized block.
@@ -356,6 +389,8 @@ pub mod generic {
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Finality proof response.
 	pub struct FinalityProofResponse<H> {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
 		/// Hash of the block (the same as in the FinalityProofRequest).
 		pub block: H,
 		/// Finality proof (if available).

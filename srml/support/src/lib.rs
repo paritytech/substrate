@@ -25,8 +25,6 @@ pub use serde;
 pub use sr_std as rstd;
 #[doc(hidden)]
 pub use parity_codec as codec;
-#[doc(hidden)]
-pub use parity_codec_derive;
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -136,11 +134,12 @@ macro_rules! for_each_tuple {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use parity_codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 
 	pub trait Trait {
-		type BlockNumber;
+		type BlockNumber: Codec + Default;
 		type Origin;
 	}
 
@@ -160,6 +159,8 @@ mod tests {
 	decl_storage! {
 		trait Store for Module<T: Trait> as Example {
 			pub Data get(data) build(|_| vec![(15u32, 42u64)]): linked_map u32 => u64;
+			pub GenericData get(generic_data): linked_map T::BlockNumber => T::BlockNumber;
+			pub GenericData2 get(generic_data2): linked_map T::BlockNumber => Option<T::BlockNumber>;
 		}
 	}
 

@@ -25,22 +25,46 @@ use crate::import_queue::Verifier;
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ImportResult {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the import queue.
-	AlreadyQueued,
+	/// Block imported.
+	Imported(ImportedAux),
 	/// Already in the blockchain.
 	AlreadyInChain,
 	/// Block or parent is known to be bad.
 	KnownBad,
 	/// Block parent is not in the chain.
 	UnknownParent,
-	/// Added to the import queue but must be justified
-	/// (usually required to safely enact consensus changes).
-	NeedsJustification,
-	/// Added to the import queue but finality proof is required
-	/// (usually required to safely enact consensus changes).
-	NeedsFinalityProof,
+}
+
+/// Auxiliary data associated with an imported block result.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ImportedAux {
+	/// Clear all pending justification requests.
+	pub clear_justification_requests: bool,
+	/// Request a justification for the given block.
+	pub needs_justification: bool,
+	/// Clear all pending finality proof requests. TODO: do we need this??????????????????????!!!!!!!!!!!!!!!!!!!!!!!!!
+	pub clear_finality_proof_requests: bool,
+	/// Request a finality proof for the given block.
+	pub needs_finality_proof: bool,
+}
+
+impl Default for ImportedAux {
+	fn default() -> ImportedAux {
+		ImportedAux {
+			clear_justification_requests: false,
+			needs_justification: false,
+			clear_finality_proof_requests: false,
+			needs_finality_proof: false,
+		}
+	}
+}
+
+impl ImportResult {
+	/// Returns default value for `ImportResult::Imported` with both
+	/// `clear_justification_requests` and `needs_justification` set to false.
+	pub fn imported() -> ImportResult {
+		ImportResult::Imported(ImportedAux::default())
+	}
 }
 
 /// Block data origin.

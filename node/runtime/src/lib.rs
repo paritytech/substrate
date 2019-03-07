@@ -21,7 +21,7 @@
 #![recursion_limit="256"]
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use support::{Serialize, Deserialize};
 use support::construct_runtime;
@@ -60,8 +60,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 28,
-	impl_version: 28,
+	spec_version: 33,
+	impl_version: 33,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -101,10 +101,15 @@ impl indices::Trait for Runtime {
 
 impl balances::Trait for Runtime {
 	type Balance = Balance;
-	type OnFreeBalanceZero = ((Staking, Contract), Democracy);
+	type OnFreeBalanceZero = (((Staking, Contract), Democracy), Session);
 	type OnNewAccount = Indices;
 	type EnsureAccountLiquid = (Staking, Democracy);
 	type Event = Event;
+}
+
+impl fees::Trait for Runtime {
+	type Event = Event;
+	type TransferAsset = Balances;
 }
 
 impl consensus::Trait for Runtime {
@@ -187,6 +192,10 @@ impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
 
+impl finality_tracker::Trait for Runtime {
+	type OnFinalizationStalled = grandpa::SyncedAuthorities<Runtime>;
+}
+
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
@@ -206,10 +215,12 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
+		FinalityTracker: finality_tracker::{Module, Call, Inherent},
 		Grandpa: grandpa::{Module, Call, Storage, Config<T>, Log(), Event<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Storage, Config<T>, Event<T>},
 		Sudo: sudo,
+		Fees: fees::{Module, Storage, Config<T>, Event<T>},
 	}
 );
 
@@ -228,7 +239,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Fees, AllModules>;
 
 impl_runtime_apis! {
 	impl client_api::Core<Block> for Runtime {
@@ -289,9 +300,23 @@ impl_runtime_apis! {
 		{
 			for log in digest.logs.iter().filter_map(|l| match l {
 				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
-				_=> None
+				_ => None
 			}) {
 				if let Some(change) = Grandpa::scrape_digest_change(log) {
+					return Some(change);
+				}
+			}
+			None
+		}
+
+		fn grandpa_forced_change(digest: &DigestFor<Block>)
+			-> Option<(NumberFor<Block>, ScheduledChange<NumberFor<Block>>)>
+		{
+			for log in digest.logs.iter().filter_map(|l| match l {
+				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
+				_ => None
+			}) {
+				if let Some(change) = Grandpa::scrape_digest_forced_change(log) {
 					return Some(change);
 				}
 			}

@@ -33,7 +33,7 @@ use service::{
 };
 use network::{
 	Protocol, config::{NetworkConfiguration, NonReservedPeerMode, Secret},
-	multiaddr,
+	build_multiaddr,
 };
 use primitives::H256;
 
@@ -59,6 +59,7 @@ use log::info;
 use lazy_static::lazy_static;
 
 use futures::Future;
+use substrate_telemetry::TelemetryEndpoints;
 
 const MAX_NODE_NAME_LENGTH: usize = 32;
 
@@ -364,7 +365,7 @@ where
 		importing: cli.importing_execution.into(),
 		block_construction: cli.block_construction_execution.into(),
 		other: cli.other_execution.into(),
-	}; 
+	};
 
 	config.roles = role;
 	let client_id = config.client_id();
@@ -401,9 +402,9 @@ where
 
 	// Override telemetry
 	if cli.no_telemetry {
-		config.telemetry_url = None;
-	} else if let Some(url) = cli.telemetry_url {
-		config.telemetry_url = Some(url);
+		config.telemetry_endpoints = None;
+	} else if !cli.telemetry_endpoints.is_empty() {
+		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
 	Ok(config)
@@ -455,7 +456,7 @@ where
 				.map_err(|err| format!("Error obtaining network key: {}", err))?;
 
 		let peer_id = network_keys.to_peer_id();
-		let addr = multiaddr![
+		let addr = build_multiaddr![
 			Ip4([127, 0, 0, 1]),
 			Tcp(30333u16),
 			P2p(peer_id)
@@ -650,8 +651,9 @@ fn init_logger(pattern: &str) {
 	let enable_color = isatty;
 
 	builder.format(move |buf, record| {
+		let now = time::now();
 		let timestamp =
-			time::strftime("%Y-%m-%d %H:%M:%S", &time::now())
+			time::strftime("%Y-%m-%d %H:%M:%S", &now)
 				.expect("Error formatting log timestamp");
 
 		let mut output = if log::max_level() <= log::LevelFilter::Info {
@@ -660,6 +662,8 @@ fn init_logger(pattern: &str) {
 			let name = ::std::thread::current()
 				.name()
 				.map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
+			let millis = (now.tm_nsec as f32 / 1000000.0).round() as usize;
+			let timestamp = format!("{}.{:03}", timestamp, millis);
 			format!(
 				"{} {} {} {}  {}",
 				Colour::Black.bold().paint(timestamp),

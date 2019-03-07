@@ -24,7 +24,7 @@ pub mod chain_spec;
 mod service;
 
 use tokio::prelude::Future;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder as RuntimeBuilder, Runtime};
 pub use cli::{VersionInfo, IntoExit, NoCustom};
 use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 use std::ops::Deref;
@@ -37,8 +37,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The Charred Cherry testnet.
-	CharredCherry,
+	/// The Dried Danta testnet.
+	DriedDanta,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
 }
@@ -47,7 +47,7 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::CharredCherry => chain_spec::charred_cherry_config()?,
+			ChainSpec::DriedDanta => chain_spec::dried_danta_config()?,
 			ChainSpec::Development => chain_spec::development_config(),
 			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
@@ -58,7 +58,7 @@ impl ChainSpec {
 		match s {
 			"dev" => Some(ChainSpec::Development),
 			"local" => Some(ChainSpec::LocalTestnet),
-			"" | "cherry" | "charred-cherry" => Some(ChainSpec::CharredCherry),
+			"" | "danta" | "dried-danta" => Some(ChainSpec::DriedDanta),
 			"staging" => Some(ChainSpec::StagingTestnet),
 			_ => None,
 		}
@@ -87,7 +87,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			info!("Chain specification: {}", config.chain_spec.name());
 			info!("Node name: {}", config.name);
 			info!("Roles: {:?}", config.roles);
-			let runtime = Runtime::new().map_err(|e| format!("{:?}", e))?;
+			let runtime = RuntimeBuilder::new().name_prefix("main-tokio-").build()
+				.map_err(|e| format!("{:?}", e))?;
 			let executor = runtime.executor();
 			match config.roles {
 				ServiceRoles::LIGHT => run_until_exit(

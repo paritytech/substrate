@@ -21,10 +21,10 @@
 use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, As};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::{decl_module, decl_storage, decl_event, ensure};
-use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid};
+use srml_support::traits::{Currency, OnFreeBalanceZero, EnsureAccountLiquid, WithdrawReason, ArithmeticType};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
@@ -65,10 +65,10 @@ impl Vote {
 	}
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
 
 pub trait Trait: system::Trait + Sized {
-	type Currency: Currency<<Self as system::Trait>::AccountId>;
+	type Currency: ArithmeticType + Currency<<Self as system::Trait>::AccountId, Balance=BalanceOf<Self>>;
 
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
 
@@ -415,12 +415,25 @@ impl<T: Trait> OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> EnsureAccountLiquid<T::AccountId> for Module<T> {
+impl<T: Trait> EnsureAccountLiquid<T::AccountId, BalanceOf<T>> for Module<T> {
 	fn ensure_account_liquid(who: &T::AccountId) -> Result {
-		if Self::bondage(who) <= <system::Module<T>>::block_number() {
+		if Self::bondage(who) > <system::Module<T>>::block_number() {
+			Err("stash accounts are not liquid")
+		} else {
+			Ok(())
+		}
+	}
+	fn ensure_account_can_withdraw(
+		who: &T::AccountId,
+		_value: BalanceOf<T>,
+		reason: WithdrawReason,
+	) -> Result {
+		if reason == WithdrawReason::TransactionPayment
+			|| Self::bondage(who) <= <system::Module<T>>::block_number()
+		{
 			Ok(())
 		} else {
-			Err("cannot transfer illiquid funds")
+			Err("cannot transfer voting funds")
 		}
 	}
 }
@@ -486,8 +499,6 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,

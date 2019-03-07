@@ -6,8 +6,8 @@ description = "Common utilities for substrate consensus"
 edition = "2018"
 
 [dependencies]
+crossbeam-channel = "0.3.4"
 log = "0.4"
-parking_lot = "0.7.1"
 primitives = { package = "substrate-primitives", path= "../../primitives" }
 inherents = { package = "substrate-inherents", path = "../../inherents" }
 error-chain = "0.12"
@@ -15,8 +15,8 @@ futures = "0.1"
 runtime_version = { package = "sr-version", path = "../../sr-version" }
 runtime_primitives = { package = "sr-primitives", path = "../../sr-primitives" }
 tokio = "0.1.7"
-parity-codec = "3.0"
-parity-codec-derive = "3.0"
+parity-codec = "3.1"
+parity-codec-derive = "3.1"
 
 [dev-dependencies]
 test_client = { package = "substrate-test-client", path = "../../test-client" }

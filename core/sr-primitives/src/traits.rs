@@ -27,9 +27,9 @@ use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{
-	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+pub use num_traits::{
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	CheckedShl, CheckedShr, Saturating
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -126,17 +126,6 @@ pub trait BlockNumberToHash {
 	}
 }
 
-/// Simple payment making trait, operating on a single generic `AccountId` type.
-pub trait MakePayment<AccountId> {
-	/// Make some sort of payment concerning `who` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return true iff the payment was successful.
-	fn make_payment(who: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-impl<T> MakePayment<T> for () {
-	fn make_payment(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
@@ -194,6 +183,7 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord +
 	HasCompact
 {}
@@ -211,6 +201,7 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord +
 	HasCompact
 > SimpleArithmetic for T {}

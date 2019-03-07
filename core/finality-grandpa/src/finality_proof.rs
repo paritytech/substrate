@@ -30,6 +30,7 @@
 //! proof fragments are returned && each should be verified separately.
 
 use std::sync::Arc;
+use log::trace;
 
 use client::{
 	backend::Backend, blockchain::Backend as BlockchainBackend, CallExecutor, Client,
@@ -37,7 +38,7 @@ use client::{
 	light::fetcher::{FetchChecker, RemoteCallRequest},
 	ExecutionStrategy,
 };
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
@@ -45,7 +46,7 @@ use runtime_primitives::traits::{
 };
 use substrate_primitives::{Ed25519AuthorityId, H256, Blake2Hasher};
 
-use justification::GrandpaJustification;
+use crate::justification::GrandpaJustification;
 
 /// GRANDPA authority set related methods for the finality proof provider.
 pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {

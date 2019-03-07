@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
-use log::{trace, debug};
+use log::{trace, debug, warn};
+use client::error::Error as ClientError;
 use consensus::import_queue::ImportQueue;
-use network_libp2p::{Severity, NodeIndex};
+use fork_tree::ForkTree;
+use network_libp2p::NodeIndex;
 use runtime_primitives::Justification;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use crate::message::{self, Message, generic::Message as GenericMessage};
@@ -32,7 +34,7 @@ const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);
 type ExtraRequest<B> = (<B as BlockT>::Hash, NumberFor<B>);
 
 /// Extra requests processor.
-trait ExtraRequestsEssence<B: BlockT> {
+pub(crate) trait ExtraRequestsEssence<B: BlockT> {
 	type Response;
 
 	/// Name of request type to display in logs.
@@ -40,7 +42,7 @@ trait ExtraRequestsEssence<B: BlockT> {
 	/// Prepare network message corresponding to the request.
 	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B>;
 	/// Accept response.
-	fn accept_response(&self, request: ExtraRequest<B>, import_queue: &ImportQueue<B>, response: Self::Response) -> ExtraResponseKind;
+	fn import_response(&self, import_queue: &ImportQueue<B>, who: NodeIndex, request: ExtraRequest<B>, response: Self::Response);
 	///
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B>;
 }
@@ -54,50 +56,56 @@ pub(crate) struct ExtraRequestsAggregator<B: BlockT> {
 }
 
 impl<B: BlockT> ExtraRequestsAggregator<B> {
-	pub fn new() -> Self {
+	pub(crate) fn new() -> Self {
 		ExtraRequestsAggregator {
 			justifications: ExtraRequests::new(JustificationsRequestsEssence),
 			finality_proofs: ExtraRequests::new(FinalityProofRequestsEssence),
 		}
 	}
 
-	pub fn request_justification(&mut self, request: &ExtraRequest<B>, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
-		self.justifications.queue_request(request);
-		self.justifications.dispatch(peers, protocol);
+	pub(crate) fn justifications(&mut self) -> &mut ExtraRequests<B, JustificationsRequestsEssence> {
+		&mut self.justifications
 	}
 
-	pub fn request_finality_proof(&mut self, request: &ExtraRequest<B>, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
-		self.finality_proofs.queue_request(request);
-		self.finality_proofs.dispatch(peers, protocol);
+	pub(crate) fn finality_proofs(&mut self) -> &mut ExtraRequests<B, FinalityProofRequestsEssence> {
+		&mut self.finality_proofs
 	}
 
-	pub fn on_justification(&mut self, who: NodeIndex, justification: Option<Justification>, protocol: &mut Context<B>, import_queue: &ImportQueue<B>) {
-		self.justifications.on_response(who, justification, protocol, import_queue);
-	}
-
-	pub fn on_finality_proof(&mut self, who: NodeIndex, finality_proof: Option<Vec<u8>>, protocol: &mut Context<B>, import_queue: &ImportQueue<B>) {
-		self.finality_proofs.on_response(who, finality_proof, protocol, import_queue);
-	}
-
-	pub fn dispatch(&mut self, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
+	/// Dispatches all possible pending requests to the given peers.
+	pub(crate) fn dispatch(&mut self, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
 		self.justifications.dispatch(peers, protocol);
 		self.finality_proofs.dispatch(peers, protocol);
 	}
 
-	pub fn collect_garbage(&mut self, best_finalized: NumberFor<B>) {
-		self.justifications.collect_garbage(best_finalized);
-		self.finality_proofs.collect_garbage(best_finalized);
+	/// Removes any pending extra requests for blocks lower than the
+	/// given best finalized.
+	pub(crate) fn on_block_finalized<F>(
+		&mut self,
+		best_finalized_hash: &B::Hash,
+		best_finalized_number: NumberFor<B>,
+		is_descendent_of: &F,
+	) -> Result<(), fork_tree::Error<ClientError>>
+		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
+	{
+		self.justifications.on_block_finalized(best_finalized_hash, best_finalized_number, is_descendent_of)?;
+		self.finality_proofs.on_block_finalized(best_finalized_hash, best_finalized_number, is_descendent_of)?;
+		Ok(())
 	}
 
-	pub fn peer_disconnected(&mut self, who: NodeIndex) {
+	/// Retry any pending request if a peer disconnected.
+	pub(crate) fn peer_disconnected(&mut self, who: NodeIndex) {
 		self.justifications.peer_disconnected(who);
 		self.finality_proofs.peer_disconnected(who);
 	}
 }
 
-/// Manages pending extra data requests of single type.
-struct ExtraRequests<B: BlockT, Essence> {
-	requests: HashSet<ExtraRequest<B>>,
+/// Manages pending block extra data (e.g. justification) requests.
+/// Multiple extras may be requested for competing forks, or for the same branch
+/// at different (increasing) heights. This structure will guarantee that extras
+/// are fetched in-order, and that obsolete changes are pruned (when finalizing a
+/// competing fork).
+pub(crate) struct ExtraRequests<B: BlockT, Essence> {
+	tree: ForkTree<B::Hash, NumberFor<B>, ()>,
 	pending_requests: VecDeque<ExtraRequest<B>>,
 	peer_requests: HashMap<NodeIndex, ExtraRequest<B>>,
 	previous_requests: HashMap<ExtraRequest<B>, Vec<(NodeIndex, Instant)>>,
@@ -107,7 +115,7 @@ struct ExtraRequests<B: BlockT, Essence> {
 impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 	fn new(essence: Essence) -> Self {
 		ExtraRequests {
-			requests: HashSet::new(),
+			tree: ForkTree::new(),
 			pending_requests: VecDeque::new(),
 			peer_requests: HashMap::new(),
 			previous_requests: HashMap::new(),
@@ -118,9 +126,9 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 	/// Dispatches all possible pending requests to the given peers. Peers are
 	/// filtered according to the current known best block (i.e. we won't send a
 	/// extra request for block #10 to a peer at block #2), and we also
-	/// throttle requests to the same peer if a previous extra request
+	/// throttle requests to the same peer if a previous justification request
 	/// yielded no results.
-	fn dispatch(&mut self, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
+	pub(crate) fn dispatch(&mut self, peers: &mut HashMap<NodeIndex, PeerSync<B>>, protocol: &mut Context<B>) {
 		if self.pending_requests.is_empty() {
 			return;
 		}
@@ -159,7 +167,7 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 			};
 
 			// only ask peers that have synced past the block number that we're
-			// asking the extra data for and to whom we haven't already made
+			// asking the extra for and to whom we haven't already made
 			// the same request recently
 			let peer_eligible = {
 				let request = match self.pending_requests.front() {
@@ -216,12 +224,26 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		);
 	}
 
-	/// Queue a justification request (without dispatching it).
-	fn queue_request(&mut self, request: &ExtraRequest<B>) {
-		if !self.requests.insert(*request) {
-			return;
+	/// Queue a extra data request (without dispatching it).
+	pub(crate) fn queue_request<F>(&mut self, request: &ExtraRequest<B>, is_descendent_of: F)
+		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
+	{
+		match self.tree.import(request.0.clone(), request.1.clone(), (), &is_descendent_of) {
+			Ok(true) => {
+				// this is a new root so we add it to the current `pending_requests`
+				self.pending_requests.push_back((request.0, request.1));
+			},
+			Err(err) => {
+				warn!(target: "sync", "Failed to insert requested {} {:?} {:?} into tree: {:?}",
+					self.essence.type_name(),
+					request.0,
+					request.1,
+					err,
+				);
+				return;
+			},
+			_ => {},
 		}
-		self.pending_requests.push_back(*request);
 	}
 
 	/// Retry any pending request if a peer disconnected.
@@ -231,69 +253,93 @@ impl<B: BlockT, Essence: ExtraRequestsEssence<B>> ExtraRequests<B, Essence> {
 		}
 	}
 
+	/// Process the import result of an extra.
+	/// Queues a retry in case the import failed.
+	pub(crate) fn on_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
+		let request = (hash, number);
+		if success {
+			if self.tree.finalize_root(&request.0).is_none() {
+				warn!(target: "sync", "Imported {} for {:?} {:?} which isn't a root in the tree: {:?}",
+					self.essence.type_name(),
+					request.0,
+					request.1,
+					self.tree.roots().collect::<Vec<_>>(),
+				);
+				return;
+			};
+
+			self.previous_requests.clear();
+			self.peer_requests.clear();
+			self.pending_requests =
+				self.tree.roots().map(|(h, n, _)| (h.clone(), n.clone())).collect();
+
+			return;
+		}
+		self.pending_requests.push_front(request);
+	}
+
 	/// Processes the response for the request previously sent to the given
-	/// peer. Queues a retry in case the import fails or the given justification
+	/// peer. Queues a retry in case the given justification
 	/// was `None`.
-	fn on_response(
+	pub(crate) fn on_response(
 		&mut self,
 		who: NodeIndex,
-		response: Essence::Response,
-		protocol: &mut Context<B>,
+		response: Option<Essence::Response>,
 		import_queue: &ImportQueue<B>,
 	) {
 		// we assume that the request maps to the given response, this is
 		// currently enforced by the outer network protocol before passing on
 		// messages to chain sync.
 		if let Some(request) = self.peer_requests.remove(&who) {
-			match self.essence.accept_response(request, import_queue, response) {
-				ExtraResponseKind::Accepted => {
-					trace!(target: "sync", "Accepted {} response for {} from {}.", self.essence.type_name(), request.0, who);
-					self.requests.remove(&request);
-					self.previous_requests.remove(&request);
-					return;
-				},
-				ExtraResponseKind::Invalid => {
-					trace!(target: "sync", "Invalid {} provided for {} by {}", self.essence.type_name(), request.0, who);
-					protocol.report_peer(
-						who,
-						Severity::Bad(format!("Invalid {} provided for {} by {}", self.essence.type_name(), request.0, who)),
-					);
-				},
-				ExtraResponseKind::Missing => {
-					trace!(target: "sync", "Empty {} response for {} has provided by {}", self.essence.type_name(), request.0, who);
-					self.previous_requests
-						.entry(request)
-						.or_insert(Vec::new())
-						.push((who, Instant::now()));
-				},
+			if let Some(response) = response {
+				self.essence.import_response(import_queue, who.clone(), request, response);
+				return;
 			}
 
+			self.previous_requests
+				.entry(request)
+				.or_insert(Vec::new())
+				.push((who, Instant::now()));
 			self.pending_requests.push_front(request);
-		} else {
-			trace!(target: "sync", "Ignoring {} response from {}. No pending request.", self.essence.type_name(), who);
 		}
 	}
 
-	/// Removes any pending justification requests for blocks lower than the
+	/// Removes any pending extra requests for blocks lower than the
 	/// given best finalized.
-	fn collect_garbage(&mut self, best_finalized: NumberFor<B>) {
-		self.requests.retain(|(_, n)| *n > best_finalized);
-		self.pending_requests.retain(|(_, n)| *n > best_finalized);
-		self.peer_requests.retain(|_, (_, n)| *n > best_finalized);
-		self.previous_requests.retain(|(_, n), _| *n > best_finalized);
+	fn on_block_finalized<F>(
+		&mut self,
+		best_finalized_hash: &B::Hash,
+		best_finalized_number: NumberFor<B>,
+		is_descendent_of: F,
+	) -> Result<(), fork_tree::Error<ClientError>>
+		where F: Fn(&B::Hash, &B::Hash) -> Result<bool, ClientError>
+	{
+		use std::collections::HashSet;
+
+		self.tree.finalize(best_finalized_hash, best_finalized_number, &is_descendent_of)?;
+
+		let roots = self.tree.roots().collect::<HashSet<_>>();
+
+		self.pending_requests.retain(|(h, n)| roots.contains(&(h, n, &())));
+		self.peer_requests.retain(|_, (h, n)| roots.contains(&(h, n, &())));
+		self.previous_requests.retain(|(h, n), _| roots.contains(&(h, n, &())));
+
+		Ok(())
+	}
+
+	/// Clear all data.
+	pub(crate) fn clear(&mut self) {
+		self.tree = ForkTree::new();
+		self.pending_requests.clear();
+		self.peer_requests.clear();
+		self.previous_requests.clear();
 	}
 }
 
-enum ExtraResponseKind {
-	Accepted,
-	Invalid,
-	Missing,
-}
-
-struct JustificationsRequestsEssence;
+pub(crate) struct JustificationsRequestsEssence;
 
 impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
-	type Response = Option<Justification>;
+	type Response = Justification;
 
 	fn type_name(&self) -> &'static str {
 		"justification"
@@ -310,16 +356,8 @@ impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 		})
 	}
 
-	fn accept_response(&self, request: ExtraRequest<B>, import_queue: &ImportQueue<B>, response: Option<Justification>) -> ExtraResponseKind {
-		if let Some(justification) = response {
-			if import_queue.import_justification(request.0, request.1, justification) {
-				ExtraResponseKind::Accepted
-			} else {
-				ExtraResponseKind::Invalid
-			}
-		} else {
-			ExtraResponseKind::Missing
-		}
+	fn import_response(&self, import_queue: &ImportQueue<B>, who: NodeIndex, request: ExtraRequest<B>, response: Self::Response) {
+		import_queue.import_justification(who, request.0, request.1, response)
 	}
 
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B> {
@@ -327,10 +365,10 @@ impl<B: BlockT> ExtraRequestsEssence<B> for JustificationsRequestsEssence {
 	}
 }
 
-struct FinalityProofRequestsEssence;
+pub(crate) struct FinalityProofRequestsEssence;
 
 impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence {
-	type Response = Option<Vec<u8>>;
+	type Response = Vec<u8>;
 
 	fn type_name(&self) -> &'static str {
 		"finality proof"
@@ -338,21 +376,14 @@ impl<B: BlockT> ExtraRequestsEssence<B> for FinalityProofRequestsEssence {
 
 	fn into_network_request(&self, request: ExtraRequest<B>, last_finalzied_hash: B::Hash) -> Message<B> {
 		GenericMessage::FinalityProofRequest(message::generic::FinalityProofRequest {
+			id: 0,
 			block: request.0,
 			last_finalized: last_finalzied_hash,
 		})
 	}
 
-	fn accept_response(&self, request: ExtraRequest<B>, import_queue: &ImportQueue<B>, response: Option<Vec<u8>>) -> ExtraResponseKind {
-		if let Some(finality_proof) = response {
-			if import_queue.import_finality_proof(request.0, request.1, finality_proof) {
-				ExtraResponseKind::Accepted
-			} else {
-				ExtraResponseKind::Invalid
-			}
-		} else {
-			ExtraResponseKind::Missing
-		}
+	fn import_response(&self, import_queue: &ImportQueue<B>, who: NodeIndex, request: ExtraRequest<B>, response: Self::Response) {
+		import_queue.import_finality_proof(who, request.0, request.1, response)
 	}
 
 	fn peer_downloading_state(&self, block: B::Hash) -> PeerSyncState<B> {

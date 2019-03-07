@@ -41,7 +41,7 @@ use exit_future::Signal;
 pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
 use parity_codec::{Encode, Decode};
-use tel::telemetry;
+use tel::{telemetry, SUBSTRATE_INFO};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
@@ -123,13 +123,13 @@ impl<Components: components::Components> Service<Components> {
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
-		let import_queue = Arc::new(Components::build_import_queue(&mut config, client.clone())?);
+		let import_queue = Box::new(Components::build_import_queue(&mut config, client.clone())?);
 		let finality_proof_provider = Components::build_finality_proof_provider(client.clone())?;
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
 		info!("Best block: #{}", best_header.number());
-		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
+		telemetry!(SUBSTRATE_INFO; "node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let transaction_pool = Arc::new(
@@ -271,24 +271,26 @@ impl<Components: components::Components> Service<Components> {
 		)?;
 
 		// Telemetry
-		let telemetry = config.telemetry_url.clone().map(|url| {
+		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
 			let is_authority = config.roles == Roles::AUTHORITY;
+			let network_id = network.local_peer_id().to_base58();
 			let pubkey = format!("{}", public_key);
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
 			let chain_name = config.chain_spec.name().to_owned();
 			Arc::new(tel::init_telemetry(tel::TelemetryConfig {
-				url: url,
+				endpoints,
 				on_connect: Box::new(move || {
-					telemetry!("system.connected";
+					telemetry!(SUBSTRATE_INFO; "system.connected";
 						"name" => name.clone(),
 						"implementation" => impl_name.clone(),
 						"version" => version.clone(),
 						"config" => "",
 						"chain" => chain_name.clone(),
 						"pubkey" => &pubkey,
-						"authority" => is_authority
+						"authority" => is_authority,
+						"network_id" => network_id.clone()
 					);
 				}),
 			}))

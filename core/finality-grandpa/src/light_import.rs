@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use log::{info, trace, warn};
 use parking_lot::RwLock;
 
 use client::{
@@ -23,10 +24,10 @@ use client::{
 	blockchain::HeaderBackend,
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
 };
-use codec::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use consensus_common::{
 	import_queue::Verifier,
-	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult,
+	BlockOrigin, BlockImport, FinalityProofImport, ImportBlock, ImportResult, ImportedAux,
 	Error as ConsensusError, ErrorKind as ConsensusErrorKind
 };
 use runtime_primitives::Justification;
@@ -38,11 +39,11 @@ use fg_primitives::GrandpaApi;
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 
+use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
 use crate::environment::canonical_at_height;
 use crate::finality_proof::AuthoritySetForFinalityChecker;
 use crate::justification::GrandpaJustification;
-use crate::load_consensus_changes;
 
 /// LightAuthoritySet is saved under this key in aux storage.
 const LIGHT_AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
@@ -84,7 +85,8 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 			.into(),
 	};
 
-	let consensus_changes = load_consensus_changes(&*client, LIGHT_CONSENSUS_CHANGES_KEY)?;
+	let consensus_changes = load_decode(&**client.backend(), LIGHT_CONSENSUS_CHANGES_KEY)?
+		.unwrap_or_else(ConsensusChanges::<Block::Hash, NumberFor<Block>>::empty);
 
 	Ok(GrandpaLightBlockImport {
 		client,
@@ -242,12 +244,10 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 	let enacts_consensus_change = new_authorities.is_some();
 	let import_result = client.import_block(block, new_authorities);
 
-	let import_result = {
-		match import_result {
-			Ok(ImportResult::Queued) => ImportResult::Queued,
-			Ok(r) => return Ok(r),
-			Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
-		}
+	let mut imported_aux = match import_result {
+		Ok(ImportResult::Imported(aux)) => aux,
+		Ok(r) => return Ok(r),
+		Err(e) => return Err(ConsensusErrorKind::ClientImport(e.to_string()).into()),
 	};
 
 	match justification {
@@ -260,7 +260,6 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 			);
 
 			do_import_justification(client, data, hash, number, justification)?;
-			Ok(import_result)
 		},
 		None if enacts_consensus_change => {
 			trace!(
@@ -270,11 +269,13 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 			);
 
 			// remember that we need finality proof for this block
+			imported_aux.needs_finality_proof = true;
 			data.consensus_changes.note_change((number, hash));
-			Ok(ImportResult::NeedsFinalityProof)
 		},
-		None => Ok(import_result),
+		None => (),
 	}
+
+	Ok(ImportResult::Imported(imported_aux))
 }
 
 /// Try to import finality proof.
@@ -298,7 +299,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 	// TODO: ensure that the proof is for non-finalized block
 	let authority_set_id = data.authority_set.set_id();
 	let authorities = data.authority_set.authorities();
-	let finality_effects = ::finality_proof::check_finality_proof(
+	let finality_effects = crate::finality_proof::check_finality_proof(
 		&*client.backend().blockchain(),
 		authority_set_id,
 		authorities,
@@ -370,7 +371,9 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA>(
 				hash,
 			);
 
-			return Ok(ImportResult::NeedsFinalityProof);
+			let mut imported_aux = ImportedAux::default();
+			imported_aux.needs_finality_proof = true;
+			return Ok(ImportResult::Imported(imported_aux));
 		},
 		Err(e) => {
 			trace!(
@@ -418,7 +421,7 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 
 	// forget obsoleted consensus changes
 	let consensus_finalization_res = data.consensus_changes
-		.finalize((number, hash), |at_height| canonical_at_height(&client, (hash, number), at_height));
+		.finalize((number, hash), |at_height| canonical_at_height(&client, (hash, number), true, at_height));
 	match consensus_finalization_res {
 		Ok((true, _)) => require_insert_aux(
 			&client,
@@ -430,7 +433,7 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 		Err(error) => return Err(on_post_finalization_error(error, "consensus changes")),
 	}
 
-	Ok(ImportResult::Queued)
+	Ok(ImportResult::imported())
 }
 
 /// Insert into aux store. If failed, return error && show inconsistency warning.

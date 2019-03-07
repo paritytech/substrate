@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use parity_codec::{Encode, Decode};
 
 /// Consensus-related data changes tracker.
 #[derive(Clone, Debug, Encode, Decode)]
@@ -22,11 +23,14 @@ pub(crate) struct ConsensusChanges<H, N> {
 	pending_changes: Vec<(N, H)>,
 }
 
-impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
+impl<H, N> ConsensusChanges<H, N> {
 	/// Create empty consensus changes.
 	pub(crate) fn empty() -> Self {
 		ConsensusChanges { pending_changes: Vec::new(), }
 	}
+}
+
+impl<H: Copy + PartialEq, N: Copy + Ord> ConsensusChanges<H, N> {
 
 	/// Returns reference to all pending changes.
 	pub fn pending_changes(&self) -> &[(N, H)] {

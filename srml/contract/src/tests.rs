@@ -27,6 +27,7 @@ use runtime_io;
 use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
+use fees;
 use {wabt, balances, consensus};
 use hex_literal::*;
 use assert_matches::assert_matches;
@@ -44,7 +45,7 @@ mod contract {
 }
 impl_outer_event! {
 	pub enum MetaEvent for Test {
-		balances<T>, contract<T>,
+		balances<T>, contract<T>, fees<T>,
 	}
 }
 impl_outer_origin! {
@@ -87,6 +88,10 @@ impl consensus::Trait for Test {
 	type Log = DigestItem;
 	type SessionKey = UintAuthorityId;
 	type InherentOfflineReport = ();
+}
+impl fees::Trait for Test {
+	type Event = MetaEvent;
+	type TransferAsset = Balances;
 }
 impl Trait for Test {
 	type Call = Call;
@@ -165,8 +170,6 @@ impl ExtBuilder {
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				balances: vec![],
-				transaction_base_fee: 0,
-				transaction_byte_fee: 0,
 				existential_deposit: self.existential_deposit,
 				transfer_fee: self.transfer_fee,
 				creation_fee: self.creation_fee,
@@ -221,13 +224,13 @@ fn account_removal_removes_storage() {
 			{
 				Balances::set_free_balance(&1, 110);
 				Balances::increase_total_stake_by(110);
-				<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
-				<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
+				<StorageOf<Test>>::insert(&1, &b"foo".to_vec(), b"1".to_vec());
+				<StorageOf<Test>>::insert(&1, &b"bar".to_vec(), b"2".to_vec());
 
 				Balances::set_free_balance(&2, 110);
 				Balances::increase_total_stake_by(110);
-				<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
-				<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
+				<StorageOf<Test>>::insert(&2, &b"hello".to_vec(), b"3".to_vec());
+				<StorageOf<Test>>::insert(&2, &b"world".to_vec(), b"4".to_vec());
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
@@ -239,15 +242,15 @@ fn account_removal_removes_storage() {
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
 			{
-				assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
-				assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
+				assert_eq!(<StorageOf<Test>>::get(&1, &b"foo".to_vec()), None);
+				assert_eq!(<StorageOf<Test>>::get(&1, &b"bar".to_vec()), None);
 
 				assert_eq!(
-					<StorageOf<Test>>::get(2, b"hello".to_vec()),
+					<StorageOf<Test>>::get(&2, &b"hello".to_vec()),
 					Some(b"3".to_vec())
 				);
 				assert_eq!(
-					<StorageOf<Test>>::get(2, b"world".to_vec()),
+					<StorageOf<Test>>::get(&2, &b"world".to_vec()),
 					Some(b"4".to_vec())
 				);
 			}
