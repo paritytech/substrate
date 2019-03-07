@@ -484,7 +484,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 					who,
 					msg,
-					self.sync.status().is_major_syncing(),
 				);
 			}
 			other => self.specialization.on_message(
