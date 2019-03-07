@@ -414,18 +414,18 @@ macro_rules! __create_decl_macro {
 			(@inner
 				$runtime:ident;
 				$system:ident;
-				{ $d( $parsed_modules:ident $d( $nstance:ident )? $d( <$parsed_generic:ident $d(, $parsed_instance_full_path:path)?> )* ,)* };
+				{ $d( $parsed_modules:ident $d( $instance:ident )? $d( <$parsed_generic:ident $d(, $parsed_instance_full_path:path)?> )* ,)* };
 			) => {
 				$d crate::paste::item! {
 					$d($d(
-						use $parsed_modules as [< $parsed_modules $macro_enum_name $nstance >];
+						use $parsed_modules as [< $parsed_modules $macro_enum_name $instance >];
 					)?)*
 
 					$d crate::$macro_outer_name! {
 
 						pub enum $macro_enum_name for $runtime where system = $system {
 							$d(
-								[< $parsed_modules $d( $macro_enum_name $nstance )? >] $d( <$parsed_generic $d(, $parsed_instance_full_path)?> )*,
+								[< $parsed_modules $d( $macro_enum_name $instance )? >] $d( <$parsed_generic $d(, $parsed_instance_full_path)?> )*,
 							)*
 						}
 					}
@@ -505,11 +505,11 @@ macro_rules! __decl_all_modules {
 	(
 		$runtime:ident;
 		$system:ident;
-		{ $( $parsed_module:ident :: $parsed_name:ident $(<$nstance:ident>)? ,)*};
+		{ $( $parsed_module:ident :: $parsed_name:ident $(<$instance:ident>)? ,)*};
 	) => {
 		pub type System = system::Module<$runtime>;
 		$(
-			pub type $parsed_name = $parsed_module::Module<$runtime $(, $parsed_module::$nstance )?>;
+			pub type $parsed_name = $parsed_module::Module<$runtime $(, $parsed_module::$instance )?>;
 		)*
 		type AllModules = ( $( $parsed_name, )* );
 	}
