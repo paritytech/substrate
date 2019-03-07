@@ -133,7 +133,7 @@ macro_rules! __runtime_modules_to_metadata_calls_event {
 		Some($crate::metadata::DecodeDifferent::Encode(
 			$crate::metadata::FnEncode(
 				$crate::paste::expr!{
-					$runtime:: [< __module_events_ $mod $(Event $instance)?>]
+					$runtime:: [< __module_events_ $mod $(_ $instance)?>]
 				}
 			)
 		))

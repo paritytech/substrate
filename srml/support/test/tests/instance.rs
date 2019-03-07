@@ -141,9 +141,9 @@ mod module1 {
 
 	decl_storage! {
 		trait Store for Module<T: Trait<Instance>, Instance: InstantiableThing> as Module1 {
-			pub Data get(data) config(): linked_map u32 => u64;
-			pub Data1 get(data1) config(): map u32 => u64;
-			pub Data2 get(data2) config(): u64;
+			pub Value config(value): u64;
+			pub Map: map u32 => u64;
+			pub LinkedMap: linked_map u32 => u64;
 		}
 	}
 
@@ -358,13 +358,22 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<u32, Inde
 
 fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 	GenesisConfig{
-		// TODO TODO: better name
-		module1ConfigInstance1: None,
-		module1ConfigInstance2: None,
-		module2: None,
-		module2ConfigInstance1: None,
-		module2ConfigInstance2: None,
-		module2ConfigInstance3: None,
+		module1_Instance1: Some(module1::GenesisConfig {
+			value: 3,
+			.. Default::default()
+		}),
+		module1_Instance2: Some(module1::GenesisConfig {
+			value: 4,
+			_genesis_phantom_data: Default::default(),
+		}),
+		module2: Some(module2::GenesisConfig {
+			value: 4,
+			map: vec![],
+			linked_map: vec![],
+		}),
+		module2_Instance1: None,
+		module2_Instance2: None,
+		module2_Instance3: None,
 	}.build_storage().unwrap().0.into()
 }
 

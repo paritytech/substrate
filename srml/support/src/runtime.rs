@@ -214,6 +214,9 @@ macro_rules! construct_runtime {
 		impl $crate::runtime_primitives::traits::GetRuntimeBlockType for $runtime {
 			type RuntimeBlock = $block;
 		}
+		$crate::__decl_instance_import!(
+			$( $( $module < $module_instance > )? )*
+		);
 		$crate::__decl_outer_event!(
 			$runtime;
 			$(
@@ -417,15 +420,11 @@ macro_rules! __create_decl_macro {
 				{ $d( $parsed_modules:ident $d( $instance:ident )? $d( <$parsed_generic:ident $d(, $parsed_instance_full_path:path)?> )* ,)* };
 			) => {
 				$d crate::paste::item! {
-					$d($d(
-						use $parsed_modules as [< $parsed_modules $macro_enum_name $instance >];
-					)?)*
-
 					$d crate::$macro_outer_name! {
 
 						pub enum $macro_enum_name for $runtime where system = $system {
 							$d(
-								[< $parsed_modules $d( $macro_enum_name $instance )? >] $d( <$parsed_generic $d(, $parsed_instance_full_path)?> )*,
+								[< $parsed_modules $d(_ $instance )? >] $d( <$parsed_generic $d(, $parsed_instance_full_path)?> )*,
 							)*
 						}
 					}
@@ -741,10 +740,9 @@ macro_rules! __decl_outer_log {
 		)* };
 	) => {
 		$crate::paste::item! {
-			$( $( use $parsed_modules as [< $parsed_modules Log $parsed_instance >]; )? )*
 			$crate::runtime_primitives::impl_outer_log!(
 				pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
-					$( [< $parsed_modules $(Log $parsed_instance)? >] $(< $parsed_modules::$parsed_instance >)? ( $( $parsed_args ),* ) ),*
+					$( [< $parsed_modules $(_ $parsed_instance)? >] $(< $parsed_modules::$parsed_instance >)? ( $( $parsed_args ),* ) ),*
 				}
 			);
 		}
@@ -804,11 +802,10 @@ macro_rules! __decl_outer_config {
 		{$( $parsed_modules:ident :: $parsed_name:ident $( $parsed_instance:ident )?  $( < $parsed_generic:ident $(, $parsed_instance_full_path:path)? > )* ,)* };
 	) => {
 		$crate::paste::item! {
-			$($(use $parsed_modules as [< $parsed_modules Config $parsed_instance >];)?)*
 			$crate::runtime_primitives::impl_outer_config!(
 				pub struct GenesisConfig for $runtime {
 					$(
-						[< $parsed_name Config >] => [< $parsed_modules $( Config $parsed_instance)? >] $( < $parsed_generic $(, $parsed_instance_full_path)? > )*,
+						[< $parsed_name Config >] => [< $parsed_modules $( _ $parsed_instance)? >] $( < $parsed_generic $(, $parsed_instance_full_path)? > )*,
 					)*
 				}
 			);
@@ -928,5 +925,16 @@ macro_rules! __decl_outer_inherent {
 				$( $parsed_name : $parsed_call, )*
 			}
 		);
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+// Those imports are used by event, config, origin and log macros to get access to its inner type
+macro_rules! __decl_instance_import {
+	( $( $module:ident <$instance:ident> )* ) => {
+		$crate::paste::item! {
+			$(use $module as [< $module _ $instance >];)*
+		}
 	};
 }
