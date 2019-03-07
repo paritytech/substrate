@@ -42,22 +42,24 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	// stash, controller, session-key
 	// generated with secret:
 	// for i in 1 2 3 4 ; do for j in stash controller; do subkey -p danta-$i-$j restore $secret; done; done
+	// and
+	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 -p danta-$i-$j restore $secret; done; done
 	let initial_authorities: Vec<(AccountId, AccountId, AuthorityId)> = vec![(
 		hex!["d807f8bd6b4b02b3db716dd5372960b094ed0e62b5704a07bc990130a642992b"].into(), // 5GwxZv7LxSUQn89TLUaLi3oEWhFcabqW3nHcEg2J88gZNhrb
 		hex!["1a934af462454e512e22b5d9455c0c3c2df479b1c61406b3d990f6bc2eb25e09"].into(), // 5CfYrg5cW8UebBdfJpJbKFhZLyk7yHWXUgdxZnSGb2dWKgpt
-		hex!["82c39b31a2b79a90f8e66e7a77fdb85a4ed5517f2ae39f6a80565e8ecae85cf5"].into(),
+		hex!["831fcce3a9565baf093b52568a8cb9875cb54974d80da8fc4f0cc767128a23e9"].into(), // 5F2daQPHK7yv4Yuwyz3cggvvn1R5u1ofGMQ5LK5XvnfebMcX
 	),(
 		hex!["12652f26e427c56268095bb0ec5824471e37722b073a9fa5de61c61c1de94656"].into(), // 5CUpn2JmpsWkHQjZgWjN3rqPEUnjjUQZYcMk14nbUgR2Gpab
 		hex!["5279e73e22971d729276ebad4eb6804d1b9c0c35bd32e8aba4513c674760a461"].into(), // 5Dvqzke7Mdp3fP6Ysut7UXPSepPr3Qguys6LNkZGPSwXwAkR
-		hex!["4de37a07567ebcbf8c64568428a835269a566723687058e017b6d69db00a77e7"].into(),
+		hex!["dbe61640d854bb7bf83cbfaf638a8a4c76c49a919ec3bbdd86799061fc1903e4"].into(), // 5H32hCtKf6nXSckviVhUvWb7N14wDCRunRkCM29mxEXwjcUZ
 	),(
 		hex!["a81d738fdeeaed440cfce5635e0820d0d23e89207cf66a62b8c0d2a968e37d32"].into(), // 5Fs8ehAjDEnenDwULCPnEr3HVXgepAVfyk9ABW84NfxCYtWD
 		hex!["443a2c779a5f5dada8ee6921efec9673f67e5ce1bd6012899ff6c1adc437696c"].into(), // 5DcAPqR269myKXhZmwbU1x2xLbuTojr85jHNRuDhrFdZ3vwi
-		hex!["063d7787ebca768b7445dfebe7d62cbb1625ff4dba288ea34488da266dd6dca5"].into(),
+		hex!["5bc01f56225e8602372fb343dba65a73e20c55bdbb3b8343a8f34df298a616fb"].into(), // 5E91HbY2xo2qDJzi3KY8nRXjDNAQE9WtmMaji6YRwT8DAuK1
 	),(
 		hex!["e269e835e0bc07c497d55bc17c7bb29c85c5615f9e61582ffdeca7e5f5c66578"].into(), // 5HBa95U5HDFCV1N5Xyrjti65F71tHRQcPbZBmkxRJ39SpqzM
 		hex!["3e9829e6fd4fc7501b504fc16f12177c6c7f38aeb3b8344efb9b15ee85118b2c"].into(), // 5DUn2afs2QevZ6PrGu8snrt76157oacH6JXUD8JNM18VKMwK
-		hex!["8101764f45778d4980dadaceee6e8af2517d3ab91ac9bec9cd1714fa5994081c"].into(),
+		hex!["0fd673ee5e95ed124bcd71463ff924c810573dad91527ab9d2b5af36f66ff84b"].into(), // 5CRUHGLA1JYe2v4p479VCHybqjB9uBXjGkJ2npdduVdrTuUM
 	)];
 	// generated with secret: subkey -p danta-root restore $secret
 	let endowed_accounts: Vec<AccountId> = vec![
