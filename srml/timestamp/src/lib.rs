@@ -179,14 +179,6 @@ decl_module! {
 		fn on_finalise() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}
-
-		fn offchain_worker(n: T::BlockNumber) {
-			use parity_codec::Encode;
-
-			let ex = n.encode();
-			runtime_io::submit_extrinsic(ex);
-
-		}
 	}
 }
 
