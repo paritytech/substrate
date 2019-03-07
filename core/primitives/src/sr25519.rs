@@ -141,7 +141,7 @@ impl Public {
 		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
 		for j in path {
 			match j {
-				DeriveJunction::Soft(cc) => acc = acc.derived_key_simple(cc, &[]).0,
+				DeriveJunction::Soft(cc) => acc = acc.derived_key_simple(ChainCode(cc), &[]).0,
 				DeriveJunction::Hard(cc) => return None,
 			}
 		}
@@ -225,31 +225,60 @@ impl ::std::fmt::Debug for Public {
 /// A since derivation junction description. It is the single parameter used when creating
 /// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
 /// a new public key from an existing public key.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Encode, Decode)]
 pub enum DeriveJunction {
 	/// Soft (vanilla) derivation. Public keys have a correspondent derivation.
-	Soft(ChainCode),
+	Soft([u8; CHAIN_CODE_LENGTH]),
 	/// Hard ("hardened") derivation. Public keys do not have a correspondent derivation.
-	Hard(ChainCode),
+	Hard([u8; CHAIN_CODE_LENGTH]),
 }
 
 impl DeriveJunction {
 	/// Consume self to return a soft derive junction with the same chain code.
-	pub fn soften(self) -> Self { DeriveJunction::Soft(self.unwrap_chain_code()) }
+	pub fn soften(self) -> Self { DeriveJunction::Soft(self.unwrap_inner()) }
+
 	/// Consume self to return a hard derive junction with the same chain code.
-	pub fn harden(self) -> Self { DeriveJunction::Hard(self.unwrap_chain_code()) }
+	pub fn harden(self) -> Self { DeriveJunction::Hard(self.unwrap_inner()) }
+
+	/// Create a new soft (vanilla) DeriveJunction from a given, encodable, value.
+	///
+	/// If you need a hard junction, use `hard()`.
+	pub fn soft<T: Encode>(index: T) -> Self {
+		let mut cc: [u8; CHAIN_CODE_LENGTH] = Default::default();
+		index.using_encoded(|data| if data.len() > CHAIN_CODE_LENGTH {
+			let hash_result = blake2_rfc::blake2b::blake2b(CHAIN_CODE_LENGTH, &[], data);
+			let hash = hash_result.as_bytes();
+			cc.copy_from_slice(hash);
+		} else {
+			cc[0..data.len()].copy_from_slice(data);
+		});
+		DeriveJunction::Soft(cc)
+	}
+
+	/// Create a new hard (hardened) DeriveJunction from a given, encodable, value.
+	///
+	/// If you need a soft junction, use `soft()`.
+	pub fn hard<T: Encode>(index: T) -> Self {
+		Self::soft(index).harden()
+	}
 
 	/// Consume self to return the chain code.
-	pub fn unwrap_chain_code(self) -> ChainCode {
+	pub fn unwrap_inner(self) -> [u8; CHAIN_CODE_LENGTH] {
 		match self {
 			DeriveJunction::Hard(c) | DeriveJunction::Soft(c) => c,
 		}
 	}
-	/// Return a reference to the chain code.
-	pub fn chain_code(&self) -> &ChainCode {
-		match *self {
-			DeriveJunction::Hard(ref c) | DeriveJunction::Soft(ref c) => c,
-		}
+
+	/// Consume self to return the chain code.
+	pub fn unwrap_chain_code(self) -> ChainCode {
+		ChainCode(self.unwrap_inner())
 	}
+
+	/// Return a reference to the chain code.
+	pub fn chain_code(&self) -> ChainCode {
+		self.clone().unwrap_chain_code()
+	}
+
 	/// Return `true` if the junction is soft.
 	pub fn is_soft(&self) -> bool {
 		match *self {
@@ -257,6 +286,7 @@ impl DeriveJunction {
 			_ => false,
 		}
 	}
+
 	/// Return `true` if the junction is hard.
 	pub fn is_hard(&self) -> bool {
 		match *self {
@@ -264,34 +294,12 @@ impl DeriveJunction {
 			_ => false,
 		}
 	}
-/*
-	/// Derive a new key from the given key following this junction.
-	pub fn derive<Key: Derivable>(&self, key: &Key) -> Option<Key> {
-		match *self {
-			DeriveJunction::Soft(ref cc) => key.derive_soft()
-			DeriveJunction::Hard(ref cc) => key.derive_soft()
-		}
-	}*/
-}
-
-impl<T: Encode> From<T> for DeriveJunction {
-	fn from(index: T) -> Self {
-		let mut cc: [u8; CHAIN_CODE_LENGTH] = Default::default();
-		index.using_encoded(|data| if data.len() > CHAIN_CODE_LENGTH {
-			let hash_result = blake2_rfc::blake2b::blake2b(64, &[], data);
-			let hash = hash_result.as_bytes();
-			cc[0..hash.len().min(CHAIN_CODE_LENGTH)].copy_from_slice(&hash[0..hash.len().min(CHAIN_CODE_LENGTH)]);
-		} else {
-			cc[0..data.len()].copy_from_slice(data);
-		});
-		DeriveJunction::Soft(ChainCode(cc))
-	}
 }
 
 /// Derive a single hard junction.
-fn derive_hard_junction(secret: &SecretKey, cc: &ChainCode) -> SecretKey {
-	("SchnorrRistrettoHDKD", &secret.to_bytes()[..], cc.0).using_encoded(|data|
-		MiniSecretKey::from_bytes(blake2_rfc::blake2b::blake2b(64, &[], data).as_bytes())
+fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
+	("SchnorrRistrettoHDKD", &secret.to_bytes()[..], cc).using_encoded(|data|
+		MiniSecretKey::from_bytes(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes())
 			.expect("all 32-byte crypto-hash results are valid MiniSecretKeys; qed")
 			.expand()
 	)
@@ -336,7 +344,7 @@ impl Pair {
 	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, mut path: Iter) -> Pair {
 		let init = self.0.secret.clone();
 		let result = path.fold(init, |acc, j| match j {
-			DeriveJunction::Soft(cc) => acc.derived_key_simple(cc, &[]).0,
+			DeriveJunction::Soft(cc) => acc.derived_key_simple(ChainCode(cc), &[]).0,
 			DeriveJunction::Hard(cc) => derive_hard_junction(&acc, &cc),
 		});
 		Self(result.into())
@@ -425,6 +433,50 @@ where
 mod test {
 	use super::*;
 	use hex_literal::{hex, hex_impl};
+
+	#[test]
+	fn derive_soft_should_work() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter());
+		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter());
+		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter());
+		assert_eq!(derive_1.public(), derive_1b.public());
+		assert_ne!(derive_1.public(), derive_2.public());
+	}
+
+	#[test]
+	fn derive_hard_should_work() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter());
+		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter());
+		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter());
+		assert_eq!(derive_1.public(), derive_1b.public());
+		assert_ne!(derive_1.public(), derive_2.public());
+	}
+
+	#[test]
+	fn derive_soft_public_should_work() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let path = Some(DeriveJunction::soft(1));
+		let pair_1 = pair.derive(path.clone().into_iter());
+		let public_1 = pair.public().derive(path.into_iter()).unwrap();
+		assert_eq!(pair_1.public(), public_1);
+	}
+
+	#[test]
+	fn derive_hard_public_should_fail() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let path = Some(DeriveJunction::hard(1));
+		assert!(pair.public().derive(path.into_iter()).is_none());
+	}
 
 	#[test]
 	fn sr_test_vector_should_work() {
