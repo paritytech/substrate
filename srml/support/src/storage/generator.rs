@@ -748,7 +748,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(
 					TypeName {
-						display_name: DecodeDifferent::Encode("u32"),
+						display_name: DecodeDifferent::Encode("T::Origin"),
 						type_name: MetadataName::U32,
 					}
 				),
@@ -1033,7 +1033,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(
 					TypeName {
-						display_name: DecodeDifferent::Encode("(Vec<Vec<(u16,Box<(  )>)>>, u32)"),
+						display_name: DecodeDifferent::Encode("(Vec<Vec<(u16, Box<()>)>>, u32)"),
 						type_name: MetadataName::Tuple(vec![
 							MetadataName::Vector(Box::new(MetadataName::Vector(Box::new(MetadataName::Tuple(vec![MetadataName::U16, MetadataName::Unit]))))),
 							MetadataName::U32
@@ -1050,7 +1050,7 @@ mod tests {
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Plain(
 					TypeName {
-						display_name: DecodeDifferent::Encode("([u32;25])"),
+						display_name: DecodeDifferent::Encode("([u32; 25])"),
 						type_name: MetadataName::Array(25, Box::new(MetadataName::U32)),
 					}
 				),

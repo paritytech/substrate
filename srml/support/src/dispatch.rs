@@ -1242,7 +1242,7 @@ mod tests {
 					FunctionArgumentMetadata {
 						name: DecodeDifferent::Encode("_data"),
 						ty: TypeName {
-							display_name: DecodeDifferent::Encode("u32"),
+							display_name: DecodeDifferent::Encode("Compact<u32>"),
 							type_name: MetadataName::Compact(Box::new(MetadataName::U32)),
 						},
 					},

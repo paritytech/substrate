@@ -265,7 +265,7 @@ mod tests {
 		ModuleMetadata, RuntimeMetadataPrefixed
 	};
 	use crate::codec::{Encode, Decode};
-	use substrate_metadata::{MetadataRegistry, MetadataName};
+	use substrate_metadata::{MetadataRegistry, MetadataName, TypeMetadata, TypeMetadataKind};
 	use substrate_metadata_derive::EncodeMetadata;
 
 	mod system {
@@ -411,8 +411,15 @@ mod tests {
 	fn runtime_metadata() {
 		let expected = RuntimeMetadata::V2(
 			RuntimeMetadataV2 {
-				module_path: DecodeDifferent::Encode("tests"),
-				type_registry: MetadataRegistry::new(),
+				module_path: DecodeDifferent::Encode("srml_support::metadata::tests"),
+				type_registry: MetadataRegistry {
+					list: vec![
+						TypeMetadata {
+							name: MetadataName::Custom("srml_support::metadata::tests".into(), "Block".into()),
+							kind: TypeMetadataKind::Struct(Vec::new()),
+						}
+					]
+				},
 				modules: vec![
 					ModuleMetadata {
 						name: DecodeDifferent::Encode("system"),
@@ -494,7 +501,7 @@ mod tests {
 						)),
 					},
 				],
-				block: MetadataName::Unknown,
+				block: MetadataName::Custom("srml_support::metadata::tests".into(), "Block".into()),
 			}
 		);
 

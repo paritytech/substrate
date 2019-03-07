@@ -98,7 +98,7 @@ impl<Balance: SimpleArithmetic + Copy + As<u64>> VestingSchedule<Balance> {
 	}
 }
 
-#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, EncodeMetadata)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct BalanceLock<Balance, BlockNumber> {
 	pub id: LockIdentifier,
@@ -371,7 +371,7 @@ impl<T: Trait> Module<T> {
 
 	/// Returns `Ok` iff the account is able to make a withdrawal of the given amount
 	/// for the given reason.
-	/// 
+	///
 	/// `Err(...)` with the reason why not otherwise.
 	pub fn ensure_account_can_withdraw(
 		who: &T::AccountId,

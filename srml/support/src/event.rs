@@ -639,14 +639,14 @@ mod tests {
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestEvent"),
 						arguments: vec![
-							TypeName { display_name: DecodeDifferent::Encode("Balance"), type_name: MetadataName::U64 },
+							TypeName { display_name: DecodeDifferent::Encode("BalanceRenamed"), type_name: MetadataName::U64 },
 						],
 						documentation: DecodeDifferent::Encode(&[])
 					},
 					EventMetadata {
 						name: DecodeDifferent::Encode("TestOrigin"),
 						arguments: vec![
-							TypeName { display_name: DecodeDifferent::Encode("Origin"), type_name: MetadataName::U32 },
+							TypeName { display_name: DecodeDifferent::Encode("OriginRenamed"), type_name: MetadataName::U32 },
 						],
 						documentation: DecodeDifferent::Encode(&[]),
 					},

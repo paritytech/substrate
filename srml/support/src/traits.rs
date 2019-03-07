@@ -22,6 +22,7 @@ use crate::runtime_primitives::traits::{
 	MaybeSerializeDebug, SimpleArithmetic, As
 };
 use substrate_metadata::EncodeMetadata;
+use substrate_metadata_derive::EncodeMetadata;
 
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
@@ -229,11 +230,11 @@ pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
 
 bitmask! {
 	/// Reasons for moving funds out of an account.
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, EncodeMetadata)]
 	pub mask WithdrawReasons: i8 where
 
 	/// Reason for moving funds out of an account.
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, EncodeMetadata)]
 	flags WithdrawReason {
 		/// In order to pay for (system) transaction costs.
 		TransactionPayment = 0b00000001,
