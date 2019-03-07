@@ -41,7 +41,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, staking, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -308,9 +308,7 @@ mod tests {
 				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
-				nominators: vec![(
-					bob(), vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three])
-				],
+				nominators: vec![],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -321,9 +319,9 @@ mod tests {
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(keyring::ed25519::Keyring::Charlie.to_raw_public().into(), 1),
-					(keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
-					(keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
+					// (keyring::ed25519::Keyring::Charlie.to_raw_public().into(), 1),
+					// (keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
+					// (keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
 				],
 			}),
 			fees: Some(FeesConfig {
@@ -450,13 +448,11 @@ mod tests {
 			]
 		);
 
-		// println!("block2 : {:?}", block2);
-
 		let mut digest = generic::Digest::<Log>::default();
 		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
 			(Keyring::Charlie.to_raw_public().into(), 1),
-			(Keyring::Alice.to_raw_public().into(), 1),
 			(Keyring::Bob.to_raw_public().into(), 1),
+			(Keyring::Alice.to_raw_public().into(), 1),
 		])));
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
@@ -590,16 +586,12 @@ mod tests {
 					phase: Phase::Finalization,
 					event: Event::session(session::RawEvent::NewSession(1))
 				},
-				// EventRecord {
-				// 	phase: Phase::Finalization,
-				// 	event: Event::staking(staking::RawEvent::Reward(0))
-				// },
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
 						(Keyring::Charlie.to_raw_public().into(), 1),
-						(Keyring::Alice.to_raw_public().into(), 1),
 						(Keyring::Bob.to_raw_public().into(), 1),
+						(Keyring::Alice.to_raw_public().into(), 1),
 					])),
 				},
 				EventRecord {
