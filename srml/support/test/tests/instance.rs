@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![recursion_limit="128"]
+
 #[cfg(feature = "std")]
 use serde_derive::Serialize;
 use runtime_io::{with_externalities, Blake2Hasher};
@@ -49,6 +51,11 @@ mod system {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			pub fn deposit_event(_event: T::Event) {
 			}
+		}
+	}
+	impl<T: Trait> Module<T> {
+		pub fn deposit_log(_item: <T::Digest as Digest>::Item) {
+			unimplemented!();
 		}
 	}
 
@@ -88,23 +95,45 @@ mod system {
 	pub enum RawLog<H> {
 		ChangesTrieRoot(H),
 	}
+
+	pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+		where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+	{
+		match o.into() {
+			Some(RawOrigin::Root) => Ok(()),
+			_ => Err("bad origin: expected to be a root origin"),
+		}
+	}
 }
 
 // Test for:
 // * No default instance
 // * Custom InstantiableTrait
-// * Origin, Inherent, Log
+// * Origin, Inherent, Log, Event
 mod module1 {
 	use super::*;
 
 	pub trait Trait<Instance>: system::Trait {
 		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
 		type Origin: From<Origin<Self, Instance>>;
+		type Log: From<Log<Self, Instance>> + Into<system::DigestItemOf<Self>>;
 	}
 
 	decl_module! {
 		pub struct Module<T: Trait<Instance>, Instance: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, Instance>() = default;
+
+			fn one() {
+				Self::deposit_event(RawEvent::AnotherVariant(3));
+				Self::deposit_log(RawLog::AmountChange(3));
+			}
+		}
+	}
+
+	impl<T: Trait<Instance>, Instance: InstantiableThing> Module<T, Instance> {
+		/// Deposit one of this module's logs.
+		fn deposit_log(log: Log<T, Instance>) {
+			<system::Module<T>>::deposit_log(<T as Trait<Instance>>::Log::from(log).into());
 		}
 	}
 
@@ -117,8 +146,9 @@ mod module1 {
 	}
 
 	decl_event! {
-		pub enum Event<T, Instance> where Digest = <T as system::Trait>::Digest {
-			Variant(Digest),
+		pub enum Event<T, Instance> where Phantom = rstd::marker::PhantomData<T> {
+			_Phantom(Phantom),
+			AnotherVariant(u32),
 		}
 	}
 
@@ -168,12 +198,14 @@ mod module2 {
 	pub trait Trait<Instance=DefaultInstance>: system::Trait {
 		type Amount: Parameter + Default;
 		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
+		type Origin: From<Origin<Self, Instance>>;
+		type Log: From<Log<Self, Instance>> + Into<system::DigestItemOf<Self>>;
 	}
 
 	impl<T: Trait<Instance>, Instance: Instantiable> Currency for Module<T, Instance> {}
 
 	decl_module! {
-		pub struct Module<T: Trait<Instance>, Instance: Instantiable=DefaultInstance> for enum Call where origin: T::Origin {
+		pub struct Module<T: Trait<Instance>, Instance: Instantiable=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
 			fn deposit_event<T, Instance>() = default;
 		}
 	}
@@ -190,6 +222,42 @@ mod module2 {
 			Variant(Amount),
 		}
 	}
+
+	#[derive(PartialEq, Eq, Clone)]
+	#[cfg_attr(feature = "std", derive(Debug))]
+	pub enum Origin<T: Trait<Instance>, Instance=DefaultInstance> {
+		Members(u32),
+		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+	}
+
+	pub type Log<T, Instance=DefaultInstance> = RawLog<
+		T,
+		Instance,
+	>;
+
+	/// A logs in this module.
+	#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
+	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
+	pub enum RawLog<T, Instance=DefaultInstance> {
+		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+		AmountChange(u32),
+	}
+
+	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
+
+	impl<T: Trait<Instance>, Instance: Instantiable> ProvideInherent for Module<T, Instance> {
+		type Call = Call<T, Instance>;
+		type Error = MakeFatalError<RuntimeString>;
+		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+
+		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+			unimplemented!();
+		}
+
+		fn check_inherent(_call: &Self::Call, _data: &InherentData) -> rstd::result::Result<(), Self::Error> {
+			unimplemented!();
+		}
+	}
 }
 
 // Test for:
@@ -203,7 +271,7 @@ mod module3 {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		}
 	}
 }
@@ -211,26 +279,36 @@ mod module3 {
 impl module1::Trait<module1::Instance1> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
+	type Log = Log;
 }
 impl module1::Trait<module1::Instance2> for Runtime {
 	type Event = Event;
 	type Origin = Origin;
+	type Log = Log;
 }
 impl module2::Trait for Runtime {
 	type Amount = u16;
 	type Event = Event;
+	type Origin = Origin;
+	type Log = Log;
 }
 impl module2::Trait<module2::Instance1> for Runtime {
 	type Amount = u32;
 	type Event = Event;
+	type Origin = Origin;
+	type Log = Log;
 }
 impl module2::Trait<module2::Instance2> for Runtime {
 	type Amount = u32;
 	type Event = Event;
+	type Origin = Origin;
+	type Log = Log;
 }
 impl module2::Trait<module2::Instance3> for Runtime {
 	type Amount = u64;
 	type Event = Event;
+	type Origin = Origin;
+	type Log = Log;
 }
 impl module3::Trait for Runtime {
 	type Currency = Module2_2;
@@ -251,9 +329,7 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
-// TODO TODO: try to deposit event inside structure
-// TODO TODO: test two generic with log without instance
-// TODO TODO: how can we test generation of inherent, log, origin ?
+// TODO TODO: try to use inherent ???? inside structure
 
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, ()>) where
@@ -264,10 +340,10 @@ construct_runtime!(
 		System: system::{Module, Call, Event, Log(ChangesTrieRoot)},
 		Module1_1: module1::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
 		Module1_2: module1::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
-		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>},
-		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
-		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
-		Module2_3: module2::<Instance3>::{Module, Call, Storage, Event<T, I>, Config<T, I>},
+		Module2: module2::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>, Log(), Inherent},
+		Module2_1: module2::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
+		Module2_2: module2::<Instance2>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
+		Module2_3: module2::<Instance3>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>, Log(), Inherent},
 		Module3: module3::{Module, Call},
 	}
 );
