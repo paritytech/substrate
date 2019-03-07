@@ -66,7 +66,7 @@ std = [
 	"fees/std",
 	"version/std",
 	"node-primitives/std",
-	"serde/std",
+	"serde",
 	"safe-mix/std",
 	"client/std",
 	"consensus_aura/std",

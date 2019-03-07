@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 hex-literal = "0.1.0"
-serde = { version = "1.0", default-features = false }
+serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "3.1", default-features = false, features = ["derive"] }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
@@ -22,7 +22,7 @@ runtime_io = { package = "sr-io", path = "../../core/sr-io" }
 [features]
 default = ["std"]
 std = [
-	"serde/std",
+	"serde",
 	"serde_derive",
 	"parity-codec/std",
 	"substrate-primitives/std",
