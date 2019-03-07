@@ -524,12 +524,7 @@ fn decl_storage_items(
 				let ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
 				(name, ident)
 			})
-			.chain(default_instance
-				.clone()
-				.map(|ident| {
-					(ident.to_string(), ident)
-				})
-			);
+			.chain(default_instance.clone().map(|ident| (String::new(), ident)));
 
 		for (prefix, ident) in instances {
 			impls.extend(quote! {
