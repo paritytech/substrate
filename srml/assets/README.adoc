@@ -95,7 +95,7 @@ Destroy a signed sender's (i.e. Alice) entire account holding of a fungible asse
 Query an account's holding balance (i.e. Alice) of a fungible asset by calling the asset module's `balance` function.
 
 ```rust
-const balance = <assets::Module<T>>::balance(INITIAL_ASSET_ID, Origin::signed(&ALICE));
+let balance = <assets::Module<T>>::balance(INITIAL_ASSET_ID, Origin::signed(&ALICE));
 ```
 
 **7. Query the Total Supply of a Fungible Asset**
@@ -103,5 +103,5 @@ const balance = <assets::Module<T>>::balance(INITIAL_ASSET_ID, Origin::signed(&A
 Query the total supply of a fungible asset that has been issued by calling the asset module's `total_supply` function.
 
 ```rust
-const total_supply = <assets::Module<T>>::total_supply(INITIAL_ASSET_ID);
+let total_supply = <assets::Module<T>>::total_supply(INITIAL_ASSET_ID);
 ```
