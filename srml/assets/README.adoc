@@ -28,11 +28,11 @@ The SRML Support Module implements the `Currency` trait abstraction over the SRM
 
 ### Public Mutable functions (changing state)
 
-#### `issue(origin, #[compact] total: T::Balance)`
+#### `issue(origin, total: T::Balance)`
 
-#### `transfer(origin, #[compact] id: AssetId, target: <T::Lookup as StaticLookup>::Source, #[compact] amount: T::Balance)`
+#### `transfer(origin, id: AssetId, target: <T::Lookup as StaticLookup>::Source, amount: T::Balance)`
 
-#### `destroy(origin, #[compact] id: AssetId)`
+#### `destroy(origin, id: AssetId)`
 
 ### Events:
 
