@@ -105,7 +105,3 @@ Query the total supply of a fungible asset that has been issued by calling the a
 ```rust
 const total_supply = <assets::Module<T>>::total_supply(INITIAL_ASSET_ID);
 ```
-
-## Dependencies
-
-The Assets Module depends on the `system` and `srml_support` modules as well as Substrate Core libraries and the Rust standard library.
