@@ -136,8 +136,7 @@ pub trait Currency<AccountId> {
 	///
 	/// If `who` doesn't exist, it is created
 	///
-	/// Returns `Updated` if the account was successfully updated
-	/// or `AccountKilled` if the update has led to killing the account.
+	/// Return indicates whether the account has been updated or if the update has led to killing the account.
 	///
 	/// #NOTES
 	///
