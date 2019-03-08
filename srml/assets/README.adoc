@@ -18,7 +18,7 @@ The SRML Support Module implements the `Currency` trait abstraction over the SRM
 
 ### Supported Origins
 
-`signed` - Used to issue, transfer, and destroy an asset holding.
+**signed** - Used to issue, transfer, and destroy an asset holding.
 
 ### Public Immutable functions (getters)
 
