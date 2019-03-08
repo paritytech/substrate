@@ -84,10 +84,9 @@
 
 ## Usage
 
-// Insert examples, and code snippets for module usage
+// Insert examples and code snippets that show how to use <INSERT_MODULE_NAME> module in a custom module.
 
-// The following example shows how to use the <INSERT_MODULE_NAME> module in your custom module to <INSERT_USAGE_SUMMARY>.
-
+// Show how to import <INSERT_MODULE_NAME>
 1. Import the `INSERT_MODULE_NAME` module and derive your module configuration trait with the `INSERT_MODULE_NAME` trait.
 
 ```
@@ -96,10 +95,18 @@ use <INSERT_MODULE_NAME>;
 pub trait Trait: <INSERT_MODULE_NAME>::Trait { }
 ```
 
-2. In your module call the `INSERT_MODULE_NAME` module's `example_getter_name()` function to get <EXPLAIN_WHAT_IT_RETURNS>.
+// Show how to query a public getter functions of <INSERT_MODULE_NAME>
+2. Query the `INSERT_MODULE_NAME` module's `example_getter_name()`.
 
 ```
-const example_value = <INSERT_MODULE_NAME>::Module<T>>::example_getter_name();
+let queried_value = <INSERT_MODULE_NAME::Module<T>>::example_getter_name();
+```
+
+// Show how to call a public setter function to change state using <INSERT_MODULE_NAME>
+2. Change state using `INSERT_MODULE_NAME` module's `example_setter_name()`.
+
+```
+<INSERT_MODULE_NAME::Module<T>>::example_setter_name();
 ```
 
 ## Implementation Details
@@ -120,6 +127,6 @@ The module configuration trait of the `INSERT_MODULE_NAME` module derives from t
 
 ## Dependencies
 
-// Dependencies on other SRML modules
+// Dependencies on other SRML modules should be mentioned, but not the Rust Standard Library
 // Genesis configuration modifications that may be made to incorporate this module
 // Interaction with other modules
