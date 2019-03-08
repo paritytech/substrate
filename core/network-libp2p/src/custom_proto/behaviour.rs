@@ -346,6 +346,9 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 	/// Also updates `next_connect_to_nodes` with the earliest known moment when we need to
 	/// update connections again.
 	fn connect_to_nodes(&mut self, params: &mut PollParameters) {
+		// Value of `Instant::now()` grabbed once at the beginning.
+		let now = Instant::now();
+
 		// Make sure we are connected or connecting to all the reserved nodes.
 		for reserved in self.reserved_peers.iter() {
 			// TODO: don't generate an event if we're already in a pending connection (https://github.com/libp2p/rust-libp2p/issues/697)
@@ -359,7 +362,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			// We set a timeout to 60 seconds for trying to connect again, however in practice
 			// a round will happen as soon as we fail to dial, disconnect from a node, allow
 			// unreserved nodes, and so on.
-			self.next_connect_to_nodes.reset(Instant::now() + Duration::from_secs(60));
+			self.next_connect_to_nodes.reset(now + Duration::from_secs(60));
 			return
 		}
 
@@ -372,10 +375,34 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 				.count();
 			self.max_outgoing_connections - num_outgoing_connections
 		};
-
 		trace!(target: "sub-libp2p", "Connect-to-nodes round; attempting to fill {:?} slots",
 			num_to_open);
 
+		// We first try to enable existing connections.
+		for peer_id in &self.connected_peers {
+			if num_to_open == 0 {
+				break
+			}
+
+			if self.enabled_peers.contains_key(peer_id) {
+				continue;
+			}
+
+			if let Some((_, expire)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
+				if *expire >= now {
+					continue;
+				}
+			}
+
+			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (active)", peer_id);
+			num_to_open -= 1;
+			self.events.push(NetworkBehaviourAction::SendEvent {
+				peer_id: peer_id.clone(),
+				event: CustomProtosHandlerIn::Enable(Endpoint::Dialer),
+			});
+		}
+
+		// Then, try to open new connections.
 		let local_peer_id = params.local_peer_id().clone();
 		let (to_try, will_change) = self.topology.addrs_to_attempt();
 		for (peer_id, _) in to_try {
@@ -392,7 +419,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			}
 
 			if let Some((_, ban_end)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
-				if *ban_end > Instant::now() {
+				if *ban_end > now {
 					continue
 				}
 			}
@@ -402,7 +429,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		}
 
 		// Next round is when we expect the topology will change.
-		self.next_connect_to_nodes.reset(cmp::min(will_change, Instant::now() + Duration::from_secs(60)));
+		self.next_connect_to_nodes.reset(cmp::min(will_change, now + Duration::from_secs(60)));
 	}
 }
 
