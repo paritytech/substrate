@@ -1,8 +1,9 @@
-use primitives::{Ed25519AuthorityId, ed25519};
+use primitives::{Ed25519AuthorityId, ed25519, sr25519, crypto::StandardPair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, FeesConfig,
 };
+use substrate_cli::DEV_PHRASE;
 use substrate_service;
 
 // Note this is the URL for the telemetry server
@@ -22,6 +23,18 @@ pub enum Alternative {
 	LocalTestnet,
 }
 
+fn authority_key(s: &str) -> Ed25519AuthorityId {
+	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+		.expect("static values are valid; qed")
+		.public().into()
+}
+
+fn account_key(s: &str) -> AccountId {
+	sr25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+		.expect("static values are valid; qed")
+		.public().0.into()
+}
+
 impl Alternative {
 	/// Get an actual chain config from one of the alternatives.
 	pub(crate) fn load(self) -> Result<ChainSpec, String> {
@@ -30,11 +43,11 @@ impl Alternative {
 				"Development",
 				"dev",
 				|| testnet_genesis(vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+					authority_key("Alice")
 				], vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
+					account_key("Alice")
 				],
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+					account_key("Alice")
 				),
 				vec![],
 				None,
@@ -46,17 +59,17 @@ impl Alternative {
 				"Local Testnet",
 				"local_testnet",
 				|| testnet_genesis(vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-					ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+					authority_key("Alice"),
+					authority_key("Bob"),
 				], vec![
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
-					ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
-					ed25519::Pair::from_seed(b"Charlie                         ").public().0.into(),
-					ed25519::Pair::from_seed(b"Dave                            ").public().0.into(),
-					ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
-					ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
+					account_key("Alice"),
+					account_key("Bob"),
+					account_key("Charlie"),
+					account_key("Dave"),
+					account_key("Eve"),
+					account_key("Ferdie"),
 				],
-					ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+					account_key("Alice"),
 				),
 				vec![],
 				None,

@@ -24,13 +24,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::num::NonZeroU32;
 
-use serde_derive::{Serialize, Deserialize};
-use error_chain::{error_chain, error_chain_processing, impl_error_chain_processed,
+use error_chain::{bail, error_chain, error_chain_processing, impl_error_chain_processed,
 	impl_extract_backtrace, impl_error_chain_kind};
 
-use substrate_primitives::{hashing::blake2_256, ed25519::{Pair, Public}, crypto::StandardPair};
+use substrate_primitives::{ed25519::{Pair, Public}, crypto::StandardPair};
 
 pub use crypto::KEY_ITERATIONS;
 
@@ -89,15 +87,19 @@ impl Store {
 
 	/// Load a key file with given public key.
 	pub fn load(&self, public: &Public, password: &str) -> Result<Pair> {
-		if let Some(&pair) = self.additional.get(public) {
+		if let Some(pair) = self.additional.get(public) {
 			return Ok(pair.clone());
 		}
 		let path = self.key_file_path(public);
 		let file = File::open(path)?;
 
 		let phrase: String = ::serde_json::from_reader(&file)?;
-		Pair::from_phrase(&phrase, Some(password))
-			.ok_or(|| ErrorKind::InvalidPhrase.into())
+		let pair = Pair::from_phrase(&phrase, Some(password))
+			.ok_or_else(|| Error::from(ErrorKind::InvalidPhrase))?;
+		if &pair.public() != public {
+			bail!(ErrorKind::InvalidPassword);
+		}
+		Ok(pair)
 	}
 
 	/// Get public keys of all stored keys.
@@ -160,16 +162,7 @@ mod tests {
 		let temp_dir = TempDir::new("keystore").unwrap();
 		let mut store = Store::open(temp_dir.path().to_owned()).unwrap();
 
-		let pair = store.generate_from_seed("0x1").unwrap();
-		assert_eq!("5GqhgbUd2S9uc5Tm7hWhw29Tw2jBnuHshmTV1fDF4V1w3G2z", pair.public().to_ss58check());
-
 		let pair = store.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc").unwrap();
 		assert_eq!("5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HBL8", pair.public().to_ss58check());
-
-		let pair = store.generate_from_seed("12345678901234567890123456789022").unwrap();
-		assert_eq!("5DscZvfjnM5im7oKRXXP9xtCG1SEwfMb8J5eGLmw5EHhoHR3", pair.public().to_ss58check());
-
-		let pair = store.generate_from_seed("1").unwrap();
-		assert_eq!("5DYnksEZFc7kgtfyNM1xK2eBtW142gZ3Ho3NQubrF2S6B2fq", pair.public().to_ss58check());
 	}
 }

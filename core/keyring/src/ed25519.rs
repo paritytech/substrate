@@ -20,8 +20,13 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
 use hex_literal::{hex, hex_impl};
-use substrate_primitives::ed25519::{Pair, Public, Signature};
+use substrate_primitives::{ed25519::{Pair, Public, Signature}, crypto::StandardPair};
 pub use substrate_primitives::ed25519;
+
+/// The root phrase for our test keys.
+///
+/// This is the same phrase that's in node::cli, but shouldn't need to be.
+pub const DEV_PHRASE: &'static str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// Set of test accounts.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -70,15 +75,15 @@ impl Keyring {
 
 	pub fn pair(self) -> Pair {
 		match self {
-			Keyring::Alice => Pair::from_seed(b"Alice                           "),
-			Keyring::Bob => Pair::from_seed(b"Bob                             "),
-			Keyring::Charlie => Pair::from_seed(b"Charlie                         "),
-			Keyring::Dave => Pair::from_seed(b"Dave                            "),
-			Keyring::Eve => Pair::from_seed(b"Eve                             "),
-			Keyring::Ferdie => Pair::from_seed(b"Ferdie                          "),
-			Keyring::One => Pair::from_seed(b"12345678901234567890123456789012"),
-			Keyring::Two => Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
-		}
+			Keyring::Alice => Pair::from_string(&format!("{}//{}", DEV_PHRASE, "Alice"), None),
+			Keyring::Bob => Pair::from_string(&format!("{}//{}", DEV_PHRASE, "Bob"), None),
+			Keyring::Charlie => Pair::from_string(&format!("{}//{}", DEV_PHRASE, "Charlie"), None),
+			Keyring::Dave => Pair::from_string(&format!("{}//{}", DEV_PHRASE, "Dave"), None),
+			Keyring::Eve => Pair::from_string(&format!("{}//{}", DEV_PHRASE, "Eve"), None),
+			Keyring::Ferdie => Pair::from_string(&format!("{}//{}", DEV_PHRASE, "Ferdie"), None),
+			Keyring::One => Some(Pair::from_seed((*b"12345678901234567890123456789012").clone())),
+			Keyring::Two => Some(Pair::from_seed(hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"))),
+		}.expect("static values are known good; qed")
 	}
 }
 

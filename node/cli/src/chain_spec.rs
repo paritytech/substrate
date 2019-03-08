@@ -16,7 +16,7 @@
 
 //! Substrate chain configurations.
 
-use primitives::{Ed25519AuthorityId as AuthorityId, ed25519, sr25519};
+use primitives::{Ed25519AuthorityId as AuthorityId, ed25519, sr25519, crypto::StandardPair};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
@@ -24,9 +24,8 @@ use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, Dem
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 use hex_literal::{hex, hex_impl};
-
-use substrate_keystore::pad_seed;
 use substrate_telemetry::TelemetryEndpoints;
+use cli::DEV_PHRASE;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
@@ -189,18 +188,22 @@ pub fn staging_testnet_config() -> ChainSpec {
 
 /// Helper function to generate AccountId from seed
 pub fn get_account_id_from_seed(seed: &str) -> AccountId {
-	sr25519::Pair::from_seed(&pad_seed(seed)).public().0.into()
+	sr25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, seed), None)
+		.expect("static values are valid; qed")
+		.public().0.into()
 }
 
 /// Helper function to generate AuthorityId from seed
 pub fn get_session_key_from_seed(seed: &str) -> AuthorityId {
-	ed25519::Pair::from_seed(&pad_seed(seed)).public().0.into()
+	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, seed), None)
+		.expect("static values are valid; qed")
+		.public().0.into()
 }
 
 /// Helper function to generate stash, controller and session key from seed
 pub fn get_authority_keys_from_seed(seed: &str) -> (AccountId, AccountId, AuthorityId) {
 	(
-		get_account_id_from_seed(&format!("{}-stash", seed)),
+		get_account_id_from_seed(&format!("{}//stash", seed)),
 		get_account_id_from_seed(seed),
 		get_session_key_from_seed(seed)
 	)
@@ -220,12 +223,12 @@ pub fn testnet_genesis(
 			get_account_id_from_seed("Dave"),
 			get_account_id_from_seed("Eve"),
 			get_account_id_from_seed("Ferdie"),
-			get_account_id_from_seed("Alice-stash"),
-			get_account_id_from_seed("Bob-stash"),
-			get_account_id_from_seed("Charlie-stash"),
-			get_account_id_from_seed("Dave-stash"),
-			get_account_id_from_seed("Eve-stash"),
-			get_account_id_from_seed("Ferdie-stash"),
+			get_account_id_from_seed("Alice//stash"),
+			get_account_id_from_seed("Bob//stash"),
+			get_account_id_from_seed("Charlie//stash"),
+			get_account_id_from_seed("Dave//stash"),
+			get_account_id_from_seed("Eve//stash"),
+			get_account_id_from_seed("Ferdie//stash"),
 		]
 	});
 

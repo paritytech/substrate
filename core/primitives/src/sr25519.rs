@@ -16,6 +16,9 @@
 
 // tag::description[]
 //! Simple sr25519 (Schnorr-Ristretto) API.
+//!
+//! Note: `CHAIN_CODE_LENGTH` must be equal to `crate::crypto::JUNCTION_ID_LEN`
+//! for this to work.
 // end::description[]
 
 use base58::{FromBase58, ToBase58};
@@ -28,9 +31,7 @@ use substrate_bip39::mini_secret_from_entropy;
 use parity_codec::{Encode, Decode};
 use crate::hash::H512;
 use bip39::{Mnemonic, Language, MnemonicType};
-use crate::crypto::{DeriveJunction, StandardPair, JUNCTION_ID_LEN};
-
-//static_assert_eq!(CHAIN_CODE_LENGTH, JUNCTION_ID_LEN);
+use crate::crypto::{DeriveJunction, StandardPair};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
