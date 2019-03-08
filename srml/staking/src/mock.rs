@@ -23,7 +23,13 @@ use primitives::testing::{Digest, DigestItem, Header, UintAuthorityId, ConvertUi
 use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::impl_outer_origin;
-use crate::{GenesisConfig, Module, Trait};
+use crate::{GenesisConfig, Module, Trait, StakerStatus};
+
+// The AccountId alias in this test module.
+type AccountIdType = u64;
+
+// Alias for the StakerStatus created with `AccountIdType`.
+type Status = StakerStatus<AccountIdType>;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -44,7 +50,7 @@ impl system::Trait for Test {
 	type Hash = H256;
 	type Hashing = ::primitives::traits::BlakeTwo256;
 	type Digest = Digest;
-	type AccountId = u64;
+	type AccountId = AccountIdType;
 	type Lookup = IdentityLookup<u64>;
 	type Header = Header;
 	type Event = ();
@@ -195,19 +201,19 @@ impl ExtBuilder {
 			current_era: self.current_era,
 			stakers: if self.validator_pool {
 				vec![
-					(11, 10, balance_factor * 1000),
-					(21, 20, balance_factor * 2000),
-					(31, 30, balance_factor * 3000),
-					(41, 40, balance_factor * 4000),
+					(11, 10, balance_factor * 1000, Status::Validator),
+					(21, 20, balance_factor * 2000, Status::Validator),
+					(31, 30, balance_factor * 3000, if self.validator_pool { Status::Validator } else { Status::Idle }),
+					(41, 40, balance_factor * 4000, if self.validator_pool { Status::Validator } else { Status::Idle }),
 					// nominator
-					(101, 100, balance_factor * 500)
+					(101, 100, balance_factor * 500, if self.nominate { Status::Nominator(vec![10, 20]) } else { Status::Nominator(vec![]) })
 				]
 			} else {
 				vec![
-					(11, 10, balance_factor * 1000), 
-					(21, 20, balance_factor * 2000),
+					(11, 10, balance_factor * 1000, Status::Validator),
+					(21, 20, balance_factor * 2000, Status::Validator),
 					// nominator
-					(101, 100, balance_factor * 500)
+					(101, 100, balance_factor * 500, if self.nominate { Status::Nominator(vec![10, 20]) } else { Status::Nominator(vec![]) })
 				]
 			},
 			validator_count: self.validator_count,
@@ -219,7 +225,6 @@ impl ExtBuilder {
 			current_offline_slash: 20,
 			offline_slash_grace: 0,
 			invulnerables: vec![],
-			nominators: if self.nominate { vec![ (100, vec![10, 20]) ] } else { vec![] },
 		}.assimilate_storage(&mut t, &mut c);
 		let _ = timestamp::GenesisConfig::<Test>{
 			period: 5,

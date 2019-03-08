@@ -41,7 +41,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, session, system, staking, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -298,7 +298,11 @@ mod tests {
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				stakers: vec![(dave(), alice(), 111), (eve(), bob(), 100), (ferdie(), charlie(), 100)],
+				stakers: vec![
+					(dave(), alice(), 111, staking::StakerStatus::Validator),
+					(eve(), bob(), 100, staking::StakerStatus::Validator),
+					(ferdie(), charlie(), 100, staking::StakerStatus::Validator)
+				],
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
@@ -308,7 +312,6 @@ mod tests {
 				current_session_reward: 0,
 				offline_slash_grace: 0,
 				invulnerables: vec![alice(), bob(), charlie()],
-				nominators: vec![],
 			}),
 			democracy: Some(Default::default()),
 			council_seats: Some(Default::default()),
@@ -318,11 +321,7 @@ mod tests {
 			contract: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
-				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					// (keyring::ed25519::Keyring::Charlie.to_raw_public().into(), 1),
-					// (keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
-					// (keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
-				],
+				authorities: vec![],
 			}),
 			fees: Some(FeesConfig {
 				transaction_base_fee: 1,

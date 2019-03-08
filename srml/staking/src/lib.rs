@@ -19,6 +19,7 @@
 //! Staking manager: Periodically determines the best set of validators.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(type_alias_enum_variants)]
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
@@ -33,16 +34,21 @@ use srml_support::traits::{
 use session::OnSessionChange;
 use primitives::{Perbill};
 use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
+use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
-mod mock;
-mod phragmen;
 
+mod mock;
 mod tests;
+mod phragmen;
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
+
+// Indicates the initial status of the staker
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum StakerStatus<AccountId> { Idle, Validator, Nominator(Vec<AccountId>), }
 
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
@@ -219,12 +225,7 @@ decl_storage! {
 		/// The set of keys are all controllers that want to nominate.
 		///
 		/// The value are the nominations.
-		pub Nominators get(nominators) build(|config: &GenesisConfig<T>| {
-			config.nominators.iter().map(|(who, nominees)| (
-				who.clone(),
-				nominees.clone(),
-			)).collect::<Vec<_>>()
-		}): linked_map T::AccountId => Vec<T::AccountId>;
+		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
@@ -259,7 +260,7 @@ decl_storage! {
 		///
 		/// This is used to derive rewards and punishments.
 		pub SlotStake get(slot_stake) build(|config: &GenesisConfig<T>| {
-			config.stakers.iter().map(|&(_, _, value)| value).min().unwrap_or_default()
+			config.stakers.iter().map(|&(_, _, value, _)| value).min().unwrap_or_default()
 		}): BalanceOf<T>;
 
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
@@ -272,22 +273,29 @@ decl_storage! {
 		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
 	}
 	add_extra_genesis {
-		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>)>;
-		config(nominators): Vec<(T::AccountId, Vec<T::AccountId>)>;
-
+		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			with_storage(storage, || {
-				// assign validators/stakers
-				for &(ref stash, ref controller, balance) in &config.stakers {
-					let _ = <Module<T>>::bond(T::Origin::from(Some(stash.clone()).into()), T::Lookup::unlookup(controller.clone()), balance, RewardDestination::Staked);
-					let _ = <Module<T>>::validate(T::Origin::from(Some(controller.clone()).into()), Default::default());
-				}
-				
-				// assign nominators
-				for &(ref nominator, ref votes) in &config.nominators {
-					let _ = <Module<T>>::nominate(T::Origin::from(Some(nominator.clone()).into()), votes.iter().map(|l| {
-						T::Lookup::unlookup(l.clone())
-					}).collect());
+				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
+					let _ = <Module<T>>::bond(
+						T::Origin::from(Some(stash.clone()).into()),
+						T::Lookup::unlookup(controller.clone()),
+						balance,
+						RewardDestination::Staked
+					);
+					let _ = match status {
+						StakerStatus::Validator => {
+							<Module<T>>::validate(
+								T::Origin::from(Some(controller.clone()).into()),
+								Default::default()
+							)
+						}, StakerStatus::Nominator(votes) => {
+							<Module<T>>::nominate(
+								T::Origin::from(Some(controller.clone()).into()),
+								votes.iter().map(|l| {T::Lookup::unlookup(l.clone())}).collect()
+							)
+						}, _ => Ok(())
+					};
 				}
 
 				<Module<T>>::select_validators();
@@ -662,20 +670,22 @@ impl<T: Trait> Module<T> {
 		let nominators = || <Nominators<T>>::enumerate();
 		let stash_of = |w| Self::stash_balance(&w);
 		let min_validator_count = Self::minimum_validator_count() as usize;
-		let elected_candidates = phragmen::elect(rounds, validators, nominators, stash_of, min_validator_count);		
+		let elected_candidates = phragmen::elect::<T, _, _, _, _>(
+			rounds,
+			validators,
+			nominators,
+			stash_of,
+			min_validator_count
+		);		
 
-		// 5- Figure out the minimum stake behind a slot.
-		let slot_stake;
-		if let Some(min_candidate) = elected_candidates.iter().min_by_key(|c: &&Candidate<T::AccountId, BalanceOf<T>>| c.exposure.total) {
-			slot_stake = min_candidate.exposure.total;
-		}
-		else {
-			// This will only happen in the very first era. 
-			slot_stake = BalanceOf::<T>::zero();
-		}
-		// slot_stake = BalanceOf::<T>::zero();
+		// Figure out the minimum stake behind a slot.
+		let slot_stake = elected_candidates
+			.iter()
+			.min_by_key(|c| c.exposure.total)
+			.map(|c| c.exposure.total)
+			.unwrap_or_default();
 
-		// 6- Clear Stakers and reduce their slash_count.
+		// Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
 			<Stakers<T>>::remove(v);
 			let slash_count = <SlashCount<T>>::take(v);
@@ -684,12 +694,12 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// 7- Populate Stakers.
+		// Populate Stakers.
 		for candidate in &elected_candidates {
 			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
 		}
 
-		// 8- Set the new validator set.
+		// Set the new validator set.
 		<session::Module<T>>::set_validators(
 			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
 		);

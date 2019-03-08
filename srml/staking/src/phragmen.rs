@@ -1,11 +1,14 @@
+use rstd::{prelude::*};
 use primitives::Perquintill;
 use primitives::traits::{Zero, As};
 use parity_codec::{HasCompact, Encode, Decode};
 use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
 
-// TODO: proper capitalization and comment line lengths
+// TODO: spaces to tabs
+// TODO: feature gate type_alias_enum_variants for tests
+// TODO: add parity license header
 
-// a wrapper around validation candidates list and some metadata needed for election process.
+// Wrapper around validation candidates some metadata.
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Candidate<AccountId, Balance: HasCompact> {
@@ -15,7 +18,8 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 	pub exposure: Exposure<AccountId, Balance>,
 	// Accumulator of the stake of this candidate based on received votes.
 	approval_stake: Balance,
-	// Intermediary value used to sort candidates. See phragmen reference implementation
+	// Intermediary value used to sort candidates.
+    // See Phragmén reference implementation.
 	score: Perquintill,
 }
 
@@ -23,19 +27,19 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Nominations<AccountId, Balance: HasCompact> {
-	// The nominator's account
+	// The nominator's account.
 	who: AccountId,
 	// List of validators proposed by this nominator.
 	nominees: Vec<Vote<AccountId, Balance>>,
 	// the stake amount proposed by the nominator as a part of the vote.
-    // Same as `nom.budget` in phragmen reference.
+    // Same as `nom.budget` in Phragmén reference.
 	stake: Balance,
 	// Incremented each time a nominee that this nominator voted for has been elected.
 	load: Perquintill,
 }
 
 // Wrapper around a nominator vote and the load of that vote. 
-// Referred to as 'edge' in the phragmen reference implementation.
+// Referred to as 'edge' in the Phragmén reference implementation.
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Vote<AccountId, Balance: HasCompact> {
@@ -47,8 +51,12 @@ pub struct Vote<AccountId, Balance: HasCompact> {
 	backing_stake: Balance
 }
 
-/// Perform election based on Phragmen algorithm.
-pub fn elect<T: Trait, FR, FN, FV, FS>(
+/// Perform election based on Phragmén algorithm.
+/// 
+/// Reference implementation: https://github.com/w3f/consensus
+/// 
+/// @returns a vector of elected candidates
+pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
         get_rounds: FR,
         get_validators: FV,
         get_nominators: FN,
@@ -63,14 +71,13 @@ pub fn elect<T: Trait, FR, FN, FV, FS>(
             Item =(T::AccountId, Vec<T::AccountId>)
         >>,
         FS: Fn(T::AccountId) -> BalanceOf<T>,
-        T::AccountId: 'static,
-        ValidatorPrefs<BalanceOf<T>>: 'static {   
+{   
     let rounds = get_rounds();
     let mut elected_candidates = vec![];
     
     // 1- Pre-process candidates and place them in a container
     let mut candidates = get_validators().map(|(who, _)| {
-        let stash_balance = stash_of(who);
+        let stash_balance = stash_of(who.clone());
         Candidate {
             who,
             approval_stake: BalanceOf::<T>::zero(),
@@ -85,11 +92,11 @@ pub fn elect<T: Trait, FR, FN, FV, FS>(
     // 2- Collect the nominators with the associated votes.
     // Also collect approval stake along the way.
     let mut nominations = get_nominators().map(|(who, nominees)| {
-        let nominator_stake = stash_of(who);
+        let nominator_stake = stash_of(who.clone());
         for n in &nominees {
-            if let Some(index) = candidates.iter().position(|i| i.who == *n) {
-                candidates[index].approval_stake += nominator_stake;
-            }
+			candidates.iter_mut().filter(|i| i.who == *n).for_each(|c| { 
+				c.approval_stake += nominator_stake; 
+			});
         }
 
         Nominations {
@@ -107,7 +114,7 @@ pub fn elect<T: Trait, FR, FN, FV, FS>(
     let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
         .collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
 
-    // 4- If we have more candidates then needed, run phragmen.
+    // 4- If we have more candidates then needed, run Phragmén.
     if candidates.len() > rounds {
         // Main election loop
         for _round in 0..rounds {
@@ -115,9 +122,9 @@ pub fn elect<T: Trait, FR, FN, FV, FS>(
             for nominaotion in &nominations {
                 for vote in &nominaotion.nominees {
                     let candidate = &vote.who;
-                    if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
-                        let approval_stake = candidates[index].approval_stake;
-                        candidates[index].score = Perquintill::from_xth(approval_stake.as_());
+                    if let Some(c) = candidates.iter_mut().find(|i| i.who == *candidate) {
+                        let approval_stake = c.approval_stake;
+                        c.score = Perquintill::from_xth(approval_stake.as_());
                     }
                 }
             }
@@ -125,32 +132,32 @@ pub fn elect<T: Trait, FR, FN, FV, FS>(
             for nominaotion in &nominations {
                 for vote in &nominaotion.nominees {
                     let candidate = &vote.who;
-                    if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
-                        let approval_stake = candidates[index].approval_stake;
+                    if let Some(c) = candidates.iter_mut().find(|i| i.who == *candidate) {
+                        let approval_stake = c.approval_stake;
                         let temp =
                             nominaotion.stake.as_()
-                            * nominaotion.load.extract()
+                            * *nominaotion.load
                             / approval_stake.as_();
-                        candidates[index].score = Perquintill::from_quintillionths(candidates[index].score.extract() + temp);
+                        c.score = Perquintill::from_quintillionths(*c.score + temp);
                     }
                 }
             }
 
             // Find the best
-            let (winner_index, _) = candidates.iter().enumerate().min_by_key(|&(_i, c)| c.score.extract())
+            let (winner_index, _) = candidates.iter().enumerate().min_by_key(|&(_i, c)| *c.score)
                 .expect("candidates length is checked to be >0; qed");
 
             // loop 3: update nominator and vote load
             let winner = candidates.remove(winner_index);
-            for nominator_idx in 0..nominations.len() {
-                for vote_idx in 0..nominations[nominator_idx].nominees.len() {
-                    if nominations[nominator_idx].nominees[vote_idx].who == winner.who {
-                        nominations[nominator_idx].nominees[vote_idx].load =
+            for n in &mut nominations {
+                for v in &mut n.nominees {
+                    if v.who == winner.who {
+                        v.load =
                             Perquintill::from_quintillionths(
-                                winner.score.extract()
-                                - nominations[nominator_idx].load.extract()
+                                *winner.score
+                                - *n.load
                             );
-                        nominations[nominator_idx].load = winner.score;
+                        n.load = winner.score;
                     }
                 }
             }
@@ -163,31 +170,29 @@ pub fn elect<T: Trait, FR, FN, FV, FS>(
         for nomination in &mut nominations {
             for vote in &mut nomination.nominees {
                 // if the target of this vote is among the winners, otherwise let go.
-                if let Some(index) = elected_candidates.iter().position(|c| c.who == vote.who) {
+                if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == vote.who) {
                     vote.backing_stake = <BalanceOf<T> as As<u64>>::sa(
                         nomination.stake.as_()
-                        * vote.load.extract()
-                        / nomination.load.extract()
+                        * *vote.load
+                        / *nomination.load
                     );
-                    elected_candidates[index].exposure.total += vote.backing_stake;
+                    c.exposure.total += vote.backing_stake;
                     // Update IndividualExposure of those who nominated and their vote won
-                    elected_candidates[index].exposure.others.push(
+                    c.exposure.others.push(
                         IndividualExposure {who: nomination.who.clone(), value: vote.backing_stake }
                     );
                 }
             }
         }
-    } // if candidates.len() > rounds 
-    else {
+    } else {
         if candidates.len() > minimum_validator_count {
             // if we don't have enough candidates, just choose all that have some vote.
             elected_candidates = candidates;
-        }
-        else {
+        } else {
             // if we have less than minimum, use the previous validator set.
             elected_candidates = original_candidates;
         }
     }
 
-    candidates
+    elected_candidates
 }
