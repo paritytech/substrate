@@ -80,7 +80,7 @@ Issue the `total` amount of a new class of fungible asset with a fixed supply of
 Transfer a signed sender's (i.e. Alice) account holding of an asset's `AssetId` to a `target` recipient account (i.e. Bob) using the public call `transfer`. It only triggers the `Transferred` event if the transfer is valid.
 
 ```rust
-<assets::Module<T>>::transfer(Origin::signed(&ALICE), INITIAL_ASSET_ID, BOB, FIXED_SUPPLY);
+<assets::Module<T>>::transfer(Origin::signed(&ALICE), initial_asset_id, BOB, FIXED_SUPPLY);
 ```
 
 **5. Destroy the Fungible Asset holding of an Account**
@@ -88,7 +88,7 @@ Transfer a signed sender's (i.e. Alice) account holding of an asset's `AssetId` 
 Destroy a signed sender's (i.e. Alice) entire account holding of a fungible asset and trigger the `Destroyed` event if they have a non-zero balance.
 
 ```rust
-<assets::Module<T>>::destroy(Origin::signed(&ALICE), INITIAL_ASSET_ID);
+<assets::Module<T>>::destroy(Origin::signed(&ALICE), initial_asset_id);
 ```
 
 **6. Query the Fungible Asset holding of an Account**
@@ -96,7 +96,7 @@ Destroy a signed sender's (i.e. Alice) entire account holding of a fungible asse
 Query an account's holding balance (i.e. Alice) of a fungible asset by calling the asset module's `balance` function.
 
 ```rust
-let balance = <assets::Module<T>>::balance(INITIAL_ASSET_ID, Origin::signed(&ALICE));
+let balance = <assets::Module<T>>::balance(initial_asset_id, Origin::signed(&ALICE));
 ```
 
 **7. Query the Total Supply of a Fungible Asset**
@@ -104,5 +104,5 @@ let balance = <assets::Module<T>>::balance(INITIAL_ASSET_ID, Origin::signed(&ALI
 Query the total supply of a fungible asset that has been issued by calling the asset module's `total_supply` function.
 
 ```rust
-let total_supply = <assets::Module<T>>::total_supply(INITIAL_ASSET_ID);
+let total_supply = <assets::Module<T>>::total_supply(initial_asset_id);
 ```
