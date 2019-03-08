@@ -231,7 +231,8 @@ impl<T: Trait> Module<T> {
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
 	///
-	/// Returns either `Updated` or `AccountKilled`.
+	/// Returns `Updated` if the account was successfully updated
+	/// or `AccountKilled` if the update has led to killing the account.
 	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
 			<ReservedBalance<T>>::insert(who, balance);
@@ -249,7 +250,8 @@ impl<T: Trait> Module<T> {
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
 	///
-	/// Returns either `Updated` or `AccountKilled`.
+	/// Returns `Updated` if the account was successfully updated
+	/// or `AccountKilled` if the update has led to killing the account.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
@@ -268,7 +270,8 @@ impl<T: Trait> Module<T> {
 	///
 	/// Same as `set_free_balance`, but will create a new account.
 	///
-	/// Returns either `Updated` or `AccountKilled`.
+	/// Returns `Updated` if the account was successfully updated
+	/// or `AccountKilled` if the update has led to killing the account.
 	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		let ed = <Module<T>>::existential_deposit();
 		// If the balance is too low, then the account is reaped.
@@ -296,8 +299,10 @@ impl<T: Trait> Module<T> {
 
 	/// Transfer some liquid free balance from one account to another.
 	///
-	/// Enforces `ExistentialDeposit` law, reaping the sender's account if it's balance is
+	/// Enforces `ExistentialDeposit` law, reaping the sender's account if its balance is
 	/// too low as a result of the transfer.
+	///
+	/// #NOTES
 	///
 	/// Will create a new account for the destination if the account does not exist.
 	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {
@@ -371,14 +376,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Increase `TotalIssuance` by `value`.
+	/// Increase stake by `value`.
 	pub fn increase_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_add(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
 
-	/// Decrease `TotalIssuance` by `value`.
+	/// Decrease stake by `value`.
 	pub fn decrease_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_sub(&value) {
 			<TotalIssuance<T>>::put(v);

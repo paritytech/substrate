@@ -139,7 +139,9 @@ pub trait Currency<AccountId> {
 	/// Returns `Updated` if the account was successfully updated
 	/// or `AccountKilled` if the update has led to killing the account.
 	///
-	/// NOTE: This assumes that the total stake remains unchanged after this operation.
+	/// #NOTES
+	///
+	/// This assumes that the total stake remains unchanged after this operation.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
 
 	/// Moves `value` from balance to reserved balance.
@@ -154,9 +156,10 @@ pub trait Currency<AccountId> {
 	/// is less than `value`, then `Some(remaining)` will be returned. If all of `value` is
 	/// moved, the function will return `None`.
 	///
-	/// NOTE: This is different to `reserve`.
+	/// #NOTES
 	///
-	/// NOTE: If the remaining reserved balance is less than `ExistentialDeposit`, it will
+	/// - This is different to `reserve`.
+	/// - If the remaining reserved balance is less than `ExistentialDeposit`, it will
 	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 

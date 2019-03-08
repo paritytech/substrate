@@ -35,17 +35,17 @@ The dispatchable function `transfer` ensures that the sender has signed the tran
 
 The following example shows how to use the balances module in your custom module.
 
-1 Import the `balances` module and derive your module configuration trait with the balances trait.
+1. Import the `balances` module and derive your module configuration trait with the balances trait.
 
-```
+```rust
 use balances;
 
 pub trait Trait: balances::Trait { }
 ```
 
-2 In your module, call the balance module:
+2. In your module, call the balance module:
 
-```
+```rust
 // Get existential deposit
 let ed = Balances::existential_deposit();
 
@@ -53,9 +53,9 @@ let ed = Balances::existential_deposit();
 let tf = Balances::transfer_fee();
 ```
 
-3 Include a balance transfer in a block (example from the `executor` module tests):
+3. Include a balance transfer in a block (example from the `executor` module tests):
 
-```
+```rust
 let mut t = new_test_ext(COMPACT_CODE, false);
 let block1 = construct_block(
     &mut t,
