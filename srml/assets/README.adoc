@@ -12,7 +12,7 @@ The SRML Support Module implements the `Currency` trait abstraction over the SRM
 
 ### Types
 
-* AssetId
+* `AssetId`: `u32`
 
 ## Public Interface
 
