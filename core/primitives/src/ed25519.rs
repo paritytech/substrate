@@ -247,13 +247,18 @@ impl Pair {
 		Pair(key, seed)
 	}
 
+	/// Get the seed for this key.
+	pub fn seed(&self) -> &Seed {
+		&self.1
+	}
+
 	/// Generate new secure (random) key pair.
 	///
 	/// This is only for ephemeral keys really, since you won't have access to the secret key
 	/// for storage. If you want a persistent key pair, use `generate_with_phrase` instead.
 	pub fn generate() -> Pair {
 		let mut seed: Seed = Default::default();
-		SystemRandom::new().fill(seed.as_mut());
+		SystemRandom::new().fill(seed.as_mut()).expect("system random source should always work! qed");
 		Self::from_seed(seed)
 	}
 
@@ -283,7 +288,7 @@ impl Pair {
 		let mut acc = self.1.clone();
 		for j in path {
 			match j {
-				DeriveJunction::Soft(cc) => return None,
+				DeriveJunction::Soft(_cc) => return None,
 				DeriveJunction::Hard(cc) => acc = derive_hard_junction(&acc, &cc),
 			}
 		}
@@ -292,8 +297,8 @@ impl Pair {
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
 	/// characters are taken (padded with spaces as necessary) and used as the MiniSecretKey.
-	pub fn from_legacy_string(s: &str) -> Pair {
-		Self::from_string(s).unwrap_or_else(|| {
+	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
+		Self::from_string(s, password_override).unwrap_or_else(|| {
 			let mut padded_seed: Seed = [' ' as u8; 32];
 			let len = s.len().min(32);
 			padded_seed[..len].copy_from_slice(&s.as_bytes()[..len]);
@@ -380,6 +385,17 @@ mod test {
 	#[test]
 	fn test_vector_should_work() {
 		let pair: Pair = Pair::from_seed(hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"));
+		let public = pair.public();
+		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
+		let message = b"";
+		let signature: Signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b").into();
+		assert!(&pair.sign(&message[..]) == &signature);
+		assert!(verify_strong(&signature, &message[..], &public));
+	}
+
+	#[test]
+	fn test_vector_by_string_should_work() {
+		let pair: Pair = Pair::from_string("0x9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", None).unwrap();
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
 		let message = b"";

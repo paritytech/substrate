@@ -19,7 +19,7 @@
 // end::description[]
 
 use parity_codec::{Encode, Decode};
-use regex::{Regex, Match};
+use regex::Regex;
 
 /// The length of the junction identifier. Note that this is also referred to as the
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
@@ -152,7 +152,7 @@ pub trait StandardPair: Sized {
 	///
 	/// `None` is returned if no matches are found.
 	/// TODO: should return Result that includes InvalidPhrase, InvalidPassword and InvalidSeed.
-	fn from_string(s: &str) -> Option<Self> {
+	fn from_string(s: &str, password_override: Option<&str>) -> Option<Self> {
 		let hex_seed = if s.starts_with("0x") {
 			&s[2..]
 		} else {
@@ -181,7 +181,7 @@ pub trait StandardPair: Sized {
 			});
 		Self::from_standard_components(
 			&cap["phrase"],
-			cap.name("password").map(|m| m.as_str()),
+			password_override.or_else(|| cap.name("password").map(|m| m.as_str())),
 			path,
 		)
 	}
@@ -211,55 +211,67 @@ mod tests {
 	#[test]
 	fn interpret_std_seed_should_work() {
 		assert_eq!(
-			TestPair::from_string("0x0123456789abcdef"),
+			TestPair::from_string("0x0123456789abcdef", None),
 			Some(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
 		);
 		assert_eq!(
-			TestPair::from_string("0123456789abcdef"),
+			TestPair::from_string("0123456789abcdef", None),
 			Some(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
+		);
+	}
+
+	#[test]
+	fn password_override_should_work() {
+		assert_eq!(
+			TestPair::from_string("hello world///password", None),
+			TestPair::from_string("hello world", Some("password")),
+		);
+		assert_eq!(
+			TestPair::from_string("hello world///password", None),
+			TestPair::from_string("hello world///other password", Some("password")),
 		);
 	}
 
 	#[test]
 	fn interpret_std_secret_string_should_work() {
 		assert_eq!(
-			TestPair::from_string("hello world"),
+			TestPair::from_string("hello world", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world/1"),
+			TestPair::from_string("hello world/1", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft(1)]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world/DOT"),
+			TestPair::from_string("hello world/DOT", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft("DOT")]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world//1"),
+			TestPair::from_string("hello world//1", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1)]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world//DOT"),
+			TestPair::from_string("hello world//DOT", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT")]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world//1/DOT"),
+			TestPair::from_string("hello world//1/DOT", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world//DOT/1"),
+			TestPair::from_string("hello world//DOT/1", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT"), DeriveJunction::soft(1)]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world///password"),
+			TestPair::from_string("hello world///password", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world//1/DOT///password"),
+			TestPair::from_string("hello world//1/DOT///password", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
 		);
 		assert_eq!(
-			TestPair::from_string("hello world/1//DOT///password"),
+			TestPair::from_string("hello world/1//DOT///password", None),
 			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::soft(1), DeriveJunction::hard("DOT")]})
 		);
 	}

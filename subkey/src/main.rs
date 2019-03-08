@@ -25,9 +25,8 @@ use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
 use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay};
+use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, crypto::StandardPair};
 use schnorrkel::keys::MiniSecretKey;
-use rustc_hex::FromHex;
 
 mod vanity;
 
@@ -44,11 +43,12 @@ trait Crypto {
 	}
 	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed;
 	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair;
-	fn pair_from_phrase(phrase: &str, password: Option<&str>) -> Self::Pair {
+	fn pair_from_suri(phrase: &str, password: Option<&str>) -> Self::Pair {
 		Self::pair_from_seed(&Self::seed_from_phrase(phrase, password))
 	}
 	fn ss58_from_pair(pair: &Self::Pair) -> String;
 	fn public_from_pair(pair: &Self::Pair) -> Vec<u8>;
+	fn seed_from_pair(_pair: &Self::Pair) -> Option<&Self::Seed> { None }
 	fn print_from_seed(seed: &Self::Seed) {
 		let pair = Self::pair_from_seed(seed);
 		println!("Seed 0x{} is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
@@ -67,6 +67,17 @@ trait Crypto {
 			Self::ss58_from_pair(&pair)
 		);
 	}
+	fn print_from_suri(suri: &str, password: Option<&str>) {
+		let pair = Self::pair_from_suri(suri, password);
+		let seed_text = Self::seed_from_pair(&pair)
+			.map_or_else(Default::default, |s| format!("\n  Seed: 0x{}", HexDisplay::from(&s.as_ref())));
+		println!("SURI `{}` is account:{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+			suri,
+			seed_text,
+			HexDisplay::from(&Self::public_from_pair(&pair)),
+			Self::ss58_from_pair(&pair)
+		);
+	}
 }
 
 struct Ed25519;
@@ -78,40 +89,13 @@ impl Crypto for Ed25519 {
 	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed {
 		Sr25519::seed_from_phrase(phrase, password)
 	}
-	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair { ed25519::Pair::from_seed(seed) }
+	fn pair_from_suri(suri: &str, password_override: Option<&str>) -> Self::Pair {
+		ed25519::Pair::from_legacy_string(suri, password_override)
+	}
+	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair { ed25519::Pair::from_seed(seed.clone()) }
 	fn ss58_from_pair(pair: &Self::Pair) -> String { pair.public().to_ss58check() }
 	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { (&pair.public().0[..]).to_owned() }
-}
-
-struct OriginalEd25519;
-
-impl Crypto for OriginalEd25519 {
-	type Seed = <Ed25519 as Crypto>::Seed;
-	type Pair = <Ed25519 as Crypto>::Pair;
-
-	fn seed_from_phrase(phrase: &str, password: Option<&str>) -> Self::Seed {
-		if password.is_some() {
-			panic!("Ed25519 original doesn't support passwords")
-		}
-
-		let mut raw_seed = phrase.as_bytes();
-
-		if raw_seed.len() > 32 {
-			raw_seed = &raw_seed[..32];
-			println!("seed is too long and will be truncated to: {}", HexDisplay::from(&raw_seed));
-		}
-
-		// Copy the raw_seed into a buffer that already contains ' ' 0x20.
-		// This will effectively get us padding for seeds shorter than 32.
-		let mut seed = [' ' as u8; 32];
-		let len = raw_seed.len().min(32);
-		seed[..len].copy_from_slice(&raw_seed[..len]);
-		seed
-	}
-
-	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair { Ed25519::pair_from_seed(seed) }
-	fn ss58_from_pair(pair: &Self::Pair) -> String { Ed25519::ss58_from_pair(pair) }
-	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { Ed25519::public_from_pair(pair) }
+	fn seed_from_pair(pair: &Self::Pair) -> Option<&Self::Seed> { Some(pair.seed()) }
 }
 
 struct Sr25519;
@@ -133,11 +117,8 @@ impl Crypto for Sr25519 {
 			.to_bytes()
 	}
 
-	fn pair_from_phrase(phrase: &str, password: Option<&str>) -> Self::Pair {
-		sr25519::Pair::from_phrase(phrase, password)
-			.unwrap_or_else(||
-				panic!("Phrase is not a valid BIP-39 phrase: \n    {}", phrase)
-			)
+	fn pair_from_suri(suri: &str, password: Option<&str>) -> Self::Pair {
+		sr25519::Pair::from_string(suri, password).expect("Invalid phrase")
 	}
 
 	fn pair_from_seed(seed: &Self::Seed) -> Self::Pair {
@@ -162,27 +143,10 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) {
 			let key = vanity::generate_key::<C>(&desired).expect("Key generation failed");
 			C::print_from_seed(&key.seed);
 		}
-		("restore", Some(matches)) => {
-			let phrase = matches.value_of("seed")
+		("inspect", Some(matches)) => {
+			let suri = matches.value_of("suri")
 				.expect("seed parameter is required; thus it can't be None; qed");
-			C::print_from_phrase(phrase, password);
-		},
-		("query", Some(matches)) => {
-			let seed_data = matches.value_of("seed")
-				.expect("seed parameter is required; thus it can't be None; qed");
-			let seed_data = if seed_data.starts_with("0x") {
-				&seed_data[2..]
-			} else {
-				seed_data
-			};
-			let seed_data: Vec<u8> = seed_data.from_hex().expect("seed is not valid hex");
-			let correct_size = ::std::mem::size_of::<C::Seed>();
-			if seed_data.len() != correct_size {
-				panic!("Seed is incorrect size. It must be {} bytes for this cryptography", correct_size);
-			}
-			let mut seed = C::Seed::default();
-			seed.as_mut().copy_from_slice(&seed_data);
-			C::print_from_seed(&seed);
+			C::print_from_suri(suri, password);
 		},
 		_ => print_usage(&matches),
 	}
@@ -194,9 +158,7 @@ fn main() {
 		.version(env!("CARGO_PKG_VERSION"))
 		.get_matches();
 
-	if matches.is_present("ed25519original") {
-		execute::<OriginalEd25519>(matches)
-	} else if matches.is_present("ed25519") {
+	if matches.is_present("ed25519") {
 		execute::<Ed25519>(matches)
 	} else {
 		execute::<Sr25519>(matches)
