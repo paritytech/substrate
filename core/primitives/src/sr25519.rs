@@ -504,11 +504,12 @@ mod test {
 	#[ignore]
 	#[test]
 	fn verify_from_wasm_works() {
-		// The values in this testcases are compared to the output of ./pkg/node-test.js in schnorrkel-js
-		// This is to make sure that the wasm library in compatible
+		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
+		// 
+		// This is to make sure that the wasm library is compatible.
 		let pk = Pair::from_seed(&hex!("0000000000000000000000000000000000000000000000000000000000000000")); 
 		let public = pk.public();
-		let js_signature = Signature::from(&hex!("c072a48a17597166462a05b65ba9d122ea351021ccf6503a9570cdeabaa354019ae587bc007ce98e89d9507d02b6bf763452efdb7b9187cf6ee3b343d94d9105"));
+		let js_signature = Signature::from(&hex!("fa30b7561aae210d2a9264137fb33b1a666aa438092738616fa23bc5ef8cc14ef1b68718719672ac8cd35f0bd02d834beee7695cc0bc90e4019be1c13cf21009"));
 		assert!(verify_strong(&js_signature, b"SUBSTRATE", public));
 	}
 }
