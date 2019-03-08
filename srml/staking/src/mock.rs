@@ -182,7 +182,8 @@ impl ExtBuilder {
 					(10, balance_factor), (11, balance_factor * 10),
 					(20, balance_factor), (21, balance_factor * 20),
 					(30, balance_factor), (31, balance_factor * 30),
-					(40, balance_factor), (41, balance_factor * 40)]
+					(40, balance_factor), (41, balance_factor * 40)
+				]
 			},
 			existential_deposit: self.existential_deposit,
 			transfer_fee: 0,
