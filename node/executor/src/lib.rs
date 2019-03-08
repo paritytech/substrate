@@ -449,9 +449,9 @@ mod tests {
 
 		let mut digest = generic::Digest::<Log>::default();
 		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-			(Keyring::Charlie.to_raw_public().into(), 1),
 			(Keyring::Alice.to_raw_public().into(), 1),
 			(Keyring::Bob.to_raw_public().into(), 1),
+			(Keyring::Charlie.to_raw_public().into(), 1),
 		])));
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
@@ -592,9 +592,9 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-						(Keyring::Charlie.to_raw_public().into(), 1),
 						(Keyring::Alice.to_raw_public().into(), 1),
 						(Keyring::Bob.to_raw_public().into(), 1),
+						(Keyring::Charlie.to_raw_public().into(), 1),
 					])),
 				},
 				EventRecord {
