@@ -437,7 +437,7 @@ fn staking_should_work() {
 	|| {
 		assert_eq!(Staking::era_length(), 3);
 		// remember + compare this along with the test.
-		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 		assert_ok!(Staking::set_bonding_duration(2));
 		assert_eq!(Staking::bonding_duration(), 2);
 
@@ -459,7 +459,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		// No effects will be seen so far.s
-		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 		
 
 		// --- Block 2:
@@ -471,7 +471,7 @@ fn staking_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		// No effects will be seen so far. Era has not been yet triggered.
-		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 
 		// --- Block 3: the validators will now change.
@@ -534,8 +534,7 @@ fn less_than_needed_candidates_works() {
 		assert_eq!(Staking::validator_count(), 3);
 
 		// initial validators 
-		// note that since the test is `.nominate(false)` 100 is also treated initially as a validators
-		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
 
 		// only one nominator will exist and it will 
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
@@ -572,8 +571,7 @@ fn no_candidate_emergency_condition() {
 		assert_eq!(Staking::validator_count(), 3);
 
 		// initial validators 
-		// note that since the test is `.nominate(false)` 100 is also treated initially as a validators
-		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
 
 		// trigger era
 		System::set_block_number(1);
@@ -581,7 +579,7 @@ fn no_candidate_emergency_condition() {
 		assert_eq!(Staking::current_era(), 1);
 
 		// No one nominates => no one has a proper vote => no change
-		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
 	});
 }
 
@@ -608,8 +606,7 @@ fn nominating_and_rewards_should_work() {
 		.build(),
 	|| {
 		// initial validators 
-		// note that since the test is `.nominate(false)` 100 is also treated initially as a validators
-		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
 
 		// Set payee to controller
 		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
@@ -1353,7 +1350,7 @@ fn phragmen_poc_works() {
 		.build(),
 	|| {
 		// initial setup of 10 and 20, both validators + 100.
-		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
 		assert_eq!(Staking::ledger(&20), Some(StakingLedger { stash: 21, total: 2000, active: 2000, unlocking: vec![] }));
@@ -1422,7 +1419,7 @@ fn switching_roles() {
 		.sessions_per_era(3)
 		.build(),
 	|| {
-		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// put some money in account that we'll use.
 		for i in 1..7 { Balances::set_free_balance(&i, 5000); }
@@ -1443,14 +1440,14 @@ fn switching_roles() {
 		Session::check_rotate_session(System::block_number());
 
 		// no change 
-		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// new block 
 		System::set_block_number(2);
 		Session::check_rotate_session(System::block_number());
 
 		// no change 
-		assert_eq!(Session::validators(), vec![100, 20, 10]);
+		assert_eq!(Session::validators(), vec![20, 10]);
 
 		// new block --> ne era --> new validators
 		System::set_block_number(3);
@@ -1490,7 +1487,7 @@ fn wrong_vote_is_null() {
 	.build(),
 	|| {
 		// from the first era onward, only two will be chosen
-		assert_eq!(Session::validators(), vec![100, 40, 30, 20, 10]);
+		assert_eq!(Session::validators(), vec![40, 30, 20, 10]);
 
 		// put some money in account that we'll use.
 		for i in 1..3 { Balances::set_free_balance(&i, 5000); }

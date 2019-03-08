@@ -19,6 +19,7 @@
 //! Staking manager: Periodically determines the best set of validators.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(type_alias_enum_variants)]
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
@@ -31,58 +32,23 @@ use srml_support::traits::{
 	LockIdentifier, LockableCurrency, WithdrawReasons
 };
 use session::OnSessionChange;
-use primitives::{Perbill, Perquill};
+use primitives::{Perbill};
 use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
+use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
-mod mock;
 
+mod mock;
 mod tests;
+mod phragmen;
 
 const RECENT_OFFLINE_COUNT: usize = 32;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const MAX_NOMINATIONS: usize = 16;
 const MAX_UNSTAKE_THRESHOLD: u32 = 10;
 
-// a wrapper around validation candidates list and some metadata needed for election process.
-#[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Candidate<AccountId, Balance: HasCompact> {
-	// The validator's account
-	who: AccountId,
-	// Exposure struct, holding info about the value that the validator has in stake.
-	exposure: Exposure<AccountId, Balance>,
-	// Accumulator of the stake of this candidate based on received votes.
-	approval_stake: Balance,
-	// Intermediary value used to sort candidates. See phragmen reference implementation
-	score: Perquill,
-}
-
-// a wrapper around the nomination info of a single nominator for a group of validators.
-#[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Nominations<AccountId, Balance: HasCompact> {
-	// The nominator's account
-	who: AccountId,
-	// List of validators proposed by this nominator.
-	nominees: Vec<Vote<AccountId, Balance>>,
-	// the stake amount proposed by the nominator as a part of the vote. Same as `nom.budget` in reference.
-	stake: Balance,
-	// is incremented each time a nominee that this nominator voted for has been elected.
-	load: Perquill,
-}
-
-// Wrapper around a nominator vote and the load of that vote. Referred to as 'edge' in the
-// phragmen reference implementation.
-#[derive(Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct Vote<AccountId, Balance: HasCompact> {
-	// account being voted for
-	who: AccountId,
-	// load of this vote.
-	load: Perquill,
-	// Final backing stake of this vote.
-	backing_stake: Balance
-}
+// Indicates the initial status of the staker
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum StakerStatus<AccountId> { Idle, Validator, Nominator(Vec<AccountId>), }
 
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode)]
@@ -259,12 +225,7 @@ decl_storage! {
 		/// The set of keys are all controllers that want to nominate.
 		///
 		/// The value are the nominations.
-		pub Nominators get(nominators) build(|config: &GenesisConfig<T>| {
-			config.nominators.iter().map(|(who, nominees)| (
-				who.clone(),
-				nominees.clone(),
-			)).collect::<Vec<_>>()
-		}): linked_map T::AccountId => Vec<T::AccountId>;
+		pub Nominators get(nominators): linked_map T::AccountId => Vec<T::AccountId>;
 
 		/// Nominators for a particular account that is in action right now. You can't iterate through validators here,
 		/// but you can find them in the `sessions` module.
@@ -299,7 +260,7 @@ decl_storage! {
 		///
 		/// This is used to derive rewards and punishments.
 		pub SlotStake get(slot_stake) build(|config: &GenesisConfig<T>| {
-			config.stakers.iter().map(|&(_, _, value)| value).min().unwrap_or_default()
+			config.stakers.iter().map(|&(_, _, value, _)| value).min().unwrap_or_default()
 		}): BalanceOf<T>;
 
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
@@ -312,22 +273,29 @@ decl_storage! {
 		pub RecentlyOffline get(recently_offline): Vec<(T::AccountId, T::BlockNumber, u32)>;
 	}
 	add_extra_genesis {
-		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>)>;
-		config(nominators): Vec<(T::AccountId, Vec<T::AccountId>)>;
-
+		config(stakers): Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>;
 		build(|storage: &mut primitives::StorageOverlay, _: &mut primitives::ChildrenStorageOverlay, config: &GenesisConfig<T>| {
 			with_storage(storage, || {
-				// assign validators/stakers
-				for &(ref stash, ref controller, balance) in &config.stakers {
-					let _ = <Module<T>>::bond(T::Origin::from(Some(stash.clone()).into()), T::Lookup::unlookup(controller.clone()), balance, RewardDestination::Staked);
-					let _ = <Module<T>>::validate(T::Origin::from(Some(controller.clone()).into()), Default::default());
-				}
-				
-				// assign nominators
-				for &(ref nominator, ref votes) in &config.nominators {
-					let _ = <Module<T>>::nominate(T::Origin::from(Some(nominator.clone()).into()), votes.iter().map(|l| {
-						T::Lookup::unlookup(l.clone())
-					}).collect());
+				for &(ref stash, ref controller, balance, ref status) in &config.stakers {
+					let _ = <Module<T>>::bond(
+						T::Origin::from(Some(stash.clone()).into()),
+						T::Lookup::unlookup(controller.clone()),
+						balance,
+						RewardDestination::Staked
+					);
+					let _ = match status {
+						StakerStatus::Validator => {
+							<Module<T>>::validate(
+								T::Origin::from(Some(controller.clone()).into()),
+								Default::default()
+							)
+						}, StakerStatus::Nominator(votes) => {
+							<Module<T>>::nominate(
+								T::Origin::from(Some(controller.clone()).into()),
+								votes.iter().map(|l| {T::Lookup::unlookup(l.clone())}).collect()
+							)
+						}, _ => Ok(())
+					};
 				}
 
 				<Module<T>>::select_validators();
@@ -696,141 +664,27 @@ impl<T: Trait> Module<T> {
 	fn select_validators() -> BalanceOf<T> {
 		// Map of (would-be) validator account to amount of stake backing it.
 		
-		let rounds = <ValidatorCount<T>>::get() as usize;
-		let mut elected_candidates: Vec<Candidate<T::AccountId, BalanceOf<T>>> = vec![];
+		let rounds = || <ValidatorCount<T>>::get() as usize;
+		let validators = || <Validators<T>>::enumerate();
+		let nominators = || <Nominators<T>>::enumerate();
+		let stash_of = |w| Self::stash_balance(&w);
+		let min_validator_count = Self::minimum_validator_count() as usize;
+		let elected_candidates = phragmen::elect::<T, _, _, _, _>(
+			rounds,
+			validators,
+			nominators,
+			stash_of,
+			min_validator_count
+		);		
 
-		// 1- Pre-process candidates and place them in a container
-		let mut candidates = <Validators<T>>::enumerate().map(|(who, _)| {
-			let stash_balance = Self::stash_balance(&who);
-			Candidate {
-				who,
-				approval_stake: BalanceOf::<T>::zero(),
-				score: Perquill::zero(),
-				exposure: Exposure { total: stash_balance, own: stash_balance, others: vec![] },
-			}
-		}).collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
+		// Figure out the minimum stake behind a slot.
+		let slot_stake = elected_candidates
+			.iter()
+			.min_by_key(|c| c.exposure.total)
+			.map(|c| c.exposure.total)
+			.unwrap_or_default();
 
-		// Just to be used when we are below minimum validator count
-		let original_candidates = candidates.clone();
-		
-		// 2- Collect the nominators with the associated votes.
-		// Also collect approval stake along the way.
-		let mut nominations = <Nominators<T>>::enumerate().map(|(who, nominees)| {
-			let nominator_stake = Self::stash_balance(&who);
-			for n in &nominees {
-				if let Some(index) = candidates.iter().position(|i| i.who == *n) {
-					candidates[index].approval_stake += nominator_stake;
-				}
-			}
-
-			Nominations {
-				who,
-				nominees: nominees.into_iter()
-					.map(|n| Vote {who: n, load: Perquill::zero(), backing_stake: BalanceOf::<T>::zero()})
-					.collect::<Vec<Vote<T::AccountId, BalanceOf<T>>>>(),
-				stake: nominator_stake,
-				load : Perquill::zero(),
-			}
-		}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
-		
-		// 3- optimization: 
-		// candidates who have 0 stake => have no votes or all null-votes. best to kick them out not.
-		let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
-			.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
-
-		// 4- If we have more candidates then needed, run phragmen.
-		if candidates.len() > rounds {
-			// Main election loop
-			for _round in 0..rounds {
-				// Loop 1: initialize score
-				for nominaotion in &nominations {
-					for vote in &nominaotion.nominees {
-						let candidate = &vote.who;
-						if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
-							let approval_stake = candidates[index].approval_stake;
-							candidates[index].score = Perquill::from_xth(approval_stake.as_());
-						}
-					}
-				}
-				// Loop 2: increment score.
-				for nominaotion in &nominations {
-					for vote in &nominaotion.nominees {
-						let candidate = &vote.who;
-						if let Some(index) = candidates.iter().position(|i| i.who == *candidate) {
-							let approval_stake = candidates[index].approval_stake;
-							let temp =
-								nominaotion.stake.as_()
-								* nominaotion.load.extract()
-								/ approval_stake.as_();
-							candidates[index].score = Perquill::from_quilltionths(candidates[index].score.extract() + temp);
-						}
-					}
-				}
-
-				// Find the best
-				let (winner_index, _) = candidates.iter().enumerate().min_by_key(|&(_i, c)| c.score.extract())
-					.expect("candidates length is checked to be >0; qed");
-
-				// loop 3: update nominator and vote load
-				let winner = candidates.remove(winner_index);
-				for nominator_idx in 0..nominations.len() {
-					for vote_idx in 0..nominations[nominator_idx].nominees.len() {
-						if nominations[nominator_idx].nominees[vote_idx].who == winner.who {
-							nominations[nominator_idx].nominees[vote_idx].load =
-								Perquill::from_quilltionths(
-									winner.score.extract()
-									- nominations[nominator_idx].load.extract()
-								);
-							nominations[nominator_idx].load = winner.score;
-						}
-					}
-				}
-
-				elected_candidates.push(winner);
-
-			} // end of all rounds
-
-			// 4.1- Update backing stake of candidates and nominators
-			for nomination in &mut nominations {
-				for vote in &mut nomination.nominees {
-					// if the target of this vote is among the winners, otherwise let go.
-					if let Some(index) = elected_candidates.iter().position(|c| c.who == vote.who) {
-						vote.backing_stake = <BalanceOf<T> as As<u64>>::sa(
-							nomination.stake.as_()
-							* vote.load.extract()
-							/ nomination.load.extract()
-						);
-						elected_candidates[index].exposure.total += vote.backing_stake;
-						// Update IndividualExposure of those who nominated and their vote won
-						elected_candidates[index].exposure.others.push(
-							IndividualExposure {who: nomination.who.clone(), value: vote.backing_stake }
-						);
-					}
-				}
-			}
-		} // if candidates.len() > rounds 
-		else {
-			if candidates.len() > Self::minimum_validator_count() as usize {
-				// if we don't have enough candidates, just choose all that have some vote.
-				elected_candidates = candidates;
-			}
-			else {
-				// if we have less than minimum, use the previous validator set.
-				elected_candidates = original_candidates;
-			}
-		}		
-
-		// 5- Figure out the minimum stake behind a slot.
-		let slot_stake;
-		if let Some(min_candidate) = elected_candidates.iter().min_by_key(|c| c.exposure.total) {
-			slot_stake = min_candidate.exposure.total;
-		}
-		else {
-			// This will only happen in the very first era. 
-			slot_stake = BalanceOf::<T>::zero();
-		}
-
-		// 6- Clear Stakers and reduce their slash_count.
+		// Clear Stakers and reduce their slash_count.
 		for v in <session::Module<T>>::validators().iter() {
 			<Stakers<T>>::remove(v);
 			let slash_count = <SlashCount<T>>::take(v);
@@ -839,12 +693,12 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		// 7- Populate Stakers.
+		// Populate Stakers.
 		for candidate in &elected_candidates {
 			<Stakers<T>>::insert(candidate.who.clone(), candidate.exposure.clone());
 		}
 
-		// 8- Set the new validator set.
+		// Set the new validator set.
 		<session::Module<T>>::set_validators(
 			&elected_candidates.into_iter().map(|i| i.who).collect::<Vec<_>>()
 		);
