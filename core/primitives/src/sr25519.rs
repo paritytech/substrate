@@ -501,6 +501,7 @@ mod test {
 		assert_eq!(Public::from_ss58check(k).unwrap(), Public::from_raw(enc));
 	}
 
+	#[ignore]
 	#[test]
 	fn verify_from_wasm_works() {
 		// The values in this testcases are compared to the output of ./pkg/node-test.js in schnorrkel-js
