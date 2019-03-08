@@ -25,13 +25,16 @@ use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
 use substrate_bip39::mini_secret_from_entropy;
-//use sha2::Sha512;
 use parity_codec::{Encode, Decode};
 use crate::hash::H512;
-use bip39::{Mnemonic, Language};
+use bip39::{Mnemonic, Language, MnemonicType};
+use crate::crypto::{DeriveJunction, StandardPair, JUNCTION_ID_LEN};
+
+//static_assert_eq!(CHAIN_CODE_LENGTH, JUNCTION_ID_LEN);
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
+use schnorrkel::keys::MINI_SECRET_KEY_LENGTH;
 
 // signing context
 const SIGNING_CTX: &'static [u8] = b"substrate transaction";
@@ -222,80 +225,6 @@ impl ::std::fmt::Debug for Public {
 	}
 }
 
-/// A since derivation junction description. It is the single parameter used when creating
-/// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
-/// a new public key from an existing public key.
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Encode, Decode)]
-pub enum DeriveJunction {
-	/// Soft (vanilla) derivation. Public keys have a correspondent derivation.
-	Soft([u8; CHAIN_CODE_LENGTH]),
-	/// Hard ("hardened") derivation. Public keys do not have a correspondent derivation.
-	Hard([u8; CHAIN_CODE_LENGTH]),
-}
-
-impl DeriveJunction {
-	/// Consume self to return a soft derive junction with the same chain code.
-	pub fn soften(self) -> Self { DeriveJunction::Soft(self.unwrap_inner()) }
-
-	/// Consume self to return a hard derive junction with the same chain code.
-	pub fn harden(self) -> Self { DeriveJunction::Hard(self.unwrap_inner()) }
-
-	/// Create a new soft (vanilla) DeriveJunction from a given, encodable, value.
-	///
-	/// If you need a hard junction, use `hard()`.
-	pub fn soft<T: Encode>(index: T) -> Self {
-		let mut cc: [u8; CHAIN_CODE_LENGTH] = Default::default();
-		index.using_encoded(|data| if data.len() > CHAIN_CODE_LENGTH {
-			let hash_result = blake2_rfc::blake2b::blake2b(CHAIN_CODE_LENGTH, &[], data);
-			let hash = hash_result.as_bytes();
-			cc.copy_from_slice(hash);
-		} else {
-			cc[0..data.len()].copy_from_slice(data);
-		});
-		DeriveJunction::Soft(cc)
-	}
-
-	/// Create a new hard (hardened) DeriveJunction from a given, encodable, value.
-	///
-	/// If you need a soft junction, use `soft()`.
-	pub fn hard<T: Encode>(index: T) -> Self {
-		Self::soft(index).harden()
-	}
-
-	/// Consume self to return the chain code.
-	pub fn unwrap_inner(self) -> [u8; CHAIN_CODE_LENGTH] {
-		match self {
-			DeriveJunction::Hard(c) | DeriveJunction::Soft(c) => c,
-		}
-	}
-
-	/// Consume self to return the chain code.
-	pub fn unwrap_chain_code(self) -> ChainCode {
-		ChainCode(self.unwrap_inner())
-	}
-
-	/// Return a reference to the chain code.
-	pub fn chain_code(&self) -> ChainCode {
-		self.clone().unwrap_chain_code()
-	}
-
-	/// Return `true` if the junction is soft.
-	pub fn is_soft(&self) -> bool {
-		match *self {
-			DeriveJunction::Soft(_) => true,
-			_ => false,
-		}
-	}
-
-	/// Return `true` if the junction is hard.
-	pub fn is_hard(&self) -> bool {
-		match *self {
-			DeriveJunction::Hard(_) => true,
-			_ => false,
-		}
-	}
-}
-
 /// Derive a single hard junction.
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
 	("SchnorrRistrettoHDKD", &secret.to_bytes()[..], cc).using_encoded(|data|
@@ -303,6 +232,25 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Sec
 			.expect("all 32-byte crypto-hash results are valid MiniSecretKeys; qed")
 			.expand()
 	)
+}
+
+impl StandardPair for Pair {
+	/// Generate a key from the phrase, password and derivation path.
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Pair> {
+		Some(Self::from_phrase(phrase, password)?.derive(path))
+	}
+
+	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it
+	/// will return `None`.
+	///
+	/// You should never need to use this; generate(), generate_with_phrase(), from_phrase()
+	fn from_seed_slice(seed: &[u8]) -> Option<Pair> {
+		if seed.len() != MINI_SECRET_KEY_LENGTH {
+			None
+		} else {
+			Some(Pair(MiniSecretKey::from_bytes(seed).ok()?.expand_to_keypair()))
+		}
+	}
 }
 
 impl Pair {
@@ -313,10 +261,12 @@ impl Pair {
 		Pair(key_pair)
 	}
 
-	/// Make a new key pair from a seed phrase.
+	/// Make a new key pair from raw secret seed material.
+	///
 	/// This is generated using schnorrkel's Mini-Secret-Keys.
+	///
 	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
-	pub fn from_seed(seed: &[u8; 32]) -> Pair {
+	pub fn from_seed(seed: &[u8; MINI_SECRET_KEY_LENGTH]) -> Pair {
 		let mini_key: MiniSecretKey = MiniSecretKey::from_bytes(seed)
 			.expect("32 bytes can always build a key; qed");
 		let kp = mini_key.expand_to_keypair();
@@ -331,6 +281,18 @@ impl Pair {
 			.expect("32 bytes can always build a key; qed");
 		let kp = mini_key.expand_to_keypair();
 		Pair(kp)
+	}
+
+	/// Generate new secure (random) key pair and provide the recovery phrase.
+	///
+	/// You can recover the same key later with `from_phrase`.
+	pub fn generate_with_phrase(password: Option<&str>) -> (Pair, String) {
+		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+		let phrase = mnemonic.phrase();
+		(
+			Self::from_phrase(phrase, password).expect("All phrases generated by Mnemonic are valid; qed"),
+			phrase.to_owned(),
+		)
 	}
 
 	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.

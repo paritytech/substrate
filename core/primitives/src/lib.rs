@@ -53,6 +53,8 @@ pub mod hexdisplay;
 pub mod ed25519;
 #[cfg(feature = "std")]
 pub mod sr25519;
+#[cfg(feature = "std")]
+pub mod crypto;
 
 pub mod u32_trait;
 
@@ -71,6 +73,7 @@ pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
 pub use authority_id::Ed25519AuthorityId;
 pub use changes_trie::ChangesTrieConfiguration;
+pub use crypto::DeriveJunction;
 
 pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out
