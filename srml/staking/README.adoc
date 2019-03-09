@@ -8,7 +8,7 @@ The staking module is the means by which a set of network maintainers (known as 
 ### Terminology
 
 - **Staking**: The process of locking up funds for some time, placing them at risk of slashing (loss) in order to become a rewarded maintainer of the network. 
-- **Validating**: The process of running a node to actively maintain the network, either by producing blocks or guaranteeing finality of the chain. (see [here]() for the details of how block production and finalization are separated)
+- **Validating**: The process of running a node to actively maintain the network, either by producing blocks or guaranteeing finality of the chain.
 - **Nominating**: The process of placing staked funds behind one or more validators in order to share in any reward and punishment, they take.
 - **Stash account**: The account holding an owner's funds used for staking.
 - **Controller account**: The account which controls an owner's funds for staking.
@@ -69,7 +69,6 @@ Finally, account 4 can withdraw from any of the above roles via
 Staking::chill(Origin::signed(4));
 ```
 
-TODO: What else could be a usage example here interesting for the user? Do we have any? 
 
 ## Implementation Details
 
@@ -103,7 +102,6 @@ Current election algorithm is implemented based on Phragmen. The reference imple
 ## Extensibility
 
 // Details that the user can modify or customize to make their own 
-
 
 ## Dependencies
 
