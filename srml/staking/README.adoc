@@ -39,7 +39,7 @@ The staking module contains many public storage items and (im)mutable functions.
 
 An arbitrary account pair, given that the associated stash has the required funds, can become stakers via the following call:
 
-```
+```rust
 // bond account 3 as stash
 // account 4 as controller 
 // with stash value 1500 units 
@@ -49,7 +49,7 @@ Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller);
 
 To state desire in becoming a validator: 
 
-```
+```rust
 // controller account 4 states desire for validation with the given preferences.
 Staking::validate(Origin::signed(4), ValidatorPrefs::default()); 
 ```
@@ -58,14 +58,14 @@ Note that, as mentioned, the stash account is transparent in such calls and only
 
 Similarly, to state desire in nominating: 
 
-```
+```rust
 // controller account 4 nominates for account 10 and 20.
 Staking::nominate(Origin::signed(4), vec![20, 10]);
 ```
 
 Finally, account 4 can withdraw from any of the above roles via
 
-```
+```rust
 Staking::chill(Origin::signed(4));
 ```
 
