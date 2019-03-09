@@ -35,6 +35,7 @@ use srml_support::traits::{
 use session::OnSessionChange;
 use primitives::{Perbill};
 use primitives::traits::{Zero, One, As, StaticLookup, Saturating, Bounded};
+#[cfg(feature = "std")]
 use primitives::{Serialize, Deserialize};
 use system::ensure_signed;
 

@@ -52,7 +52,7 @@ pub struct Nominations<AccountId, Balance: HasCompact> {
 	load: Perquintill,
 }
 
-// Wrapper around a nominator vote and the load of that vote. 
+// Wrapper around a nominator vote and the load of that vote.
 // Referred to as 'edge' in the Phragmén reference implementation.
 #[derive(Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -66,9 +66,9 @@ pub struct Vote<AccountId, Balance: HasCompact> {
 }
 
 /// Perform election based on Phragmén algorithm.
-/// 
+///
 /// Reference implementation: https://github.com/w3f/consensus
-/// 
+///
 /// @returns a vector of elected candidates
 pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		get_rounds: FR,
@@ -85,7 +85,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 			Item =(T::AccountId, Vec<T::AccountId>)
 		>>,
 		FS: Fn(T::AccountId) -> BalanceOf<T>,
-{   
+{
 	let rounds = get_rounds();
 	let mut elected_candidates = vec![];
 	
@@ -108,8 +108,8 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 	let mut nominations = get_nominators().map(|(who, nominees)| {
 		let nominator_stake = stash_of(who.clone());
 		for n in &nominees {
-			candidates.iter_mut().filter(|i| i.who == *n).for_each(|c| { 
-				c.approval_stake += nominator_stake; 
+			candidates.iter_mut().filter(|i| i.who == *n).for_each(|c| {
+				c.approval_stake += nominator_stake;
 			});
 		}
 
@@ -123,7 +123,7 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
 		}
 	}).collect::<Vec<Nominations<T::AccountId, BalanceOf<T>>>>();
 	
-	// 3- optimization: 
+	// 3- optimization:
 	// Candidates who have 0 stake => have no votes or all null-votes. Kick them out not.
 	let mut candidates = candidates.into_iter().filter(|c| c.approval_stake > BalanceOf::<T>::zero())
 		.collect::<Vec<Candidate<T::AccountId, BalanceOf<T>>>>();
