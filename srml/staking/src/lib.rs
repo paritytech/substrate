@@ -19,7 +19,8 @@
 //! Staking manager: Periodically determines the best set of validators.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(type_alias_enum_variants)]
+// Used only in mock.rs
+#![cfg_attr(test, feature(type_alias_enum_variants))]
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;
@@ -663,7 +664,6 @@ impl<T: Trait> Module<T> {
 	/// @returns the new SlotStake value.
 	fn select_validators() -> BalanceOf<T> {
 		// Map of (would-be) validator account to amount of stake backing it.
-		use phragmen::Candidate;
 		
 		let rounds = || <ValidatorCount<T>>::get() as usize;
 		let validators = || <Validators<T>>::enumerate();

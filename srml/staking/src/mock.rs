@@ -29,6 +29,7 @@ use crate::{GenesisConfig, Module, Trait, StakerStatus};
 type AccountIdType = u64;
 
 // Alias for the StakerStatus created with `AccountIdType`.
+// needs `type_alias_enum_variants`
 type Status = StakerStatus<AccountIdType>;
 
 impl_outer_origin!{

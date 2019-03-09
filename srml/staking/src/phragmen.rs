@@ -1,12 +1,26 @@
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Rust implementation of the Phragmén election algorithm.
+
 use rstd::{prelude::*};
 use primitives::Perquintill;
 use primitives::traits::{Zero, As};
 use parity_codec::{HasCompact, Encode, Decode};
 use crate::{Exposure, BalanceOf, Trait, ValidatorPrefs, IndividualExposure};
-
-// TODO: spaces to tabs
-// TODO: feature gate type_alias_enum_variants for tests
-// TODO: add parity license header
 
 // Wrapper around validation candidates some metadata.
 #[derive(Clone, Encode, Decode)]
@@ -167,19 +181,19 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
         } // end of all rounds
 
         // 4.1- Update backing stake of candidates and nominators
-        for nomination in &mut nominations {
-            for vote in &mut nomination.nominees {
+        for n in &mut nominations {
+            for v in &mut n.nominees {
                 // if the target of this vote is among the winners, otherwise let go.
-                if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == vote.who) {
-                    vote.backing_stake = <BalanceOf<T> as As<u64>>::sa(
-                        nomination.stake.as_()
-                        * *vote.load
-                        / *nomination.load
+                if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who) {
+                    v.backing_stake = <BalanceOf<T> as As<u64>>::sa(
+                        n.stake.as_()
+                        * *v.load
+                        / *n.load
                     );
-                    c.exposure.total += vote.backing_stake;
+                    c.exposure.total += v.backing_stake;
                     // Update IndividualExposure of those who nominated and their vote won
                     c.exposure.others.push(
-                        IndividualExposure {who: nomination.who.clone(), value: vote.backing_stake }
+                        IndividualExposure {who: n.who.clone(), value: v.backing_stake }
                     );
                 }
             }
@@ -188,6 +202,17 @@ pub fn elect<T: Trait + 'static, FR, FN, FV, FS>(
         if candidates.len() > minimum_validator_count {
             // if we don't have enough candidates, just choose all that have some vote.
             elected_candidates = candidates;
+			// `Exposure.others` still needs an update
+			for n in &mut nominations {
+				for v in &mut n.nominees {
+					if let Some(c) = elected_candidates.iter_mut().find(|c| c.who == v.who) {
+						c.exposure.total += n.stake;
+						c.exposure.others.push(
+							IndividualExposure {who: n.who.clone(), value: n.stake }
+						);
+					}
+				}
+			}
         } else {
             // if we have less than minimum, use the previous validator set.
             elected_candidates = original_candidates;

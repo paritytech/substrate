@@ -48,8 +48,8 @@ fn basic_setup_works() {
 		]);
 
 		// Account 10 is exposed by 100 * balance_factor from their own stash in account 11
-		assert_eq!(Staking::stakers(10), Exposure { total: 1000, own: 1000, others: vec![] });
-		assert_eq!(Staking::stakers(20), Exposure { total: 2000, own: 2000, others: vec![] });
+		assert_eq!(Staking::stakers(10), Exposure { total: 1500, own: 1000, others: vec![ IndividualExposure { who: 100, value: 500 }] });
+		assert_eq!(Staking::stakers(20), Exposure { total: 2500, own: 2000, others: vec![ IndividualExposure { who: 100, value: 500 }] });
 
 		// The number of validators required.
 		assert_eq!(Staking::validator_count(), 2);
@@ -62,7 +62,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::current_session_reward(), 10);
 
 		// initial slot_stake
-		assert_eq!(Staking::slot_stake(), 1000);
+		assert_eq!(Staking::slot_stake(), 1500);
 
 		// initial slash_count of validators 
 		assert_eq!(Staking::slash_count(&10), 0);
@@ -358,6 +358,7 @@ fn multi_era_reward_should_work() {
 	with_externalities(&mut ExtBuilder::default()
 		.session_length(3)
 		.sessions_per_era(3)
+		.nominate(false)
 		.build(),
 	|| {
 		let delay = 0;
@@ -447,11 +448,10 @@ fn staking_should_work() {
 		// bond one account pair and state interest in nomination.
 		// this is needed to keep 10 and 20 in the validator list with phragmen
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20, 4]));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 4]));
 
 		// --- Block 1:
 		System::set_block_number(1);
-
 
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller)); // balance of 3 = 3000, stashed = 1500
@@ -478,8 +478,7 @@ fn staking_should_work() {
 		System::set_block_number(3);
 		Session::check_rotate_session(System::block_number());
 
-		// the votes for all three accounts are the same, 500 each,
-		// 20 and 4 have more staked value, 1500 and 2000 respectively; they will be chosen. TODO: double check.
+		// 2 only voted for 4 and 20
 		assert_eq!(Session::validators().len(), 2);
 		assert_eq!(Session::validators(), vec![4, 20]);
 		assert_eq!(Staking::current_era(), 1);
@@ -493,6 +492,9 @@ fn staking_should_work() {
 		Staking::unbond(Origin::signed(4), Staking::ledger(&4).unwrap().active).unwrap();
 		// explicit chill indicated that 4 no longer wants to be a validator.
 		Staking::chill(Origin::signed(4)).unwrap();
+		
+		// nominator votes for 10
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![20, 10]));
 		
 		Session::check_rotate_session(System::block_number());
 		// nothing should be changed so far.
@@ -540,7 +542,7 @@ fn less_than_needed_candidates_works() {
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 500, RewardDestination::default()));
 		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
 
-		// and 20 are now valid candidates.
+		// 10 and 20 are now valid candidates.
 		// trigger era
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
@@ -549,7 +551,9 @@ fn less_than_needed_candidates_works() {
 		// both validators will be chosen again. NO election algorithm is even executed.
 		assert_eq!(Session::validators(), vec![20, 10]);
 
-		// TODO: what is the correct exposure value now for this?
+		// But the exposure is updated in a simple way. Each nominators vote is applied
+		assert_eq!(Staking::stakers(10).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![2]);
+		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![2]);
 	});
 }
 
@@ -680,7 +684,7 @@ fn nominating_and_rewards_should_work() {
 #[test]
 fn nominators_also_get_slashed() {
 	// A nominator should be slashed if the validator they nominated is slashed
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		assert_eq!(Staking::era_length(), 1);
 		assert_eq!(Staking::validator_count(), 2);
 		// slash happens immediately.
@@ -828,7 +832,7 @@ fn cannot_transfer_staked_balance() {
 		// Confirm account 11 has some free balance
 		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::stakers(&10).total, 1000);
+		assert_eq!(Staking::stakers(&10).total, 1000 + 500);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(Balances::transfer(Origin::signed(11), 20, 1), "account liquidity restrictions prevent withdrawal");
 
@@ -843,15 +847,12 @@ fn cannot_transfer_staked_balance() {
 fn cannot_reserve_staked_balance() {
 	// Checks that a bonded account cannot reserve balance from free balance
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		System::set_block_number(1);
-		Session::check_rotate_session(System::block_number());
-		
 		// Confirm account 11 is stashed
 		assert_eq!(Staking::bonded(&11), Some(10));
 		// Confirm account 11 has some free balance
-		assert_eq!(Balances::free_balance(&11), 1010);
+		assert_eq!(Balances::free_balance(&11), 1000);
 		// Confirm account 11 (via controller 10) is totally staked
-		assert_eq!(Staking::stakers(&10).total, 1010);
+		assert_eq!(Staking::stakers(&10).total, 1000 + 500);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(Balances::reserve(&11, 1), "account liquidity restrictions prevent withdrawal");
 
@@ -888,10 +889,12 @@ fn reward_destination_works() {
 		assert_eq!(Staking::payee(&10), RewardDestination::Staked);
 		// Check current session reward is 10
 		assert_eq!(current_session_reward, 10);
-		// Check that reward went to the stash account
-		assert_eq!(Balances::free_balance(&11), 1000 + 10);
+		// Check that reward went to the stash account of validator
+		// 1/3 of the reward is for the nominator.
+		let validator_reward = (10. * (2./3.)) as u64; // = 6
+		assert_eq!(Balances::free_balance(&11), 1000 + validator_reward);
 		// Check that amount at stake increased accordingly
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 10, active: 1000 + 10, unlocking: vec![] }));
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000 + 6, active: 1000 + 6, unlocking: vec![] }));
 		// Update current session reward
 		current_session_reward = Staking::current_session_reward();
 
@@ -906,14 +909,17 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Stash
 		assert_eq!(Staking::payee(&10), RewardDestination::Stash);
 		// Check that reward went to the stash account
-		assert_eq!(Balances::free_balance(&11), 1010 + current_session_reward);
+		let new_validator_reward = ((1000 + 6) as f64 / ( (1000 + 6) + (500 + 4) ) as f64) * current_session_reward as f64;
+		assert_eq!(Balances::free_balance(&11), 1000 + validator_reward + new_validator_reward as u64);
 		// Check that amount at stake is not increased
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1010, active: 1010, unlocking: vec![] }));
-		// Update current session reward
-		current_session_reward = Staking::current_session_reward();
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1006, active: 1006, unlocking: vec![] }));
 
 		//Change RewardDestination to Controller
 		<Payee<Test>>::insert(&10, RewardDestination::Controller);
+
+		// Check controller balance
+		assert_eq!(Balances::free_balance(&10), 1);
+
 
 		// Move forward the system for payment
 		System::set_block_number(3);
@@ -923,12 +929,11 @@ fn reward_destination_works() {
 		// Check that RewardDestination is Controller
 		assert_eq!(Staking::payee(&10), RewardDestination::Controller);
 		// Check that reward went to the controller account
-		assert_eq!(Balances::free_balance(&10), 1 + current_session_reward);
+		let reward_of = |w| Staking::stakers(w).own * Staking::current_session_reward() / Staking::stakers(w).total;
+		assert_eq!(Balances::free_balance(&10), 1 + reward_of(&10));
 		// Check that amount at stake is not increased
-		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1010, active: 1010, unlocking: vec![] }));
-
+		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1006, active: 1006, unlocking: vec![] }));
 	});
-
 }
 
 #[test]
@@ -1056,6 +1061,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
 	with_externalities(&mut ExtBuilder::default()
 		.reward(10) // it is the default, just for verbosity
+		.nominate(false)
 		.build(), 
 	|| {
 		// Set payee to controller. avoids confusion
@@ -1152,7 +1158,7 @@ fn slot_stake_is_least_staked_validator_and_limits_maximum_punishment() {
 	// Test that slot_stake is the maximum punishment that can happen to a validator
 	// Note that rewardDestination is the stash account by default
 	// Note that unlike reward slash will affect free_balance, not the stash account.
-	with_externalities(&mut ExtBuilder::default().build(), || {
+	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
 		// Confirm validator count is 2
 		assert_eq!(Staking::validator_count(), 2);
 		// Confirm account 10 and 20 are validators
@@ -1388,13 +1394,13 @@ fn phragmen_poc_works() {
 		System::set_block_number(1);
 		Session::check_rotate_session(System::block_number());
 
-
 		// Z and Y are chosen 
 		assert_eq!(Session::validators(), vec![30, 20]);
 
 		// with stake 35 and 25 respectively
 
-		// This is only because 30 has been bonded on the fly. 35 is the point, not 'own' Exposure.
+		// This is only because 30 has been bonded on the fly, exposures are stored at the very end of the era. 
+		// 35 is the point, not 'own' Exposure.
 		assert_eq!(Staking::stakers(30).own, 0); 
 		assert_eq!(Staking::stakers(30).total, 0 + 35);
 		// same as above. +25 is the point
@@ -1505,15 +1511,4 @@ fn wrong_vote_is_null() {
 
 		assert_eq!(Session::validators(), vec![20, 10]);
 	});
-}
-
-#[test]
-fn staking_ledger_grows_and_shrinks() {
-	// TODO: Show that staking ledger grows with new events
-	// TODO: Show that staking ledger shrinks when user is removed
-	// @kianenigma: I find this invalid. Staking ledger is used in so many operations
-	// that one testcases for it would simply be in vein. we should instead tune all other
-	// tests to make sure that they are checking the state of the ledger correctly.
-	// Some of the places where ledger is being updated:
-	// * bond(), unbond(), bond_extra(), withdraw_unbonded(),
 }
