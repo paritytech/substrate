@@ -21,10 +21,14 @@
 use base58::{FromBase58, ToBase58};
 use blake2_rfc;
 use rand::rngs::OsRng;
-use schnorrkel::{signing_context, Keypair, MiniSecretKey, PublicKey};
-use sha2::Sha512;
+use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey,
+	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
+};
+use substrate_bip39::mini_secret_from_entropy;
+//use sha2::Sha512;
 use parity_codec::{Encode, Decode};
 use crate::hash::H512;
+use bip39::{Mnemonic, Language};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
@@ -32,6 +36,8 @@ use serde::{de, Deserialize, Deserializer, Serializer};
 // signing context
 const SIGNING_CTX: &'static [u8] = b"substrate transaction";
 
+/// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
+///
 /// Instead of importing it for the local module, alias it to be available as a public type
 pub type Signature = H512;
 
@@ -45,11 +51,11 @@ pub struct LocalizedSignature {
 	pub signature: Signature,
 }
 
-/// A public key.
+/// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Public(pub [u8; 32]);
 
-/// A schnorrkel key pair.
+/// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
 pub struct Pair(Keypair);
 
 impl ::std::hash::Hash for Public {
@@ -127,6 +133,20 @@ impl Public {
 		v.extend(&r.as_bytes()[0..2]);
 		v.to_base58()
 	}
+
+	/// Derive a child key from a series of given junctions.
+	///
+	/// `None` if there are any hard junctions in there.
+	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, mut path: Iter) -> Option<Public> {
+		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
+		for j in path {
+			match j {
+				DeriveJunction::Soft(cc) => acc = acc.derived_key_simple(ChainCode(cc), &[]).0,
+				DeriveJunction::Hard(cc) => return None,
+			}
+		}
+		Some(Self(acc.to_bytes()))
+	}
 }
 
 impl AsRef<[u8; 32]> for Public {
@@ -159,6 +179,36 @@ impl AsRef<Pair> for Pair {
 	}
 }
 
+impl From<MiniSecretKey> for Pair {
+	fn from(sec: MiniSecretKey) -> Pair {
+		Pair(sec.expand_to_keypair())
+	}
+}
+
+impl From<SecretKey> for Pair {
+	fn from(sec: SecretKey) -> Pair {
+		Pair(Keypair::from(sec))
+	}
+}
+
+impl From<schnorrkel::Keypair> for Pair {
+	fn from(p: schnorrkel::Keypair) -> Pair {
+		Pair(p)
+	}
+}
+
+impl From<Pair> for schnorrkel::Keypair {
+	fn from(p: Pair) -> schnorrkel::Keypair {
+		p.0
+	}
+}
+
+impl AsRef<schnorrkel::Keypair> for Pair {
+	fn as_ref(&self) -> &schnorrkel::Keypair {
+		&self.0
+	}
+}
+
 impl ::std::fmt::Display for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{}", self.to_ss58check())
@@ -172,12 +222,95 @@ impl ::std::fmt::Debug for Public {
 	}
 }
 
+/// A since derivation junction description. It is the single parameter used when creating
+/// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
+/// a new public key from an existing public key.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Encode, Decode)]
+pub enum DeriveJunction {
+	/// Soft (vanilla) derivation. Public keys have a correspondent derivation.
+	Soft([u8; CHAIN_CODE_LENGTH]),
+	/// Hard ("hardened") derivation. Public keys do not have a correspondent derivation.
+	Hard([u8; CHAIN_CODE_LENGTH]),
+}
+
+impl DeriveJunction {
+	/// Consume self to return a soft derive junction with the same chain code.
+	pub fn soften(self) -> Self { DeriveJunction::Soft(self.unwrap_inner()) }
+
+	/// Consume self to return a hard derive junction with the same chain code.
+	pub fn harden(self) -> Self { DeriveJunction::Hard(self.unwrap_inner()) }
+
+	/// Create a new soft (vanilla) DeriveJunction from a given, encodable, value.
+	///
+	/// If you need a hard junction, use `hard()`.
+	pub fn soft<T: Encode>(index: T) -> Self {
+		let mut cc: [u8; CHAIN_CODE_LENGTH] = Default::default();
+		index.using_encoded(|data| if data.len() > CHAIN_CODE_LENGTH {
+			let hash_result = blake2_rfc::blake2b::blake2b(CHAIN_CODE_LENGTH, &[], data);
+			let hash = hash_result.as_bytes();
+			cc.copy_from_slice(hash);
+		} else {
+			cc[0..data.len()].copy_from_slice(data);
+		});
+		DeriveJunction::Soft(cc)
+	}
+
+	/// Create a new hard (hardened) DeriveJunction from a given, encodable, value.
+	///
+	/// If you need a soft junction, use `soft()`.
+	pub fn hard<T: Encode>(index: T) -> Self {
+		Self::soft(index).harden()
+	}
+
+	/// Consume self to return the chain code.
+	pub fn unwrap_inner(self) -> [u8; CHAIN_CODE_LENGTH] {
+		match self {
+			DeriveJunction::Hard(c) | DeriveJunction::Soft(c) => c,
+		}
+	}
+
+	/// Consume self to return the chain code.
+	pub fn unwrap_chain_code(self) -> ChainCode {
+		ChainCode(self.unwrap_inner())
+	}
+
+	/// Return a reference to the chain code.
+	pub fn chain_code(&self) -> ChainCode {
+		self.clone().unwrap_chain_code()
+	}
+
+	/// Return `true` if the junction is soft.
+	pub fn is_soft(&self) -> bool {
+		match *self {
+			DeriveJunction::Soft(_) => true,
+			_ => false,
+		}
+	}
+
+	/// Return `true` if the junction is hard.
+	pub fn is_hard(&self) -> bool {
+		match *self {
+			DeriveJunction::Hard(_) => true,
+			_ => false,
+		}
+	}
+}
+
+/// Derive a single hard junction.
+fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
+	("SchnorrRistrettoHDKD", &secret.to_bytes()[..], cc).using_encoded(|data|
+		MiniSecretKey::from_bytes(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes())
+			.expect("all 32-byte crypto-hash results are valid MiniSecretKeys; qed")
+			.expand()
+	)
+}
+
 impl Pair {
 	/// Generate new secure (random) key pair.
 	pub fn generate() -> Pair {
 		let mut csprng: OsRng = OsRng::new().expect("os random generator works; qed");
-		let keypair: Keypair = Keypair::generate(&mut csprng);
-		Pair(keypair)
+		let key_pair: Keypair = Keypair::generate(&mut csprng);
+		Pair(key_pair)
 	}
 
 	/// Make a new key pair from a seed phrase.
@@ -186,8 +319,35 @@ impl Pair {
 	pub fn from_seed(seed: &[u8; 32]) -> Pair {
 		let mini_key: MiniSecretKey = MiniSecretKey::from_bytes(seed)
 			.expect("32 bytes can always build a key; qed");
-		let kp = mini_key.expand_to_keypair::<Sha512>();
+		let kp = mini_key.expand_to_keypair();
 		Pair(kp)
+	}
+
+	/// Make a new key pair from a seed phrase.
+	/// This is generated using schnorrkel's Mini-Secret-Keys.
+	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
+	pub fn from_entropy(entropy: &[u8], password: Option<&str>) -> Pair {
+		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
+			.expect("32 bytes can always build a key; qed");
+		let kp = mini_key.expand_to_keypair();
+		Pair(kp)
+	}
+
+	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
+	pub fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Pair> {
+		Mnemonic::from_phrase(phrase, Language::English)
+			.ok()
+			.map(|m| Self::from_entropy(m.entropy(), password))
+	}
+
+	/// Derive a child key from a series of given junctions.
+	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, mut path: Iter) -> Pair {
+		let init = self.0.secret.clone();
+		let result = path.fold(init, |acc, j| match j {
+			DeriveJunction::Soft(cc) => acc.derived_key_simple(ChainCode(cc), &[]).0,
+			DeriveJunction::Hard(cc) => derive_hard_junction(&acc, &cc),
+		});
+		Self(result.into())
 	}
 
 	/// Sign a message.
@@ -273,6 +433,50 @@ where
 mod test {
 	use super::*;
 	use hex_literal::{hex, hex_impl};
+
+	#[test]
+	fn derive_soft_should_work() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter());
+		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter());
+		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter());
+		assert_eq!(derive_1.public(), derive_1b.public());
+		assert_ne!(derive_1.public(), derive_2.public());
+	}
+
+	#[test]
+	fn derive_hard_should_work() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter());
+		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter());
+		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter());
+		assert_eq!(derive_1.public(), derive_1b.public());
+		assert_ne!(derive_1.public(), derive_2.public());
+	}
+
+	#[test]
+	fn derive_soft_public_should_work() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let path = Some(DeriveJunction::soft(1));
+		let pair_1 = pair.derive(path.clone().into_iter());
+		let public_1 = pair.public().derive(path.into_iter()).unwrap();
+		assert_eq!(pair_1.public(), public_1);
+	}
+
+	#[test]
+	fn derive_hard_public_should_fail() {
+		let pair: Pair = Pair::from_seed(&hex!(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		));
+		let path = Some(DeriveJunction::hard(1));
+		assert!(pair.public().derive(path.into_iter()).is_none());
+	}
 
 	#[test]
 	fn sr_test_vector_should_work() {
