@@ -57,7 +57,7 @@ impl<Balance> OnDilution<Balance> for () {
 pub enum UpdateBalanceOutcome {
 	/// Account balance was simply updated.
 	Updated,
-	/// The update has led to killing of the account.
+	/// The update led to killing the account.
 	AccountKilled,
 }
 
@@ -75,7 +75,7 @@ pub trait Currency<AccountId> {
 	/// The combined balance of `who`.
 	fn total_balance(who: &AccountId) -> Self::Balance;
 
-	/// Some result as `slash(who, value)` (but without the side-effects) assuming there are no
+	/// Same result as `slash(who, value)` (but without the side-effects) assuming there are no
 	/// balance changes in the meantime and only the reserved balance is not taken into account.
 	fn can_slash(who: &AccountId, value: Self::Balance) -> bool;
 
@@ -86,16 +86,16 @@ pub trait Currency<AccountId> {
 	/// The total amount of stake on the system.
 	fn total_issuance() -> Self::Balance;
 
-	/// The minimum balance any single account may have. This is equivalent to Balances module's
-	/// Existential Deposit.
+	/// The minimum balance any single account may have. This is equivalent to the `Balances` module's
+	/// `ExistentialDeposit`.
 	fn minimum_balance() -> Self::Balance;
 
 	/// The 'free' balance of a given account.
 	///
-	/// This is the only balance that matters in terms of most operations on tokens. It is
-	/// alone used to determine the balance when in the contract execution environment. When this
+	/// This is the only balance that matters in terms of most operations on tokens. It alone
+	/// is used to determine the balance when in the contract execution environment. When this
 	/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
-	/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
+	/// deleted: specifically `FreeBalance`. Further, the `OnFreeBalanceZero` callback
 	/// is invoked, giving a chance to external modules to clean up data associated with
 	/// the deleted account.
 	///
@@ -136,8 +136,6 @@ pub trait Currency<AccountId> {
 	///
 	/// If `who` doesn't exist, it is created
 	///
-	/// Return indicates whether the account has been updated or if the update has led to killing the account.
-	///
 	/// #NOTES
 	///
 	/// This assumes that the total stake remains unchanged after this operation.
@@ -146,7 +144,7 @@ pub trait Currency<AccountId> {
 	/// Moves `value` from balance to reserved balance.
 	///
 	/// If the free balance is lower than `value`, then no funds will be moved and an `Err` will
-	/// be returned to notify of this. This is different behaviour to `unreserve`.
+	/// be returned to notify of this. This is different behavior than `unreserve`.
 	fn reserve(who: &AccountId, value: Self::Balance) -> result::Result<(), &'static str>;
 
 	/// Moves up to `value` from reserved balance to free balance. This function cannot fail.
@@ -157,7 +155,7 @@ pub trait Currency<AccountId> {
 	///
 	/// #NOTES
 	///
-	/// - This is different to `reserve`.
+	/// - This is different from `reserve`.
 	/// - If the remaining reserved balance is less than `ExistentialDeposit`, it will
 	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
@@ -274,10 +272,10 @@ pub trait TransferAsset<AccountId> {
 	/// Transfer asset from `from` account to `to` account with `amount` of asset.
 	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
-	/// Remove asset from `who` account by deducting `amount` in the account balances.
+	/// Remove asset from `who` account by deducting `amount` from the account free balance and stake.
 	fn withdraw(who: &AccountId, amount: Self::Amount, reason: WithdrawReason) -> Result<(), &'static str>;
 
-	/// Add asset to `who` account by increasing `amount` in the account balances.
+	/// Add asset to `who` account by increasing `amount` of the account free balance and stake.
 	fn deposit(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 

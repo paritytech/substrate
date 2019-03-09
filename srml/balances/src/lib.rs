@@ -21,6 +21,9 @@
 //! slashing an account balance, account removal, rewards,
 //! lookup of an index to reclaim an account (when balance not reserved),
 //! increasing total stake.
+//!
+//! Implements functions for `Currency`, `LockableCurrency`, `TransferAsset`,
+//! and `IsDeadAccount` traits.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -116,7 +119,7 @@ decl_storage! {
 		pub ExistentialDeposit get(existential_deposit) config(): T::Balance;
 		/// The fee required to make a transfer.
 		pub TransferFee get(transfer_fee) config(): T::Balance;
-		/// The fee required to create an account. At least as big as ReclaimRebate.
+		/// The fee required to create an account.
 		pub CreationFee get(creation_fee) config(): T::Balance;
 
 		/// Information regarding the vesting of a given account.
@@ -150,8 +153,11 @@ decl_storage! {
 		/// is invoked, giving a chance to external modules to clean up data associated with
 		/// the deleted account.
 		///
+		/// This is orthogonal to the `Bondage` value that an account has, a high value of which
+		/// makes even the `free_balance` unspendable.
+		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
-		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
 		pub FreeBalance get(free_balance) build(|config: &GenesisConfig<T>| config.balances.clone()): map T::AccountId => T::Balance;
 
 		/// The amount of the balance of a given account that is externally reserved; this can still get
@@ -165,7 +171,7 @@ decl_storage! {
 		/// is deleted: specifically, `ReservedBalance`.
 		///
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
-		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
 		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
 
 		/// Any liquidity locks on some account balances.
@@ -213,7 +219,7 @@ decl_module! {
 	}
 }
 
-// For funding methods, see Currency trait
+// For funding methods, see `Currency` trait
 impl<T: Trait> Module<T> {
 
 	/// Get the amount that is currently being vested and cannot be transfered out of this account.
@@ -230,8 +236,6 @@ impl<T: Trait> Module<T> {
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
-	///
-	/// Return indicates whether the account has been updated or if the update has led to killing the account.
 	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
 			<ReservedBalance<T>>::insert(who, balance);
@@ -248,8 +252,6 @@ impl<T: Trait> Module<T> {
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
-	///
-	/// Return indicates whether the account has been updated or if the update has led to killing the account.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for now - but consider it instructive.
 		// assert!(!Self::total_balance(who).is_zero());
@@ -268,19 +270,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// Same as `set_free_balance`, but will create a new account.
 	///
-	/// Return indicates whether the account has been updated or if the update has led to killing the account.
+	/// #NOTES
+	///
+	/// See documentation on `FreeBalance` and `ReservedBalance` storage items for their differences
 	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		let ed = <Module<T>>::existential_deposit();
-		// If the balance is too low, then the account is reaped.
-		// NOTE: There are two balances for every account: `reserved_balance` and
-		// `free_balance`. This contract subsystem only cares about the latter: whenever
-		// the term "balance" is used *here* it should be assumed to mean "free balance"
-		// in the rest of the module.
-		// Free balance can never be less than ED. If that happens, it gets reduced to zero
-		// and the account information relevant to this subsystem is deleted (i.e. the
-		// account is reaped).
-		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
-		// value of which makes even the `free_balance` unspendable.
 		if balance < ed {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
