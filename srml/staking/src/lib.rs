@@ -19,8 +19,6 @@
 //! Staking manager: Periodically determines the best set of validators.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-// Used only in mock.rs
-#![cfg_attr(test, feature(type_alias_enum_variants))]
 
 #[cfg(feature = "std")]
 use runtime_io::with_storage;

@@ -28,10 +28,6 @@ use crate::{GenesisConfig, Module, Trait, StakerStatus};
 // The AccountId alias in this test module.
 type AccountIdType = u64;
 
-// Alias for the StakerStatus created with `AccountIdType`.
-// needs `type_alias_enum_variants`
-type Status = StakerStatus<AccountIdType>;
-
 impl_outer_origin!{
 	pub enum Origin for Test {}
 }
@@ -202,19 +198,19 @@ impl ExtBuilder {
 			current_era: self.current_era,
 			stakers: if self.validator_pool {
 				vec![
-					(11, 10, balance_factor * 1000, Status::Validator),
-					(21, 20, balance_factor * 2000, Status::Validator),
-					(31, 30, balance_factor * 3000, if self.validator_pool { Status::Validator } else { Status::Idle }),
-					(41, 40, balance_factor * 4000, if self.validator_pool { Status::Validator } else { Status::Idle }),
+					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
+					(31, 30, balance_factor * 3000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
+					(41, 40, balance_factor * 4000, if self.validator_pool { StakerStatus::<AccountIdType>::Validator } else { StakerStatus::<AccountIdType>::Idle }),
 					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { Status::Nominator(vec![10, 20]) } else { Status::Nominator(vec![]) })
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]
 			} else {
 				vec![
-					(11, 10, balance_factor * 1000, Status::Validator),
-					(21, 20, balance_factor * 2000, Status::Validator),
+					(11, 10, balance_factor * 1000, StakerStatus::<AccountIdType>::Validator),
+					(21, 20, balance_factor * 2000, StakerStatus::<AccountIdType>::Validator),
 					// nominator
-					(101, 100, balance_factor * 500, if self.nominate { Status::Nominator(vec![10, 20]) } else { Status::Nominator(vec![]) })
+					(101, 100, balance_factor * 500, if self.nominate { StakerStatus::<AccountIdType>::Nominator(vec![10, 20]) } else { StakerStatus::<AccountIdType>::Nominator(vec![]) })
 				]
 			},
 			validator_count: self.validator_count,
