@@ -1315,7 +1315,7 @@ mod tests {
 
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
-	use self::keyring::Keyring;
+	use self::keyring::ed25519::Keyring;
 
 	type TestBlock = GenericTestBlock<()>;
 

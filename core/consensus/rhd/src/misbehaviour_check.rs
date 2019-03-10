@@ -75,7 +75,6 @@ mod tests {
 	use super::*;
 
 	use keyring::ed25519;
-	use keyring::Keyring;
 	use rhododendron;
 
 	use runtime_primitives::testing::{H256, Block as RawBlock};
@@ -110,7 +109,7 @@ mod tests {
 
 	#[test]
 	fn evaluates_double_prepare() {
-		let key: ed25519::Pair = Keyring::One.into();
+		let key: ed25519::Pair = ed25519::Keyring::One.into();
 		let parent_hash = [0xff; 32].into();
 		let hash_1 = [0; 32].into();
 		let hash_2 = [1; 32].into();
@@ -139,7 +138,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public().into(),
+			&ed25519::Keyring::Two.to_raw_public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -151,7 +150,7 @@ mod tests {
 
 	#[test]
 	fn evaluates_double_commit() {
-		let key: ed25519::Pair = Keyring::One.into();
+		let key: ed25519::Pair = ed25519::Keyring::One.into();
 		let parent_hash = [0xff; 32].into();
 		let hash_1 = [0; 32].into();
 		let hash_2 = [1; 32].into();
@@ -180,7 +179,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public().into(),
+			&ed25519::Keyring::Two.to_raw_public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,

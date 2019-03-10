@@ -54,8 +54,6 @@ error_chain! {
 	}
 }
 
-type Seed = [u8; 32];
-
 /// Key store.
 pub struct Store {
 	path: PathBuf,

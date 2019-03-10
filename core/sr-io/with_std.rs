@@ -163,6 +163,7 @@ pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<H2
 }
 
 /// A trie root formed from the enumerated items.
+// TODO: remove (just use `ordered_trie_root`)
 pub fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
 where
 	H: Hasher,

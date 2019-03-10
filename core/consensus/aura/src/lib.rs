@@ -696,7 +696,7 @@ mod tests {
 	use network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
-	use keyring::Keyring;
+	use keyring::ed25519::Keyring;
 	use client::BlockchainEvents;
 	use test_client;
 

@@ -31,17 +31,15 @@ mod tests {
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::sr25519::Keyring;
+	use keyring::{AccountKeyring, AuthorityKeyring};
 	use runtime_support::{Hashable, StorageValue, StorageMap, traits::Currency};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
-	use primitives::{
-		twox_128, Blake2Hasher, ChangesTrieConfiguration, sr25519::{Public, Pair}, NeverNativeValue,
-		NativeOrEncoded
-	};
+	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
+		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, staking, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -55,27 +53,27 @@ mod tests {
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	fn alice() -> AccountId {
-		AccountId::from(Keyring::Alice.to_raw_public())
+		AccountId::from(AccountKeyring::Alice.to_raw_public())
 	}
 
 	fn bob() -> AccountId {
-		AccountId::from(Keyring::Bob.to_raw_public())
+		AccountId::from(AccountKeyring::Bob.to_raw_public())
 	}
 
 	fn charlie() -> AccountId {
-		AccountId::from(Keyring::Charlie.to_raw_public())
+		AccountId::from(AccountKeyring::Charlie.to_raw_public())
 	}
 
 	fn dave() -> AccountId {
-		AccountId::from(Keyring::Dave.to_raw_public())
+		AccountId::from(AccountKeyring::Dave.to_raw_public())
 	}
 
 	fn eve() -> AccountId {
-		AccountId::from(Keyring::Eve.to_raw_public())
+		AccountId::from(AccountKeyring::Eve.to_raw_public())
 	}
 
 	fn ferdie() -> AccountId {
-		AccountId::from(Keyring::Ferdie.to_raw_public())
+		AccountId::from(AccountKeyring::Ferdie.to_raw_public())
 	}
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
@@ -83,12 +81,12 @@ mod tests {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
-				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
+				let key = AccountKeyring::from_raw_public(signed.clone().into()).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
-						pair.sign(&runtime_io::blake2_256(b))
+						key.sign(&runtime_io::blake2_256(b))
 					} else {
-						pair.sign(b)
+						key.sign(b)
 					}
 				}).into();
 				UncheckedExtrinsic {
@@ -288,11 +286,11 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into(), three],
+				validators: vec![AccountKeyring::One.to_raw_public().into(), AccountKeyring::Two.to_raw_public().into(), three],
 				keys: vec![
-					(alice(), keyring::ed25519::Keyring::Alice.to_raw_public().into()),
-					(bob(), keyring::ed25519::Keyring::Bob.to_raw_public().into()),
-					(charlie(), keyring::ed25519::Keyring::Charlie.to_raw_public().into())
+					(alice(), AuthorityKeyring::Alice.to_raw_public().into()),
+					(bob(), AuthorityKeyring::Bob.to_raw_public().into()),
+					(charlie(), AuthorityKeyring::Charlie.to_raw_public().into())
 				]
 			}),
 			staking: Some(StakingConfig {
@@ -318,9 +316,9 @@ mod tests {
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
 				authorities: vec![ // set these so no GRANDPA events fire when session changes
-					(keyring::ed25519::Keyring::Charlie.to_raw_public().into(), 1),
-					(keyring::ed25519::Keyring::Bob.to_raw_public().into(), 1),
-					(keyring::ed25519::Keyring::Alice.to_raw_public().into(), 1),
+					(AuthorityKeyring::Charlie.to_raw_public().into(), 1),
+					(AuthorityKeyring::Bob.to_raw_public().into(), 1),
+					(AuthorityKeyring::Alice.to_raw_public().into(), 1),
 				],
 			}),
 			fees: Some(FeesConfig {
@@ -449,9 +447,9 @@ mod tests {
 
 		let mut digest = generic::Digest::<Log>::default();
 		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-			(Keyring::Alice.to_raw_public().into(), 1),
-			(Keyring::Bob.to_raw_public().into(), 1),
-			(Keyring::Charlie.to_raw_public().into(), 1),
+			(AccountKeyring::Alice.to_raw_public().into(), 1),
+			(AccountKeyring::Bob.to_raw_public().into(), 1),
+			(AccountKeyring::Charlie.to_raw_public().into(), 1),
 		])));
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
@@ -592,9 +590,9 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-						(Keyring::Alice.to_raw_public().into(), 1),
-						(Keyring::Bob.to_raw_public().into(), 1),
-						(Keyring::Charlie.to_raw_public().into(), 1),
+						(AccountKeyring::Alice.to_raw_public().into(), 1),
+						(AccountKeyring::Bob.to_raw_public().into(), 1),
+						(AccountKeyring::Charlie.to_raw_public().into(), 1),
 					])),
 				},
 				EventRecord {

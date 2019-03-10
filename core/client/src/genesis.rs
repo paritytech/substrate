@@ -41,12 +41,14 @@ pub fn construct_genesis_block<
 mod tests {
 	use super::*;
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::Keyring;
 	use executor::{NativeExecutionDispatch, native_executor_instance};
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
-	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
+	use test_client::{
+		runtime::genesismap::{GenesisConfig, additional_storage_with_genesis},
+		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic},
+		AccountKeyring
+	};
 	use runtime_primitives::traits::BlakeTwo256;
 	use primitives::{Blake2Hasher, ed25519::{Public, Pair}};
 	use hex::*;
@@ -67,7 +69,7 @@ mod tests {
 		use trie::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.to_fixed_bytes())).unwrap())
+			let signature = Pair::from(AccountKeyring::from_public(Public::from_raw(tx.from.to_fixed_bytes())).unwrap())
 				.sign(&tx.encode()).into();
 
 			Extrinsic::Transfer(tx, signature)
@@ -133,8 +135,8 @@ mod tests {
 			genesis_hash,
 			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
 			vec![Transfer {
-				from: Keyring::One.to_raw_public().into(),
-				to: Keyring::Two.to_raw_public().into(),
+				from: AccountKeyring::One.to_raw_public().into(),
+				to: AccountKeyring::Two.to_raw_public().into(),
 				amount: 69,
 				nonce: 0,
 			}]
@@ -144,7 +146,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
+			vec![AccountKeyring::One.to_raw_public().into(), AccountKeyring::Two.to_raw_public().into()], 1000
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
@@ -170,7 +172,7 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
+			vec![AccountKeyring::One.to_raw_public().into(), AccountKeyring::Two.to_raw_public().into()], 1000
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
@@ -197,7 +199,7 @@ mod tests {
 	#[should_panic]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 68
+			vec![AccountKeyring::One.to_raw_public().into(), AccountKeyring::Two.to_raw_public().into()], 68
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
