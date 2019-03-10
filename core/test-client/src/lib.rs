@@ -31,7 +31,7 @@ pub use client::backend;
 pub use executor::NativeExecutor;
 pub use runtime;
 pub use consensus;
-pub use keyring::{AuthorityKeyring, ed25519::Keyring as AccountKeyring};
+pub use keyring::{AuthorityKeyring, AccountKeyring};
 
 use std::sync::Arc;
 use futures::future::FutureResult;
@@ -167,7 +167,13 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 		AuthorityKeyring::Alice.to_raw_public().into(),
 		AuthorityKeyring::Bob.to_raw_public().into(),
 		AuthorityKeyring::Charlie.to_raw_public().into(),
-	], 1000)
+	], vec![
+		AccountKeyring::Alice.to_raw_public().into(),
+		AccountKeyring::Bob.to_raw_public().into(),
+		AccountKeyring::Charlie.to_raw_public().into(),
+	],
+		1000
+	)
 }
 
 fn genesis_storage(support_changes_trie: bool) -> StorageOverlay {

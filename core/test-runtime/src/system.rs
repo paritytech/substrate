@@ -84,7 +84,7 @@ pub fn execute_block(block: Block) {
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(e).unwrap_or_else(|e| panic!("Extrinsic error {:?}", e));
+		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
 		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
@@ -143,7 +143,6 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		longevity: 64,
 	}
 }
-
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
@@ -290,7 +289,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("61b224cf39d06931f87bc5283e7633dd95b44df7e4b4f4aa0d72d14da35139c7").into(),
+			state_root: hex!("6192174c896be5d03ee971367223c2ceda76cf91daa3fe415b3419434ff1b84d").into(),
 			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 			digest: Digest { logs: vec![], },
 		};
@@ -341,7 +340,7 @@ mod tests {
 			header: Header {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
-				state_root: hex!("40708d8ff22125a90e6896a18c167fe92e0d1c5e993bd97359b188f28592036d").into(),
+				state_root: hex!("61f46dbf853580aaf03bd14e55f1f7648e49d747332a67b34196558f7d0c9b6d").into(),
 				extrinsics_root,
 				digest: Digest { logs: vec![], },
 			},
@@ -375,7 +374,7 @@ mod tests {
 			header: Header {
 				parent_hash: b.header.hash(),
 				number: 2,
-				state_root: hex!("88ba330491916f780fb9f4e321525c4b5972a2250a757dd479f26e10276d00cb").into(),
+				state_root: hex!("539f5f05d49bc2af874d596cd6e67438c69edd5748c663aa818d7ad773e5b2a2").into(),
 				extrinsics_root,
 				digest: Digest { logs: vec![], },
 			},

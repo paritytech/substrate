@@ -24,7 +24,7 @@ use transaction_pool::{
 	txpool::Pool,
 	ChainApi,
 };
-use primitives::H256;
+use primitives::{H256, blake2_256, hexdisplay::HexDisplay};
 use test_client::{self, AccountKeyring, runtime::{Extrinsic, Transfer}};
 use tokio::runtime;
 
@@ -48,14 +48,16 @@ fn submit_transaction_should_not_cause_error() {
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
-	let h: H256 = hex!("ee90e225897f9341f370affc31c8ed41d1f9e8b26dbab6b82a6e5acf1a94d807").into();
+	let xt = uxt(AccountKeyring::Alice, 1).encode();
+	let h: H256 = blake2_256(&xt).into();
+//	let h: H256 = hex!("ee90e225897f9341f370affc31c8ed41d1f9e8b26dbab6b82a6e5acf1a94d807").into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, uxt(AccountKeyring::Alice, 1).encode().into()),
+		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
 		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, uxt(AccountKeyring::Alice, 1).encode().into()).is_err()
+		AuthorApi::submit_extrinsic(&p, xt.into()).is_err()
 	);
 }
 
@@ -68,14 +70,15 @@ fn submit_rich_transaction_should_not_cause_error() {
 		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
-	let h: H256 = hex!("4a25cf827c9a0dc5040ab9a97a1a79378368a4a4669dae25d5f04b68ab677673").into();
+	let xt = uxt(AccountKeyring::Alice, 0).encode();
+	let h: H256 = blake2_256(&xt).into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, uxt(AccountKeyring::Alice, 0).encode().into()),
+		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
 		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, uxt(AccountKeyring::Alice, 0).encode().into()).is_err()
+		AuthorApi::submit_extrinsic(&p, xt.into()).is_err()
 	);
 }
 
@@ -114,9 +117,10 @@ fn should_watch_extrinsic() {
 		res,
 		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":"ready","subscription":1}}"#.into())
 	);
+	let h = blake2_256(&replacement.encode());
 	assert_eq!(
 		runtime.block_on(data.into_future()).unwrap().0,
-		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":"0x9db528eeae362979d48c2a600f6deaf9aac0a1c2e88ee6cd9be2c2ccb88d53fd"},"subscription":1}}"#.into())
+		Some(format!(r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":1}}}}"#, HexDisplay::from(&h)))
 	);
 }
 

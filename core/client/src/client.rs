@@ -1523,7 +1523,7 @@ pub(crate) mod tests {
 	use primitives::twox_128;
 	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
-	use test_client::{self, TestClient, AccountKeyring};
+	use test_client::{self, TestClient, AccountKeyring, AuthorityKeyring};
 	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
@@ -1628,9 +1628,9 @@ pub(crate) mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
-			AccountKeyring::Alice.to_raw_public().into(),
-			AccountKeyring::Bob.to_raw_public().into(),
-			AccountKeyring::Charlie.to_raw_public().into()
+			AuthorityKeyring::Alice.to_raw_public().into(),
+			AuthorityKeyring::Bob.to_raw_public().into(),
+			AuthorityKeyring::Charlie.to_raw_public().into()
 		]);
 	}
 

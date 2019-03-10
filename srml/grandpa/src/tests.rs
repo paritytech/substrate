@@ -193,5 +193,6 @@ fn dispatch_forced_change() {
 			Grandpa::on_finalise(11);
 			header = System::finalise();
 		}
+		let _ = header;
 	});
 }

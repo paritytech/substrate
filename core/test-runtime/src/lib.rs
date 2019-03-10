@@ -29,7 +29,7 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity,
+	ApplyResult, Sr25519Signature, transaction_validity::TransactionValidity,
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -82,7 +82,7 @@ pub struct Transfer {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<Ed25519AuthorityId>),
-	Transfer(Transfer, Ed25519Signature),
+	Transfer(Transfer, Sr25519Signature),
 }
 
 #[cfg(feature = "std")]
