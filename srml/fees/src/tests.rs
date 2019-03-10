@@ -23,7 +23,7 @@ use runtime_io::with_externalities;
 use runtime_primitives::traits::{OnFinalise};
 use system::{EventRecord, Phase};
 
-use mock::{Fees, System, ExtBuilder};
+use mock::{Fees, System, ExtBuilder, OnFeeChargedMock};
 use srml_support::{assert_ok, assert_err};
 
 #[test]
@@ -170,5 +170,8 @@ fn on_finalise_should_work() {
 				event: RawEvent::Charged(5, 1).into(),
 			},
 		]);
+
+		// Block fee should match.
+		assert_eq!(OnFeeChargedMock::amount(), 2);
 	});
 }

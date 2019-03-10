@@ -26,10 +26,10 @@ use runtime_primitives::{
 use primitives::{H256, Blake2Hasher};
 use runtime_io;
 use srml_support::{
-	impl_outer_origin, impl_outer_event,
+	impl_outer_origin, impl_outer_event, decl_module, decl_storage, StorageValue,
 	traits::{ArithmeticType, TransferAsset, WithdrawReason}
 };
-use crate::{GenesisConfig, Module, Trait, system};
+use crate::{GenesisConfig, Module, Trait, system, OnFeeCharged};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
@@ -75,14 +75,36 @@ impl system::Trait for Test {
 	type Event = TestEvent;
 	type Log = DigestItem;
 }
+
+pub trait OnFeeChargedMockTrait: system::Trait {}
+
+decl_module! {
+	pub struct OnFeeChargedMockModule<T: OnFeeChargedMockTrait> for enum Call where origin: T::Origin {}
+}
+
+decl_storage! {
+	trait Store for OnFeeChargedMockModule<T: OnFeeChargedMockTrait> as F {
+		Amount get(amount): u64;
+	}
+}
+
+impl<T: OnFeeChargedMockTrait> OnFeeCharged<u64> for OnFeeChargedMockModule<T> {
+	fn on_fee_charged(fee: &u64) {
+		<Amount<T>>::put(fee);
+	}
+}
+
+impl OnFeeChargedMockTrait for Test {}
+
 impl Trait for Test {
 	type Event = TestEvent;
 	type TransferAsset = TransferAssetMock;
-	type OnFeeCharged = ();
+	type OnFeeCharged = OnFeeChargedMock;
 }
 
 pub type System = system::Module<Test>;
 pub type Fees = Module<Test>;
+pub type OnFeeChargedMock = OnFeeChargedMockModule<Test>;
 
 pub struct ExtBuilder {
 	transaction_base_fee: u64,
