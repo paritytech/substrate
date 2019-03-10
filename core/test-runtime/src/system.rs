@@ -71,6 +71,36 @@ pub fn initialise_block(header: &Header) {
 }
 
 /// Actually execute all transitioning for `block`.
+pub fn polish_block(block: &mut Block) {
+	let header = &mut block.header;
+
+	// check transaction trie root represents the transactions.
+	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
+	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
+	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
+	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
+	header.extrinsics_root = txs_root;
+
+	// execute transactions
+	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
+		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
+		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	});
+
+	header.state_root = storage_root().into();
+
+	// check digest
+	let mut digest = Digest::default();
+	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
+	}
+	if let Some(new_authorities) = <NewAuthorities>::take() {
+		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+	}
+	header.digest = digest;
+}
+
 pub fn execute_block(block: Block) {
 	let ref header = block.header;
 
@@ -83,9 +113,9 @@ pub fn execute_block(block: Block) {
 
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
-		execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
-		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
+	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
+	execute_transaction_backend(e).unwrap_or_else(|_| panic!("Invalid transaction"));
+	storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
 	// check storage root.
@@ -96,10 +126,10 @@ pub fn execute_block(block: Block) {
 	// check digest
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
-		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
+	digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
-		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+	digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
@@ -255,14 +285,13 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, twox_128, TestExternalities, ordered_trie_root};
+	use runtime_io::{with_externalities, twox_128, TestExternalities};
 	use parity_codec::{Joiner, KeyedVec};
 	use substrate_test_client::{AuthorityKeyring, AccountKeyring};
-	use crate::{Header, Digest, Extrinsic, Transfer};
+	use crate::{Header, Extrinsic, Transfer};
 	use primitives::{Blake2Hasher, map};
 	use primitives::storage::well_known_keys;
 	use substrate_executor::WasmExecutor;
-	use hex_literal::{hex, hex_impl};
 
 	const WASM_CODE: &'static [u8] =
 			include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm");
@@ -284,22 +313,21 @@ mod tests {
 	}
 
 	fn block_import_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
-		let mut t = new_test_ext();
-
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("6192174c896be5d03ee971367223c2ceda76cf91daa3fe415b3419434ff1b84d").into(),
-			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
-			digest: Digest { logs: vec![], },
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
 		};
-
-		let b = Block {
+		let mut b = Block {
 			header: h,
 			extrinsics: vec![],
 		};
 
-		block_executor(b, &mut t);
+		with_externalities(&mut new_test_ext(), || polish_block(&mut b));
+
+		block_executor(b, &mut new_test_ext());
 	}
 
 	#[test]
@@ -319,6 +347,54 @@ mod tests {
 	}
 
 	fn block_import_with_transaction_works<F>(block_executor: F) where F: Fn(Block, &mut TestExternalities<Blake2Hasher>) {
+		let mut b1 = Block {
+			header: Header {
+				parent_hash: [69u8; 32].into(),
+				number: 1,
+				state_root: Default::default(),
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
+			},
+			extrinsics: vec![
+				construct_signed_tx(Transfer {
+					from: AccountKeyring::Alice.to_raw_public().into(),
+					to: AccountKeyring::Bob.to_raw_public().into(),
+					amount: 69,
+					nonce: 0,
+				})
+			],
+		};
+
+		let mut dummy_ext = new_test_ext();
+		with_externalities(&mut dummy_ext, || polish_block(&mut b1));
+
+		let mut b2 = Block {
+			header: Header {
+				parent_hash: b1.header.hash(),
+				number: 2,
+				state_root: Default::default(),
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
+			},
+			extrinsics: vec![
+				construct_signed_tx(Transfer {
+					from: AccountKeyring::Bob.to_raw_public().into(),
+					to: AccountKeyring::Alice.to_raw_public().into(),
+					amount: 27,
+					nonce: 0,
+				}),
+				construct_signed_tx(Transfer {
+					from: AccountKeyring::Alice.to_raw_public().into(),
+					to: AccountKeyring::Charlie.to_raw_public().into(),
+					amount: 69,
+					nonce: 1,
+				}),
+			],
+		};
+
+		with_externalities(&mut dummy_ext, || polish_block(&mut b2));
+		drop(dummy_ext);
+
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
@@ -326,65 +402,16 @@ mod tests {
 			assert_eq!(balance_of(AccountKeyring::Bob.to_raw_public().into()), 0);
 		});
 
-
-		let extrinsics = vec![
-			construct_signed_tx(Transfer {
-				from: AccountKeyring::Alice.to_raw_public().into(),
-				to: AccountKeyring::Bob.to_raw_public().into(),
-				amount: 69,
-				nonce: 0,
-			})
-		];
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(|xt| xt.encode()));
-		let b = Block {
-			header: Header {
-				parent_hash: [69u8; 32].into(),
-				number: 1,
-				state_root: hex!("61f46dbf853580aaf03bd14e55f1f7648e49d747332a67b34196558f7d0c9b6d").into(),
-				extrinsics_root,
-				digest: Digest { logs: vec![], },
-			},
-			extrinsics,
-		};
+		block_executor(b1, &mut t);
 
 		with_externalities(&mut t, || {
-			execute_block(b.clone());
-
 			assert_eq!(balance_of(AccountKeyring::Alice.to_raw_public().into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Bob.to_raw_public().into()), 69);
 		});
 
-		let extrinsics = vec![
-			construct_signed_tx(Transfer {
-				from: AccountKeyring::Bob.to_raw_public().into(),
-				to: AccountKeyring::Alice.to_raw_public().into(),
-				amount: 27,
-				nonce: 0,
-			}),
-			construct_signed_tx(Transfer {
-				from: AccountKeyring::Alice.to_raw_public().into(),
-				to: AccountKeyring::Charlie.to_raw_public().into(),
-				amount: 69,
-				nonce: 1,
-			}),
-		];
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(|xt| xt.encode()));
-
-		let b = Block {
-			header: Header {
-				parent_hash: b.header.hash(),
-				number: 2,
-				state_root: hex!("539f5f05d49bc2af874d596cd6e67438c69edd5748c663aa818d7ad773e5b2a2").into(),
-				extrinsics_root,
-				digest: Digest { logs: vec![], },
-			},
-			extrinsics,
-		};
-
-		block_executor(b, &mut t);
+		block_executor(b2, &mut t);
 
 		with_externalities(&mut t, || {
-
 			assert_eq!(balance_of(AccountKeyring::Alice.to_raw_public().into()), 0);
 			assert_eq!(balance_of(AccountKeyring::Bob.to_raw_public().into()), 42);
 			assert_eq!(balance_of(AccountKeyring::Charlie.to_raw_public().into()), 69);

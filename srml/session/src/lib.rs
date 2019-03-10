@@ -184,8 +184,6 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
-
 		// Update any changes in session keys.
 		for (i, v) in Self::validators().into_iter().enumerate() {
 			<consensus::Module<T>>::set_authority(
@@ -194,6 +192,8 @@ impl<T: Trait> Module<T> {
 					.unwrap_or_else(|| T::ConvertAccountIdToSessionKey::convert(v))
 			);
 		};
+
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 	}
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.

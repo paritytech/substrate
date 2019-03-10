@@ -19,9 +19,13 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use lazy_static::lazy_static;
-use hex_literal::{hex, hex_impl};
-use substrate_primitives::sr25519::{Pair, Public, Signature};
+use substrate_primitives::{sr25519::{Pair, Public, Signature}, crypto::StandardPair, H256};
 pub use substrate_primitives::sr25519;
+
+/// The root phrase for our test keys.
+///
+/// This is the same phrase that's in node::cli, but shouldn't need to be.
+pub const DEV_PHRASE: &'static str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// Set of test accounts.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,6 +64,14 @@ impl Keyring {
 		*Public::from(self).as_array_ref()
 	}
 
+	pub fn from_h256_public(who: H256) -> Option<Keyring> {
+		Self::from_public(Public::from_raw(who.into()))
+	}
+
+	pub fn to_h256_public(self) -> H256 {
+		Public::from(self).as_array_ref().into()
+	}
+
 	pub fn to_raw_public_vec(self) -> Vec<u8> {
 		Public::from(self).to_raw_vec()
 	}
@@ -69,16 +81,8 @@ impl Keyring {
 	}
 
 	pub fn pair(self) -> Pair {
-		match self {
-			Keyring::Alice => Pair::from_seed(b"Alice                           "),
-			Keyring::Bob => Pair::from_seed(b"Bob                             "),
-			Keyring::Charlie => Pair::from_seed(b"Charlie                         "),
-			Keyring::Dave => Pair::from_seed(b"Dave                            "),
-			Keyring::Eve => Pair::from_seed(b"Eve                             "),
-			Keyring::Ferdie => Pair::from_seed(b"Ferdie                          "),
-			Keyring::One => Pair::from_seed(b"12345678901234567890123456789012"),
-			Keyring::Two => Pair::from_seed(&hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")),
-		}
+		Pair::from_string(&format!("{}//{}", DEV_PHRASE, <&'static str>::from(self)), None)
+			.expect("static values are known good; qed")
 	}
 }
 
@@ -91,8 +95,8 @@ impl From<Keyring> for &'static str {
 			Keyring::Dave => "Dave",
 			Keyring::Eve => "Eve",
 			Keyring::Ferdie => "Ferdie",
-			Keyring::One => "one",
-			Keyring::Two => "two",
+			Keyring::One => "One",
+			Keyring::Two => "Two",
 		}
 	}
 }
@@ -131,6 +135,12 @@ impl From<Keyring> for Pair {
 impl From<Keyring> for [u8; 32] {
 	fn from(k: Keyring) -> Self {
 		*(*PUBLIC_KEYS).get(&k).unwrap().as_array_ref()
+	}
+}
+
+impl From<Keyring> for H256 {
+	fn from(k: Keyring) -> Self {
+		(*PUBLIC_KEYS).get(&k).unwrap().as_array_ref().into()
 	}
 }
 

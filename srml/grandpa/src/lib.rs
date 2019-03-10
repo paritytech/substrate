@@ -340,19 +340,14 @@ impl<T> Default for SyncedAuthorities<T> {
 }
 
 impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
-	T: Trait,
-	T: session::Trait,
-	<T as session::Trait>::ConvertAccountIdToSessionKey: Convert<
-		<T as system::Trait>::AccountId,
-		<T as Trait>::SessionKey,
-	>,
+	T: Trait + consensus::Trait<SessionKey=<T as Trait>::SessionKey>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<T as Trait>::SessionKey>>
 {
 	fn on_session_change(_: X, _: bool) {
 		use primitives::traits::Zero;
 
-		let next_authorities = <session::Module<T>>::validators()
+		let next_authorities = <consensus::Module<T>>::authorities()
 			.into_iter()
-			.map(T::ConvertAccountIdToSessionKey::convert)
 			.map(|key| (key, 1)) // evenly-weighted.
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 

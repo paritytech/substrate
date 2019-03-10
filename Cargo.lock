@@ -3271,6 +3271,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
+ "srml-consensus 0.1.0",
  "srml-finality-tracker 0.1.0",
  "srml-session 0.1.0",
  "srml-support 0.1.0",
