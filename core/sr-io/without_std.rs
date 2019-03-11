@@ -62,6 +62,10 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 pub struct ExchangeableFunction<T>(T);
 
 impl<T> ExchangeableFunction<T> {
+	/// Create a new instance of `ExchangeableFunction`.
+	pub const fn new(impl_: T) -> Self {
+		Self(impl_)
+	}
 	/// Replace the implementation with `new_impl`.
 	///
 	/// # Returns
@@ -126,25 +130,6 @@ macro_rules! extern_functions {
 					)*
 				}
 			}
-		}
-
-		/// The exchangeable extern functions `unimplemented` implementations.
-		#[allow(unused_variables)]
-		mod extern_functions_unimplemented {
-			$(
-				pub fn $name ( $( $arg : $arg_ty ),* ) $( -> $ret )? {
-					unimplemented!(concat!("\"", stringify!($name), "\" not implemented for the current runtime."))
-				}
-			)*
-		}
-
-		/// All extern functions will call `unimplemented!` when being called.
-		///
-		/// # Returns
-		///
-		/// When dropping the returned structure, all extern functions will switch back to the previous implementation.
-		pub unsafe fn switch_extern_functions_to_unimplemented() -> ( $( RestoreImplementation<unsafe fn ( $( $arg_ty ),* ) $( -> $ret )?> ),* ) {
-			( $( $name.replace_implementation(extern_functions_unimplemented::$name) ),* )
 		}
 	};
 }

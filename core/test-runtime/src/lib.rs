@@ -272,7 +272,7 @@ fn benchmark_add_one(i: u64) -> u64 {
 
 /// The `benchmark_add_one` function as function pointer.
 #[cfg(not(feature = "std"))]
-static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction(benchmark_add_one);
+static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction::new(benchmark_add_one);
 
 cfg_if! {
 	if #[cfg(feature = "std")] {
@@ -464,7 +464,7 @@ cfg_if! {
 				}
 
 				fn benchmark_indirect_call() -> u64 {
-					(0..10000).fold(0, |p, i| p + BENCHMARK_ADD_ONE.0.get()(i))
+					(0..10000).fold(0, |p, i| p + BENCHMARK_ADD_ONE(i))
 				}
 
 				fn benchmark_direct_call() -> u64 {
