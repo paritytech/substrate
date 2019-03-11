@@ -261,14 +261,14 @@ impl Network<Block> for MessageRouting {
 }
 
 #[derive(Default, Clone)]
-struct TestApi {
+pub(crate) struct TestApi {
 	genesis_authorities: Vec<(Ed25519AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
 	forced_changes: Arc<Mutex<HashMap<Hash, (BlockNumber, ScheduledChange<BlockNumber>)>>>,
 }
 
 impl TestApi {
-	fn new(genesis_authorities: Vec<(Ed25519AuthorityId, u64)>) -> Self {
+	pub fn new(genesis_authorities: Vec<(Ed25519AuthorityId, u64)>) -> Self {
 		TestApi {
 			genesis_authorities,
 			scheduled_changes: Arc::new(Mutex::new(HashMap::new())),
@@ -277,7 +277,7 @@ impl TestApi {
 	}
 }
 
-struct RuntimeApi {
+pub(crate) struct RuntimeApi {
 	inner: TestApi,
 }
 
@@ -352,11 +352,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: Option<()>,
 		_: Vec<u8>,
 	) -> Result<NativeOrEncoded<Vec<(Ed25519AuthorityId, u64)>>> {
-//		if at == &BlockId::Number(0) {
-			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
-/*		} else {
-			panic!("should generally only request genesis authorities")
-		}*/
+		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 	}
 
 	fn grandpa_pending_change_runtime_api_impl(
@@ -1060,7 +1056,7 @@ fn justification_is_fetched_by_light_client_when_consensus_data_changes() {
 	let _ = ::env_logger::try_init();
 
  	let peers = &[Keyring::Alice];
-	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
+	let net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
 
  	// import block#1 WITH consensus data change + ensure if is finalized (with justification)
 	let new_authorities = vec![Ed25519AuthorityId::from([42; 32])];

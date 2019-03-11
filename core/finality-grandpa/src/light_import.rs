@@ -20,7 +20,7 @@ use parking_lot::RwLock;
 
 use client::{
 	CallExecutor, Client,
-	backend::Backend,
+	backend::{AuxStore, Backend},
 	blockchain::HeaderBackend,
 	error::Error as ClientError, error::ErrorKind as ClientErrorKind,
 };
@@ -63,38 +63,11 @@ pub fn light_block_import<B, E, Block: BlockT<Hash=H256>, RA, PRA>(
 		PRA: ProvideRuntimeApi,
 		PRA::Api: GrandpaApi<Block>,
 {
-	use runtime_primitives::traits::Zero;
-	let authority_set = match Backend::get_aux(&**client.backend(), LIGHT_AUTHORITY_SET_KEY)? {
-		None => {
-			info!(target: "afg", "Loading GRANDPA authorities \
-				from genesis on what appears to be first startup.");
-
-			// no authority set on disk: fetch authorities from genesis state
-			let genesis_authorities = api.runtime_api().grandpa_authorities(&BlockId::number(Zero::zero()))?;
-
-			let authority_set = LightAuthoritySet::genesis(genesis_authorities);
-			let encoded = authority_set.encode();
-			Backend::insert_aux(&**client.backend(), &[(LIGHT_AUTHORITY_SET_KEY, &encoded[..])], &[])?;
-
-			authority_set
-		},
-		Some(raw) => LightAuthoritySet::decode(&mut &raw[..])
-			.ok_or_else(|| ::client::error::ErrorKind::Backend(
-				format!("GRANDPA authority set kept in invalid format")
-			))?
-			.into(),
-	};
-
-	let consensus_changes = load_decode(&**client.backend(), LIGHT_CONSENSUS_CHANGES_KEY)?
-		.unwrap_or_else(ConsensusChanges::<Block::Hash, NumberFor<Block>>::empty);
-
+	let import_data = load_aux_import_data(&**client.backend(), api)?;
 	Ok(GrandpaLightBlockImport {
 		client,
 		authority_set_provider,
-		data: Arc::new(RwLock::new(LightImportData {
-			authority_set,
-			consensus_changes,
-		})),
+		data: Arc::new(RwLock::new(import_data)),
 	})
 }
 
@@ -436,6 +409,52 @@ fn do_finalize_block<B, E, Block: BlockT<Hash=H256>, RA>(
 	Ok(ImportResult::imported())
 }
 
+/// Load light impoty aux data from the store.
+fn load_aux_import_data<B, Block: BlockT<Hash=H256>, PRA>(
+	aux_store: &B,
+	api: Arc<PRA>,
+) -> Result<LightImportData<Block>, ClientError>
+	where
+		B: AuxStore,
+		PRA: ProvideRuntimeApi,
+		PRA::Api: GrandpaApi<Block>,
+{
+	use runtime_primitives::traits::Zero;
+	let authority_set = match load_decode(aux_store, LIGHT_AUTHORITY_SET_KEY)? {
+		Some(authority_set) => authority_set,
+		None => {
+			info!(target: "afg", "Loading GRANDPA authorities \
+				from genesis on what appears to be first startup.");
+
+			// no authority set on disk: fetch authorities from genesis state
+			let genesis_authorities = api.runtime_api().grandpa_authorities(&BlockId::number(Zero::zero()))?;
+
+			let authority_set = LightAuthoritySet::genesis(genesis_authorities);
+			let encoded = authority_set.encode();
+			aux_store.insert_aux(&[(LIGHT_AUTHORITY_SET_KEY, &encoded[..])], &[])?;
+
+			authority_set
+		},
+	};
+
+	let consensus_changes = match load_decode(aux_store, LIGHT_CONSENSUS_CHANGES_KEY)? {
+		Some(consensus_changes) => consensus_changes,
+		None => {
+			let consensus_changes = ConsensusChanges::<Block::Hash, NumberFor<Block>>::empty();
+
+			let encoded = authority_set.encode();
+			aux_store.insert_aux(&[(LIGHT_CONSENSUS_CHANGES_KEY, &encoded[..])], &[])?;
+
+			consensus_changes
+		},
+	};
+
+	Ok(LightImportData {
+		authority_set,
+		consensus_changes,
+	})
+}
+
 /// Insert into aux store. If failed, return error && show inconsistency warning.
 fn require_insert_aux<T: Encode, B, E, Block: BlockT<Hash=H256>, RA>(
 	client: &Client<B, E, Block, RA>,
@@ -462,4 +481,56 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 	warn!(target: "finality", "Failed to write updated {} to disk. Bailing.", value_type);
 	warn!(target: "finality", "Node is in a potentially inconsistent state.");
 	ConsensusError::from(ConsensusErrorKind::ClientImport(error.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use substrate_primitives::H256;
+	use test_client::client::in_mem::Blockchain as InMemoryAuxStore;
+	use test_client::runtime::Block;
+	use crate::tests::TestApi;
+
+	#[test]
+	fn aux_data_updated_on_start() {
+		let aux_store = InMemoryAuxStore::<Block>::new();
+		let api = Arc::new(TestApi::new(vec![(Ed25519AuthorityId([1; 32]), 1)]));
+
+		// when aux store is empty initially
+		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_none());
+		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_none());
+
+		// it is updated on importer start
+		load_aux_import_data(&aux_store, api).unwrap();
+		assert!(aux_store.get_aux(LIGHT_AUTHORITY_SET_KEY).unwrap().is_some());
+		assert!(aux_store.get_aux(LIGHT_CONSENSUS_CHANGES_KEY).unwrap().is_some());
+	}
+
+	#[test]
+	fn aux_data_loaded_on_restart() {
+		let aux_store = InMemoryAuxStore::<Block>::new();
+		let api = Arc::new(TestApi::new(vec![(Ed25519AuthorityId([1; 32]), 1)]));
+
+		// when aux store is non-empty initially
+		let mut consensus_changes = ConsensusChanges::<H256, u64>::empty();
+		consensus_changes.note_change((42, Default::default()));
+		aux_store.insert_aux(
+			&[
+				(
+					LIGHT_AUTHORITY_SET_KEY,
+					LightAuthoritySet::genesis(vec![(Ed25519AuthorityId([42; 32]), 2)]).encode().as_slice(),
+				),
+				(
+					LIGHT_CONSENSUS_CHANGES_KEY,
+					consensus_changes.encode().as_slice(),
+				),
+			],
+			&[],
+		).unwrap();
+
+		// importer uses it on start
+		let data = load_aux_import_data(&aux_store, api).unwrap();
+		assert_eq!(data.authority_set.authorities(), vec![(Ed25519AuthorityId([42; 32]), 2)]);
+		assert_eq!(data.consensus_changes.pending_changes(), &[(42, Default::default())]);
+	}
 }
