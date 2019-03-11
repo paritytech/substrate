@@ -302,7 +302,7 @@ fn balance_transfer_with_transfer_fee_works() {
 		Balances::increase_total_stake_by(111);
 		Balances::set_free_balance(&2, 7);
 		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
-		// new_balance = balance - transfer_amount - transfer_fee
+		// new_from_balance = balance - transfer_amount - transfer_fee
 		assert_eq!(Balances::total_balance(&1), 111 - 69 - 3);
 		assert_eq!(Balances::total_balance(&2), 7 + 69);
 	});
