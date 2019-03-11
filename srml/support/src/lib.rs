@@ -141,6 +141,12 @@ mod tests {
 	use parity_codec::Codec;
 	use runtime_io::{with_externalities, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
+	pub use srml_metadata::{
+		DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
+		StorageFunctionType, StorageFunctionModifier,
+		DefaultByte, DefaultByteGetter,
+	};
+	pub use rstd::marker::PhantomData;
 
 	pub trait Trait {
 		type BlockNumber: Codec + Default;
@@ -299,5 +305,91 @@ mod tests {
 			assert_eq!(DoubleMap::get(key1+1, key2), 4u64);
 			assert_eq!(DoubleMap::get(key1+1, key2+1), 4u64);
 		});
+	}
+
+	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
+		functions: DecodeDifferent::Encode(&[
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("Data"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("u64")
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructData(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GenericData"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber")
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructGenericData(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GenericData2"),
+				modifier: StorageFunctionModifier::Optional,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("T::BlockNumber"), value: DecodeDifferent::Encode("T::BlockNumber")
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("DataDM"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::DoubleMap{
+					key1: DecodeDifferent::Encode("u32"),
+					key2: DecodeDifferent::Encode("u32"),
+					value: DecodeDifferent::Encode("u64"),
+					key2_hasher: DecodeDifferent::Encode("blake2_256"),
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GenericDataDM"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::DoubleMap{
+					key1: DecodeDifferent::Encode("T::BlockNumber"),
+					key2: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("T::BlockNumber"),
+					key2_hasher: DecodeDifferent::Encode("twox_128"),
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructGenericDataDM(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GenericData2DM"),
+				modifier: StorageFunctionModifier::Optional,
+				ty: StorageFunctionType::DoubleMap{
+					key1: DecodeDifferent::Encode("T::BlockNumber"),
+					key2: DecodeDifferent::Encode("T::BlockNumber"),
+					value: DecodeDifferent::Encode("T::BlockNumber"),
+					key2_hasher: DecodeDifferent::Encode("twox_256"),
+				},
+				default: DecodeDifferent::Encode(
+					DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
+				),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+		])
+	};
+
+	#[test]
+	fn store_metadata() {
+		let metadata = Module::<Test>::store_metadata();
+		assert_eq!(EXPECTED_METADATA, metadata);
 	}
 }

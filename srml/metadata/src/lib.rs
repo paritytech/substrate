@@ -266,6 +266,7 @@ pub enum StorageFunctionType {
 		key1: DecodeDifferentStr,
 		key2: DecodeDifferentStr,
 		value: DecodeDifferentStr,
+		key2_hasher: DecodeDifferentStr,
 	},
 }
 

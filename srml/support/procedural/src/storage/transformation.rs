@@ -591,15 +591,16 @@ fn store_functions_to_metadata (
 					}
 				}
 			},
-			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, .. } => {
+			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher } => {
 				let k1ty = clean_type_string(&quote!(#key1_type).to_string());
 				let k2ty = clean_type_string(&quote!(#key2_type).to_string());
+				let k2_hasher = clean_type_string(&key2_hasher.to_string());
 				quote!{
 					#scrate::storage::generator::StorageFunctionType::DoubleMap {
 						key1: #scrate::storage::generator::DecodeDifferent::Encode(#k1ty),
 						key2: #scrate::storage::generator::DecodeDifferent::Encode(#k2ty),
 						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
-						// TODO TODO: put hasher into metadata ?
+						key2_hasher: #scrate::storage::generator::DecodeDifferent::Encode(#k2_hasher),
 					}
 				}
 			},
