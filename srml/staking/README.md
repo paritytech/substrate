@@ -1,7 +1,7 @@
 # Staking Module
 
 <!-- Original author of paragraph: @gavofyork -->
-The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under normal operation but are held at pain of "slash" (expropriation) should they be found not to bee discharhing their duties properly[[1](#references)]. 
+The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under normal operation but are held at pain of "slash" (expropriation) should they be found not to bee discharhing their duties properly [[1](#references)]. 
 
 ### Overview 
 
@@ -34,7 +34,7 @@ Any account pair successfully placed at stake can accept three possible roles, n
 
 #### Validating
 
-A **validator** takes the role of either validating blocks or ensuring their finality, maintaining the veracity of the network in other words. A validator should avoid both any sort of malicious misbehavior and going offline. Unlike nominating, bonded accounts that state interest in being a validator do NOT get immediately chosen as a validator. Instead, they are declared as a _candidate_ and they _might_ get elected at the _next **era**_ as a validator. The result of election is determined by nominators and their votes. An account can become a validator via the `validate()` call.
+A **validator** takes the role of either validating blocks or ensuring their finality, maintaining the veracity of the network in other words. A validator should avoid both any sort of malicious misbehavior and going offline. Bonded accounts that state interest in being a validator do NOT get immediately chosen as a validator. Instead, they are declared as a _candidate_ and they _might_ get elected at the _next **era**_ as a validator. The result of election is determined by nominators and their votes. An account can become a validator via the `validate()` call.
 
 #### Nomination 
 
@@ -48,7 +48,7 @@ Finally, any of the roles above can choose to temporarily step back and just chi
 
 ## Public Interface
 
-The staking module contains many public storage items and (im)mutable, and dispatchable, functions. Please refer to the `Module` struct definition for more details.
+The staking module contains many public storage items and (im)mutable, and dispatchable, functions. Please refer to the [`Module`](https://crates.parity.io/srml_staking/struct.Module.html) struct definition for more details.
 
 ## Usage Example
 
@@ -136,4 +136,4 @@ See the [`GensisConfig`](https://crates.parity.io/srml_staking/struct.GenesisCon
 
 # References
 
-1. This document is written as a more verbose version of the original [Staking.md]() file. Some sections, (denoted by `[1]`) are taken directly from the aforementioned document.
+1. This document is written as a more verbose version of the original [Staking.md](./Staking.md) file. Some sections, (denoted by `[1]`) are taken directly from the aforementioned document.
