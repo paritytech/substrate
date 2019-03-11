@@ -89,6 +89,14 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 ///
 /// The `on_initialise` and `on_finalise` functions are special, since it can either take no
 /// parameters, or one parameter, which has the runtime's block number type.
+///
+/// ### Module with instances
+///
+/// decl_module! support modules with instances with the following syntax: (DefaultInstance type is
+/// optionnal)
+/// ```nocompile
+/// pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {}
+/// ```
 #[macro_export]
 macro_rules! decl_module {
 	// Macro transformations (to convert invocations with incomplete parameters to the canonical

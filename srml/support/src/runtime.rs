@@ -37,6 +37,10 @@
 ///         System: system,
 ///         Test: test::{default, Log(Test)},
 ///         Test2: test_with_long_module::{Module},
+///
+///         // Module with instances
+///         Test3_Instance1: test3::<Instance1>::{Module, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+///         Test3_DefaultInstance: test3::{Module, Call, Storage, Event<T>, Config<T>, Origin<T>},
 ///     }
 /// )
 /// ```
@@ -55,9 +59,9 @@
 /// - `Module`
 /// - `Call`
 /// - `Storage`
-/// - `Event` or `Event<T>` (if the event is generic)
-/// - `Origin` or `Origin<T>` (if the origin is generic)
-/// - `Config` or `Config<T>` (if the config is generic)
+/// - `Event` or `Event<T>` (if the event is generic) or `Event<T, I>` (if also over instance)
+/// - `Origin` or `Origin<T>` (if the origin is generic) or `Origin<T, I>` (if also over instance)
+/// - `Config` or `Config<T>` (if the config is generic) or `Config<T, I>` (if also over instance)
 /// - `Log( $(IDENT),* )`
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as

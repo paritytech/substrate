@@ -88,6 +88,37 @@ pub use srml_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEn
 /// ```
 ///
 /// The syntax for generic events requires the `where`.
+///
+/// # Generic Event with Instance Example:
+///
+/// ```rust
+/// #[macro_use]
+/// extern crate srml_support;
+/// extern crate parity_codec as codec;
+/// #[macro_use]
+/// extern crate parity_codec;
+/// #[macro_use]
+/// extern crate serde_derive;
+///
+///# struct DefaultInstance;
+///# trait Instance {}
+///# impl Instance for DefaultInstance {}
+/// trait Trait<I: Instance=DefaultInstance> {
+///     type Balance;
+///     type Token;
+/// }
+///
+/// // For module with instances, DefaultInstance is optionnal
+/// decl_event!(
+///    pub enum Event<T, I: Instance = DefaultInstance> where
+///       <T as Trait>::Balance,
+///       <T as Trait>::Token
+///    {
+///       Message(Balance, Token),
+///    }
+/// );
+///# fn main() {}
+/// ```
 #[macro_export]
 macro_rules! decl_event {
 	(
