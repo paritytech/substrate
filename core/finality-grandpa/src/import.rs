@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use consensus_common::ImportedAux;
 use std::sync::Arc;
 
 use log::{debug, trace, info};
@@ -406,7 +407,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 		let justification = block.justification.take();
 		let enacts_consensus_change = new_authorities.is_some();
 		let import_result = self.inner.import_block(block, new_authorities);
-
+		
 		let mut imported_aux = {
 			match import_result {
 				Ok(ImportResult::Imported(aux)) => aux,
@@ -458,7 +459,16 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 
 		match justification {
 			Some(justification) => {
-				self.import_justification(hash, number, justification, needs_justification)?;
+				match self.import_justification(hash, number, justification, needs_justification) {
+					Ok(()) => {}, 
+					Err(_) => {
+						return Ok(ImportResult::Imported(ImportedAux {
+							clear_justification_requests: false,
+							needs_justification: true,
+							bad_justification: true,
+						}));
+					},
+				};
 			},
 			None => {
 				if needs_justification {
@@ -474,7 +484,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 				if enacts_consensus_change {
 					self.consensus_changes.lock().note_change((number, hash));
 				}
-
+				println!("needs justification!");
 				imported_aux.needs_justification = true;
 			}
 		}

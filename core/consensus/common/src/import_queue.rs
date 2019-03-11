@@ -309,7 +309,7 @@ impl<B: BlockT> BlockImporter<B> {
 
 			match result {
 				Ok(BlockImportResult::ImportedKnown(number)) => link.block_imported(&hash, number),
-				Ok(BlockImportResult::ImportedUnknown(number, aux)) => {
+				Ok(BlockImportResult::ImportedUnknown(number, aux, who)) => {
 					link.block_imported(&hash, number);
 
 					if aux.clear_justification_requests {
@@ -320,6 +320,13 @@ impl<B: BlockT> BlockImporter<B> {
 					if aux.needs_justification {
 						trace!(target: "sync", "Block imported but requires justification {}: {:?}", number, hash);
 						link.request_justification(&hash, number);
+					}
+
+					if aux.bad_justification {
+						println!("baaad justification!!!!");
+						if let Some(peer) = who {
+							link.note_useless_and_restart_sync(peer, "Sent block with bad justification to import");						
+						}
 					}
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
@@ -479,7 +486,7 @@ pub enum BlockImportResult<N: ::std::fmt::Debug + PartialEq> {
 	/// Imported known block.
 	ImportedKnown(N),
 	/// Imported unknown block.
-	ImportedUnknown(N, ImportedAux),
+	ImportedUnknown(N, ImportedAux, Option<Origin>),
 }
 
 /// Block import error.
@@ -528,7 +535,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>>(
 				trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 				Ok(BlockImportResult::ImportedKnown(number))
 			},
-			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux)),
+			Ok(ImportResult::Imported(aux)) => Ok(BlockImportResult::ImportedUnknown(number, aux, peer)),
 			Ok(ImportResult::UnknownParent) => {
 				debug!(target: "sync", "Block with unknown parent {}: {:?}, parent: {:?}", number, hash, parent);
 				Err(BlockImportError::UnknownParent)

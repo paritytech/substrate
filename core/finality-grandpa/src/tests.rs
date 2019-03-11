@@ -992,7 +992,50 @@ fn allows_reimporting_change_blocks() {
 
 	assert_eq!(
 		block_import.import_block(block(), None).unwrap(),
-		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false }),
+		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: false }),
+	);
+
+	assert_eq!(
+		block_import.import_block(block(), None).unwrap(),
+		ImportResult::AlreadyInChain
+	);
+}
+
+#[test]
+fn test_bad_justification() {
+	let peers_a = &[Keyring::Alice, Keyring::Bob, Keyring::Charlie];
+	let peers_b = &[Keyring::Alice, Keyring::Bob];
+	let voters = make_ids(peers_a);
+	let api = TestApi::new(voters);
+	let net = GrandpaTestNet::new(api.clone(), 3);
+
+	let client = net.peer(0).client().clone();
+	let (block_import, ..) = net.make_block_import(client.clone());
+
+	let builder = client.new_block_at(&BlockId::Number(0)).unwrap();
+	let block = builder.bake().unwrap();
+	api.scheduled_changes.lock().insert(*block.header.parent_hash(), ScheduledChange {
+		next_authorities: make_ids(peers_b),
+		delay: 0,
+	});
+
+	let block = || {
+		let block = block.clone();
+		ImportBlock {
+			origin: BlockOrigin::File,
+			header: block.header,
+			justification: Some(Vec::new()),
+			post_digests: Vec::new(),
+			body: Some(block.extrinsics),
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		}
+	};
+
+	assert_eq!(
+		block_import.import_block(block(), None).unwrap(),
+		ImportResult::Imported(ImportedAux { needs_justification: true, clear_justification_requests: false, bad_justification: true }),
 	);
 
 	assert_eq!(
