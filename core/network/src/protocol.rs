@@ -230,8 +230,6 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a justification was successfully imported.
 	JustificationImportResult(B::Hash, NumberFor<B>, bool),
-	/// Tell protocol to clear all pending finality proof requests.
-	ClearFinalityProofRequests,
 	/// Tell protocol to request finality proof for a block.
 	RequestFinalityProof(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a finality proof was successfully imported.
@@ -412,7 +410,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 				self.sync.request_justification(&hash, number, &mut context);
 			},
 			ProtocolMsg::JustificationImportResult(hash, number, success) => self.sync.justification_import_result(hash, number, success),
-			ProtocolMsg::ClearFinalityProofRequests => self.sync.clear_finality_proof_requests(),
 			ProtocolMsg::RequestFinalityProof(hash, number) => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);

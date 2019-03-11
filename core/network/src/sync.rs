@@ -515,11 +515,6 @@ impl<B: BlockT> ChainSync<B> {
 		self.extra_requests.finality_proofs().dispatch(&mut self.peers, protocol);
 	}
 
-	/// Clears all pending finality proof requests.
-	pub fn clear_finality_proof_requests(&mut self) {
-		self.extra_requests.finality_proofs().clear();
-	}
-
 	pub fn finality_proof_import_result(&mut self, hash: B::Hash, number: NumberFor<B>, success: bool) {
 		self.extra_requests.justifications().on_import_result(hash, number, success);
 	}

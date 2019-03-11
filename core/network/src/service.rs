@@ -109,10 +109,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
-	fn clear_finality_proof_requests(&self) {
-		let _ = self.protocol_sender.send(ProtocolMsg::ClearFinalityProofRequests);
-	}
-
 	fn request_finality_proof(&self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.protocol_sender.send(ProtocolMsg::RequestFinalityProof(hash.clone(), number));
 	}

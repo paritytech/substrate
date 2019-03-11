@@ -512,8 +512,6 @@ pub trait Link<B: BlockT>: Send {
 	fn request_justification(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Finality proof import result.
 	fn finality_proof_imported(&self, _who: Origin, _hash: &B::Hash, _number: NumberFor<B>, _success: bool) {}
-	/// Clear all pending finality proof requests.
-	fn clear_finality_proof_requests(&self) {}
 	/// Request a finality proof for the given block.
 	fn request_finality_proof(&self, _hash: &B::Hash, _number: NumberFor<B>) {}
 	/// Disconnect from peer.
