@@ -333,8 +333,6 @@ impl system::Trait for Runtime {
 	type Log = Log;
 }
 
-// TODO TODO: should we test inherents better ?
-
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<H256, ()>) where
 		Block = Block,

@@ -64,7 +64,6 @@ pub trait Parameter: Codec + Clone + Eq {}
 #[cfg(not(feature = "std"))]
 impl<T> Parameter for T where T: Codec + Clone + Eq {}
 
-// TODO TODO: documentation
 /// Declare a module struct and implement the dispatch logic.
 ///
 /// Usually used as follows:

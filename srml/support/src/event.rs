@@ -278,7 +278,6 @@ macro_rules! __decl_generic_event {
 		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),* $(, $instance)? > {
-			// TODO TODO: not sure 🤔 do we say it is for the user to set it ?
 			#[doc(hidden)]
 			$(PhantomData($crate::rstd::marker::PhantomData<$instance>),)?
 			$(
