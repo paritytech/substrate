@@ -148,7 +148,13 @@ impl<B: BlockT> BasicQueue<B> {
 	) -> Self {
 		let (result_sender, result_port) = channel::unbounded();
 		let worker_sender = BlockImportWorker::new(result_sender, verifier.clone(), block_import);
-		let importer_sender = BlockImporter::new(result_port, worker_sender, verifier, justification_import, finality_proof_import);
+		let importer_sender = BlockImporter::new(
+			result_port,
+			worker_sender,
+			verifier,
+			justification_import,
+			finality_proof_import,
+		);
 
 		Self {
 			sender: importer_sender,

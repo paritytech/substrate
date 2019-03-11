@@ -293,7 +293,13 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 	let finalized_block_number = client.backend().blockchain()
 		.expect_block_number_from_id(&BlockId::Hash(finality_effects.block))
 		.map_err(|e| ConsensusError::from(ConsensusErrorKind::ClientImport(e.to_string())))?;
-	do_finalize_block(client, data, finalized_block_hash, finalized_block_number, finality_effects.justification.encode())?;
+	do_finalize_block(
+		client,
+		data,
+		finalized_block_hash,
+		finalized_block_number,
+		finality_effects.justification.encode(),
+	)?;
 
 	// apply new authorities set
 	data.authority_set.update(

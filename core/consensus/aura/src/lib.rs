@@ -32,7 +32,9 @@ use parity_codec::Encode;
 use consensus_common::{
 	Authorities, BlockImport, Environment, Proposer, ForkChoiceStrategy
 };
-use consensus_common::import_queue::{Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport};
+use consensus_common::import_queue::{
+	Verifier, BasicQueue, SharedBlockImport, SharedJustificationImport, SharedFinalityProofImport,
+};
 use client::ChainHead;
 use client::block_builder::api::{BlockBuilder as BlockBuilderApi, self as block_builder_api};
 use client::runtime_api::ApiExt;
