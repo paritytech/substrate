@@ -23,6 +23,7 @@ use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
+use serde_json;
 use network::{SyncState, SyncProvider};
 use client::{backend::Backend, BlockchainEvents};
 use substrate_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -82,10 +83,13 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				(proc.cpu_usage(), proc.memory())
 			} else { (0.0, 0) };
 
+			let network_state = serde_json::to_string(&network.network_state())
+				.expect("NetworkState implements Serialize, JSON serialization should work; qed");
+
 			telemetry!(
 				SUBSTRATE_INFO;
 				"system.interval";
-				"network_state" => format!("{:?}", network.network_state()),
+				"network_state" => network_state,
 				"status" => format!("{}{}", status, target),
 				"peers" => num_peers,
 				"height" => best_number,
