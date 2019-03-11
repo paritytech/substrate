@@ -41,7 +41,7 @@ use runtime_primitives::{generic, generic::BlockId, Justification};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
 };
-use primitives::{Ed25519AuthorityId, ed25519};
+use primitives::{Ed25519AuthorityId, ed25519, crypto::StandardPair};
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future};
@@ -416,7 +416,7 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 		let to_sign = (slot_num, pre_hash).encode();
 		let public = ed25519::Public(expected_author.0);
 
-		if ed25519::verify_strong(&sig, &to_sign[..], public) {
+		if ed25519::Pair::verify(&sig, &to_sign[..], public) {
 			Ok(CheckedHeader::Checked(header, slot_num, sig))
 		} else {
 			Err(format!("Bad signature on {:?}", hash))

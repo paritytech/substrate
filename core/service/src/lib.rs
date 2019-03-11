@@ -34,6 +34,7 @@ use log::{info, warn, debug};
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
+use primitives::crypto::StandardPair;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;

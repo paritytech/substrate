@@ -21,6 +21,10 @@
 use parity_codec::{Encode, Decode};
 use regex::Regex;
 
+/// The infallible type.
+#[derive(Debug)]
+pub enum Infallible {}
+
 /// The length of the junction identifier. Note that this is also referred to as the
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
 pub const JUNCTION_ID_LEN: usize = 32;
@@ -120,19 +124,73 @@ impl<'a> From<&'a str> for DeriveJunction {
 	}
 }
 
-
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
 pub trait StandardPair: Sized {
-	/// Construct a key from a phrase, password and path.
-	/// TODO: should return Result that includes InvalidPhrase, InvalidPassword and InvalidSeed.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Self>;
+	/// TThe type which is used to encode a public key.
+	type Public;
+
+	/// The type used to (minimally) encode the data required to securely create
+	/// a new key pair.
+	type Seed;
+
+	/// The type used to represent a signature. Can be created from a key pair and a message
+	/// and verified with the message and a public key.
+	type Signature;
+
+	/// Error returned from the `derive` function.
+	type DeriveError;
+
+	/// Generate new secure (random) key pair.
+	///
+	/// This is only for ephemeral keys really, since you won't have access to the secret key
+	/// for storage. If you want a persistent key pair, use `generate_with_phrase` instead.
+	fn generate() -> Self;
+
+	/// Generate new secure (random) key pair and provide the recovery phrase.
+	///
+	/// You can recover the same key later with `from_phrase`.
+	///
+	/// This is generally slower than `generate()`, so prefer that unless you need to persist
+	/// the key from the current session.
+	fn generate_with_phrase(password: Option<&str>) -> (Self, String);
+
+	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Self>;
+
+	/// Derive a child key from a series of given junctions.
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Self, Self::DeriveError>;
+
+	/// Generate new key pair from the provided `seed`.
+	///
+	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
+	/// by an attacker then they can also derive your key.
+	fn from_seed(seed: Self::Seed) -> Self;
 
 	/// Make a new key pair from secret seed material. The slice must be the correct size or
 	/// it will return `None`.
-	/// TODO: should return Result that includes InvalidPhrase, InvalidPassword and InvalidSeed.
+	///
+	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
+	/// by an attacker then they can also derive your key.
 	fn from_seed_slice(seed: &[u8]) -> Option<Self>;
+
+	/// Construct a key from a phrase, password and path.
+	fn from_standard_components<
+		I: Iterator<Item=DeriveJunction>
+	>(phrase: &str, password: Option<&str>, path: I) -> Option<Self>;
+
+	/// Sign a message.
+	fn sign(&self, message: &[u8]) -> Self::Signature;
+
+	/// Verify a signature on a message. Returns true if the signature is good.
+	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool;
+
+	/// Verify a signature on a message. Returns true if the signature is good.
+	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
+
+	/// Get the public key.
+	fn public(&self) -> Self::Public;
 
 	/// Interprets the string `s` in order to generate a key Pair.
 	///
@@ -195,11 +253,32 @@ mod tests {
 
 	#[derive(Eq, PartialEq, Debug)]
 	enum TestPair {
+		Generated,
+		GeneratedWithPhrase,
+		GeneratedFromPhrase{phrase: String, password: Option<String>},
 		Standard{phrase: String, password: Option<String>, path: Vec<DeriveJunction>},
 		Seed(Vec<u8>),
 	}
 
 	impl StandardPair for TestPair {
+		type Public = ();
+		type Seed = ();
+		type Signature = ();
+		type DeriveError = ();
+
+		fn generate() -> Self { TestPair::Generated }
+		fn generate_with_phrase(_password: Option<&str>) -> (Self, String) { (TestPair::GeneratedWithPhrase, "".into()) }
+		fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Self> {
+			Some(TestPair::GeneratedFromPhrase{ phrase: phrase.to_owned(), password: password.map(Into::into) })
+		}
+		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Result<Self, Self::DeriveError> {
+			Err(())
+		}
+		fn from_seed(_seed: Self::Seed) -> Self { TestPair::Seed(vec![]) }
+		fn sign(&self, _message: &[u8]) -> Self::Signature { () }
+		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(_sig: &Self::Signature, _message: M, _pubkey: P) -> bool { true }
+		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_sig: &[u8], _message: M, _pubkey: P) -> bool { true }
+		fn public(&self) -> Self::Public { () }
 		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Self> {
 			Some(TestPair::Standard { phrase: phrase.to_owned(), password: password.map(ToOwned::to_owned), path: path.collect() })
 		}

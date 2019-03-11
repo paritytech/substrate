@@ -762,7 +762,7 @@ fn check_justification_signed_message<H>(
 		let auth_id = sig.signer.clone().into();
 		if !authorities.contains(&auth_id) { return None }
 
-		if ed25519::verify_strong(&sig.signature, message, &sig.signer) {
+		if ed25519::Pair::verify(&sig.signature, message, &sig.signer) {
 			Some(sig.signer.0)
 		} else {
 			None
@@ -838,7 +838,7 @@ pub fn check_vote<B: Block>(
 
 fn check_action<B: Block>(action: Action<B, B::Hash>, parent_hash: &B::Hash, sig: &LocalizedSignature) -> Result<(), Error> {
 	let message = localized_encode(*parent_hash, action);
-	if ed25519::verify_strong(&sig.signature, &message, &sig.signer) {
+	if ed25519::Pair::verify(&sig.signature, &message, &sig.signer) {
 		Ok(())
 	} else {
 		Err(CommonErrorKind::InvalidSignature(sig.signature.into(), sig.signer.clone().into()).into())

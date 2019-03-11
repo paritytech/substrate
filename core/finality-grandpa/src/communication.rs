@@ -25,7 +25,7 @@ use futures::prelude::*;
 use futures::sync::mpsc;
 use log::{debug, trace};
 use parity_codec::{Encode, Decode};
-use substrate_primitives::{ed25519, Ed25519AuthorityId};
+use substrate_primitives::{ed25519, Ed25519AuthorityId, crypto::StandardPair};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use crate::{Error, Network, Message, SignedMessage, Commit,
@@ -249,7 +249,7 @@ pub(crate) fn check_message_sig<Block: BlockT>(
 ) -> Result<(), ()> {
 	let as_public = ed25519::Public::from_raw(id.0);
 	let encoded_raw = localized_payload(round, set_id, message);
-	if ed25519::verify_strong(signature, &encoded_raw, as_public) {
+	if ed25519::Pair::verify(signature, &encoded_raw, as_public) {
 		Ok(())
 	} else {
 		debug!(target: "afg", "Bad signature on message from {:?}", id);

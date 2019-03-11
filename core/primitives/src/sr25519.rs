@@ -31,7 +31,7 @@ use substrate_bip39::mini_secret_from_entropy;
 use parity_codec::{Encode, Decode};
 use crate::hash::H512;
 use bip39::{Mnemonic, Language, MnemonicType};
-use crate::crypto::{DeriveJunction, StandardPair};
+use crate::crypto::{DeriveJunction, StandardPair, Infallible};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
@@ -153,6 +153,25 @@ impl Public {
 	}
 }
 
+/// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
+#[cfg(feature = "std")]
+pub fn deserialize<'de, D, T: From<[u8; 32]>>(deserializer: D) -> Result<T, D::Error> where
+	D: Deserializer<'de>,
+{
+	let ss58 = String::deserialize(deserializer)?;
+	Public::from_ss58check(&ss58)
+		.map_err(|e| de::Error::custom(format!("{:?}", e)))
+		.map(|v| v.0.into())
+}
+
+/// Serializes something that implements `AsRef<[u8; 32]>` into `ss58`.
+#[cfg(feature = "std")]
+pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok, S::Error> where
+	S: Serializer,
+{
+	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
+}
+
 impl AsRef<[u8; 32]> for Public {
 	fn as_ref(&self) -> &[u8; 32] {
 		&self.0
@@ -235,10 +254,38 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Sec
 	)
 }
 
+type Seed = [u8; MINI_SECRET_KEY_LENGTH];
+
 impl StandardPair for Pair {
-	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Pair> {
-		Some(Self::from_phrase(phrase, password)?.derive(path))
+	type Public = Public;
+	type Seed = Seed;
+	type Signature = Signature;
+	type DeriveError = Infallible;
+
+	/// Generate new secure (random) key pair.
+	fn generate() -> Pair {
+		let mut csprng: OsRng = OsRng::new().expect("os random generator works; qed");
+		let key_pair: Keypair = Keypair::generate(&mut csprng);
+		Pair(key_pair)
+	}
+
+	/// Make a new key pair from raw secret seed material.
+	///
+	/// This is generated using schnorrkel's Mini-Secret-Keys.
+	///
+	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
+	fn from_seed(seed: Seed) -> Pair {
+		let mini_key: MiniSecretKey = MiniSecretKey::from_bytes(&seed[..])
+			.expect("32 bytes can always build a key; qed");
+		let kp = mini_key.expand_to_keypair();
+		Pair(kp)
+	}
+
+	/// Get the public key.
+	fn public(&self) -> Public {
+		let mut pk = [0u8; 32];
+		pk.copy_from_slice(&self.0.public.to_bytes());
+		Public(pk)
 	}
 
 	/// Make a new key pair from secret seed material. The slice must be 32 bytes long or it
@@ -252,42 +299,13 @@ impl StandardPair for Pair {
 			Some(Pair(MiniSecretKey::from_bytes(seed).ok()?.expand_to_keypair()))
 		}
 	}
-}
 
-impl Pair {
-	/// Generate new secure (random) key pair.
-	pub fn generate() -> Pair {
-		let mut csprng: OsRng = OsRng::new().expect("os random generator works; qed");
-		let key_pair: Keypair = Keypair::generate(&mut csprng);
-		Pair(key_pair)
+	/// Generate a key from the phrase, password and derivation path.
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Pair> {
+		Self::from_phrase(phrase, password)?.derive(path).ok()
 	}
 
-	/// Make a new key pair from raw secret seed material.
-	///
-	/// This is generated using schnorrkel's Mini-Secret-Keys.
-	///
-	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
-	pub fn from_seed(seed: &[u8; MINI_SECRET_KEY_LENGTH]) -> Pair {
-		let mini_key: MiniSecretKey = MiniSecretKey::from_bytes(seed)
-			.expect("32 bytes can always build a key; qed");
-		let kp = mini_key.expand_to_keypair();
-		Pair(kp)
-	}
-
-	/// Make a new key pair from a seed phrase.
-	/// This is generated using schnorrkel's Mini-Secret-Keys.
-	/// A MiniSecretKey is literally what Ed25519 calls a SecretKey, which is just 32 random bytes.
-	pub fn from_entropy(entropy: &[u8], password: Option<&str>) -> Pair {
-		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
-			.expect("32 bytes can always build a key; qed");
-		let kp = mini_key.expand_to_keypair();
-		Pair(kp)
-	}
-
-	/// Generate new secure (random) key pair and provide the recovery phrase.
-	///
-	/// You can recover the same key later with `from_phrase`.
-	pub fn generate_with_phrase(password: Option<&str>) -> (Pair, String) {
+	fn generate_with_phrase(password: Option<&str>) -> (Pair, String) {
 		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
 		let phrase = mnemonic.phrase();
 		(
@@ -296,145 +314,112 @@ impl Pair {
 		)
 	}
 
-	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
-	pub fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Pair> {
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Pair> {
 		Mnemonic::from_phrase(phrase, Language::English)
 			.ok()
 			.map(|m| Self::from_entropy(m.entropy(), password))
 	}
 
-	/// Derive a child key from a series of given junctions.
-	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Pair {
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Pair, Self::DeriveError> {
 		let init = self.0.secret.clone();
 		let result = path.fold(init, |acc, j| match j {
 			DeriveJunction::Soft(cc) => acc.derived_key_simple(ChainCode(cc), &[]).0,
 			DeriveJunction::Hard(cc) => derive_hard_junction(&acc, &cc),
 		});
-		Self(result.into())
+		Ok(Self(result.into()))
 	}
 
-	/// Sign a message.
-	pub fn sign(&self, message: &[u8]) -> Signature {
+	fn sign(&self, message: &[u8]) -> Signature {
 		let context = signing_context(SIGNING_CTX);
 		Signature::from(self.0.sign(context.bytes(message)).to_bytes())
 	}
 
-	/// Get the public key.
-	pub fn public(&self) -> Public {
-		let mut pk = [0u8; 32];
-		pk.copy_from_slice(&self.0.public.to_bytes());
-		Public(pk)
+	/// Verify a signature on a message. Returns true if the signature is good.
+	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
+		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig[..]) {
+			Ok(some_signature) => some_signature,
+			Err(_) => return false
+		};
+		match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
+			Ok(pk) => pk.verify(
+				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
+			),
+			Err(_) => false,
+		}
+	}
+
+	/// Verify a signature on a message. Returns true if the signature is good.
+	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
+		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(sig) {
+			Ok(some_signature) => some_signature,
+			Err(_) => return false
+		};
+		match PublicKey::from_bytes(pubkey.as_ref()) {
+			Ok(pk) => pk.verify(
+				signing_context(SIGNING_CTX).bytes(message.as_ref()), &signature
+			),
+			Err(_) => false,
+		}
 	}
 }
 
-/// Verify a signature on a message. Returns true if the signature is good.
-pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: P) -> bool {
-	let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig[..]) {
-		Ok(some_signature) => some_signature,
-		Err(_) => return false
-	};
-	match PublicKey::from_bytes(pubkey.as_ref().as_slice()) {
-		Ok(pk) => pk.verify(signing_context(SIGNING_CTX).bytes(message), &signature),
-		Err(_) => false,
+impl Pair {
+	/// Make a new key pair from binary data derived from a valid seed phrase.
+	///
+	/// This uses a key derivation function to convert the entropy into a seed, then returns
+	/// the pair generated from it.
+	pub fn from_entropy(entropy: &[u8], password: Option<&str>) -> Pair {
+		let mini_key: MiniSecretKey = mini_secret_from_entropy(entropy, password.unwrap_or(""))
+			.expect("32 bytes can always build a key; qed");
+		let kp = mini_key.expand_to_keypair();
+		Pair(kp)
 	}
-}
-
-/// Verify a message without type checking the parameters' types for the right size.
-/// Returns true if both the pubkey and the signature is good.
-pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], pubkey: P) -> bool {
-	let signature = match schnorrkel::Signature::from_bytes(&sig[..]) {
-		Ok(sig) => sig,
-		Err(_) => return false,
-	};
-	match PublicKey::from_bytes(pubkey.as_ref()) {
-		Ok(pk) => pk.verify_simple(SIGNING_CTX, message, &signature),
-		Err(_) => false,
-	}
-}
-
-/// Something that acts as a signature allowing a message to be verified.
-pub trait Verifiable {
-	/// Verify something that acts like a signature.
-	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool;
-}
-
-impl Verifiable for Signature {
-	/// Verify something that acts like a signature.
-	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool {
-		verify_strong(&self, message, pubkey)
-	}
-}
-
-impl Verifiable for LocalizedSignature {
-	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool {
-		pubkey.as_ref() == &self.signer && self.signature.verify(message, pubkey)
-	}
-}
-
-/// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
-#[cfg(feature = "std")]
-pub fn deserialize<'de, D, T: From<[u8; 32]>>(deserializer: D) -> Result<T, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let ss58 = String::deserialize(deserializer)?;
-	Public::from_ss58check(&ss58)
-		.map_err(|e| de::Error::custom(format!("{:?}", e)))
-		.map(|v| v.0.into())
-}
-
-/// Serializes something that implements `AsRef<[u8; 32]>` into `ss58`.
-#[cfg(feature = "std")]
-pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok, S::Error>
-where
-	S: Serializer,
-{
-	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
+	use crate::crypto::StandardPair;
 	use hex_literal::{hex, hex_impl};
 	
 	#[test]
 	fn derive_soft_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair: Pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
-		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter());
-		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter());
-		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter());
+		let derive_1 = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
+		let derive_1b = pair.derive(Some(DeriveJunction::soft(1)).into_iter()).unwrap();
+		let derive_2 = pair.derive(Some(DeriveJunction::soft(2)).into_iter()).unwrap();
 		assert_eq!(derive_1.public(), derive_1b.public());
 		assert_ne!(derive_1.public(), derive_2.public());
 	}
 
 	#[test]
 	fn derive_hard_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair: Pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
-		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter());
-		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter());
-		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter());
+		let derive_1 = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
+		let derive_1b = pair.derive(Some(DeriveJunction::hard(1)).into_iter()).unwrap();
+		let derive_2 = pair.derive(Some(DeriveJunction::hard(2)).into_iter()).unwrap();
 		assert_eq!(derive_1.public(), derive_1b.public());
 		assert_ne!(derive_1.public(), derive_2.public());
 	}
 
 	#[test]
 	fn derive_soft_public_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair: Pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::soft(1));
-		let pair_1 = pair.derive(path.clone().into_iter());
+		let pair_1 = pair.derive(path.clone().into_iter()).unwrap();
 		let public_1 = pair.public().derive(path.into_iter()).unwrap();
 		assert_eq!(pair_1.public(), public_1);
 	}
 
 	#[test]
 	fn derive_hard_public_should_fail() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair: Pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let path = Some(DeriveJunction::hard(1));
@@ -443,7 +428,7 @@ mod test {
 
 	#[test]
 	fn sr_test_vector_should_work() {
-		let pair: Pair = Pair::from_seed(&hex!(
+		let pair: Pair = Pair::from_seed(hex!(
 			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
 		));
 		let public = pair.public();
@@ -455,8 +440,7 @@ mod test {
 		);
 		let message = b"";
 		let signature = pair.sign(message);
-		assert!(verify(&signature[..], message, &public.0));
-		assert!(verify_strong(&signature, &message[..], &public));
+		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
 	#[test]
@@ -465,13 +449,13 @@ mod test {
 		let public = pair.public();
 		let message = b"Something important";
 		let signature = pair.sign(&message[..]);
-		assert!(verify_strong(&signature, &message[..], &public));
+		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
 	#[test]
 	fn seeded_pair_should_work() {
 
-		let pair = Pair::from_seed(b"12345678901234567890123456789012");
+		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(
 			public,
@@ -481,7 +465,7 @@ mod test {
 		);
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
-		assert!(verify_strong(&signature, &message[..], &public));
+		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 
 	#[test]
@@ -501,15 +485,14 @@ mod test {
 		assert_eq!(Public::from_ss58check(k).unwrap(), Public::from_raw(enc));
 	}
 
-	#[ignore]
 	#[test]
 	fn verify_from_wasm_works() {
 		// The values in this test case are compared to the output of `node-test.js` in schnorrkel-js.
 		// 
 		// This is to make sure that the wasm library is compatible.
-		let pk = Pair::from_seed(&hex!("0000000000000000000000000000000000000000000000000000000000000000")); 
+		let pk = Pair::from_seed(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
 		let public = pk.public();
 		let js_signature = Signature::from(&hex!("fa30b7561aae210d2a9264137fb33b1a666aa438092738616fa23bc5ef8cc14ef1b68718719672ac8cd35f0bd02d834beee7695cc0bc90e4019be1c13cf21009"));
-		assert!(verify_strong(&js_signature, b"SUBSTRATE", public));
+		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
 }

@@ -172,12 +172,12 @@ impl Deref for Keyring {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ed25519::Verifiable;
+	use substrate_primitives::{ed25519::Pair, crypto::StandardPair};
 
 	#[test]
 	fn should_work() {
-		assert!(Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Alice));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Bob!", Keyring::Alice));
-		assert!(!Keyring::Alice.sign(b"I am Alice!").verify(b"I am Alice!", Keyring::Bob));
+		assert!(Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Alice));
+		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Bob!", Keyring::Alice));
+		assert!(!Pair::verify(&Keyring::Alice.sign(b"I am Alice!"), b"I am Alice!", Keyring::Bob));
 	}
 }
