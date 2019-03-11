@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -85,17 +85,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use parity_codec::Encode;
 #[cfg(feature = "std")]
-use parity_codec_derive::Decode;
-use parity_codec_derive::Encode;
+use parity_codec::Decode;
+#[cfg(feature = "std")]
+use inherents::ProvideInherentData;
 use srml_support::{StorageValue, Parameter, decl_storage, decl_module};
 use srml_support::for_each_tuple;
 use runtime_primitives::traits::{As, SimpleArithmetic, Zero};
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, cmp};
 use inherents::{RuntimeString, InherentIdentifier, ProvideInherent, IsFatalError, InherentData};
-#[cfg(feature = "std")]
-use inherents::ProvideInherentData;
 
 /// The identifier for the `timestamp` inherent.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"timstap0";
@@ -201,7 +201,7 @@ macro_rules! impl_timestamp_set {
 for_each_tuple!(impl_timestamp_set);
 
 /// The module configuration trait
-pub trait Trait: consensus::Trait + system::Trait {
+pub trait Trait: system::Trait {
 	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic
 		+ Mul<Self::BlockNumber, Output = Self::Moment>
@@ -240,7 +240,6 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
-
 		/// Current time for the current block.
 		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
 
@@ -327,7 +326,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
-	use runtime_primitives::testing::{Digest, DigestItem, Header, UintAuthorityId};
+	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -347,11 +346,6 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type Log = DigestItem;
-	}
-	impl consensus::Trait for Test {
-		type Log = DigestItem;
-		type SessionKey = UintAuthorityId;
-		type InherentOfflineReport = ();
 	}
 	impl Trait for Test {
 		type Moment = u64;
