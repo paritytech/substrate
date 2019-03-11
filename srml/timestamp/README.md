@@ -43,7 +43,7 @@ Sets the current time. This call should be invoked exactly once per block. It wi
 
 The timestamp should be greater than the previous one by the amount specified by `block_period`.
 
-##### Errors:
+##### Errors
 
 * Timestamp must be updated only once in the block
 * Timestamp must increment by at least `BlockPeriod` between sequential blocks
@@ -58,9 +58,9 @@ The timestamp module defines and implements the trait `TimestampInherentData` fo
 
 The following example shows how to use the timestamp module in your custom module to query the current timestamp.
 
-In your custom module, after importing the `timestamp` module and deriving your module's configuration trait with the timestamp trait, call the timestamp module's `get` function to get the current timestamp,
+In your custom module, after importing the `timestamp` module and deriving your module's configuration trait with the timestamp trait, call the timestamp module's `get` function to get the current timestamp.
 
-```
+```ignore
 let now = <timestamp::Module<T>>::get();
 ```
 
