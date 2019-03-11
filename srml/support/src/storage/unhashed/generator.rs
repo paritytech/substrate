@@ -102,11 +102,7 @@ pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> 
 	fn prefix() -> &'static [u8];
 
 	/// Get the storage key used to fetch a value corresponding to a specific key.
-	fn key_for(k1: &K1, k2: &K2) -> Vec<u8> {
-		let mut key = Self::prefix_for(k1);
-		key.extend(&k2.using_encoded(twox_128));
-		key
-	}
+	fn key_for(k1: &K1, k2: &K2) -> Vec<u8>;
 
 	/// Get the storage prefix used to fetch keys corresponding to a specific key1.
 	fn prefix_for(k1: &K1) -> Vec<u8> {

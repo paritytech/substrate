@@ -144,9 +144,17 @@ struct DeclStorageDoubleMap {
 	pub map_keyword: ext::CustomToken<DoubleMapKeyword>,
 	pub key1: syn::Type,
 	pub comma_keyword: Token![,],
-	pub key2: syn::Type,
+	pub key2_hasher: DeclStorageDoubleMapHasher,
+	pub key2: ext::Parens<syn::Type>,
 	pub ass_keyword: Token![=>],
 	pub value: syn::Type,
+}
+
+#[derive(Parse, ToTokens, Debug)]
+enum DeclStorageDoubleMapHasher {
+	Blake2_256(ext::CustomToken<Blake2_256Keyword>),
+	Twox256(ext::CustomToken<Twox256Keyword>),
+	Twox128(ext::CustomToken<Twox128Keyword>),
 }
 
 #[derive(Parse, ToTokens, Debug)]
@@ -165,3 +173,6 @@ custom_keyword_impl!(DeclStorageGetter, "get", "storage getter");
 custom_keyword!(MapKeyword, "map", "map as keyword");
 custom_keyword!(LinkedMapKeyword, "linked_map", "linked_map as keyword");
 custom_keyword!(DoubleMapKeyword, "double_map", "double_map as keyword");
+custom_keyword!(Blake2_256Keyword, "blake2_256", "Blake2_256 as keyword");
+custom_keyword!(Twox256Keyword, "twox_256", "Twox_256 as keyword");
+custom_keyword!(Twox128Keyword, "twox_128", "Twox_128 as keyword");

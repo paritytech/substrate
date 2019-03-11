@@ -452,8 +452,8 @@ fn decl_storage_items(
 			DeclStorageTypeInfosKind::Map { key_type, is_linked: true } => {
 				i.linked_map(key_type)
 			},
-			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type } => {
-				i.double_map(key1_type, key2_type)
+			DeclStorageTypeInfosKind::DoubleMap { key1_type, key2_type, key2_hasher } => {
+				i.double_map(key1_type, key2_type, key2_hasher)
 			},
 		};
 		impls.extend(implementation)
@@ -585,6 +585,7 @@ fn store_functions_to_metadata (
 						key1: #scrate::storage::generator::DecodeDifferent::Encode(#k1ty),
 						key2: #scrate::storage::generator::DecodeDifferent::Encode(#k2ty),
 						value: #scrate::storage::generator::DecodeDifferent::Encode(#styp),
+						// TODO TODO: put hasher into metadata ?
 					}
 				}
 			},
@@ -686,6 +687,7 @@ enum DeclStorageTypeInfosKind<'a> {
 	DoubleMap {
 		key1_type: &'a syn::Type,
 		key2_type: &'a syn::Type,
+		key2_hasher: TokenStream2,
 	}
 }
 
@@ -711,7 +713,8 @@ fn get_type_infos(storage_type: &DeclStorageType) -> DeclStorageTypeInfos {
 		}),
 		DeclStorageType::DoubleMap(ref map) => (&map.value, DeclStorageTypeInfosKind::DoubleMap {
 			key1_type: &map.key1,
-			key2_type: &map.key2,
+			key2_type: &map.key2.content,
+			key2_hasher: { let h = &map.key2_hasher; quote! { #h } },
 		}),
 	};
 

@@ -478,7 +478,7 @@ impl<'a> Impls<'a> {
 		}
 	}
 
-	pub fn double_map(self, k1ty: &syn::Type, k2ty: &syn::Type) -> TokenStream2 {
+	pub fn double_map(self, k1ty: &syn::Type, k2ty: &syn::Type, k2_hasher: TokenStream2) -> TokenStream2 {
 		let Self {
 			scrate,
 			visibility,
@@ -515,6 +515,12 @@ impl<'a> Impls<'a> {
 
 				fn prefix() -> &'static [u8] {
 					#prefix.as_bytes()
+				}
+
+				fn key_for(k1: &#k1ty, k2: &#k2ty) -> Vec<u8> {
+					let mut key = #as_double_map::prefix_for(k1);
+					key.extend(&#scrate::Hashable::#k2_hasher(k2));
+					key
 				}
 
 				fn get<S: #scrate::GenericUnhashedStorage>(key1: &#k1ty, key2: &#k2ty, storage: &S) -> Self::Query {
