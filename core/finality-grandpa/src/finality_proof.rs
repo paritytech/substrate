@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -37,7 +37,6 @@ use client::{
 	light::fetcher::RemoteCallRequest,
 };
 use parity_codec::{Encode, Decode};
-use parity_codec_derive::{Encode, Decode};
 use grandpa::BlockNumberOps;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{

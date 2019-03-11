@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ pub mod system;
 
 use rstd::{prelude::*, marker::PhantomData};
 use parity_codec::{Encode, Decode, Input};
-use parity_codec_derive::{Encode, Decode};
 
 use substrate_client::{
 	runtime_api as client_api, block_builder::api as block_builder_api, decl_runtime_apis,

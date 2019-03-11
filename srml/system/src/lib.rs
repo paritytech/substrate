@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -30,10 +30,7 @@ use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero,
 use substrate_primitives::storage::well_known_keys;
 use srml_support::{storage, StorageValue, StorageMap, Parameter, decl_module, decl_event, decl_storage};
 use safe_mix::TripletMix;
-use parity_codec_derive::{Encode, Decode};
-
-#[cfg(any(feature = "std", test))]
-use parity_codec::Encode;
+use parity_codec::{Encode, Decode};
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher};

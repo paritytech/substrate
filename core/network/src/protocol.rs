@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -223,6 +223,8 @@ pub enum ProtocolMsg<B: BlockT, S: NetworkSpecialization<B>> {
 	PropagateExtrinsics,
 	/// Tell protocol that a block was imported (sent by the import-queue).
 	BlockImportedSync(B::Hash, NumberFor<B>),
+	/// Tell protocol to clear all pending justification requests.
+	ClearJustificationRequests,
 	/// Tell protocol to request justification for a block.
 	RequestJustification(B::Hash, NumberFor<B>),
 	/// Inform protocol whether a justification was successfully imported.
@@ -394,6 +396,7 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 			}
 			ProtocolMsg::AnnounceBlock(hash) => self.announce_block(hash),
 			ProtocolMsg::BlockImportedSync(hash, number) => self.sync.block_imported(&hash, number),
+			ProtocolMsg::ClearJustificationRequests => self.sync.clear_justification_requests(),
 			ProtocolMsg::RequestJustification(hash, number) => {
 				let mut context =
 					ProtocolContext::new(&mut self.context_data, &self.network_chan);
@@ -481,7 +484,6 @@ impl<B: BlockT, S: NetworkSpecialization<B>, H: ExHashT> Protocol<B, S, H> {
 					&mut ProtocolContext::new(&mut self.context_data, &self.network_chan),
 					who,
 					msg,
-					self.sync.status().is_major_syncing(),
 				);
 			}
 			other => self.specialization.on_message(

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,9 +27,7 @@ use primitives::traits::{As, Zero};
 use timestamp::OnTimestampSet;
 #[cfg(feature = "std")]
 use timestamp::TimestampInherentData;
-#[cfg(feature = "std")]
-use parity_codec::Decode;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use inherents::{RuntimeString, InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 #[cfg(feature = "std")]
 use inherents::{InherentDataProviders, ProvideInherentData};

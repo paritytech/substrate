@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -27,11 +27,11 @@ pub use parity_codec as codec;
 pub use serde_derive;
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
 use substrate_primitives::hash::{H256, H512};
-use parity_codec_derive::{Encode, Decode};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use substrate_primitives::hexdisplay::ascii_format;
@@ -87,17 +87,9 @@ pub use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
 
-/// A set of key value pairs for storage.
-#[cfg(feature = "std")]
-pub type StorageOverlay = HashMap<Vec<u8>, Vec<u8>>;
-
-/// A set of key value pairs for children storage;
-#[cfg(feature = "std")]
-pub type ChildrenStorageOverlay = HashMap<Vec<u8>, StorageOverlay>;
-
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
-pub trait BuildStorage {
+pub trait BuildStorage: Sized {
 	/// Hash given slice.
 	///
 	/// Default to xx128 hashing.
@@ -107,13 +99,31 @@ pub trait BuildStorage {
 		r
 	}
 	/// Build the storage out of this builder.
-	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String>;
+	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
+		let mut storage = Default::default();
+		let mut child_storage = Default::default();
+		self.assimilate_storage(&mut storage, &mut child_storage)?;
+		Ok((storage, child_storage))
+	}
+	/// Assimilate the storage for this module into pre-existing overlays.
+	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		let (s, cs) = self.build_storage()?;
+		storage.extend(s);
+		for (other_child_key, other_child_map) in cs {
+			child_storage.entry(other_child_key).or_default().extend(other_child_map);
+		}
+		Ok(())
+	}
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageOverlay {
 	fn build_storage(self) -> Result<(StorageOverlay, ChildrenStorageOverlay), String> {
 		Ok((self, Default::default()))
+	}
+	fn assimilate_storage(self, storage: &mut StorageOverlay, _child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
+		storage.extend(self);
+		Ok(())
 	}
 }
 
@@ -411,6 +421,14 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
+			fn assimilate_storage(self, top: &mut $crate::StorageOverlay, children: &mut $crate::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+				$(
+					if let Some(extra) = self.$snake {
+						extra.assimilate_storage(top, children)?;
+					}
+				)*
+				Ok(())
+			}
 			fn build_storage(self) -> ::std::result::Result<($crate::StorageOverlay, $crate::ChildrenStorageOverlay), String> {
 				let mut top = $crate::StorageOverlay::new();
 				let mut children = $crate::ChildrenStorageOverlay::new();
@@ -585,8 +603,7 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;
-	use crate::codec::{Encode as EncodeHidden, Decode as DecodeHidden};
-	use parity_codec_derive::{Encode, Decode};
+	use crate::codec::{Encode, Decode};
 	use crate::traits::DigestItem;
 
 	pub trait RuntimeT {
@@ -601,7 +618,7 @@ mod tests {
 
 	mod a {
 		use super::RuntimeT;
-		use parity_codec_derive::{Encode, Decode};
+		use crate::codec::{Encode, Decode};
 		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
@@ -611,7 +628,7 @@ mod tests {
 
 	mod b {
 		use super::RuntimeT;
-		use parity_codec_derive::{Encode, Decode};
+		use crate::codec::{Encode, Decode};
 		use serde_derive::Serialize;
 		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
 
@@ -630,24 +647,24 @@ mod tests {
 		// encode/decode regular item
 		let b1: Log = b::RawLog::B1::<u64>(777).into();
 		let encoded_b1 = b1.encode();
-		let decoded_b1: Log = DecodeHidden::decode(&mut &encoded_b1[..]).unwrap();
+		let decoded_b1: Log = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		assert_eq!(b1, decoded_b1);
 
 		// encode/decode system item
 		let auth_change: Log = a::RawLog::AuthoritiesChange::<u64>(vec![100, 200, 300]).into();
 		let encoded_auth_change = auth_change.encode();
-		let decoded_auth_change: Log = DecodeHidden::decode(&mut &encoded_auth_change[..]).unwrap();
+		let decoded_auth_change: Log = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
 		assert_eq!(auth_change, decoded_auth_change);
 
 		// interpret regular item using `generic::DigestItem`
-		let generic_b1: super::generic::DigestItem<H256, u64> = DecodeHidden::decode(&mut &encoded_b1[..]).unwrap();
+		let generic_b1: super::generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		match generic_b1 {
 			super::generic::DigestItem::Other(_) => (),
 			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
 		}
 
 		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: super::generic::DigestItem<H256, u64> = DecodeHidden::decode(&mut &encoded_auth_change[..]).unwrap();
+		let generic_auth_change: super::generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
 		match generic_auth_change {
 			super::generic::DigestItem::AuthoritiesChange::<H256, u64>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
 			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
