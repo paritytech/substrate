@@ -387,6 +387,7 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 					},
 					Err(_) => {
 						error!(target: "sub-libp2p", "Tokio timer has errored");
+						deadline.reset(Instant::now() + Duration::from_secs(60));
 						return_value = None;
 						PerProtocolState::Opening { deadline }
 					},
