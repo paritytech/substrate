@@ -429,9 +429,7 @@ impl<B: BlockT> ChainSync<B> {
 		let previous_state = self.state(&previous_best_seen);
 
 		if let Some(info) = protocol.peer_info(who) {
-			// println!("on new peer {:?}", info);
 			let status = block_status(&*protocol.client(), &self.queue_blocks, info.best_hash);
-			// println!("block_status={:?}", status);
 			match (status, info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
@@ -462,7 +460,6 @@ impl<B: BlockT> ChainSync<B> {
 					if our_best > As::sa(0) {
 						let common_best = ::std::cmp::min(our_best, info.best_number);
 						debug!(target:"sync", "New peer with unknown best hash {} ({}), searching for common ancestor.", info.best_hash, info.best_number);
-						// println!("our_best {:?}", our_best);
 						self.peers.insert(who, PeerSync {
 							common_number: As::sa(0),
 							best_hash: info.best_hash,
@@ -519,12 +516,10 @@ impl<B: BlockT> ChainSync<B> {
 		curr_block_num: NumberFor<B>,
 		block_hash_match: bool,
 	) -> Option<(AncestorSearchState<B>, NumberFor<B>)> {
-		println!("ancestor search: {:?} {:?} {:?}", curr_block_num, block_hash_match, state);
 		match state {
 			AncestorSearchState::ExponentialBackoff(next_distance_to_tip) => {
 				if block_hash_match && next_distance_to_tip == As::sa(1) {
 					// We found the ancestor so there is no more ancestor search state.
-					println!("ancestor found at {:?}", curr_block_num);
 					return None;
 				}
 				if block_hash_match {
