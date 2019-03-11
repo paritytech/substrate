@@ -275,7 +275,7 @@ impl<T: Trait> Module<T> {
 			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
-			if !<FreeBalance<T>>::exists(who) {
+			if !<FreeBalance<T>>::exists(who) && !<ReservedBalance<T>>::exists(who) {
 				Self::new_account(&who, balance);
 			}
 			Self::set_free_balance(who, balance);
