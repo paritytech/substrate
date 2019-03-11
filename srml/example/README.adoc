@@ -95,19 +95,7 @@ use <INSERT_MODULE_NAME>;
 pub trait Trait: <INSERT_MODULE_NAME>::Trait { }
 ```
 
-// Show how to query a public getter functions of <INSERT_MODULE_NAME>
-2. Query the `INSERT_MODULE_NAME` module's `example_getter_name()`.
-
-```
-let queried_value = <INSERT_MODULE_NAME::Module<T>>::example_getter_name();
-```
-
-// Show how to call a public setter function to change state using <INSERT_MODULE_NAME>
-2. Change state using `INSERT_MODULE_NAME` module's `example_setter_name()`.
-
-```
-<INSERT_MODULE_NAME::Module<T>>::example_setter_name();
-```
+// Show how to query a public getter and setter functions of <INSERT_MODULE_NAME>
 
 ## Implementation Details
 
