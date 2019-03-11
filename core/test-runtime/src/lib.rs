@@ -270,15 +270,9 @@ fn benchmark_add_one(i: u64) -> u64 {
 	i + 1
 }
 
-/// A `Cell` that is tagged as sync, as we know that it is not modified by multiple threads.
-#[cfg(not(feature = "std"))]
-struct SyncCell<T>(rstd::cell::Cell<T>);
-#[cfg(not(feature = "std"))]
-unsafe impl<T> Sync for SyncCell<T> {}
-
 /// The `benchmark_add_one` function as function pointer.
 #[cfg(not(feature = "std"))]
-static BENCHMARK_ADD_ONE: SyncCell<fn(u64) -> u64> = SyncCell(rstd::cell::Cell::new(benchmark_add_one));
+static BENCHMARK_ADD_ONE: runtime_io::ExchangeableFunction<fn(u64) -> u64> = runtime_io::ExchangeableFunction(benchmark_add_one);
 
 cfg_if! {
 	if #[cfg(feature = "std")] {
