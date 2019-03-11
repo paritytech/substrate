@@ -1,6 +1,28 @@
 name: subkey
 author: "Parity Team <admin@parity.io>"
 about: A substrate key utility
+args:
+  - ed25519-legacy:
+      short: o
+      long: legacy
+      help: Use legacy, outdated Ed25519 cryptography
+      takes_value: false
+  - ed25519:
+      short: e
+      long: ed25519
+      help: Use Ed25519/BIP39 cryptography
+      takes_value: false
+  - sr25519:
+      short: s
+      long: sr25519
+      help: Use Schnorr/Ristretto x25519/BIP39 cryptography
+      takes_value: false
+  - password:
+      short: p
+      long: password
+      takes_value: true
+      required: false
+      help: The password for the key
 subcommands:
   - generate:
       about: Generate a random account
@@ -14,7 +36,7 @@ subcommands:
                   it will be right-padded with 0x20 bytes (ASCII space). If the provided seed is longer than
                   32 bytes then seed will be truncated.
   - vanity:
-      about: Generate vanity address
+      about: Generate a seed that provides a vanity address
       args:
         - pattern:
             index: 1
@@ -25,3 +47,9 @@ subcommands:
             help: Number of keys to generate
             takes_value: true
             default_value: "1"
+  - query:
+      about: Query an account by its seed
+      args:
+        - seed:
+            index: 1
+            help: The 0x prefixed seed

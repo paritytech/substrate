@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -77,7 +77,6 @@ impl balances::Trait for Test {
 	type Balance = u64;
 	type OnFreeBalanceZero = Contract;
 	type OnNewAccount = ();
-	type EnsureAccountLiquid = ();
 	type Event = MetaEvent;
 }
 impl timestamp::Trait for Test {
