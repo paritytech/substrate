@@ -620,6 +620,6 @@ where
 	T::Balance: MaybeSerializeDebug
 {
 	fn is_dead_account(who: &T::AccountId) -> bool {
-		Self::total_balance(who).is_zero()
+		!<FreeBalance<T>>::exists(who) && !<ReservedBalance<T>>::exists(who)
 	}
 }
