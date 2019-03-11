@@ -165,7 +165,7 @@ pub enum VmExecResult {
 	/// This can include, e.g.: division by 0, OOB access or failure to satisfy some precondition
 	/// of a system call.
 	///
-	/// Contains some vm-specific description of an trap.
+	/// Contains some vm-specific description of a trap.
 	Trap(&'static str),
 }
 

@@ -16,23 +16,68 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use crate::{Schedule, Trait, CodeHash, ComputeDispatchFee};
-use crate::exec::{Ext, BalanceOf, VmExecResult, OutputBuf, EmptyOutputBuf, CallReceipt, InstantiateReceipt};
-use crate::gas::{GasMeter, Token, GasMeterResult, approx_gas_for_balance};
+use crate::exec::{
+	BalanceOf, CallReceipt, EmptyOutputBuf, Ext, InstantiateReceipt, OutputBuf, VmExecResult,
+};
+use crate::gas::{approx_gas_for_balance, GasMeter, GasMeterResult, Token};
+use crate::{CodeHash, ComputeDispatchFee, Schedule, Trait};
+use parity_codec::{Decode, Encode};
+use rstd::mem;
+use rstd::prelude::*;
+use runtime_primitives::traits::{As, Bounded, CheckedMul};
 use sandbox;
 use system;
-use rstd::prelude::*;
-use rstd::mem;
-use parity_codec::{Decode, Encode};
-use runtime_primitives::traits::{As, CheckedMul, Bounded};
 
-/// Enumerates all possible *special* trap conditions.
-///
-/// In this runtime traps used not only for signaling about errors but also
-/// to just terminate quickly in some cases.
-enum SpecialTrap {
-	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(OutputBuf),
+/// Trap error codes
+enum ErrorCode {
+	OutOfGas = 1,          // Execution ran out of gas
+	MemoryOutOfBounds = 2, // Contract attempted to access memory "out of bounds"
+	BadEncoding = 3,       // Runtime ABI failed to decode a buffer from the contract
+}
+
+impl ErrorCode {
+	/// Return a description of the error code
+	fn description(self) -> &'static str {
+		match self {
+			ErrorCode::OutOfGas => "out of gas",
+			ErrorCode::MemoryOutOfBounds => "memory out of bounds",
+			ErrorCode::BadEncoding => "bad type encoding",
+		}
+	}
+}
+
+/// Trap types
+#[allow(dead_code)]
+enum Trap {
+	Success,
+	Error(ErrorCode),
+	Returned(OutputBuf),
+}
+
+impl Trap {
+	/// Return a description of the trap
+	fn description(self) -> &'static str {
+		match self {
+			Trap::Success => "execution success",
+			Trap::Error(code) => code.description(),
+			Trap::Returned(_) => "ext_return call",
+		}
+	}
+
+	/// Return the trap as a u32 code
+	fn code(self) -> u32 {
+		match self {
+			Trap::Success => 0,
+			Trap::Error(code) => code as u32,
+			Trap::Returned(_) => 2,
+		}
+	}
+}
+
+impl From<Trap> for sandbox::HostError {
+	fn from(_trap: Trap) -> sandbox::HostError {
+		sandbox::HostError
+	}
 }
 
 /// Can only be used for one call.
@@ -46,8 +91,9 @@ pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	schedule: &'a Schedule<<E::T as Trait>::Gas>,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
-	special_trap: Option<SpecialTrap>,
+	trap: Trap,
 }
+
 impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 	pub(crate) fn new(
 		ext: &'a mut E,
@@ -65,7 +111,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 			schedule,
 			memory,
 			gas_meter,
-			special_trap: None,
+			trap: Trap::Success,
 		}
 	}
 
@@ -80,13 +126,13 @@ pub(crate) fn to_execution_result<E: Ext>(
 ) -> VmExecResult {
 	// Check the exact type of the error. It could be plain trap or
 	// special runtime trap the we must recognize.
-	match (sandbox_err, runtime.special_trap) {
+	match (sandbox_err, runtime.trap) {
 		// No traps were generated. Proceed normally.
-		(None, None) => VmExecResult::Ok,
+		(None, Trap::Success) => VmExecResult::Ok,
 		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(buf))) => VmExecResult::Returned(buf),
-		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => VmExecResult::Trap("during execution"),
+		(Some(sandbox::Error::Execution), Trap::Returned(buf)) => VmExecResult::Returned(buf),
+		// A known error trap which can be logged definitivley
+		(Some(_), Trap::Error(code)) => VmExecResult::Trap(code.description()),
 		// Any other case (such as special trap flag without actual trap) signifies
 		// a logic error.
 		_ => unreachable!(),
@@ -135,37 +181,35 @@ impl<T: Trait> Token<T> for RuntimeToken<T::Gas> {
 
 /// Charge the gas meter with the specified token.
 ///
-/// Returns `Err(HostError)` if there is not enough gas.
+/// Traps with `OutOfGas` if there is not enough gas.
 fn charge_gas<T: Trait, Tok: Token<T>>(
 	gas_meter: &mut GasMeter<T>,
 	metadata: &Tok::Metadata,
 	token: Tok,
-) -> Result<(), sandbox::HostError> {
+) -> Result<(), Trap> {
 	match gas_meter.charge(metadata, token) {
 		GasMeterResult::Proceed => Ok(()),
-		GasMeterResult::OutOfGas => Err(sandbox::HostError),
+		GasMeterResult::OutOfGas => Err(Trap::Error(ErrorCode::OutOfGas)),
 	}
 }
 
 /// Read designated chunk from the sandbox memory, consuming an appropriate amount of
 /// gas.
 ///
-/// Returns `Err` if one of the following conditions occurs:
+/// Returns `Trap::Error` if one of the following conditions occurs:
 ///
 /// - calculating the gas cost resulted in overflow.
 /// - out of gas
 /// - requested buffer is not within the bounds of the sandbox memory.
-fn read_sandbox_memory<E: Ext>(
-	ctx: &mut Runtime<E>,
-	ptr: u32,
-	len: u32,
-) -> Result<Vec<u8>, sandbox::HostError> {
+fn read_sandbox_memory<E: Ext>(ctx: &mut Runtime<E>, ptr: u32, len: u32) -> Result<Vec<u8>, Trap> {
 	charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ReadMemory(len))?;
 
 	let mut buf = Vec::new();
 	buf.resize(len as usize, 0);
 
-	ctx.memory().get(ptr, &mut buf)?;
+	ctx.memory()
+		.get(ptr, &mut buf)
+		.map_err(|_| Trap::Error(ErrorCode::MemoryOutOfBounds))?;
 
 	Ok(buf)
 }
@@ -184,12 +228,16 @@ fn write_sandbox_memory<T: Trait>(
 	memory: &sandbox::Memory,
 	ptr: u32,
 	buf: &[u8],
-) -> Result<(), sandbox::HostError> {
-	charge_gas(gas_meter, schedule, RuntimeToken::WriteMemory(buf.len() as u32))?;
+) -> Result<(), Trap> {
+	charge_gas(
+		gas_meter,
+		schedule,
+		RuntimeToken::WriteMemory(buf.len() as u32),
+	)?;
 
-	memory.set(ptr, buf)?;
-
-	Ok(())
+	memory
+		.set(ptr, buf)
+		.map_err(|_| Trap::Error(ErrorCode::MemoryOutOfBounds))
 }
 
 // ***********************************************************
@@ -207,8 +255,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
-		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::Explicit(amount))?;
-		Ok(())
+		charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::Explicit(amount)).map_err(|_| sandbox::HostError)
 	},
 
 	// Change the value at the given key in the storage or remove the entry.
@@ -277,13 +324,17 @@ define_env!(Env, <E: Ext>,
 	) -> u32 => {
 		let callee = {
 			let callee_buf = read_sandbox_memory(ctx, callee_ptr, callee_len)?;
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee_buf[..]).ok_or_else(|| {
+				ctx.trap = Trap::Error(ErrorCode::BadEncoding);
+				sandbox::HostError
+			})?
 		};
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).ok_or_else(|| {
+				ctx.trap = Trap::Error(ErrorCode::BadEncoding);
+				sandbox::HostError
+			})?
 		};
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
@@ -353,12 +404,17 @@ define_env!(Env, <E: Ext>,
 	) -> u32 => {
 		let code_hash = {
 			let code_hash_buf = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
-			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| sandbox::HostError)?
+			<CodeHash<<E as Ext>::T>>::decode(&mut &code_hash_buf[..]).ok_or_else(|| {
+				ctx.trap = Trap::Error(ErrorCode::BadEncoding);
+				sandbox::HostError
+			})?
 		};
 		let value = {
 			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
-			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).ok_or_else(|| {
+				ctx.trap = Trap::Error(ErrorCode::BadEncoding);
+				sandbox::HostError
+			})?
 		};
 		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
@@ -407,7 +463,10 @@ define_env!(Env, <E: Ext>,
 			)
 		{
 			GasMeterResult::Proceed => (),
-			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
+			GasMeterResult::OutOfGas => {
+				ctx.trap = Trap::Error(ErrorCode::OutOfGas);
+				return Err(sandbox::HostError)
+			},
 		}
 
 		let empty_output_buf = ctx
@@ -426,7 +485,7 @@ define_env!(Env, <E: Ext>,
 				ctx.memory.get(data_ptr, slice_mut)
 			}
 		)?;
-		ctx.special_trap = Some(SpecialTrap::Return(output_buf));
+		ctx.trap = Trap::Returned(output_buf);
 
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
@@ -503,8 +562,10 @@ define_env!(Env, <E: Ext>,
 	ext_dispatch_call(ctx, call_ptr: u32, call_len: u32) => {
 		let call = {
 			let call_buf = read_sandbox_memory(ctx, call_ptr, call_len)?;
-			<<<E as Ext>::T as Trait>::Call>::decode(&mut &call_buf[..])
-				.ok_or_else(|| sandbox::HostError)?
+			<<<E as Ext>::T as Trait>::Call>::decode(&mut &call_buf[..]).ok_or_else(|| {
+				ctx.trap = Trap::Error(ErrorCode::BadEncoding);
+				sandbox::HostError
+			})?
 		};
 
 		// Charge gas for dispatching this call.
@@ -512,7 +573,7 @@ define_env!(Env, <E: Ext>,
 			let balance_fee = <<E as Ext>::T as Trait>::ComputeDispatchFee::compute_dispatch_fee(&call);
 			approx_gas_for_balance::<<E as Ext>::T>(ctx.gas_meter.gas_price(), balance_fee)
 		};
-		charge_gas(&mut ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
+		charge_gas(ctx.gas_meter, ctx.schedule, RuntimeToken::ComputedDispatchFee(fee))?;
 
 		ctx.ext.note_dispatch_call(call);
 
@@ -530,25 +591,19 @@ define_env!(Env, <E: Ext>,
 		let offset = offset as usize;
 		if offset > ctx.input_data.len() {
 			// Offset can't be larger than input buffer length.
-			return Err(sandbox::HostError);
+			ctx.trap = Trap::Error(ErrorCode::MemoryOutOfBounds);
+			return Err(sandbox::HostError)
 		}
 
 		// This can't panic since `offset <= ctx.input_data.len()`.
 		let src = &ctx.input_data[offset..];
 		if src.len() != len as usize {
-			return Err(sandbox::HostError);
+			ctx.trap = Trap::Error(ErrorCode::MemoryOutOfBounds);
+			return Err(sandbox::HostError)
 		}
 
 		// Finally, perform the write.
-		write_sandbox_memory(
-			ctx.schedule,
-			ctx.gas_meter,
-			&ctx.memory,
-			dest_ptr,
-			src,
-		)?;
-
-		Ok(())
+		write_sandbox_memory(ctx.schedule, &mut ctx.gas_meter, &ctx.memory, dest_ptr, src).map_err(|_| sandbox::HostError)
 	},
 
 	// Returns the size of the scratch buffer.
@@ -562,24 +617,18 @@ define_env!(Env, <E: Ext>,
 		let offset = offset as usize;
 		if offset > ctx.scratch_buf.len() {
 			// Offset can't be larger than scratch buffer length.
-			return Err(sandbox::HostError);
+			ctx.trap = Trap::Error(ErrorCode::MemoryOutOfBounds);
+			return Err(sandbox::HostError)
 		}
 
 		// This can't panic since `offset <= ctx.scratch_buf.len()`.
 		let src = &ctx.scratch_buf[offset..];
 		if src.len() != len as usize {
-			return Err(sandbox::HostError);
+			ctx.trap = Trap::Error(ErrorCode::MemoryOutOfBounds);
+			return Err(sandbox::HostError)
 		}
 
 		// Finally, perform the write.
-		write_sandbox_memory(
-			ctx.schedule,
-			ctx.gas_meter,
-			&ctx.memory,
-			dest_ptr,
-			src,
-		)?;
-
-		Ok(())
+		write_sandbox_memory(ctx.schedule, &mut ctx.gas_meter, &ctx.memory, dest_ptr, src).map_err(|_| sandbox::HostError)
 	},
 );
