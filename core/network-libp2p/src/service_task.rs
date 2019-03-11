@@ -19,7 +19,7 @@ use crate::{
 	transport, NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer
 };
 use crate::custom_proto::{CustomMessage, RegisteredProtocol, RegisteredProtocols};
-use crate::{Error, NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
+use crate::{NetworkConfiguration, NodeIndex, ProtocolId, parse_str_addr};
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, build_multiaddr};
@@ -41,7 +41,7 @@ use tokio_timer::Interval;
 pub fn start_service<TProtos, TMessage>(
 	config: NetworkConfiguration,
 	registered_custom: TProtos,
-) -> Result<Service<TMessage>, Error>
+) -> Result<Service<TMessage>, IoError>
 where TProtos: IntoIterator<Item = RegisteredProtocol<TMessage>>,
 	TMessage: CustomMessage + Send + 'static {
 

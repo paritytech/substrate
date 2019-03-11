@@ -303,7 +303,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		who: NodeIndex,
 		message: ConsensusMessage,
-		is_syncing: bool,
 	) -> Option<(B::Hash, ConsensusMessage)> {
 		let message_hash = HashFor::<B>::hash(&message.data[..]);
 
@@ -332,12 +331,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 				},
 				Some(ValidationResult::Expired) => {
 					trace!(target:"gossip", "Ignored expired message from {}", who);
-					if !is_syncing {
-						protocol.report_peer(
-							who,
-							Severity::Useless(format!("Sent expired consensus message")),
-						);
-					}
 					return None;
 				}
 				None => {
