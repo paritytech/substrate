@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -112,6 +112,7 @@ construct_service_factory! {
 					},
 					link_half,
 					grandpa::NetworkBridge::new(service.network()),
+					service.config.custom.inherent_data_providers.clone(),
 					service.on_exit(),
 				)?);
 

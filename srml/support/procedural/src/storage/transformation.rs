@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -181,12 +181,14 @@ fn decl_store_extra_genesis(
 
 		let mut opt_build;
 		// need build line
-		if let (Some(ref getter), Some(ref config)) = (getter, config) {
+		if let Some(ref config) = config {
 			let ident = if let Some(ident) = config.expr.content.as_ref() {
 				quote!( #ident )
-			} else {
+			} else if let Some(ref getter) = getter {
 				let ident = &getter.getfn.content;
 				quote!( #ident )
+			} else {
+				return Err(syn::Error::new_spanned(name, format!("Invalid storage definiton, couldn't find config identifier: storage must either have a get identifier `get(ident)` or a defined config identifier `config(ident)`")));
 			};
 			if type_infos.kind.is_simple() && ext::has_parametric_type(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
@@ -224,22 +226,15 @@ fn decl_store_extra_genesis(
 		let typ = type_infos.typ;
 		if let Some(builder) = opt_build {
 			is_trait_needed = true;
-			let error_message = format!(
-				"Genesis parameters encoding of {} does not match the expected type ({:?}).",
-				name,
-				type_infos.value_type,
-			);
 			builders.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{{
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let v = (#builder)(&self);
-						let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-							.expect(#error_message);
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
+						
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -247,11 +242,8 @@ fn decl_store_extra_genesis(
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k, v) in data.into_iter() {
-							let v = Encode::using_encoded(&v, |mut v| Decode::decode(&mut v))
-								.expect(#error_message);
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>>::insert(&k, &v, &storage);
 						}
 					}}
@@ -389,11 +381,27 @@ fn decl_store_extra_genesis(
 					let mut r: #scrate::runtime_primitives::StorageOverlay = Default::default();
 					let mut c: #scrate::runtime_primitives::ChildrenStorageOverlay = Default::default();
 
-					#builders
+					{
+						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
+						#builders
+					}
 
 					#scall(&mut r, &mut c, &self);
 
 					Ok((r, c))
+				}
+				fn assimilate_storage(self, r: &mut #scrate::runtime_primitives::StorageOverlay, c: &mut #scrate::runtime_primitives::ChildrenStorageOverlay) -> ::std::result::Result<(), String> {
+					use #scrate::rstd::{cell::RefCell, marker::PhantomData};
+					let storage = (RefCell::new(r), PhantomData::<Self>::default());
+
+					#builders
+
+					let r = storage.0.into_inner();
+
+					#scall(r, c, &self);
+
+					Ok(())
 				}
 			}
 		}

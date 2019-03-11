@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -38,7 +38,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{self, Instant, Duration};
 
 use parity_codec::{Decode, Encode};
-use parity_codec_derive::{Decode, Encode};
 use consensus::offline_tracker::OfflineTracker;
 use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};

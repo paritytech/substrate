@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -189,7 +189,7 @@ impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalExtrinsic<Ad
 mod tests {
 	use super::*;
 	use runtime_io::blake2_256;
-	use parity_codec_derive::{Encode, Decode};
+	use crate::codec::{Encode, Decode};
 	use serde_derive::{Serialize, Deserialize};
 
 	struct TestContext;

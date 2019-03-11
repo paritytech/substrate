@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -101,7 +101,7 @@ pub trait StorageDoubleMap {
 	{
 		let mut raw_prefix = Vec::new();
 		raw_prefix.extend(Self::PREFIX);
-		raw_prefix.extend(Encode::encode(&key));
+		key.encode_to(&mut raw_prefix);
 		raw_prefix
 	}
 

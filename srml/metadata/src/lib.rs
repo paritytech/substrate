@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,10 +26,7 @@
 use serde_derive::Serialize;
 #[cfg(feature = "std")]
 use parity_codec::{Decode, Input};
-#[cfg(feature = "std")]
-use parity_codec_derive::Decode;
 use parity_codec::{Encode, Output};
-use parity_codec_derive::Encode;
 use rstd::vec::Vec;
 
 #[cfg(feature = "std")]

@@ -22,7 +22,7 @@ use crate::parse_str_addr;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::prelude::*;
 use libp2p::core::swarm::{ConnectedPoint, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::core::{protocols_handler::ProtocolsHandler, Multiaddr, PeerId};
+use libp2p::core::{protocols_handler::ProtocolsHandler, Endpoint, Multiaddr, PeerId};
 use log::{debug, trace, warn};
 use smallvec::SmallVec;
 use std::{cmp, error, io, marker::PhantomData, path::Path, time::Duration, time::Instant};
@@ -177,6 +177,11 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		}
 	}
 
+	/// Returns the list of reserved nodes.
+	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.reserved_peers.iter()
+	}
+
 	/// Adds a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.topology.add_bootstrap_addr(&peer_id, addr);
@@ -192,6 +197,11 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 	/// method will disconnect it and return its index.
 	pub fn remove_reserved_peer(&mut self, peer_id: PeerId) {
 		self.reserved_peers.remove(&peer_id);
+	}
+
+	/// Returns true if we only accept reserved nodes.
+	pub fn is_reserved_only(&self) -> bool {
+		self.reserved_only
 	}
 
 	/// Start accepting all peers again if we weren't.
@@ -258,6 +268,24 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		}
 	}
 
+	/// Returns a list of all the peers that are banned, and until when.
+	pub fn banned_peers(&self) -> impl Iterator<Item = (&PeerId, Instant)> {
+		self.banned_peers.iter().map(|&(ref id, until)| (id, until))
+	}
+
+	/// Returns true if we try to open protocols with the given peer.
+	pub fn is_enabled(&self, peer_id: &PeerId) -> bool {
+		self.enabled_peers.contains_key(peer_id)
+	}
+
+	/// Returns the list of protocols we have open with the given peer.
+	pub fn open_protocols<'a>(&'a self, peer_id: &'a PeerId) -> impl Iterator<Item = ProtocolId> + 'a {
+		self.open_protocols
+			.iter()
+			.filter(move |(p, _)| p == peer_id)
+			.map(|(_, proto)| *proto)
+	}
+
 	/// Sends a message to a peer using the given custom protocol.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
@@ -303,11 +331,24 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		self.topology.cleanup();
 	}
 
+	/// Returns the list of peers in the topology.
+	pub fn known_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.topology.known_peers()
+	}
+
+	/// Returns a list of addresses known for this peer, and their reputation score.
+	pub fn known_addresses(&mut self, peer_id: &PeerId) -> impl Iterator<Item = (&Multiaddr, u32)> {
+		self.topology.addresses_of_peer(peer_id, true)
+	}
+
 	/// Updates the attempted connections to nodes.
 	///
 	/// Also updates `next_connect_to_nodes` with the earliest known moment when we need to
 	/// update connections again.
 	fn connect_to_nodes(&mut self, params: &mut PollParameters) {
+		// Value of `Instant::now()` grabbed once at the beginning.
+		let now = Instant::now();
+
 		// Make sure we are connected or connecting to all the reserved nodes.
 		for reserved in self.reserved_peers.iter() {
 			// TODO: don't generate an event if we're already in a pending connection (https://github.com/libp2p/rust-libp2p/issues/697)
@@ -321,7 +362,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			// We set a timeout to 60 seconds for trying to connect again, however in practice
 			// a round will happen as soon as we fail to dial, disconnect from a node, allow
 			// unreserved nodes, and so on.
-			self.next_connect_to_nodes.reset(Instant::now() + Duration::from_secs(60));
+			self.next_connect_to_nodes.reset(now + Duration::from_secs(60));
 			return
 		}
 
@@ -334,10 +375,34 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 				.count();
 			self.max_outgoing_connections - num_outgoing_connections
 		};
-
 		trace!(target: "sub-libp2p", "Connect-to-nodes round; attempting to fill {:?} slots",
 			num_to_open);
 
+		// We first try to enable existing connections.
+		for peer_id in &self.connected_peers {
+			if num_to_open == 0 {
+				break
+			}
+
+			if self.enabled_peers.contains_key(peer_id) {
+				continue;
+			}
+
+			if let Some((_, expire)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
+				if *expire >= now {
+					continue;
+				}
+			}
+
+			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (active)", peer_id);
+			num_to_open -= 1;
+			self.events.push(NetworkBehaviourAction::SendEvent {
+				peer_id: peer_id.clone(),
+				event: CustomProtosHandlerIn::Enable(Endpoint::Dialer),
+			});
+		}
+
+		// Then, try to open new connections.
 		let local_peer_id = params.local_peer_id().clone();
 		let (to_try, will_change) = self.topology.addrs_to_attempt();
 		for (peer_id, _) in to_try {
@@ -354,7 +419,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 			}
 
 			if let Some((_, ban_end)) = self.banned_peers.iter().find(|(p, _)| p == peer_id) {
-				if *ban_end > Instant::now() {
+				if *ban_end > now {
 					continue
 				}
 			}
@@ -364,7 +429,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		}
 
 		// Next round is when we expect the topology will change.
-		self.next_connect_to_nodes.reset(cmp::min(will_change, Instant::now() + Duration::from_secs(60)));
+		self.next_connect_to_nodes.reset(cmp::min(will_change, now + Duration::from_secs(60)));
 	}
 }
 
@@ -381,7 +446,7 @@ where
 	}
 
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		self.topology.addresses_of_peer(peer_id)
+		self.topology.addresses_of_peer(peer_id, false).map(|(a, _)| a.clone()).collect()
 	}
 
 	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
@@ -458,13 +523,13 @@ where
 			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (active)", peer_id);
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::EnableActive,
+				event: CustomProtosHandlerIn::Enable(Endpoint::Dialer),
 			});
 		} else {
 			trace!(target: "sub-libp2p", "Enabling custom protocols with {:?} (passive)", peer_id);
 			self.events.push(NetworkBehaviourAction::SendEvent {
 				peer_id: peer_id.clone(),
-				event: CustomProtosHandlerIn::EnablePassive,
+				event: CustomProtosHandlerIn::Enable(Endpoint::Listener),
 			});
 		}
 
@@ -581,10 +646,15 @@ where
 					messages,
 				}));
 			}
-			CustomProtosHandlerOut::ProtocolError { protocol_id, error } => {
-				warn!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
-					{:?}: {:?}", source, protocol_id, error);
-				self.ban_peer(source);
+			CustomProtosHandlerOut::ProtocolError { protocol_id, error, is_severe } => {
+				if is_severe {
+					warn!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
+						{:?}: {:?}", source, protocol_id, error);
+					self.ban_peer(source);
+				} else {
+					debug!(target: "sub-libp2p", "Network misbehaviour from {:?} with protocol \
+						{:?}: {:?}", source, protocol_id, error);
+				}
 			}
 		}
 	}

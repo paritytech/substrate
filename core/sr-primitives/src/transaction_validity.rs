@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 //! Transaction validity interface.
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
+use crate::codec::{Encode, Decode};
 
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;

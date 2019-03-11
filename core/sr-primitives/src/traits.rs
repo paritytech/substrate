@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,13 +23,12 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
-use substrate_primitives;
-use substrate_primitives::Blake2Hasher;
+use substrate_primitives::{self, Hasher, Blake2Hasher};
 use crate::codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
-pub use num_traits::ops::checked::{
-	CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, CheckedShl, CheckedShr,
+pub use num_traits::{
+	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
+	CheckedShl, CheckedShr, Saturating
 };
 use rstd::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -84,6 +83,8 @@ pub trait StaticLookup {
 	type Target;
 	/// Attempt a lookup.
 	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	/// Convert from Target back to Source.
+	fn unlookup(t: Self::Target) -> Self::Source;
 }
 
 /// A lookup implementation returning the input value.
@@ -93,6 +94,7 @@ impl<T: Codec + Clone + PartialEq + MaybeDebug> StaticLookup for IdentityLookup<
 	type Source = T;
 	type Target = T;
 	fn lookup(x: T) -> result::Result<T, &'static str> { Ok(x) }
+	fn unlookup(x: T) -> T { x }
 }
 impl<T> Lookup for IdentityLookup<T> {
 	type Source = T;
@@ -124,59 +126,6 @@ pub trait BlockNumberToHash {
 	fn genesis_hash(&self) -> Self::Hash {
 		self.block_number_to_hash(Zero::zero()).expect("All blockchains must know their genesis block hash; qed")
 	}
-}
-
-/// Charge bytes fee trait
-pub trait ChargeBytesFee<AccountId> {
-	/// Charge fees from `transactor` for an extrinsic (transaction) of encoded length
-	/// `encoded_len` bytes. Return Ok iff the payment was successful.
-	fn charge_base_bytes_fee(transactor: &AccountId, encoded_len: usize) -> Result<(), &'static str>;
-}
-
-/// Charge fee trait
-pub trait ChargeFee<AccountId>: ChargeBytesFee<AccountId> {
-	/// The type of fee amount.
-	type Amount;
-
-	/// Charge `amount` of fees from `transactor`. Return Ok iff the payment was successful.
-	fn charge_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Refund `amount` of previous charged fees from `transactor`. Return Ok iff the refund was successful.
-	fn refund_fee(transactor: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
-/// Transfer fungible asset trait
-pub trait TransferAsset<AccountId> {
-	/// The type of asset amount.
-	type Amount;
-
-	/// Transfer asset from `from` account to `to` account with `amount` of asset.
-	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Remove asset from `who` account by deducing `amount` in the account balances.
-	fn remove_from(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-
-	/// Add asset to `who` account by increasing `amount` in the account balances.
-	fn add_to(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
-}
-
-impl<T> ChargeBytesFee<T> for () {
-	fn charge_base_bytes_fee(_: &T, _: usize) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> ChargeFee<T> for () {
-	type Amount = ();
-
-	fn charge_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn refund_fee(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-}
-
-impl<T> TransferAsset<T> for () {
-	type Amount = ();
-
-	fn transfer(_: &T, _: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn remove_from(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
-	fn add_to(_: &T, _: Self::Amount) -> Result<(), &'static str> { Ok(()) }
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
@@ -236,7 +185,8 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord +
+	Saturating +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 {}
 impl<T:
@@ -253,7 +203,8 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord +
+	Saturating +
+	PartialOrd<Self> + Ord + Bounded +
 	HasCompact
 > SimpleArithmetic for T {}
 
@@ -349,7 +300,10 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + MaybeSerializeDebug + AsRef<[u8]> + AsMut<[u8]>;
+	type Output: Member + MaybeSerializeDebug + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + Copy + Default;
+
+	/// The associated hash_db Hasher type.
+	type Hasher: Hasher<Out=Self::Output>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -389,6 +343,7 @@ pub struct BlakeTwo256;
 
 impl Hash for BlakeTwo256 {
 	type Output = substrate_primitives::H256;
+	type Hasher = Blake2Hasher;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
 	}
@@ -530,6 +485,7 @@ impl<T: ::rstd::hash::Hash> MaybeHash for T {}
 pub trait MaybeHash {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeHash for T {}
+
 
 /// A type that can be used in runtime structures.
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}

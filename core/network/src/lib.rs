@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{
     NodeIndex, ProtocolId, Severity, Protocol, Multiaddr,
+	NetworkState, NetworkStatePeer, NetworkStateNotConnectedPeer, NetworkStatePeerEndpoint,
     obtain_private_key, build_multiaddr, PeerId, PublicKey
 };
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage, ConsensusEngineId};
