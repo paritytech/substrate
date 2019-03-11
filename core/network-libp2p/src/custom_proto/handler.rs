@@ -132,11 +132,6 @@ enum PerProtocolState<TMessage, TSubstream> {
 		reenable: bool,
 	},
 
-	/// We are trying to shut down the connection and thus should refuse any incoming connection.
-	/// Contains substreams that are being closed. Once all the substreams are closed, we close
-	/// the connection.
-	ShuttingDown(SmallVec<[RegisteredProtocolSubstream<TMessage, TSubstream>; 6]>),
-
 	/// We sometimes temporarily switch to this state during processing. If we are in this state
 	/// at the beginning of a method, that means something bad happend in the source code.
 	Poisoned,
@@ -232,10 +227,6 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				return_value = None;
 				PerProtocolState::Disabled { shutdown, reenable: true }
 			}
-			PerProtocolState::ShuttingDown(list) => {
-				return_value = None;
-				PerProtocolState::ShuttingDown(list)
-			}
 		};
 
 		return_value
@@ -289,58 +280,8 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 
 			PerProtocolState::Disabled { shutdown, .. } =>
 				PerProtocolState::Disabled { shutdown, reenable: false },
-			PerProtocolState::ShuttingDown(list) =>
-				PerProtocolState::ShuttingDown(list),
 		};
 
-		return_value
-	}
-
-	/// Shuts down all the substream. Returns `true` if the protocol was closed, `false` if it was
-	/// already closed or not open yet.
-	fn shutdown(&mut self) -> bool {
-		let mut return_value = false;
-		self.state = match mem::replace(&mut self.state, PerProtocolState::Poisoned) {
-			PerProtocolState::Poisoned => {
-				error!(target: "sub-libp2p", "Handler is in poisoned state");
-				PerProtocolState::Poisoned
-			}
-
-			PerProtocolState::Init { substreams: mut list, .. } => {
-				for s in &mut list { s.shutdown(); }
-				PerProtocolState::ShuttingDown(list)
-			}
-
-			PerProtocolState::Opening { .. } => {
-				PerProtocolState::ShuttingDown(SmallVec::new())
-			}
-
-			PerProtocolState::BackCompat { mut substream, mut shutdown } => {
-				substream.shutdown();
-				shutdown.push(substream);
-				return_value = true;
-				PerProtocolState::ShuttingDown(shutdown.into_iter().collect())
-			}
-
-			PerProtocolState::Normal(state) => {
-				let mut out: SmallVec<[_; 6]> = SmallVec::new();
-				out.extend(state.outgoing_substream.into_iter());
-				out.extend(state.incoming_substreams.into_iter());
-				out.extend(state.pending_response.into_iter().map(|(_, s)| s));
-				out.extend(state.pending_send_back.into_iter().map(|(_, s)| s));
-				for s in &mut out {
-					s.shutdown();
-				}
-				out.extend(state.shutdown.into_iter());
-				return_value = true;
-				PerProtocolState::ShuttingDown(out)
-			}
-
-			PerProtocolState::Disabled { shutdown, .. } =>
-				PerProtocolState::ShuttingDown(shutdown),
-			PerProtocolState::ShuttingDown(list) =>
-				PerProtocolState::ShuttingDown(list),
-		};
 		return_value
 	}
 
@@ -353,7 +294,7 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 		self.state = match mem::replace(&mut self.state, PerProtocolState::Poisoned) {
 			PerProtocolState::Poisoned => {
 				error!(target: "sub-libp2p", "Handler is in poisoned state; shutting down");
-				return_value = Some(ProtocolsHandlerEvent::Shutdown);
+				return_value = None;
 				PerProtocolState::Poisoned
 			}
 
@@ -467,12 +408,6 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 					return_value = None;
 					PerProtocolState::Disabled { shutdown, reenable }
 				}
-			}
-
-			PerProtocolState::ShuttingDown(mut list) => {
-				shutdown_list(&mut list);
-				return_value = None;
-				PerProtocolState::ShuttingDown(list)
 			}
 		};
 
@@ -793,12 +728,6 @@ where
 				shutdown.push(substream);
 				PerProtocolState::Disabled { shutdown, reenable: false }
 			}
-
-			PerProtocolState::ShuttingDown(mut list) => {
-				substream.shutdown();
-				list.push(substream);
-				PerProtocolState::ShuttingDown(list)
-			}
 		};
 	}
 
@@ -910,9 +839,6 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 	}
 
 	#[inline]
-	fn inject_inbound_closed(&mut self) {}
-
-	#[inline]
 	fn inject_dial_upgrade_error(&mut self, protocol_id: Self::OutboundOpenInfo, err: ProtocolsHandlerUpgrErr<io::Error>) {
 		let is_severe = match err {
 			ProtocolsHandlerUpgrErr::Upgrade(_) => true,
@@ -942,7 +868,7 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 				PerProtocolState::Init { .. } | PerProtocolState::Opening { .. } => {}
 				PerProtocolState::BackCompat { .. } | PerProtocolState::Normal { .. } =>
 					keep_forever = true,
-				PerProtocolState::Disabled { .. } | PerProtocolState::ShuttingDown(_) |
+				PerProtocolState::Disabled { .. } |
 				PerProtocolState::Poisoned => return KeepAlive::Now,
 			}
 		}
@@ -951,18 +877,6 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			KeepAlive::Forever
 		} else {
 			KeepAlive::Now
-		}
-	}
-
-	fn shutdown(&mut self) {
-		for protocol in &mut self.protocols {
-			if protocol.shutdown() {
-				let event = CustomProtosHandlerOut::CustomProtocolClosed {
-					protocol_id: protocol.protocol.id(),
-					result: Ok(())
-				};
-				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
-			}
 		}
 	}
 
@@ -983,16 +897,6 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			if let Some(event) = protocol.poll() {
 				return Ok(Async::Ready(event))
 			}
-		}
-
-		// Shut down the node if everything is closed.
-		let can_shut_down = self.protocols.iter().all(|p|
-			match p.state {
-				PerProtocolState::ShuttingDown(ref list) if list.is_empty() => true,
-				_ => false
-			});
-		if can_shut_down {
-			return Ok(Async::Ready(ProtocolsHandlerEvent::Shutdown))
 		}
 
 		Ok(Async::NotReady)
