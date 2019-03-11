@@ -141,7 +141,6 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 			pub fn store_metadata_name() -> &'static str {
 				#cratename_string
 			}
-
 		}
 
 		#extra_genesis
@@ -486,8 +485,12 @@ fn impl_store_items(
 ) -> TokenStream2 {
 	storage_lines.inner.iter().map(|sline| &sline.name)
 		.fold(TokenStream2::new(), |mut items, name| {
-		items.extend(quote!(type #name = #name<#traitinstance>;));
-		items
+			items.extend(
+				quote!(
+					type #name = #name<#traitinstance>;
+				)
+			);
+			items
 	})
 }
 
@@ -499,6 +502,7 @@ fn impl_store_fns(
 	let mut items = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
+			attrs,
 			name,
 			getter,
 			storage_type,
@@ -511,10 +515,14 @@ fn impl_store_fns(
 			let type_infos = get_type_infos(storage_type);
 			let value_type = type_infos.value_type;
 
+			// Propagate doc attributes.
+			let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 			let typ = type_infos.typ;
 			let item = match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{
+						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
 						}
@@ -522,6 +530,7 @@ fn impl_store_fns(
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{
+						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::storage::generator::Borrow<#key_type>>(key: K) -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
@@ -590,7 +599,7 @@ fn store_functions_to_metadata (
 			})
 			.unwrap_or_else(|| quote!( Default::default() ));
 		let mut docs = TokenStream2::new();
-		for attr in attrs.inner.iter().filter_map(|v| v.interpret_meta()) {
+		for attr in attrs.inner.iter().filter_map(|v| v.parse_meta().ok()) {
 			if let syn::Meta::NameValue(syn::MetaNameValue{
 				ref ident,
 				ref lit,
