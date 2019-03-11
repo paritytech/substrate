@@ -119,7 +119,6 @@ impl executive::ExecuteBlock<Block> for BlockExecutor {
 	fn execute_extrinsics_without_checks(_: NumberFor<Block>, extrinsics: Vec<<Block as BlockT>::Extrinsic>) {
 		execute_extrinsics_without_checks(extrinsics);
 	}
-
 }
 
 /// Execute a transaction outside of the block execution function.

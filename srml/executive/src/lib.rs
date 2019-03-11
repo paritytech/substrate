@@ -128,7 +128,7 @@ impl<
 
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
-		Self::execute_extrinsics_with_bookeeping(extrinsics, *header.number());
+		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
 		// any final checks
 		Self::final_checks(&header);
@@ -143,11 +143,11 @@ impl<
 		Self::initialise_block_impl(&block_number, &parent_hash, &extrinsics_root);
 
 		// execute extrinsics
-		Self::execute_extrinsics_with_bookeeping(extrinsics, block_number);
+		Self::execute_extrinsics_with_book_keeping(extrinsics, block_number);
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping
-	fn execute_extrinsics_with_bookeeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
+	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping.

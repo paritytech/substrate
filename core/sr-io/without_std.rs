@@ -63,7 +63,11 @@ pub struct ExchangeableFunction<T>(T);
 
 impl<T> ExchangeableFunction<T> {
 	/// Replace the implementation with `new_impl`.
-	pub fn replace_implementation(self: &'static mut Self, new_impl: T)  -> RestoreImplementation<T> {
+	///
+	/// # Returns
+	///
+	/// Returns the original implementation wrapped in [`RestoreImplementation`].
+	pub fn replace_implementation(&'static mut self, new_impl: T)  -> RestoreImplementation<T> {
 		let old = mem::replace(&mut self.0, new_impl);
 
 		RestoreImplementation(self, Some(old))
@@ -196,8 +200,8 @@ extern_functions! {
 	///
 	/// # Returns
 	///
-	/// - `0` if the change trie root was found.
-	/// - `1` if the change trie root was not found.
+	/// - `1` if the change trie root was found.
+	/// - `0` if the change trie root was not found.
 	fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_num: u64, result: *mut u8) -> u32;
 
 	/// A child storage function.

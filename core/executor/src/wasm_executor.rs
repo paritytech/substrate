@@ -393,10 +393,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.map_err(|_| UserError("Invalid attempt to get parent_hash in ext_storage_changes_root"))?;
 		parent_hash.as_mut().copy_from_slice(&raw_parent_hash[..]);
 		let r = this.ext.storage_changes_root(parent_hash, parent_number);
-		if let Some(ref r) = r {
+		if let Some(r) = r {
 			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
+			Ok(1)
+		} else {
+			Ok(0)
 		}
-		Ok(if r.is_some() { 1u32 } else { 0u32 })
 	},
 	ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
@@ -681,7 +683,7 @@ impl WasmExecutor {
 		create_parameters: F,
 		filter_result: FR,
 	) -> Result<R> {
-		let module = ::wasmi::Module::from_buffer(code)?;
+		let module = wasmi::Module::from_buffer(code)?;
 		let module = self.prepare_module(ext, heap_pages, &module)?;
 		self.call_in_wasm_module_with_custom_signature(ext, &module, method, create_parameters, filter_result)
 	}
@@ -714,7 +716,7 @@ impl WasmExecutor {
 			|res, memory| {
 				if let Some(I64(r)) = res {
 					let offset = r as u32;
-					let length = (r >> 32) as u32 as usize;
+					let length = (r >> 32) as usize;
 					memory.get(offset, length).map_err(|_| ErrorKind::Runtime.into()).map(Some)
 				} else {
 					Ok(None)
@@ -759,11 +761,9 @@ impl WasmExecutor {
 			&mut fec
 		);
 		let result = match result {
-			Ok(val) => {
-				match filter_result(val, &memory)? {
-					Some(val) => Ok(val),
-					None => Err(ErrorKind::InvalidReturn.into()),
-				}
+			Ok(val) => match filter_result(val, &memory)? {
+				Some(val) => Ok(val),
+				None => Err(ErrorKind::InvalidReturn.into()),
 			},
 			Err(e) => {
 				trace!(target: "wasm-executor", "Failed to execute code with {} pages", memory.current_size().0);

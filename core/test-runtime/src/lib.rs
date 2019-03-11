@@ -82,7 +82,9 @@ impl Transfer {
 	/// Convert into a signed extrinsic.
 	#[cfg(feature = "std")]
 	pub fn into_signed_tx(self) -> Extrinsic {
-		let signature = keyring::Keyring::from_raw_public(self.from.to_fixed_bytes()).unwrap().sign(&self.encode()).into();
+		let signature = keyring::Keyring::from_raw_public(
+			self.from.to_fixed_bytes()
+		).expect("Creates keyring from public key.").sign(&self.encode()).into();
 		Extrinsic::Transfer(self, signature)
 	}
 }
