@@ -154,7 +154,7 @@
 //! 
 //! # References
 //! 
-//! 1. This document is written as a more verbose version of the original [Staking.md](./Staking.md) file. Some sections, (denoted by `[1]`) are taken directly from the aforementioned document.
+//! 1. This document is written as a more verbose version of the original [Staking.md](../Staking.md) file. Some sections, (denoted by `[1]`) are taken directly from the aforementioned document.
 
 
 #![cfg_attr(not(feature = "std"), no_std)]
