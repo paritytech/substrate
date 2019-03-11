@@ -29,6 +29,7 @@ use sandbox;
 use system;
 
 /// Trap error codes
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 enum ErrorCode {
 	OutOfGas = 1,          // Execution ran out of gas
 	MemoryOutOfBounds = 2, // Contract attempted to access memory "out of bounds"
@@ -47,7 +48,7 @@ impl ErrorCode {
 }
 
 /// Trap types
-#[allow(dead_code)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 enum Trap {
 	Success,
 	Error(ErrorCode),
@@ -632,3 +633,55 @@ define_env!(Env, <E: Ext>,
 		write_sandbox_memory(ctx.schedule, &mut ctx.gas_meter, &ctx.memory, dest_ptr, src).map_err(|_| sandbox::HostError)
 	},
 );
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::Test;
+	use crate::wasm::tests::MockExt;
+	use srml_support::assert_err;
+
+	#[test]
+	fn charge_gas_traps_with_out_of_gas() {
+		let schedule = Schedule::<u64>::default();
+		let mut gas_meter = GasMeter::<Test>::with_limit(0, 1);
+
+		assert_err!(
+			charge_gas(&mut gas_meter, &schedule, RuntimeToken::Explicit(1)),
+			Trap::Error(ErrorCode::OutOfGas)
+		);
+	}
+
+	#[test]
+	fn read_sandbox_memory_traps_with_memory_out_of_bounds() {
+		let mut ext = MockExt::default();
+		let mut gas_meter = GasMeter::<Test>::with_limit(10_000, 1);
+		let schedule = Schedule::<u64>::default();
+		let mut ctx = Runtime::new(
+			&mut ext,
+			&[],
+			EmptyOutputBuf::new(),
+			&schedule,
+			sandbox::Memory::new(0, None).unwrap(),
+			&mut gas_meter,
+		);
+
+		assert_err!(
+			read_sandbox_memory(&mut ctx, 10, 10),
+			Trap::Error(ErrorCode::MemoryOutOfBounds)
+		)
+	}
+
+	#[test]
+	fn write_sandbox_memory_traps_with_memory_out_of_bounds() {
+		let schedule = Schedule::<u64>::default();
+		let mut gas_meter = GasMeter::<Test>::with_limit(100, 1);
+		let memory = sandbox::Memory::new(0, None).unwrap();
+
+		assert_err!(
+			write_sandbox_memory(&schedule, &mut gas_meter, &memory, 10, &vec![]),
+			Trap::Error(ErrorCode::MemoryOutOfBounds)
+		)
+	}
+
+}

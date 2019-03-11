@@ -154,6 +154,7 @@ impl EmptyOutputBuf {
 }
 
 /// `OutputBuf` is the end result of filling an `EmptyOutputBuf`.
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct OutputBuf(Vec<u8>);
 
 #[must_use]

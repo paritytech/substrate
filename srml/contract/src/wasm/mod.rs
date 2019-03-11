@@ -17,10 +17,10 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use crate::{CodeHash, Schedule, Trait};
-use crate::wasm::env_def::FunctionImplProvider;
-use crate::exec::{Ext, EmptyOutputBuf, VmExecResult};
+use crate::exec::{EmptyOutputBuf, Ext, VmExecResult};
 use crate::gas::GasMeter;
+use crate::wasm::env_def::FunctionImplProvider;
+use crate::{CodeHash, Schedule, Trait};
 
 use rstd::prelude::*;
 use parity_codec::{Encode, Decode};
@@ -32,8 +32,8 @@ mod code_cache;
 mod prepare;
 mod runtime;
 
-use self::runtime::{to_execution_result, Runtime};
 use self::code_cache::load as load_code;
+use self::runtime::{to_execution_result, Runtime};
 
 pub use self::code_cache::save as save_code;
 
@@ -117,8 +117,8 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 		let memory =
 			sandbox::Memory::new(exec.prefab_module.initial, Some(exec.prefab_module.maximum))
 				.unwrap_or_else(|_| {
-				// unlike `.expect`, explicit panic preserves the source location.
-				// Needed as we can't use `RUST_BACKTRACE` in here.
+					// unlike `.expect`, explicit panic preserves the source location.
+					// Needed as we can't use `RUST_BACKTRACE` in here.
 					panic!(
 						"exec.prefab_module.initial can't be greater than exec.prefab_module.maximum;
 						thus Memory::new must not fail;
@@ -170,16 +170,16 @@ impl<'a, T: Trait> crate::exec::Vm<T> for WasmVm<'a, T> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
-	use std::collections::HashMap;
-	use substrate_primitives::H256;
-	use crate::exec::{CallReceipt, Ext, InstantiateReceipt, EmptyOutputBuf};
+	use crate::exec::{CallReceipt, EmptyOutputBuf, Ext, InstantiateReceipt};
 	use crate::gas::GasMeter;
-	use crate::tests::{Test, Call};
-	use wabt;
+	use crate::tests::{Call, Test};
 	use crate::wasm::prepare::prepare_contract;
 	use crate::CodeHash;
+	use std::collections::HashMap;
+	use substrate_primitives::H256;
+	use wabt;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct DispatchEntry(Call);
@@ -273,7 +273,7 @@ mod tests {
 			&1111
 		}
 
-		fn random_seed(&self) -> &H256{
+		fn random_seed(&self) -> &H256 {
 			&self.random_seed
 		}
 	}
