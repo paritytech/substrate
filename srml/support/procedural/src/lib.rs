@@ -58,6 +58,14 @@ use proc_macro::TokenStream;
 /// ```
 /// or when at least one storage field requires default initialization (both `get` and `config` or `build`).
 /// This struct can be expose as `Config` by `decl_runtime` macro.
+///
+/// Available storage
+/// * Value: `Foo: u32;` implements `StorageValue`
+/// * Map: `Foo: map u32 => u32;` implements `StorageMap`
+/// * Linked map: `Foo: linked_map u32 => u32;` implements `StorageMap` and `EnumerableStorageMap`
+/// * Double map: `Foo: double_map u32, $hash(u32) => u32;` implements `StorageDoubleMap` with
+/// hasher $hash one available in `Hashable` trait
+///   /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::transformation::decl_storage_impl(input)

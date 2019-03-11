@@ -94,6 +94,8 @@ impl<H> UnhashedStorage for (crate::rstd::cell::RefCell<&mut sr_primitives::Stor
 /// The storage key (i.e. the key under which the `Value` will be stored) is created from two parts.
 /// The first part is a hash of a concatenation of the `PREFIX` and `Key1`. And the second part
 /// is a hash of a `Key2`.
+///
+/// /!\ be careful while choosing the Hash, indeed malicious could craft second keys to lower the trie.
 pub trait StorageDoubleMap<K1: codec::Codec, K2: codec::Codec, V: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
