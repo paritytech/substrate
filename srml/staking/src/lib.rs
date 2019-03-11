@@ -21,7 +21,7 @@
 //! <!-- Original author of paragraph: @gavofyork -->
 //! The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under normal operation but are held at pain of "slash" (expropriation) should they be found not to bee discharhing their duties properly [[1](#references)]. 
 //! 
-//! ### Overview 
+//! ## Overview 
 //! 
 //! ### Terminology
 //! <!-- Original author of paragraph: @gavofyork -->
