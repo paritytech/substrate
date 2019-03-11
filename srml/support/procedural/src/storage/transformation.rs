@@ -512,7 +512,7 @@ fn decl_storage_items(
 		}
 
 		impls.extend(quote! {
-			pub trait #instantiable {
+			pub trait #instantiable: 'static {
 				const INSTANCE_PREFIX: &'static str;
 				#method_defs
 			}

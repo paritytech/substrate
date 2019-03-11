@@ -115,15 +115,15 @@ mod system {
 mod module1 {
 	use super::*;
 
-	pub trait Trait<Instance>: system::Trait {
-		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
-		type Origin: From<Origin<Self, Instance>>;
-		type Log: From<Log<Self, Instance>> + Into<system::DigestItemOf<Self>>;
+	pub trait Trait<I>: system::Trait {
+		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+		type Origin: From<Origin<Self, I>>;
+		type Log: From<Log<Self, I>> + Into<system::DigestItemOf<Self>>;
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait<Instance>, Instance: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
-			fn deposit_event<T, Instance>() = default;
+		pub struct Module<T: Trait<I>, I: InstantiableThing> for enum Call where origin: <T as system::Trait>::Origin {
+			fn deposit_event<T, I>() = default;
 
 			fn one() {
 				Self::deposit_event(RawEvent::AnotherVariant(3));
@@ -132,15 +132,15 @@ mod module1 {
 		}
 	}
 
-	impl<T: Trait<Instance>, Instance: InstantiableThing> Module<T, Instance> {
+	impl<T: Trait<I>, I: InstantiableThing> Module<T, I> {
 		/// Deposit one of this module's logs.
-		fn deposit_log(log: Log<T, Instance>) {
-			<system::Module<T>>::deposit_log(<T as Trait<Instance>>::Log::from(log).into());
+		fn deposit_log(log: Log<T, I>) {
+			<system::Module<T>>::deposit_log(<T as Trait<I>>::Log::from(log).into());
 		}
 	}
 
 	decl_storage! {
-		trait Store for Module<T: Trait<Instance>, Instance: InstantiableThing> as Module1 {
+		trait Store for Module<T: Trait<I>, I: InstantiableThing> as Module1 {
 			pub Value config(value): u64;
 			pub Map: map u32 => u64;
 			pub LinkedMap: linked_map u32 => u64;
@@ -148,7 +148,7 @@ mod module1 {
 	}
 
 	decl_event! {
-		pub enum Event<T, Instance> where Phantom = rstd::marker::PhantomData<T> {
+		pub enum Event<T, I> where Phantom = rstd::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
 		}
@@ -156,28 +156,28 @@ mod module1 {
 
 	#[derive(PartialEq, Eq, Clone)]
 	#[cfg_attr(feature = "std", derive(Debug))]
-	pub enum Origin<T: Trait<Instance>, Instance> {
+	pub enum Origin<T: Trait<I>, I> {
 		Members(u32),
-		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+		_Phantom(rstd::marker::PhantomData<(T, I)>),
 	}
 
-	pub type Log<T, Instance> = RawLog<
+	pub type Log<T, I> = RawLog<
 		T,
-		Instance,
+		I,
 	>;
 
 	/// A logs in this module.
 	#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
 	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
-	pub enum RawLog<T, Instance> {
-		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+	pub enum RawLog<T, I> {
+		_Phantom(rstd::marker::PhantomData<(T, I)>),
 		AmountChange(u32),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<Instance>, Instance: InstantiableThing> ProvideInherent for Module<T, Instance> {
-		type Call = Call<T, Instance>;
+	impl<T: Trait<I>, I: InstantiableThing> ProvideInherent for Module<T, I> {
+		type Call = Call<T, I>;
 		type Error = MakeFatalError<RuntimeString>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
@@ -197,23 +197,23 @@ mod module1 {
 mod module2 {
 	use super::*;
 
-	pub trait Trait<Instance=DefaultInstance>: system::Trait {
+	pub trait Trait<I=DefaultInstance>: system::Trait {
 		type Amount: Parameter + Default;
-		type Event: From<Event<Self, Instance>> + Into<<Self as system::Trait>::Event>;
-		type Origin: From<Origin<Self, Instance>>;
-		type Log: From<Log<Self, Instance>> + Into<system::DigestItemOf<Self>>;
+		type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
+		type Origin: From<Origin<Self, I>>;
+		type Log: From<Log<Self, I>> + Into<system::DigestItemOf<Self>>;
 	}
 
-	impl<T: Trait<Instance>, Instance: Instantiable> Currency for Module<T, Instance> {}
+	impl<T: Trait<I>, I: Instance> Currency for Module<T, I> {}
 
 	decl_module! {
-		pub struct Module<T: Trait<Instance>, Instance: Instantiable=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
-			fn deposit_event<T, Instance>() = default;
+		pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as system::Trait>::Origin {
+			fn deposit_event<T, I>() = default;
 		}
 	}
 
 	decl_storage! {
-		trait Store for Module<T: Trait<Instance>, Instance: Instantiable=DefaultInstance> as Module2 {
+		trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Module2 {
 			pub Value config(value): T::Amount;
 			pub Map config(map): map u64 => u64;
 			pub LinkedMap config(linked_map): linked_map u64 => u64;
@@ -222,35 +222,35 @@ mod module2 {
 	}
 
 	decl_event! {
-		pub enum Event<T, Instance=DefaultInstance> where Amount = <T as Trait<Instance>>::Amount {
+		pub enum Event<T, I=DefaultInstance> where Amount = <T as Trait<I>>::Amount {
 			Variant(Amount),
 		}
 	}
 
 	#[derive(PartialEq, Eq, Clone)]
 	#[cfg_attr(feature = "std", derive(Debug))]
-	pub enum Origin<T: Trait<Instance>, Instance=DefaultInstance> {
+	pub enum Origin<T: Trait<I>, I=DefaultInstance> {
 		Members(u32),
-		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+		_Phantom(rstd::marker::PhantomData<(T, I)>),
 	}
 
-	pub type Log<T, Instance=DefaultInstance> = RawLog<
+	pub type Log<T, I=DefaultInstance> = RawLog<
 		T,
-		Instance,
+		I,
 	>;
 
 	/// A logs in this module.
 	#[cfg_attr(feature = "std", derive(serde_derive::Serialize, Debug))]
 	#[derive(parity_codec::Encode, parity_codec::Decode, PartialEq, Eq, Clone)]
-	pub enum RawLog<T, Instance=DefaultInstance> {
-		_Phantom(rstd::marker::PhantomData<(T, Instance)>),
+	pub enum RawLog<T, I=DefaultInstance> {
+		_Phantom(rstd::marker::PhantomData<(T, I)>),
 		AmountChange(u32),
 	}
 
 	pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"12345678";
 
-	impl<T: Trait<Instance>, Instance: Instantiable> ProvideInherent for Module<T, Instance> {
-		type Call = Call<T, Instance>;
+	impl<T: Trait<I>, I: Instance> ProvideInherent for Module<T, I> {
+		type Call = Call<T, I>;
 		type Error = MakeFatalError<RuntimeString>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
