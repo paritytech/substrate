@@ -487,6 +487,7 @@ macro_rules! decl_module {
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			#[doc(hidden)]
 			$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
 				{ $( $impl )* }
 				Ok(())
@@ -503,6 +504,7 @@ macro_rules! decl_module {
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			#[doc(hidden)]
 			$vis fn $name($( $param: $param_ty ),* ) -> $result {
 				$( $impl )*
 			}
@@ -518,6 +520,7 @@ macro_rules! decl_module {
 		) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			#[doc(hidden)]
 			$vis fn $name(
 				$origin: $origin_ty $(, $param: $param_ty )*
 			) -> $crate::dispatch::Result {
