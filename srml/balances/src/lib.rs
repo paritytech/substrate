@@ -327,7 +327,7 @@ impl<T: Trait> Module<T> {
 		if transactor != dest {
 			T::ChargeFee::charge_fee(transactor, fee)?;
 
-			Self::set_free_balance(transactor, new_from_balance - fee);
+			Self::set_free_balance(transactor, new_from_balance);
 			Self::set_free_balance_creating(dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor.clone(), dest.clone(), value, fee));
 		}
