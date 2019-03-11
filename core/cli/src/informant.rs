@@ -85,6 +85,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			telemetry!(
 				SUBSTRATE_INFO;
 				"system.interval";
+				"network_state" => format!("{:?}", network.network_state()),
 				"status" => format!("{}{}", status, target),
 				"peers" => num_peers,
 				"height" => best_number,
