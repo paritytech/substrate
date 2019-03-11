@@ -284,6 +284,31 @@ fn balance_transfer_works() {
 }
 
 #[test]
+fn balance_transfer_with_creation_fee_works() {
+	with_externalities(&mut ExtBuilder::default().creation_fee(3).build(), || {
+		Balances::set_free_balance(&1, 111);
+		Balances::increase_total_stake_by(111);
+		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
+		// new_from_balance = balance - transfer_amount - creation_fee
+		assert_eq!(Balances::total_balance(&1), 111 - 69 - 3);
+		assert_eq!(Balances::total_balance(&2), 69);
+	});
+}
+
+#[test]
+fn balance_transfer_with_transfer_fee_works() {
+	with_externalities(&mut ExtBuilder::default().transfer_fee(3).build(), || {
+		Balances::set_free_balance(&1, 111);
+		Balances::increase_total_stake_by(111);
+		Balances::set_free_balance(&2, 7);
+		assert_ok!(Balances::transfer(Some(1).into(), 2, 69));
+		// new_balance = balance - transfer_amount - transfer_fee
+		assert_eq!(Balances::total_balance(&1), 111 - 69 - 3);
+		assert_eq!(Balances::total_balance(&2), 7 + 69);
+	});
+}
+
+#[test]
 fn reserving_balance_should_work() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		Balances::set_free_balance(&1, 111);
