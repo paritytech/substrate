@@ -23,7 +23,7 @@ The timestamp module is the recommended way to query the on-chain time instead o
 * `Now`: `Moment` - The current timestamp represented as **total seconds from the unix epoch**.
 * `BlockPeriod`: `Moment` - The minimum (and advised) period between blocks.
 
-### Public Inspection functions - Immutable (getters)
+### Public Immutable functions
 
 #### get()
 
@@ -35,7 +35,7 @@ Returns the timestamp as `Moment`.
 
 Get the block period for the chain. Return the block period as the `Moment` type.
 
-### Public Mutable functions (changing state)
+### Public Mutable functions
 
 #### set(origin, now: T::Moment)
 
@@ -56,9 +56,9 @@ The timestamp module defines and implements the trait `TimestampInherentData` fo
 
 ## Usage
 
-The following example show how to use the timestamp module in your custom module to query the current timestamp.
+The following example shows how to use the timestamp module in your custom module to query the current timestamp.
 
-In your custom module, after importing the `timestamp` module and deriving your module's configuration trait with the timestamp trait, call the timestamp module's get function to get the current timestamp,
+In your custom module, after importing the `timestamp` module and deriving your module's configuration trait with the timestamp trait, call the timestamp module's `get` function to get the current timestamp,
 
 ```
 let now = <timestamp::Module<T>>::get();
