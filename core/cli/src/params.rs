@@ -215,6 +215,18 @@ pub struct RunCmd {
 	)]
 	pub block_construction_execution: ExecutionStrategy,
 
+	/// The means of execution used when calling into the runtime while constructing blocks.
+	#[structopt(
+		long = "offchain-worker-execution",
+		value_name = "STRATEGY",
+		raw(
+			possible_values = "&ExecutionStrategy::variants()",
+			case_insensitive = "true",
+			default_value = r#""NativeWhenPossible""#
+		)
+	)]
+	pub offchain_worker_execution: ExecutionStrategy,
+
 	/// The means of execution used when calling into the runtime while not syncing, importing or constructing blocks.
 	#[structopt(
 		long = "other-execution",
@@ -227,7 +239,7 @@ pub struct RunCmd {
 	)]
 	pub other_execution: ExecutionStrategy,
 
-	
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,

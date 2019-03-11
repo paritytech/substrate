@@ -6,8 +6,6 @@ license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
-[lib]
-
 [dependencies]
 client = { package = "substrate-client", path = "../../core/client" }
 consensus = { package = "substrate-consensus-common", path = "../../core/consensus/common" }

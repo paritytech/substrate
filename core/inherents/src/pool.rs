@@ -16,7 +16,7 @@
 
 //! Inherents Pool
 
-use std::{fmt, mem};
+use std::{fmt, mem, vec};
 use parking_lot::Mutex;
 
 /// Inherents Pool
@@ -30,7 +30,7 @@ pub struct InherentsPool<T> {
 impl<T> Default for InherentsPool<T> {
 	fn default() -> Self {
 		InherentsPool {
-			data: Mutex::new(vec![]),
+			data: Default::default(),
 		}
 	}
 }

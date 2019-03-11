@@ -82,7 +82,7 @@ impl<C, Block> OffchainWorkers<C, Block> where
 		let has_api = runtime.has_api::<OffchainWorkerApi<Block>>(&at);
 		debug!("Checking offchain workers at {:?}: {:?}", at, has_api);
 
-		if let Ok(true) = has_api {
+		if has_api.unwrap_or(false) {
 			let (api, runner) = api::Api::new(pool.clone(), self.inherents_pool.clone(), at.clone());
 			self.executor.spawn(runner.process());
 

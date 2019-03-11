@@ -1351,31 +1351,22 @@ impl<B, E, Block, RA> CallRuntimeAt<Block> for Client<B, E, Block, RA> where
 			ExecutionContext::Other => self.execution_strategies.other.get_manager(),
 		};
 
-		if let ExecutionContext::OffchainWorker(mut ext) = context {
-			self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
-				at,
-				function,
-				&args,
-				changes,
-				initialised_block,
-				|| self.prepare_environment_block(at),
-				manager,
-				native_call,
-				Some(&mut ext),
-			)
-		} else {
-			self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
-				at,
-				function,
-				&args,
-				changes,
-				initialised_block,
-				|| self.prepare_environment_block(at),
-				manager,
-				native_call,
-				NeverOffchainExt::new(),
-			)
-		}
+		let mut offchain_extensions = match context {
+			ExecutionContext::OffchainWorker(ext) => Some(ext),
+			_ => None,
+		};
+
+		self.executor.contextual_call::<_, _, fn(_,_) -> _,_,_>(
+			at,
+			function,
+			&args,
+			changes,
+			initialised_block,
+			|| self.prepare_environment_block(at),
+			manager,
+			native_call,
+			offchain_extensions.as_mut(),
+		)
 	}
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> error::Result<RuntimeVersion> {

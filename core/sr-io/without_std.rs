@@ -408,9 +408,10 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 /// Depending on the kind of extrinsic it will either be:
 /// 1. scheduled to be included in the next produced block (inherent)
 /// 2. added to the pool and propagated (transaction)
-pub fn submit_extrinsic(data: Vec<u8>) {
+pub fn submit_extrinsic<T: codec::Encode>(data: &T) {
+	let encoded_data = codec::Encode::encode(data);
 	unsafe {
-		ext_submit_extrinsic(data.as_ptr(), data.len() as u32)
+		ext_submit_extrinsic(encoded_data.as_ptr(), encoded_data.len() as u32)
 	}
 }
 
