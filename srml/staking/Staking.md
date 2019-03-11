@@ -41,7 +41,7 @@ A `validate` transaction takes a parameter of type `ValidatorPrefs`; this encode
 
 The latter option, `validator_payment`, allows a validator to reserve some amount of funds for themselves before the rest is shared out, *pro rata* amongst itself and the nominators. By "default", this is zero which means the validator and nominators partake in the rewards equally. However, by raising this, the validator may reserve some of the funds for themselves, making them a less attractive financial proposal compared to other less "greedy" validators. This allows over-subscribed validators to monetise their reputation and provides a macroeconomic mechanism of redistributing nominations between different validators.
 
-### Nonminating
+### Nominating
 
 A `nominate` transaction take a single parameter which is the set of validator identities the nominator approves of their stake backing. Nomination does not allow control of *how much* of the stake backs any individual validator. If a staker wishes to have such fine-grained control, they could split their funds between several accounts and stake each individually to effect such a arrangement.
 
