@@ -130,14 +130,17 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		}
 		impl<#traitinstance: 'static + #traittype> #module_ident<#traitinstance> {
 			#impl_store_fns
+			#[doc(hidden)]
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
 					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
 			}
+			#[doc(hidden)]
 			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
 				#store_functions_to_metadata
 			}
+			#[doc(hidden)]
 			pub fn store_metadata_name() -> &'static str {
 				#cratename_string
 			}
