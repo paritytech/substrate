@@ -234,7 +234,7 @@ fn decl_store_extra_genesis(
 
 						let v = (#builder)(&self);
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
-						
+
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -608,6 +608,7 @@ fn store_functions_to_metadata (
 		};
 		items.extend(item);
 		let def_get = quote! {
+			#[doc(hidden)]
 			pub struct #struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
