@@ -256,7 +256,6 @@ fn decl_store_extra_genesis(
 						use #scrate::rstd::{cell::RefCell, marker::PhantomData};
 						use #scrate::codec::{Encode, Decode};
 
-						let storage = (RefCell::new(&mut r), PhantomData::<Self>::default());
 						let data = (#builder)(&self);
 						for (k1, k2, v) in data.into_iter() {
 							<#name<#traitinstance> as #scrate::storage::unhashed::generator::StorageDoubleMap<#key1_type, #key2_type, #typ>>::insert(&k1, &k2, &v, &storage);
