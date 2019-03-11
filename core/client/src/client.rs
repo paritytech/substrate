@@ -276,6 +276,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
+			// TODO: this should be moved in #1412
 			let genesis_authorities_len: Option<u32> = genesis_storage
 				.get(well_known_keys::AUTHORITY_COUNT)
 				.and_then(|v| Decode::decode(&mut &v[..]));
