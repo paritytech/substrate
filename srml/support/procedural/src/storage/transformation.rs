@@ -130,18 +130,20 @@ pub fn decl_storage_impl(input: TokenStream) -> TokenStream {
 		}
 		impl<#traitinstance: 'static + #traittype> #module_ident<#traitinstance> {
 			#impl_store_fns
+			#[doc(hidden)]
 			pub fn store_metadata() -> #scrate::storage::generator::StorageMetadata {
 				#scrate::storage::generator::StorageMetadata {
 					functions: #scrate::storage::generator::DecodeDifferent::Encode(#store_functions_to_metadata) ,
 				}
 			}
+			#[doc(hidden)]
 			pub fn store_metadata_functions() -> &'static [#scrate::storage::generator::StorageFunctionMetadata] {
 				#store_functions_to_metadata
 			}
+			#[doc(hidden)]
 			pub fn store_metadata_name() -> &'static str {
 				#cratename_string
 			}
-
 		}
 
 		#extra_genesis
@@ -168,6 +170,7 @@ fn decl_store_extra_genesis(
 	for sline in storage_lines.inner.iter() {
 
 		let DeclStorageLine {
+			attrs,
 			name,
 			getter,
 			config,
@@ -188,7 +191,13 @@ fn decl_store_extra_genesis(
 				let ident = &getter.getfn.content;
 				quote!( #ident )
 			} else {
-				return Err(syn::Error::new_spanned(name, format!("Invalid storage definiton, couldn't find config identifier: storage must either have a get identifier `get(ident)` or a defined config identifier `config(ident)`")));
+				return Err(
+					Error::new_spanned(
+						name,
+						"Invalid storage definiton, couldn't find config identifier: storage must either have a get identifier \
+						`get(ident)` or a defined config identifier `config(ident)`"
+					)
+				);
 			};
 			if type_infos.kind.is_simple() && ext::has_parametric_type(type_infos.value_type, traitinstance) {
 				is_trait_needed = true;
@@ -199,13 +208,17 @@ fn decl_store_extra_genesis(
 			if let DeclStorageTypeInfosKind::Map { key_type, .. } = type_infos.kind {
 				serde_complete_bound.insert(key_type);
 			}
+
+			// Propagate doc attributes.
+			let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 			let storage_type = type_infos.typ.clone();
 			config_field.extend(match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
-					quote!( pub #ident: #storage_type, )
+					quote!( #( #[ #attrs ] )* pub #ident: #storage_type, )
 				},
 				DeclStorageTypeInfosKind::Map {key_type, .. } => {
-					quote!( pub #ident: Vec<(#key_type, #storage_type)>, )
+					quote!( #( #[ #attrs ] )* pub #ident: Vec<(#key_type, #storage_type)>, )
 				},
 			});
 			opt_build = Some(build.as_ref().map(|b| &b.expr.content).map(|b|quote!( #b ))
@@ -234,7 +247,7 @@ fn decl_store_extra_genesis(
 
 						let v = (#builder)(&self);
 						<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>>::put(&v, &storage);
-						
+
 					}}
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
@@ -475,8 +488,12 @@ fn impl_store_items(
 ) -> TokenStream2 {
 	storage_lines.inner.iter().map(|sline| &sline.name)
 		.fold(TokenStream2::new(), |mut items, name| {
-		items.extend(quote!(type #name = #name<#traitinstance>;));
-		items
+			items.extend(
+				quote!(
+					type #name = #name<#traitinstance>;
+				)
+			);
+			items
 	})
 }
 
@@ -488,6 +505,7 @@ fn impl_store_fns(
 	let mut items = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
+			attrs,
 			name,
 			getter,
 			storage_type,
@@ -500,10 +518,14 @@ fn impl_store_fns(
 			let type_infos = get_type_infos(storage_type);
 			let value_type = type_infos.value_type;
 
+			// Propagate doc attributes.
+			let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 			let typ = type_infos.typ;
 			let item = match type_infos.kind {
 				DeclStorageTypeInfosKind::Simple => {
 					quote!{
+						#( #[ #attrs ] )*
 						pub fn #get_fn() -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageValue<#typ>> :: get(&#scrate::storage::RuntimeStorage)
 						}
@@ -511,6 +533,7 @@ fn impl_store_fns(
 				},
 				DeclStorageTypeInfosKind::Map { key_type, .. } => {
 					quote!{
+						#( #[ #attrs ] )*
 						pub fn #get_fn<K: #scrate::storage::generator::Borrow<#key_type>>(key: K) -> #value_type {
 							<#name<#traitinstance> as #scrate::storage::generator::StorageMap<#key_type, #typ>> :: get(key.borrow(), &#scrate::storage::RuntimeStorage)
 						}
@@ -579,7 +602,7 @@ fn store_functions_to_metadata (
 			})
 			.unwrap_or_else(|| quote!( Default::default() ));
 		let mut docs = TokenStream2::new();
-		for attr in attrs.inner.iter().filter_map(|v| v.interpret_meta()) {
+		for attr in attrs.inner.iter().filter_map(|v| v.parse_meta().ok()) {
 			if let syn::Meta::NameValue(syn::MetaNameValue{
 				ref ident,
 				ref lit,
@@ -608,6 +631,7 @@ fn store_functions_to_metadata (
 		};
 		items.extend(item);
 		let def_get = quote! {
+			#[doc(hidden)]
 			pub struct #struct_name<#traitinstance>(pub #scrate::rstd::marker::PhantomData<#traitinstance>);
 			#[cfg(feature = "std")]
 			#[allow(non_upper_case_globals)]
