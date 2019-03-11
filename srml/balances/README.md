@@ -1,8 +1,8 @@
-= Balances Module
+# Balances Module
 
 The balances module provides the functionality for handling balances.
 
-== Overview
+## Overview
 
 The balances module provides functions for:
 
@@ -18,16 +18,16 @@ The balances module provides functions for:
 
 The dispatchable function `transfer` ensures that the sender has signed the transaction. When using the publicly exposed functions in the implementation, you will need to do these checks in your runtime, as many functions will affect storage without ensuring, for example, that the sender is the signer.
 
-== Public Interface
+## Public Interface
 
-=== Types
+### Types
 
 - Balance
 - OnFreeBalanceZero
 - OnNewAccount
 - Event
 
-These are link:https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#specifying-placeholder-types-in-trait-definitions-with-associated-types[associated types] and must be implemented in your `runtime/src/lib.rs`. For example:
+These are [associated types](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#specifying-placeholder-types-in-trait-definitions-with-associated-types) and must be implemented in your `runtime/src/lib.rs`. For example:
 
 ```rust
 impl balances::Trait for Runtime {
@@ -42,17 +42,17 @@ impl balances::Trait for Runtime {
 }
 ```
 
-=== Dispatchable Functions
+### Dispatchable Functions
 
 // TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24)
 - `transfer` - Transfer some liquid free balance to another staker.
-- `set_balance` - Set the balances of a given account. Only dispatchable by a user with root priviledges.
+- `set_balance` - Set the balances of a given account. Only dispatchable by a user with root privileges.
 
-== Usage
+## Usage
 
 The following example shows how to use the balances module in your custom module.
 
-=== Importing into your runtime
+### Importing into your runtime
 
 Import the `balances` module and derive your module configuration trait with the balances trait.
 
@@ -108,7 +108,7 @@ pub trait Trait: balances::Trait {
 }
 ```
 
-==== Example of getters
+### Example of getters
 
 You now have access to the functions in `balances`. In your module, call the getters:
 
@@ -120,9 +120,9 @@ let ed = Balances::existential_deposit();
 let tf = Balances::transfer_fee();
 ```
 
-==== Real Use Example
+### Real Use Example
 
-Use a balance transfer to buy a link:https://github.com/shawntabrizi/substrate-collectables-workshop/blob/master/3/assets/3.5-finished-code.rs#L105[SubstrateKitty]:
+Use a balance transfer to buy a [SubstrateKitty](https://github.com/shawntabrizi/substratekitties/blob/master/substratekitties/runtime/src/substratekitties.rs#L105):
 
 ```rust
 fn buy_kitty(origin, kitty_id: T::Hash, max_price: T::Balance) -> Result {
@@ -153,11 +153,11 @@ fn buy_kitty(origin, kitty_id: T::Hash, max_price: T::Balance) -> Result {
 }
 ```
 
-== Dependencies
+## Dependencies
 
 The balances module depends on the `system` and `srml_support` modules as well as Substrate Core libraries and the Rust standard library.
 
-=== Genesis config
+### Genesis config
 
 Configuration is in `<your-node-name>/src/chain_spec.rs`. The following storage items are configurable:
 
