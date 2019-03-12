@@ -759,6 +759,7 @@ mod tests {
 	use super::*;
 	use quickcheck::*;
 	use tempdir::TempDir;
+	use network::identity::{secp256k1, ed25519};
 
 	#[test]
 	fn tests_node_name_good() {
@@ -776,78 +777,53 @@ mod tests {
 	}
 
 	#[test]
-	fn test_node_key_config_input_ed25519() {
-		fn secret_input(p: Option<String>) -> error::Result<bool> {
-			let s = network::identity::ed25519::SecretKey::generate();
-			let k = NodeKeyParams {
-				node_key_type: NodeKeyType::Ed25519,
-				node_key: Some(format!("{:x}", H256::from_slice(s.as_ref()))),
-				node_key_file: None
-			};
-			node_key_config(k, &p)
-				.map(|c| match c {
-					NodeKeyConfig::Ed25519(network::Secret::Input(s2)) =>
-						s.as_ref() == s2.as_ref(),
-					_ => false
+	fn test_node_key_config_input() {
+		fn secret_input(net_config_dir: Option<String>) -> error::Result<()> {
+			NodeKeyType::variants().into_iter().try_for_each(|t| {
+				let node_key_type = NodeKeyType::from_str(t).unwrap();
+				let sk = match node_key_type {
+					NodeKeyType::Secp256k1 => secp256k1::SecretKey::generate().as_ref().to_vec(),
+					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
+				};
+				let params = NodeKeyParams {
+					node_key_type,
+					node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
+					node_key_file: None
+				};
+				node_key_config(params, &net_config_dir).and_then(|c| match c {
+					NodeKeyConfig::Secp256k1(network::Secret::Input(ref ski))
+						if node_key_type == NodeKeyType::Secp256k1 &&
+							&sk[..] == ski.as_ref() => Ok(()),
+					NodeKeyConfig::Ed25519(network::Secret::Input(ref ski))
+						if node_key_type == NodeKeyType::Ed25519 &&
+							&sk[..] == ski.as_ref() => Ok(()),
+					_ => Err(input_err("Unexpected node key config"))
 				})
-		}
-
-		quickcheck(secret_input as fn(_) -> _);
-	}
-
-	#[test]
-	fn test_node_key_config_file_ed25519() {
-		fn secret_file(net_config_dir: Option<String>) -> error::Result<bool> {
-			let tmp = TempDir::new("alice")?;
-			let file = tmp.path().join("mysecret").to_path_buf();
-			let params = NodeKeyParams {
-				node_key_type: NodeKeyType::Ed25519,
-				node_key: None,
-				node_key_file: Some(file.clone())
-			};
-			node_key_config(params, &net_config_dir).map(|c| match c {
-				NodeKeyConfig::Ed25519(network::Secret::File(f)) =>
-					f == file,
-				_ => false
 			})
 		}
 
-		QuickCheck::new().tests(5).quickcheck(secret_file as fn(_) -> _);
+		QuickCheck::new().tests(5).quickcheck(secret_input as fn(_) -> _);
 	}
 
 	#[test]
-	fn test_node_key_config_input_secp256k1() {
-		fn secret_input(net_config_dir: Option<String>) -> error::Result<bool> {
-			let sk = network::identity::secp256k1::SecretKey::generate();
-			let params = NodeKeyParams {
-				node_key_type: NodeKeyType::Secp256k1,
-				node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
-				node_key_file: None
-			};
-			node_key_config(params, &net_config_dir).map(|c| match c {
-				NodeKeyConfig::Secp256k1(network::Secret::Input(ski)) =>
-					sk.as_ref() == ski.as_ref(),
-				_ => false
-			})
-		}
-
-		quickcheck(secret_input as fn(_) -> _);
-	}
-
-	#[test]
-	fn test_node_key_config_file_secp256k1() {
-		fn secret_file(net_config_dir: Option<String>) -> error::Result<bool> {
-			let tmp = TempDir::new("alice")?;
-			let file = tmp.path().join("mysecret").to_path_buf();
-			let params = NodeKeyParams {
-				node_key_type: NodeKeyType::Secp256k1,
-				node_key: None,
-				node_key_file: Some(file.clone())
-			};
-			node_key_config(params, &net_config_dir).map(|c| match c {
-				NodeKeyConfig::Secp256k1(network::Secret::File(f)) =>
-					f == file,
-				_ => false
+	fn test_node_key_config_file() {
+		fn secret_file(net_config_dir: Option<String>) -> error::Result<()> {
+			NodeKeyType::variants().into_iter().try_for_each(|t| {
+				let node_key_type = NodeKeyType::from_str(t).unwrap();
+				let tmp = TempDir::new("alice")?;
+				let file = tmp.path().join(format!("{}_mysecret", t)).to_path_buf();
+				let params = NodeKeyParams {
+					node_key_type,
+					node_key: None,
+					node_key_file: Some(file.clone())
+				};
+				node_key_config(params, &net_config_dir).and_then(|c| match c {
+					NodeKeyConfig::Secp256k1(network::Secret::File(ref f))
+						if node_key_type == NodeKeyType::Secp256k1 && f == &file => Ok(()),
+					NodeKeyConfig::Ed25519(network::Secret::File(ref f))
+						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
+					_ => Err(input_err("Unexpected node key config"))
+				})
 			})
 		}
 
