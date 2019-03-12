@@ -83,8 +83,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
-			balances: endowed_accounts.iter()
-				.map(|&k| (k, ENDOWMENT))
+			balances: endowed_accounts.iter().cloned()
+				.map(|k| (k, ENDOWMENT))
 				.chain(initial_authorities.iter().map(|x| (x.0.clone(), STASH)))
 				.collect(),
 			existential_deposit: 1 * DOLLARS,
@@ -98,7 +98,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 				.collect::<Vec<_>>(),
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 			session_length: 5 * MINUTES,
 			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
 		}),
@@ -113,8 +113,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			bonding_duration: 60 * MINUTES,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
-			stakers: initial_authorities.iter().map(|x| (x.0.into(), x.1.into(), STASH)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH)).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 10 * MINUTES,    // 1 day per public referendum
@@ -248,11 +248,11 @@ pub fn testnet_genesis(
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
-			balances: endowed_accounts.iter().map(|&k| (k.into(), ENDOWMENT)).collect(),
+			balances: endowed_accounts.iter().map(|k| (k.clone(), ENDOWMENT)).collect(),
 			vesting: vec![],
 		}),
 		session: Some(SessionConfig {
-			validators: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			validators: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 			session_length: 10,
 			keys: initial_authorities.iter().map(|x| (x.1.clone(), x.2.clone())).collect::<Vec<_>>(),
 		}),
@@ -267,8 +267,8 @@ pub fn testnet_genesis(
 			current_offline_slash: 0,
 			current_session_reward: 0,
 			offline_slash_grace: 0,
-			stakers: initial_authorities.iter().map(|x| (x.0.into(), x.1.into(), STASH)).collect(),
-			invulnerables: initial_authorities.iter().map(|x| x.1.into()).collect(),
+			stakers: initial_authorities.iter().map(|x| (x.0.clone(), x.1.clone(), STASH)).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,
@@ -280,7 +280,7 @@ pub fn testnet_genesis(
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
 				.filter(|&endowed| initial_authorities.iter().find(|&(_, controller, _)| controller == endowed).is_none())
-				.map(|a| (a.clone().into(), 1000000)).collect(),
+				.map(|a| (a.clone(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
 			present_slash_per_voter: 1,
@@ -332,7 +332,7 @@ fn development_config_genesis() -> GenesisConfig {
 		vec![
 			get_authority_keys_from_seed("Alice"),
 		],
-		get_account_id_from_seed("Alice").into(),
+		get_account_id_from_seed("Alice"),
 		None,
 	)
 }
@@ -348,7 +348,7 @@ fn local_testnet_genesis() -> GenesisConfig {
 			get_authority_keys_from_seed("Alice"),
 			get_authority_keys_from_seed("Bob"),
 		],
-		get_account_id_from_seed("Alice").into(),
+		get_account_id_from_seed("Alice"),
 		None,
 	)
 }

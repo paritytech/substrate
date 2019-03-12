@@ -462,7 +462,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 					amount: 1,
 					nonce,
 				};
-				let signature = AccountKeyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
+				let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
 				builder.push(Extrinsic::Transfer(transfer, signature)).unwrap();
 				nonce = nonce + 1;
 				builder.bake().unwrap()

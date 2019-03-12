@@ -41,9 +41,9 @@ impl Into<AuthorityId> for UintAuthorityId {
 
 /// Converter between u64 and the AuthorityId wrapper type.
 pub struct ConvertUintAuthorityId;
-impl Convert<u64, UintAuthorityId> for ConvertUintAuthorityId {
-	fn convert(a: u64) -> UintAuthorityId {
-		UintAuthorityId(a)
+impl Convert<u64, Option<UintAuthorityId>> for ConvertUintAuthorityId {
+	fn convert(a: u64) -> Option<UintAuthorityId> {
+		Some(UintAuthorityId(a))
 	}
 }
 /// Digest item

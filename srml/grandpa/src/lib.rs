@@ -40,7 +40,7 @@ use srml_support::{Parameter, decl_event, decl_storage, decl_module};
 use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
-use primitives::traits::{CurrentHeight, Convert};
+use primitives::traits::CurrentHeight;
 use substrate_primitives::ed25519;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
@@ -361,22 +361,17 @@ impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
 }
 
 impl<T> finality_tracker::OnFinalizationStalled<T::BlockNumber> for SyncedAuthorities<T> where
-	T: Trait,
-	T: session::Trait,
+	T: Trait + consensus::Trait<SessionKey=<T as Trait>::SessionKey>,
+	<T as consensus::Trait>::Log: From<consensus::RawLog<<T as Trait>::SessionKey>>,
 	T: finality_tracker::Trait,
-	<T as session::Trait>::ConvertAccountIdToSessionKey: Convert<
-		<T as system::Trait>::AccountId,
-		<T as Trait>::SessionKey,
-	>,
 {
 	fn on_stalled(further_wait: T::BlockNumber) {
 		// when we record old authority sets, we can use `finality_tracker::median`
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
 
-		let next_authorities = <session::Module<T>>::validators()
+		let next_authorities = <consensus::Module<T>>::authorities()
 			.into_iter()
-			.map(T::ConvertAccountIdToSessionKey::convert)
 			.map(|key| (key, 1)) // evenly-weighted.
 			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
 

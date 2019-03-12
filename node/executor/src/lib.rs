@@ -53,27 +53,27 @@ mod tests {
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	fn alice() -> AccountId {
-		AccountKeyring::Alice.to_h256_public()
+		AccountKeyring::Alice.into()
 	}
 
 	fn bob() -> AccountId {
-		AccountKeyring::Bob.to_h256_public()
+		AccountKeyring::Bob.into()
 	}
 
 	fn charlie() -> AccountId {
-		AccountKeyring::Charlie.to_h256_public()
+		AccountKeyring::Charlie.into()
 	}
 
 	fn dave() -> AccountId {
-		AccountKeyring::Dave.to_h256_public()
+		AccountKeyring::Dave.into()
 	}
 
 	fn eve() -> AccountId {
-		AccountKeyring::Eve.to_h256_public()
+		AccountKeyring::Eve.into()
 	}
 
 	fn ferdie() -> AccountId {
-		AccountKeyring::Ferdie.to_h256_public()
+		AccountKeyring::Ferdie.into()
 	}
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
@@ -81,7 +81,7 @@ mod tests {
 			Some((signed, index)) => {
 				let era = Era::mortal(256, 0);
 				let payload = (index.into(), xt.function, era, GENESIS_HASH);
-				let key = AccountKeyring::from_h256_public(signed.clone()).unwrap();
+				let key = AccountKeyring::from_public(&signed).unwrap();
 				let signature = payload.using_encoded(|b| {
 					if b.len() > 256 {
 						key.sign(&runtime_io::blake2_256(b))
@@ -286,7 +286,7 @@ mod tests {
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
-				validators: vec![AccountKeyring::One.to_h256_public(), AccountKeyring::Two.to_h256_public(), three],
+				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
 				keys: vec![
 					(alice(), AuthorityKeyring::Alice.to_raw_public().into()),
 					(bob(), AuthorityKeyring::Bob.to_raw_public().into()),
@@ -756,7 +756,7 @@ mod tests {
 				CheckedExtrinsic {
 					signed: Some((charlie(), 2)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(indices::address::Address::Id(addr), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::call::<Runtime>(indices::address::Address::Id(addr.clone()), 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]

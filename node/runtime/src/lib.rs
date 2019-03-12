@@ -37,7 +37,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -125,16 +125,8 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
-/// Session key conversion.
-pub struct SessionKeyConversion;
-impl Convert<AccountId, AuthorityId> for SessionKeyConversion {
-	fn convert(a: AccountId) -> AuthorityId {
-		a.to_fixed_bytes().into()
-	}
-}
-
 impl session::Trait for Runtime {
-	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type ConvertAccountIdToSessionKey = ();
 	type OnSessionChange = (Staking, grandpa::SyncedAuthorities<Runtime>);
 	type Event = Event;
 }

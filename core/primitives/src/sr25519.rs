@@ -21,32 +21,205 @@
 //! for this to work.
 // end::description[]
 
+#[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
+#[cfg(feature = "std")]
 use blake2_rfc;
+#[cfg(feature = "std")]
 use rand::rngs::OsRng;
+#[cfg(feature = "std")]
 use schnorrkel::{signing_context, Keypair, SecretKey, MiniSecretKey, PublicKey,
 	derive::{Derivation, ChainCode, CHAIN_CODE_LENGTH}
 };
+#[cfg(feature = "std")]
 use substrate_bip39::mini_secret_from_entropy;
-use parity_codec::{Encode, Decode};
-use crate::hash::H512;
+#[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
+#[cfg(feature = "std")]
 use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible};
+use crate::hash::{H256, H512};
+use parity_codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
-use serde::{de, Deserialize, Deserializer, Serializer};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(feature = "std")]
 use schnorrkel::keys::MINI_SECRET_KEY_LENGTH;
 
 // signing context
-const SIGNING_CTX: &'static [u8] = b"substrate transaction";
+#[cfg(feature = "std")]
+const SIGNING_CTX: &[u8] = b"substrate";
+
+/// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+pub struct Public(pub [u8; 32]);
+
+/// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
+#[cfg(feature = "std")]
+pub struct Pair(Keypair);
+
+impl AsRef<Public> for Public {
+	fn as_ref(&self) -> &Public {
+		&self
+	}
+}
+
+impl AsRef<[u8; 32]> for Public {
+	fn as_ref(&self) -> &[u8; 32] {
+		&self.0
+	}
+}
+
+impl AsRef<[u8]> for Public {
+	fn as_ref(&self) -> &[u8] {
+		&self.0[..]
+	}
+}
+
+impl From<Public> for [u8; 32] {
+	fn from(x: Public) -> [u8; 32] {
+		x.0
+	}
+}
+
+impl From<Public> for H256 {
+	fn from(x: Public) -> H256 {
+		x.0.into()
+	}
+}
+
+// Consider removal in favour of need to explicitly use `from_raw`.
+impl From<[u8; 32]> for Public {
+	fn from(x: [u8; 32]) -> Self {
+		Public(x)
+	}
+}
+
+// Consider removal in favour of need to explicitly use `from_raw_h256`.
+impl From<H256> for Public {
+	fn from(x: H256) -> Self {
+		Public(x.into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::fmt::Display for Public {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", self.to_ss58check())
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		let s = self.to_ss58check();
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+}
+
+#[cfg(feature = "std")]
+impl Serialize for Public {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serialize(&self, serializer)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for Public {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		deserialize(deserializer)
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::hash::Hash for Public {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		self.0.hash(state);
+	}
+}
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
-pub type Signature = H512;
+#[derive(Encode, Decode)]
+pub struct Signature(pub [u8; 64]);
+
+impl Clone for Signature {
+	fn clone(&self) -> Self {
+		let mut r = [0u8; 64];
+		r.copy_from_slice(&self.0[..]);
+		Signature(r)
+	}
+}
+
+impl Default for Signature {
+	fn default() -> Self {
+		Signature([0u8; 64])
+	}
+}
+
+impl PartialEq for Signature {
+	fn eq(&self, b: &Self) -> bool {
+		&self.0[..] == &b.0[..]
+	}
+}
+
+impl Eq for Signature {}
+
+impl From<Signature> for [u8; 64] {
+	fn from(v: Signature) -> [u8; 64] {
+		v.0
+	}
+}
+
+impl From<Signature> for H512 {
+	fn from(v: Signature) -> H512 {
+		H512::from(v.0)
+	}
+}
+
+impl AsRef<[u8; 64]> for Signature {
+	fn as_ref(&self) -> &[u8; 64] {
+		&self.0
+	}
+}
+
+impl AsRef<[u8]> for Signature {
+	fn as_ref(&self) -> &[u8] {
+		&self.0[..]
+	}
+}
+
+// Consider removal in favour of need to explicitly use `from_raw`.
+impl From<[u8; 64]> for Signature {
+	fn from(v: [u8; 64]) -> Signature {
+		Signature(v)
+	}
+}
+
+// Consider removal in favour of need to explicitly use `from_raw_h256`.
+impl From<H512> for Signature {
+	fn from(v: H512) -> Signature {
+		Signature(v.into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::fmt::Debug for Signature {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::hash::Hash for Signature {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		::std::hash::Hash::hash(&self.0[..], state);
+	}
+}
 
 /// A localized signature also contains sender information.
 /// NOTE: Encode and Decode traits are supported in ed25519 but not possible for now here.
+#[cfg(feature = "std")]
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct LocalizedSignature {
 	/// The signer of the signature.
@@ -55,20 +228,8 @@ pub struct LocalizedSignature {
 	pub signature: Signature,
 }
 
-/// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub struct Public(pub [u8; 32]);
-
-/// An Schnorrkel/Ristretto x25519 ("sr25519") key pair.
-pub struct Pair(Keypair);
-
-impl ::std::hash::Hash for Public {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
-	}
-}
-
 /// An error type for SS58 decoding.
+#[cfg(feature = "std")]
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum PublicError {
 	/// Bad alphabet.
@@ -95,6 +256,7 @@ impl Public {
 	}
 
 	/// Some if the string is a properly encoded SS58Check address.
+	#[cfg(feature = "std")]
 	pub fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
 		if d.len() != 35 {
@@ -113,6 +275,7 @@ impl Public {
 	}
 
 	/// Return a `Vec<u8>` filled with raw data.
+	#[cfg(feature = "std")]
 	pub fn to_raw_vec(self) -> Vec<u8> {
 		let r: &[u8; 32] = self.as_ref();
 		r.to_vec()
@@ -130,6 +293,7 @@ impl Public {
 	}
 
 	/// Return the ss58-check string for this key.
+	#[cfg(feature = "std")]
 	pub fn to_ss58check(&self) -> String {
 		let mut v = vec![42u8];
 		v.extend(self.as_slice());
@@ -141,6 +305,7 @@ impl Public {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// `None` if there are any hard junctions in there.
+	#[cfg(feature = "std")]
 	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Option<Public> {
 		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
 		for j in path {
@@ -172,80 +337,50 @@ pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok
 	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
 }
 
-impl AsRef<[u8; 32]> for Public {
-	fn as_ref(&self) -> &[u8; 32] {
-		&self.0
-	}
-}
-
-impl AsRef<[u8]> for Public {
-	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
-	}
-}
-
-impl Into<[u8; 32]> for Public {
-	fn into(self) -> [u8; 32] {
-		self.0
-	}
-}
-
-impl AsRef<Public> for Public {
-	fn as_ref(&self) -> &Public {
-		&self
-	}
-}
-
+#[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
 		&self
 	}
 }
 
+#[cfg(feature = "std")]
 impl From<MiniSecretKey> for Pair {
 	fn from(sec: MiniSecretKey) -> Pair {
 		Pair(sec.expand_to_keypair())
 	}
 }
 
+#[cfg(feature = "std")]
 impl From<SecretKey> for Pair {
 	fn from(sec: SecretKey) -> Pair {
 		Pair(Keypair::from(sec))
 	}
 }
 
+#[cfg(feature = "std")]
 impl From<schnorrkel::Keypair> for Pair {
 	fn from(p: schnorrkel::Keypair) -> Pair {
 		Pair(p)
 	}
 }
 
+#[cfg(feature = "std")]
 impl From<Pair> for schnorrkel::Keypair {
 	fn from(p: Pair) -> schnorrkel::Keypair {
 		p.0
 	}
 }
 
+#[cfg(feature = "std")]
 impl AsRef<schnorrkel::Keypair> for Pair {
 	fn as_ref(&self) -> &schnorrkel::Keypair {
 		&self.0
 	}
 }
 
-impl ::std::fmt::Display for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", self.to_ss58check())
-	}
-}
-
-impl ::std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
-	}
-}
-
 /// Derive a single hard junction.
+#[cfg(feature = "std")]
 fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> SecretKey {
 	("SchnorrRistrettoHDKD", &secret.to_bytes()[..], cc).using_encoded(|data|
 		MiniSecretKey::from_bytes(blake2_rfc::blake2b::blake2b(32, &[], data).as_bytes())
@@ -254,8 +389,10 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Sec
 	)
 }
 
+#[cfg(feature = "std")]
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
+#[cfg(feature = "std")]
 impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
@@ -336,7 +473,7 @@ impl TraitPair for Pair {
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
-		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig[..]) {
+		let signature: schnorrkel::Signature = match schnorrkel::Signature::from_bytes(&sig.as_ref()) {
 			Ok(some_signature) => some_signature,
 			Err(_) => return false
 		};
@@ -363,6 +500,7 @@ impl TraitPair for Pair {
 	}
 }
 
+#[cfg(feature = "std")]
 impl Pair {
 	/// Make a new key pair from binary data derived from a valid seed phrase.
 	///
@@ -492,7 +630,7 @@ mod test {
 		// This is to make sure that the wasm library is compatible.
 		let pk = Pair::from_seed(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
 		let public = pk.public();
-		let js_signature = Signature::from(&hex!("fa30b7561aae210d2a9264137fb33b1a666aa438092738616fa23bc5ef8cc14ef1b68718719672ac8cd35f0bd02d834beee7695cc0bc90e4019be1c13cf21009"));
+		let js_signature = Signature::from(hex!("fa30b7561aae210d2a9264137fb33b1a666aa438092738616fa23bc5ef8cc14ef1b68718719672ac8cd35f0bd02d834beee7695cc0bc90e4019be1c13cf21009"));
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
 }

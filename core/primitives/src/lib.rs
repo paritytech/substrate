@@ -50,13 +50,12 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 #[cfg(feature = "std")]
-pub mod sr25519;
-#[cfg(feature = "std")]
 pub mod crypto;
 
 pub mod u32_trait;
 
 pub mod ed25519;
+pub mod sr25519;
 pub mod hash;
 mod hasher;
 pub mod sandbox;

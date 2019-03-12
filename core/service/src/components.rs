@@ -549,7 +549,7 @@ mod tests {
 				from: AccountKeyring::Alice.to_raw_public().into(),
 				to: Default::default(),
 			};
-			let signature = AccountKeyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
+			let signature = AccountKeyring::from_public(&transfer.from).unwrap().sign(&transfer.encode()).into();
 			Extrinsic::Transfer(transfer, signature)
 		};
 		// store the transaction in the pool

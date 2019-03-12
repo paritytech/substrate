@@ -282,7 +282,7 @@ mod tests {
 			from: AccountKeyring::Alice.to_raw_public().into(),
 			to: Default::default(),
 		};
-		let signature = AccountKeyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 		Extrinsic::Transfer(tx, signature)
 	}
 

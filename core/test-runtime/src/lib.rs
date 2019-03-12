@@ -29,7 +29,7 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult, Sr25519Signature, transaction_validity::TransactionValidity,
+	ApplyResult, transaction_validity::TransactionValidity,
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -38,7 +38,7 @@ use runtime_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{ed25519, OpaqueMetadata};
+use primitives::{ed25519, sr25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -82,7 +82,7 @@ pub struct Transfer {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
-	Transfer(Transfer, Sr25519Signature),
+	Transfer(Transfer, AccountSignature),
 }
 
 #[cfg(feature = "std")]
@@ -130,7 +130,9 @@ pub type AuthorityId = ed25519::Public;
 // The signature type used by authorities.
 pub type AuthoritySignature = ed25519::Signature;
 /// An identifier for an account on this system.
-pub type AccountId = H256;
+pub type AccountId = sr25519::Public;
+// The signature type used by accounts/transactions.
+pub type AccountSignature = sr25519::Signature;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
 /// The block number type used in this runtime.

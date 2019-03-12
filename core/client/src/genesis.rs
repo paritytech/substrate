@@ -69,7 +69,7 @@ mod tests {
 		use trie::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
-			let signature = AccountKeyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap()
+			let signature = AccountKeyring::from_public(&tx.from).unwrap()
 				.sign(&tx.encode()).into();
 
 			Extrinsic::Transfer(tx, signature)

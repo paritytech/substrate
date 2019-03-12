@@ -41,7 +41,7 @@ pub enum Keyring {
 }
 
 impl Keyring {
-	pub fn from_public(who: Public) -> Option<Keyring> {
+	pub fn from_public(who: &Public) -> Option<Keyring> {
 		[
 			Keyring::Alice,
 			Keyring::Bob,
@@ -53,11 +53,11 @@ impl Keyring {
 			Keyring::Two,
 		].iter()
 			.map(|i| *i)
-			.find(|&k| Public::from(k) == who)
+			.find(|&k| &Public::from(k) == who)
 	}
 
 	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
-		Self::from_public(Public::from_raw(who))
+		Self::from_public(&Public::from_raw(who))
 	}
 
 	pub fn to_raw_public(self) -> [u8; 32] {
@@ -65,7 +65,7 @@ impl Keyring {
 	}
 
 	pub fn from_h256_public(who: H256) -> Option<Keyring> {
-		Self::from_public(Public::from_raw(who.into()))
+		Self::from_public(&Public::from_raw(who.into()))
 	}
 
 	pub fn to_h256_public(self) -> H256 {

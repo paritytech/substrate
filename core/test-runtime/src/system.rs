@@ -152,7 +152,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	}
 
 	let hash = |from: &AccountId, nonce: u64| {
-		twox_128(&nonce.to_keyed_vec(from.as_bytes())).to_vec()
+		twox_128(&nonce.to_keyed_vec(&from.encode())).to_vec()
 	};
 	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
 		let mut deps = Vec::new();
@@ -308,7 +308,7 @@ mod tests {
 	}
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
-		let signature = AccountKeyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 		Extrinsic::Transfer(tx, signature)
 	}
 
