@@ -69,7 +69,6 @@ mod tests;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
-pub use ed25519::Public as Ed25519AuthorityId;
 pub use changes_trie::ChangesTrieConfiguration;
 #[cfg(feature = "std")]
 pub use crypto::{DeriveJunction, Pair};

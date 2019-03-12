@@ -238,13 +238,13 @@ impl Network<Block> for MessageRouting {
 
 #[derive(Default, Clone)]
 struct TestApi {
-	genesis_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	genesis_authorities: Vec<(AuthorityId, u64)>,
 	scheduled_changes: Arc<Mutex<HashMap<Hash, ScheduledChange<BlockNumber>>>>,
 	forced_changes: Arc<Mutex<HashMap<Hash, (BlockNumber, ScheduledChange<BlockNumber>)>>>,
 }
 
 impl TestApi {
-	fn new(genesis_authorities: Vec<(Ed25519AuthorityId, u64)>) -> Self {
+	fn new(genesis_authorities: Vec<(AuthorityId, u64)>) -> Self {
 		TestApi {
 			genesis_authorities,
 			scheduled_changes: Arc::new(Mutex::new(HashMap::new())),
@@ -282,7 +282,7 @@ impl Core<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<Ed25519AuthorityId>>> {
+	) -> Result<NativeOrEncoded<Vec<AuthorityId>>> {
 		unimplemented!("Not required for testing!")
 	}
 
@@ -327,7 +327,7 @@ impl GrandpaApi<Block> for RuntimeApi {
 		_: ExecutionContext,
 		_: Option<()>,
 		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Vec<(Ed25519AuthorityId, u64)>>> {
+	) -> Result<NativeOrEncoded<Vec<(AuthorityId, u64)>>> {
 		if at == &BlockId::Number(0) {
 			Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
 		} else {
@@ -374,9 +374,9 @@ impl GrandpaApi<Block> for RuntimeApi {
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
-fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(Ed25519AuthorityId, u64)> {
+fn make_ids(keys: &[AuthorityKeyring]) -> Vec<(AuthorityId, u64)> {
 	keys.iter()
-		.map(|key| Ed25519AuthorityId(key.to_raw_public()))
+		.map(|key| AuthorityId(key.to_raw_public()))
 		.map(|id| (id, 1))
 		.collect()
 }
@@ -723,7 +723,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
 	// import block#1 WITH consensus data change
-	let new_authorities = vec![Ed25519AuthorityId::from([42; 32])];
+	let new_authorities = vec![AuthorityId::from([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
 	net.sync();
 	let net = Arc::new(Mutex::new(net));

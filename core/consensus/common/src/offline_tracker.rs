@@ -112,14 +112,14 @@ impl<AuthorityId: Eq + Clone + std::hash::Hash> OfflineTracker<AuthorityId> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::Ed25519AuthorityId;
+	use primitives::ed25519::Public as AuthorityId;
 
 	#[test]
 	fn validator_offline() {
-		let mut tracker = OfflineTracker::<Ed25519AuthorityId>::new();
-		let v: Ed25519AuthorityId = [0; 32].into();
-		let v2: Ed25519AuthorityId = [1; 32].into();
-		let v3: Ed25519AuthorityId = [2; 32].into();
+		let mut tracker = OfflineTracker::<AuthorityId>::new();
+		let v: AuthorityId = [0; 32].into();
+		let v2: AuthorityId = [1; 32].into();
+		let v3: AuthorityId = [2; 32].into();
 		tracker.note_round_end(v.clone(), true);
 		tracker.note_round_end(v2.clone(), true);
 		tracker.note_round_end(v3.clone(), true);

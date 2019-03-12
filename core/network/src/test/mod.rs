@@ -43,7 +43,7 @@ use crate::message::{Message, ConsensusEngineId};
 use network_libp2p::{NodeIndex, ProtocolId, PeerId};
 use parity_codec::Encode;
 use parking_lot::{Mutex, RwLock};
-use primitives::{H256, Ed25519AuthorityId};
+use primitives::{H256, ed25519::Public as AuthorityId};
 use crate::protocol::{ConnectedPeer, Context, FromNetworkMsg, Protocol, ProtocolMsg};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{AuthorityIdFor, Block as BlockT, Digest, DigestItem, Header, NumberFor};
@@ -472,7 +472,7 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		}
 	}
 
-	pub fn push_authorities_change_block(&self, new_authorities: Vec<Ed25519AuthorityId>) -> H256 {
+	pub fn push_authorities_change_block(&self, new_authorities: Vec<AuthorityId>) -> H256 {
 		self.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			builder.push(Extrinsic::AuthoritiesChange(new_authorities.clone())).unwrap();
 			builder.bake().unwrap()

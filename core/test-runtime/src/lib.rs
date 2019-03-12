@@ -29,7 +29,7 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult, Sr25519Signature, Ed25519Signature, transaction_validity::TransactionValidity,
+	ApplyResult, Sr25519Signature, transaction_validity::TransactionValidity,
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -38,7 +38,7 @@ use runtime_primitives::{
 };
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{Ed25519AuthorityId, OpaqueMetadata};
+use primitives::{ed25519, OpaqueMetadata};
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 use inherents::{CheckInherentsResult, InherentData};
@@ -81,7 +81,7 @@ pub struct Transfer {
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Extrinsic {
-	AuthoritiesChange(Vec<Ed25519AuthorityId>),
+	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer(Transfer, Sr25519Signature),
 }
 
@@ -125,6 +125,10 @@ impl Extrinsic {
 	}
 }
 
+// The identity type used by authorities.
+pub type AuthorityId = ed25519::Public;
+// The signature type used by authorities.
+pub type AuthoritySignature = ed25519::Signature;
 /// An identifier for an account on this system.
 pub type AccountId = H256;
 /// A simple hash type for all our hashing.
@@ -134,7 +138,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, Ed25519AuthorityId, Ed25519Signature>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256, AuthorityId, AuthoritySignature>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.
@@ -256,7 +260,7 @@ cfg_if! {
 					version()
 				}
 
-				fn authorities() -> Vec<Ed25519AuthorityId> {
+				fn authorities() -> Vec<AuthorityId> {
 					system::authorities()
 				}
 
@@ -347,7 +351,7 @@ cfg_if! {
 					version()
 				}
 
-				fn authorities() -> Vec<Ed25519AuthorityId> {
+				fn authorities() -> Vec<AuthorityId> {
 					system::authorities()
 				}
 

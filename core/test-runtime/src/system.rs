@@ -26,8 +26,8 @@ use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use parity_codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, Transfer, H256 as Hash, Block, Header, Digest};
-use primitives::{Ed25519AuthorityId, Blake2Hasher};
-use primitives::storage::well_known_keys;
+use primitives::{Blake2Hasher, storage::well_known_keys};
+use primitives::ed25519::Public as AuthorityId;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -37,7 +37,7 @@ storage_items! {
 	// The current block number being processed. Set by `execute_block`.
 	Number: b"sys:num" => required BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
-	NewAuthorities: b"sys:new_auth" => Vec<Ed25519AuthorityId>;
+	NewAuthorities: b"sys:new_auth" => Vec<AuthorityId>;
 }
 
 pub fn balance_of_key(who: AccountId) -> Vec<u8> {
@@ -53,7 +53,7 @@ pub fn nonce_of(who: AccountId) -> u64 {
 }
 
 /// Get authorities ar given block.
-pub fn authorities() -> Vec<Ed25519AuthorityId> {
+pub fn authorities() -> Vec<AuthorityId> {
 	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
 		.expect("There are always authorities in test-runtime");
 	(0..len)
@@ -254,8 +254,8 @@ fn execute_transfer_backend(tx: &Transfer) -> ApplyResult {
 	Ok(ApplyOutcome::Success)
 }
 
-fn execute_new_authorities_backend(new_authorities: &[Ed25519AuthorityId]) -> ApplyResult {
-	let new_authorities: Vec<Ed25519AuthorityId> = new_authorities.iter().cloned().collect();
+fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyResult {
+	let new_authorities: Vec<AuthorityId> = new_authorities.iter().cloned().collect();
 	<NewAuthorities>::put(new_authorities);
 	Ok(ApplyOutcome::Success)
 }

@@ -18,7 +18,7 @@
 
 use fork_tree::ForkTree;
 use parking_lot::RwLock;
-use substrate_primitives::Ed25519AuthorityId;
+use substrate_primitives::ed25519;
 use grandpa::VoterSet;
 use parity_codec::{Encode, Decode};
 use log::{debug, info};
@@ -27,6 +27,8 @@ use std::cmp::Ord;
 use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
+
+use ed25519::Public as AuthorityId;
 
 /// A shared authority set.
 pub(crate) struct SharedAuthoritySet<H, N> {
@@ -61,7 +63,7 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub(crate) fn current_authorities(&self) -> VoterSet<Ed25519AuthorityId> {
+	pub(crate) fn current_authorities(&self) -> VoterSet<AuthorityId> {
 		self.inner.read().current_authorities.iter().cloned().collect()
 	}
 }
@@ -85,7 +87,7 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
-	pub(crate) current_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	pub(crate) current_authorities: Vec<(AuthorityId, u64)>,
 	pub(crate) set_id: u64,
 	// Tree of pending standard changes across forks. Standard changes are
 	// enacted on finality and must be enacted (i.e. finalized) in-order across
@@ -102,7 +104,7 @@ where H: PartialEq,
 	  N: Ord,
 {
 	/// Get a genesis set with given authorities.
-	pub(crate) fn genesis(initial: Vec<(Ed25519AuthorityId, u64)>) -> Self {
+	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
 		AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
@@ -112,7 +114,7 @@ where H: PartialEq,
 	}
 
 	/// Get the current set id and a reference to the current authority set.
-	pub(crate) fn current(&self) -> (u64, &[(Ed25519AuthorityId, u64)]) {
+	pub(crate) fn current(&self) -> (u64, &[(AuthorityId, u64)]) {
 		(self.set_id, &self.current_authorities[..])
 	}
 }
@@ -379,7 +381,7 @@ pub(crate) enum DelayKind<N> {
 #[derive(Debug, Clone, Encode, PartialEq)]
 pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
-	pub(crate) next_authorities: Vec<(Ed25519AuthorityId, u64)>,
+	pub(crate) next_authorities: Vec<(AuthorityId, u64)>,
 	/// How deep in the chain the announcing block must be
 	/// before the change is applied.
 	pub(crate) delay: N,

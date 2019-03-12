@@ -258,11 +258,6 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// Ed25519 signature verify.
-pub use substrate_primitives::ed25519::Signature as Ed25519Signature;
-/// Ed25519 signature authority ID (note this should be renamed Ed25519Public).
-pub use substrate_primitives::ed25519::Public as Ed25519AuthorityId;
-
 /// Sr25519 signature verify.
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]

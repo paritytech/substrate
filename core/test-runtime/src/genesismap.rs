@@ -20,18 +20,19 @@ use std::collections::HashMap;
 use runtime_io::twox_128;
 use super::AccountId;
 use parity_codec::{Encode, KeyedVec, Joiner};
-use primitives::{Ed25519AuthorityId, ChangesTrieConfiguration, map, storage::well_known_keys};
+use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use runtime_primitives::traits::Block;
+use primitives::ed25519::Public as AuthorityId;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
 	pub changes_trie_config: Option<ChangesTrieConfiguration>,
-	pub authorities: Vec<Ed25519AuthorityId>,
+	pub authorities: Vec<AuthorityId>,
 	pub balances: Vec<(AccountId, u64)>,
 }
 
 impl GenesisConfig {
-	pub fn new(support_changes_trie: bool, authorities: Vec<Ed25519AuthorityId>, endowed_accounts: Vec<AccountId>, balance: u64) -> Self {
+	pub fn new(support_changes_trie: bool, authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, balance: u64) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
 				true => Some(super::changes_trie_config()),

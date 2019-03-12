@@ -16,7 +16,7 @@
 
 //! Substrate chain configurations.
 
-use primitives::{Ed25519AuthorityId as AuthorityId, ed25519, sr25519, Pair};
+use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,

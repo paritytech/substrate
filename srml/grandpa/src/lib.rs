@@ -41,9 +41,10 @@ use srml_support::dispatch::Result;
 use srml_support::storage::StorageValue;
 use srml_support::storage::unhashed::StorageVec;
 use primitives::traits::{CurrentHeight, Convert};
-use substrate_primitives::Ed25519AuthorityId;
+use substrate_primitives::ed25519;
 use system::ensure_signed;
 use primitives::traits::MaybeSerializeDebug;
+use ed25519::Public as AuthorityId;
 
 mod mock;
 mod tests;
@@ -100,7 +101,7 @@ impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
 }
 
 impl<N, SessionKey> GrandpaChangeSignal<N> for RawLog<N, SessionKey>
-	where N: Clone, SessionKey: Clone + Into<Ed25519AuthorityId>,
+	where N: Clone, SessionKey: Clone + Into<AuthorityId>,
 {
 	fn as_signal(&self) -> Option<ScheduledChange<N>> {
 		RawLog::as_signal(self).map(|(delay, next_authorities)| ScheduledChange {
@@ -309,7 +310,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T> where Ed25519AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
+impl<T: Trait> Module<T> where AuthorityId: core::convert::From<<T as Trait>::SessionKey> {
 	/// See if the digest contains any standard scheduled change.
 	pub fn scrape_digest_change(log: &Log<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>

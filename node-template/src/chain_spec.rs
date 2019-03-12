@@ -1,10 +1,12 @@
-use primitives::{Ed25519AuthorityId, ed25519, sr25519, Pair};
+use primitives::{ed25519, sr25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, FeesConfig,
 };
 use substrate_cli::DEV_PHRASE;
 use substrate_service;
+
+use ed25519::Public as AuthorityId;
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -23,7 +25,7 @@ pub enum Alternative {
 	LocalTestnet,
 }
 
-fn authority_key(s: &str) -> Ed25519AuthorityId {
+fn authority_key(s: &str) -> AuthorityId {
 	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
 		.expect("static values are valid; qed")
 		.public().into()
@@ -89,7 +91,7 @@ impl Alternative {
 	}
 }
 
-fn testnet_genesis(initial_authorities: Vec<Ed25519AuthorityId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
+fn testnet_genesis(initial_authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, root_key: AccountId) -> GenesisConfig {
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/node_template_runtime_wasm.compact.wasm").to_vec(),
