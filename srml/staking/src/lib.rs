@@ -81,7 +81,6 @@
 //! 
 //! ## Usage
 //! 
-//! ### Prerequisites
 //! 
 //! ### Snippet: Bonding and Accepting Roles
 //! 
