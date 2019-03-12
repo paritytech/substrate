@@ -33,8 +33,8 @@ pub struct Candidate<AccountId, Balance: HasCompact> {
 	// Accumulator of the stake of this candidate based on received votes.
 	approval_stake: Balance,
 	// Intermediary value used to sort candidates.
-// See Phragmén reference implementation.
-	score: Perquintill,
+	// See Phragmén reference implementation.
+	pub score: Perquintill,
 }
 
 // Wrapper around the nomination info of a single nominator for a group of validators.

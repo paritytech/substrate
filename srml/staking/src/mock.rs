@@ -26,7 +26,7 @@ use srml_support::impl_outer_origin;
 use crate::{GenesisConfig, Module, Trait, StakerStatus};
 
 // The AccountId alias in this test module.
-type AccountIdType = u64;
+pub type AccountIdType = u64;
 
 impl_outer_origin!{
 	pub enum Origin for Test {}

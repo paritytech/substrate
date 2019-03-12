@@ -675,7 +675,7 @@ impl<T: Trait> Module<T> {
 			nominators,
 			stash_of,
 			min_validator_count
-		);		
+		);
 
 		// Figure out the minimum stake behind a slot.
 		let slot_stake = elected_candidates

@@ -20,6 +20,8 @@
 
 use super::*;
 use runtime_io::with_externalities;
+use phragmen;
+use primitives::Perquintill;
 use srml_support::{assert_ok, assert_noop, EnumerableStorageMap};
 use mock::{Balances, Session, Staking, System, Timestamp, Test, ExtBuilder, Origin};
 use srml_support::traits::Currency;
@@ -1355,7 +1357,7 @@ fn phragmen_poc_works() {
 		.nominate(false)
 		.build(),
 	|| {
-		// initial setup of 10 and 20, both validators + 100.
+		// initial setup of 10 and 20, both validators.
 		assert_eq!(Session::validators(), vec![20, 10]);
 
 		assert_eq!(Staking::ledger(&10), Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![] }));
@@ -1415,6 +1417,71 @@ fn phragmen_poc_works() {
 		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.value).collect::<Vec<BalanceOf<Test>>>(), vec![15, 10]);
 		assert_eq!(Staking::stakers(20).others.iter().map(|e| e.who).collect::<Vec<BalanceOf<Test>>>(), vec![6, 2]);
 	});
+}
+
+#[test]
+fn phragmen_election_works() {
+	// tests the encapsulated phragmen::elect function.
+	with_externalities(&mut ExtBuilder::default().nominate(false).build(), || {
+		// initial setup of 10 and 20, both validators
+		assert_eq!(Session::validators(), vec![20, 10]);
+
+		// no one is a nominator
+		assert_eq!(<Nominators<Test>>::enumerate().count(), 0 as usize);
+
+		// Bond [30, 31] as the third validator
+		assert_ok!(Staking::bond(Origin::signed(31), 30, 1000, RewardDestination::default()));
+		assert_ok!(Staking::validate(Origin::signed(30), ValidatorPrefs::default()));
+
+		// bond [2,1](A), [4,3](B), as 2 nominators
+		// Give all of them some balance to be able to bond properly.
+		for i in &[1, 3] { Balances::set_free_balance(i, 50); }
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(2), vec![10, 20]));
+
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 45, RewardDestination::default()));
+		assert_ok!(Staking::nominate(Origin::signed(4), vec![10, 30]));
+
+		let rounds =     || 2 as usize;
+		let validators = || <Validators<Test>>::enumerate();
+		let nominators = || <Nominators<Test>>::enumerate();
+		let stash_of =  |w| Staking::stash_balance(&w);
+		let min_validator_count = Staking::minimum_validator_count() as usize;
+
+		let winners = phragmen::elect::<Test, _, _, _, _>(
+			rounds,
+			validators,
+			nominators,
+			stash_of,
+			min_validator_count
+		);
+
+		// 10 and 30 must be the winners
+		assert_eq!(winners.iter().map(|w| w.who).collect::<Vec<BalanceOf<Test>>>(), vec![10, 30]);
+
+		let winner_10 = winners.iter().filter(|w| w.who == 10).nth(0).unwrap();
+		let winner_30 = winners.iter().filter(|w| w.who == 30).nth(0).unwrap();
+
+		// python implementation output:
+		/*
+		10  is elected with stake  26.31578947368421 and score  0.02
+		30  is elected with stake  23.684210526315788 and score  0.042222222222222223
+
+		2  has load  0.02 and supported 
+		10  with stake  5.0 20  with stake  0.0 
+		4  has load  0.042222222222222223 and supported 
+		10  with stake  21.31578947368421 30  with stake  23.684210526315788 
+		*/
+
+		assert_eq!(winner_10.exposure.total, 1000 + 26);
+		assert_eq!(winner_10.score, Perquintill::from_fraction(0.02));
+		assert_eq!(winner_10.exposure.others[0].value, 21);
+		assert_eq!(winner_10.exposure.others[1].value, 5);
+
+		assert_eq!(winner_30.exposure.total, 23);
+		assert_eq!(winner_30.score, Perquintill::from_quintillionths(42222222222222222));
+		assert_eq!(winner_30.exposure.others[0].value, 23);
+	})
 }
 
 #[test]
