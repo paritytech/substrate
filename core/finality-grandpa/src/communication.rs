@@ -30,9 +30,10 @@ use substrate_primitives::{ed25519, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_INFO};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
-use crate::{Error, Network, Message, SignedMessage, Commit,
-	CompactCommit, GossipMessage, FullCommitMessage, VoteOrPrecommitMessage};
-use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
+
+use crate::gossip::{GossipMessage, FullCommitMessage, VoteOrPrecommitMessage};
+use crate::{Error, Network, Message, SignedMessage, Commit, CompactCommit};
+use substrate_primitives::ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	(message, round, set_id).encode()

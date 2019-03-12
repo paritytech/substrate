@@ -199,13 +199,11 @@ impl Network<Block> for MessageRouting {
 	}
 
 	fn drop_round_messages(&self, round: u64, set_id: u64) {
-		self.validator.drop_round(round, set_id);
 		let topic = make_topic(round, set_id);
 		self.drop_messages(topic);
 	}
 
 	fn drop_set_messages(&self, set_id: u64) {
-		self.validator.drop_set(set_id);
 		let topic = make_commit_topic(set_id);
 		self.drop_messages(topic);
 	}
