@@ -323,9 +323,8 @@ impl<B: BlockT> BlockImporter<B> {
 					}
 
 					if aux.bad_justification {
-						println!("baaad justification!!!!");
 						if let Some(peer) = who {
-							link.note_useless_and_restart_sync(peer, "Sent block with bad justification to import");						
+							link.useless_peer(peer, "Sent block with bad justification to import");						
 						}
 					}
 				},
@@ -435,12 +434,12 @@ impl<B: BlockT, V: 'static + Verifier<B>> BlockImportWorker<B, V> {
 			let import_result = if has_error {
 				Err(BlockImportError::Error)
 			} else {
-   				import_single_block(
-   					&*self.block_import,
-   					origin.clone(),
-   					block.clone(),
-   					self.verifier.clone(),
-   				)
+				import_single_block(
+					&*self.block_import,
+					origin.clone(),
+					block.clone(),
+					self.verifier.clone(),
+				)
 			};
 			let was_ok = import_result.is_ok();
 			results.push((import_result, block.hash));
@@ -634,7 +633,7 @@ mod tests {
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 
 		// Send an unknown
-		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(), Default::default())), Default::default())];
+		let results = vec![(Ok(BlockImportResult::ImportedUnknown(Default::default(), Default::default(), None)), Default::default())];
 		let _ = result_sender.send(BlockImportWorkerMsg::Imported(results)).ok().unwrap();
 		assert_eq!(link_port.recv(), Ok(LinkMsg::BlockImported));
 

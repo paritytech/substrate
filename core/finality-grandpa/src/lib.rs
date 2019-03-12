@@ -777,6 +777,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	RA: Send + Sync + 'static,
 {
 	use futures::future::{self, Loop as FutureLoop};
+
 	let LinkHalf {
 		client,
 		persistent_data,
@@ -804,7 +805,6 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 
 	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
 	let voter_work = future::loop_fn(initial_state, move |params| {
-		println!("executing grandpa loop");
 		let (env, set_state, voter_commands_rx) = params;
 		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
 		telemetry!(CONSENSUS_DEBUG; "afg.starting_new_voter";
