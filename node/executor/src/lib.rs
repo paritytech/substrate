@@ -257,7 +257,7 @@ mod tests {
 	}
 
 	fn new_test_ext(code: &[u8], support_changes_trie: bool) -> TestExternalities<Blake2Hasher> {
-		let three = [3u8; 32].into();
+		let three = AccountId::from_raw([3u8; 32]);
 		TestExternalities::new_with_code(code, GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(SystemConfig {
@@ -288,9 +288,9 @@ mod tests {
 				session_length: 2,
 				validators: vec![AccountKeyring::One.into(), AccountKeyring::Two.into(), three],
 				keys: vec![
-					(alice(), AuthorityKeyring::Alice.to_raw_public().into()),
-					(bob(), AuthorityKeyring::Bob.to_raw_public().into()),
-					(charlie(), AuthorityKeyring::Charlie.to_raw_public().into())
+					(alice(), AuthorityKeyring::Alice.into()),
+					(bob(), AuthorityKeyring::Bob.into()),
+					(charlie(), AuthorityKeyring::Charlie.into())
 				]
 			}),
 			staking: Some(StakingConfig {
@@ -581,9 +581,9 @@ mod tests {
 /*				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-						(AuthorityKeyring::Alice.to_raw_public().into(), 1),
-						(AuthorityKeyring::Charlie.to_raw_public().into(), 1),
-						(AuthorityKeyring::Bob.to_raw_public().into(), 1),
+						(AuthorityKeyring::Alice.into(), 1),
+						(AuthorityKeyring::Charlie.into(), 1),
+						(AuthorityKeyring::Bob.into(), 1),
 					])),
 				},
 */				EventRecord {

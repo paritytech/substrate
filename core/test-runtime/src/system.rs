@@ -357,8 +357,8 @@ mod tests {
 			},
 			extrinsics: vec![
 				construct_signed_tx(Transfer {
-					from: AccountKeyring::Alice.to_raw_public().into(),
-					to: AccountKeyring::Bob.to_raw_public().into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Bob.into(),
 					amount: 69,
 					nonce: 0,
 				})
@@ -378,14 +378,14 @@ mod tests {
 			},
 			extrinsics: vec![
 				construct_signed_tx(Transfer {
-					from: AccountKeyring::Bob.to_raw_public().into(),
-					to: AccountKeyring::Alice.to_raw_public().into(),
+					from: AccountKeyring::Bob.into(),
+					to: AccountKeyring::Alice.into(),
 					amount: 27,
 					nonce: 0,
 				}),
 				construct_signed_tx(Transfer {
-					from: AccountKeyring::Alice.to_raw_public().into(),
-					to: AccountKeyring::Charlie.to_raw_public().into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Charlie.into(),
 					amount: 69,
 					nonce: 1,
 				}),
@@ -398,23 +398,23 @@ mod tests {
 		let mut t = new_test_ext();
 
 		with_externalities(&mut t, || {
-			assert_eq!(balance_of(AccountKeyring::Alice.to_raw_public().into()), 111);
-			assert_eq!(balance_of(AccountKeyring::Bob.to_raw_public().into()), 0);
+			assert_eq!(balance_of(AccountKeyring::Alice.into()), 111);
+			assert_eq!(balance_of(AccountKeyring::Bob.into()), 0);
 		});
 
 		block_executor(b1, &mut t);
 
 		with_externalities(&mut t, || {
-			assert_eq!(balance_of(AccountKeyring::Alice.to_raw_public().into()), 42);
-			assert_eq!(balance_of(AccountKeyring::Bob.to_raw_public().into()), 69);
+			assert_eq!(balance_of(AccountKeyring::Alice.into()), 42);
+			assert_eq!(balance_of(AccountKeyring::Bob.into()), 69);
 		});
 
 		block_executor(b2, &mut t);
 
 		with_externalities(&mut t, || {
-			assert_eq!(balance_of(AccountKeyring::Alice.to_raw_public().into()), 0);
-			assert_eq!(balance_of(AccountKeyring::Bob.to_raw_public().into()), 42);
-			assert_eq!(balance_of(AccountKeyring::Charlie.to_raw_public().into()), 69);
+			assert_eq!(balance_of(AccountKeyring::Alice.into()), 0);
+			assert_eq!(balance_of(AccountKeyring::Bob.into()), 42);
+			assert_eq!(balance_of(AccountKeyring::Charlie.into()), 69);
 		});
 	}
 

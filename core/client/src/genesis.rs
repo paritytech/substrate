@@ -133,8 +133,8 @@ mod tests {
 			genesis_hash,
 			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
 			vec![Transfer {
-				from: AccountKeyring::One.to_raw_public().into(),
-				to: AccountKeyring::Two.to_raw_public().into(),
+				from: AccountKeyring::One.into(),
+				to: AccountKeyring::Two.into(),
 				amount: 69,
 				nonce: 0,
 			}]
@@ -144,8 +144,8 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_native() {
 		let mut storage = GenesisConfig::new(false,
-			vec![AuthorityKeyring::One.to_raw_public().into(), AuthorityKeyring::Two.to_raw_public().into()],
-			vec![AccountKeyring::One.to_raw_public().into(), AccountKeyring::Two.to_raw_public().into()],
+			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
@@ -172,8 +172,8 @@ mod tests {
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
 		let mut storage = GenesisConfig::new(false,
-			vec![AuthorityKeyring::One.to_raw_public().into(), AuthorityKeyring::Two.to_raw_public().into()],
-			vec![AccountKeyring::One.to_raw_public().into(), AccountKeyring::Two.to_raw_public().into()],
+			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			1000
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
@@ -200,8 +200,8 @@ mod tests {
 	#[test]
 	fn construct_genesis_with_bad_transaction_should_panic() {
 		let mut storage = GenesisConfig::new(false,
-			vec![AuthorityKeyring::One.to_raw_public().into(), AuthorityKeyring::Two.to_raw_public().into()],
-			vec![AccountKeyring::One.to_raw_public().into(), AccountKeyring::Two.to_raw_public().into()],
+			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 			68
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());

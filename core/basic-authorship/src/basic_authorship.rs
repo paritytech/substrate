@@ -279,7 +279,7 @@ mod tests {
 		let tx = Transfer {
 			amount: Default::default(),
 			nonce,
-			from: AccountKeyring::Alice.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		};
 		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();

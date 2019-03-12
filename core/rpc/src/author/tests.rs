@@ -31,7 +31,7 @@ fn uxt(sender: AccountKeyring, nonce: u64) -> Extrinsic {
 	let tx = Transfer {
 		amount: Default::default(),
 		nonce,
-		from: sender.to_raw_public().into(),
+		from: sender.into(),
 		to: Default::default(),
 	};
 	let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();

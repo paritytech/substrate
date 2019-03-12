@@ -29,6 +29,28 @@ pub enum Infallible {}
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
 pub const JUNCTION_ID_LEN: usize = 32;
 
+/// Similar to `From`, except that the onus is on the part of the caller to ensure
+/// that data passed in makes sense. Basically, you're not guaranteed to get anything
+/// sensible out.
+pub trait UncheckedFrom<T> {
+	/// Convert from an instance of `T` to Self. This is not guaranteed to be
+	/// whatever counts as a valid instance of `T` and it's up to the caller to
+	/// ensure that it makes sense.
+	fn unchecked_from(t: T) -> Self;
+}
+
+/// The counterpart to `UncheckedFrom`.
+pub trait UncheckedInto<T> {
+	/// The counterpart to `unchecked_from`.
+	fn unchecked_into(self) -> T;
+}
+
+impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
+	fn unchecked_into(self) -> T {
+		T::unchecked_from(self)
+	}
+}
+
 /// A since derivation junction description. It is the single parameter used when creating
 /// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
 /// a new public key from an existing public key.

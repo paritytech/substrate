@@ -457,8 +457,8 @@ impl<D, S: NetworkSpecialization<Block> + Clone> Peer<D, S> {
 		if with_tx {
 			self.generate_blocks_at(at, count, BlockOrigin::File, |mut builder| {
 				let transfer = Transfer {
-					from: AccountKeyring::Alice.to_raw_public().into(),
-					to: AccountKeyring::Alice.to_raw_public().into(),
+					from: AccountKeyring::Alice.into(),
+					to: AccountKeyring::Alice.into(),
 					amount: 1,
 					nonce,
 				};

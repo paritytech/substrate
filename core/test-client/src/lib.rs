@@ -164,13 +164,13 @@ pub fn new_with_backend<B>(
 
 fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 	GenesisConfig::new(support_changes_trie, vec![
-		AuthorityKeyring::Alice.to_raw_public().into(),
-		AuthorityKeyring::Bob.to_raw_public().into(),
-		AuthorityKeyring::Charlie.to_raw_public().into(),
+		AuthorityKeyring::Alice.into(),
+		AuthorityKeyring::Bob.into(),
+		AuthorityKeyring::Charlie.into(),
 	], vec![
-		AccountKeyring::Alice.to_raw_public().into(),
-		AccountKeyring::Bob.to_raw_public().into(),
-		AccountKeyring::Charlie.to_raw_public().into(),
+		AccountKeyring::Alice.into(),
+		AccountKeyring::Bob.into(),
+		AccountKeyring::Charlie.into(),
 	],
 		1000
 	)

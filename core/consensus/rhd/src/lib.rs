@@ -1446,10 +1446,10 @@ mod tests {
 	fn future_gets_preempted() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.to_raw_public().into(),
-				AuthorityKeyring::Two.to_raw_public().into(),
-				AuthorityKeyring::Alice.to_raw_public().into(),
-				AuthorityKeyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1493,10 +1493,10 @@ mod tests {
 		let hash = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::One.to_raw_public().into(),
-			AuthorityKeyring::Two.to_raw_public().into(),
-			AuthorityKeyring::Alice.to_raw_public().into(),
-			AuthorityKeyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::One.into(),
+			AuthorityKeyring::Two.into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let authorities_keys = vec![
@@ -1554,8 +1554,8 @@ mod tests {
 		let parent_hash = Default::default();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.to_raw_public().into(),
-			AuthorityKeyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let block = TestBlock {
@@ -1591,8 +1591,8 @@ mod tests {
 		let hash: H256 = [0xff; 32].into();
 
 		let authorities = vec![
-			AuthorityKeyring::Alice.to_raw_public().into(),
-			AuthorityKeyring::Eve.to_raw_public().into(),
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Eve.into(),
 		];
 
 		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
@@ -1618,10 +1618,10 @@ mod tests {
 	fn drop_bft_future_does_not_deadlock() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.to_raw_public().into(),
-				AuthorityKeyring::Two.to_raw_public().into(),
-				AuthorityKeyring::Alice.to_raw_public().into(),
-				AuthorityKeyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};
@@ -1643,10 +1643,10 @@ mod tests {
 	fn bft_can_build_though_skipped() {
 		let client = FakeClient {
 			authorities: vec![
-				AuthorityKeyring::One.to_raw_public().into(),
-				AuthorityKeyring::Two.to_raw_public().into(),
-				AuthorityKeyring::Alice.to_raw_public().into(),
-				AuthorityKeyring::Eve.to_raw_public().into(),
+				AuthorityKeyring::One.into(),
+				AuthorityKeyring::Two.into(),
+				AuthorityKeyring::Alice.into(),
+				AuthorityKeyring::Eve.into(),
 			],
 			imported_heights: Mutex::new(HashSet::new()),
 		};

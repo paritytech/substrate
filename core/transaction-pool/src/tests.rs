@@ -87,7 +87,7 @@ fn number_of(at: &BlockId<Block>) -> u64 {
 
 fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 	let transfer = Transfer {
-		from: who.to_raw_public().into(),
+		from: who.into(),
 		to: AccountId::default(),
 		nonce,
 		amount: 1,

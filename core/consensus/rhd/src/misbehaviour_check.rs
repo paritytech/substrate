@@ -138,7 +138,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(!evaluate_misbehavior::<Block, H256>(
-			&AuthorityKeyring::Two.to_raw_public().into(),
+			&AuthorityKeyring::Two.into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -179,7 +179,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(!evaluate_misbehavior::<Block, H256>(
-			&AuthorityKeyring::Two.to_raw_public().into(),
+			&AuthorityKeyring::Two.into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,

@@ -64,8 +64,8 @@ fn should_notify_about_storage_changes() {
 
 		let mut builder = api.client.new_block().unwrap();
 		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
@@ -88,7 +88,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 	{
 		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
-		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.to_raw_public().into()));
+		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		api.subscribe_storage(Default::default(), subscriber, Some(vec![
 			StorageKey(alice_balance_key.to_vec()),
@@ -99,8 +99,8 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 		let mut builder = api.client.new_block().unwrap();
 		builder.push_transfer(runtime::Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
@@ -133,8 +133,8 @@ fn should_query_storage() {
 		let add_block = |nonce| {
 			let mut builder = client.new_block().unwrap();
 			builder.push_transfer(runtime::Transfer {
-				from: AccountKeyring::Alice.to_raw_public().into(),
-				to: AccountKeyring::Ferdie.to_raw_public().into(),
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
 				amount: 42,
 				nonce,
 			}).unwrap();
@@ -147,7 +147,7 @@ fn should_query_storage() {
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
 
-		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.to_raw_public().into()));
+		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		let mut expected = vec![
 			StorageChangeSet {

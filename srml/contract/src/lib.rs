@@ -70,6 +70,7 @@ use serde_derive::{Serialize, Deserialize};
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
+use substrate_primitives::crypto::UncheckedFrom;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};
@@ -120,7 +121,7 @@ pub trait Trait: fees::Trait + balances::Trait + timestamp::Trait {
 pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
 impl<T: Trait> ContractAddressFor<CodeHash<T>, T::AccountId> for SimpleAddressDeterminator<T>
 where
-	T::AccountId: From<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
 {
 	fn contract_address_for(code_hash: &CodeHash<T>, data: &[u8], origin: &T::AccountId) -> T::AccountId {
 		let data_hash = T::Hashing::hash(data);
@@ -130,7 +131,7 @@ where
 		buf.extend_from_slice(data_hash.as_ref());
 		buf.extend_from_slice(origin.as_ref());
 
-		T::Hashing::hash(&buf[..]).into()
+		UncheckedFrom::unchecked_from(T::Hashing::hash(&buf[..]))
 	}
 }
 

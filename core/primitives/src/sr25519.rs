@@ -36,7 +36,7 @@ use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, UncheckedFrom};
 use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
@@ -84,6 +84,18 @@ impl From<Public> for [u8; 32] {
 impl From<Public> for H256 {
 	fn from(x: Public) -> H256 {
 		x.0.into()
+	}
+}
+
+impl UncheckedFrom<[u8; 32]> for Public {
+	fn unchecked_from(x: [u8; 32]) -> Self {
+		Public::from_raw(x)
+	}
+}
+
+impl UncheckedFrom<H256> for Public {
+	fn unchecked_from(x: H256) -> Self {
+		Public::from_h256(x)
 	}
 }
 

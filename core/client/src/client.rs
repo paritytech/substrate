@@ -1554,8 +1554,8 @@ pub(crate) mod tests {
 			let mut builder = remote_client.new_block().unwrap();
 			for (from, to) in block_transfers {
 				builder.push_transfer(Transfer {
-					from: from.to_raw_public().into(),
-					to: to.to_raw_public().into(),
+					from: from.into(),
+					to: to.into(),
 					amount: 1,
 					nonce: *nonces.entry(from).and_modify(|n| { *n = *n + 1 }).or_default(),
 				}).unwrap();
@@ -1570,12 +1570,12 @@ pub(crate) mod tests {
 		}
 
 		// prepare test cases
-		let alice = twox_128(&runtime::system::balance_of_key(AccountKeyring::Alice.to_raw_public().into())).to_vec();
-		let bob = twox_128(&runtime::system::balance_of_key(AccountKeyring::Bob.to_raw_public().into())).to_vec();
-		let charlie = twox_128(&runtime::system::balance_of_key(AccountKeyring::Charlie.to_raw_public().into())).to_vec();
-		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.to_raw_public().into())).to_vec();
-		let eve = twox_128(&runtime::system::balance_of_key(AccountKeyring::Eve.to_raw_public().into())).to_vec();
-		let ferdie = twox_128(&runtime::system::balance_of_key(AccountKeyring::Ferdie.to_raw_public().into())).to_vec();
+		let alice = twox_128(&runtime::system::balance_of_key(AccountKeyring::Alice.into())).to_vec();
+		let bob = twox_128(&runtime::system::balance_of_key(AccountKeyring::Bob.into())).to_vec();
+		let charlie = twox_128(&runtime::system::balance_of_key(AccountKeyring::Charlie.into())).to_vec();
+		let dave = twox_128(&runtime::system::balance_of_key(AccountKeyring::Dave.into())).to_vec();
+		let eve = twox_128(&runtime::system::balance_of_key(AccountKeyring::Eve.into())).to_vec();
+		let ferdie = twox_128(&runtime::system::balance_of_key(AccountKeyring::Ferdie.into())).to_vec();
 		let test_cases = vec![
 			(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
 			(1, 3, alice.clone(), vec![(1, 0)]),
@@ -1609,14 +1609,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				AccountKeyring::Alice.to_raw_public().into()
+				AccountKeyring::Alice.into()
 			).unwrap(),
 			1000
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				AccountKeyring::Ferdie.to_raw_public().into()
+				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			0
 		);
@@ -1628,9 +1628,9 @@ pub(crate) mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 0);
 		assert_eq!(client.authorities_at(&BlockId::Number(0)).unwrap(), vec![
-			AuthorityKeyring::Alice.to_raw_public().into(),
-			AuthorityKeyring::Bob.to_raw_public().into(),
-			AuthorityKeyring::Charlie.to_raw_public().into()
+			AuthorityKeyring::Alice.into(),
+			AuthorityKeyring::Bob.into(),
+			AuthorityKeyring::Charlie.into()
 		]);
 	}
 
@@ -1652,8 +1652,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block().unwrap();
 
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
@@ -1665,14 +1665,14 @@ pub(crate) mod tests {
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				AccountKeyring::Alice.to_raw_public().into()
+				AccountKeyring::Alice.into()
 			).unwrap(),
 			958
 		);
 		assert_eq!(
 			client.runtime_api().balance_of(
 				&BlockId::Number(client.info().unwrap().chain.best_number),
-				AccountKeyring::Ferdie.to_raw_public().into()
+				AccountKeyring::Ferdie.into()
 			).unwrap(),
 			42
 		);
@@ -1694,15 +1694,15 @@ pub(crate) mod tests {
 		let mut builder = client.new_block().unwrap();
 
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
 
 		assert!(builder.push_transfer(Transfer {
-			from: AccountKeyring::Eve.to_raw_public().into(),
-			to: AccountKeyring::Alice.to_raw_public().into(),
+			from: AccountKeyring::Eve.into(),
+			to: AccountKeyring::Alice.into(),
 			amount: 42,
 			nonce: 0,
 		}).is_err());
@@ -1788,8 +1788,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
 			nonce: 0,
 		}).unwrap();
@@ -1808,8 +1808,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 1,
 		}).unwrap();
@@ -1820,8 +1820,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 0,
 		}).unwrap();
@@ -1909,8 +1909,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 41,
 			nonce: 0,
 		}).unwrap();
@@ -1929,8 +1929,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 1,
 		}).unwrap();
@@ -1941,8 +1941,8 @@ pub(crate) mod tests {
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
 		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
 		builder.push_transfer(Transfer {
-			from: AccountKeyring::Alice.to_raw_public().into(),
-			to: AccountKeyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 1,
 			nonce: 0,
 		}).unwrap();

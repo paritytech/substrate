@@ -35,7 +35,7 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, UncheckedFrom};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 
@@ -100,6 +100,18 @@ impl Into<H256> for Public {
 impl From<H256> for Public {
 	fn from(x: H256) -> Self {
 		Public(x.into())
+	}
+}
+
+impl UncheckedFrom<[u8; 32]> for Public {
+	fn unchecked_from(x: [u8; 32]) -> Self {
+		Public::from_raw(x)
+	}
+}
+
+impl UncheckedFrom<H256> for Public {
+	fn unchecked_from(x: H256) -> Self {
+		Public::from_h256(x)
 	}
 }
 
