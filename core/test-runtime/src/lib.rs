@@ -344,7 +344,7 @@ cfg_if! {
 
 			impl offchain_primitives::OffchainWorkerApi<Block> for Runtime {
 				fn offchain_worker(block: u64) {
-					runtime_io::submit_extrinsic(block.encode())
+					runtime_io::submit_extrinsic(&block)
 				}
 			}
 		}
