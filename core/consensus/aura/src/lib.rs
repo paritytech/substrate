@@ -119,11 +119,11 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_aura_seal(&self) -> Option<(u64, Signature)>;
 }
 
-impl<Hash, AuthorityId, SealSignature: Clone + From<Signature> + Into<Signature>> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId, SealSignature> {
+impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId, Signature> {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
 	fn aura_seal(slot_number: u64, signature: Signature) -> Self {
-		generic::DigestItem::Seal(slot_number, SealSignature::from(signature))
+		generic::DigestItem::Seal(slot_number, signature)
 	}
 	/// If this item is an Aura seal, return the slot number and signature.
 	fn as_aura_seal(&self) -> Option<(u64, Signature)> {
