@@ -112,7 +112,7 @@ pub struct NetworkConfigurationParams {
 }
 
 arg_enum! {
-	#[derive(Debug, Clone)]
+	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 	pub enum NodeKeyType {
 		Secp256k1,
 		Ed25519

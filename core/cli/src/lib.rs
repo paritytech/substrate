@@ -702,10 +702,10 @@ fn init_logger(pattern: &str) {
 	builder.filter(None, log::LevelFilter::Info);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse_filters(&lvl);
+		builder.parse(&lvl);
 	}
 
-	builder.parse_filters(pattern);
+	builder.parse(pattern);
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 
@@ -849,6 +849,57 @@ mod tests {
 			})
 		}
 		QuickCheck::new().tests(5).quickcheck(secret_file as fn(_) -> _);
+	}
+
+	#[test]
+	fn test_node_key_config_default() {
+		fn with_def_params<F>(f: F) -> error::Result<()>
+		where
+			F: Fn(NodeKeyParams) -> error::Result<()>
+		{
+			NodeKeyType::variants().into_iter().try_for_each(|t| {
+				let node_key_type = NodeKeyType::from_str(t).unwrap();
+				f(NodeKeyParams {
+					node_key_type,
+					node_key: None,
+					node_key_file: None
+				})
+			})
+		}
+
+		fn no_config_dir() -> error::Result<()> {
+			with_def_params(|params| {
+				let typ = params.node_key_type;
+				node_key_config::<String>(params, &None)
+					.and_then(|c| match c {
+						NodeKeyConfig::Secp256k1(network::Secret::New)
+							if typ == NodeKeyType::Secp256k1 => Ok(()),
+						NodeKeyConfig::Ed25519(network::Secret::New)
+							if typ == NodeKeyType::Ed25519 => Ok(()),
+						_ => Err(input_err("Unexpected node key config"))
+					})
+			})
+		}
+
+		fn some_config_dir(net_config_dir: String) -> error::Result<()> {
+			with_def_params(|params| {
+				let dir = PathBuf::from(net_config_dir.clone());
+				let typ = params.node_key_type;
+				node_key_config(params, &Some(net_config_dir.clone()))
+					.and_then(move |c| match c {
+						NodeKeyConfig::Secp256k1(network::Secret::File(ref f))
+							if typ == NodeKeyType::Secp256k1 &&
+								f == &dir.join(NODE_KEY_SECP256K1_FILE) => Ok(()),
+						NodeKeyConfig::Ed25519(network::Secret::File(ref f))
+							if typ == NodeKeyType::Ed25519 &&
+								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
+						_ => Err(input_err("Unexpected node key config"))
+				})
+			})
+		}
+
+		QuickCheck::new().tests(1).quickcheck(no_config_dir as fn() -> _);
+		QuickCheck::new().tests(5).quickcheck(some_config_dir as fn(_) -> _);
 	}
 
 }
