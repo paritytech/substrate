@@ -227,6 +227,9 @@ macro_rules! __decl_generic_event {
 		{ $( $events:tt )* };
 		{ ,$( $generic_param:ident = $generic_type:ty ),* };
 	) => {
+		/// Accessor to [`RawEvent`]
+		///
+		/// [`RawEvent`]: enum.RawEvent.html
 		pub type Event<$event_generic_param> = RawEvent<$( $generic_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, $crate::codec::Encode, $crate::codec::Decode)]
