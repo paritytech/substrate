@@ -296,23 +296,17 @@ mod tests {
 
 	#[test]
 	fn test_secret_input() {
-		fn prop() -> io::Result<bool> {
-			let sk = secp256k1::SecretKey::generate();
-			let kp1 = NodeKeyConfig::Secp256k1(Secret::Input(sk.clone())).into_keypair()?;
-			let kp2 = NodeKeyConfig::Secp256k1(Secret::Input(sk)).into_keypair()?;
-			Ok(secret_bytes(&kp1) == secret_bytes(&kp2))
-		}
-		QuickCheck::new().tests(5).quickcheck(prop as fn() -> _)
+		let sk = secp256k1::SecretKey::generate();
+		let kp1 = NodeKeyConfig::Secp256k1(Secret::Input(sk.clone())).into_keypair().unwrap();
+		let kp2 = NodeKeyConfig::Secp256k1(Secret::Input(sk)).into_keypair().unwrap();
+		assert!(secret_bytes(&kp1) == secret_bytes(&kp2));
 	}
 
 	#[test]
 	fn test_secret_new() {
-		fn prop() -> io::Result<bool> {
-			let kp1 = NodeKeyConfig::Ed25519(Secret::New).into_keypair()?;
-			let kp2 = NodeKeyConfig::Ed25519(Secret::New).into_keypair()?;
-			Ok(secret_bytes(&kp1) != secret_bytes(&kp2))
-		}
-		QuickCheck::new().tests(5).quickcheck(prop as fn() -> _)
+		let kp1 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
+		let kp2 = NodeKeyConfig::Ed25519(Secret::New).into_keypair().unwrap();
+		assert!(secret_bytes(&kp1) != secret_bytes(&kp2));
 	}
 }
 
