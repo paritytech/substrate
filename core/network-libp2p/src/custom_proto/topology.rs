@@ -109,7 +109,9 @@ impl NetTopology {
 	/// the earlier known time when a new entry will be added automatically to
 	/// the list.
 	pub fn addrs_to_attempt(&mut self) -> (impl Iterator<Item = &PeerId>, Instant) {
-		self.inner.addrs_to_attempt()
+		let state = self.inner.state();
+		// TODO: take `to_drop` into account
+		(state.to_connect, state.next_modification)
 	}
 
 	/// Adds an address corresponding to a boostrap node.

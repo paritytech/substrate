@@ -18,7 +18,7 @@ use fnv::FnvHashMap;
 use libp2p::{core::swarm::ConnectedPoint, Multiaddr, PeerId};
 use log::{debug, trace, warn};
 use serde_derive::{Serialize, Deserialize};
-use std::cmp;
+use std::{cmp, iter};
 use std::io::{Read, Cursor, Error as IoError, ErrorKind as IoErrorKind, Write};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -160,14 +160,18 @@ impl NetTopology {
 		});
 	}
 
-	/// Returns a list of all the known addresses of peers, ordered by the
-	/// order in which we should attempt to connect to them.
+	/// Returns a list of all the peers that we should connect to, ordered by
+	/// the priority in which we should attempt to connect to them, and a list of all
+	/// the peers that we should disconnect from.
 	///
 	/// Because of expiration and back-off mechanisms, this list can grow
 	/// by itself over time. The `Instant` that is returned corresponds to
 	/// the earlier known time when a new entry will be added automatically to
 	/// the list.
-	pub fn addrs_to_attempt(&mut self) -> (impl Iterator<Item = &PeerId>, Instant) {
+	///
+	/// Despite the returned `Instant`, the user is expected to call this method
+	/// whenever they call a method that modifies the topology.
+	pub fn state(&mut self) -> State<impl Iterator<Item = &PeerId>, impl Iterator<Item = &PeerId>> {
 		// TODO: optimize
 		let now = Instant::now();
 		let now_systime = SystemTime::now();
@@ -202,7 +206,11 @@ impl NetTopology {
 
 		addrs_out.sort_by(|a, b| b.1.cmp(&a.1));
 		// TODO: remove duplicates, or preferably just rewrite the whole thing
-		(addrs_out.into_iter().map(|a| (a.0).0), instant)
+		State {
+			to_connect: addrs_out.into_iter().map(|a| (a.0).0),
+			to_drop: iter::empty(),
+			next_modification: instant
+		}
 	}
 
 	/// Adds an address corresponding to a boostrap node.
@@ -459,6 +467,17 @@ impl NetTopology {
 			}
 		}
 	}
+}
+
+/// State returned by the `state()` method.
+#[derive(Debug)]
+pub struct State<TConn, TDisc> {
+	/// Iterator to a list of peer IDs to connect to.
+	pub to_connect: TConn,
+	/// Iterator to a list of peer IDs to disconnect from.
+	pub to_drop: TDisc,
+	/// When one of the two lists in this struct will modify itself.
+	pub next_modification: Instant,
 }
 
 fn peer_access<'a>(store: &'a mut FnvHashMap<PeerId, PeerInfo>, peer: &PeerId) -> &'a mut PeerInfo {
