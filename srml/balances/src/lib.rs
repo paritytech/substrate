@@ -14,16 +14,129 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles setting and retrieval of free balance,
-//! retrieving total, reserved, and unreserved balances,
-//! repatriating a reserved balance to a beneficiary account that exists,
-//! transfering a balance between accounts (when not reserved),
-//! slashing an account balance, account removal, rewards,
-//! lookup of an index to reclaim an account (when balance not reserved),
-//! increasing total stake.
+//! # Balances Module
+//! 
+//! ## Overview
+//! 
+//! The balances module provides functions for:
+//! 
+//! - Getting and setting free balance
+//! - Retrieving total, reserved, and unreserved balances
+//! - Repatriating a reserved balance to a beneficiary account that exists
+//! - Transfering a balance between accounts (when not reserved)
+//! - Slashing an account balance
+//! - Account removal
+//! - Lookup of an index to reclaim an account
+//! - Increasing or decreasing total stake
+//! - Setting and removing locks on chains that implement `LockableCurrency`
+//! 
+//! ### Terminology
+//! 
+//! - **Existential Deposit:** The existential deposit is the minimum balance required to create or keep an account open. This prevents "dust accounts" from filling storage.
+//! - **Stake:** The total amount of tokens in existence in a system.
+//! - **Reaping an account:** The act of removing an account by reseting its nonce, setting its balance to zero, and removing from storage.
+//! - **Free Balance:** The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is reaped.
+//! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the existential deposit then it will be deleted.
+//! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number. Only runtimes that implement the `LockableCurrency` trait allow this.
+//! 
+//! ## Interface
+//! 
+//! ### Types
+//! 
+//! - Balance
+//! - OnFreeBalanceZero
+//! - OnNewAccount
+//! - Event
+//! 
+//! These are [associated types](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#specifying-placeholder-types-in-trait-definitions-with-associated-types) and must be implemented in your `runtime/src/lib.rs`. For example:
+//! 
+//! ```ignore
+//! impl balances::Trait for Runtime {
+//! 	/// The type for recording an account's balance.
+//! 	type Balance = u128;
+//! 	/// What to do if an account's free balance gets zeroed.
+//! 	type OnFreeBalanceZero = ();
+//! 	/// What to do if a new account is created.
+//! 	type OnNewAccount = Indices;
+//! 	/// The uniquitous event type.
+//! 	type Event = Event;
+//! }
+//! ```
+//! 
+//! ### Dispatchable Functions
+//! 
+//! The `Call` enum is documented here: https://crates.parity.io/srml_balances/enum.Call.html
 //!
-//! Implements functions for `Currency`, `LockableCurrency`, `TransferAsset`,
-//! and `IsDeadAccount` traits.
+//! <!-- TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24) -->
+//! - `transfer` - Transfer some liquid free balance to another staker.
+//! - `set_balance` - Set the balances of a given account. Only dispatchable by a user with root privileges.
+//! 
+//! ### Public Functions
+//! 
+//! <!-- TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24) -->
+//! See the rustdocs for details on publicly available functions.
+//! 
+//! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
+//! 
+//! ## Usage
+//! 
+//! The following examples show how to use the balances module in your custom module.
+//! 
+//! ### Importing into your runtime
+//! 
+//! Import the `balances` module and derive your module configuration trait with the balances trait. You can now call functions from the module.
+//! 
+//! ```ignore
+//! use support::{decl_module, dispatch::Result};
+//! use system::ensure_signed;
+//!
+//! pub trait Trait: balances::Trait {}
+//!
+//! decl_module! {
+//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		fn transfer_proxy(origin, to: T::AccountId, value: T::Balance) -> Result {
+//! 			let sender = ensure_signed(origin)?;
+//! 			<balances::Module<T>>::make_transfer(&sender, &to, value)?;
+//!
+//! 			Ok(())
+//! 		}
+//! 	}
+//! }
+//! ```
+//! 
+//! ### Real Use Example
+//! 
+//! Use the `free_balance` function in the `staking` module:
+//! 
+//! ```ignore
+//! fn bond_extra(origin, max_additional: BalanceOf<T>) {
+//! 	let controller = ensure_signed(origin)?;
+//! 	let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
+//! 	let stash_balance = T::Currency::free_balance(&ledger.stash);
+//!
+//! 	if stash_balance > ledger.total {
+//! 		let extra = (stash_balance - ledger.total).min(max_additional);
+//! 		ledger.total += extra;
+//! 		ledger.active += extra;
+//! 		Self::update_ledger(&controller, ledger);
+//! 	}
+//! }
+//! ```
+//! 
+//! ## Genesis config
+//! 
+//! Configuration is in `<your-node-name>/src/chain_spec.rs`. The following storage items are configurable:
+//! 
+//! - `TotalIssuance`
+//! - `ExistentialDeposit`
+//! - `TransferFee`
+//! - `CreationFee`
+//! - `Vesting`
+//! - `FreeBalance`
+//!
+//! ## Related Modules
+//! 
+//! The balances module depends on the `system` and `srml_support` modules as well as Substrate Core libraries and the Rust standard library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -188,10 +301,13 @@ decl_module! {
 		fn deposit_event<T>() = default;
 
 		/// Transfer some liquid free balance to another staker.
+		///
 		/// `transfer` will set the `FreeBalance` of the sender and receiver.
 		/// It will decrease the total stake of the system by the `TransferFee`.
 		/// If the sender's account is below the existential deposit as a result
 		/// of the transfer, the account will be reaped.
+		///
+		/// The dispatch origin for this call must be `Signed` by the transactor.
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -202,11 +318,14 @@ decl_module! {
 			Self::make_transfer(&transactor, &dest, value)?;
 		}
 
-		/// Set the balances of a given account. Only dispatchable by root.
+		/// Set the balances of a given account.
+		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage.
 		/// If the new free or reserved balance is below the existential deposit, 
 		/// it will also decrease the total stake of the system (`TotalIssuance`)
 		/// and reset the account nonce (`system::AccountNonce`).
+		///
+		/// The dispatch origin for this call is `root`.
 		fn set_balance(
 			who: <T::Lookup as StaticLookup>::Source,
 			#[compact] free: T::Balance,
