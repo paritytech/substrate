@@ -218,9 +218,10 @@ pub fn secp256k1_ecdsa_recover(sig: &[u8; 65], msg: &[u8; 32]) -> Result<[u8; 64
 
 /// Submit extrinsic.
 pub fn submit_extrinsic<T: codec::Encode>(data: &T) {
-	ext::with(|ext| {
-		ext.submit_extrinsic(codec::Encode::encode(data))
-	}).expect("submit_extrinsic cannot be called outside of an Externalities-provided environment.")
+	ext::with(|ext| ext
+		.submit_extrinsic(codec::Encode::encode(data))
+		.expect("submit_extrinsic can be called only in offchain worker context")
+	).expect("submit_extrinsic cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Execute the given closure with global function available whose functionality routes into the

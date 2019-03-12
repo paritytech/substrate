@@ -522,7 +522,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let extrinsic = this.memory.get(msg_data, len as usize)
 			.map_err(|_| UserError("OOB while ext_submit_extrinsic: wasm"))?;
 
-		this.ext.submit_extrinsic(extrinsic);
+		this.ext.submit_extrinsic(extrinsic)
+			.map_err(|_| UserError("Calling unavailable API ext_submit_extrinsic: wasm"))?;
 
 		Ok(())
 	},

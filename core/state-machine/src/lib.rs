@@ -155,7 +155,9 @@ pub trait Externalities<H: Hasher> {
 	fn storage_changes_root(&mut self, parent: H::Out, parent_num: u64) -> Option<H::Out> where H::Out: Ord;
 
 	/// Submit extrinsic.
-	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>);
+	///
+	/// Returns an error in case the API is not available.
+	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()>;
 }
 
 /// An implementation of offchain extensions that should never be triggered.

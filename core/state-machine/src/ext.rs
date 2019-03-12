@@ -22,7 +22,6 @@ use crate::backend::{Backend, Consolidate};
 use crate::changes_trie::{AnchorBlockId, Storage as ChangesTrieStorage, compute_changes_trie_root};
 use crate::{Externalities, OverlayedChanges, OffchainExt};
 use hash_db::Hasher;
-use parity_codec::Encode;
 use primitives::storage::well_known_keys::is_child_storage_key;
 use trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root, is_child_trie_key_valid};
 use heapsize::HeapSizeOf;
@@ -342,12 +341,14 @@ where
 		root
 	}
 
-	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) {
+	fn submit_extrinsic(&mut self, extrinsic: Vec<u8>) -> Result<(), ()> {
 		let _guard = panic_handler::AbortGuard::new(true);
 		if let Some(ext) = self.offchain_externalities.as_mut() {
-			ext.submit_extrinsic(extrinsic.encode());
+			ext.submit_extrinsic(extrinsic);
+			Ok(())
 		} else {
 			warn!("Call to submit_extrinsic without offchain externalities set.");
+			Err(())
 		}
 	}
 }
@@ -355,6 +356,7 @@ where
 #[cfg(test)]
 mod tests {
 	use hex_literal::{hex, hex_impl};
+	use parity_codec::Encode;
 	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use crate::backend::InMemory;

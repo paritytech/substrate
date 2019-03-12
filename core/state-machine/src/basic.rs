@@ -153,8 +153,9 @@ impl<H: Hasher> Externalities<H> for BasicExternalities where H::Out: Ord + Heap
 		None
 	}
 
-	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) {
+	fn submit_extrinsic(&mut self, _extrinsic: Vec<u8>) -> Result<(), ()> {
 		warn!("Call to submit_extrinsic without offchain externalities set.");
+		Err(())
 	}
 }
 
