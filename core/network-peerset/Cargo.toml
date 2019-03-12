@@ -1,8 +1,8 @@
 [package]
-description = "libp2p implementation of the ethcore network library"
+description = "Connectivity manager based on reputation"
 homepage = "http://parity.io"
 license = "GPL-3.0"
-name = "substrate-network-libp2p"
+name = "substrate-network-peerset"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
@@ -17,7 +17,6 @@ libp2p = { version = "0.4.0", default-features = false, features = ["secio-secp2
 parking_lot = "0.7.1"
 lazy_static = "1.2"
 log = "0.4"
-substrate-network-peerset = { path = "../network-peerset" }
 rand = "0.6"
 serde = "1.0.70"
 serde_derive = "1.0.70"
