@@ -478,9 +478,11 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
 		root;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
+			$(#[doc = $doc_attr])*
 			$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
 				{ $( $impl )* }
 				Ok(())
@@ -492,11 +494,13 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
 		root;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
 			root $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
+			$(#[doc = $doc_attr])*
 			$vis fn $name($( $param: $param_ty ),* ) -> $result {
 				$( $impl )*
 			}
@@ -507,11 +511,13 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
 		$ignore:ident;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
+			$(#[doc = $doc_attr])*
 			$vis fn $name(
 				$origin: $origin_ty $(, $param: $param_ty )*
 			) -> $crate::dispatch::Result {
@@ -525,11 +531,13 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		$origin_ty:ty;
 		$ignore:ident;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $module<$trait_instance $(, $instance)?> {
+			$(#[doc = $doc_attr])*
 			$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
 				$( $impl )*
 			}
@@ -594,6 +602,7 @@ macro_rules! decl_module {
 				$mod_type<$trait_instance: $trait_name $(<I>, $fn_instance: $fn_instantiable)?>;
 				$origin_type;
 				$from;
+				$(#[doc = $doc_attr])*
 				$fn_vis fn $fn_name (
 					$from $(, $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
@@ -603,10 +612,11 @@ macro_rules! decl_module {
 		#[cfg(feature = "std")]
 		$(#[$attr])*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
+			#[doc(hidden)]
 			__PhantomItem(::std::marker::PhantomData<($trait_instance $(, $instance)?)>),
-			__OtherPhantomItem(::std::marker::PhantomData<($trait_instance $(, $instance)?)>),
 			$(
 				#[allow(non_camel_case_types)]
+				$(#[doc = $doc_attr])*
 				$fn_name ( $( $param ),* ),
 			)*
 		}
@@ -614,10 +624,11 @@ macro_rules! decl_module {
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
 		pub enum $call_type<$trait_instance: $trait_name$(<I>, $instance: $instantiable $( = $module_default_instance)?)?> {
+			#[doc(hidden)]
 			__PhantomItem(::core::marker::PhantomData<($trait_instance $(, $instance)?)>),
-			__OtherPhantomItem(::core::marker::PhantomData<($trait_instance $(, $instance)?)>),
 			$(
 				#[allow(non_camel_case_types)]
+				$(#[doc = $doc_attr])*
 				$fn_name ( $( $param ),* ),
 			)*
 		}
@@ -650,7 +661,6 @@ macro_rules! decl_module {
 							} else {
 								match *_other {
 									$call_type::__PhantomItem(_) => unreachable!(),
-									$call_type::__OtherPhantomItem(_) => unreachable!(),
 									_ => false,
 								}
 							}
@@ -693,7 +703,6 @@ macro_rules! decl_module {
 			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
 				$crate::__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[$codec_attr on type $param])* $param_name ),* ); )*);
 				if let $call_type::__PhantomItem(_) = *self { unreachable!() }
-				if let $call_type::__OtherPhantomItem(_) = *self { unreachable!() }
 			}
 		}
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $crate::dispatch::Dispatchable
@@ -712,7 +721,7 @@ macro_rules! decl_module {
 							)
 						},
 					)*
-					_ => { panic!("__PhantomItem should never be used.") },
+					$call_type::__PhantomItem(_) => { panic!("__PhantomItem should never be used.") },
 				}
 			}
 		}
@@ -723,6 +732,7 @@ macro_rules! decl_module {
 		}
 
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+			#[doc(hidden)]
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
 				d.dispatch(origin)
 			}
@@ -939,6 +949,7 @@ macro_rules! __dispatch_impl_metadata {
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name $(<I>, $instance: 'static + $instantiable)?> $mod_type<$trait_instance $(, $instance)?> {
+			#[doc(hidden)]
 			pub fn call_functions() -> &'static [$crate::dispatch::FunctionMetadata] {
 				$crate::__call_to_functions!($($rest)*)
 			}

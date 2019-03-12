@@ -21,7 +21,7 @@ use std::{io, thread};
 use log::{warn, debug, error, trace, info};
 use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
 use parking_lot::{Mutex, RwLock};
-use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
+use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
 use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol, NetworkState};
 use consensus::import_queue::{ImportQueue, Link};
@@ -469,11 +469,7 @@ fn start_thread<B: BlockT + 'static>(
 	let service = match start_service(config, Some(registered)) {
 		Ok(service) => Arc::new(Mutex::new(service)),
 		Err(err) => {
-			match err.kind() {
-				ErrorKind::Io(ref e) if e.kind() == io::ErrorKind::AddrInUse =>
-					warn!("Network port is already in use, make sure that another instance of Substrate client is not running or change the port using the --port option."),
-				_ => warn!("Error starting network: {}", err),
-			};
+			warn!("Error starting network: {}", err);
 			return Err(err.into())
 		},
 	};

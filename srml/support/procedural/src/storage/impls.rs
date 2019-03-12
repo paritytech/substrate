@@ -29,7 +29,7 @@ pub fn option_unwrap(is_option: bool) -> TokenStream2 {
 	}
 }
 
-pub(crate) struct Impls<'a> {
+pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub scrate: &'a TokenStream2,
 	pub visibility: &'a syn::Visibility,
 	pub traitinstance: &'a syn::Ident,
@@ -40,9 +40,10 @@ pub(crate) struct Impls<'a> {
 	pub prefix: String,
 	pub cratename: &'a syn::Ident,
 	pub name: &'a syn::Ident,
+	pub attrs: I,
 }
 
-impl<'a> Impls<'a> {
+impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 	pub fn simple_value(self) -> TokenStream2 {
 		let Self {
 			scrate,
@@ -54,6 +55,7 @@ impl<'a> Impls<'a> {
 			fielddefault,
 			prefix,
 			name,
+			attrs,
 			..
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
@@ -89,7 +91,7 @@ impl<'a> Impls<'a> {
 
 		// generator for value
 		quote!{
-
+			#( #[ #attrs ] )*
 			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageValue<#typ> for #name<#traitinstance, #instance> {
@@ -121,7 +123,6 @@ impl<'a> Impls<'a> {
 					ret
 				}
 			}
-
 		}
 	}
 
@@ -136,6 +137,7 @@ impl<'a> Impls<'a> {
 			fielddefault,
 			prefix,
 			name,
+			attrs,
 			..
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
@@ -171,6 +173,7 @@ impl<'a> Impls<'a> {
 
 		// generator for map
 		quote!{
+			#( #[ #attrs ] )*
 			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#scrate::storage::generator::PhantomData<(#traitinstance #comma_instance)>);
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance, #instance> {
@@ -224,6 +227,7 @@ impl<'a> Impls<'a> {
 			fielddefault,
 			prefix,
 			name,
+			attrs,
 			..
 		} = self;
 
@@ -354,6 +358,7 @@ impl<'a> Impls<'a> {
 		};
 
 		let structure = quote! {
+			#( #[ #attrs ] )*
 			#visibility struct #name<#traitinstance: #traittype, #instance #bound_instantiable #equal_default_instance>(#phantom_data<(#traitinstance #comma_instance)>);
 
 			impl<#traitinstance: #traittype, #instance #bound_instantiable> self::#inner_module::Utils<#traitinstance, #instance> for #name<#traitinstance, #instance> {
