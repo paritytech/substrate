@@ -358,7 +358,7 @@ decl_module! {
 		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		///
-		/// See also `withdraw_unbonded`.
+		/// See also [`Call::withdraw_unbonded`].
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -388,7 +388,7 @@ decl_module! {
 		///
 		/// NOTE: This call must be made by the controller, not the stash.
 		///
-		/// See also `unbond`.
+		/// See also [`Call::unbond`].
 		fn withdraw_unbonded(origin) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -572,7 +572,7 @@ impl<T: Trait> Module<T> {
 					let _ = T::Currency::reward(&l.stash, amount);
 					Self::update_ledger(who, l);
 				},
-		}		
+		}
 	}
 
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
@@ -755,7 +755,7 @@ impl<T: Trait> Module<T> {
 			let _ = Self::slash_validator(&v, slash);
 			<Validators<T>>::remove(&v);
 			let _ = Self::apply_force_new_era(false);
-			
+
 			RawEvent::OfflineSlash(v.clone(), slash)
 		} else {
 			RawEvent::OfflineWarning(v.clone(), slash_count)
