@@ -40,7 +40,7 @@ use client::{
 };
 use parity_codec::{Encode, Decode};
 use grandpa::BlockNumberOps;
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{Justification, generic::BlockId};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, One,
 };
@@ -475,9 +475,22 @@ impl<Header: HeaderT> AuthoritiesOrEffects<Header> {
 }
 
 /// Justification used to prove block finality.
-trait ProvableJustification<Header: HeaderT>: Encode + Decode {
+pub(crate) trait ProvableJustification<Header: HeaderT>: Encode + Decode {
 	/// Verify justification with respect to authorities set and authorities set id.
 	fn verify(&self, set_id: u64, authorities: &[(Ed25519AuthorityId, u64)]) -> ClientResult<()>;
+
+	/// Decode and verify justification.
+	fn decode_and_verify(
+		justification: Justification,
+		set_id: u64,
+		authorities: &[(Ed25519AuthorityId, u64)],
+	) -> ClientResult<Self> {
+		let justification = Self::decode(&mut &*justification).ok_or_else(|| {
+			ClientError::from(ClientErrorKind::JustificationDecode)
+		})?;
+		justification.verify(set_id, authorities)?;
+		Ok(justification)
+	}
 }
 
 impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJustification<Block>
@@ -490,7 +503,7 @@ impl<Block: BlockT<Hash=H256>> ProvableJustification<Block::Header> for GrandpaJ
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use test_client::runtime::{Block, Header, H256};
 	use test_client::client::{backend::NewBlockState};
 	use test_client::client::in_mem::Blockchain as InMemoryBlockchain;
@@ -529,11 +542,15 @@ mod tests {
 	}
 
 	#[derive(Debug, PartialEq, Encode, Decode)]
-	struct ValidJustification(Vec<u8>);
+	pub struct TestJustification(pub bool, pub Vec<u8>);
 
-	impl ProvableJustification<Header> for ValidJustification {
+	impl ProvableJustification<Header> for TestJustification {
 		fn verify(&self, _set_id: u64, _authorities: &[(Ed25519AuthorityId, u64)]) -> ClientResult<()> {
-			Ok(())
+			if self.0 {
+				Ok(())
+			} else {
+				Err(ClientErrorKind::BadJustification("test".into()).into())
+			}
 		}
 	}
 
@@ -759,7 +776,7 @@ mod tests {
 		let blockchain = test_blockchain();
 
 		// when we can't decode proof from Vec<u8>
-		do_check_finality_proof::<_, _, ValidJustification>(
+		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			vec![(Ed25519AuthorityId([3u8; 32]), 1u64)],
@@ -773,12 +790,12 @@ mod tests {
 		let blockchain = test_blockchain();
 
 		// when decoded proof has zero length
-		do_check_finality_proof::<_, _, ValidJustification>(
+		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			vec![(Ed25519AuthorityId([3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
-			Vec::<ValidJustification>::new().encode(),
+			Vec::<TestJustification>::new().encode(),
 		).unwrap_err();
 	}
 
@@ -787,19 +804,19 @@ mod tests {
 		let blockchain = test_blockchain();
 
 		// when intermediate (#0) fragment has non-empty unknown headers
-		do_check_finality_proof::<_, _, ValidJustification>(
+		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			vec![(Ed25519AuthorityId([3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![FinalityProofFragment {
 				block: header(4).hash(),
-				justification: ValidJustification(vec![7]).encode(),
+				justification: TestJustification(true, vec![7]).encode(),
 				unknown_headers: vec![header(4)],
 				authorities_proof: Some(vec![vec![42]]),
 			}, FinalityProofFragment {
 				block: header(5).hash(),
-				justification: ValidJustification(vec![8]).encode(),
+				justification: TestJustification(true, vec![8]).encode(),
 				unknown_headers: vec![header(5)],
 				authorities_proof: None,
 			}].encode(),
@@ -811,19 +828,19 @@ mod tests {
 		let blockchain = test_blockchain();
 
 		// when intermediate (#0) fragment has empty authorities proof
-		do_check_finality_proof::<_, _, ValidJustification>(
+		do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			vec![(Ed25519AuthorityId([3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| unreachable!("returns before CheckAuthoritiesProof")),
 			vec![FinalityProofFragment {
 				block: header(4).hash(),
-				justification: ValidJustification(vec![7]).encode(),
+				justification: TestJustification(true, vec![7]).encode(),
 				unknown_headers: Vec::new(),
 				authorities_proof: None,
 			}, FinalityProofFragment {
 				block: header(5).hash(),
-				justification: ValidJustification(vec![8]).encode(),
+				justification: TestJustification(true, vec![8]).encode(),
 				unknown_headers: vec![header(5)],
 				authorities_proof: None,
 			}].encode(),
@@ -834,19 +851,19 @@ mod tests {
 	fn finality_proof_check_works() {
 		let blockchain = test_blockchain();
 
-		let effects = do_check_finality_proof::<_, _, ValidJustification>(
+		let effects = do_check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			vec![(Ed25519AuthorityId([3u8; 32]), 1u64)],
 			&ClosureAuthoritySetForFinalityChecker(|_, _, _| Ok(vec![(Ed25519AuthorityId([4u8; 32]), 1u64)])),
 			vec![FinalityProofFragment {
 				block: header(2).hash(),
-				justification: ValidJustification(vec![7]).encode(),
+				justification: TestJustification(true, vec![7]).encode(),
 				unknown_headers: Vec::new(),
 				authorities_proof: Some(vec![vec![42]]),
 			}, FinalityProofFragment {
 				block: header(4).hash(),
-				justification: ValidJustification(vec![8]).encode(),
+				justification: TestJustification(true, vec![8]).encode(),
 				unknown_headers: vec![header(4)],
 				authorities_proof: None,
 			}].encode(),
@@ -854,7 +871,7 @@ mod tests {
 		assert_eq!(effects, FinalityEffects {
 			headers_to_import: vec![header(4)],
 			block: header(4).hash(),
-			justification: ValidJustification(vec![8]).encode(),
+			justification: TestJustification(true, vec![8]).encode(),
 			new_set_id: 2,
 			new_authorities: vec![(Ed25519AuthorityId([4u8; 32]), 1u64)],
 		});

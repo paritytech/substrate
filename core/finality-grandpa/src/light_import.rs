@@ -42,7 +42,7 @@ use substrate_primitives::{H256, Ed25519AuthorityId, Blake2Hasher};
 use crate::aux_schema::load_decode;
 use crate::consensus_changes::ConsensusChanges;
 use crate::environment::canonical_at_height;
-use crate::finality_proof::AuthoritySetForFinalityChecker;
+use crate::finality_proof::{AuthoritySetForFinalityChecker, ProvableJustification};
 use crate::justification::GrandpaJustification;
 
 /// LightAuthoritySet is saved under this key in aux storage.
@@ -111,7 +111,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> BlockImport<Block>
 		block: ImportBlock<Block>,
 		new_authorities: Option<Vec<Ed25519AuthorityId>>,
 	) -> Result<ImportResult, Self::Error> {
-		do_import_block(&*self.client, &mut *self.data.write(), block, new_authorities)
+		do_import_block::<_, _, _, _, GrandpaJustification<Block>>(&*self.client, &mut *self.data.write(), block, new_authorities)
 	}
 
 	fn check_block(
@@ -155,7 +155,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA> FinalityProofImport<Block>
 		finality_proof: Vec<u8>,
 		verifier: &Verifier<Block>,
 	) -> Result<(), Self::Error> {
-		do_import_finality_proof(
+		do_import_finality_proof::<_, _, _, _, GrandpaJustification<Block>>(
 			&*self.client,
 			&*self.authority_set_provider,
 			&mut *self.data.write(),
@@ -195,7 +195,7 @@ impl LightAuthoritySet {
 }
 
 /// Try to import new block.
-fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
+fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	client: &Client<B, E, Block, RA>,
 	data: &mut LightImportData<Block>,
 	mut block: ImportBlock<Block>,
@@ -208,6 +208,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 		NumberFor<Block>: grandpa::BlockNumberOps,
 		DigestFor<Block>: Encode,
 		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
+		J: ProvableJustification<Block::Header>,
 {
 	let hash = block.post_header().hash();
 	let number = block.header.number().clone();
@@ -232,7 +233,7 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 				hash,
 			);
 
-			do_import_justification(client, data, hash, number, justification)?;
+			do_import_justification::<_, _, _, _, J>(client, data, hash, number, justification)
 		},
 		None if enacts_consensus_change => {
 			trace!(
@@ -244,15 +245,14 @@ fn do_import_block<B, E, Block: BlockT<Hash=H256>, RA>(
 			// remember that we need finality proof for this block
 			imported_aux.needs_finality_proof = true;
 			data.consensus_changes.note_change((number, hash));
+			Ok(ImportResult::Imported(imported_aux))
 		},
-		None => (),
+		None => Ok(ImportResult::Imported(imported_aux)),
 	}
-
-	Ok(ImportResult::Imported(imported_aux))
 }
 
 /// Try to import finality proof.
-fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
+fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	client: &Client<B, E, Block, RA>,
 	authority_set_provider: &AuthoritySetForFinalityChecker<Block>,
 	data: &mut LightImportData<Block>,
@@ -268,8 +268,8 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 		DigestFor<Block>: Encode,
 		DigestItemFor<Block>: DigestItem<AuthorityId=Ed25519AuthorityId>,
 		NumberFor<Block>: grandpa::BlockNumberOps,
+		J: ProvableJustification<Block::Header>,
 {
-	// TODO: ensure that the proof is for non-finalized block
 	let authority_set_id = data.authority_set.set_id();
 	let authorities = data.authority_set.authorities();
 	let finality_effects = crate::finality_proof::check_finality_proof(
@@ -285,7 +285,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 	for header_to_import in finality_effects.headers_to_import {
 		let (block_to_import, new_authorities) = verifier.verify(block_origin, header_to_import, None, None)?;
 		assert!(block_to_import.justification.is_none(), "We have passed None as justification to verifier.verify");
-		do_import_block(client, data, block_to_import, new_authorities)?;
+		do_import_block::<_, _, _, _, J>(client, data, block_to_import, new_authorities)?;
 	}
 
 	// try to import latest justification
@@ -311,7 +311,7 @@ fn do_import_finality_proof<B, E, Block: BlockT<Hash=H256>, RA>(
 }
 
 /// Try to import justification.
-fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA>(
+fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA, J>(
 	client: &Client<B, E, Block, RA>,
 	data: &mut LightImportData<Block>,
 	hash: Block::Hash,
@@ -323,6 +323,7 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA>(
 		E: CallExecutor<Block, Blake2Hasher> + 'static + Clone + Send + Sync,
 		RA: Send + Sync,
 		NumberFor<Block>: grandpa::BlockNumberOps,
+		J: ProvableJustification<Block::Header>,
 {
 	// with justification, we have two cases
 	//
@@ -334,10 +335,10 @@ fn do_import_justification<B, E, Block: BlockT<Hash=H256>, RA>(
 
 	// first, try to behave optimistically
 	let authority_set_id = data.authority_set.set_id();
-	let justification = GrandpaJustification::<Block>::decode_and_verify(
-		&justification,
+	let justification = J::decode_and_verify(
+		justification,
 		authority_set_id,
-		&data.authority_set.authorities().into_iter().collect(),
+		&data.authority_set.authorities(),
 	);
 
 	// BadJustification error means that justification has been successfully decoded, but
@@ -492,10 +493,87 @@ fn on_post_finalization_error(error: ClientError, value_type: &str) -> Consensus
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use consensus_common::ForkChoiceStrategy;
 	use substrate_primitives::H256;
 	use test_client::client::in_mem::Blockchain as InMemoryAuxStore;
-	use test_client::runtime::Block;
+	use test_client::runtime::{Block, Header};
 	use crate::tests::TestApi;
+	use crate::finality_proof::tests::TestJustification;
+
+	fn import_block(
+		new_authorities: Option<Vec<Ed25519AuthorityId>>,
+		justification: Option<Justification>,
+	) -> ImportResult {
+		let client = test_client::new_light();
+		let mut import_data = LightImportData {
+			authority_set: LightAuthoritySet::genesis(vec![(Ed25519AuthorityId([1; 32]), 1)]),
+			consensus_changes: ConsensusChanges::empty(),
+		};
+		let block = ImportBlock {
+			origin: BlockOrigin::Own,
+			header: Header {
+				number: 1,
+				parent_hash: client.info().unwrap().chain.best_hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			},
+			justification,
+			post_digests: Vec::new(),
+			body: None,
+			finalized: false,
+			auxiliary: Vec::new(),
+			fork_choice: ForkChoiceStrategy::LongestChain,
+		};
+		do_import_block::<_, _, _, _, TestJustification>(
+			&client,
+			&mut import_data,
+			block,
+			new_authorities,
+		).unwrap()
+	}
+
+	#[test]
+	fn finality_proof_not_required_when_consensus_data_does_not_changes_and_no_justification_provided() {
+		assert_eq!(import_block(None, None), ImportResult::Imported(ImportedAux {
+			clear_justification_requests: false,
+			needs_justification: false,
+			needs_finality_proof: false,
+		}));
+	}
+
+	#[test]
+	fn finality_proof_not_required_when_consensus_data_does_not_changes_and_correct_justification_provided() {
+		let justification = TestJustification(true, Vec::new()).encode();
+		assert_eq!(import_block(None, Some(justification)), ImportResult::Imported(ImportedAux {
+			clear_justification_requests: false,
+			needs_justification: false,
+			needs_finality_proof: false,
+		}));
+	}
+
+	#[test]
+	fn finality_proof_required_when_consensus_data_changes_and_no_justification_provided() {
+		assert_eq!(import_block(Some(vec![Ed25519AuthorityId([2; 32])]), None), ImportResult::Imported(ImportedAux {
+			clear_justification_requests: false,
+			needs_justification: false,
+			needs_finality_proof: true,
+		}));
+	}
+
+	#[test]
+	fn finality_proof_required_when_consensus_data_changes_and_incorrect_justification_provided() {
+		let justification = TestJustification(false, Vec::new()).encode();
+		assert_eq!(
+			import_block(Some(vec![Ed25519AuthorityId([2; 32])]), Some(justification)),
+			ImportResult::Imported(ImportedAux {
+				clear_justification_requests: false,
+				needs_justification: false,
+				needs_finality_proof: true,
+			},
+		));
+	}
+
 
 	#[test]
 	fn aux_data_updated_on_start() {
