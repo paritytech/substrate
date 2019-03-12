@@ -3442,6 +3442,7 @@ dependencies = [
  "hex-literal 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "srml-support 0.1.0",
