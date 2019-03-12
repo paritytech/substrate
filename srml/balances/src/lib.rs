@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Balances Module
-//! 
+//!
 //! ## Overview
-//! 
+//!
 //! The balances module provides functions for:
-//! 
+//!
 //! - Getting and setting free balance
 //! - Retrieving total, reserved, and unreserved balances
 //! - Repatriating a reserved balance to a beneficiary account that exists
@@ -29,27 +29,27 @@
 //! - Lookup of an index to reclaim an account
 //! - Increasing or decreasing total stake
 //! - Setting and removing locks on chains that implement `LockableCurrency`
-//! 
+//!
 //! ### Terminology
-//! 
+//!
 //! - **Existential Deposit:** The existential deposit is the minimum balance required to create or keep an account open. This prevents "dust accounts" from filling storage.
 //! - **Stake:** The total amount of tokens in existence in a system.
-//! - **Reaping an account:** The act of removing an account by reseting its nonce, setting its balance to zero, and removing from storage.
+//! - **Reaping an account:** The act of removing an account by resetting its nonce, setting its balance to zero, and removing from storage.
 //! - **Free Balance:** The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is reaped.
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the existential deposit then it will be deleted.
 //! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number. Only runtimes that implement the `LockableCurrency` trait allow this.
-//! 
+//!
 //! ## Interface
-//! 
+//!
 //! ### Types
-//! 
+//!
 //! - Balance
 //! - OnFreeBalanceZero
 //! - OnNewAccount
 //! - Event
-//! 
+//!
 //! These are [associated types](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#specifying-placeholder-types-in-trait-definitions-with-associated-types) and must be implemented in your `runtime/src/lib.rs`. For example:
-//! 
+//!
 //! ```ignore
 //! impl balances::Trait for Runtime {
 //! 	/// The type for recording an account's balance.
@@ -62,30 +62,32 @@
 //! 	type Event = Event;
 //! }
 //! ```
-//! 
+//!
 //! ### Dispatchable Functions
-//! 
+//!
 //! The `Call` enum is documented here: https://crates.parity.io/srml_balances/enum.Call.html
 //!
 //! <!-- TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24) -->
+//!
 //! - `transfer` - Transfer some liquid free balance to another staker.
 //! - `set_balance` - Set the balances of a given account. Only dispatchable by a user with root privileges.
-//! 
+//!
 //! ### Public Functions
-//! 
+//!
 //! <!-- TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24) -->
-//! See the rustdocs for details on publicly available functions.
-//! 
+//!
+//! See the [module](https://crates.parity.io/srml_balances/struct.Module.html) for details on publicly available functions.
+//!
 //! **Note:** When using the publicly exposed functions, you (the runtime developer) are responsible for implementing any necessary checks (e.g. that the sender is the signer) before calling a function that will affect storage.
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! The following examples show how to use the balances module in your custom module.
-//! 
-//! ### Importing into your runtime
-//! 
+//!
+//! ### Import and Balance Transfer
+//!
 //! Import the `balances` module and derive your module configuration trait with the balances trait. You can now call functions from the module.
-//! 
+//!
 //! ```ignore
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
@@ -103,11 +105,11 @@
 //! 	}
 //! }
 //! ```
-//! 
+//!
 //! ### Real Use Example
-//! 
-//! Use the `free_balance` function in the `staking` module:
-//! 
+//!
+//! Use the `free_balance` function (from the `Currency` trait) in the `staking` module:
+//!
 //! ```ignore
 //! fn bond_extra(origin, max_additional: BalanceOf<T>) {
 //! 	let controller = ensure_signed(origin)?;
@@ -122,9 +124,9 @@
 //! 	}
 //! }
 //! ```
-//! 
+//!
 //! ## Genesis config
-//! 
+//!
 //! Configuration is in `<your-node-name>/src/chain_spec.rs`. The following storage items are configurable:
 //! 
 //! - `TotalIssuance`
@@ -135,8 +137,8 @@
 //! - `FreeBalance`
 //!
 //! ## Related Modules
-//! 
-//! The balances module depends on the `system` and `srml_support` modules as well as Substrate Core libraries and the Rust standard library.
+//!
+//! The balances module depends on the [`system`](https://crates.parity.io/srml_system/index.html) and [`srml_support`](https://crates.parity.io/srml_support/index.html) modules as well as Substrate Core libraries and the Rust standard library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -389,7 +391,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// Same as `set_free_balance`, but will create a new account.
 	///
-	/// #NOTES
+	/// # NOTES
 	///
 	/// See documentation on `FreeBalance` and `ReservedBalance` storage items for their differences
 	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
@@ -412,7 +414,7 @@ impl<T: Trait> Module<T> {
 	/// Enforces `ExistentialDeposit` law, reaping the sender's account if its balance is
 	/// too low as a result of the transfer.
 	///
-	/// #NOTES
+	/// # NOTES
 	///
 	/// Will create a new account for the destination if the account does not exist.
 	pub fn make_transfer(transactor: &T::AccountId, dest: &T::AccountId, value: T::Balance) -> Result {

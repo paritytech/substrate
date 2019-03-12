@@ -136,7 +136,7 @@ pub trait Currency<AccountId> {
 	///
 	/// If `who` doesn't exist, it is created
 	///
-	/// #NOTES
+	/// # NOTES
 	///
 	/// This assumes that the total stake remains unchanged after this operation.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
@@ -153,7 +153,7 @@ pub trait Currency<AccountId> {
 	/// is less than `value`, then `Some(remaining)` will be returned. If all of `value` is
 	/// moved, the function will return `None`.
 	///
-	/// #NOTES
+	/// # NOTES
 	///
 	/// - This is different from `reserve`.
 	/// - If the remaining reserved balance is less than `ExistentialDeposit`, it will
