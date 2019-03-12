@@ -19,7 +19,7 @@
 //! # Staking Module
 //! 
 //! <!-- Original author of paragraph: @gavofyork -->
-//! The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under normal operation but are held at pain of "slash" (expropriation) should they be found not to bee discharhing their duties properly [[1](#references)]. 
+//! The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under normal operation but are held at pain of "slash" (expropriation) should they be found not to bee discharhing their duties properly. 
 //! 
 //! ## Overview 
 //! 
@@ -32,7 +32,7 @@
 //! - Stash account: The account holding an owner's funds used for staking.
 //! - Controller account: The account which controls am owner's funds for staking.
 //! - Era: A (whole) number of sessions which is the period that the validator set (and each validator's active nominator set) is recalculated and where rewards are paid out.
-//! - Slash: The punishment of a staker by reducing their funds. 
+//! - Slash: The punishment of a staker by reducing their funds ([reference](#references)). 
 //! 
 //! ### Goals
 //! <!-- Original author of paragraph: @gavofyork -->
@@ -64,17 +64,30 @@
 //! 
 //! Finally, any of the roles above can choose to temporarily step back and just chill for a while. This means that if they are a nominator, they will not be considered as voters anymore and if they are validators, they will no longer be a candidate for the next election (again, both effects apply at the beginning of the next era). An account can step back via the `chill()` call.
 //! 
-//! ## Public Interface
+//! ## Interface
 //! 
-//! The staking module contains many public storage items and (im)mutable, and dispatchable, functions. Please refer to the [`Module`](https://crates.parity.io/srml_staking/struct.Module.html) struct definition for more details.
+//! ### Types
 //! 
-//! ## Usage Example
+//! - `Currency`: Used as the measurement means of staking and funds management.		
+//!  
+//! ### Dispatchable
 //! 
-//! ### Bonding and Accepting Roles
+//! The Dispatchable functions of the staking module enable the steps needed for entities to accept and and change their role, alongside some helper funcitons to get/set the metadata of the module.
+//! 
+//! Please refer to the [`Call`](https://crates.parity.io/srml_staking/enum.Call.html) enum and its associated functions for a detailed list of dispatchable functions.
+//! 
+//! ### Public 
+//! The staking module contains many public storage items and (im)mutable functions. Please refer to the [struct list](#structs) below and the [`Module`](https://crates.parity.io/srml_staking/struct.Module.html) struct definition for more details.
+//! 
+//! ## Usage
+//! 
+//! ### Prerequisites
+//! 
+//! ### Snippet: Bonding and Accepting Roles
 //! 
 //! An arbitrary account pair, given that the associated stash has the required funds, can become stakers via the following call:
 //! 
-//! ```rust
+//! ```rust,ignore
 //! // bond account 3 as stash
 //! // account 4 as controller 
 //! // with stash value 1500 units 
@@ -84,7 +97,7 @@
 //! 
 //! To state desire in becoming a validator: 
 //! 
-//! ```rust
+//! ```rust,ignore
 //! // controller account 4 states desire for validation with the given preferences.
 //! Staking::validate(Origin::signed(4), ValidatorPrefs::default()); 
 //! ```
@@ -93,17 +106,16 @@
 //! 
 //! Similarly, to state desire in nominating: 
 //! 
-//! ```rust
+//! ```rust,ignore
 //! // controller account 4 nominates for account 10 and 20.
 //! Staking::nominate(Origin::signed(4), vec![20, 10]);
 //! ```
 //! 
 //! Finally, account 4 can withdraw from any of the above roles via
 //! 
-//! ```rust
+//! ```rust,ignore
 //! Staking::chill(Origin::signed(4));
 //! ```
-//! 
 //! 
 //! ## Implementation Details
 //! 
@@ -154,7 +166,7 @@
 //! 
 //! # References
 //! 
-//! 1. This document is written as a more verbose version of the original [Staking.md](../Staking.md) file. Some sections, (denoted by `[1]`) are taken directly from the aforementioned document.
+//! 1. This document is written as a more verbose version of the original [Staking.md](../Staking.md) file. Some sections, are taken directly from the aforementioned document.
 
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -424,6 +436,7 @@ decl_module! {
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will be the
 		/// account that controls it.
+		/// The dispatch origin for this call must be _Signed_.
 		fn bond(origin, controller: <T::Lookup as StaticLookup>::Source, #[compact] value: BalanceOf<T>, payee: RewardDestination) {
 			let stash = ensure_signed(origin)?;
 
@@ -449,7 +462,7 @@ decl_module! {
 		///
 		/// Use this if there are additional funds in your stash account that you wish to bond.
 		///
-		/// NOTE: This call must be made by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn bond_extra(origin, max_additional: BalanceOf<T>) {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -470,7 +483,7 @@ decl_module! {
 		/// Once the unlock period is done, you can call `withdraw_unbonded` to actually move
 		/// the funds out of management ready for transfer.
 		///
-		/// NOTE: This call must be made by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
 		/// See also [`Call::withdraw_unbonded`].
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
@@ -500,7 +513,7 @@ decl_module! {
 		/// This essentially frees up that balance to be used by the stash account to do
 		/// whatever it wants.
 		///
-		/// NOTE: This call must be made by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
 		/// See also [`Call::unbond`].
 		fn withdraw_unbonded(origin) {
@@ -514,7 +527,7 @@ decl_module! {
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
-		/// NOTE: This call must be made by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn validate(origin, prefs: ValidatorPrefs<BalanceOf<T>>) {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -527,7 +540,7 @@ decl_module! {
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
-		/// NOTE: This call must be made by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -545,7 +558,7 @@ decl_module! {
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
-		/// NOTE: This call must be made by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn chill(origin) {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
@@ -557,7 +570,7 @@ decl_module! {
 		///
 		/// Effects will be felt at the beginning of the next era.
 		///
-		/// NOTE: This call must be made by the controller, not the stash.
+		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
 			let _ledger = Self::ledger(&controller).ok_or("not a controller")?;
