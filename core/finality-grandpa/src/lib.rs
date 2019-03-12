@@ -90,6 +90,7 @@ mod aux_schema;
 mod communication;
 mod consensus_changes;
 mod environment;
+mod gossip;
 mod finality_proof;
 mod import;
 mod justification;
