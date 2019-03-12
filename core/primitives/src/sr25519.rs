@@ -87,20 +87,6 @@ impl From<Public> for H256 {
 	}
 }
 
-// Consider removal in favour of need to explicitly use `from_raw`.
-impl From<[u8; 32]> for Public {
-	fn from(x: [u8; 32]) -> Self {
-		Public(x)
-	}
-}
-
-// Consider removal in favour of need to explicitly use `from_raw_h256`.
-impl From<H256> for Public {
-	fn from(x: H256) -> Self {
-		Public(x.into())
-	}
-}
-
 #[cfg(feature = "std")]
 impl ::std::fmt::Display for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -119,14 +105,15 @@ impl ::std::fmt::Debug for Public {
 #[cfg(feature = "std")]
 impl Serialize for Public {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		serialize(&self, serializer)
+		serializer.serialize_str(&self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		deserialize(deserializer)
+		Public::from_ss58check(&String::deserialize(deserializer)?)
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))
 	}
 }
 
@@ -189,17 +176,9 @@ impl AsRef<[u8]> for Signature {
 	}
 }
 
-// Consider removal in favour of need to explicitly use `from_raw`.
-impl From<[u8; 64]> for Signature {
-	fn from(v: [u8; 64]) -> Signature {
-		Signature(v)
-	}
-}
-
-// Consider removal in favour of need to explicitly use `from_raw_h256`.
-impl From<H512> for Signature {
-	fn from(v: H512) -> Signature {
-		Signature(v.into())
+impl From<schnorrkel::Signature> for Signature {
+	fn from(s: schnorrkel::Signature) -> Signature {
+		Signature(s.to_bytes())
 	}
 }
 
@@ -242,17 +221,59 @@ pub enum PublicError {
 	InvalidChecksum,
 }
 
+impl Signature {
+	/// A new instance from the given 64-byte `data`.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_raw(data: [u8; 64]) -> Signature {
+		Signature(data)
+	}
+
+	/// A new instance from the given slice that should be 64 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 64];
+		r.copy_from_slice(data);
+		Signature(r)
+	}
+
+	/// A new instance from an H512.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_h512(v: H512) -> Signature {
+		Signature(v.into())
+	}
+}
+
 impl Public {
 	/// A new instance from the given 32-byte `data`.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
 	pub fn from_raw(data: [u8; 32]) -> Self {
 		Public(data)
 	}
 
 	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
 	pub fn from_slice(data: &[u8]) -> Self {
 		let mut r = [0u8; 32];
 		r.copy_from_slice(data);
 		Public(r)
+	}
+
+	/// A new instance from an H256.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	pub fn from_h256(x: H256) -> Self {
+		Public(x.into())
 	}
 
 	/// Some if the string is a properly encoded SS58Check address.
@@ -317,7 +338,7 @@ impl Public {
 		Some(Self(acc.to_bytes()))
 	}
 }
-
+/*
 /// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
 #[cfg(feature = "std")]
 pub fn deserialize<'de, D, T: From<[u8; 32]>>(deserializer: D) -> Result<T, D::Error> where
@@ -336,7 +357,7 @@ pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok
 {
 	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
 }
-
+*/
 #[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
@@ -468,7 +489,7 @@ impl TraitPair for Pair {
 
 	fn sign(&self, message: &[u8]) -> Signature {
 		let context = signing_context(SIGNING_CTX);
-		Signature::from(self.0.sign(context.bytes(message)).to_bytes())
+		self.0.sign(context.bytes(message)).into()
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -630,7 +651,7 @@ mod test {
 		// This is to make sure that the wasm library is compatible.
 		let pk = Pair::from_seed(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
 		let public = pk.public();
-		let js_signature = Signature::from(hex!("fa30b7561aae210d2a9264137fb33b1a666aa438092738616fa23bc5ef8cc14ef1b68718719672ac8cd35f0bd02d834beee7695cc0bc90e4019be1c13cf21009"));
+		let js_signature = Signature::from_raw(hex!("fa30b7561aae210d2a9264137fb33b1a666aa438092738616fa23bc5ef8cc14ef1b68718719672ac8cd35f0bd02d834beee7695cc0bc90e4019be1c13cf21009"));
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
 }

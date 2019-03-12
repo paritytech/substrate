@@ -121,14 +121,15 @@ impl ::std::fmt::Debug for Public {
 #[cfg(feature = "std")]
 impl Serialize for Public {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		serialize(&self, serializer)
+		serializer.serialize_str(&self.to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		deserialize(deserializer)
+		Public::from_ss58check(&String::deserialize(deserializer)?)
+			.map_err(|e| de::Error::custom(format!("{:?}", e)))
 	}
 }
 
@@ -165,21 +166,9 @@ impl PartialEq for Signature {
 
 impl Eq for Signature {}
 
-impl From<H512> for Signature {
-	fn from(v: H512) -> Signature {
-		Signature(v.into())
-	}
-}
-
 impl From<Signature> for H512 {
 	fn from(v: Signature) -> H512 {
 		H512::from(v.0)
-	}
-}
-
-impl From<[u8; 64]> for Signature {
-	fn from(v: [u8; 64]) -> Signature {
-		Signature(v)
 	}
 }
 
@@ -215,6 +204,34 @@ impl ::std::hash::Hash for Signature {
 	}
 }
 
+impl Signature {
+	/// A new instance from the given 64-byte `data`.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_raw(data: [u8; 64]) -> Signature {
+		Signature(data)
+	}
+
+	/// A new instance from the given slice that should be 64 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_slice(data: &[u8]) -> Self {
+		let mut r = [0u8; 64];
+		r.copy_from_slice(data);
+		Signature(r)
+	}
+
+	/// A new instance from an H512.
+	///
+	/// NOTE: No checking goes on to ensure this is a real signature. Only use it if
+	/// you are certain that the array actually is a signature. GIGO!
+	pub fn from_h512(v: H512) -> Signature {
+		Signature(v.into())
+	}
+}
+
 /// A localized signature also contains sender information.
 #[cfg(feature = "std")]
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
@@ -241,15 +258,29 @@ pub enum PublicError {
 
 impl Public {
 	/// A new instance from the given 32-byte `data`.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
 	pub fn from_raw(data: [u8; 32]) -> Self {
 		Public(data)
 	}
 
 	/// A new instance from the given slice that should be 32 bytes long.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
 	pub fn from_slice(data: &[u8]) -> Self {
 		let mut r = [0u8; 32];
 		r.copy_from_slice(data);
 		Public(r)
+	}
+
+	/// A new instance from an H256.
+	///
+	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
+	/// you are certain that the array actually is a pubkey. GIGO!
+	pub fn from_h256(x: H256) -> Self {
+		Public(x.into())
 	}
 
 	/// Return a `Vec<u8>` filled with raw data.
@@ -301,8 +332,7 @@ impl Public {
 	}
 }
 
-// Note: next two can probably be removed in the future.
-
+/*
 /// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
 #[cfg(feature = "std")]
 pub fn deserialize<'de, D, T: From<[u8; 32]>>(deserializer: D) -> Result<T, D::Error> where
@@ -321,7 +351,7 @@ pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok
 {
 	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
 }
-
+*/
 #[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
@@ -436,7 +466,7 @@ impl TraitPair for Pair {
 	fn sign(&self, message: &[u8]) -> Signature {
 		let mut r = [0u8; 64];
 		r.copy_from_slice(self.0.sign(message).as_ref());
-		Signature::from(r)
+		Signature::from_raw(r)
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -498,7 +528,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
 		let message = b"";
-		let signature: Signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b").into();
+		let signature = Signature::from_raw(hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"));
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
@@ -509,7 +539,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")));
 		let message = b"";
-		let signature: Signature = hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b").into();
+		let signature = Signature::from_raw(hex!("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"));
 		assert!(&pair.sign(&message[..]) == &signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
