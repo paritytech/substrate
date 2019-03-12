@@ -113,7 +113,6 @@ use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 mod tests;
 
 const GRANDPA_ENGINE_ID: network::ConsensusEngineId = [b'a', b'f', b'g', b'1'];
-const MESSAGE_ROUND_TOLERANCE: u64 = 2;
 
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;

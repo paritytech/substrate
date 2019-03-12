@@ -44,11 +44,6 @@ pub struct View {
 }
 
 impl View {
-	/// A new view of consensus.
-	pub fn new(round: u64, set_id: u64) -> Self {
-		View { round, set_id }
-	}
-
 	/// Get the round number.
 	pub fn round(&self) -> u64 { self.round }
 
@@ -112,51 +107,9 @@ pub struct FullCommitMessage<Block: BlockT> {
 	pub message: CompactCommit<Block>,
 }
 
-struct TopicTracker {
-	min_live_round: u64,
-	max_round: u64,
-	set_id: u64,
-}
-
-impl TopicTracker {
-	fn is_expired(&self, round: u64, set_id: u64) -> bool {
-		if set_id < self.set_id {
-			trace!(target: "afg", "Expired: Message with expired set_id {} (ours {})", set_id, self.set_id);
-			telemetry!(CONSENSUS_TRACE; "afg.expired_set_id";
-				"set_id" => ?set_id, "ours" => ?self.set_id
-			);
-			return true;
-		} else if set_id == self.set_id + 1 {
-			// allow a few first rounds of future set.
-			if round > crate::MESSAGE_ROUND_TOLERANCE {
-				trace!(target: "afg", "Expired: Message too far in the future set, round {} (ours set_id {})", round, self.set_id);
-				telemetry!(CONSENSUS_TRACE; "afg.expired_msg_too_far_in_future_set";
-					"round" => ?round, "ours" => ?self.set_id
-				);
-				return true;
-			}
-		} else if set_id == self.set_id {
-			if round < self.min_live_round.saturating_sub(crate::MESSAGE_ROUND_TOLERANCE) {
-				trace!(target: "afg", "Expired: Message round is out of bounds {} (ours {}-{})", round, self.min_live_round, self.max_round);
-				telemetry!(CONSENSUS_TRACE; "afg.msg_round_oob";
-					"round" => ?round, "our_min_live_round" => ?self.min_live_round, "our_max_round" => ?self.max_round
-				);
-				return true;
-			}
-		} else {
-			trace!(target: "afg", "Expired: Message in invalid future set {} (ours {})", set_id, self.set_id);
-			telemetry!(CONSENSUS_TRACE; "afg.expired_msg_in_invalid_future_set";
-				"set_id" => ?set_id, "ours" => ?self.set_id
-			);
-			return true;
-		}
-		false
-	}
-}
-
 /// A validator for GRANDPA gossip messages.
 pub(crate) struct GossipValidator<Block: BlockT> {
-	rounds: parking_lot::RwLock<TopicTracker>,
+	local_view: parking_lot::RwLock<View>,
 	_marker: std::marker::PhantomData<Block>,
 }
 
@@ -164,9 +117,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 	/// Create a new gossip-validator.
 	pub(crate) fn new() -> GossipValidator<Block> {
 		GossipValidator {
-			rounds: parking_lot::RwLock::new(TopicTracker {
-				min_live_round: 0,
-				max_round: 0,
+			local_view: parking_lot::RwLock::new(View {
+				round: 0,
 				set_id: 0,
 			}),
 			_marker: Default::default(),
@@ -175,28 +127,27 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 	/// Note a round in a set has started.
 	pub(crate) fn note_round(&self, round: u64, set_id: u64) {
-		let mut rounds = self.rounds.write();
-		if set_id > rounds.set_id {
-			rounds.set_id = set_id;
-			rounds.max_round = 0;
-			rounds.min_live_round = 0;
-		}
-		rounds.max_round = rounds.max_round.max(round);
+		let mut view = self.local_view.write();
+		*view = View { round, set_id };
 	}
 
 	/// Note that a voter set with given ID has started.
-	pub(crate) fn note_set(&self, _set_id: u64) { }
+	pub(crate) fn note_set(&self, set_id: u64) {
+		self.local_view.write().update_set(set_id);
+	}
 
-	/// Whether a message is expired.
-	fn is_expired(&self, round: u64, set_id: u64) -> bool {
-		self.rounds.read().is_expired(round, set_id)
+	/// Consider a message.
+	fn consider(&self, round: u64, set_id: u64) -> Consider {
+		self.local_view.read().consider(round, set_id)
 	}
 
 	fn validate_round_message(&self, full: VoteOrPrecommitMessage<Block>)
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
-		if self.is_expired(full.round, full.set_id) {
-			return network_gossip::ValidationResult::Expired;
+		match self.consider(full.round, full.set_id) {
+			Consider::RejectFuture | Consider::RejectPast =>
+				return network_gossip::ValidationResult::Expired,
+			_ => {},
 		}
 
 		if let Err(()) = crate::communication::check_message_sig::<Block>(
@@ -219,8 +170,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
 		use grandpa::Message as GrandpaMessage;
-		if self.is_expired(full.round, full.set_id) {
-			return network_gossip::ValidationResult::Expired;
+
+		match self.consider(full.round, full.set_id) {
+			Consider::RejectFuture | Consider::RejectPast =>
+				return network_gossip::ValidationResult::Expired,
+			_ => {},
 		}
 
 		if full.message.precommits.len() != full.message.auth_data.len() || full.message.precommits.is_empty() {
@@ -281,14 +235,16 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 	}
 
 	fn message_expired<'a>(&'a self) -> Box<FnMut(Block::Hash, &[u8]) -> bool + 'a> {
-		let rounds = self.rounds.read();
+		let rounds = self.local_view.read();
 		Box::new(move |_topic, mut data| {
-			match GossipMessage::<Block>::decode(&mut data) {
-				None => true,
-				Some(GossipMessage::Commit(full)) => rounds.is_expired(full.round, full.set_id),
+			let consider = match GossipMessage::<Block>::decode(&mut data) {
+				None => Consider::Accept,
+				Some(GossipMessage::Commit(full)) => rounds.consider(full.round, full.set_id),
 				Some(GossipMessage::VoteOrPrecommit(full)) =>
-					rounds.is_expired(full.round, full.set_id),
-			}
+					rounds.consider(full.round, full.set_id),
+			};
+
+			consider == Consider::Accept
 		})
 	}
 }
@@ -299,7 +255,7 @@ mod tests {
 
 	#[test]
 	fn view_accepts_current() {
-		let view = View::new(100, 1);
+		let view = View { round: 100, set_id: 1 };
 
 		assert_eq!(view.consider(98, 1), Consider::RejectPast);
 		assert_eq!(view.consider(1, 0), Consider::RejectPast);
