@@ -54,7 +54,7 @@
 
 use futures::prelude::*;
 use log::{debug, info, warn};
-use futures::sync::{self, mpsc, oneshot};
+use futures::sync::mpsc;
 use client::{
 	BlockchainEvents, CallExecutor, Client, backend::Backend,
 	error::Error as ClientError,
@@ -62,8 +62,7 @@ use client::{
 use client::blockchain::HeaderBackend;
 use parity_codec::Encode;
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, DigestFor, ProvideRuntimeApi, Hash as HashT,
-	DigestItemFor, DigestItem,
+	NumberFor, Block as BlockT, DigestFor, ProvideRuntimeApi, DigestItemFor, DigestItem,
 };
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
@@ -76,8 +75,6 @@ use srml_finality_tracker;
 use grandpa::Error as GrandpaError;
 use grandpa::{voter, round::State as RoundState, BlockNumberOps, VoterSet};
 
-use network::Service as NetworkService;
-
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -89,7 +86,6 @@ mod aux_schema;
 mod communication;
 mod consensus_changes;
 mod environment;
-mod gossip;
 mod finality_proof;
 mod import;
 mod justification;
@@ -99,20 +95,18 @@ mod until_imported;
 mod service_integration;
 #[cfg(feature="service-integration")]
 pub use service_integration::{LinkHalfForService, BlockImportForService};
+pub use communication::{Network, NetworkBridge};
 
 use aux_schema::{PersistentData, VoterSetState};
 use environment::Environment;
 pub use finality_proof::{prove_finality, check_finality_proof};
 use import::GrandpaBlockImport;
 use until_imported::UntilCommitBlocksImported;
-use gossip::GossipValidator;
 
 use ed25519::{Public as AuthorityId, Signature as AuthoritySignature};
 
 #[cfg(test)]
 mod tests;
-
-const GRANDPA_ENGINE_ID: network::ConsensusEngineId = [b'a', b'f', b'g', b'1'];
 
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
@@ -190,148 +184,6 @@ impl From<GrandpaError> for Error {
 impl From<ClientError> for Error {
 	fn from(e: ClientError) -> Self {
 		Error::Client(e)
-	}
-}
-
-/// A stream used by NetworkBridge in its implementation of Network.
-pub struct NetworkStream {
-	inner: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
-	outer: oneshot::Receiver<mpsc::UnboundedReceiver<Vec<u8>>>
-}
-
-impl Stream for NetworkStream {
-	type Item = Vec<u8>;
-	type Error = ();
-
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		if let Some(ref mut inner) = self.inner {
-			return inner.poll();
-		}
-		match self.outer.poll() {
-			Ok(futures::Async::Ready(mut inner)) => {
-				let poll_result = inner.poll();
-				self.inner = Some(inner);
-				poll_result
-			},
-			Ok(futures::Async::NotReady) => Ok(futures::Async::NotReady),
-			Err(_) => Err(())
-		}
-	}
-}
-
-/// A handle to the network. This is generally implemented by providing some
-/// handle to a gossip service or similar.
-///
-/// Intended to be a lightweight handle such as an `Arc`.
-pub trait Network<Block: BlockT>: Clone {
-	/// A stream of input messages for a topic.
-	type In: Stream<Item=Vec<u8>,Error=()>;
-
-	/// Get a stream of messages for a specific round. This stream should
-	/// never logically conclude.
-	fn messages_for(&self, round: u64, set_id: u64) -> Self::In;
-
-	/// Send a message at a specific round out.
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>);
-
-	/// Clean up messages for a round.
-	fn drop_round_messages(&self, round: u64, set_id: u64);
-
-	/// Clean up messages for a given authority set id (e.g. commit messages).
-	fn drop_set_messages(&self, set_id: u64);
-
-	/// Get a stream of commit messages for a specific set-id. This stream
-	/// should never logically conclude.
-	fn commit_messages(&self, set_id: u64) -> Self::In;
-
-	/// Send message over the commit channel.
-	fn send_commit(&self, round: u64, set_id: u64, message: Vec<u8>);
-
-	/// Inform peers that a block with given hash should be downloaded.
-	fn announce(&self, round: u64, set_id: u64, block: Block::Hash);
-}
-
-///  Bridge between NetworkService, gossiping consensus messages and Grandpa
-pub struct NetworkBridge<B: BlockT, S: network::specialization::NetworkSpecialization<B>> {
-	service: Arc<NetworkService<B, S>>,
-	validator: Arc<GossipValidator<B>>,
-}
-
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>> NetworkBridge<B, S> {
-	/// Create a new NetworkBridge to the given NetworkService
-	pub fn new(service: Arc<NetworkService<B, S>>) -> Self {
-		let validator = Arc::new(GossipValidator::new());
-		let v = validator.clone();
-		service.with_gossip(move |gossip, _| {
-			gossip.register_validator(GRANDPA_ENGINE_ID, v);
-		});
-		NetworkBridge { service, validator: validator }
-	}
-}
-
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Clone for NetworkBridge<B, S> {
-	fn clone(&self) -> Self {
-		NetworkBridge {
-			service: Arc::clone(&self.service),
-			validator: Arc::clone(&self.validator),
-		}
-	}
-}
-
-fn message_topic<B: BlockT>(round: u64, set_id: u64) -> B::Hash {
-	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-{}", set_id, round).as_bytes())
-}
-
-fn commit_topic<B: BlockT>(set_id: u64) -> B::Hash {
-	<<B::Header as HeaderT>::Hashing as HashT>::hash(format!("{}-COMMITS", set_id).as_bytes())
-}
-
-impl<B: BlockT, S: network::specialization::NetworkSpecialization<B>,> Network<B> for NetworkBridge<B, S> {
-	type In = NetworkStream;
-	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
-		self.validator.note_round(round, set_id);
-		let (tx, rx) = sync::oneshot::channel();
-		self.service.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, message_topic::<B>(round, set_id));
-			let _ = tx.send(inner_rx);
-		});
-		NetworkStream { outer: rx, inner: None }
-	}
-
-	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
-		let topic = message_topic::<B>(round, set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
-	}
-
-	fn drop_round_messages(&self, _round: u64, _set_id: u64) {
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
-	}
-
-	fn drop_set_messages(&self, _set_id: u64) {
-		self.service.with_gossip(move |gossip, _| gossip.collect_garbage());
-	}
-
-	fn commit_messages(&self, set_id: u64) -> Self::In {
-		self.validator.note_set(set_id);
-		let (tx, rx) = sync::oneshot::channel();
-		self.service.with_gossip(move |gossip, _| {
-			let inner_rx = gossip.messages_for(GRANDPA_ENGINE_ID, commit_topic::<B>(set_id));
-			let _ = tx.send(inner_rx);
-		});
-		NetworkStream { outer: rx, inner: None }
-	}
-
-	fn send_commit(&self, _round: u64, set_id: u64, message: Vec<u8>) {
-		let topic = commit_topic::<B>(set_id);
-		self.service.gossip_consensus_message(topic, GRANDPA_ENGINE_ID, message);
-	}
-
-	fn announce(&self, round: u64, _set_id: u64, block: B::Hash) {
-		debug!(target: "afg", "Announcing block {} to peers which we voted on in round {}", block, round);
-		telemetry!(CONSENSUS_DEBUG; "afg.announcing_blocks_to_voted_peers";
-			"block" => ?block, "round" => ?round
-		);
-		self.service.announce_block(block)
 	}
 }
 

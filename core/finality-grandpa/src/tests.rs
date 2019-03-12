@@ -33,12 +33,13 @@ use consensus_common::{BlockOrigin, ForkChoiceStrategy, ImportedAux, ImportBlock
 use consensus_common::import_queue::{SharedBlockImport, SharedJustificationImport};
 use std::collections::{HashMap, HashSet};
 use std::result;
-use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi};
+use runtime_primitives::traits::{ApiRef, ProvideRuntimeApi, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::ExecutionContext;
 use substrate_primitives::NativeOrEncoded;
 
 use authorities::AuthoritySet;
+use communication::{GRANDPA_ENGINE_ID, gossip::GossipValidator};
 use consensus_changes::ConsensusChanges;
 
 type PeerData =
@@ -167,11 +168,11 @@ impl MessageRouting {
 }
 
 fn make_topic(round: u64, set_id: u64) -> Hash {
-	message_topic::<Block>(round, set_id)
+	crate::communication::message_topic::<Block>(round, set_id)
 }
 
 fn make_commit_topic(set_id: u64) -> Hash {
-	commit_topic::<Block>(set_id)
+	crate::communication::commit_topic::<Block>(set_id)
 }
 
 impl Network<Block> for MessageRouting {

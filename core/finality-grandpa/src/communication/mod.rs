@@ -23,7 +23,7 @@ use std::sync::Arc;
 use grandpa::VoterSet;
 use grandpa::Message::{Prevote, Precommit};
 use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::sync::{oneshot, mpsc};
 use log::{debug, trace};
 use parity_codec::{Encode, Decode};
 use substrate_primitives::{ed25519, Pair};
