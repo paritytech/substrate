@@ -237,10 +237,12 @@ Then build the code:
 cargo build 				# Builds all native code
 ----
 
-You can run the tests if you like:
+You can run all the tests if you like:
 
 [source, shell]
 cargo test --all
+
+Or just run the tests of a specific package (i.e. `cargo test -p srml-assets`)
 
 You can start a development chain with:
 
