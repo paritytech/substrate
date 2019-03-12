@@ -18,7 +18,9 @@
 //! Cryptographic utilities.
 // end::description[]
 
+#[cfg(feature = "std")]
 use parity_codec::{Encode, Decode};
+#[cfg(feature = "std")]
 use regex::Regex;
 
 /// The infallible type.
@@ -27,6 +29,7 @@ pub enum Infallible {}
 
 /// The length of the junction identifier. Note that this is also referred to as the
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
+#[cfg(feature = "std")]
 pub const JUNCTION_ID_LEN: usize = 32;
 
 /// Similar to `From`, except that the onus is on the part of the caller to ensure
@@ -53,6 +56,7 @@ impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 
 /// An error with the interpretation of a secret.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "std")]
 pub enum SecretStringError {
 	/// The overall format was invalid (e.g. the seed phrase contained symbols).
 	InvalidFormat,
@@ -72,6 +76,7 @@ pub enum SecretStringError {
 /// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
 /// a new public key from an existing public key.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Encode, Decode)]
+#[cfg(feature = "std")]
 pub enum DeriveJunction {
 	/// Soft (vanilla) derivation. Public keys have a correspondent derivation.
 	Soft([u8; JUNCTION_ID_LEN]),
@@ -79,6 +84,7 @@ pub enum DeriveJunction {
 	Hard([u8; JUNCTION_ID_LEN]),
 }
 
+#[cfg(feature = "std")]
 impl DeriveJunction {
 	/// Consume self to return a soft derive junction with the same chain code.
 	pub fn soften(self) -> Self { DeriveJunction::Soft(self.unwrap_inner()) }
@@ -139,6 +145,7 @@ impl DeriveJunction {
 	}
 }
 
+#[cfg(feature = "std")]
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
@@ -167,6 +174,7 @@ impl<T: AsRef<str>> From<T> for DeriveJunction {
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
+#[cfg(feature = "std")]
 pub trait Pair: Sized {
 	/// TThe type which is used to encode a public key.
 	type Public;

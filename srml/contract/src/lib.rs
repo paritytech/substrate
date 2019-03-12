@@ -67,10 +67,10 @@ use crate::account_db::AccountDb;
 
 #[cfg(feature = "std")]
 use serde_derive::{Serialize, Deserialize};
+use substrate_primitives::crypto::UncheckedFrom;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use parity_codec::{Codec, Encode, Decode};
-use substrate_primitives::crypto::UncheckedFrom;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic,Bounded, StaticLookup};
 use srml_support::dispatch::{Result, Dispatchable};
 use srml_support::{Parameter, StorageMap, StorageValue, StorageDoubleMap, decl_module, decl_event, decl_storage};

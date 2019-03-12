@@ -49,7 +49,6 @@ pub mod hashing;
 pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
-#[cfg(feature = "std")]
 pub mod crypto;
 
 pub mod u32_trait;

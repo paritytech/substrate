@@ -21,7 +21,6 @@ use crate::utils::{
 	return_type_extract_type
 };
 
-use proc_macro;
 use proc_macro2::{Span, TokenStream};
 
 use quote::quote;

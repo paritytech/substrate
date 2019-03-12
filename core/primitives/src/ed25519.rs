@@ -38,6 +38,7 @@ use bip39::{Mnemonic, Language, MnemonicType};
 use crate::crypto::{Pair as TraitPair, DeriveJunction, UncheckedFrom, SecretStringError};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
+use crate::crypto::UncheckedFrom;
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we

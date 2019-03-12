@@ -36,8 +36,8 @@ use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, UncheckedFrom, SecretStringError};
-use crate::hash::{H256, H512};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError};
+use crate::{hash::{H256, H512}, crypto::UncheckedFrom};
 use parity_codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -188,6 +188,7 @@ impl AsRef<[u8]> for Signature {
 	}
 }
 
+#[cfg(feature = "std")]
 impl From<schnorrkel::Signature> for Signature {
 	fn from(s: schnorrkel::Signature) -> Signature {
 		Signature(s.to_bytes())
