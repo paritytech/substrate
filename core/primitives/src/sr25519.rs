@@ -650,7 +650,7 @@ mod test {
 		// This is to make sure that the wasm library is compatible.
 		let pk = Pair::from_seed(hex!("0000000000000000000000000000000000000000000000000000000000000000"));
 		let public = pk.public();
-		let js_signature = Signature::from_raw(hex!("fa30b7561aae210d2a9264137fb33b1a666aa438092738616fa23bc5ef8cc14ef1b68718719672ac8cd35f0bd02d834beee7695cc0bc90e4019be1c13cf21009"));
+		let js_signature = Signature::from_raw(hex!("28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"));
 		assert!(Pair::verify(&js_signature, b"SUBSTRATE", public));
 	}
 }
