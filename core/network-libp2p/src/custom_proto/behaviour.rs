@@ -341,6 +341,11 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		self.topology.addresses_of_peer(peer_id, true)
 	}
 
+	/// Modifies the reputation of the given peer.
+	pub fn report_peer(&mut self, peer_id: &PeerId, score_modif: i32) {
+		self.topology.report_peer(peer_id, score_modif);
+	}
+
 	/// Updates the attempted connections to nodes.
 	///
 	/// Also updates `next_connect_to_nodes` with the earliest known moment when we need to

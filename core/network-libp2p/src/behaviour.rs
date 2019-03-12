@@ -91,6 +91,11 @@ impl<TMessage, TSubstream> Behaviour<TMessage, TSubstream> {
 		self.custom_protocols.flush_topology()
 	}
 
+	/// Modifies the reputation of the given peer.
+	pub fn report_peer(&mut self, peer_id: &PeerId, score_modif: i32) {
+		self.custom_protocols.report_peer(peer_id, score_modif);
+	}
+
 	/// Perform a cleanup pass, removing all obsolete addresses and peers.
 	///
 	/// This should be done from time to time.

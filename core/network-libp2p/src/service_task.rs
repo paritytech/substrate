@@ -304,6 +304,13 @@ where TMessage: CustomMessage + Send + 'static {
 		Swarm::local_peer_id(&self.swarm)
 	}
 
+	/// Modifies the reputation of the given peer.
+	pub fn report_peer(&mut self, node_index: NodeIndex, score_modif: i32) {
+		if let Some(peer_id) = self.nodes_info.get(&node_index).map(|info| &info.peer_id) {
+			self.swarm.report_peer(peer_id, score_modif);
+		}
+	}
+
 	/// Returns the list of all the peers we are connected to.
 	#[inline]
 	pub fn connected_peers<'a>(&'a self) -> impl Iterator<Item = NodeIndex> + 'a {
@@ -373,7 +380,7 @@ where TMessage: CustomMessage + Send + 'static {
 	/// Disconnects a peer and bans it for a little while.
 	///
 	/// Same as `drop_node`, except that the same peer will not be able to reconnect later.
-	#[inline]
+	#[deprecated(note = "Use report_peer instead")]
 	pub fn ban_node(&mut self, node_index: NodeIndex) {
 		if let Some(info) = self.nodes_info.get(&node_index) {
 			info!(target: "sub-libp2p", "Banned {:?} (#{:?}, {:?}, {:?})", info.peer_id,
@@ -386,7 +393,7 @@ where TMessage: CustomMessage + Send + 'static {
 	///
 	/// This is asynchronous and will not immediately close the peer.
 	/// Corresponding closing events will be generated once the closing actually happens.
-	#[inline]
+	#[deprecated(note = "Use report_peer instead")]
 	pub fn drop_node(&mut self, node_index: NodeIndex) {
 		if let Some(info) = self.nodes_info.get(&node_index) {
 			debug!(target: "sub-libp2p", "Dropping {:?} on purpose (#{:?}, {:?}, {:?})",

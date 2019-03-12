@@ -101,6 +101,11 @@ impl NetTopology {
 		self.inner.cleanup();
 	}
 
+	/// Modifies the reputation of the given peer.
+	pub fn report_peer(&mut self, peer_id: &PeerId, score_modif: i32) {
+		self.inner.report_peer(peer_id, score_modif);
+	}
+
 	/// Returns a list of all the known addresses of peers, ordered by the
 	/// order in which we should attempt to connect to them.
 	///

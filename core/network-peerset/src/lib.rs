@@ -344,6 +344,11 @@ impl NetTopology {
 		anything_changed
 	}
 
+	/// Modifies the score of the given peer.
+	pub fn report_peer(&mut self, _peer_id: &PeerId, _score_modif: i32) {
+		// TODO: not implemented
+	}
+
 	/// Returns the list of peers that are stored in the topology.
 	pub fn known_peers(&self) -> impl Iterator<Item = &PeerId> {
 		self.store.keys()
