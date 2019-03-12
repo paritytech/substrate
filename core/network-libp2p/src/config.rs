@@ -131,7 +131,10 @@ pub enum Secret<K> {
 	Input(K),
 	/// Read the secret key from a file. If the file does not exist,
 	/// it is created with a newly generated secret key `K`. The format
-	/// of the file is determined by `K`.
+	/// of the file is determined by `K`:
+	///
+	///   * `secp256k1::SecretKey`: An unencoded 32 bytes Secp256k1 secret key.
+	///   * `ed25519::SecretKey`: An unencoded 32 bytes Ed25519 secret key.
 	File(PathBuf),
 	/// Always generate a new secret key `K`.
 	New

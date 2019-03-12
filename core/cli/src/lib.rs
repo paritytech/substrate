@@ -791,6 +791,7 @@ mod tests {
 					_ => false
 				})
 		}
+
 		quickcheck(secret_input as fn(_) -> _);
 	}
 
@@ -810,6 +811,7 @@ mod tests {
 				_ => false
 			})
 		}
+
 		QuickCheck::new().tests(5).quickcheck(secret_file as fn(_) -> _);
 	}
 
@@ -822,13 +824,13 @@ mod tests {
 				node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
 				node_key_file: None
 			};
-			node_key_config(params, &net_config_dir)
-				.map(|c| match c {
-					NodeKeyConfig::Secp256k1(network::Secret::Input(ski)) =>
-						sk.as_ref() == ski.as_ref(),
-					_ => false
-				})
+			node_key_config(params, &net_config_dir).map(|c| match c {
+				NodeKeyConfig::Secp256k1(network::Secret::Input(ski)) =>
+					sk.as_ref() == ski.as_ref(),
+				_ => false
+			})
 		}
+
 		quickcheck(secret_input as fn(_) -> _);
 	}
 
@@ -848,6 +850,7 @@ mod tests {
 				_ => false
 			})
 		}
+
 		QuickCheck::new().tests(5).quickcheck(secret_file as fn(_) -> _);
 	}
 
