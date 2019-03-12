@@ -144,12 +144,8 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			commit.meta.deleted.push(pruned.journal_key.clone());
 			self.pending_prunings += 1;
 		} else if let Some((block, pruned)) = self.pending_records.get(self.pending_prunings - self.death_rows.len()) {
-			trace!(target: "state-db", "Pruning pending{:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			commit.data.deleted.extend(pruned.deleted.iter().cloned());
-			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), block.encode()));
-			let journal_key = to_journal_key(*block);
-			commit.meta.deleted.push(journal_key);
-			self.pending_prunings += 1;
+			self.apply_pending();
+			self.prune_one(commit);
 		} else {
 			warn!(target: "state-db", "Trying to prune when there's nothing to prune");
 		}
@@ -346,4 +342,35 @@ mod tests {
 		pruning.apply_pending();
 		assert_eq!(pruning.pending_number, 3);
 	}
+
+	#[test]
+	fn reinserted_survive2() {
+		let mut db = make_db(&[1, 2, 3]);
+		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
+		let mut commit = make_commit(&[], &[2]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		let mut commit = make_commit(&[2], &[]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		let mut commit = make_commit(&[], &[2]);
+		pruning.note_canonical(&H256::random(), &mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 2, 3])));
+
+		let mut commit = CommitSet::default();
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 2, 3])));
+		let mut commit = CommitSet::default();
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 2, 3])));
+		pruning.prune_one(&mut commit);
+		db.commit(&commit);
+		assert!(db.data_eq(&make_db(&[1, 3])));
+		pruning.apply_pending();
+		assert_eq!(pruning.pending_number, 3);
+	}
+
 }
