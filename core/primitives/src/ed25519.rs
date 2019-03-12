@@ -35,7 +35,7 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, UncheckedFrom, SecretStringError};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::UncheckedFrom;
