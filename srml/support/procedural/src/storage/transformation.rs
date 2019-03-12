@@ -434,6 +434,7 @@ fn decl_storage_items(
 	let mut impls = TokenStream2::new();
 	for sline in storage_lines.inner.iter() {
 		let DeclStorageLine {
+			attrs,
 			name,
 			storage_type,
 			default_value,
@@ -443,6 +444,9 @@ fn decl_storage_items(
 
 		let type_infos = get_type_infos(storage_type);
 		let kind = type_infos.kind.clone();
+		// Propagate doc attributes.
+		let attrs = attrs.inner.iter().filter_map(|a| a.parse_meta().ok()).filter(|m| m.name() == "doc");
+
 		let i = impls::Impls {
 			scrate,
 			visibility,
@@ -453,6 +457,7 @@ fn decl_storage_items(
 				.unwrap_or_else(|| quote!{ Default::default() }),
 			prefix: format!("{} {}", cratename, name),
 			name,
+			attrs,
 		};
 
 		let implementation = match kind {
