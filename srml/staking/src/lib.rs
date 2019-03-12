@@ -74,7 +74,7 @@
 //! 
 //! The Dispatchable functions of the staking module enable the steps needed for entities to accept and and change their role, alongside some helper funcitons to get/set the metadata of the module.
 //! 
-//! Please refer to the [`Call`](https://crates.parity.io/srml_staking/enum.Call.html) enum and its associated functions for a detailed list of dispatchable functions.
+//! Please refer to the [`Call`] enum and its associated variants for a detailed list of dispatchable functions.
 //! 
 //! ### Public 
 //! The staking module contains many public storage items and (im)mutable functions. Please refer to the [struct list](#structs) below and the [`Module`](https://crates.parity.io/srml_staking/struct.Module.html) struct definition for more details.
@@ -155,7 +155,7 @@
 //! 
 //! ## GenesisConfig
 //! 
-//! See the [`GensisConfig`](https://crates.parity.io/srml_staking/struct.GenesisConfig.html) for a list of attributed that can be provided.
+//! See the [`GensisConfig`] for a list of attributed that can be provided.
 //! 
 //! ## Related Modules 
 //! 
