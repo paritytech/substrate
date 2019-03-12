@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-
 use std::sync::Arc;
 
 use log::{debug, trace, info};
@@ -461,6 +460,7 @@ impl<B, E, Block: BlockT<Hash=H256>, RA, PRA> BlockImport<Block>
 			Some(justification) => {
 				if self.import_justification(hash, number, justification, needs_justification).is_err() {
 					imported_aux.bad_justification = true;
+					imported_aux.needs_justification = true;
 				};
 			},
 			None => {
