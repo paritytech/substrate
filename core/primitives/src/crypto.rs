@@ -122,8 +122,9 @@ impl DeriveJunction {
 	}
 }
 
-impl<'a> From<&'a str> for DeriveJunction {
-	fn from(j: &'a str) -> DeriveJunction {
+impl<T: AsRef<str>> From<T> for DeriveJunction {
+	fn from(j: T) -> DeriveJunction {
+		let j = j.as_ref();
 		let (code, hard) = if j.starts_with("/") {
 			(&j[1..], true)
 		} else {
@@ -254,17 +255,10 @@ pub trait Pair: Sized {
 		let re = Regex::new(r"^(?P<phrase>\w+( \w+)*)(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s)?;
-		let re_junction = Regex::new(r"/(/?)([^/]+)")
+		let re_junction = Regex::new(r"/(/?[^/]+)")
 			.expect("constructed from known-good static value; qed");
 		let path = re_junction.captures_iter(&cap["path"])
-			.map(|f| {
-				let j = if let Ok(n) = str::parse::<u64>(&f[2]) {
-					DeriveJunction::soft(n)
-				} else {
-					DeriveJunction::soft(&f[2])
-				};
-				if f[1].is_empty() { j } else { j.harden() }
-			});
+			.map(|f| DeriveJunction::from(&f[1]));
 		Self::from_standard_components(
 			&cap["phrase"],
 			password_override.or_else(|| cap.name("password").map(|m| m.as_str())),
