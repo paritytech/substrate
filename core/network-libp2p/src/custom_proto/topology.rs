@@ -108,7 +108,7 @@ impl NetTopology {
 	/// by itself over time. The `Instant` that is returned corresponds to
 	/// the earlier known time when a new entry will be added automatically to
 	/// the list.
-	pub fn addrs_to_attempt(&mut self) -> (impl Iterator<Item = (&PeerId, &Multiaddr)>, Instant) {
+	pub fn addrs_to_attempt(&mut self) -> (impl Iterator<Item = &PeerId>, Instant) {
 		self.inner.addrs_to_attempt()
 	}
 

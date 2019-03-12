@@ -405,7 +405,7 @@ impl<TMessage, TSubstream> CustomProtos<TMessage, TSubstream> {
 		// Then, try to open new connections.
 		let local_peer_id = params.local_peer_id().clone();
 		let (to_try, will_change) = self.topology.addrs_to_attempt();
-		for (peer_id, _) in to_try {
+		for peer_id in to_try {
 			if num_to_open == 0 {
 				break
 			}

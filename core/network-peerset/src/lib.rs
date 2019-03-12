@@ -167,7 +167,7 @@ impl NetTopology {
 	/// by itself over time. The `Instant` that is returned corresponds to
 	/// the earlier known time when a new entry will be added automatically to
 	/// the list.
-	pub fn addrs_to_attempt(&mut self) -> (impl Iterator<Item = (&PeerId, &Multiaddr)>, Instant) {
+	pub fn addrs_to_attempt(&mut self) -> (impl Iterator<Item = &PeerId>, Instant) {
 		// TODO: optimize
 		let now = Instant::now();
 		let now_systime = SystemTime::now();
@@ -201,7 +201,8 @@ impl NetTopology {
 		}
 
 		addrs_out.sort_by(|a, b| b.1.cmp(&a.1));
-		(addrs_out.into_iter().map(|a| a.0), instant)
+		// TODO: remove duplicates, or preferably just rewrite the whole thing
+		(addrs_out.into_iter().map(|a| (a.0).0), instant)
 	}
 
 	/// Adds an address corresponding to a boostrap node.
