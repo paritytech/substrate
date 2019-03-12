@@ -3644,6 +3644,7 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "names 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "structopt 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
