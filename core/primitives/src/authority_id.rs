@@ -17,80 +17,17 @@
 #[cfg(feature = "std")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 use parity_codec::{Encode, Decode};
-use crate::H256;
+use crate::{H256, H512};
+
+// TODO: Remove the following two identifiers, and replace their usage with ed25519::Public and ::Signature.
+// This will require opening the ed25519 module up to no-std, and thus guarding all the algorithmic code
+// (key init, sign, verify, ...) with std feature gate.
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode)]
 pub struct Ed25519AuthorityId(pub [u8; 32]);
 
-#[cfg(feature = "std")]
-impl ::std::fmt::Display for Ed25519AuthorityId {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", crate::ed25519::Public(self.0).to_ss58check())
-	}
-}
+/// An identifier for an authority's signature in the consensus algorithm. The same size as ed25519::Signature.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode, Debug, Hash)]
+pub struct Ed25519Signature(pub H512);
 
-#[cfg(feature = "std")]
-impl ::std::fmt::Debug for Ed25519AuthorityId {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		let h = format!("{}", crate::hexdisplay::HexDisplay::from(&self.0));
-		write!(f, "{} ({}…{})", crate::ed25519::Public(self.0).to_ss58check(), &h[0..8], &h[60..])
-	}
-}
-
-#[cfg(feature = "std")]
-impl ::std::hash::Hash for Ed25519AuthorityId {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
-	}
-}
-
-impl AsRef<[u8; 32]> for Ed25519AuthorityId {
-	fn as_ref(&self) -> &[u8; 32] {
-		&self.0
-	}
-}
-
-impl AsRef<[u8]> for Ed25519AuthorityId {
-	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
-	}
-}
-
-impl Into<[u8; 32]> for Ed25519AuthorityId {
-	fn into(self) -> [u8; 32] {
-		self.0
-	}
-}
-
-impl From<[u8; 32]> for Ed25519AuthorityId {
-	fn from(a: [u8; 32]) -> Self {
-		Ed25519AuthorityId(a)
-	}
-}
-
-impl AsRef<Ed25519AuthorityId> for Ed25519AuthorityId {
-	fn as_ref(&self) -> &Ed25519AuthorityId {
-		&self
-	}
-}
-
-impl Into<H256> for Ed25519AuthorityId {
-	fn into(self) -> H256 {
-		self.0.into()
-	}
-}
-
-#[cfg(feature = "std")]
-impl Serialize for Ed25519AuthorityId {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		crate::ed25519::serialize(&self, serializer)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<'de> Deserialize<'de> for Ed25519AuthorityId {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		crate::ed25519::deserialize(deserializer)
-	}
-}

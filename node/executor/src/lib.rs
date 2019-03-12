@@ -37,7 +37,7 @@ mod tests {
 	use primitives::{twox_128, Blake2Hasher, ChangesTrieConfiguration, NeverNativeValue,
 		NativeOrEncoded};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
+	use runtime_primitives::traits::{Header as HeaderT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
@@ -315,11 +315,7 @@ mod tests {
 			contract: Some(Default::default()),
 			sudo: Some(Default::default()),
 			grandpa: Some(GrandpaConfig {
-				authorities: vec![ // set these so no GRANDPA events fire when session changes
-/*					(AuthorityKeyring::Charlie.to_raw_public().into(), 1),
-					(AuthorityKeyring::Bob.to_raw_public().into(), 1),
-					(AuthorityKeyring::Alice.to_raw_public().into(), 1),
-*/				],
+				authorities: vec![],
 			}),
 			fees: Some(FeesConfig {
 				transaction_base_fee: 1,
@@ -445,12 +441,7 @@ mod tests {
 			]
 		);
 
-		let mut digest = generic::Digest::<Log>::default();
-/*		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-			(AuthorityKeyring::Alice.to_raw_public().into(), 1),
-			(AuthorityKeyring::Charlie.to_raw_public().into(), 1),
-			(AuthorityKeyring::Bob.to_raw_public().into(), 1),
-		])));*/
+		let digest = generic::Digest::<Log>::default();
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
 		(block1, block2)

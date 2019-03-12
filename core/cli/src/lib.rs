@@ -64,7 +64,7 @@ use substrate_telemetry::TelemetryEndpoints;
 const MAX_NODE_NAME_LENGTH: usize = 32;
 
 /// The root phrase for our development network keys.
-pub const DEV_PHRASE: &'static str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
+pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
 
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {

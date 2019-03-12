@@ -50,20 +50,18 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 #[cfg(feature = "std")]
-pub mod ed25519;
-#[cfg(feature = "std")]
 pub mod sr25519;
 #[cfg(feature = "std")]
 pub mod crypto;
 
 pub mod u32_trait;
 
+pub mod ed25519;
 pub mod hash;
 mod hasher;
 pub mod sandbox;
 pub mod storage;
 pub mod uint;
-mod authority_id;
 mod changes_trie;
 
 #[cfg(test)]
@@ -71,18 +69,15 @@ mod tests;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::U256;
-pub use authority_id::Ed25519AuthorityId;
+pub use ed25519::Public as Ed25519AuthorityId;
 pub use changes_trie::ChangesTrieConfiguration;
 #[cfg(feature = "std")]
-pub use crypto::DeriveJunction;
+pub use crypto::{DeriveJunction, Pair};
 
 pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
-
-/// A 512-bit value interpreted as a signature.
-pub type Signature = hash::H512;
 
 /// Hex-serialised shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone)]

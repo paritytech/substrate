@@ -33,7 +33,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{
 	As, Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use substrate_primitives::{Blake2Hasher, ed25519,Ed25519AuthorityId, H256, crypto::StandardPair};
+use substrate_primitives::{Blake2Hasher, ed25519,Ed25519AuthorityId, H256, Pair};
 
 use crate::{
 	Commit, Config, Error, Network, Precommit, Prevote,

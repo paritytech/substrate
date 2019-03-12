@@ -11,10 +11,11 @@ use parity_codec::{Encode, Decode};
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use primitives::bytes;
-use primitives::{Ed25519AuthorityId, OpaqueMetadata};
+use primitives::OpaqueMetadata;
 use runtime_primitives::{
 	ApplyResult, transaction_validity::TransactionValidity, Ed25519Signature, generic,
-	traits::{self, BlakeTwo256, Block as BlockT, StaticLookup}, create_runtime_str
+	traits::{self, BlakeTwo256, Block as BlockT, StaticLookup}, create_runtime_str,
+	Ed25519AuthorityId
 };
 use client::{
 	block_builder::api::{CheckInherentsResult, InherentData, self as block_builder_api},
@@ -35,7 +36,7 @@ pub use timestamp::BlockPeriod;
 pub use support::{StorageValue, construct_runtime};
 
 /// Alias to Ed25519 pubkey that identifies an account on the chain.
-pub type AccountId = primitives::H256;
+pub type AccountId = Ed25519AuthorityId;
 
 /// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
@@ -66,7 +67,7 @@ pub mod opaque {
 		}
 	}
 	/// Opaque block header type.
-	pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash, Ed25519AuthorityId>>;
+	pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash, Ed25519AuthorityId, Ed25519Signature>>;
 	/// Opaque block type.
 	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 	/// Opaque block identifier type.
@@ -179,7 +180,7 @@ impl template::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, Ed25519AuthorityId>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, Ed25519AuthorityId, Ed25519Signature>) where
 		Block = Block,
 		NodeBlock = opaque::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

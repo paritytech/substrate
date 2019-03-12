@@ -127,7 +127,7 @@ impl<'a> From<&'a str> for DeriveJunction {
 /// Trait suitable for typical cryptographic PKI key pair type.
 ///
 /// For now it just specifies how to create a key from a phrase and derivation path.
-pub trait StandardPair: Sized {
+pub trait Pair: Sized {
 	/// TThe type which is used to encode a public key.
 	type Public;
 
@@ -208,6 +208,12 @@ pub trait StandardPair: Sized {
 	/// integers, non-numeric items as strings. Junctions prefixed with `/` are interpreted as soft
 	/// junctions, and with `//` as hard junctions.
 	///
+	/// There is no correspondence mapping between SURI strings and the keys they represent.
+	/// Two different non-identical strings can actually lead to the same secret being derived.
+	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
+	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will generally
+	/// be equivalent to no password at all.
+	///
 	/// `None` is returned if no matches are found.
 	/// TODO: should return Result that includes InvalidPhrase, InvalidPassword and InvalidSeed.
 	fn from_string(s: &str, password_override: Option<&str>) -> Option<Self> {
@@ -260,7 +266,7 @@ mod tests {
 		Seed(Vec<u8>),
 	}
 
-	impl StandardPair for TestPair {
+	impl Pair for TestPair {
 		type Public = ();
 		type Seed = ();
 		type Signature = ();

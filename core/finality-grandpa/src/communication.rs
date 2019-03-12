@@ -25,7 +25,7 @@ use futures::prelude::*;
 use futures::sync::mpsc;
 use log::{debug, trace};
 use parity_codec::{Encode, Decode};
-use substrate_primitives::{ed25519, Ed25519AuthorityId, crypto::StandardPair};
+use substrate_primitives::{ed25519, Ed25519AuthorityId, Pair};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::timer::Interval;
 use crate::{Error, Network, Message, SignedMessage, Commit,
@@ -309,7 +309,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 
 	fn start_send(&mut self, msg: Message<Block>) -> StartSend<Message<Block>, Error> {
 		// when locals exist, sign messages on import
-		if let Some((ref pair, local_id)) = self.locals {
+		if let Some((ref pair, ref local_id)) = self.locals {
 			let encoded = localized_payload(self.round, self.set_id, &msg);
 			let signature = pair.sign(&encoded[..]);
 
@@ -317,7 +317,7 @@ impl<Block: BlockT, N: Network<Block>> Sink for OutgoingMessages<Block, N>
 			let signed = SignedMessage::<Block> {
 				message: msg,
 				signature,
-				id: local_id,
+				id: local_id.clone(),
 			};
 
 			let message = GossipMessage::VoteOrPrecommit(VoteOrPrecommitMessage::<Block> {

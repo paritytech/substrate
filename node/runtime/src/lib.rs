@@ -36,9 +36,9 @@ use client::{
 };
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
-use runtime_primitives::traits::{
+use runtime_primitives::{Ed25519Signature, traits::{
 	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
-};
+}};
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -196,7 +196,7 @@ impl finality_tracker::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey, Ed25519Signature>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic

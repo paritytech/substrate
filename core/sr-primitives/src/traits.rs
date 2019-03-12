@@ -55,6 +55,13 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
+impl Verify for substrate_primitives::ed25519::Signature {
+	type Signer = substrate_primitives::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.

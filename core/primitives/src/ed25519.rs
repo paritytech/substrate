@@ -18,23 +18,205 @@
 //! Simple Ed25519 API.
 // end::description[]
 
-use untrusted;
-use blake2_rfc;
-use ring::{signature, signature::KeyPair, rand::{SecureRandom, SystemRandom}};
-use crate::{hash::H512, Ed25519AuthorityId};
-use base58::{ToBase58, FromBase58};
+
+use crate::{hash::H256, hash::H512};
 use parity_codec::{Encode, Decode};
-use substrate_bip39::seed_from_entropy;
-use bip39::{Mnemonic, Language, MnemonicType};
-use crate::crypto::{DeriveJunction, StandardPair};
 
 #[cfg(feature = "std")]
-use serde::{de, Serializer, Deserializer, Deserialize};
+use untrusted;
+#[cfg(feature = "std")]
+use blake2_rfc;
+#[cfg(feature = "std")]
+use ring::{signature, signature::KeyPair, rand::{SecureRandom, SystemRandom}};
+#[cfg(feature = "std")]
+use base58::{ToBase58, FromBase58};
+#[cfg(feature = "std")]
+use substrate_bip39::seed_from_entropy;
+#[cfg(feature = "std")]
+use bip39::{Mnemonic, Language, MnemonicType};
+#[cfg(feature = "std")]
+use crate::crypto::{Pair as TraitPair, DeriveJunction};
+#[cfg(feature = "std")]
+use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 
-/// Alias to 512-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = H512;
+/// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
+/// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
+/// will need it later (such as for HDKD).
+#[cfg(feature = "std")]
+type Seed = [u8; 32];
+
+/// A public key.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, Default)]
+pub struct Public(pub [u8; 32]);
+
+/// A key pair.
+#[cfg(feature = "std")]
+pub struct Pair(signature::Ed25519KeyPair, Seed);
+
+#[cfg(feature = "std")]
+impl Clone for Pair {
+	fn clone(&self) -> Self {
+		Pair::from_seed(self.1.clone())
+	}
+}
+
+impl AsRef<[u8; 32]> for Public {
+	fn as_ref(&self) -> &[u8; 32] {
+		&self.0
+	}
+}
+
+impl AsRef<[u8]> for Public {
+	fn as_ref(&self) -> &[u8] {
+		&self.0[..]
+	}
+}
+
+impl Into<[u8; 32]> for Public {
+	fn into(self) -> [u8; 32] {
+		self.0
+	}
+}
+
+// Consider removal in favour of need to explicitly use `from_raw`.
+impl From<[u8; 32]> for Public {
+	fn from(x: [u8; 32]) -> Self {
+		Public(x)
+	}
+}
+
+impl AsRef<Public> for Public {
+	fn as_ref(&self) -> &Public {
+		&self
+	}
+}
+
+impl Into<H256> for Public {
+	fn into(self) -> H256 {
+		self.0.into()
+	}
+}
+
+impl From<H256> for Public {
+	fn from(x: H256) -> Self {
+		Public(x.into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::fmt::Display for Public {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", self.to_ss58check())
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::fmt::Debug for Public {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		let s = self.to_ss58check();
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+	}
+}
+
+#[cfg(feature = "std")]
+impl Serialize for Public {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+		serialize(&self, serializer)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for Public {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
+		deserialize(deserializer)
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::hash::Hash for Public {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		self.0.hash(state);
+	}
+}
+
+/// A signature (a 512-bit value).
+#[derive(Encode, Decode)]
+pub struct Signature(pub [u8; 64]);
+
+impl Clone for Signature {
+	fn clone(&self) -> Self {
+		let mut r = [0u8; 64];
+		r.copy_from_slice(&self.0[..]);
+		Signature(r)
+	}
+}
+
+impl Default for Signature {
+	fn default() -> Self {
+		Signature([0u8; 64])
+	}
+}
+
+impl PartialEq for Signature {
+	fn eq(&self, b: &Self) -> bool {
+		&self.0[..] == &b.0[..]
+	}
+}
+
+impl Eq for Signature {}
+
+impl From<H512> for Signature {
+	fn from(v: H512) -> Signature {
+		Signature(v.into())
+	}
+}
+
+impl From<Signature> for H512 {
+	fn from(v: Signature) -> H512 {
+		H512::from(v.0)
+	}
+}
+
+impl From<[u8; 64]> for Signature {
+	fn from(v: [u8; 64]) -> Signature {
+		Signature(v)
+	}
+}
+
+impl From<Signature> for [u8; 64] {
+	fn from(v: Signature) -> [u8; 64] {
+		v.0
+	}
+}
+
+impl AsRef<[u8; 64]> for Signature {
+	fn as_ref(&self) -> &[u8; 64] {
+		&self.0
+	}
+}
+
+impl AsRef<[u8]> for Signature {
+	fn as_ref(&self) -> &[u8] {
+		&self.0[..]
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::fmt::Debug for Signature {
+	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+		write!(f, "{}", crate::hexdisplay::HexDisplay::from(&self.0))
+	}
+}
+
+#[cfg(feature = "std")]
+impl ::std::hash::Hash for Signature {
+	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+		::std::hash::Hash::hash(&self.0[..], state);
+	}
+}
 
 /// A localized signature also contains sender information.
+#[cfg(feature = "std")]
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct LocalizedSignature {
 	/// The signer of the signature.
@@ -43,44 +225,8 @@ pub struct LocalizedSignature {
 	pub signature: Signature,
 }
 
-/// Verify a message without type checking the parameters' types for the right size.
-/// Returns true if the signature is good.
-pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], public: P) -> bool {
-	let public_key = untrusted::Input::from(public.as_ref());
-	let msg = untrusted::Input::from(message);
-	let sig = untrusted::Input::from(sig);
-
-	match signature::verify(&signature::ED25519, public_key, msg, sig) {
-		Ok(_) => true,
-		_ => false,
-	}
-}
-
-/// A public key.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-pub struct Public(pub [u8; 32]);
-
-/// A key pair.
-pub struct Pair(signature::Ed25519KeyPair, Seed);
-
-impl Clone for Pair {
-	fn clone(&self) -> Self {
-		Pair::from_seed(self.1.clone())
-	}
-}
-
-/// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
-/// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
-/// will need it later (such as for HDKD).
-type Seed = [u8; 32];
-
-impl ::std::hash::Hash for Public {
-	fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
-		self.0.hash(state);
-	}
-}
-
 /// An error type for SS58 decoding.
+#[cfg(feature = "std")]
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum PublicError {
 	/// Bad alphabet.
@@ -106,6 +252,27 @@ impl Public {
 		Public(r)
 	}
 
+	/// Return a `Vec<u8>` filled with raw data.
+	#[cfg(feature = "std")]
+	pub fn to_raw_vec(self) -> Vec<u8> {
+		let r: &[u8; 32] = self.as_ref();
+		r.to_vec()
+	}
+
+	/// Return a slice filled with raw data.
+	pub fn as_slice(&self) -> &[u8] {
+		let r: &[u8; 32] = self.as_ref();
+		&r[..]
+	}
+
+	/// Return a slice filled with raw data.
+	pub fn as_array_ref(&self) -> &[u8; 32] {
+		self.as_ref()
+	}
+}
+
+#[cfg(feature = "std")]
+impl Public {
 	/// Some if the string is a properly encoded SS58Check address.
 	pub fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?;	// failure here would be invalid encoding.
@@ -124,23 +291,6 @@ impl Public {
 		Ok(Self::from_slice(&d[1..33]))
 	}
 
-	/// Return a `Vec<u8>` filled with raw data.
-	pub fn to_raw_vec(self) -> Vec<u8> {
-		let r: &[u8; 32] = self.as_ref();
-		r.to_vec()
-	}
-
-	/// Return a slice filled with raw data.
-	pub fn as_slice(&self) -> &[u8] {
-		let r: &[u8; 32] = self.as_ref();
-		&r[..]
-	}
-
-	/// Return a slice filled with raw data.
-	pub fn as_array_ref(&self) -> &[u8; 32] {
-		self.as_ref()
-	}
-
 	/// Return the ss58-check string for this key.
 	pub fn to_ss58check(&self) -> String {
 		let mut v = vec![42u8];
@@ -150,6 +300,8 @@ impl Public {
 		v.to_base58()
 	}
 }
+
+// Note: next two can probably be removed in the future.
 
 /// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
 #[cfg(feature = "std")]
@@ -170,62 +322,15 @@ pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok
 	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
 }
 
-impl AsRef<[u8; 32]> for Public {
-	fn as_ref(&self) -> &[u8; 32] {
-		&self.0
-	}
-}
-
-impl AsRef<[u8]> for Public {
-	fn as_ref(&self) -> &[u8] {
-		&self.0[..]
-	}
-}
-
-impl Into<[u8; 32]> for Public {
-	fn into(self) -> [u8; 32] {
-		self.0
-	}
-}
-
-impl AsRef<Public> for Public {
-	fn as_ref(&self) -> &Public {
-		&self
-	}
-}
-
+#[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
 		&self
 	}
 }
 
-impl From<Public> for Ed25519AuthorityId {
-	fn from(id: Public) -> Ed25519AuthorityId {
-		Ed25519AuthorityId(id.0)
-	}
-}
-
-impl From<Ed25519AuthorityId> for Public {
-	fn from(id: Ed25519AuthorityId) -> Self {
-		Public(id.0)
-	}
-}
-
-impl ::std::fmt::Display for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", self.to_ss58check())
-	}
-}
-
-impl ::std::fmt::Debug for Public {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
-	}
-}
-
 /// Derive a single hard junction.
+#[cfg(feature = "std")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 	("Ed25519HDKD", secret_seed, cc).using_encoded(|data| {
 		let mut res = [0u8; 32];
@@ -235,12 +340,14 @@ fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
 }
 
 /// An error when deriving a key.
+#[cfg(feature = "std")]
 pub enum DeriveError {
 	/// A soft key was found in the path (and is unsupported).
 	SoftKeyInPath,
 }
 
-impl StandardPair for Pair {
+#[cfg(feature = "std")]
+impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
 	type Signature = Signature;
@@ -336,7 +443,7 @@ impl StandardPair for Pair {
 	fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: P) -> bool {
 		let public_key = untrusted::Input::from(&pubkey.as_ref().0[..]);
 		let msg = untrusted::Input::from(message.as_ref());
-		let sig = untrusted::Input::from(&sig.as_bytes());
+		let sig = untrusted::Input::from(&sig.0[..]);
 
 		match signature::verify(&signature::ED25519, public_key, msg, sig) {
 			Ok(_) => true,
@@ -360,6 +467,7 @@ impl StandardPair for Pair {
 	}
 }
 
+#[cfg(feature = "std")]
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> &Seed {
@@ -382,11 +490,7 @@ impl Pair {
 mod test {
 	use super::*;
 	use hex_literal::{hex, hex_impl};
-
-	fn _test_primitives_signature_and_local_the_same() {
-		fn takes_two<T>(_: T, _: T) { }
-		takes_two(Signature::default(), crate::Signature::default())
-	}
+	use crate::Pair as _Pair;
 
 	#[test]
 	fn test_vector_should_work() {
@@ -421,14 +525,12 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-		use crate::hexdisplay::HexDisplay;
-
 		let pair = Pair::from_seed(*b"12345678901234567890123456789012");
 		let public = pair.public();
 		assert_eq!(public, Public::from_raw(hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")));
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
-		println!("Correct signature: {}", HexDisplay::from(&signature.as_bytes()));
+		println!("Correct signature: {:?}", signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
 	}
 

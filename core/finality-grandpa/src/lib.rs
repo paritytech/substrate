@@ -68,7 +68,7 @@ use runtime_primitives::traits::{
 use fg_primitives::GrandpaApi;
 use inherents::InherentDataProviders;
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher, crypto::StandardPair};
+use substrate_primitives::{ed25519, H256, Ed25519AuthorityId, Blake2Hasher, Pair};
 use substrate_telemetry::{telemetry, CONSENSUS_TRACE, CONSENSUS_DEBUG, CONSENSUS_WARN};
 
 use srml_finality_tracker;

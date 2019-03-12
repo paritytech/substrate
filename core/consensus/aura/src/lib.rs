@@ -37,11 +37,11 @@ use client::ChainHead;
 use client::block_builder::api::{BlockBuilder as BlockBuilderApi, self as block_builder_api};
 use client::runtime_api::ApiExt;
 use consensus_common::{ImportBlock, BlockOrigin};
-use runtime_primitives::{generic, generic::BlockId, Justification};
+use runtime_primitives::{generic, generic::BlockId, Justification, Ed25519Signature};
 use runtime_primitives::traits::{
 	Block, Header, Digest, DigestItemFor, DigestItem, ProvideRuntimeApi
 };
-use primitives::{Ed25519AuthorityId, ed25519, crypto::StandardPair};
+use primitives::{Ed25519AuthorityId, ed25519, Pair};
 use inherents::{InherentDataProviders, InherentData, RuntimeString};
 
 use futures::{Stream, Future, IntoFuture, future};
@@ -59,6 +59,8 @@ use aura_slots::{CheckedHeader, SlotWorker, SlotInfo, SlotCompatible};
 pub use aura_slots::SlotDuration;
 pub use aura_primitives::*;
 pub use consensus_common::SyncOracle;
+
+type Signature = Ed25519Signature;
 
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
@@ -80,9 +82,10 @@ fn slot_author(slot_num: u64, authorities: &[Ed25519AuthorityId]) -> Option<Ed25
 	assert!(idx <= usize::max_value() as u64,
 		"It is impossible to have a vector with length beyond the address space; qed");
 
-	let current_author = *authorities.get(idx as usize)
+	let current_author = authorities.get(idx as usize)
 		.expect("authorities not empty; index constrained to list length;\
-				this is a valid index; qed");
+				this is a valid index; qed")
+		.clone();
 
 	Some(current_author)
 }
@@ -109,22 +112,22 @@ fn inherent_to_common_error(err: RuntimeString) -> consensus_common::Error {
 pub trait CompatibleDigestItem: Sized {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self;
+	fn aura_seal(slot_number: u64, signature: Signature) -> Self;
 
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)>;
+	fn as_aura_seal(&self) -> Option<(u64, Signature)>;
 }
 
-impl<Hash, AuthorityId> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId> {
+impl<Hash, AuthorityId, SealSignature: Clone + From<Signature> + Into<Signature>> CompatibleDigestItem for generic::DigestItem<Hash, AuthorityId, SealSignature> {
 	/// Construct a digest item which is a slot number and a signature on the
 	/// hash.
-	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
-		generic::DigestItem::Seal(slot_number, signature)
+	fn aura_seal(slot_number: u64, signature: Signature) -> Self {
+		generic::DigestItem::Seal(slot_number, SealSignature::from(signature))
 	}
 	/// If this item is an Aura seal, return the slot number and signature.
-	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
+	fn as_aura_seal(&self) -> Option<(u64, Signature)> {
 		match self {
-			generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
+			generic::DigestItem::Seal(slot, ref sig) => Some((*slot, sig.clone().into())),
 			_ => None
 		}
 	}
@@ -395,7 +398,7 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};
-	let (slot_num, &sig) = match digest_item.as_aura_seal() {
+	let (slot_num, sig) = match digest_item.as_aura_seal() {
 		Some(x) => x,
 		None => return Err(format!("Header {:?} is unsealed", hash)),
 	};

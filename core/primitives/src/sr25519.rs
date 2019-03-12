@@ -31,7 +31,7 @@ use substrate_bip39::mini_secret_from_entropy;
 use parity_codec::{Encode, Decode};
 use crate::hash::H512;
 use bip39::{Mnemonic, Language, MnemonicType};
-use crate::crypto::{DeriveJunction, StandardPair, Infallible};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible};
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serializer};
@@ -256,7 +256,7 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Sec
 
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
-impl StandardPair for Pair {
+impl TraitPair for Pair {
 	type Public = Public;
 	type Seed = Seed;
 	type Signature = Signature;
@@ -379,7 +379,7 @@ impl Pair {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::crypto::StandardPair;
+	use crate::Pair as _Pair;
 	use hex_literal::{hex, hex_impl};
 	
 	#[test]

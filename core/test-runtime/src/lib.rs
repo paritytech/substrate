@@ -29,7 +29,7 @@ use substrate_client::{
 	impl_runtime_apis,
 };
 use runtime_primitives::{
-	ApplyResult, Sr25519Signature, transaction_validity::TransactionValidity,
+	ApplyResult, Sr25519Signature, Ed25519Signature, transaction_validity::TransactionValidity,
 	create_runtime_str,
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -134,7 +134,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<H256, Ed25519AuthorityId>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256, Ed25519AuthorityId, Ed25519Signature>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.

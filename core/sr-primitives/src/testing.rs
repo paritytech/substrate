@@ -24,7 +24,7 @@ use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
-
+use crate::Ed25519Signature;
 pub use substrate_primitives::{H256, Ed25519AuthorityId};
 use substrate_primitives::U256;
 
@@ -47,7 +47,7 @@ impl Convert<u64, UintAuthorityId> for ConvertUintAuthorityId {
 	}
 }
 /// Digest item
-pub type DigestItem = GenDigestItem<H256, Ed25519AuthorityId>;
+pub type DigestItem = GenDigestItem<H256, Ed25519AuthorityId, Ed25519Signature>;
 
 /// Header Digest
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]

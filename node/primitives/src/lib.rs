@@ -22,13 +22,13 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 use runtime_primitives::{
-    generic, traits::{Verify, BlakeTwo256}, EdSr25519Signature, OpaqueExtrinsic
+	generic, traits::{Verify, BlakeTwo256}, EdSr25519Signature, Ed25519Signature, OpaqueExtrinsic
 };
 
 /// An index to a block.
 pub type BlockNumber = u64;
 
-/// Alias to 512-bit hash when used in the context of a signature on the chain.
+/// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = EdSr25519Signature;
 
 /// Some way of identifying an account on the chain. We intentionally make it equivalent
@@ -46,6 +46,9 @@ pub type Balance = u128;
 /// exactly equivalent to what the substrate calls an "authority".
 pub type SessionKey = primitives::Ed25519AuthorityId;
 
+/// Alias to 512-bit hash when used in the context of a session signature on the chain.
+pub type SessionSignature = Ed25519Signature;
+
 /// Index of a transaction in the chain.
 pub type Index = u64;
 
@@ -56,7 +59,7 @@ pub type Hash = primitives::H256;
 pub type Timestamp = u64;
 
 /// Header type.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash, SessionKey>>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash, SessionKey, Ed25519Signature>>;
 /// Block type.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// Block ID.

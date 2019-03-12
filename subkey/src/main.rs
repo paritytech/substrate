@@ -25,7 +25,7 @@ use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
 use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, crypto::StandardPair};
+use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair};
 use schnorrkel::keys::MiniSecretKey;
 
 mod vanity;
