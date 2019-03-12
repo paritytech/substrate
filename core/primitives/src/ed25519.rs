@@ -35,7 +35,7 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, UncheckedFrom};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, UncheckedFrom, SecretStringError};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 
@@ -344,26 +344,6 @@ impl Public {
 	}
 }
 
-/*
-/// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
-#[cfg(feature = "std")]
-pub fn deserialize<'de, D, T: From<[u8; 32]>>(deserializer: D) -> Result<T, D::Error> where
-	D: Deserializer<'de>,
-{
-	let ss58 = String::deserialize(deserializer)?;
-	Public::from_ss58check(&ss58)
-		.map_err(|e| de::Error::custom(format!("{:?}", e)))
-		.map(|v| v.0.into())
-}
-
-/// Serializes something that implements `AsRef<[u8; 32]>` into `ss58`.
-#[cfg(feature = "std")]
-pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok, S::Error> where
-	S: Serializer,
-{
-	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
-}
-*/
 #[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
@@ -418,11 +398,12 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate key pair from given recovery phrase and password.
-	fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Pair> {
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Pair, SecretStringError> {
 		let big_seed = seed_from_entropy(
-			Mnemonic::from_phrase(phrase, Language::English).ok()?.entropy(),
+			Mnemonic::from_phrase(phrase, Language::English)
+				.map_err(|_| SecretStringError::InvalidPhrase)?.entropy(),
 			password.unwrap_or(""),
-		).ok()?;
+		).map_err(|_| SecretStringError::InvalidSeed)?;
 		Self::from_seed_slice(&big_seed[0..32])
 	}
 
@@ -439,13 +420,13 @@ impl TraitPair for Pair {
 	/// will return `None`.
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
-	fn from_seed_slice(seed_slice: &[u8]) -> Option<Pair> {
+	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		if seed_slice.len() != 32 {
-			None
+			Err(SecretStringError::InvalidSeedLength)
 		} else {
 			let mut seed = [0u8; 32];
 			seed.copy_from_slice(&seed_slice);
-			Some(Self::from_seed(seed))
+			Ok(Self::from_seed(seed))
 		}
 	}
 
@@ -462,8 +443,8 @@ impl TraitPair for Pair {
 	}
 
 	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Pair> {
-		Self::from_phrase(phrase, password)?.derive(path).ok()
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Pair, SecretStringError> {
+		Self::from_phrase(phrase, password)?.derive(path).map_err(|_| SecretStringError::InvalidPath)
 	}
 
 	/// Get the public key.
@@ -519,7 +500,7 @@ impl Pair {
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
 	/// characters are taken (padded with spaces as necessary) and used as the MiniSecretKey.
 	pub fn from_legacy_string(s: &str, password_override: Option<&str>) -> Pair {
-		Self::from_string(s, password_override).unwrap_or_else(|| {
+		Self::from_string(s, password_override).unwrap_or_else(|_| {
 			let mut padded_seed: Seed = [' ' as u8; 32];
 			let len = s.len().min(32);
 			padded_seed[..len].copy_from_slice(&s.as_bytes()[..len]);

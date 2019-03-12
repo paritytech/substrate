@@ -36,7 +36,7 @@ use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, UncheckedFrom};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, UncheckedFrom, SecretStringError};
 use crate::hash::{H256, H512};
 use parity_codec::{Encode, Decode};
 
@@ -350,26 +350,7 @@ impl Public {
 		Some(Self(acc.to_bytes()))
 	}
 }
-/*
-/// Deserialize from `ss58` into something that can be constructed from `[u8; 32]`.
-#[cfg(feature = "std")]
-pub fn deserialize<'de, D, T: From<[u8; 32]>>(deserializer: D) -> Result<T, D::Error> where
-	D: Deserializer<'de>,
-{
-	let ss58 = String::deserialize(deserializer)?;
-	Public::from_ss58check(&ss58)
-		.map_err(|e| de::Error::custom(format!("{:?}", e)))
-		.map(|v| v.0.into())
-}
 
-/// Serializes something that implements `AsRef<[u8; 32]>` into `ss58`.
-#[cfg(feature = "std")]
-pub fn serialize<S, T: AsRef<[u8; 32]>>(data: &T, serializer: S) -> Result<S::Ok, S::Error> where
-	S: Serializer,
-{
-	serializer.serialize_str(&Public(*data.as_ref()).to_ss58check())
-}
-*/
 #[cfg(feature = "std")]
 impl AsRef<Pair> for Pair {
 	fn as_ref(&self) -> &Pair {
@@ -462,17 +443,23 @@ impl TraitPair for Pair {
 	/// will return `None`.
 	///
 	/// You should never need to use this; generate(), generate_with_phrase(), from_phrase()
-	fn from_seed_slice(seed: &[u8]) -> Option<Pair> {
+	fn from_seed_slice(seed: &[u8]) -> Result<Pair, SecretStringError> {
 		if seed.len() != MINI_SECRET_KEY_LENGTH {
-			None
+			Err(SecretStringError::InvalidSeedLength)
 		} else {
-			Some(Pair(MiniSecretKey::from_bytes(seed).ok()?.expand_to_keypair()))
+			Ok(Pair(
+				MiniSecretKey::from_bytes(seed)
+					.map_err(|_| SecretStringError::InvalidSeed)?
+					.expand_to_keypair()
+			))
 		}
 	}
 
 	/// Generate a key from the phrase, password and derivation path.
-	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Pair> {
-		Self::from_phrase(phrase, password)?.derive(path).ok()
+	fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Pair, SecretStringError> {
+		Self::from_phrase(phrase, password)?
+			.derive(path)
+			.map_err(|_| SecretStringError::InvalidPath)
 	}
 
 	fn generate_with_phrase(password: Option<&str>) -> (Pair, String) {
@@ -484,9 +471,9 @@ impl TraitPair for Pair {
 		)
 	}
 
-	fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Pair> {
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Pair, SecretStringError> {
 		Mnemonic::from_phrase(phrase, Language::English)
-			.ok()
+			.map_err(|_| SecretStringError::InvalidPhrase)
 			.map(|m| Self::from_entropy(m.entropy(), password))
 	}
 

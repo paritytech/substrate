@@ -51,6 +51,23 @@ impl<S, T: UncheckedFrom<S>> UncheckedInto<T> for S {
 	}
 }
 
+/// An error with the interpretation of a secret.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecretStringError {
+	/// The overall format was invalid (e.g. the seed phrase contained symbols).
+	InvalidFormat,
+	/// The seed phrase provided is not a valid BIP39 phrase.
+	InvalidPhrase,
+	/// The supplied password was invalid.
+	InvalidPassword,
+	/// The seed is invalid (bad content).
+	InvalidSeed,
+	/// The seed has an invalid length.
+	InvalidSeedLength,
+	/// The derivation path was invalid (e.g. contains soft junctions when they are not supported).
+	InvalidPath,
+}
+
 /// A since derivation junction description. It is the single parameter used when creating
 /// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
 /// a new public key from an existing public key.
@@ -180,7 +197,7 @@ pub trait Pair: Sized {
 	fn generate_with_phrase(password: Option<&str>) -> (Self, String);
 
 	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
-	fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Self>;
+	fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Self, SecretStringError>;
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Result<Self, Self::DeriveError>;
@@ -196,12 +213,12 @@ pub trait Pair: Sized {
 	///
 	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
 	/// by an attacker then they can also derive your key.
-	fn from_seed_slice(seed: &[u8]) -> Option<Self>;
+	fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError>;
 
 	/// Construct a key from a phrase, password and path.
 	fn from_standard_components<
 		I: Iterator<Item=DeriveJunction>
-	>(phrase: &str, password: Option<&str>, path: I) -> Option<Self>;
+	>(phrase: &str, password: Option<&str>, path: I) -> Result<Self, SecretStringError>;
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Self::Signature;
@@ -238,8 +255,7 @@ pub trait Pair: Sized {
 	/// be equivalent to no password at all.
 	///
 	/// `None` is returned if no matches are found.
-	/// TODO: should return Result that includes InvalidPhrase, InvalidPassword and InvalidSeed.
-	fn from_string(s: &str, password_override: Option<&str>) -> Option<Self> {
+	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
 		let hex_seed = if s.starts_with("0x") {
 			&s[2..]
 		} else {
@@ -247,14 +263,14 @@ pub trait Pair: Sized {
 		};
 
 		if let Ok(d) = hex::decode(hex_seed) {
-			if let Some(r) = Self::from_seed_slice(&d) {
-				return Some(r)
+			if let Ok(r) = Self::from_seed_slice(&d) {
+				return Ok(r)
 			}
 		}
 
 		let re = Regex::new(r"^(?P<phrase>\w+( \w+)*)(?P<path>(//?[^/]+)*)(///(?P<password>.*))?$")
 			.expect("constructed from known-good static value; qed");
-		let cap = re.captures(s)?;
+		let cap = re.captures(s).ok_or(SecretStringError::InvalidFormat)?;
 		let re_junction = Regex::new(r"/(/?[^/]+)")
 			.expect("constructed from known-good static value; qed");
 		let path = re_junction.captures_iter(&cap["path"])
@@ -290,8 +306,8 @@ mod tests {
 
 		fn generate() -> Self { TestPair::Generated }
 		fn generate_with_phrase(_password: Option<&str>) -> (Self, String) { (TestPair::GeneratedWithPhrase, "".into()) }
-		fn from_phrase(phrase: &str, password: Option<&str>) -> Option<Self> {
-			Some(TestPair::GeneratedFromPhrase{ phrase: phrase.to_owned(), password: password.map(Into::into) })
+		fn from_phrase(phrase: &str, password: Option<&str>) -> Result<Self, SecretStringError> {
+			Ok(TestPair::GeneratedFromPhrase{ phrase: phrase.to_owned(), password: password.map(Into::into) })
 		}
 		fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Result<Self, Self::DeriveError> {
 			Err(())
@@ -301,11 +317,11 @@ mod tests {
 		fn verify<P: AsRef<Self::Public>, M: AsRef<[u8]>>(_sig: &Self::Signature, _message: M, _pubkey: P) -> bool { true }
 		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_sig: &[u8], _message: M, _pubkey: P) -> bool { true }
 		fn public(&self) -> Self::Public { () }
-		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Option<Self> {
-			Some(TestPair::Standard { phrase: phrase.to_owned(), password: password.map(ToOwned::to_owned), path: path.collect() })
+		fn from_standard_components<I: Iterator<Item=DeriveJunction>>(phrase: &str, password: Option<&str>, path: I) -> Result<Self, SecretStringError> {
+			Ok(TestPair::Standard { phrase: phrase.to_owned(), password: password.map(ToOwned::to_owned), path: path.collect() })
 		}
-		fn from_seed_slice(seed: &[u8]) -> Option<Self> {
-			Some(TestPair::Seed(seed.to_owned()))
+		fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError> {
+			Ok(TestPair::Seed(seed.to_owned()))
 		}
 	}
 
@@ -313,11 +329,11 @@ mod tests {
 	fn interpret_std_seed_should_work() {
 		assert_eq!(
 			TestPair::from_string("0x0123456789abcdef", None),
-			Some(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
+			Ok(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
 		);
 		assert_eq!(
 			TestPair::from_string("0123456789abcdef", None),
-			Some(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
+			Ok(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
 		);
 	}
 
@@ -337,43 +353,43 @@ mod tests {
 	fn interpret_std_secret_string_should_work() {
 		assert_eq!(
 			TestPair::from_string("hello world", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world/1", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft(1)]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft(1)]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world/DOT", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft("DOT")]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::soft("DOT")]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//1", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1)]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1)]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//DOT", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT")]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT")]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//1/DOT", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//DOT/1", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT"), DeriveJunction::soft(1)]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: None, path: vec![DeriveJunction::hard("DOT"), DeriveJunction::soft(1)]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world///password", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world//1/DOT///password", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::hard(1), DeriveJunction::soft("DOT")]})
 		);
 		assert_eq!(
 			TestPair::from_string("hello world/1//DOT///password", None),
-			Some(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::soft(1), DeriveJunction::hard("DOT")]})
+			Ok(TestPair::Standard{phrase: "hello world".to_owned(), password: Some("password".to_owned()), path: vec![DeriveJunction::soft(1), DeriveJunction::hard("DOT")]})
 		);
 	}
 }

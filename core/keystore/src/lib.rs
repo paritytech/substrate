@@ -78,7 +78,8 @@ impl Store {
 
 	/// Create a new key from seed. Do not place it into the store.
 	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
-		let pair = Pair::from_string(seed, None).ok_or(Error::from(ErrorKind::InvalidSeed))?;
+		let pair = Pair::from_string(seed, None)
+			.map_err(|_| Error::from(ErrorKind::InvalidSeed))?;
 		self.additional.insert(pair.public(), pair.clone());
 		Ok(pair)
 	}
@@ -93,7 +94,7 @@ impl Store {
 
 		let phrase: String = ::serde_json::from_reader(&file)?;
 		let pair = Pair::from_phrase(&phrase, Some(password))
-			.ok_or_else(|| Error::from(ErrorKind::InvalidPhrase))?;
+			.map_err(|_| Error::from(ErrorKind::InvalidPhrase))?;
 		if &pair.public() != public {
 			bail!(ErrorKind::InvalidPassword);
 		}
