@@ -484,10 +484,11 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$origin_ty:ty;
 		root;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
-			#[doc(hidden)]
+			$(#[doc = $doc_attr])*
 			$vis fn $name($( $param: $param_ty ),* ) -> $crate::dispatch::Result {
 				{ $( $impl )* }
 				Ok(())
@@ -499,12 +500,13 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$origin_ty:ty;
 		root;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
 			root $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
-			#[doc(hidden)]
+			$(#[doc = $doc_attr])*
 			$vis fn $name($( $param: $param_ty ),* ) -> $result {
 				$( $impl )*
 			}
@@ -515,12 +517,13 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$origin_ty:ty;
 		$ignore:ident;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
-			#[doc(hidden)]
+			$(#[doc = $doc_attr])*
 			$vis fn $name(
 				$origin: $origin_ty $(, $param: $param_ty )*
 			) -> $crate::dispatch::Result {
@@ -534,11 +537,13 @@ macro_rules! decl_module {
 		$module:ident<$trait_instance:ident: $trait_name:ident>;
 		$origin_ty:ty;
 		$ignore:ident;
+		$(#[doc = $doc_attr:tt])*
 		$vis:vis fn $name:ident (
 			$origin:ident $(, $param:ident : $param_ty:ty )*
 		) -> $result:ty { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$(#[doc = $doc_attr])*
 			$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
 				$( $impl )*
 			}
@@ -602,6 +607,7 @@ macro_rules! decl_module {
 				$mod_type<$trait_instance: $trait_name>;
 				$origin_type;
 				$from;
+				$(#[doc = $doc_attr])*
 				$fn_vis fn $fn_name (
 					$from $(, $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
