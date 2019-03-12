@@ -79,7 +79,7 @@ pub struct Service<Components: components::Components> {
 	pub config: FactoryFullConfiguration<Components::Factory>,
 	_rpc: Box<::std::any::Any + Send + Sync>,
 	_telemetry: Option<Arc<tel::Telemetry>>,
-	_offchain_workers: Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>,
+	_offchain_workers: Option<Arc<offchain::OffchainWorkers<ComponentClient<Components>, ComponentBlock<Components>>>>,
 }
 
 /// Creates bare client without any networking.
@@ -171,18 +171,22 @@ impl<Components: components::Components> Service<Components> {
 		on_demand.map(|on_demand| on_demand.set_network_sender(network_chan));
 
 		let inherents_pool = Arc::new(InherentsPool::default());
-		let offchain_workers = Arc::new(offchain::OffchainWorkers::new(
-			client.clone(),
-			inherents_pool.clone(),
-			task_executor.clone(),
-		));
+		let offchain_workers =  if config.offchain_worker {
+			Some(Arc::new(offchain::OffchainWorkers::new(
+				client.clone(),
+				inherents_pool.clone(),
+				task_executor.clone(),
+			)))
+		} else {
+			None
+		};
 
 		{
 			// block notifications
 			let network = Arc::downgrade(&network);
 			let txpool = Arc::downgrade(&transaction_pool);
 			let wclient = Arc::downgrade(&client);
-			let offchain = Arc::downgrade(&offchain_workers);
+			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
@@ -200,7 +204,7 @@ impl<Components: components::Components> Service<Components> {
 						).map_err(|e| warn!("Pool error processing new block: {:?}", e))?;
 					}
 
-					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.upgrade()) {
+					if let (Some(txpool), Some(offchain)) = (txpool.upgrade(), offchain.as_ref().and_then(|o| o.upgrade())) {
 						Components::RuntimeServices::offchain_workers(
 							&number,
 							&offchain,

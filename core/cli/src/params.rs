@@ -18,7 +18,6 @@ use crate::traits::{AugmentClap, GetLogFilter};
 
 use std::path::PathBuf;
 use structopt::{StructOpt, clap::{arg_enum, _clap_count_exprs, App, AppSettings, SubCommand}};
-use client;
 
 /// Auxialary macro to implement `GetLogFilter` for all types that have the `shared_params` field.
 macro_rules! impl_get_log_filter {
@@ -50,6 +49,16 @@ impl Into<client::ExecutionStrategy> for ExecutionStrategy {
 			ExecutionStrategy::Both => client::ExecutionStrategy::Both,
 			ExecutionStrategy::NativeElseWasm => client::ExecutionStrategy::NativeElseWasm,
 		}
+	}
+}
+
+arg_enum! {
+	/// How to execute blocks
+	#[derive(Debug, Clone)]
+	pub enum OffchainWorkerEnabled {
+		Always,
+		Never,
+		WhenValidating,
 	}
 }
 
@@ -122,63 +131,9 @@ pub struct TransactionPoolParams {
 	pub pool_kbytes: usize,
 }
 
-/// The `run` command used to run a node.
+/// Execution strategies parameters.
 #[derive(Debug, StructOpt, Clone)]
-pub struct RunCmd {
-	/// Specify custom keystore path
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
-
-	/// Specify additional key seed
-	#[structopt(long = "key", value_name = "STRING")]
-	pub key: Option<String>,
-
-	/// Enable validator mode
-	#[structopt(long = "validator")]
-	pub validator: bool,
-
-	/// Run in light client mode
-	#[structopt(long = "light")]
-	pub light: bool,
-
-	/// Limit the memory the database cache can use
-	#[structopt(long = "db-cache", value_name = "MiB")]
-	pub database_cache_size: Option<u32>,
-
-	/// Listen to all RPC interfaces (default is local)
-	#[structopt(long = "rpc-external")]
-	pub rpc_external: bool,
-
-	/// Listen to all Websocket interfaces (default is local)
-	#[structopt(long = "ws-external")]
-	pub ws_external: bool,
-
-	/// Specify HTTP RPC server TCP port
-	#[structopt(long = "rpc-port", value_name = "PORT")]
-	pub rpc_port: Option<u16>,
-
-	/// Specify WebSockets RPC server TCP port
-	#[structopt(long = "ws-port", value_name = "PORT")]
-	pub ws_port: Option<u16>,
-
-	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
-
-	/// The human-readable name for this node, as reported to the telemetry server, if enabled
-	#[structopt(long = "name", value_name = "NAME")]
-	pub name: Option<String>,
-
-	/// Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
-	#[structopt(long = "no-telemetry")]
-	pub no_telemetry: bool,
-
-	/// The URL of the telemetry server to connect to. This flag can be passed multiple times
-	/// as a mean to specify multiple telemetry endpoints. Verbosity levels range from 0-9, with
-	/// 0 denoting the least verbosity. If no verbosity level is specified the default is 0.
-	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = "parse_telemetry_endpoints"))]
-	pub telemetry_endpoints: Vec<(String, u8)>,
-
+pub struct ExecutionStrategies {
 	/// The means of execution used when calling into the runtime while syncing blocks.
 	#[structopt(
 		long = "syncing-execution",
@@ -238,7 +193,81 @@ pub struct RunCmd {
 		)
 	)]
 	pub other_execution: ExecutionStrategy,
+}
 
+/// The `run` command used to run a node.
+#[derive(Debug, StructOpt, Clone)]
+pub struct RunCmd {
+	/// Specify custom keystore path
+	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
+	pub keystore_path: Option<PathBuf>,
+
+	/// Specify additional key seed
+	#[structopt(long = "key", value_name = "STRING")]
+	pub key: Option<String>,
+
+	/// Enable validator mode
+	#[structopt(long = "validator")]
+	pub validator: bool,
+
+	/// Run in light client mode
+	#[structopt(long = "light")]
+	pub light: bool,
+
+	/// Limit the memory the database cache can use
+	#[structopt(long = "db-cache", value_name = "MiB")]
+	pub database_cache_size: Option<u32>,
+
+	/// Listen to all RPC interfaces (default is local)
+	#[structopt(long = "rpc-external")]
+	pub rpc_external: bool,
+
+	/// Listen to all Websocket interfaces (default is local)
+	#[structopt(long = "ws-external")]
+	pub ws_external: bool,
+
+	/// Specify HTTP RPC server TCP port
+	#[structopt(long = "rpc-port", value_name = "PORT")]
+	pub rpc_port: Option<u16>,
+
+	/// Specify WebSockets RPC server TCP port
+	#[structopt(long = "ws-port", value_name = "PORT")]
+	pub ws_port: Option<u16>,
+
+	/// Specify the pruning mode, a number of blocks to keep or 'archive'. Default is 256.
+	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
+	pub pruning: Option<String>,
+
+	/// The human-readable name for this node, as reported to the telemetry server, if enabled
+	#[structopt(long = "name", value_name = "NAME")]
+	pub name: Option<String>,
+
+	/// Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
+	#[structopt(long = "no-telemetry")]
+	pub no_telemetry: bool,
+
+	/// The URL of the telemetry server to connect to. This flag can be passed multiple times
+	/// as a mean to specify multiple telemetry endpoints. Verbosity levels range from 0-9, with
+	/// 0 denoting the least verbosity. If no verbosity level is specified the default is 0.
+	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = "parse_telemetry_endpoints"))]
+	pub telemetry_endpoints: Vec<(String, u8)>,
+
+	/// Should execute offchain workers on every block. By default it's only enabled for nodes that are authoring new
+	/// blocks.
+	#[structopt(
+		long = "offchain-worker",
+		value_name = "ENABLED",
+		raw(
+			possible_values = "&OffchainWorkerEnabled::variants()",
+			case_insensitive = "true",
+			default_value = r#""WhenValidating""#
+		)
+	)]
+	pub offchain_worker: OffchainWorkerEnabled,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub execution_strategies: ExecutionStrategies,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
