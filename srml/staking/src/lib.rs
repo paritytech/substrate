@@ -19,7 +19,7 @@
 //! # Staking Module
 //! 
 //! <!-- Original author of paragraph: @gavofyork -->
-//! The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under normal operation but are held at pain of "slash" (expropriation) should they be found not to bee discharhing their duties properly. 
+//! The staking module is the means by which a set of network maintainers (known as "authorities" in some contexts and "validators" in others) are chosen based upon those who voluntarily place funds under deposit. Under deposit, those funds are rewarded under normal operation but are held at pain of "slash" (expropriation) should they be found not to bee discharging their duties properly. 
 //! 
 //! ## Overview 
 //! 
@@ -39,14 +39,14 @@
 //! 
 //! The staking system in Substrate NPoS is designed to achieve three goals:
 //! - It should be possible to stake funds that are controlled by a cold wallet.
-//! - It should be possible to withdraw some, or deposit more, funds without interrupting  the role of t.
+//! - It should be possible to withdraw some, or deposit more, funds without interrupting the role of an entity.
 //! - It should be possible to switch between roles (nominator, validator, idle) with minimal overhead.
 //! 
 //! ### Scenarios
 //! 
 //! #### Staking 
 //! 
-//! Almost any interaction with the staking module requires at least one account to become **bonded**, also known as being a **staker**. For this, all that it is needed is a secondary _**stash account**_ which will hold the staked funds. Henceforth, the former account that initiated the interest is called the **controller** and the later, holding the funds, is named the **stash**. Also, note that this implies that entering the staking process requires an _account pair_, one of which to take the role of the controller and one to be the frozen stash account (any value locked in stash cannot be used, hence called _frozen_). This process in the public API is mostly referred to as _bonding_ via the `bond()` function. 
+//! Almost any interaction with the staking module requires at least one account to become **bonded**, also known as being a **staker**. For this, all that it is needed is a secondary _**stash account**_ which will hold the staked funds. Henceforth, the former account that initiated the interest is called the **controller** and the latter, holding the funds, is named the **stash**. Also, note that this implies that entering the staking process requires an _account pair_, one of which to take the role of the controller and one to be the frozen stash account (any value locked in stash cannot be used, hence called _frozen_). This process in the public API is mostly referred to as _bonding_ via the `bond()` function. 
 //! 
 //! Any account pair successfully placed at stake can accept three possible roles, namely: `validate`, `nominate` or simply `chill`. Note that during the process of accepting these roles, the _controller_ account is always responsible for declaring interest and the _stash_ account stays untouched, without directly interacting in any operation. 
 //! 
@@ -56,7 +56,7 @@
 //! 
 //! #### Nomination 
 //! 
-//! A **nominator** does not take any _direct_ role in maintaining the network, instead, it votes on a set of validators to be elected. Once interest in nomination is stated by an account, it takes effect _immediately_, meaning that their votes will be taken into account at the next election round. As mentioned above, a nominator must also place some fund in a stash account, essentially indicating the _weight_ of their vote. In some sense, the nominator bets on the honesty of a set of validators by voting for them, with the goal of having a share at the reward granted to them. Any rewards given to a validator is shared among that validator and all of the nominators that voted for it. The same logic applies to the slash of a validator; if a validator misbehaves all of its nominators also get slashed. This rule incentivizes the nominators to NOT vote for the misbehaving/offline validators as much as possible, simply because the nominators will also lose funds if they vote poorly. An account can become a nominator via the `nominate()` call.
+//! A **nominator** does not take any _direct_ role in maintaining the network, instead, it votes on a set of validators to be elected. Once interest in nomination is stated by an account, it takes effect _immediately_, meaning that their votes will be taken into account at the next election round. As mentioned above, a nominator must also place some fund in a stash account, essentially indicating the _weight_ of their vote. In some sense, the nominator bets on the honesty of a set of validators by voting for them, with the goal of having a share of the reward granted to them. Any rewards given to a validator is shared among that validator and all of the nominators that voted for it. The same logic applies to the slash of a validator; if a validator misbehaves all of its nominators also get slashed. This rule incentivizes the nominators to NOT vote for the misbehaving/offline validators as much as possible, simply because the nominators will also lose funds if they vote poorly. An account can become a nominator via the `nominate()` call.
 //! 
 //! #### Rewards and Slash
 //! 
@@ -72,7 +72,7 @@
 //!  
 //! ### Dispatchable
 //! 
-//! The Dispatchable functions of the staking module enable the steps needed for entities to accept and and change their role, alongside some helper funcitons to get/set the metadata of the module.
+//! The Dispatchable functions of the staking module enable the steps needed for entities to accept and change their role, alongside some helper functions to get/set the metadata of the module.
 //! 
 //! Please refer to the [`Call`] enum and its associated variants for a detailed list of dispatchable functions.
 //! 
@@ -137,7 +137,7 @@
 //! - A validator can be _reported_ to be offline at any point via `on_offline_validator` public function. 
 //! - Each validator declares how many times they can be _reported_ before it actually gets slashed via the `unstake_threshold` in `ValidatorPrefs`. On top of this, the module also introduces a `OfflineSlashGrace`, which applies to all validators and prevents them from getting immediately slashed.
 //! - Similar to the reward value, the slash value is updated at the end of each era by multiplying `slot_stake` and a configuration storage item, `OfflineSlash`.
-//! - Once a validator has been reported a sufficient amount of times, the actual value that gets deducted from that validator, and every single nominator that voted for it calculated by multiplying the result of the above point by `2.pow(unstake_threshold)`.
+//! - Once a validator has been reported a sufficient amount of times, the actual value that gets deducted from that validator, and every single nominator that voted for it is calculated by multiplying the result of the above point by `2.pow(unstake_threshold)`.
 //! - If the previous overflow, then `slot_stake` is used.
 //! - If the previous is more than what the validator/nominator has in stake, all of their stake is slashed (`.max(total_stake)` in other words).
 //! 
