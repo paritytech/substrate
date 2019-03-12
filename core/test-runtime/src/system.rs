@@ -126,10 +126,10 @@ pub fn execute_block(block: Block) {
 	// check digest
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root(header.parent_hash.into(), header.number - 1) {
-	digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
+		digest.push(generic::DigestItem::ChangesTrieRoot(storage_changes_root.into()));
 	}
 	if let Some(new_authorities) = <NewAuthorities>::take() {
-	digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
+		digest.push(generic::DigestItem::AuthoritiesChange(new_authorities));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }

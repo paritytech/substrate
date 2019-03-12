@@ -319,13 +319,6 @@ impl Verify for AnySignature {
 	}
 }
 
-//TODO: remove this
-impl From<H512> for AnySignature {
-	fn from(h: H512) -> AnySignature {
-		AnySignature(h)
-	}
-}
-
 /// Context for executing a call into the runtime.
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]

@@ -49,7 +49,6 @@ fn submit_transaction_should_not_cause_error() {
 	};
 	let xt = uxt(AccountKeyring::Alice, 1).encode();
 	let h: H256 = blake2_256(&xt).into();
-//	let h: H256 = hex!("ee90e225897f9341f370affc31c8ed41d1f9e8b26dbab6b82a6e5acf1a94d807").into();
 
 	assert_matches!(
 		AuthorApi::submit_extrinsic(&p, xt.clone().into()),
