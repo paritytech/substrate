@@ -143,7 +143,7 @@ pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
 }
 
 /// Determine the default child trie root.
-pub fn default_child_trie_root2<H: Hasher>(_storage_key: &[u8]) -> H::Out {
+pub fn default_child_trie_root_hash<H: Hasher>(_storage_key: &[u8]) -> H::Out {
 	let mut db = MemoryDB::default();
 	let mut root = H::Out::default();
 	let mut empty = TrieDBMut::<H>::new(&mut db, &mut root);

@@ -97,23 +97,6 @@ pub trait Storage {
 	fn take_or_default<T: codec::Decode + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
 }
 
-/// Abstraction around storage that can contain other storage.
-pub trait SubStorage: Storage {
-  /// keyspace is unique identifier of storage.
-  /// it is used to ensure underlying storage is isolated.
-	fn keyspace(&self) -> &[u8];
-	/// reference to a parent storage key space
-	fn parent(&self) -> Option<&[u8]>;
-	/// remove all storage content including child storage
-  /// can fail in case of cyclic child dependency
-	fn kill(self) -> bool;
-  /// remove this storage making child storage orphan
-  /// returns storage containing only child trie refence
-  /// TODO return a storage (allow subtree from branch root)
-	fn kill_allow_orphan(self) -> Vec<Vec<u8>>;
-}
-
-
 // We use a construct like this during when genesis storage is being built.
 #[cfg(feature = "std")]
 impl<S: sr_primitives::BuildStorage> Storage for (crate::rstd::cell::RefCell<&mut sr_primitives::StorageOverlay>, PhantomData<S>) {

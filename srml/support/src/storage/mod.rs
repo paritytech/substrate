@@ -560,7 +560,7 @@ pub mod unhashed {
 	}
 }
 
-/// child storage TODO replace unhashed by having only one kind of storage (root being null storage
+/// child storage NOTE could replace unhashed by having only one kind of storage (root being null storage
 /// key (storage_key can become Option<&[u8]>).
 /// This module is a currently only a variant of unhashed with additional `storage_key`.
 /// Note that `storage_key` must be unique and strong (strong in the sense of being long enough to 
