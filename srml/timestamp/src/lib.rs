@@ -17,7 +17,7 @@
 //! # Timestamp Module
 //! 
 //! The timestamp module provides functionality to get and set the on-chain time. 
-//! To use it in your module, you need to implement the following [`Trait`]. 
+//! To use it in your module, you need to implement the timestamp [`Trait`]. 
 //! The supported dispatchable functions are documented as part of the [`Call`] enum.
 //! 
 //! ## Overview
