@@ -41,7 +41,7 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT, Hash as HashT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, indices, staking, session, system, consensus, timestamp, treasury, contract};
+	use {balances, indices, session, system, consensus, timestamp, treasury, contract};
 	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -277,8 +277,8 @@ mod tests {
 					(alice(), 111),
 					(bob(), 100),
 					(charlie(), 100_000_000),
-					(dave(), 100),
-					(eve(), 100),
+					(dave(), 111),
+					(eve(), 101),
 					(ferdie(), 100),
 				],
 				existential_deposit: 0,
@@ -298,7 +298,7 @@ mod tests {
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
 				current_era: 0,
-				stakers: vec![(dave(), alice(), 111), (eve(), bob(), 100), (ferdie(), charlie(), 100)],
+				stakers: vec![(dave(), alice(), 111), (eve(), bob(), 101), (ferdie(), charlie(), 100)],
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
@@ -449,9 +449,9 @@ mod tests {
 
 		let mut digest = generic::Digest::<Log>::default();
 		digest.push(Log::from(::grandpa::RawLog::AuthoritiesChangeSignal(0, vec![
-			(Keyring::Charlie.to_raw_public().into(), 1),
 			(Keyring::Alice.to_raw_public().into(), 1),
 			(Keyring::Bob.to_raw_public().into(), 1),
+			(Keyring::Charlie.to_raw_public().into(), 1),
 		])));
 		assert_eq!(Header::decode(&mut &block2.0[..]).unwrap().digest, digest);
 
@@ -531,7 +531,7 @@ mod tests {
 				}
 			]);
 		});
-		
+
 		executor().call::<_, NeverNativeValue, fn() -> _>(
 			&mut t,
 			"Core_execute_block",
@@ -543,7 +543,7 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
 			// 111 - 69 - 1 - 10 - 1 = 30
-			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1); 
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1);
 			// 100 + 69 + 10 - 1     = 178
 			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 			assert_eq!(System::events(), vec![
@@ -592,9 +592,9 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::grandpa(::grandpa::RawEvent::NewAuthorities(vec![
-						(Keyring::Charlie.to_raw_public().into(), 1),
 						(Keyring::Alice.to_raw_public().into(), 1),
 						(Keyring::Bob.to_raw_public().into(), 1),
+						(Keyring::Charlie.to_raw_public().into(), 1),
 					])),
 				},
 				EventRecord {
@@ -641,7 +641,7 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			// bob sends 5, alice sends 15 | bob += 10, alice -= 10
 			// 111 - 69 - 1 - 10 - 1 = 30
-			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1); 
+			assert_eq!(Balances::total_balance(&alice()), 111 - 69 - 1 - 10 - 1);
 			// 100 + 69 + 10 - 1     = 178
 			assert_eq!(Balances::total_balance(&bob()), 100 + 69 + 10 - 1);
 		});
@@ -896,7 +896,7 @@ mod tests {
 	#[test]
 	fn full_wasm_block_import_works_with_changes_trie() {
 		let block1 = changes_trie_block();
-		
+
 		let mut t = new_test_ext(COMPACT_CODE, true);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "Core_execute_block", &block1.0).unwrap();
 

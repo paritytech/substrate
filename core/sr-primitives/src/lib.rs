@@ -106,14 +106,7 @@ pub trait BuildStorage: Sized {
 		Ok((storage, child_storage))
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String> {
-		let (s, cs) = self.build_storage()?;
-		storage.extend(s);
-		for (other_child_key, other_child_map) in cs {
-			child_storage.entry(other_child_key).or_default().extend(other_child_map);
-		}
-		Ok(())
-	}
+	fn assimilate_storage(self, storage: &mut StorageOverlay, child_storage: &mut ChildrenStorageOverlay) -> Result<(), String>;
 }
 
 #[cfg(feature = "std")]
@@ -428,20 +421,6 @@ macro_rules! impl_outer_config {
 					}
 				)*
 				Ok(())
-			}
-			fn build_storage(self) -> ::std::result::Result<($crate::StorageOverlay, $crate::ChildrenStorageOverlay), String> {
-				let mut top = $crate::StorageOverlay::new();
-				let mut children = $crate::ChildrenStorageOverlay::new();
-				$(
-					if let Some(extra) = self.$snake {
-						let (other_top, other_children) = extra.build_storage()?;
-						top.extend(other_top);
-						for (other_child_key, other_child_map) in other_children {
-							children.entry(other_child_key).or_default().extend(other_child_map);
-						}
-					}
-				)*
-				Ok((top, children))
 			}
 		}
 	}
