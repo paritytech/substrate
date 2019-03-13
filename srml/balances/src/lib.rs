@@ -16,6 +16,8 @@
 
 //! # Balances Module
 //!
+//! The balances module provides functionality for handling accounts and balances. To use the balances module, you need to implement the following [Trait](https://crates.parity.io/srml_balances/trait.Trait.html). Supported dispatchables are documented in the [`Call` enum](https://crates.parity.io/srml_balances/enum.Call.html).
+//!
 //! ## Overview
 //!
 //! The balances module provides functions for:
@@ -23,7 +25,7 @@
 //! - Getting and setting free balance
 //! - Retrieving total, reserved, and unreserved balances
 //! - Repatriating a reserved balance to a beneficiary account that exists
-//! - Transfering a balance between accounts (when not reserved)
+//! - Transferring a balance between accounts (when not reserved)
 //! - Slashing an account balance
 //! - Account removal
 //! - Lookup of an index to reclaim an account
@@ -41,40 +43,14 @@
 //!
 //! ## Interface
 //!
-//! ### Types
-//!
-//! - Balance
-//! - OnFreeBalanceZero
-//! - OnNewAccount
-//! - Event
-//!
-//! These are [associated types](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#specifying-placeholder-types-in-trait-definitions-with-associated-types) and must be implemented in your `runtime/src/lib.rs`. For example:
-//!
-//! ```ignore
-//! impl balances::Trait for Runtime {
-//! 	/// The type for recording an account's balance.
-//! 	type Balance = u128;
-//! 	/// What to do if an account's free balance gets zeroed.
-//! 	type OnFreeBalanceZero = ();
-//! 	/// What to do if a new account is created.
-//! 	type OnNewAccount = Indices;
-//! 	/// The uniquitous event type.
-//! 	type Event = Event;
-//! }
-//! ```
-//!
 //! ### Dispatchable Functions
 //!
-//! The `Call` enum is documented here: https://crates.parity.io/srml_balances/enum.Call.html
-//!
-//! <!-- TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24) -->
+//! The `Call` enum is documented [here](https://crates.parity.io/srml_balances/enum.Call.html).
 //!
 //! - `transfer` - Transfer some liquid free balance to another staker.
 //! - `set_balance` - Set the balances of a given account. Only dispatchable by a user with root privileges.
 //!
 //! ### Public Functions
-//!
-//! <!-- TODO: Add link to rust docs (https://github.com/paritytech/substrate-developer-hub/issues/24) -->
 //!
 //! See the [module](https://crates.parity.io/srml_balances/struct.Module.html) for details on publicly available functions.
 //!
@@ -88,7 +64,7 @@
 //!
 //! Import the `balances` module and derive your module configuration trait with the balances trait. You can now call functions from the module.
 //!
-//! ```ignore
+//! ```rust,ignore
 //! use support::{decl_module, dispatch::Result};
 //! use system::ensure_signed;
 //!
@@ -110,7 +86,7 @@
 //!
 //! Use the `free_balance` function (from the `Currency` trait) in the `staking` module:
 //!
-//! ```ignore
+//! ```rust,ignore
 //! fn bond_extra(origin, max_additional: BalanceOf<T>) {
 //! 	let controller = ensure_signed(origin)?;
 //! 	let mut ledger = Self::ledger(&controller).ok_or("not a controller")?;
