@@ -21,18 +21,19 @@ extern crate test;
 extern crate substrate_bip39;
 extern crate rustc_hex;
 
+use std::io::{stdin, Read};
 use clap::load_yaml;
 use rand::{RngCore, rngs::OsRng};
 use substrate_bip39::mini_secret_from_entropy;
 use bip39::{Mnemonic, Language, MnemonicType};
-use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair};
+use substrate_primitives::{ed25519, sr25519, hexdisplay::HexDisplay, Pair, crypto::Ss58Codec};
 use schnorrkel::keys::MiniSecretKey;
 
 mod vanity;
 
 trait Crypto {
 	type Seed: AsRef<[u8]> + AsMut<[u8]> + Sized + Default;
-	type Pair;
+	type Pair: Pair;
 	fn generate_phrase() -> String {
 		Mnemonic::new(MnemonicType::Words12, Language::English).phrase().to_owned()
 	}
@@ -130,7 +131,10 @@ impl Crypto for Sr25519 {
 	fn public_from_pair(pair: &Self::Pair) -> Vec<u8> { (&pair.public().0[..]).to_owned() }
 }
 
-fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) {
+fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
+	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
+	<<C as Crypto>::Pair as Pair>::Public: Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
+{
 	let password = matches.value_of("password");
 	match matches.subcommand() {
 		("generate", Some(_matches)) => {
@@ -144,10 +148,48 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) {
 			C::print_from_seed(&key.seed);
 		}
 		("inspect", Some(matches)) => {
+			// TODO: Accept public key with derivation path.
 			let suri = matches.value_of("suri")
-				.expect("seed parameter is required; thus it can't be None; qed");
+				.expect("secret URI parameter is required; thus it can't be None; qed");
 			C::print_from_suri(suri, password);
 		},
+		("sign", Some(matches)) => {
+			let suri = matches.value_of("suri")
+				.expect("secret URI parameter is required; thus it can't be None; qed");
+			let pair = C::pair_from_suri(suri, password);
+			let mut message = vec![];
+			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
+			if matches.is_present("hex") {
+				message = hex::decode(&message).expect("Invalid hex in message");
+			}
+			let sig = pair.sign(&message);
+			println!("{}", hex::encode(&sig));
+		}
+		("verify", Some(matches)) => {
+			let sig_data = matches.value_of("sig")
+				.expect("signature parameter is required; thus it can't be None; qed");
+			let mut sig = <<C as Crypto>::Pair as Pair>::Signature::default();
+			let sig_data = hex::decode(sig_data).expect("signature is invalid hex");
+			if sig_data.len() != sig.as_ref().len() {
+				panic!("signature is an invalid length. {} bytes is not the expected value of {} bytes", sig_data.len(), sig.as_ref().len());
+			}
+			sig.as_mut().copy_from_slice(&sig_data);
+			let uri = matches.value_of("uri")
+				.expect("public uri parameter is required; thus it can't be None; qed");
+			let pubkey = <<C as Crypto>::Pair as Pair>::Public::from_uri(uri).ok().or_else(||
+				<C as Crypto>::Pair::from_string(uri, password).ok().map(|p| p.public())
+			).expect("Invalid URI; expecting either a secret URI or a public URI.");
+			let mut message = vec![];
+			stdin().lock().read_to_end(&mut message).expect("Error reading from stdin");
+			if matches.is_present("hex") {
+				message = hex::decode(&message).expect("Invalid hex in message");
+			}
+			if <<C as Crypto>::Pair as Pair>::verify(&sig, &message, &pubkey) {
+				println!("Signature verifies correctly.")
+			} else {
+				println!("Signature invalid.")
+			}
+		}
 		_ => print_usage(&matches),
 	}
 }

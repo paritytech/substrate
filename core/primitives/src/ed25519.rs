@@ -35,7 +35,7 @@ use substrate_bip39::seed_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError, Derive};
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::UncheckedFrom;
@@ -73,6 +73,12 @@ impl AsRef<[u8]> for Public {
 	}
 }
 
+impl AsMut<[u8]> for Public {
+	fn as_mut(&mut self) -> &mut [u8] {
+		&mut self.0[..]
+	}
+}
+
 impl Into<[u8; 32]> for Public {
 	fn into(self) -> [u8; 32] {
 		self.0
@@ -80,9 +86,9 @@ impl Into<[u8; 32]> for Public {
 }
 
 // Consider removal in favour of need to explicitly use `from_raw`.
-impl From<[u8; 32]> for Public {
-	fn from(x: [u8; 32]) -> Self {
-		Public(x)
+impl From<Pair> for Public {
+	fn from(x: Pair) -> Self {
+		x.public()
 	}
 }
 
@@ -203,6 +209,12 @@ impl AsRef<[u8]> for Signature {
 	}
 }
 
+impl AsMut<[u8]> for Signature {
+	fn as_mut(&mut self) -> &mut [u8] {
+		&mut self.0[..]
+	}
+}
+
 #[cfg(feature = "std")]
 impl ::std::fmt::Debug for Signature {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
@@ -314,6 +326,9 @@ impl Public {
 		self.as_ref()
 	}
 }
+
+#[cfg(feature = "std")]
+impl Derive for Public {}
 
 #[cfg(feature = "std")]
 impl Public {

@@ -12,6 +12,7 @@ tiny-bip39 = "0.6.0"
 rustc-hex = "2.0"
 substrate-bip39 = { git = "https://github.com/paritytech/substrate-bip39" }
 schnorrkel = { git = "https://github.com/w3f/schnorrkel" }
+hex = "0.3"
 
 [features]
 bench = []

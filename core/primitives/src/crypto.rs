@@ -22,6 +22,8 @@
 use parity_codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use regex::Regex;
+#[cfg(feature = "std")]
+use base58::{FromBase58, ToBase58};
 
 /// The infallible type.
 #[derive(Debug)]
@@ -168,6 +170,87 @@ impl<T: AsRef<str>> From<T> for DeriveJunction {
 		} else {
 			res
 		}
+	}
+}
+
+/// An error type for SS58 decoding.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum PublicError {
+	/// Bad alphabet.
+	BadBase58,
+	/// Bad length.
+	BadLength,
+	/// Unknown version.
+	UnknownVersion,
+	/// Invalid checksum.
+	InvalidChecksum,
+	/// Invalid format.
+	InvalidFormat,
+	/// Invalid derivation path.
+	InvalidPath,
+}
+
+/// Key that can be encoded to/from SS58.
+#[cfg(feature = "std")]
+pub trait Ss58Codec: Sized {
+	/// Some if the string is a properly encoded SS58Check address.
+	fn from_ss58check(s: &str) -> Result<Self, PublicError>;
+	/// Some if the string is a properly encoded SS58Check address, optionally with
+	/// a derivation path following.
+	fn from_uri(s: &str) -> Result<Self, PublicError> { Self::from_ss58check(s) }
+	/// Return the ss58-check string for this key.
+	fn to_ss58check(&self) -> String;
+}
+
+#[cfg(feature = "std")]
+/// Derivable key trait.
+pub trait Derive: Sized {
+	/// Derive a child key from a series of given junctions.
+	///
+	/// Will be `None` for public keys if there are any hard junctions in there.
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, _path: Iter) -> Option<Self> { None }
+}
+
+#[cfg(feature = "std")]
+impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
+	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
+		let mut res = T::default();
+		let len = res.as_mut().len();
+		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
+		if d.len() != len + 3 {
+			// Invalid length.
+			return Err(PublicError::BadLength);
+		}
+		if d[0] != 42 {
+			// Invalid version.
+			return Err(PublicError::UnknownVersion);
+		}
+		if d[len+1..len+3] != blake2_rfc::blake2b::blake2b(64, &[], &d[0..len+1]).as_bytes()[0..2] {
+			// Invalid checksum.
+			return Err(PublicError::InvalidChecksum);
+		}
+		res.as_mut().copy_from_slice(&d[1..len+1]);
+		Ok(res)
+	}
+
+	fn to_ss58check(&self) -> String {
+		let mut v = vec![42u8];
+		v.extend(self.as_ref());
+		let r = blake2_rfc::blake2b::blake2b(64, &[], &v);
+		v.extend(&r.as_bytes()[0..2]);
+		v.to_base58()
+	}
+
+	fn from_uri(s: &str) -> Result<Self, PublicError> {
+		let re = Regex::new(r"^(?P<ss58>[\w\d]+)(?P<path>(//?[^/]+)*)$")
+			.expect("constructed from known-good static value; qed");
+		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;
+		let re_junction = Regex::new(r"/(/?[^/]+)")
+			.expect("constructed from known-good static value; qed");
+		let path = re_junction.captures_iter(&cap["path"])
+			.map(|f| DeriveJunction::from(&f[1]));
+		Self::from_ss58check(&cap["ss58"])?.derive(path).ok_or(PublicError::InvalidPath)
 	}
 }
 

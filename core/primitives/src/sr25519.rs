@@ -22,8 +22,6 @@
 // end::description[]
 
 #[cfg(feature = "std")]
-use base58::{FromBase58, ToBase58};
-#[cfg(feature = "std")]
 use blake2_rfc;
 #[cfg(feature = "std")]
 use rand::rngs::OsRng;
@@ -36,7 +34,7 @@ use substrate_bip39::mini_secret_from_entropy;
 #[cfg(feature = "std")]
 use bip39::{Mnemonic, Language, MnemonicType};
 #[cfg(feature = "std")]
-use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError};
+use crate::crypto::{Pair as TraitPair, DeriveJunction, Infallible, SecretStringError, Derive, Ss58Codec};
 use crate::{hash::{H256, H512}, crypto::UncheckedFrom};
 use parity_codec::{Encode, Decode};
 
@@ -72,6 +70,12 @@ impl AsRef<[u8; 32]> for Public {
 impl AsRef<[u8]> for Public {
 	fn as_ref(&self) -> &[u8] {
 		&self.0[..]
+	}
+}
+
+impl AsMut<[u8]> for Public {
+	fn as_mut(&mut self) -> &mut [u8] {
+		&mut self.0[..]
 	}
 }
 
@@ -188,6 +192,12 @@ impl AsRef<[u8]> for Signature {
 	}
 }
 
+impl AsMut<[u8]> for Signature {
+	fn as_mut(&mut self) -> &mut [u8] {
+		&mut self.0[..]
+	}
+}
+
 #[cfg(feature = "std")]
 impl From<schnorrkel::Signature> for Signature {
 	fn from(s: schnorrkel::Signature) -> Signature {
@@ -220,20 +230,6 @@ pub struct LocalizedSignature {
 	pub signature: Signature,
 }
 
-/// An error type for SS58 decoding.
-#[cfg(feature = "std")]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum PublicError {
-	/// Bad alphabet.
-	BadBase58,
-	/// Bad length.
-	BadLength,
-	/// Unknown version.
-	UnknownVersion,
-	/// Invalid checksum.
-	InvalidChecksum,
-}
-
 impl Signature {
 	/// A new instance from the given 64-byte `data`.
 	///
@@ -259,6 +255,23 @@ impl Signature {
 	/// you are certain that the array actually is a signature. GIGO!
 	pub fn from_h512(v: H512) -> Signature {
 		Signature(v.into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl Derive for Public {
+	/// Derive a child key from a series of given junctions.
+	///
+	/// `None` if there are any hard junctions in there.
+	fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Option<Public> {
+		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
+		for j in path {
+			match j {
+				DeriveJunction::Soft(cc) => acc = acc.derived_key_simple(ChainCode(cc), &[]).0,
+				DeriveJunction::Hard(_cc) => return None,
+			}
+		}
+		Some(Self(acc.to_bytes()))
 	}
 }
 
@@ -289,25 +302,6 @@ impl Public {
 		Public(x.into())
 	}
 
-	/// Some if the string is a properly encoded SS58Check address.
-	#[cfg(feature = "std")]
-	pub fn from_ss58check(s: &str) -> Result<Self, PublicError> {
-		let d = s.from_base58().map_err(|_| PublicError::BadBase58)?; // failure here would be invalid encoding.
-		if d.len() != 35 {
-			// Invalid length.
-			return Err(PublicError::BadLength);
-		}
-		if d[0] != 42 {
-			// Invalid version.
-			return Err(PublicError::UnknownVersion);
-		}
-		if d[33..35] != blake2_rfc::blake2b::blake2b(64, &[], &d[0..33]).as_bytes()[0..2] {
-			// Invalid checksum.
-			return Err(PublicError::InvalidChecksum);
-		}
-		Ok(Self::from_slice(&d[1..33]))
-	}
-
 	/// Return a `Vec<u8>` filled with raw data.
 	#[cfg(feature = "std")]
 	pub fn to_raw_vec(self) -> Vec<u8> {
@@ -324,31 +318,6 @@ impl Public {
 	/// Return a slice filled with raw data.
 	pub fn as_array_ref(&self) -> &[u8; 32] {
 		self.as_ref()
-	}
-
-	/// Return the ss58-check string for this key.
-	#[cfg(feature = "std")]
-	pub fn to_ss58check(&self) -> String {
-		let mut v = vec![42u8];
-		v.extend(self.as_slice());
-		let r = blake2_rfc::blake2b::blake2b(64, &[], &v);
-		v.extend(&r.as_bytes()[0..2]);
-		v.to_base58()
-	}
-
-	/// Derive a child key from a series of given junctions.
-	///
-	/// `None` if there are any hard junctions in there.
-	#[cfg(feature = "std")]
-	pub fn derive<Iter: Iterator<Item=DeriveJunction>>(&self, path: Iter) -> Option<Public> {
-		let mut acc = PublicKey::from_bytes(self.as_ref()).ok()?;
-		for j in path {
-			match j {
-				DeriveJunction::Soft(cc) => acc = acc.derived_key_simple(ChainCode(cc), &[]).0,
-				DeriveJunction::Hard(_cc) => return None,
-			}
-		}
-		Some(Self(acc.to_bytes()))
 	}
 }
 
