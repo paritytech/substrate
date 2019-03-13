@@ -247,21 +247,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use quickcheck::*;
-	use rand::distributions::*;
-	use rand::Rng;
 	use super::*;
 	use tempdir::TempDir;
-
-	#[derive(Debug, Clone)]
-	struct AlnumString(String);
-
-	impl Arbitrary for AlnumString {
-		fn arbitrary<G: Gen>(mut g: &mut G) -> AlnumString {
-			let n = g.gen_range(1, g.size() + 1);
-			AlnumString(Alphanumeric.sample_iter(&mut g).take(n).collect())
-		}
-	}
 
 	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
 		match kp {
@@ -273,25 +260,20 @@ mod tests {
 
 	#[test]
 	fn test_secret_file_mkdir() {
-		fn prop(dirname: AlnumString, filename: AlnumString) -> io::Result<bool> {
-			let tmp = TempDir::new(&dirname.0)?;
-			std::fs::remove_dir(tmp.path())?;
-			let file = tmp.path().join(filename.0).to_path_buf();
-			NodeKeyConfig::Ed25519(Secret::File(file)).into_keypair().map(|_| true)
-		}
-		QuickCheck::new().tests(5).quickcheck(prop as fn(_,_) -> _)
+		let tmp = TempDir::new("x").unwrap();
+		std::fs::remove_dir(tmp.path()).unwrap();
+		let file = tmp.path().join("x").to_path_buf();
+		NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
+		assert!(file.is_file())
 	}
 
 	#[test]
 	fn test_secret_file() {
-		fn prop(dirname: AlnumString, filename: AlnumString) -> io::Result<bool> {
-			let tmp = TempDir::new(&dirname.0)?;
-			let file = tmp.path().join(filename.0).to_path_buf();
-			let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair()?;
-			let kp2 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair()?;
-			Ok(file.is_file() && secret_bytes(&kp1) == secret_bytes(&kp2))
-		}
-		QuickCheck::new().tests(5).quickcheck(prop as fn(_,_) -> _)
+		let tmp = TempDir::new("x").unwrap();
+		let file = tmp.path().join("x").to_path_buf();
+		let kp1 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
+		let kp2 = NodeKeyConfig::Ed25519(Secret::File(file.clone())).into_keypair().unwrap();
+		assert!(file.is_file() && secret_bytes(&kp1) == secret_bytes(&kp2))
 	}
 
 	#[test]

@@ -757,7 +757,6 @@ fn kill_color(s: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use quickcheck::*;
 	use tempdir::TempDir;
 	use network::identity::{secp256k1, ed25519};
 
@@ -802,7 +801,8 @@ mod tests {
 			})
 		}
 
-		QuickCheck::new().tests(5).quickcheck(secret_input as fn(_) -> _);
+		assert!(secret_input(None).is_ok());
+		assert!(secret_input(Some("x".to_string())).is_ok());
 	}
 
 	#[test]
@@ -827,7 +827,8 @@ mod tests {
 			})
 		}
 
-		QuickCheck::new().tests(5).quickcheck(secret_file as fn(_) -> _);
+		assert!(secret_file(None).is_ok());
+		assert!(secret_file(Some("x".to_string())).is_ok());
 	}
 
 	#[test]
@@ -877,8 +878,7 @@ mod tests {
 			})
 		}
 
-		QuickCheck::new().tests(1).quickcheck(no_config_dir as fn() -> _);
-		QuickCheck::new().tests(5).quickcheck(some_config_dir as fn(_) -> _);
+		assert!(no_config_dir().is_ok());
+		assert!(some_config_dir("x".to_string()).is_ok());
 	}
-
 }
