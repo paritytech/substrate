@@ -29,17 +29,17 @@
 //! - Slashing an account balance
 //! - Account removal
 //! - Lookup of an index to reclaim an account
-//! - Increasing or decreasing total stake
-//! - Setting and removing locks on chains that implement `LockableCurrency`
+//! - Increasing or decreasing total issuance
+//! - Implementation of `Currency` and `LockableCurrency`
 //!
 //! ### Terminology
 //!
 //! - **Existential Deposit:** The existential deposit is the minimum balance required to create or keep an account open. This prevents "dust accounts" from filling storage.
-//! - **Stake:** The total amount of tokens in existence in a system.
-//! - **Reaping an account:** The act of removing an account by resetting its nonce, setting its balance to zero, and removing from storage.
+//! - **Total Issuance:** The total amount of units in existence in a system.
+//! - **Reaping an account:** The act of removing an account by resetting its nonce. Happens after its balance is set to zero.
 //! - **Free Balance:** The free balance is the only balance that matters for most operations. When this balance falls below the existential deposit, the account is reaped.
 //! - **Reserved Balance:** Reserved balance still belongs to the account holder, but is suspended. Reserved balance can still be slashed, but only after all of free balance has been slashed. If the reserved balance falls below the existential deposit then it will be deleted.
-//! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number. Only runtimes that implement the `LockableCurrency` trait allow this.
+//! - **Locks:** Locks enable the runtime to lock an account's balance until a specified block number.
 //!
 //! ## Interface
 //!
@@ -47,7 +47,7 @@
 //!
 //! The `Call` enum is documented [here](https://crates.parity.io/srml_balances/enum.Call.html).
 //!
-//! - `transfer` - Transfer some liquid free balance to another staker.
+//! - `transfer` - Transfer some liquid free balance to another account.
 //! - `set_balance` - Set the balances of a given account. Only dispatchable by a user with root privileges.
 //!
 //! ### Public Functions
@@ -202,7 +202,7 @@ pub struct BalanceLock<Balance, BlockNumber> {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		/// The total amount of stake in the system.
+		/// The total units issued in the system.
 		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T>| {
 			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
 		}): T::Balance;
@@ -244,9 +244,6 @@ decl_storage! {
 		/// is invoked, giving a chance to external modules to clean up data associated with
 		/// the deleted account.
 		///
-		/// This is orthogonal to the `Bondage` value that an account has, a high value of which
-		/// makes even the `free_balance` unspendable.
-		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.)
 		pub FreeBalance get(free_balance) build(|config: &GenesisConfig<T>| config.balances.clone()): map T::AccountId => T::Balance;
@@ -255,8 +252,7 @@ decl_storage! {
 		/// slashed, but gets slashed last of all.
 		///
 		/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
-		/// that are still 'owned' by the account holder, but which are suspendable. (This is different
-		/// and wholly unrelated to the `Bondage` system used in the staking module.)
+		/// that are still 'owned' by the account holder, but which are suspendable.
 		///
 		/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
 		/// is deleted: specifically, `ReservedBalance`.
@@ -278,10 +274,10 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
 
-		/// Transfer some liquid free balance to another staker.
+		/// Transfer some liquid free balance to another account.
 		///
 		/// `transfer` will set the `FreeBalance` of the sender and receiver.
-		/// It will decrease the total stake of the system by the `TransferFee`.
+		/// It will decrease the total issuance of the system by the `TransferFee`.
 		/// If the sender's account is below the existential deposit as a result
 		/// of the transfer, the account will be reaped.
 		///
@@ -300,7 +296,7 @@ decl_module! {
 		///
 		/// This will alter `FreeBalance` and `ReservedBalance` in storage.
 		/// If the new free or reserved balance is below the existential deposit, 
-		/// it will also decrease the total stake of the system (`TotalIssuance`)
+		/// it will also decrease the total issuance of the system (`TotalIssuance`)
 		/// and reset the account nonce (`system::AccountNonce`).
 		///
 		/// The dispatch origin for this call is `root`.
@@ -316,7 +312,7 @@ decl_module! {
 	}
 }
 
-// For funding methods, see `Currency` trait
+/// The functions in this implementation affect storage.
 impl<T: Trait> Module<T> {
 
 	/// Get the amount that is currently being vested and cannot be transfered out of this account.
@@ -464,14 +460,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Increase stake by `value`.
+	/// Increase total issuance by `value`.
 	pub fn increase_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_add(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
 
-	/// Decrease stake by `value`.
+	/// Decrease total issuance by `value`.
 	pub fn decrease_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_issuance().checked_sub(&value) {
 			<TotalIssuance<T>>::put(v);

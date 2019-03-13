@@ -83,7 +83,7 @@ pub trait Currency<AccountId> {
 	/// are no balance changes in the meantime.
 	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool;
 
-	/// The total amount of stake on the system.
+	/// The total amount of issuance in the system.
 	fn total_issuance() -> Self::Balance;
 
 	/// The minimum balance any single account may have. This is equivalent to the `Balances` module's
@@ -107,8 +107,7 @@ pub trait Currency<AccountId> {
 	/// slashed, but gets slashed last of all.
 	///
 	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
-	/// that are still 'owned' by the account holder, but which are suspendable. (This is different
-	/// and wholly unrelated to the `Bondage` system used in the staking module.)
+	/// that are still 'owned' by the account holder, but which are suspendable.
 	///
 	/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
 	/// is deleted: specifically, `ReservedBalance`.
@@ -138,7 +137,7 @@ pub trait Currency<AccountId> {
 	///
 	/// # NOTES
 	///
-	/// This assumes that the total stake remains unchanged after this operation.
+	/// This assumes that the total issuance remains unchanged after this operation.
 	fn increase_free_balance_creating(who: &AccountId, value: Self::Balance) -> UpdateBalanceOutcome;
 
 	/// Moves `value` from balance to reserved balance.
@@ -160,7 +159,7 @@ pub trait Currency<AccountId> {
 	/// invoke `on_reserved_too_low` and could reap the account.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Option<Self::Balance>;
 
-	/// Deducts up to `value` from reserved balance of `who` and the total stake of the system.
+	/// Deducts up to `value` from reserved balance of `who` and the total issuance of the system.
 	/// This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
@@ -190,7 +189,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
-	/// Create a new `BalanceLock` struct on account `who`.
+	/// Create a new balance lock on account `who`.
 	///
 	/// If the new lock is valid (i.e. not already expired), it will push the struct to
 	/// the `Locks` vec in storage. Note that you can lock more funds than a user has.
@@ -204,7 +203,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 		reasons: WithdrawReasons,
 	);
 
-	/// Changes a `BalanceLock` (selected by `id`) so that it becomes less liquid in all
+	/// Changes a balance lock (selected by `id`) so that it becomes less liquid in all
 	/// parameters or creates a new one if it does not exist.
 	///
 	/// Calling `extend_lock` on an existing lock `id` differs from `set_lock` in that it
@@ -272,10 +271,10 @@ pub trait TransferAsset<AccountId> {
 	/// Transfer asset from `from` account to `to` account with `amount` of asset.
 	fn transfer(from: &AccountId, to: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 
-	/// Remove asset from `who` account by deducting `amount` from the account free balance and stake.
+	/// Remove asset from `who` account by deducting `amount` from the account free balance and total issuance.
 	fn withdraw(who: &AccountId, amount: Self::Amount, reason: WithdrawReason) -> Result<(), &'static str>;
 
-	/// Add asset to `who` account by increasing `amount` of the account free balance and stake.
+	/// Add asset to `who` account by increasing `amount` of the account free balance and total issuance.
 	fn deposit(who: &AccountId, amount: Self::Amount) -> Result<(), &'static str>;
 }
 
