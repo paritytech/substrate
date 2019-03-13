@@ -66,7 +66,7 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	} else {
 		let mod_name = generate_hidden_includes_mod_name(unique_id);
 		quote::quote!( self::#mod_name::hidden_include )
-	}.into()
+	}
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
@@ -92,7 +92,7 @@ pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream
 			}
 		}
 
-	}.into()
+	}
 }
 
 // fn to remove white spaces arount string types

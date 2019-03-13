@@ -41,14 +41,16 @@ pub fn construct_genesis_block<
 mod tests {
 	use super::*;
 	use parity_codec::{Encode, Decode, Joiner};
-	use keyring::Keyring;
 	use executor::{NativeExecutionDispatch, native_executor_instance};
 	use state_machine::{self, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
-	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
+	use test_client::{
+		runtime::genesismap::{GenesisConfig, additional_storage_with_genesis},
+		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic},
+		AccountKeyring, AuthorityKeyring
+	};
 	use runtime_primitives::traits::BlakeTwo256;
-	use primitives::{Blake2Hasher, ed25519::{Public, Pair}};
+	use primitives::Blake2Hasher;
 	use hex::*;
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
@@ -67,7 +69,7 @@ mod tests {
 		use trie::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.to_fixed_bytes())).unwrap())
+			let signature = AccountKeyring::from_public(&tx.from).unwrap()
 				.sign(&tx.encode()).into();
 
 			Extrinsic::Transfer(tx, signature)
@@ -75,7 +77,6 @@ mod tests {
 
 		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(transactions.iter().map(Encode::encode)).into();
 
-		println!("root before: {:?}", extrinsics_root);
 		let mut header = Header {
 			parent_hash,
 			number,
@@ -121,7 +122,6 @@ mod tests {
 			ExecutionStrategy::NativeElseWasm,
 		).unwrap();
 		header = Header::decode(&mut &ret_data[..]).unwrap();
-		println!("root after: {:?}", header.extrinsics_root);
 
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
@@ -133,8 +133,8 @@ mod tests {
 			genesis_hash,
 			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
 			vec![Transfer {
-				from: Keyring::One.to_raw_public().into(),
-				to: Keyring::Two.to_raw_public().into(),
+				from: AccountKeyring::One.into(),
+				to: AccountKeyring::Two.into(),
 				amount: 69,
 				nonce: 0,
 			}]
@@ -143,8 +143,10 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_native() {
-		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
+		let mut storage = GenesisConfig::new(false,
+			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
+			1000
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
@@ -169,8 +171,10 @@ mod tests {
 
 	#[test]
 	fn construct_genesis_should_work_with_wasm() {
-		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
+		let mut storage = GenesisConfig::new(false,
+			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
+			1000
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
@@ -194,10 +198,11 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn construct_genesis_with_bad_transaction_should_panic() {
-		let mut storage = GenesisConfig::new_simple(
-			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 68
+		let mut storage = GenesisConfig::new(false,
+			vec![AuthorityKeyring::One.into(), AuthorityKeyring::Two.into()],
+			vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
+			68
 		).genesis_map();
 		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
 		let block = construct_genesis_block::<Block>(state_root);
@@ -208,7 +213,7 @@ mod tests {
 		let (b1data, _b1hash) = block1(genesis_hash, &backend);
 
 		let mut overlay = OverlayedChanges::default();
-		let _ = state_machine::new(
+		let r = state_machine::new(
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
@@ -217,6 +222,7 @@ mod tests {
 			&b1data,
 		).execute(
 			ExecutionStrategy::NativeElseWasm,
-		).unwrap();
+		);
+		assert!(r.is_err());
 	}
 }
