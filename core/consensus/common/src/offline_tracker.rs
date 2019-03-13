@@ -116,8 +116,7 @@ mod tests {
 
 	#[test]
 	fn validator_offline() {
-		let mut tracker = OfflineTracker::<AuthorityId>::
-		w();
+		let mut tracker = OfflineTracker::<AuthorityId>::new();
 		let v = AuthorityId::from_raw([0; 32]);
 		let v2 = AuthorityId::from_raw([1; 32]);
 		let v3 = AuthorityId::from_raw([2; 32]);
