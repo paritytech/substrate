@@ -1,4 +1,4 @@
-use primitives::{ed25519, sr25519, Pair};
+use primitives::{ed25519, Pair};
 use node_template_runtime::{
 	AccountId, GenesisConfig, ConsensusConfig, TimestampConfig, BalancesConfig,
 	SudoConfig, IndicesConfig, FeesConfig,
@@ -28,13 +28,13 @@ pub enum Alternative {
 fn authority_key(s: &str) -> AuthorityId {
 	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
 		.expect("static values are valid; qed")
-		.public().into()
+		.public()
 }
 
 fn account_key(s: &str) -> AccountId {
-	sr25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
+	ed25519::Pair::from_string(&format!("{}//{}", DEV_PHRASE, s), None)
 		.expect("static values are valid; qed")
-		.public().0.into()
+		.public()
 }
 
 impl Alternative {

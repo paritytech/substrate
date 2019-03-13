@@ -541,6 +541,7 @@ pub(crate) mod tests {
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
+	type AuthorityId = AuthorityIdFor<Block>;
 
 	pub fn default_header(parent: &Hash, number: u64) -> Header {
 		Header {
@@ -554,7 +555,7 @@ pub(crate) mod tests {
 
 	fn header_with_changes_trie(parent: &Hash, number: u64) -> Header {
 		let mut header = default_header(parent, number);
-		header.digest.logs.push(DigestItem::ChangesTrieRoot(AuthorityId::from_raw([(number % 256) as [u8; 32]])));
+		header.digest.logs.push(DigestItem::ChangesTrieRoot([(number % 256) as u8; 32].into()));
 		header
 	}
 

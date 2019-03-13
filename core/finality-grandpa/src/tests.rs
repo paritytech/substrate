@@ -723,7 +723,7 @@ fn justification_is_emitted_when_consensus_data_changes() {
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 3);
 
 	// import block#1 WITH consensus data change
-	let new_authorities = vec![AuthorityId::from([42; 32])];
+	let new_authorities = vec![AuthorityId::from_raw([42; 32])];
 	net.peer(0).push_authorities_change_block(new_authorities);
 	net.sync();
 	let net = Arc::new(Mutex::new(net));
