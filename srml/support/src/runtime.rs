@@ -62,6 +62,11 @@
 /// - `Inherent $( (CALL) )*` - If the module provides/can check inherents. The optional parameter
 ///                             is for modules that use a `Call` from a different module as
 ///                             inherent.
+///
+/// # Note
+///
+/// The population of the genesis storage depends on the order of modules. So, if one of your
+/// modules depends on another module. The dependent module need to come before the module depending on it.
 #[macro_export]
 macro_rules! construct_runtime {
 

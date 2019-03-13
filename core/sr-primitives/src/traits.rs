@@ -55,6 +55,20 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
+impl Verify for substrate_primitives::ed25519::Signature {
+	type Signer = substrate_primitives::ed25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::ed25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
+impl Verify for substrate_primitives::sr25519::Signature {
+	type Signer = substrate_primitives::sr25519::Public;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
+		runtime_io::sr25519_verify(self.as_ref(), msg.get(), signer)
+	}
+}
+
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
 	/// A return type.
@@ -134,6 +148,16 @@ pub trait Convert<A, B> {
 	fn convert(a: A) -> B;
 }
 
+impl<A, B: Default> Convert<A, B> for () {
+	fn convert(_: A) -> B { Default::default() }
+}
+
+/// A structure that performs identity conversion.
+pub struct Identity;
+impl<T> Convert<T, T> for Identity {
+	fn convert(a: T) -> T { a }
+}
+
 /// Simple trait similar to `Into`, except that it can be used to convert numerics between each
 /// other.
 pub trait As<T> {
@@ -160,15 +184,6 @@ macro_rules! impl_numerics {
 }
 
 impl_numerics!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
-
-/// A structure that performs identity conversion.
-pub struct Identity;
-impl<T> Convert<T, T> for Identity {
-	fn convert(a: T) -> T { a }
-}
-impl<T> Convert<T, ()> for () {
-	fn convert(_: T) -> () { () }
-}
 
 /// A meta trait for arithmetic.
 pub trait SimpleArithmetic:
