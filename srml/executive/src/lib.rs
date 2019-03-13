@@ -159,6 +159,7 @@ impl<
 			return Err(internal::ApplyError::FullBlock);
 		}
 
+		let mut is_inherent = true;
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(sender);
@@ -173,6 +174,7 @@ impl<
 
 			// increment nonce in storage
 			<system::Module<System>>::inc_account_nonce(sender);
+			is_inherent = false;
 		}
 
 		// make sure to `note_extrinsic` only after we know it's going to be executed
@@ -184,7 +186,9 @@ impl<
 		// decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
 		let r = f.dispatch(s.into());
-		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
+		if !is_inherent {
+			<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
+		}
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
 			primitives::BLOCK_FULL => Err(internal::ApplyError::FullBlock),
