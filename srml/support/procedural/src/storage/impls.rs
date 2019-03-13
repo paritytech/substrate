@@ -29,7 +29,7 @@ pub fn option_unwrap(is_option: bool) -> TokenStream2 {
 	}
 }
 
-pub(crate) struct Impls<'a> {
+pub(crate) struct Impls<'a, I: Iterator<Item=syn::Meta>> {
 	pub scrate: &'a TokenStream2,
 	pub visibility: &'a syn::Visibility,
 	pub traitinstance: &'a syn::Ident,
@@ -38,9 +38,10 @@ pub(crate) struct Impls<'a> {
 	pub fielddefault: TokenStream2,
 	pub prefix: String,
 	pub name: &'a syn::Ident,
+	pub attrs: I,
 }
 
-impl<'a> Impls<'a> {
+impl<'a, I: Iterator<Item=syn::Meta>> Impls<'a, I> {
 	pub fn simple_value(self) -> TokenStream2 {
 		let Self {
 			scrate,
@@ -51,6 +52,7 @@ impl<'a> Impls<'a> {
 			fielddefault,
 			prefix,
 			name,
+			attrs,
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
@@ -70,7 +72,7 @@ impl<'a> Impls<'a> {
 
 		// generator for value
 		quote!{
-
+			#( #[ #attrs ] )*
 			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
 
 			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageValue<#typ> for #name<#traitinstance> {
@@ -102,7 +104,6 @@ impl<'a> Impls<'a> {
 					ret
 				}
 			}
-
 		}
 	}
 
@@ -116,6 +117,7 @@ impl<'a> Impls<'a> {
 			fielddefault,
 			prefix,
 			name,
+			attrs,
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
@@ -134,6 +136,7 @@ impl<'a> Impls<'a> {
 		};
 		// generator for map
 		quote!{
+			#( #[ #attrs ] )*
 			#visibility struct #name<#traitinstance: #traittype>(#scrate::storage::generator::PhantomData<#traitinstance>);
 
 			impl<#traitinstance: #traittype> #scrate::storage::generator::StorageMap<#kty, #typ> for #name<#traitinstance> {
@@ -186,12 +189,12 @@ impl<'a> Impls<'a> {
 			fielddefault,
 			prefix,
 			name,
+			attrs,
 		} = self;
 		let DeclStorageTypeInfos { typ, value_type, is_option, .. } = type_infos;
 		let option_simple_1 = option_unwrap(is_option);
 		// make sure to use different prefix for head and elements.
 		let head_key = format!("head of {}", prefix);
-		let prefix = format!("{}", prefix);
 		let name_lowercase = name.to_string().to_lowercase();
 		let inner_module = syn::Ident::new(&format!("__linked_map_details_for_{}_do_not_use", name_lowercase), name.span());
 		let linkage = syn::Ident::new(&format!("__LinkageFor{}DoNotUse", name), name.span());
@@ -300,6 +303,7 @@ impl<'a> Impls<'a> {
 		};
 
 		let structure = quote! {
+			#( #[ #attrs ] )*
 			#visibility struct #name<#traitinstance: #traittype>(#phantom_data<#traitinstance>);
 
 			impl<#traitinstance: #traittype> self::#inner_module::Utils<#traitinstance> for #name<#traitinstance> {
