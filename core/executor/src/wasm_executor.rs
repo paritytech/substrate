@@ -28,7 +28,7 @@ use wasmi::memory_units::{Pages};
 use state_machine::Externalities;
 use crate::error::{Error, ErrorKind, Result};
 use crate::wasm_utils::UserError;
-use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519};
+use primitives::{blake2_256, twox_128, twox_256, ed25519, sr25519, Pair};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::{H256, Blake2Hasher};
@@ -474,7 +474,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_ed25519_verify"))?;
 		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_ed25519_verify"))?;
 
-		Ok(if ed25519::verify(&sig, &msg, &pubkey) {
+		Ok(if ed25519::Pair::verify_weak(&sig, &msg, &pubkey) {
 			0
 		} else {
 			5
@@ -487,7 +487,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.get_into(pubkey_data, &mut pubkey[..]).map_err(|_| UserError("Invalid attempt to get pubkey in ext_sr25519_verify"))?;
 		let msg = this.memory.get(msg_data, msg_len as usize).map_err(|_| UserError("Invalid attempt to get message in ext_sr25519_verify"))?;
 
-		Ok(if sr25519::verify(&sig, &msg, &pubkey) {
+		Ok(if sr25519::Pair::verify_weak(&sig, &msg, &pubkey) {
 			0
 		} else {
 			5
@@ -759,7 +759,9 @@ impl WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	
 	use parity_codec::Encode;
+
 	use state_machine::TestExternalities;
 	use hex_literal::{hex, hex_impl};
 	use primitives::map;
@@ -875,7 +877,7 @@ mod tests {
 	fn ed25519_verify_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
+		let key = ed25519::Pair::from_seed(blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());
@@ -901,7 +903,7 @@ mod tests {
 	fn sr25519_verify_should_work() {
 		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
-		let key = sr25519::Pair::from_seed(&blake2_256(b"test"));
+		let key = sr25519::Pair::from_seed(blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
 		let mut calldata = vec![];
 		calldata.extend_from_slice(key.public().as_ref());

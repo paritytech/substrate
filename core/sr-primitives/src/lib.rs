@@ -30,7 +30,7 @@ pub use serde_derive;
 pub use runtime_io::{StorageOverlay, ChildrenStorageOverlay};
 
 use rstd::prelude::*;
-use substrate_primitives::hash::{H256, H512};
+use substrate_primitives::{ed25519, sr25519, hash::{H256, H512}};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
@@ -251,39 +251,64 @@ impl From<codec::Compact<Perbill>> for Perbill {
 	}
 }
 
-/// Ed25519 signature verify.
+/// Signature verify that can work with any known signature types..
+#[derive(Eq, PartialEq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum MultiSignature {
+	/// An Ed25519 signature.
+	Ed25519(ed25519::Signature),
+	/// An Sr25519 signature.
+	Sr25519(sr25519::Signature),
+}
+
+impl Default for MultiSignature {
+	fn default() -> Self {
+		MultiSignature::Ed25519(Default::default())
+	}
+}
+
+/// Public key for any known crypto algorithm.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum MultiSigner {
+	/// An Ed25519 identity.
+	Ed25519(ed25519::Public),
+	/// An Sr25519 identity.
+	Sr25519(sr25519::Public),
+}
+
+impl Default for MultiSigner {
+	fn default() -> Self {
+		MultiSigner::Ed25519(Default::default())
+	}
+}
+
+impl Verify for MultiSignature {
+	type Signer = MultiSigner;
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
+		match (self, signer) {
+			(MultiSignature::Ed25519(ref sig), &MultiSigner::Ed25519(ref who)) => sig.verify(msg, who),
+			(MultiSignature::Sr25519(ref sig), &MultiSigner::Sr25519(ref who)) => sig.verify(msg, who),
+			_ => false,
+		}
+	}
+}
+
+/// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Ed25519Signature(pub H512);
+pub struct AnySignature(H512);
 
-impl Verify for Ed25519Signature {
-	type Signer = H256;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::ed25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
-	}
-}
-
-impl From<H512> for Ed25519Signature {
-	fn from(h: H512) -> Ed25519Signature {
-		Ed25519Signature(h)
-	}
-}
-
-/// Sr25519 signature verify.
-#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
+/// Public key for any known crypto algorithm.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Sr25519Signature(pub H512);
+pub struct AnySigner(H256);
 
-impl Verify for Sr25519Signature {
-	type Signer = H256;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &Self::Signer) -> bool {
-		runtime_io::sr25519_verify((self.0).as_fixed_bytes(), msg.get(), &signer.as_bytes())
-	}
-}
-
-impl From<H512> for Sr25519Signature {
-	fn from(h: H512) -> Sr25519Signature {
-		Sr25519Signature(h)
+impl Verify for AnySignature {
+	type Signer = AnySigner;
+	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AnySigner) -> bool {
+		runtime_io::sr25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0.as_bytes()) ||
+			runtime_io::ed25519_verify(self.0.as_fixed_bytes(), msg.get(), &signer.0.as_bytes())
 	}
 }
 
@@ -581,7 +606,7 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 
 #[cfg(test)]
 mod tests {
-	use substrate_primitives::hash::H256;
+	use substrate_primitives::hash::{H256, H512};
 	use crate::codec::{Encode, Decode};
 	use crate::traits::DigestItem;
 
@@ -616,7 +641,7 @@ mod tests {
 	}
 
 	impl_outer_log! {
-		pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
+		pub enum Log(InternalLog: DigestItem<H256, u64, H512>) for Runtime {
 			a(AuthoritiesChange), b()
 		}
 	}
@@ -636,16 +661,16 @@ mod tests {
 		assert_eq!(auth_change, decoded_auth_change);
 
 		// interpret regular item using `generic::DigestItem`
-		let generic_b1: super::generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_b1[..]).unwrap();
+		let generic_b1: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		match generic_b1 {
 			super::generic::DigestItem::Other(_) => (),
 			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
 		}
 
 		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: super::generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
+		let generic_auth_change: super::generic::DigestItem<H256, u64, H512> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
 		match generic_auth_change {
-			super::generic::DigestItem::AuthoritiesChange::<H256, u64>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
+			super::generic::DigestItem::AuthoritiesChange::<H256, u64, H512>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
 			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
 		}
 

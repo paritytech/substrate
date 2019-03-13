@@ -18,38 +18,35 @@
 
 use std::collections::HashMap;
 use runtime_io::twox_128;
+use super::AccountId;
 use parity_codec::{Encode, KeyedVec, Joiner};
-use primitives::{Ed25519AuthorityId, ChangesTrieConfiguration, map};
-use primitives::storage::well_known_keys;
+use primitives::{ChangesTrieConfiguration, map, storage::well_known_keys};
 use runtime_primitives::traits::Block;
+use primitives::ed25519::Public as AuthorityId;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
 	pub changes_trie_config: Option<ChangesTrieConfiguration>,
-	pub authorities: Vec<Ed25519AuthorityId>,
-	pub balances: Vec<(Ed25519AuthorityId, u64)>,
+	pub authorities: Vec<AuthorityId>,
+	pub balances: Vec<(AccountId, u64)>,
 }
 
 impl GenesisConfig {
-	pub fn new_simple(authorities: Vec<Ed25519AuthorityId>, balance: u64) -> Self {
-		Self::new(false, authorities, balance)
-	}
-
-	pub fn new(support_changes_trie: bool, authorities: Vec<Ed25519AuthorityId>, balance: u64) -> Self {
+	pub fn new(support_changes_trie: bool, authorities: Vec<AuthorityId>, endowed_accounts: Vec<AccountId>, balance: u64) -> Self {
 		GenesisConfig {
 			changes_trie_config: match support_changes_trie {
 				true => Some(super::changes_trie_config()),
 				false => None,
 			},
 			authorities: authorities.clone(),
-			balances: authorities.into_iter().map(|a| (a, balance)).collect(),
+			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 		}
 	}
 
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm").to_vec();
 		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
-			.map(|&(account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
+			.map(|&(ref account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
 				(well_known_keys::CODE.into(), wasm_runtime),

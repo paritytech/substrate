@@ -63,6 +63,9 @@ use substrate_telemetry::TelemetryEndpoints;
 
 const MAX_NODE_NAME_LENGTH: usize = 32;
 
+/// The root phrase for our development network keys.
+pub const DEV_PHRASE: &str = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
+
 /// Executable version. Used to pass version information from the root crate.
 pub struct VersionInfo {
 	/// Implemtation name.
@@ -387,7 +390,7 @@ where
 	}
 
 	if cli.shared_params.dev {
-		config.keys.push("Alice".into());
+		config.keys.push(format!("{}//Alice", DEV_PHRASE));
 	}
 
 	let rpc_interface: &str = if cli.rpc_external { "0.0.0.0" } else { "127.0.0.1" };

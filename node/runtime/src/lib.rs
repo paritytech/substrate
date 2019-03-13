@@ -27,7 +27,7 @@ use support::{Serialize, Deserialize};
 use support::construct_runtime;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, AuthorityId, Signature, AuthoritySignature
 };
 use grandpa::fg_primitives::{self, ScheduledChange};
 use client::{
@@ -37,7 +37,7 @@ use client::{
 use runtime_primitives::{ApplyResult, generic, create_runtime_str};
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::traits::{
-	Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
+	BlakeTwo256, Block as BlockT, DigestFor, NumberFor, StaticLookup,
 };
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -60,7 +60,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("node"),
 	impl_name: create_runtime_str!("substrate-node"),
 	authoring_version: 10,
-	spec_version: 34,
+	spec_version: 35,
 	impl_version: 35,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -113,7 +113,7 @@ impl fees::Trait for Runtime {
 
 impl consensus::Trait for Runtime {
 	type Log = Log;
-	type SessionKey = SessionKey;
+	type SessionKey = AuthorityId;
 
 	// The Aura module handles offline-reports internally
 	// rather than using an explicit report system.
@@ -125,16 +125,8 @@ impl timestamp::Trait for Runtime {
 	type OnTimestampSet = Aura;
 }
 
-/// Session key conversion.
-pub struct SessionKeyConversion;
-impl Convert<AccountId, SessionKey> for SessionKeyConversion {
-	fn convert(a: AccountId) -> SessionKey {
-		a.to_fixed_bytes().into()
-	}
-}
-
 impl session::Trait for Runtime {
-	type ConvertAccountIdToSessionKey = SessionKeyConversion;
+	type ConvertAccountIdToSessionKey = ();
 	type OnSessionChange = (Staking, grandpa::SyncedAuthorities<Runtime>);
 	type Event = Event;
 }
@@ -186,7 +178,7 @@ impl sudo::Trait for Runtime {
 }
 
 impl grandpa::Trait for Runtime {
-	type SessionKey = SessionKey;
+	type SessionKey = AuthorityId;
 	type Log = Log;
 	type Event = Event;
 }
@@ -196,7 +188,7 @@ impl finality_tracker::Trait for Runtime {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where
 		Block = Block,
 		NodeBlock = node_primitives::Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
@@ -246,7 +238,7 @@ impl_runtime_apis! {
 			VERSION
 		}
 
-		fn authorities() -> Vec<SessionKey> {
+		fn authorities() -> Vec<AuthorityId> {
 			Consensus::authorities()
 		}
 
@@ -322,7 +314,7 @@ impl_runtime_apis! {
 			None
 		}
 
-		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
+		fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
 			Grandpa::grandpa_authorities()
 		}
 	}
