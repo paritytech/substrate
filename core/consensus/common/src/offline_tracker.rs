@@ -116,10 +116,11 @@ mod tests {
 
 	#[test]
 	fn validator_offline() {
-		let mut tracker = OfflineTracker::<AuthorityId>::new();
-		let v: AuthorityId = [0; 32].into();
-		let v2: AuthorityId = [1; 32].into();
-		let v3: AuthorityId = [2; 32].into();
+		let mut tracker = OfflineTracker::<AuthorityId>::
+		w();
+		let v = AuthorityId::from_raw([0; 32]);
+		let v2 = AuthorityId::from_raw([1; 32]);
+		let v3 = AuthorityId::from_raw([2; 32]);
 		tracker.note_round_end(v.clone(), true);
 		tracker.note_round_end(v2.clone(), true);
 		tracker.note_round_end(v3.clone(), true);

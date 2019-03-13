@@ -79,9 +79,9 @@ impl AsMut<[u8]> for Public {
 	}
 }
 
-impl Into<[u8; 32]> for Public {
-	fn into(self) -> [u8; 32] {
-		self.0
+impl From<Public> for [u8; 32] {
+	fn from(x: Public) -> Self {
+		x.0
 	}
 }
 
@@ -98,15 +98,9 @@ impl AsRef<Public> for Public {
 	}
 }
 
-impl Into<H256> for Public {
-	fn into(self) -> H256 {
-		self.0.into()
-	}
-}
-
-impl From<H256> for Public {
-	fn from(x: H256) -> Self {
-		Public(x.into())
+impl From<Public> for H256 {
+	fn from(x: Public) -> Self {
+		x.0.into()
 	}
 }
 
