@@ -185,6 +185,8 @@ pub mod generic {
 		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
 		Consensus(ConsensusMessage),
+		/// Consensus status message.
+		ConsensusStatus(ConsensusStatusMessage),
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.
@@ -225,6 +227,7 @@ pub mod generic {
 				Message::BlockAnnounce(_) => CustomMessageId::OneWay,
 				Message::Transactions(_) => CustomMessageId::OneWay,
 				Message::Consensus(_) => CustomMessageId::OneWay,
+				Message::ConsensusStatus(_) => CustomMessageId::OneWay,
 				Message::RemoteCallRequest(ref req) => CustomMessageId::Request(req.id),
 				Message::RemoteCallResponse(ref resp) => CustomMessageId::Response(resp.id),
 				Message::RemoteReadRequest(ref req) => CustomMessageId::Request(req.id),
@@ -255,6 +258,15 @@ pub mod generic {
 		pub genesis_hash: Hash,
 		/// Chain-specific status.
 		pub chain_status: Vec<u8>,
+	}
+
+	/// Consensus status broadcasted periodically and on request.
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	pub struct ConsensusStatusMessage {
+		/// Engine id
+		pub engine_id: ConsensusEngineId,
+		/// Engine-specific status message.
+		pub data: Vec<u8>,
 	}
 
 	/// Request block data from a peer.

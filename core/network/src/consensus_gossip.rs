@@ -26,7 +26,7 @@ use rand::{self, seq::SliceRandom};
 use lru_cache::LruCache;
 use network_libp2p::{Severity, NodeIndex};
 use runtime_primitives::traits::{Block as BlockT, Hash, HashFor};
-pub use crate::message::generic::{Message, ConsensusMessage};
+pub use crate::message::generic::{Message, ConsensusMessage, ConsensusStatusMessage};
 use crate::protocol::Context;
 use crate::config::Roles;
 use crate::ConsensusEngineId;
@@ -40,26 +40,16 @@ struct PeerConsensus<H> {
 	is_authority: bool,
 }
 
-#[derive(Clone, Copy)]
-enum Status {
-	Live,
-	Future,
-}
-
 struct MessageEntry<B: BlockT> {
-	message_hash: B::Hash,
 	topic: B::Hash,
 	message: ConsensusMessage,
 	timestamp: Instant,
-	status: Status,
 }
 
 /// Message validation result.
 pub enum ValidationResult<H> {
 	/// Message is valid with this topic.
 	Valid(H),
-	/// Message is future with this topic.
-	Future(H),
 	/// Invalid message.
 	Invalid,
 	/// Obsolete message.
@@ -68,13 +58,30 @@ pub enum ValidationResult<H> {
 
 /// Validates consensus messages.
 pub trait Validator<H> {
+	/// New peer is connected.
+	fn new_peer(&self, _who: NodeIndex, _roles: Roles) {
+	}
+
+	/// New connection is dropped.
+	fn peer_disconnected(&self, _who: NodeIndex) {
+	}
+
 	/// Validate consensus message.
 	fn validate(&self, data: &[u8]) -> ValidationResult<H>;
+
+	/// Process status message.
+	fn on_status(&self, _who: NodeIndex, _data: &[u8]) {
+	}
+
+	/// Filter out departing messages.
+	fn should_send_to(&self, _who: NodeIndex, _topic: &H, _data: &[u8]) -> bool {
+		true
+	}
 
 	/// Produce a closure for validating messages on a given topic.
 	fn message_expired<'a>(&'a self) -> Box<FnMut(H, &[u8]) -> bool + 'a> {
 		Box::new(move |_topic, data| match self.validate(data) {
-			ValidationResult::Valid(_) | ValidationResult::Future(_) => false,
+			ValidationResult::Valid(_) => false,
 			ValidationResult::Invalid | ValidationResult::Expired => true,
 		})
 	}
@@ -112,29 +119,14 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
-		if roles.intersects(Roles::AUTHORITY) {
-			trace!(target:"gossip", "Registering {:?} {}", roles, who);
-			let now = Instant::now();
-			// Send out all known messages to authorities.
-			let mut known_messages = HashSet::new();
-			for entry in self.messages.iter() {
-				if entry.timestamp + MESSAGE_LIFETIME < now { continue }
-				if let Status::Future = entry.status { continue }
-
-				known_messages.insert(entry.message_hash);
-				protocol.send_message(who, Message::Consensus(entry.message.clone()));
-			}
-			self.peers.insert(who, PeerConsensus {
-				known_messages,
-				is_authority: true,
-			});
-		}
-		else if roles.intersects(Roles::FULL) {
-			self.peers.insert(who, PeerConsensus {
-				known_messages: HashSet::new(),
-				is_authority: false,
-			});
+	pub fn new_peer(&mut self, _protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
+		trace!(target:"gossip", "Registering {:?} {}", roles, who);
+		self.peers.insert(who, PeerConsensus {
+			known_messages: HashSet::new(),
+			is_authority: roles.intersects(Roles::AUTHORITY),
+		});
+		for v in self.validators.values() {
+			v.new_peer(who, roles);
 		}
 	}
 
@@ -142,6 +134,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		&mut self,
 		protocol: &mut Context<B>,
 		message_hash: B::Hash,
+		topic: B::Hash,
 		get_message: F,
 	)
 		where F: Fn() -> ConsensusMessage,
@@ -164,19 +157,22 @@ impl<B: BlockT> ConsensusGossip<B> {
 		};
 
 		for (id, ref mut peer) in self.peers.iter_mut() {
-			if peer.is_authority {
-				if peer.known_messages.insert(message_hash.clone()) {
-					let message = get_message();
-					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
-					protocol.send_message(*id, Message::Consensus(message));
-				}
-			} else if non_authorities.contains(&id) {
-				if peer.known_messages.insert(message_hash.clone()) {
-					let message = get_message();
-					trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-					protocol.send_message(*id, Message::Consensus(message));
+			if peer.known_messages.contains(&message_hash) {
+				continue
+			}
+			let message = get_message();
+			if let Some(validator) = self.validators.get(&message.engine_id) {
+				if !validator.should_send_to(*id, &topic, &message.data) {
+					continue
 				}
 			}
+			peer.known_messages.insert(message_hash.clone());
+			if peer.is_authority {
+					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
+			} else if non_authorities.contains(&id) {
+					trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+			}
+			protocol.send_message(*id, Message::Consensus(message));
 		}
 	}
 
@@ -184,7 +180,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 		&mut self,
 		message_hash: B::Hash,
 		topic: B::Hash,
-		status: Status,
 		get_message: F,
 	)
 		where F: Fn() -> ConsensusMessage
@@ -192,16 +187,17 @@ impl<B: BlockT> ConsensusGossip<B> {
 		if self.known_messages.insert(message_hash, ()).is_none() {
 			self.messages.push(MessageEntry {
 				topic,
-				message_hash,
 				message: get_message(),
 				timestamp: Instant::now(),
-				status,
 			});
 		}
 	}
 
 	/// Call when a peer has been disconnected to stop tracking gossip status.
 	pub fn peer_disconnected(&mut self, _protocol: &mut Context<B>, who: NodeIndex) {
+		for v in self.validators.values() {
+			v.peer_disconnected(who);
+		}
 		self.peers.remove(&who);
 	}
 
@@ -254,39 +250,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 		-> mpsc::UnboundedReceiver<Vec<u8>>
 	{
 		let (tx, rx) = mpsc::unbounded();
-
-		let validator = match self.validators.get(&engine_id) {
-			None => {
-				self.live_message_sinks.entry((engine_id, topic)).or_default().push(tx);
-				return rx;
-			}
-			Some(v) => v,
-		};
-
 		for entry in self.messages.iter_mut()
 			.filter(|e| e.topic == topic && e.message.engine_id == engine_id)
 		{
-			let live = match entry.status {
-				Status::Live => true,
-				Status::Future => match validator.validate(&entry.message.data) {
-					ValidationResult::Valid(_) => {
-						entry.status = Status::Live;
-						true
-					}
-					_ => {
-						// don't send messages considered to be future still.
-						// if messages are considered expired they'll be cleaned up when we
-						// collect garbage.
-						false
-					}
-				}
-			};
-
-			if live {
-				entry.status = Status::Live;
-				tx.unbounded_send(entry.message.data.clone())
-					.expect("receiver known to be live; qed");
-			}
+			tx.unbounded_send(entry.message.data.clone())
+				.expect("receiver known to be live; qed");
 		}
 
 		self.live_message_sinks.entry((engine_id, topic)).or_default().push(tx);
@@ -316,11 +284,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 			let engine_id = message.engine_id;
 			//validate the message
-			let (topic, status) = match self.validators.get(&engine_id)
+			let topic = match self.validators.get(&engine_id)
 				.map(|v| v.validate(&message.data))
 			{
-				Some(ValidationResult::Valid(topic)) => (topic, Status::Live),
-				Some(ValidationResult::Future(topic)) => (topic, Status::Future),
+				Some(ValidationResult::Valid(topic)) => topic,
 				Some(ValidationResult::Invalid) => {
 					trace!(target:"gossip", "Invalid message from {}", who);
 					protocol.report_peer(
@@ -357,11 +324,49 @@ impl<B: BlockT> ConsensusGossip<B> {
 					entry.remove_entry();
 				}
 			}
-			self.multicast_inner(protocol, message_hash, topic, status, || message.clone());
+			self.multicast_inner(protocol, message_hash, topic, || message.clone());
 			Some((topic, message))
 		} else {
 			trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
 			None
+		}
+	}
+
+
+	/// Handle an incoming ConsensusStatusMessage. Forwards it to the consensus engine handler.
+	pub fn on_status(
+		&mut self,
+		protocol: &mut Context<B>,
+		who: NodeIndex,
+		message: ConsensusStatusMessage,
+	) {
+		if let Some(_) = self.peers.get_mut(&who) {
+			let engine_id = message.engine_id;
+			//validate the message
+			if let Some(validator) = self.validators.get(&engine_id) {
+				validator.on_status(who, &message.data)
+			} else {
+				protocol.report_peer(
+					who,
+					Severity::Useless(format!("Sent status with unknown consensus engine id")),
+				);
+				trace!(target:"gossip", "Unknown status message engine id {:?} from {}", engine_id, who);
+			}
+		} else {
+			trace!(target:"gossip", "Ignored status from unregistered peer {}", who);
+		}
+	}
+
+	/// Send out consensus status message to a particular peer.
+	pub fn send_consensus_status(
+		&mut self,
+		protocol: &mut Context<B>,
+		peer: NodeIndex,
+		message: ConsensusStatusMessage,
+	) {
+		if let Some(_) = self.peers.get(&peer) {
+			trace!(target:"gossip", "Sending consensus status to {}", peer);
+			protocol.send_message(peer, Message::ConsensusStatus(message));
 		}
 	}
 
@@ -373,7 +378,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		message: ConsensusMessage,
 	) {
 		let message_hash = HashFor::<B>::hash(&message.data);
-		self.multicast_inner(protocol, message_hash, topic, Status::Live, || message.clone());
+		self.multicast_inner(protocol, message_hash, topic, || message.clone());
 	}
 
 	fn multicast_inner<F>(
@@ -381,15 +386,12 @@ impl<B: BlockT> ConsensusGossip<B> {
 		protocol: &mut Context<B>,
 		message_hash: B::Hash,
 		topic: B::Hash,
-		status: Status,
 		get_message: F,
 	)
 		where F: Fn() -> ConsensusMessage
 	{
-		self.register_message(message_hash, topic, status, &get_message);
-		if let Status::Live = status {
-			self.propagate(protocol, message_hash, get_message);
-		}
+		self.register_message(message_hash, topic, &get_message);
+		self.propagate(protocol, message_hash, topic, get_message);
 	}
 
 	/// Note new consensus session.
@@ -413,10 +415,8 @@ mod tests {
 			if $consensus.known_messages.insert($hash, ()).is_none() {
 				$consensus.messages.push(MessageEntry {
 					topic: $topic,
-					message_hash: $hash,
 					message: ConsensusMessage { data: $m, engine_id: [0, 0, 0, 0]},
 					timestamp: $now,
-					status: Status::Live,
 				});
 			}
 		}
@@ -493,7 +493,7 @@ mod tests {
 		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, Status::Live, || message.clone());
+		consensus.register_message(message_hash, topic, || message.clone());
 		let stream = consensus.messages_for([0, 0, 0, 0], topic);
 
 		assert_eq!(stream.wait().next(), Some(Ok(message.data)));
@@ -507,8 +507,8 @@ mod tests {
 		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
 		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 0] };
 
-		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic, Status::Live, || msg_a.clone());
-		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic, Status::Live, || msg_b.clone());
+		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic, || msg_a.clone());
+		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic, || msg_b.clone());
 
 		assert_eq!(consensus.messages.len(), 2);
 	}
@@ -523,7 +523,7 @@ mod tests {
 		let message_hash = HashFor::<Block>::hash(&message.data);
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		consensus.register_message(message_hash, topic, Status::Live, || message.clone());
+		consensus.register_message(message_hash, topic, || message.clone());
 
 		let stream1 = consensus.messages_for([0, 0, 0, 0], topic);
 		let stream2 = consensus.messages_for([0, 0, 0, 0], topic);
@@ -541,8 +541,8 @@ mod tests {
 		let msg_a = ConsensusMessage { data: vec![1, 2, 3], engine_id: [0, 0, 0, 0] };
 		let msg_b = ConsensusMessage { data: vec![4, 5, 6], engine_id: [0, 0, 0, 1] };
 
-		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic, Status::Live, || msg_a.clone());
-		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic, Status::Live, || msg_b.clone());
+		consensus.register_message(HashFor::<Block>::hash(&msg_a.data), topic, || msg_a.clone());
+		consensus.register_message(HashFor::<Block>::hash(&msg_b.data), topic, || msg_b.clone());
 
 		let mut stream = consensus.messages_for([0, 0, 0, 0], topic).wait();
 
