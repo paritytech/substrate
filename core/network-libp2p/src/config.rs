@@ -52,13 +52,6 @@ pub struct NetworkConfiguration {
 
 impl Default for NetworkConfiguration {
 	fn default() -> Self {
-		NetworkConfiguration::new()
-	}
-}
-
-impl NetworkConfiguration {
-	/// Create a new instance of default settings.
-	pub fn new() -> Self {
 		NetworkConfiguration {
 			config_path: None,
 			net_config_path: None,
@@ -73,6 +66,13 @@ impl NetworkConfiguration {
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
 		}
+	}
+}
+
+impl NetworkConfiguration {
+	/// Create a new instance of default settings.
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
