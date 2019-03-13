@@ -416,6 +416,17 @@ fn register_finality_tracker_inherent_data_provider<B, E, Block: BlockT<Hash=H25
 	}
 }
 
+fn forward_commit_finalized<B, S, N>(network: &N, stream: S) -> impl Future<Item=(),Error=Error>
+	where
+		B: BlockT,
+		S: Stream<Item=(u64, NumberFor<B>)> + Send + 'static,
+		N: Network<B> + Send + 'static,
+{
+	let net = network.clone();
+	stream.for_each(move |(set_id, num)| { net.note_commit_finalized(set_id, num); Ok(()) })
+		.map_err(|_| panic!("unbounded receivers do not error; qed"))
+}
+
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
 pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
@@ -450,6 +461,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;
 
 	let voters = authority_set.current_authorities();
+	let (commit_finalized_tx, commit_finalized_rx) = mpsc::unbounded();
+	let forward_commit_finalized = forward_commit_finalized(&network, commit_finalized_rx);
 
 	let initial_environment = Arc::new(Environment {
 		inner: client.clone(),
@@ -460,6 +473,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		authority_set: authority_set.clone(),
 		consensus_changes: consensus_changes.clone(),
 		last_completed: environment::LastCompletedRound::new(set_state.round()),
+		note_commit_finalized: commit_finalized_tx.clone(),
 	});
 
 	let initial_state = (initial_environment, set_state, voter_commands_rx.into_future());
@@ -515,6 +529,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 		let network = network.clone();
 		let authority_set = authority_set.clone();
 		let consensus_changes = consensus_changes.clone();
+		let note_commit_finalized = commit_finalized_tx.clone();
 
 		let handle_voter_command = move |command: VoterCommand<_, _>, voter_commands_rx| {
 			match command {
@@ -543,6 +558,7 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 						last_completed: environment::LastCompletedRound::new(
 							(0, genesis_state.clone())
 						),
+						note_commit_finalized: note_commit_finalized,
 					});
 
 
@@ -599,8 +615,8 @@ pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N, RA>(
 	});
 
 	let voter_work = voter_work
-		.join(broadcast_worker)
-		.map(|((), ())| ())
+		.join3(broadcast_worker, forward_commit_finalized)
+		.map(|_| ())
 		.map_err(|e| {
 			warn!("GRANDPA Voter failed: {:?}", e);
 			telemetry!(CONSENSUS_WARN; "afg.voter_failed"; "e" => ?e);

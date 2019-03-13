@@ -41,7 +41,7 @@ pub enum Consider {
 pub struct View<N> {
 	round: u64, // the current round we are at.
 	set_id: u64, // the current voter set id.
-	last_commit: Option<(u64, N)>, // round number and block height, if any.
+	last_commit: Option<N>, // commit-finalized block height, if any.
 }
 
 impl<N: Ord> View<N> {
@@ -75,7 +75,7 @@ impl<N: Ord> View<N> {
 		// the one we're aware of.
 		match self.last_commit {
 			None => Consider::Accept,
-			Some((_, ref num)) => if num < &number {
+			Some(ref num) => if num < &number {
 				Consider::Accept
 			} else {
 				Consider::RejectPast
@@ -151,6 +151,12 @@ impl<Block: BlockT> GossipValidator<Block> {
 	/// Note that a voter set with given ID has started.
 	pub(crate) fn note_set(&self, set_id: u64) {
 		self.local_view.write().update_set(set_id);
+	}
+
+	/// Note that we've imported a commit finalizing a given block.
+	pub(crate) fn note_commit_finalized(&self, finalized: NumberFor<Block>) {
+		let mut view = self.local_view.write();
+		view.last_commit = std::cmp::max(view.last_commit, Some(finalized));
 	}
 
 	fn consider_vote(&self, round: u64, set_id: u64) -> Consider {
@@ -295,7 +301,7 @@ mod tests {
 
 	#[test]
 	fn commit_vote_rules() {
-		let view = View { round: 100, set_id: 2, last_commit: Some((100, 1000u64)) };
+		let view = View { round: 100, set_id: 2, last_commit: Some(1000u64) };
 
 		assert_eq!(view.consider_commit(3, 1), Consider::RejectFuture);
 		assert_eq!(view.consider_commit(3, 1000), Consider::RejectFuture);

@@ -233,6 +233,10 @@ impl Network<Block> for MessageRouting {
 	fn announce(&self, _round: u64, _set_id: u64, _block: H256) {
 
 	}
+
+	fn note_commit_finalized(&self, _set_id: u64, _block: BlockNumber) {
+
+	}
 }
 
 #[derive(Default, Clone)]
