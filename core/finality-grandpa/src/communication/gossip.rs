@@ -16,7 +16,7 @@
 
 //! Gossip and politeness for GRANDPA communication.
 
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{NumberFor, Block as BlockT};
 use network::consensus_gossip::{self as network_gossip, ValidatorContext};
 use network::{config::Roles, NodeIndex};
 use parity_codec::{Encode, Decode};
@@ -38,12 +38,13 @@ pub enum Consider {
 }
 
 /// A view of protocol state.
-pub struct View {
+pub struct View<N> {
 	round: u64, // the current round we are at.
 	set_id: u64, // the current voter set id.
+	last_commit: Option<(u64, N)>, // round number and block height, if any.
 }
 
-impl View {
+impl<N: Ord> View<N> {
 	/// Update the set ID. implies a reset to round 0.
 	pub fn update_set(&mut self, set_id: u64) {
 		self.set_id = set_id;
@@ -51,7 +52,7 @@ impl View {
 	}
 
 	/// Consider a round and set ID combination under a current view.
-	pub fn consider(&self, round: u64, set_id: u64) -> Consider {
+	pub fn consider_vote(&self, round: u64, set_id: u64) -> Consider {
 		// only from current set
 		if set_id < self.set_id { return Consider::RejectPast }
 		if set_id > self.set_id { return Consider::RejectFuture }
@@ -61,6 +62,25 @@ impl View {
 		if round < self.round.saturating_sub(1) { return Consider::RejectPast }
 
 		Consider::Accept
+	}
+
+	/// Consider a commit. Rounds are not taken into account, but are implicitly
+	/// because we gate on finalization of a further block than a previous commit.
+	pub fn consider_commit(&self, set_id: u64, number: N) -> Consider {
+		// only from current set
+		if set_id < self.set_id { return Consider::RejectPast }
+		if set_id > self.set_id { return Consider::RejectFuture }
+
+		// only commits which claim to prove a higher block number than
+		// the one we're aware of.
+		match self.last_commit {
+			None => Consider::Accept,
+			Some((_, ref num)) => if num < &number {
+				Consider::Accept
+			} else {
+				Consider::RejectPast
+			}
+		}
 	}
 }
 
@@ -98,7 +118,7 @@ pub struct FullCommitMessage<Block: BlockT> {
 
 /// A validator for GRANDPA gossip messages.
 pub(crate) struct GossipValidator<Block: BlockT> {
-	local_view: parking_lot::RwLock<View>,
+	local_view: parking_lot::RwLock<View<NumberFor<Block>>>,
 	_marker: std::marker::PhantomData<Block>,
 }
 
@@ -109,6 +129,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			local_view: parking_lot::RwLock::new(View {
 				round: 0,
 				set_id: 0,
+				last_commit: None,
 			}),
 			_marker: Default::default(),
 		}
@@ -117,7 +138,14 @@ impl<Block: BlockT> GossipValidator<Block> {
 	/// Note a round in a set has started.
 	pub(crate) fn note_round(&self, round: u64, set_id: u64) {
 		let mut view = self.local_view.write();
-		*view = View { round, set_id };
+		view.round = round;
+
+		if set_id != view.set_id {
+			// clear commit when we change set.
+			view.last_commit = None;
+		}
+
+		view.set_id = set_id;
 	}
 
 	/// Note that a voter set with given ID has started.
@@ -125,15 +153,18 @@ impl<Block: BlockT> GossipValidator<Block> {
 		self.local_view.write().update_set(set_id);
 	}
 
-	/// Consider a message.
-	fn consider(&self, round: u64, set_id: u64) -> Consider {
-		self.local_view.read().consider(round, set_id)
+	fn consider_vote(&self, round: u64, set_id: u64) -> Consider {
+		self.local_view.read().consider_vote(round, set_id)
+	}
+
+	fn consider_commit(&self, set_id: u64, number: NumberFor<Block>) -> Consider {
+		self.local_view.read().consider_commit(set_id, number)
 	}
 
 	fn validate_round_message(&self, full: VoteOrPrecommitMessage<Block>)
 		-> network_gossip::ValidationResult<Block::Hash>
 	{
-		match self.consider(full.round, full.set_id) {
+		match self.consider_vote(full.round, full.set_id) {
 			Consider::RejectFuture | Consider::RejectPast =>
 				return network_gossip::ValidationResult::Expired,
 			_ => {},
@@ -160,7 +191,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 	{
 		use grandpa::Message as GrandpaMessage;
 
-		match self.consider(full.round, full.set_id) {
+		match self.consider_commit(full.set_id, full.message.target_number) {
 			Consider::RejectFuture | Consider::RejectPast =>
 				return network_gossip::ValidationResult::Expired,
 			_ => {},
@@ -228,9 +259,12 @@ impl<Block: BlockT> network_gossip::Validator<Block> for GossipValidator<Block> 
 		Box::new(move |_topic, mut data| {
 			let consider = match GossipMessage::<Block>::decode(&mut data) {
 				None => Consider::Accept,
-				Some(GossipMessage::Commit(full)) => rounds.consider(full.round, full.set_id),
+				Some(GossipMessage::Commit(full)) => rounds.consider_commit(
+					full.set_id,
+					full.message.target_number,
+				),
 				Some(GossipMessage::VoteOrPrecommit(full)) =>
-					rounds.consider(full.round, full.set_id),
+					rounds.consider_vote(full.round, full.set_id),
 			};
 
 			consider == Consider::Accept
@@ -243,19 +277,37 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn view_accepts_current() {
-		let view = View { round: 100, set_id: 1 };
+	fn view_vote_rules() {
+		let view = View { round: 100, set_id: 1, last_commit: Some((100, 1u64)) };
 
-		assert_eq!(view.consider(98, 1), Consider::RejectPast);
-		assert_eq!(view.consider(1, 0), Consider::RejectPast);
-		assert_eq!(view.consider(1000, 0), Consider::RejectPast);
+		assert_eq!(view.consider_vote(98, 1), Consider::RejectPast);
+		assert_eq!(view.consider_vote(1, 0), Consider::RejectPast);
+		assert_eq!(view.consider_vote(1000, 0), Consider::RejectPast);
 
-		assert_eq!(view.consider(99, 1), Consider::Accept);
-		assert_eq!(view.consider(100, 1), Consider::Accept);
-		assert_eq!(view.consider(101, 1), Consider::Accept);
+		assert_eq!(view.consider_vote(99, 1), Consider::Accept);
+		assert_eq!(view.consider_vote(100, 1), Consider::Accept);
+		assert_eq!(view.consider_vote(101, 1), Consider::Accept);
 
-		assert_eq!(view.consider(102, 1), Consider::RejectFuture);
-		assert_eq!(view.consider(1, 2), Consider::RejectFuture);
-		assert_eq!(view.consider(1000, 2), Consider::RejectFuture);
+		assert_eq!(view.consider_vote(102, 1), Consider::RejectFuture);
+		assert_eq!(view.consider_vote(1, 2), Consider::RejectFuture);
+		assert_eq!(view.consider_vote(1000, 2), Consider::RejectFuture);
+	}
+
+	#[test]
+	fn commit_vote_rules() {
+		let view = View { round: 100, set_id: 2, last_commit: Some((100, 1000u64)) };
+
+		assert_eq!(view.consider_commit(3, 1), Consider::RejectFuture);
+		assert_eq!(view.consider_commit(3, 1000), Consider::RejectFuture);
+		assert_eq!(view.consider_commit(3, 10000), Consider::RejectFuture);
+
+		assert_eq!(view.consider_commit(1, 1), Consider::RejectPast);
+		assert_eq!(view.consider_commit(1, 1000), Consider::RejectPast);
+		assert_eq!(view.consider_commit(1, 10000), Consider::RejectPast);
+
+		assert_eq!(view.consider_commit(2, 1), Consider::RejectPast);
+		assert_eq!(view.consider_commit(2, 1000), Consider::RejectPast);
+		assert_eq!(view.consider_commit(2, 1001), Consider::Accept);
+		assert_eq!(view.consider_commit(2, 10000), Consider::Accept);
 	}
 }
