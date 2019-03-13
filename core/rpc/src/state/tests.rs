@@ -17,10 +17,10 @@
 use super::*;
 use self::error::{Error, ErrorKind};
 
+use sr_io::twox_128;
 use assert_matches::assert_matches;
 use consensus::BlockOrigin;
-use rustc_hex::FromHex;
-use test_client::{self, runtime, keyring::Keyring, TestClient, BlockBuilderExt};
+use test_client::{self, runtime, AccountKeyring, TestClient, BlockBuilderExt};
 
 #[test]
 fn should_return_storage() {
@@ -64,8 +64,8 @@ fn should_notify_about_storage_changes() {
 
 		let mut builder = api.client.new_block().unwrap();
 		builder.push_transfer(runtime::Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
@@ -88,8 +88,10 @@ fn should_send_initial_storage_changes_and_notifications() {
 	{
 		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
+		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
+
 		api.subscribe_storage(Default::default(), subscriber, Some(vec![
-			StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()),
+			StorageKey(alice_balance_key.to_vec()),
 		]).into());
 
 		// assert id assigned
@@ -97,8 +99,8 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 		let mut builder = api.client.new_block().unwrap();
 		builder.push_transfer(runtime::Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
 			amount: 42,
 			nonce: 0,
 		}).unwrap();
@@ -131,8 +133,8 @@ fn should_query_storage() {
 		let add_block = |nonce| {
 			let mut builder = client.new_block().unwrap();
 			builder.push_transfer(runtime::Transfer {
-				from: Keyring::Alice.to_raw_public().into(),
-				to: Keyring::Ferdie.to_raw_public().into(),
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Ferdie.into(),
 				amount: 42,
 				nonce,
 			}).unwrap();
@@ -145,13 +147,14 @@ fn should_query_storage() {
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
 
+		let alice_balance_key = twox_128(&test_runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
 		let mut expected = vec![
 			StorageChangeSet {
 				block: genesis_hash,
 				changes: vec![
 					(
-						StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()),
+						StorageKey(alice_balance_key.to_vec()),
 						Some(StorageData(vec![232, 3, 0, 0, 0, 0, 0, 0]))
 					),
 				],
@@ -160,7 +163,7 @@ fn should_query_storage() {
 				block: block1_hash,
 				changes: vec![
 					(
-						StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()),
+						StorageKey(alice_balance_key.to_vec()),
 						Some(StorageData(vec![190, 3, 0, 0, 0, 0, 0, 0]))
 					),
 				],
@@ -169,7 +172,7 @@ fn should_query_storage() {
 
 		// Query changes only up to block1
 		let result = api.query_storage(
-			vec![StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap())],
+			vec![StorageKey(alice_balance_key.to_vec())],
 			genesis_hash,
 			Some(block1_hash).into(),
 		);
@@ -178,7 +181,7 @@ fn should_query_storage() {
 
 		// Query all changes
 		let result = api.query_storage(
-			vec![StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap())],
+			vec![StorageKey(alice_balance_key.to_vec())],
 			genesis_hash,
 			None.into(),
 		);
@@ -187,7 +190,7 @@ fn should_query_storage() {
 			block: block2_hash,
 			changes: vec![
 				(
-					StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()),
+					StorageKey(alice_balance_key.to_vec()),
 					Some(StorageData(vec![148, 3, 0, 0, 0, 0, 0, 0]))
 				),
 			],

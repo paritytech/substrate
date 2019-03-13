@@ -273,17 +273,16 @@ mod tests {
 	use codec::Encode;
 	use std::cell::RefCell;
 	use consensus_common::{Environment, Proposer};
-	use test_client::keyring::Keyring;
-	use test_client::{self, runtime::{Extrinsic, Transfer}};
+	use test_client::{self, runtime::{Extrinsic, Transfer}, AccountKeyring};
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		let tx = Transfer {
 			amount: Default::default(),
 			nonce,
-			from: Keyring::Alice.to_raw_public().into(),
+			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		};
-		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
+		let signature = AccountKeyring::from_public(&tx.from).unwrap().sign(&tx.encode()).into();
 		Extrinsic::Transfer(tx, signature)
 	}
 
