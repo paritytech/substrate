@@ -14,7 +14,114 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Handles all transaction fee related operations
+//! ## Overview
+//! 
+//! The `fees` module handles transaction fee related operations. To use this module, the [`TransferAsset`](https://crates.parity.io/srml_fees/trait.Trait.html#associatedtype.TransferAsset) trait must be implemented to enable asset transfer between accounts. This module provides the following functionality
+//! 
+//! - Getting and setting the base and per-byte transaction fee
+//! - Tracking the overall charged fees for each transaction
+//! - Charging and refunding transaction fees
+//! 
+//! ## Interface
+//! 
+//! ### Dispatchable
+//! 
+//! This module is intended to be called by other modules rather than transactions (no dispatchable functions).
+//! 
+//! ### Public
+//! 
+//! The following methods are publicly accessible to other modules that implement the [`ChargeFee`](https://github.com/paritytech/substrate/blob/master/srml/fees/src/lib.rs#L93) trait.
+//! 
+//! - [`charge_fee`](https://github.com/paritytech/substrate/blob/master/srml/fees/src/lib.rs#L96) - handles subtracting transaction fees from the transactor's account
+//! - [`refund_fee`](https://github.com/paritytech/substrate/blob/master/srml/fees/src/lib.rs#L107) - handles transaction fee refunds to the transactor's account
+//! 
+//! ## Usage
+//! 
+//! ### Prerequisites
+//! 
+//! The fees module depends on the [`system`](https://crates.parity.io/srml_system/index.html) and [`support`](https://crates.parity.io/srml_support/index.html) modules as well as Substrate Core libraries and the Rust standard library.
+//! 
+//! ### Simple Code Snippet
+//! 
+//! Use the `ChargeFee` trait to charge and refund fees.
+//! 
+//! ```rust
+//! T::ChargeFee::charge_fee(transactor, fee);
+//! T::ChargeFee::refund_fee(transactor, fee);
+//! ```
+//! 
+//! ### Example from SRML
+//! 
+//! The `ChargeFee` trait is invoked in the `balances` and `contract` modules to manage fee-related logic in the following ways
+//! 1. `balances`: transfer/creation fee
+//! 2. `contract`: gas fee refund/buy
+//! 
+//! [In the balances module](https://github.com/paritytech/substrate/blob/687cf01ed34ee12d7aaf49bf99d7276192bc8363/srml/balances/src/lib.rs#L58), the `ChargeFee` trait is imported in the module's configuration trait:
+//! ```rust
+//! type ChargeFee: ChargeFee<Self::AccountId, Amount=Self::Balance>;
+//! ```
+//! 
+//! It is [later](https://github.com/paritytech/substrate/blob/687cf01ed34ee12d7aaf49bf99d7276192bc8363/srml/balances/src/lib.rs#L328) utilized to charge a transaction fee when the `transactor != dest` (any transfer betweeen different accounts):
+//! ```rust
+//! if transactor != dest {
+//!     T::ChargeFee::charge_fee(transactor, fee)?;
+//!     ...
+//! }
+//! ```
+//! 
+//! In the `contract` module, the `ChargeFee` trait is used to refund the gas fee ([ex](https://github.com/paritytech/substrate/pull/1815/files#diff-2179e1ee855613aa8f3343cf87154fe4R241)):
+//! ```rust
+//! let _ = <T as Trait>::ChargeFee::refund_fee(transactor, refund);
+//! ```
+//! 
+//! Moreover the following code in [substrate/node/runtime/src/lib.rs](https://github.com/paritytech/substrate/blob/687cf01ed34ee12d7aaf49bf99d7276192bc8363/node/runtime/src/lib.rs#L106) hooks the `fees` module and `balances` module, thereby enabling greater flexibility when implementing and extending the `ChargeFee` trait.
+//! ```rust
+//! impl balances::Trait for Runtime {
+//! 	type Balance = Balance;
+//! 	type OnFreeBalanceZero = ((Staking, Contract), Session);
+//! 	type OnNewAccount = Indices;
+//! 	type ChargeFee = fees::Module<Runtime>;
+//! 	type Event = Event;
+//! }
+//! ```
+//! 
+//! A [similar configuration](https://github.com/paritytech/substrate/blob/6ac1f183e0852a387953592d31f01957ff3c76f8/node/runtime/src/lib.rs#L111) involves utilizing the `balances` module in the `fees` implementation.
+//! ```rust
+//! impl fees::Trait for Runtime {
+//! 	type Event = Event;
+//! 	type TransferAsset = Balances;
+//! }
+//! ```
+//! If a chain does not have the `balances` module, then `TransferAsset` can be set to `()`
+//! ```rust
+//! type TransferAsset = ();
+//! ```
+//! In this case, no fee will be charged. Therefore, chains with different implementations of the balances module only need to implement the `TransferAsset` trait in order to be used by the `fees` module.
+//! 
+//! <!-- ([ongoing PR](https://github.com/paritytech/substrate/issues/1923)) In addition, it is possible to provide `fees` information to other modules. With this functionality, modules can more easily manage accumulated fees within the current block.
+//! ```rust
+//! pub trait OnFeeCharged<Amount> {
+//! 	fn on_fee_charged(fee: &Amount);
+//! }
+//! ```
+//! This functionality provides greater flexibility when distributing fees to validators (and other relevant actors). -->
+//! 
+//! ## Genesis Config
+//! 
+//! Configuration is in `<your-node-name>/src/chain_spec.rs`. The following storage items are configurable:
+//! 
+//! - `transaction_base_fee`
+//! - `transaction_byte_fee`
+//! 
+//! ## Related Modules
+//! 
+//! - [**Balances**](https://crates.parity.io/srml_balances/index.html): used for the implementation of the `TransferAsset` trait to be used by the `fees` module
+//! - [**Sessions**](https://crates.parity.io/srml_session/index.html): provides context for the accumulation of fees (throughout a session)
+//! - [**System**](https://crates.parity.io/srml_system/index.html): used to obtain block number and time, among other details
+//! 
+//! ## References
+//! 
+//! There are no references at this time. <!-- expect to add references to state rent implementations-->
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
