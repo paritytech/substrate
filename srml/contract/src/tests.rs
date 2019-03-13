@@ -24,6 +24,7 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header, UintAuthorit
 use runtime_primitives::traits::{BlakeTwo256, IdentityLookup};
 use runtime_primitives::BuildStorage;
 use runtime_io;
+use srml_support::{storage::child, storage::unhashed};
 use srml_support::{StorageMap, StorageDoubleMap, assert_ok, impl_outer_event, impl_outer_dispatch, impl_outer_origin};
 use substrate_primitives::{Blake2Hasher};
 use system::{self, Phase, EventRecord};
@@ -33,7 +34,8 @@ use hex_literal::*;
 use assert_matches::assert_matches;
 use crate::{
 	ContractAddressFor, GenesisConfig, Module, RawEvent,
-	Trait, ComputeDispatchFee, KeySpaceGenerator
+	Trait, ComputeDispatchFee, KeySpaceGenerator, KeySpace,
+	SubTrie,
 };
 
 mod contract {
@@ -114,12 +116,11 @@ impl ContractAddressFor<H256, u64> for DummyContractAddressFor {
 
 pub struct DummyKeySpaceGenerator;
 impl KeySpaceGenerator<u64> for DummyKeySpaceGenerator {
-	fn key_space(account_id: &u64, top: &[u8]) -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(top);
-    res.extend_from_slice(&account_id.to_be_bytes()[..]);
-    res
-  }
+	fn key_space(account_id: &u64) -> KeySpace {
+		let mut res = Vec::new();
+		res.extend_from_slice(&account_id.to_be_bytes()[..]);
+		res
+	}
 }
 
 pub struct DummyComputeDispatchFee;
@@ -227,6 +228,8 @@ fn refunds_unused_gas() {
 
 #[test]
 fn account_removal_removes_storage() {
+	let unique_id1 = b"unique_id1";
+	let unique_id2 = b"unique_id2";
 	with_externalities(
 		&mut ExtBuilder::default().existential_deposit(100).build(),
 		|| {
@@ -234,13 +237,24 @@ fn account_removal_removes_storage() {
 			{
 				Balances::set_free_balance(&1, 110);
 				Balances::increase_total_stake_by(110);
-				<AccountStorage<Test>>::insert(&1, &b"foo".to_vec(), b"1".to_vec());
-				<AccountStorage<Test>>::insert(&1, &b"bar".to_vec(), b"2".to_vec());
+				let contract_id1 = parity_codec::Encode::encode(&1);
+				unhashed::put(&contract_id1[..], &SubTrie{
+					key_space: unique_id1.to_vec(),
+					current_mem_stored: 0,
+				});
+				child::put(&unique_id1[..], &b"foo".to_vec(), &b"1".to_vec());
+				child::put(&unique_id1[..], &b"bar".to_vec(), &b"2".to_vec());
 
 				Balances::set_free_balance(&2, 110);
 				Balances::increase_total_stake_by(110);
-				<AccountStorage<Test>>::insert(&2, &b"hello".to_vec(), b"3".to_vec());
-				<AccountStorage<Test>>::insert(&2, &b"world".to_vec(), b"4".to_vec());
+				let contract_id2 = parity_codec::Encode::encode(&2);
+				unhashed::put(&contract_id2[..], &SubTrie{
+					key_space: unique_id2.to_vec(),
+					current_mem_stored: 0,
+				});
+				unhashed::put(&contract_id2[..], &unique_id2.to_vec());
+				child::put(&unique_id2[..], &b"hello".to_vec(), &b"3".to_vec());
+				child::put(&unique_id2[..], &b"world".to_vec(), &b"4".to_vec());
 			}
 
 			// Transfer funds from account 1 of such amount that after this transfer
@@ -252,15 +266,15 @@ fn account_removal_removes_storage() {
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
 			{
-				assert_eq!(<AccountStorage<Test>>::get(&1, &b"foo".to_vec()), None);
-				assert_eq!(<AccountStorage<Test>>::get(&1, &b"bar".to_vec()), None);
+				assert_eq!(child::get_raw(&unique_id1[..], &b"foo".to_vec()), None);
+				assert_eq!(child::get_raw(&unique_id1[..], &b"bar".to_vec()), None);
 
 				assert_eq!(
-					<AccountStorage<Test>>::get(&2, &b"hello".to_vec()),
+					child::get(&unique_id2[..], &b"hello".to_vec()),
 					Some(b"3".to_vec())
 				);
 				assert_eq!(
-					<AccountStorage<Test>>::get(&2, &b"world".to_vec()),
+					child::get(&unique_id2[..], &b"world".to_vec()),
 					Some(b"4".to_vec())
 				);
 			}

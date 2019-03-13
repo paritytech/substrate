@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait};
-use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
+use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait, KeySpace};
+use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb, AccountKeySpaceMapping};
 use crate::gas::{GasMeter, Token, approx_gas_for_balance};
 
 use rstd::prelude::*;
+use rstd::cell::RefCell;
 use runtime_primitives::traits::{CheckedAdd, CheckedSub, Zero};
 use srml_support::traits::WithdrawReason;
 use timestamp;
@@ -226,7 +227,7 @@ impl<T: Trait> Token<T> for ExecFeeToken {
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	// TODO can we remove self_account
 	pub self_account: T::AccountId,
-	pub self_keyspace: Vec<u8>, // TODO ref?
+	pub self_keyspace: KeySpace,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
@@ -246,10 +247,11 @@ where
 	///
 	/// The specified `origin` address will be used as `sender` for
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
-		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb);
+		let overlay = OverlayAccountDb::<T>::new(&DirectAccountDb, Some(RefCell::new(AccountKeySpaceMapping::new())));
+		let self_keyspace = overlay.get_or_create_keyspace(&origin);
 		ExecutionContext {
 			self_account: origin,
-			self_keyspace: Vec::new(),
+			self_keyspace,
 			depth: 0,
 			overlay,
 			events: Vec::new(),
@@ -261,22 +263,11 @@ where
 	}
 
 	fn nested(&self, overlay: OverlayAccountDb<'a, T>, dest: T::AccountId) -> Self {
-		use super::KeySpaceGenerator;
-    // for contract we do not have multilayer of trie, we there for refer to top &[] key space
-    // TODO design multilayer of trie (this nested is not good for it as it is only transaction
-    // related, a right abstraction will use Vec<T::AccountId> as address (mainly that would be
-    // useless but for isolated things it would make sense: it is probably more a matter of 
-    // having an new instruction that run under a account isolated context (call into account).
-    // Thinking of ring and isolation this could make sense (ring context similar for ext
-    // here it would be for storage).
-		let key_space = overlay.get_subtrie(&[], &dest).map(|st|st.key_space)
-			.unwrap_or_else(||
-				<T as Trait>::KeySpaceGenerator::key_space(&dest, &[])
-			);
+		let self_keyspace = overlay.get_or_create_keyspace(&dest);
 		ExecutionContext {
-			overlay: overlay,
+			overlay,
 			self_account: dest,
-			self_keyspace: key_space,
+			self_keyspace,
 			depth: self.depth + 1,
 			events: Vec::new(),
 			calls: Vec::new(),
@@ -311,7 +302,7 @@ where
 
 		let (change_set, events, calls) = {
 			let mut nested = self.nested(
-				OverlayAccountDb::new(&self.overlay),
+				OverlayAccountDb::new(&self.overlay, None),
 				dest.clone()
 			);
 
@@ -386,7 +377,7 @@ where
 		}
 
 		let (change_set, events, calls) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay);
+			let mut overlay = OverlayAccountDb::new(&self.overlay, None);
 			overlay.set_code(&dest, Some(code_hash.clone()));
 			let mut nested = self.nested(overlay, dest.clone());
 

@@ -16,19 +16,19 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{CodeHash, CodeHashOf, Trait, SubTrie};
+use super::{CodeHash, CodeHashOf, Trait, SubTrie, KeySpace};
 use {balances, system};
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
-use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child};
+use srml_support::{StorageMap, traits::UpdateBalanceOutcome, storage::child, storage::unhashed};
 use substrate_primitives::storage::well_known_keys;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
 	/// In the case the outer option is None, the code_hash remains untouched, while providing `Some(None)` signifies a removing of the code in question
 	code: Option<Option<CodeHash<T>>>,
-  storage_key_space: Vec<u8>,
+	storage_key_space: KeySpace,
 	storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -38,7 +38,7 @@ impl<T: Trait> Default for ChangeEntry<T> {
 		ChangeEntry {
 			balance: Default::default(),
 			code: Default::default(),
-      storage_key_space: Default::default(),
+			storage_key_space: Default::default(),
 			storage: Default::default(),
 		}
 	}
@@ -46,65 +46,68 @@ impl<T: Trait> Default for ChangeEntry<T> {
 
 pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
+#[derive(Clone, Default)]
+pub struct AccountKeySpaceMapping<A: Ord> {
+	to_account: BTreeMap<KeySpace, A>,
+	to_key: BTreeMap<A, KeySpace>,
+}
+
+impl<A: Clone + Ord> AccountKeySpaceMapping<A> {
+
+	pub fn new() -> Self {
+		AccountKeySpaceMapping {
+			to_account: BTreeMap::new(),
+			to_key: BTreeMap::new(),
+		}
+	}
+
+	pub fn insert(&mut self, account: A, ks: KeySpace) {
+		self.to_account.insert(ks.clone(), account.clone());
+		self.to_key.insert(account, ks);
+	}
+	pub fn get_keyspace(&self, account: &A) -> Option<&KeySpace> {
+		self.to_key.get(account)
+	}
+	pub fn get_account(&self, ks: &KeySpace) -> Option<&A> {
+		self.to_account.get(ks)
+	}
+
+}
+
 pub trait AccountDb<T: Trait> {
-/*	fn get_subtrie<'a>(
-    &self,
-    key_space: &[u8],
-    account: &T::AccountId,
-    subtries: &'a mut SubtriesCache<<T as system::Trait>::Hash>)
-    -> Option<&'a SubTrie<<T as system::Trait>::Hash>>;*/
-	fn get_subtrie(&self, parent_key_space: &[u8], account: &T::AccountId) -> Option<SubTrie>;
-	fn get_storage(&self, key_space: &[u8], location: &[u8]) -> Option<Vec<u8>>;
+	fn get_subtrie(&self, account: &T::AccountId) -> Option<SubTrie>;
+	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace;
+	fn get_account_from_ks(&self, ks: &KeySpace) -> Option<T::AccountId>;
+	fn get_storage(&self, key_space: &KeySpace, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
 
 	fn commit(&mut self, change_set: ChangeSet<T>);
 }
 
-
-/*
-// TODO move this cache in externality with a subtrie struct with more content (aka root & other)
-pub struct SubtriesCache<H> {
-	// TODO switch to lru ??
-	cache: BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, Option<SubTrie<H>>>>,
-}
-impl<H> SubtriesCache<H> {
-	pub fn new() -> Self {
-		SubtriesCache{ cache: BTreeMap::new() }
-	}
-	pub fn get(&self, parent_key_space: &[u8], account_key: &[u8]) -> Option<&Option<SubTrie<H>>> {
-		self.cache.get(parent_key_space).and_then(|r|r.get(account_key))
-	}
-	pub fn entry(&mut self, parent_key_space: Vec<u8>, account_key: Vec<u8>) -> Entry<Vec<u8>, Option<SubTrie<H>>> {
-		self.cache.entry(parent_key_space)
-			.or_insert_with(|| BTreeMap::new())
-			.entry(account_key)
-	}
-}
-*/
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {
-	fn get_subtrie(&self, key_space: &[u8], account: &T::AccountId) -> Option<SubTrie> {
+	fn get_subtrie(&self, account: &T::AccountId) -> Option<SubTrie> {
 		use parity_codec::KeyedVec;
 		// warn slow to_keyed_vec
 		let keyed_account = account.to_keyed_vec(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
-    // TODO change child to return reference on cache??
-		let res: Option<SubTrie> = child::get(key_space, &keyed_account[..]);
-    res
-/*		if let Some(res) = subtries.get(key_space, &keyed_account[..]) {
-			res.as_ref()
-		} else {
-			let res: Option<SubTrie<<T as system::Trait>::Hash>> = child::get(key_space, &keyed_account[..]);
-			subtries.entry(key_space.to_vec(), keyed_account)
-				.or_insert(res).as_ref()
-		}*/
+		let res: Option<SubTrie> = unhashed::get(&keyed_account[..]);
+		res
 	}
-	fn get_storage(&self, key_space: &[u8], location: &[u8]) -> Option<Vec<u8>> {
-		/*use super::KeySpaceGenerator;
-		// same thing here parent to default top empty
-		let keyspace = <T as Trait>::KeySpaceGenerator::key_space(account, &[]);// TODO this needs subtrie caching!! -> this is not working as every call is different: value need to be access from parent trie*/
-			// TODO get keyspace primitive
-		child::get_raw(key_space, location) // TODO make a support trait , does not seems usefull
+	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace {
+		use super::KeySpaceGenerator;
+		<Self as AccountDb<T>>::get_subtrie(self, account)
+			.map(|s|s.key_space)
+			.unwrap_or_else(||<T as Trait>::KeySpaceGenerator::key_space(account))
+	}
+	fn get_account_from_ks(&self, _: &KeySpace) -> Option<T::AccountId> {
+		// very borderline implementation that consider actual usage of accountdb 
+		// this function being kind of helper of get_storage function
+		// weak design here (for overlayaccountdb it make sense for top level cache)
+		None
+	}
+	fn get_storage(&self, key_space: &KeySpace, location: &[u8]) -> Option<Vec<u8>> {
+		child::get_raw(key_space, location)
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<CodeHashOf<T>>::get(account)
@@ -134,9 +137,9 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 			}
 			for (k, v) in changed.storage.into_iter() {
 				if let Some(value) = v {
-					child::put_raw(&keyspace[..], &k, &value[..]); // TODO move value (ref here is bad) TODO need address to for parent root update??
+					child::put_raw(&keyspace[..], &k, &value[..]);
 				} else {
-					child::kill(&keyspace[..], &k); // TODO also need address???
+					child::kill(&keyspace[..], &k);
 				}
 			}
 		}
@@ -144,12 +147,14 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 }
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	local: RefCell<ChangeSet<T>>,
+	keyspace_account: Option<RefCell<AccountKeySpaceMapping<<T as system::Trait>::AccountId>>>,
 	underlying: &'a AccountDb<T>,
 }
 impl<'a, T: Trait> OverlayAccountDb<'a, T> {
-	pub fn new(underlying: &'a AccountDb<T>) -> OverlayAccountDb<'a, T> {
+	pub fn new(underlying: &'a AccountDb<T>, keyspace_account: Option<RefCell<AccountKeySpaceMapping<<T as system::Trait>::AccountId>>>) -> OverlayAccountDb<'a, T> {
 		OverlayAccountDb {
 			local: RefCell::new(ChangeSet::new()),
+			keyspace_account,
 			underlying,
 		}
 	}
@@ -164,13 +169,22 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		location: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) {
-		self.local
-			.borrow_mut()
+		use super::KeySpaceGenerator;
+		let mut local_mut = self.local.borrow_mut();
+		let mut entry = local_mut
 			.entry(account.clone())
-			.or_insert(Default::default())
-			.storage
-			.insert(location, value);
+			.or_insert(Default::default());
+		entry.storage.insert(location, value);
+		if entry.storage_key_space.len() == 0 {
+			entry.storage_key_space = if let Some(ks) = self.underlying.get_subtrie(account) {
+				ks.key_space
+			} else {
+				// gen new keyspace
+				<T as Trait>::KeySpaceGenerator::key_space(&account)
+			}
+		}
 	}
+
 	pub fn set_code(&mut self, account: &T::AccountId, code: Option<CodeHash<T>>) {
 		self.local
 			.borrow_mut()
@@ -188,18 +202,39 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
-	fn get_subtrie(&self, key_space: &[u8], account: &T::AccountId) -> Option<SubTrie> {
-		self.underlying.get_subtrie(key_space, account)
+	fn get_subtrie(&self, account: &T::AccountId) -> Option<SubTrie> {
+		let v = self.underlying.get_subtrie(account);
+		v.as_ref().map(|v|
+			self.keyspace_account.as_ref().map(|ka|
+				ka.borrow_mut().insert(account.clone(), v.key_space.clone())));
+		v
 	}
-	fn get_storage(&self, key_space: &[u8], location: &[u8]) -> Option<Vec<u8>> {
-    unimplemented!() // TODO changeset over key space
-/*		self.local
+	fn get_or_create_keyspace(&self, account: &T::AccountId) -> KeySpace {
+		self.keyspace_account.as_ref()
+			.map(|ka| {
+        let mut ka_mut = ka.borrow_mut();
+				if let Some(v) = ka_mut.get_keyspace(account) {
+					v.clone()
+				} else {
+					let v = self.underlying.get_or_create_keyspace(account);
+					ka_mut.insert(account.clone(), v.clone());
+					v
+				}
+			})
+			.unwrap_or_else(||self.underlying.get_or_create_keyspace(account))
+	}
+	fn get_account_from_ks(&self, ks: &KeySpace) -> Option<T::AccountId> {
+		self.keyspace_account.as_ref()
+			.map(|ka| ka.borrow().get_account(ks).cloned())
+			.unwrap_or_else(|| self.underlying.get_account_from_ks(ks))
+	}
+	fn get_storage(&self, key_space: &KeySpace, location: &[u8]) -> Option<Vec<u8>> {
+		self.get_account_from_ks(key_space).and_then(|account| self.local
 			.borrow()
-			.get(key_space)
+			.get(&account)
 			.and_then(|a| a.storage.get(location))
 			.cloned()
-			.unwrap_or_else(|| self.underlying.get_storage(key_space, location))
-*/
+			.unwrap_or_else(|| self.underlying.get_storage(key_space, location)))
 	}
 	fn get_code(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		self.local
