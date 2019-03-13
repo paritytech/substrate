@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -72,7 +72,6 @@ impl Decode for NodeHeader {
 
 			BRANCH_NODE_NO_VALUE => NodeHeader::Branch(false),		// 254
 			BRANCH_NODE_WITH_VALUE => NodeHeader::Branch(true),		// 255
-			_ => unreachable!(),
 		})
 	}
 }

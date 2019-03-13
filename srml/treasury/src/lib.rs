@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ use rstd::prelude::*;
 use srml_support::{StorageValue, StorageMap, decl_module, decl_storage, decl_event, ensure};
 use srml_support::traits::{Currency, OnDilution, ArithmeticType};
 use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin, StaticLookup}};
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use system::ensure_signed;
 
 type BalanceOf<T> = <<T as Trait>::Currency as ArithmeticType>::Type;
@@ -287,7 +287,6 @@ mod tests {
 		type Balance = u64;
 		type OnNewAccount = ();
 		type OnFreeBalanceZero = ();
-		type EnsureAccountLiquid = ();
 		type Event = ();
 	}
 	impl Trait for Test {

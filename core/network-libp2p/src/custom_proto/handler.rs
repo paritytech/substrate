@@ -28,6 +28,7 @@ use log::{debug, error, warn};
 use smallvec::{smallvec, SmallVec};
 use std::{error, fmt, io, mem, time::Duration, time::Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_timer::Delay;
 use void::Void;
 
 /// Implements the `ProtocolsHandler` trait of libp2p.
@@ -89,12 +90,19 @@ struct PerProtocol<TMessage, TSubstream> {
 /// State of the handler for a specific protocol.
 enum PerProtocolState<TMessage, TSubstream> {
 	/// Waiting for the behaviour to tell the handler whether it is enabled or disabled.
-	/// Contains a list of substreams opened by the remote but that haven't been processed yet.
-	Init(SmallVec<[RegisteredProtocolSubstream<TMessage, TSubstream>; 6]>),
+	Init {
+		/// List of substreams opened by the remote but that haven't been processed yet.
+		substreams: SmallVec<[RegisteredProtocolSubstream<TMessage, TSubstream>; 6]>,
+		/// Deadline after which the initialization is abnormally long.
+		init_deadline: Delay,
+	},
 
 	/// Handler is opening a substream in order to activate itself.
 	/// If we are in this state, we haven't sent any `CustomProtocolOpen` yet.
-	Opening,
+	Opening {
+		/// Deadline after which the opening is abnormally long.
+		deadline: Delay,
+	},
 
 	/// Backwards-compatible mode. Contains the unique substream that is open.
 	/// If we are in this state, we have sent a `CustomProtocolOpen` message to the outside.
@@ -174,7 +182,7 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				PerProtocolState::Poisoned
 			}
 
-			PerProtocolState::Init(incoming) => {
+			PerProtocolState::Init { substreams: incoming, .. } => {
 				if incoming.is_empty() {
 					if let Endpoint::Dialer = endpoint {
 						return_value = Some(ProtocolsHandlerEvent::OutboundSubstreamRequest {
@@ -184,7 +192,9 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 					} else {
 						return_value = None;
 					}
-					PerProtocolState::Opening
+					PerProtocolState::Opening {
+						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
+					}
 
 				} else if incoming.iter().any(|s| s.is_multiplex()) {
 					let event = CustomProtosHandlerOut::CustomProtocolOpen {
@@ -215,7 +225,7 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				}
 			}
 
-			st @ PerProtocolState::Opening => { return_value = None; st }
+			st @ PerProtocolState::Opening { .. } => { return_value = None; st }
 			st @ PerProtocolState::BackCompat { .. } => { return_value = None; st }
 			st @ PerProtocolState::Normal { .. } => { return_value = None; st }
 			PerProtocolState::Disabled { shutdown, .. } => {
@@ -242,14 +252,14 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				PerProtocolState::Poisoned
 			}
 
-			PerProtocolState::Init(mut shutdown) => {
+			PerProtocolState::Init { substreams: mut shutdown, .. } => {
 				for s in &mut shutdown {
 					s.shutdown();
 				}
 				PerProtocolState::Disabled { shutdown, reenable: false }
 			}
 
-			PerProtocolState::Opening => {
+			PerProtocolState::Opening { .. } => {
 				PerProtocolState::Disabled { shutdown: SmallVec::new(), reenable: false }
 			}
 
@@ -296,12 +306,12 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				PerProtocolState::Poisoned
 			}
 
-			PerProtocolState::Init(mut list) => {
+			PerProtocolState::Init { substreams: mut list, .. } => {
 				for s in &mut list { s.shutdown(); }
 				PerProtocolState::ShuttingDown(list)
 			}
 
-			PerProtocolState::Opening => {
+			PerProtocolState::Opening { .. } => {
 				PerProtocolState::ShuttingDown(SmallVec::new())
 			}
 
@@ -347,14 +357,41 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 				PerProtocolState::Poisoned
 			}
 
-			st @ PerProtocolState::Init(_) => {
+			PerProtocolState::Init { substreams, mut init_deadline } => {
+				match init_deadline.poll() {
+					Ok(Async::Ready(())) =>
+						error!(target: "sub-libp2p", "Handler initialization process is too long"),
+					Ok(Async::NotReady) => {}
+					Err(_) => error!(target: "sub-libp2p", "Tokio timer has errored")
+				}
+
 				return_value = None;
-				st
+				PerProtocolState::Init { substreams, init_deadline }
 			}
 
-			st @ PerProtocolState::Opening { .. } => {
-				return_value = None;
-				st
+			PerProtocolState::Opening { mut deadline } => {
+				match deadline.poll() {
+					Ok(Async::Ready(())) => {
+						deadline.reset(Instant::now() + Duration::from_secs(60));
+						let event = CustomProtosHandlerOut::ProtocolError {
+							protocol_id: self.protocol.id(),
+							is_severe: false,
+							error: "Timeout when opening protocol".to_string().into(),
+						};
+						return_value = Some(ProtocolsHandlerEvent::Custom(event));
+						PerProtocolState::Opening { deadline }
+					},
+					Ok(Async::NotReady) => {
+						return_value = None;
+						PerProtocolState::Opening { deadline }
+					},
+					Err(_) => {
+						error!(target: "sub-libp2p", "Tokio timer has errored");
+						deadline.reset(Instant::now() + Duration::from_secs(60));
+						return_value = None;
+						PerProtocolState::Opening { deadline }
+					},
+				}
 			}
 
 			PerProtocolState::BackCompat { mut substream, shutdown } => {
@@ -423,7 +460,9 @@ where TMessage: CustomMessage, TSubstream: AsyncRead + AsyncWrite {
 						upgrade: self.protocol.clone(),
 						info: self.protocol.id(),
 					});
-					PerProtocolState::Opening
+					PerProtocolState::Opening {
+						deadline: Delay::new(Instant::now() + Duration::from_secs(60))
+					}
 				} else {
 					return_value = None;
 					PerProtocolState::Disabled { shutdown, reenable }
@@ -622,7 +661,10 @@ where
 			protocols: protocols.0.into_iter().map(|protocol| {
 				PerProtocol {
 					protocol,
-					state: PerProtocolState::Init(SmallVec::new()),
+					state: PerProtocolState::Init {
+						substreams: SmallVec::new(),
+						init_deadline: Delay::new(Instant::now() + Duration::from_secs(5))
+					},
 				}
 			}).collect(),
 			events_queue: SmallVec::new(),
@@ -672,15 +714,15 @@ where
 				PerProtocolState::Poisoned
 			}
 
-			PerProtocolState::Init(mut incoming) => {
+			PerProtocolState::Init { mut substreams, init_deadline } => {
 				if substream.endpoint() == Endpoint::Dialer {
 					error!(target: "sub-libp2p", "Opened dialing substream before initialization");
 				}
-				incoming.push(substream);
-				PerProtocolState::Init(incoming)
+				substreams.push(substream);
+				PerProtocolState::Init { substreams, init_deadline }
 			}
 
-			PerProtocolState::Opening => {
+			PerProtocolState::Opening { .. } => {
 				let event = CustomProtosHandlerOut::CustomProtocolOpen {
 					protocol_id: substream.protocol_id(),
 					version: substream.protocol_version()
@@ -893,15 +935,23 @@ where TSubstream: AsyncRead + AsyncWrite, TMessage: CustomMessage {
 			return KeepAlive::Until(self.warm_up_end)
 		}
 
+		let mut keep_forever = false;
+
 		for protocol in self.protocols.iter() {
 			match protocol.state {
+				PerProtocolState::Init { .. } | PerProtocolState::Opening { .. } => {}
+				PerProtocolState::BackCompat { .. } | PerProtocolState::Normal { .. } =>
+					keep_forever = true,
 				PerProtocolState::Disabled { .. } | PerProtocolState::ShuttingDown(_) |
 				PerProtocolState::Poisoned => return KeepAlive::Now,
-				_ => {}
 			}
 		}
 
-		KeepAlive::Forever
+		if keep_forever {
+			KeepAlive::Forever
+		} else {
+			KeepAlive::Now
+		}
 	}
 
 	fn shutdown(&mut self) {

@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -24,13 +24,12 @@ use std::{fmt::Debug, ops::Deref, fmt};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{self, Checkable, Applyable, BlakeTwo256, Convert};
 use crate::generic::DigestItem as GenDigestItem;
-use parity_codec_derive::{Encode, Decode};
 
 pub use substrate_primitives::{H256, Ed25519AuthorityId};
 use substrate_primitives::U256;
 
 /// Authority Id
-#[derive(Default, PartialEq, Eq, Clone, Decode, Encode, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UintAuthorityId(pub u64);
 impl Into<Ed25519AuthorityId> for UintAuthorityId {

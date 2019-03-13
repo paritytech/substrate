@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -120,7 +120,7 @@ fn node_config<F: ServiceFactory> (
 		execution_strategies: Default::default(),
 		rpc_http: None,
 		rpc_ws: None,
-		telemetry_url: None,
+		telemetry_endpoints: None,
 		default_heap_pages: None,
 	}
 }
@@ -181,7 +181,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 			}
 			network.run_until_all_full(|_index, service|
-				service.network().status().num_peers == NUM_NODES as usize - 1
+				service.network().peers().len() == NUM_NODES as usize - 1
 			);
 			network.runtime
 		};
@@ -201,7 +201,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 				address = service.network().node_id().expect("No node address");
 			}
 			network.run_until_all_full(|_index, service| {
-				service.network().status().num_peers == NUM_NODES as usize - 1
+				service.network().peers().len() == NUM_NODES as usize - 1
 			});
 		}
 		temp.close().expect("Error removing temp dir");

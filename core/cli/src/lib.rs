@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -59,6 +59,7 @@ use log::info;
 use lazy_static::lazy_static;
 
 use futures::Future;
+use substrate_telemetry::TelemetryEndpoints;
 
 const MAX_NODE_NAME_LENGTH: usize = 32;
 
@@ -401,9 +402,9 @@ where
 
 	// Override telemetry
 	if cli.no_telemetry {
-		config.telemetry_url = None;
-	} else if let Some(url) = cli.telemetry_url {
-		config.telemetry_url = Some(url);
+		config.telemetry_endpoints = None;
+	} else if !cli.telemetry_endpoints.is_empty() {
+		config.telemetry_endpoints = Some(TelemetryEndpoints::new(cli.telemetry_endpoints));
 	}
 
 	Ok(config)

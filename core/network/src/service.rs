@@ -1,4 +1,4 @@
-// Copyright 2017-2018 Parity Technologies (UK) Ltd.
+// Copyright 2017-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,15 +19,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{io, thread};
 use log::{warn, debug, error, trace, info};
-use futures::{Async, Future, Stream, stream, sync::oneshot};
-use parking_lot::Mutex;
-use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, ErrorKind, Severity};
+use futures::{Async, Future, Stream, stream, sync::oneshot, sync::mpsc};
+use parking_lot::{Mutex, RwLock};
+use network_libp2p::{ProtocolId, NetworkConfiguration, NodeIndex, Severity};
 use network_libp2p::{start_service, parse_str_addr, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
-use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol};
+use network_libp2p::{Protocol as Libp2pProtocol, RegisteredProtocol, NetworkState};
 use consensus::import_queue::{ImportQueue, Link};
 use crate::consensus_gossip::ConsensusGossip;
 use crate::message::{Message, ConsensusEngineId};
-use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ProtocolMsg, ProtocolStatus, PeerInfo};
+use crate::protocol::{self, Context, FromNetworkMsg, Protocol, ConnectedPeer, ProtocolMsg, ProtocolStatus, PeerInfo};
 use crate::config::Params;
 use crossbeam_channel::{self as channel, Receiver, Sender, TryRecvError};
 use crate::error::Error;
@@ -42,12 +42,17 @@ pub use network_libp2p::PeerId;
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 
+
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
-	/// Get sync status
-	fn status(&self) -> ProtocolStatus<B>;
+	/// Get a stream of sync statuses.
+	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>>;
+	/// Get network state.
+	fn network_state(&self) -> NetworkState;
 	/// Get currently connected peers
-	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)>;
+	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)>;
+	/// Are we in the process of downloading the chain?
+	fn is_major_syncing(&self) -> bool;
 }
 
 /// Minimum Requirements for a Hash within Networking
@@ -71,6 +76,7 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 }
 
 /// A link implementation that connects to the network.
+#[derive(Clone)]
 pub struct NetworkLink<B: BlockT, S: NetworkSpecialization<B>> {
 	/// The protocol sender
 	pub(crate) protocol_sender: Sender<ProtocolMsg<B, S>>,
@@ -83,6 +89,10 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		let _ = self.protocol_sender.send(ProtocolMsg::BlockImportedSync(hash.clone(), number));
 	}
 
+	fn blocks_processed(&self, processed_blocks: Vec<B::Hash>, has_error: bool) {
+		let _ = self.protocol_sender.send(ProtocolMsg::BlocksProcessed(processed_blocks, has_error));
+	}
+
 	fn justification_imported(&self, who: NodeIndex, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		let _ = self.protocol_sender.send(ProtocolMsg::JustificationImportResult(hash.clone(), number, success));
 		if !success {
@@ -91,12 +101,12 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 		}
 	}
 
-	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
+	fn clear_justification_requests(&self) {
+		let _ = self.protocol_sender.send(ProtocolMsg::ClearJustificationRequests);
 	}
 
-	fn maintain_sync(&self) {
-		let _ = self.protocol_sender.send(ProtocolMsg::MaintainSync);
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		let _ = self.protocol_sender.send(ProtocolMsg::RequestJustification(hash.clone(), number));
 	}
 
 	fn useless_peer(&self, who: NodeIndex, reason: &str) {
@@ -118,10 +128,14 @@ impl<B: BlockT, S: NetworkSpecialization<B>> Link<B> for NetworkLink<B, S> {
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: NetworkSpecialization<B>> {
-	// Are we connected to any peer?
+	/// Sinks to propagate status updates.
+	status_sinks: Arc<Mutex<Vec<mpsc::UnboundedSender<ProtocolStatus<B>>>>>,
+	/// Are we connected to any peer?
 	is_offline: Arc<AtomicBool>,
-	// Are we actively catching up with the chain?
+	/// Are we actively catching up with the chain?
 	is_major_syncing: Arc<AtomicBool>,
+	/// Peers whom we are connected with.
+	peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<B>>>>,
 	/// Network service
 	network: Arc<Mutex<NetworkService<Message<B>>>>,
 	/// Protocol sender
@@ -140,12 +154,16 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		import_queue: Box<ImportQueue<B>>,
 	) -> Result<(Arc<Service<B, S>>, NetworkChan<B>), Error> {
 		let (network_chan, network_port) = network_channel(protocol_id);
+		let status_sinks = Arc::new(Mutex::new(Vec::new()));
 		// Start in off-line mode, since we're not connected to any nodes yet.
 		let is_offline = Arc::new(AtomicBool::new(true));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
+		let peers: Arc<RwLock<HashMap<NodeIndex, ConnectedPeer<B>>>> = Arc::new(Default::default());
 		let (protocol_sender, network_to_protocol_sender) = Protocol::new(
+			status_sinks.clone(),
 			is_offline.clone(),
 			is_major_syncing.clone(),
+			peers.clone(),
 			network_chan.clone(),
 			params.config,
 			params.chain,
@@ -164,8 +182,10 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 		)?;
 
 		let service = Arc::new(Service {
+			status_sinks,
 			is_offline,
 			is_major_syncing,
+			peers,
 			network,
 			protocol_sender: protocol_sender.clone(),
 			bg_thread: Some(thread),
@@ -252,11 +272,17 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Service<B, S> {
 			.protocol_sender
 			.send(ProtocolMsg::ExecuteWithGossip(Box::new(f)));
 	}
+
+	/// Are we in the process of downloading the chain?
+	/// Used by both SyncProvider and SyncOracle.
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing.load(Ordering::Relaxed)
+	}
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> ::consensus::SyncOracle for Service<B, S> {
 	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(Ordering::Relaxed)
+		self.is_major_syncing()
 	}
 	fn is_offline(&self) -> bool {
 		self.is_offline.load(Ordering::Relaxed)
@@ -275,25 +301,23 @@ impl<B: BlockT + 'static, S: NetworkSpecialization<B>> Drop for Service<B, S> {
 }
 
 impl<B: BlockT + 'static, S: NetworkSpecialization<B>> SyncProvider<B> for Service<B, S> {
+	fn is_major_syncing(&self) -> bool {
+		self.is_major_syncing()
+	}
 	/// Get sync status
-	fn status(&self) -> ProtocolStatus<B> {
-		let (sender, port) = channel::unbounded();
-		let _ = self.protocol_sender.send(ProtocolMsg::Status(sender));
-		port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
-			or the ProtocolMsg::Stop message is received,
-			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.")
+	fn status(&self) -> mpsc::UnboundedReceiver<ProtocolStatus<B>> {
+		let (sink, stream) = mpsc::unbounded();
+		self.status_sinks.lock().push(sink);
+		stream
 	}
 
-	fn peers(&self) -> Vec<(NodeIndex, Option<PeerId>, PeerInfo<B>)> {
-		let (sender, port) = channel::unbounded();
-		let _ = self.protocol_sender.send(ProtocolMsg::Peers(sender));
-		let peers = port.recv().expect("1. Protocol keeps handling messages until all senders are dropped,
-			or the ProtocolMsg::Stop message is received,
-			2 Service keeps a sender to protocol, and the ProtocolMsg::Stop is never sent.");
-		let network = self.network.lock();
-		peers.into_iter().map(|(idx, info)| {
-			(idx, network.peer_id_of_node(idx).map(|p| p.clone()), info)
-		}).collect::<Vec<_>>()
+	fn network_state(&self) -> NetworkState {
+		self.network.lock().state()
+	}
+
+	fn peers(&self) -> Vec<(NodeIndex, PeerInfo<B>)> {
+		let peers = (*self.peers.read()).clone();
+		peers.into_iter().map(|(idx, connected)| (idx, connected.peer_info)).collect()
 	}
 }
 
@@ -430,8 +454,6 @@ pub enum NetworkMsg<B: BlockT + 'static> {
 	Outgoing(NodeIndex, Message<B>),
 	/// Report a peer.
 	ReportPeer(NodeIndex, Severity),
-	/// Get a peer id.
-	GetPeerId(NodeIndex, Sender<Option<String>>),
 }
 
 /// Starts the background thread that handles the networking.
@@ -447,11 +469,7 @@ fn start_thread<B: BlockT + 'static>(
 	let service = match start_service(config, Some(registered)) {
 		Ok(service) => Arc::new(Mutex::new(service)),
 		Err(err) => {
-			match err.kind() {
-				ErrorKind::Io(ref e) if e.kind() == io::ErrorKind::AddrInUse =>
-					warn!("Network port is already in use, make sure that another instance of Substrate client is not running or change the port using the --port option."),
-				_ => warn!("Error starting network: {}", err),
-			};
+			warn!("Error starting network: {}", err);
 			return Err(err.into())
 		},
 	};
@@ -513,17 +531,15 @@ fn run_thread<B: BlockT + 'static>(
 						info!(target: "sync", "Banning {:?} because {:?}", who, message);
 						network_service_2.lock().ban_node(who)
 					},
-					Severity::Useless(_) => network_service_2.lock().drop_node(who),
-					Severity::Timeout => network_service_2.lock().drop_node(who),
+					Severity::Useless(message) => {
+						info!(target: "sync", "Dropping {:?} because {:?}", who, message);
+						network_service_2.lock().drop_node(who)
+					},
+					Severity::Timeout => {
+						info!(target: "sync", "Dropping {:?} because it timed out", who);
+						network_service_2.lock().drop_node(who)
+					},
 				}
-			},
-			NetworkMsg::GetPeerId(who, sender) => {
-				let node_id = network_service_2
-					.lock()
-					.peer_id_of_node(who)
-					.cloned()
-					.map(|id| id.to_base58());
-				let _ = sender.send(node_id);
 			},
 		}
 		Ok(())
@@ -546,9 +562,9 @@ fn run_thread<B: BlockT + 'static>(
 						FromNetworkMsg::PeerDisconnected(node_index, debug_info));
 				}
 			}
-			NetworkServiceEvent::OpenedCustomProtocol { node_index, version, debug_info, .. } => {
+			NetworkServiceEvent::OpenedCustomProtocol { peer_id, node_index, version, debug_info, .. } => {
 				debug_assert_eq!(version, protocol::CURRENT_VERSION as u8);
-				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(node_index, debug_info));
+				let _ = protocol_sender.send(FromNetworkMsg::PeerConnected(peer_id, node_index, debug_info));
 			}
 			NetworkServiceEvent::ClosedCustomProtocol { node_index, debug_info, .. } => {
 				let _ = protocol_sender.send(FromNetworkMsg::PeerDisconnected(node_index, debug_info));

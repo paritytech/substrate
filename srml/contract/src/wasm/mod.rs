@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2018-2019 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ use crate::exec::{Ext, EmptyOutputBuf, VmExecResult};
 use crate::gas::GasMeter;
 
 use rstd::prelude::*;
-use parity_codec_derive::{Encode, Decode};
+use parity_codec::{Encode, Decode};
 use sandbox;
 
 #[macro_use]
