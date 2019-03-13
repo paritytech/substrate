@@ -85,7 +85,7 @@ impl From<Public> for [u8; 32] {
 	}
 }
 
-// Consider removal in favour of need to explicitly use `from_raw`.
+#[cfg(feature = "std")]
 impl From<Pair> for Public {
 	fn from(x: Pair) -> Self {
 		x.public()
