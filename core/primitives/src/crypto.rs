@@ -198,7 +198,7 @@ pub trait Ss58Codec: Sized {
 	fn from_ss58check(s: &str) -> Result<Self, PublicError>;
 	/// Some if the string is a properly encoded SS58Check address, optionally with
 	/// a derivation path following.
-	fn from_uri(s: &str) -> Result<Self, PublicError> { Self::from_ss58check(s) }
+	fn from_string(s: &str) -> Result<Self, PublicError> { Self::from_ss58check(s) }
 	/// Return the ss58-check string for this key.
 	fn to_ss58check(&self) -> String;
 }
@@ -242,7 +242,7 @@ impl<T: AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 		v.to_base58()
 	}
 
-	fn from_uri(s: &str) -> Result<Self, PublicError> {
+	fn from_string(s: &str) -> Result<Self, PublicError> {
 		let re = Regex::new(r"^(?P<ss58>[\w\d]+)(?P<path>(//?[^/]+)*)$")
 			.expect("constructed from known-good static value; qed");
 		let cap = re.captures(s).ok_or(PublicError::InvalidFormat)?;

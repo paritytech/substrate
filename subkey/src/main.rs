@@ -68,16 +68,24 @@ trait Crypto {
 			Self::ss58_from_pair(&pair)
 		);
 	}
-	fn print_from_suri(suri: &str, password: Option<&str>) {
-		let pair = Self::pair_from_suri(suri, password);
-		let seed_text = Self::seed_from_pair(&pair)
-			.map_or_else(Default::default, |s| format!("\n  Seed: 0x{}", HexDisplay::from(&s.as_ref())));
-		println!("SURI `{}` is account:{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
-			suri,
-			seed_text,
-			HexDisplay::from(&Self::public_from_pair(&pair)),
-			Self::ss58_from_pair(&pair)
-		);
+	fn print_from_uri(uri: &str, password: Option<&str>) where <Self::Pair as Pair>::Public: Sized + Ss58Codec + AsRef<[u8]> {
+		if let Ok(pair) = Self::Pair::from_string(uri, password) {
+			let seed_text = Self::seed_from_pair(&pair)
+				.map_or_else(Default::default, |s| format!("\n  Seed: 0x{}", HexDisplay::from(&s.as_ref())));
+			println!("Secret Key URI `{}` is account:{}\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+				uri,
+				seed_text,
+				HexDisplay::from(&Self::public_from_pair(&pair)),
+				Self::ss58_from_pair(&pair)
+			);
+		}
+		if let Ok(public) = <Self::Pair as Pair>::Public::from_string(uri) {
+			println!("Public Key URI `{}` is account:\n  Public key (hex): 0x{}\n  Address (SS58): {}",
+				uri,
+				HexDisplay::from(&public.as_ref()),
+				public.to_ss58check()
+			);
+		}
 	}
 }
 
@@ -133,7 +141,7 @@ impl Crypto for Sr25519 {
 
 fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 	<<C as Crypto>::Pair as Pair>::Signature: AsRef<[u8]> + AsMut<[u8]> + Default,
-	<<C as Crypto>::Pair as Pair>::Public: Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
+	<<C as Crypto>::Pair as Pair>::Public: Sized + AsRef<[u8]> + Ss58Codec + AsRef<<<C as Crypto>::Pair as Pair>::Public>,
 {
 	let password = matches.value_of("password");
 	match matches.subcommand() {
@@ -149,9 +157,9 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 		}
 		("inspect", Some(matches)) => {
 			// TODO: Accept public key with derivation path.
-			let suri = matches.value_of("suri")
-				.expect("secret URI parameter is required; thus it can't be None; qed");
-			C::print_from_suri(suri, password);
+			let uri = matches.value_of("uri")
+				.expect("URI parameter is required; thus it can't be None; qed");
+			C::print_from_uri(uri, password);
 		},
 		("sign", Some(matches)) => {
 			let suri = matches.value_of("suri")
@@ -176,7 +184,7 @@ fn execute<C: Crypto<Seed=[u8; 32]>>(matches: clap::ArgMatches) where
 			sig.as_mut().copy_from_slice(&sig_data);
 			let uri = matches.value_of("uri")
 				.expect("public uri parameter is required; thus it can't be None; qed");
-			let pubkey = <<C as Crypto>::Pair as Pair>::Public::from_uri(uri).ok().or_else(||
+			let pubkey = <<C as Crypto>::Pair as Pair>::Public::from_string(uri).ok().or_else(||
 				<C as Crypto>::Pair::from_string(uri, password).ok().map(|p| p.public())
 			).expect("Invalid URI; expecting either a secret URI or a public URI.");
 			let mut message = vec![];

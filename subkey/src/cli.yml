@@ -24,7 +24,7 @@ subcommands:
   - inspect:
       about: Gets a public key and a SS58 address from the provided Secret URI
       args:
-        - suri:
+        - uri:
             index: 1
             required: true
             help: A Key URI to be inspected. May be a secret seed, secret URI (with derivation paths and password), SS58 or public URI.
