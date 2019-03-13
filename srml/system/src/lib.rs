@@ -400,11 +400,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32) {
-		Self::deposit_event(match r {
-			Ok(_) => Event::ExtrinsicSuccess,
-			Err(_) => Event::ExtrinsicFailed,
-		}.into());
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>, encoded_len: u32, is_inherent: bool) {
+		if !is_inherent {
+			Self::deposit_event(match r {
+				Ok(_) => Event::ExtrinsicSuccess,
+				Err(_) => Event::ExtrinsicFailed,
+			}.into());
+		}
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 		let total_length = encoded_len.saturating_add(Self::all_extrinsics_len());
@@ -514,8 +516,8 @@ mod tests {
 
 			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic(&Ok(()), 0);
-			System::note_applied_extrinsic(&Err(""), 0);
+			System::note_applied_extrinsic(&Ok(()), 0, false);
+			System::note_applied_extrinsic(&Err(""), 0, false);
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalise();

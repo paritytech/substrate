@@ -186,9 +186,7 @@ impl<
 		// decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
 		let r = f.dispatch(s.into());
-		if !is_inherent {
-			<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
-		}
+		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, is_inherent);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
 			primitives::BLOCK_FULL => Err(internal::ApplyError::FullBlock),
