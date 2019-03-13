@@ -320,7 +320,7 @@ fn development_config_genesis() -> GenesisConfig {
 			get_authority_keys_from_seed("Alice"),
 		],
 		get_account_id_from_seed("Alice").into(),
-		None,
+		Some(vec![get_authority_keys_from_seed("Alice").0]),
 	)
 }
 
@@ -336,7 +336,10 @@ fn local_testnet_genesis() -> GenesisConfig {
 			get_authority_keys_from_seed("Bob"),
 		],
 		get_account_id_from_seed("Alice").into(),
-		None,
+		Some(vec![
+			get_authority_keys_from_seed("Alice").0,
+			get_authority_keys_from_seed("Bob").0,
+		]),
 	)
 }
 
